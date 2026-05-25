@@ -1,0 +1,34 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --green: #1a7a4a;
+  --green-mid: #22a05e;
+  --green-light: #e6f7ee;
+  --green-dark: #0d4a2c;
+  --gold: #d4920a;
+  --dark: #0f1410;
+  --muted: #637068;
+  --border: #d8e5dc;
+  --surface: #f4f8f5;
+  --white: #ffffff;
+}
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--surface);
+  color: var(--dark);
+  font-size: 15px;
+  line-height: 1.6;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+button {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+input, textarea, select {
+  font-family: inherit;
+  font-size: 15px;
+}
