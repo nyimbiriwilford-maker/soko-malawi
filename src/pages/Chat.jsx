@@ -116,7 +116,6 @@ export default function Chat() {
   }
 
   // ── CALL ACTIONS ──────────────────────────────────────────────────────────
-
   async function startCall(type) {
     setCallType(type)
     setCallState('calling')
@@ -268,12 +267,10 @@ export default function Chat() {
         return true
       }
 
-     // ── Caller receives: callee answered ──
- // ── Caller receives: callee answered ──
-      // ── Caller receives: callee answered ──
+  // ── Caller receives: callee answered ──
       if (_event === 'answer') {
         if (!pcRef.current) return true
-        if (pcRef.current.signalingState === 'stable') return true
+        if (pcRef.current.signalingState !== 'have-local-offer') return true
         pcRef.current.setRemoteDescription(new RTCSessionDescription(payload.answer))
           .then(async () => {
             for (const c of pendingCandidates.current) {
@@ -288,7 +285,6 @@ export default function Chat() {
           .catch(err => console.error('setRemoteDescription (answer) error:', err))
         return true
       }
-
       // ── ICE candidate ──
       if (_event === 'ice') {
         if (!pcRef.current) return true
