@@ -778,8 +778,7 @@ export default function Chat() {
         <div style={S.callOverlay}>
           {callType === 'video' && (
             <div style={{ position: 'absolute', inset: 0 }}>
-              <video ref={remoteVideoRef} autoPlay playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              <video ref={localVideoRef} autoPlay playsInline muted style={{ position: 'absolute', bottom: 100, right: 16, width: 110, height: 150, objectFit: 'cover', borderRadius: 12, border: '2px solid rgba(255,255,255,0.3)', background: '#000' }} />
+<video ref={el => { remoteVideoRef.current = el; if (el && remoteStreamRef.current) el.srcObject = remoteStreamRef.current }} autoPlay playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />              <video ref={localVideoRef} autoPlay playsInline muted style={{ position: 'absolute', bottom: 100, right: 16, width: 110, height: 150, objectFit: 'cover', borderRadius: 12, border: '2px solid rgba(255,255,255,0.3)', background: '#000' }} />
             </div>
           )}
           {callType === 'voice' && (
@@ -789,8 +788,7 @@ export default function Chat() {
               <div style={{ fontSize: 22, color: '#5de89e', fontWeight: '700', marginTop: 12, fontVariantNumeric: 'tabular-nums' }}>
                 {formatTime(callDuration)}
               </div>
-              <video ref={remoteVideoRef} autoPlay playsInline style={{ display: 'none' }} />
-              <video ref={localVideoRef} autoPlay playsInline muted style={{ display: 'none' }} />
+<video ref={el => { remoteVideoRef.current = el; if (el && remoteStreamRef.current) el.srcObject = remoteStreamRef.current }} autoPlay playsInline style={{ display: 'none' }} />              <video ref={localVideoRef} autoPlay playsInline muted style={{ display: 'none' }} />
             </div>
           )}
           <div style={{ position: 'absolute', bottom: 40, display: 'flex', gap: 16, alignItems: 'center', zIndex: 10 }}>
