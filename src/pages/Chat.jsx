@@ -268,10 +268,12 @@ export default function Chat() {
       }
 
      // ── Caller receives: callee answered ──
+ // ── Caller receives: callee answered ──
       if (_event === 'answer') {
         if (!pcRef.current) return true
+        if (pcRef.current.signalingState === 'stable') return true // already set, ignore duplicate
         pcRef.current.setRemoteDescription(new RTCSessionDescription(payload.answer))
-        pcRef.current.setRemoteDescription(new RTCSessionDescription(payload.answer))
+         pcRef.current.setRemoteDescription(new RTCSessionDescription(payload.answer))
           .then(async () => {
             for (const c of pendingCandidates.current) {
               try { await pcRef.current.addIceCandidate(new RTCIceCandidate(c)) } catch(e) {}
