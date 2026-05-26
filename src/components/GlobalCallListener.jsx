@@ -21,7 +21,6 @@ export default function GlobalCallListener() {
     if (!user) return
     currentUserRef.current = user
 
-    // Use Broadcast instead of postgres_changes — it's instant
     const ch = supabase.channel(`call_broadcast_${user.id}`)
       .on('broadcast', { event: 'ring' }, async ({ payload }) => {
         console.log('📞 Incoming call received:', payload)
@@ -78,17 +77,11 @@ export default function GlobalCallListener() {
     stopRing()
     sessionStorage.setItem('__pendingCall', JSON.stringify(incoming))
     setIncoming(null)
-async function answer() {
-  stopRing()
-  sessionStorage.setItem('__pendingCall', JSON.stringify(incoming))
-  setIncoming(null)
-  window.location.href = `/chat/${incoming.fromUser}`
-}  }
+    window.location.href = `/chat/${incoming.fromUser}`
+  }
 
   async function decline() {
     stopRing()
-    const user = currentUserRef.current
-    // Send decline back via broadcast on caller's channel
     const ch = supabase.channel(`call_broadcast_${incoming.fromUser}`)
     await ch.subscribe()
     await ch.send({ type: 'broadcast', event: 'decline', payload: { callId: incoming.callId } })
