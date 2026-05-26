@@ -11,6 +11,7 @@ import Profile from './pages/Profile'
 import Jobs from './pages/Jobs'
 import Services from './pages/Services'
 import GlobalCallListener from './components/GlobalCallListener'
+import { CallProvider } from './context/CallContext'
 
 export default function App() {
   const [session, setSession] = useState(undefined)
@@ -34,21 +35,23 @@ export default function App() {
   )
 
   return (
-    <BrowserRouter>
-      {session && <GlobalCallListener />}
-      <Routes>
-        <Route path="/login" element={!session ? <Login /> : <Navigate to="/" />} />
-        <Route path="/" element={session ? <Home /> : <Navigate to="/login" />} />
-        <Route path="/listing/:id" element={session ? <ListingDetail /> : <Navigate to="/login" />} />
-        <Route path="/post" element={session ? <PostListing /> : <Navigate to="/login" />} />
-        <Route path="/chats" element={session ? <ChatList /> : <Navigate to="/login" />} />
-<Route path="/chat/:userId/:listingId" element={session ? <Chat /> : <Navigate to="/login" />} />
-<Route path="/chat/:userId" element={session ? <Chat /> : <Navigate to="/login" />} />        
-        <Route path="/profile" element={session ? <Profile /> : <Navigate to="/login" />} />
-        <Route path="/jobs" element={session ? <Jobs /> : <Navigate to="/login" />} />
-        <Route path="*" element={<Navigate to="/" />} />
-        <Route path="/services" element={session ? <Services /> : <Navigate to="/login" />} />
-      </Routes>
-    </BrowserRouter>
+    <CallProvider>
+      <BrowserRouter>
+        {session && <GlobalCallListener />}
+        <Routes>
+          <Route path="/login" element={!session ? <Login /> : <Navigate to="/" />} />
+          <Route path="/" element={session ? <Home /> : <Navigate to="/login" />} />
+          <Route path="/listing/:id" element={session ? <ListingDetail /> : <Navigate to="/login" />} />
+          <Route path="/post" element={session ? <PostListing /> : <Navigate to="/login" />} />
+          <Route path="/chats" element={session ? <ChatList /> : <Navigate to="/login" />} />
+          <Route path="/chat/:userId/:listingId" element={session ? <Chat /> : <Navigate to="/login" />} />
+          <Route path="/chat/:userId" element={session ? <Chat /> : <Navigate to="/login" />} />        
+          <Route path="/profile" element={session ? <Profile /> : <Navigate to="/login" />} />
+          <Route path="/jobs" element={session ? <Jobs /> : <Navigate to="/login" />} />
+          <Route path="*" element={<Navigate to="/" />} />
+          <Route path="/services" element={session ? <Services /> : <Navigate to="/login" />} />
+        </Routes>
+      </BrowserRouter>
+    </CallProvider>
   )
 }

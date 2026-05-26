@@ -1,7 +1,7 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-
+import { useCall } from '../context/CallContext'
 import { ICE_SERVERS } from '../lib/webrtc'
 
 function generateCallId(uid1, uid2) {
@@ -37,17 +37,18 @@ export default function Chat() {
   const [isMuted, setIsMuted] = useState(false)
   const [isCamOff, setIsCamOff] = useState(false)
 
+  const { sendSignal: ctxSendSignal, registerCallListener, dismissIncoming, stopRing: ctxStopRing, playRing: ctxPlayRing } = useCall()
+
   const pcRef = useRef(null)
   const localStreamRef = useRef(null)
   const localVideoRef = useRef(null)
   const remoteVideoRef = useRef(null)
   const callIdRef = useRef(null)
-  const callChannelRef = useRef(null)  // broadcast channel for signaling
   const callTimerRef = useRef(null)
   const pendingCandidates = useRef([])
   const incomingOfferRef = useRef(null)
-  const ringCtxRef = useRef(null)
   const currentUserRef = useRef(null)
+  const isServiceChatRef = useRef(false)
 
   const bottomRef = useRef(null)
   const mediaRecorderRef = useRef(null)
@@ -58,13 +59,15 @@ export default function Chat() {
   const audioRefs = useRef({})
   const inputRef = useRef(null)
   const channelRef = useRef(null)
-
   useEffect(() => {
     init()
     return () => {
-      if (channelRef.current) supabase.removeChannel(channelRef.current)
-      if (callChannelRef.current) supabase.removeChannel(callChannelRef.current)
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current)
+        channelRef.current = null
+      }
       clearInterval(callTimerRef.current)
+      ctxStopRing()
     }
   }, [userId, listingId])
 
@@ -72,58 +75,7 @@ export default function Chat() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // ── RING SOUNDS ────────────────────────────────────────────────────────────
-
-  function playRingtone(type = 'outgoing') {
-    stopRingSound()
-    try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)()
-      let active = true
-      ringCtxRef.current = { stop: () => { active = false; try { ctx.close() } catch(e){} } }
-
-      if (type === 'outgoing') {
-        const ring = () => {
-          if (!active) return
-          const beep = (freq, start, dur) => {
-            const osc = ctx.createOscillator()
-            const gain = ctx.createGain()
-            osc.connect(gain); gain.connect(ctx.destination)
-            osc.type = 'sine'; osc.frequency.value = freq
-            gain.gain.setValueAtTime(0, ctx.currentTime + start)
-            gain.gain.linearRampToValueAtTime(0.18, ctx.currentTime + start + 0.02)
-            gain.gain.setValueAtTime(0.18, ctx.currentTime + start + dur - 0.02)
-            gain.gain.linearRampToValueAtTime(0, ctx.currentTime + start + dur)
-            osc.start(ctx.currentTime + start)
-            osc.stop(ctx.currentTime + start + dur)
-          }
-          beep(480, 0, 0.18)
-          beep(480, 0.22, 0.18)
-          if (active) setTimeout(ring, 2200)
-        }
-        ring()
-      } else {
-        const ring = () => {
-          if (!active) return
-          const osc = ctx.createOscillator()
-          const gain = ctx.createGain()
-          osc.connect(gain); gain.connect(ctx.destination)
-          osc.type = 'sine'
-          osc.frequency.setValueAtTime(380, ctx.currentTime)
-          osc.frequency.linearRampToValueAtTime(480, ctx.currentTime + 0.4)
-          gain.gain.setValueAtTime(0, ctx.currentTime)
-          gain.gain.linearRampToValueAtTime(0.22, ctx.currentTime + 0.05)
-          gain.gain.setValueAtTime(0.22, ctx.currentTime + 0.35)
-          gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 0.45)
-          osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.45)
-          if (active) setTimeout(ring, 1800)
-        }
-        ring()
-      }
-    } catch(e) {}
-  }
-
   function playCallEndSound() {
-    stopRingSound()
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)()
       const notes = [480, 360, 300]
@@ -157,77 +109,18 @@ export default function Chat() {
     } catch(e) {}
   }
 
-  function stopRingSound() {
-    if (ringCtxRef.current) { ringCtxRef.current.stop(); ringCtxRef.current = null }
-  }
-
-  // ── BROADCAST SIGNALING (replaces postgres_changes for calls) ─────────────
-
-  async function setupCallChannel(myId) {
-    // Each user listens on their own broadcast channel
-    const ch = supabase.channel(`call_broadcast_${myId}`)
-      .on('broadcast', { event: 'ring' }, ({ payload }) => {
-        console.log('📞 ring received in Chat:', payload)
-        callIdRef.current = payload.callId
-        incomingOfferRef.current = payload.offer
-        setCallType(payload.callType)
-        setCallState('receiving')
-        playRingtone('incoming')
-      })
-      .on('broadcast', { event: 'ringing' }, () => {
-        setCallState('ringing')
-      })
-      .on('broadcast', { event: 'answer' }, async ({ payload }) => {
-        if (!pcRef.current) return
-        await pcRef.current.setRemoteDescription(new RTCSessionDescription(payload.answer))
-        for (const c of pendingCandidates.current) {
-          try { await pcRef.current.addIceCandidate(new RTCIceCandidate(c)) } catch(e){}
-        }
-        pendingCandidates.current = []
-        stopRingSound()
-        playConnectedSound()
-        setCallState('in-call')
-        startCallTimer()
-      })
-      .on('broadcast', { event: 'ice' }, async ({ payload }) => {
-        if (!pcRef.current) return
-        try {
-          if (pcRef.current.remoteDescription) {
-            await pcRef.current.addIceCandidate(new RTCIceCandidate(payload.candidate))
-          } else {
-            pendingCandidates.current.push(payload.candidate)
-          }
-        } catch(e) {}
-      })
-      .on('broadcast', { event: 'hangup' }, () => {
-        playCallEndSound()
-        endCallLocally()
-      })
-      .on('broadcast', { event: 'decline' }, () => {
-        playCallEndSound()
-        endCallLocally()
-      })
-      .subscribe((status) => {
-        console.log('Call channel status:', status)
-      })
-    callChannelRef.current = ch
-  }
-
+  // ── sendSignal (using CallContext) ──
   async function sendSignal(event, payload = {}) {
-  const targetId = userId || incomingOfferRef.current?.fromUser
-  if (!targetId) { console.error('sendSignal: no target userId'); return }
-  const ch = supabase.channel(`call_broadcast_${targetId}`)
-  await ch.subscribe()
-  await ch.send({ type: 'broadcast', event, payload: { ...payload, callId: callIdRef.current } })
-  setTimeout(() => supabase.removeChannel(ch), 2000)
-}
+    if (!userId) { console.error('sendSignal: no targetUserId'); return }
+    await ctxSendSignal(userId, event, { ...payload, callId: callIdRef.current })
+  }
 
   // ── CALL ACTIONS ──────────────────────────────────────────────────────────
 
   async function startCall(type) {
     setCallType(type)
     setCallState('calling')
-    playRingtone('outgoing')
+    // NOTE: do NOT play ring for the caller — only the callee rings
 
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: true, video: type === 'video'
@@ -254,12 +147,18 @@ export default function Chat() {
     const callId = generateCallId(currentUserRef.current.id, userId)
     callIdRef.current = callId
 
-    // Send ring via broadcast to the other user
-    await sendSignal('ring', { offer, callType: type, fromUser: currentUserRef.current.id, callId })
+    // Send ring via CallContext — this delivers to the callee
+    await ctxSendSignal(userId, 'ring', {
+      offer,
+      callType: type,
+      fromUser: currentUserRef.current.id,
+      callId
+    })
   }
 
   async function answerCall() {
-    stopRingSound()
+    ctxStopRing()
+    dismissIncoming()
 
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: true, video: callType === 'video'
@@ -296,7 +195,8 @@ export default function Chat() {
   }
 
   async function declineCall() {
-    stopRingSound()
+    ctxStopRing()
+    dismissIncoming()
     await sendSignal('decline')
     await sendMessage('', 'text', null, {
       call_type: callType, call_status: 'missed',
@@ -317,7 +217,7 @@ export default function Chat() {
   }
 
   function endCallLocally() {
-    stopRingSound()
+    ctxStopRing()
     clearInterval(callTimerRef.current)
     pcRef.current?.close(); pcRef.current = null
     localStreamRef.current?.getTracks().forEach(t => t.stop())
@@ -344,20 +244,131 @@ export default function Chat() {
     setIsCamOff(c => !c)
   }
 
+  // ── Register call listener (routes signals from CallContext) ──
+  useEffect(() => {
+    const unregister = registerCallListener((payload) => {
+      const { _event } = payload
+
+      // ── Incoming ring ──
+      if (_event === 'ring') {
+        // Only handle if this ring is from the user we have open in chat
+        if (payload.fromUser !== userId) return false // let GlobalCallListener handle it
+        callIdRef.current = payload.callId
+        incomingOfferRef.current = payload.offer
+        setCallType(payload.callType)
+        setCallState('receiving')
+        ctxPlayRing()
+        return true // handled — suppress GlobalCallListener overlay
+      }
+
+      // ── Caller receives: callee is ringing ──
+      if (_event === 'ringing') {
+        setCallState('ringing')
+        return true
+      }
+
+      // ── Caller receives: callee answered ──
+      if (_event === 'answer') {
+        if (!pcRef.current) return true
+        if (pcRef.current.signalingState !== 'have-local-offer') {
+          console.warn('Ignoring answer in wrong state:', pcRef.current.signalingState)
+          return true
+        }
+        pcRef.current.setRemoteDescription(new RTCSessionDescription(payload.answer))
+          .then(async () => {
+            for (const c of pendingCandidates.current) {
+              try { await pcRef.current.addIceCandidate(new RTCIceCandidate(c)) } catch(e) {}
+            }
+            pendingCandidates.current = []
+            ctxStopRing()
+            playConnectedSound()
+            setCallState('in-call')
+            startCallTimer()
+          })
+          .catch(err => console.error('setRemoteDescription (answer) error:', err))
+        return true
+      }
+
+      // ── ICE candidate ──
+      if (_event === 'ice') {
+        if (!pcRef.current) return true
+        try {
+          if (pcRef.current.remoteDescription) {
+            pcRef.current.addIceCandidate(new RTCIceCandidate(payload.candidate))
+          } else {
+            pendingCandidates.current.push(payload.candidate)
+          }
+        } catch(e) {}
+        return true
+      }
+
+      // ── Remote hung up / declined ──
+      if (_event === 'hangup' || _event === 'decline') {
+        playCallEndSound()
+        endCallLocally()
+        return true
+      }
+
+      return false
+    })
+
+    return unregister
+  }, [userId])
+
   // ── INIT ──────────────────────────────────────────────────────────────────
 
+  async function loadBooking(serviceId, myId, otherId) {
+    // Guard: don't query if any ID is missing/undefined
+    if (!serviceId || serviceId === 'undefined' || !myId || !otherId) return null
+
+    // Try as customer first
+    const { data: bk1, error: e1 } = await supabase.from('bookings').select('*')
+      .eq('service_id', serviceId)
+      .eq('customer_id', myId)
+      .eq('provider_id', otherId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+    if (e1) console.log('Booking query 1 error (normal if no booking):', e1.code)
+    if (!e1 && bk1?.length) return bk1[0]
+
+    // Try as provider
+    const { data: bk2, error: e2 } = await supabase.from('bookings').select('*')
+      .eq('service_id', serviceId)
+      .eq('customer_id', otherId)
+      .eq('provider_id', myId)
+      .order('created_at', { ascending: false })
+      .limit(1)
+    if (e2) console.log('Booking query 2 error (normal if no booking):', e2.code)
+    if (!e2 && bk2?.length) return bk2[0]
+
+    return null
+  }
+
   async function init() {
+    // Refresh session first to avoid 400/406 errors from expired tokens
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession()
+    if (sessionError || !session) {
+      // Try to refresh
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession()
+      if (refreshError || !refreshData.session) {
+        console.warn('Session expired, redirecting to login')
+        navigate('/login')
+        return
+      }
+    }
+
     const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { navigate('/login'); return }
+
     setCurrentUser(user)
     currentUserRef.current = user
     await supabase.from('users').upsert({ id: user.id, name: user.email }, { onConflict: 'id' })
-    const { data: other } = await supabase.from('users').select('*').eq('id', userId).single()
+
+    if (!userId) { console.error('No userId param'); return }
+    const { data: other } = await supabase.from('users').select('*').eq('id', userId).maybeSingle()
     setOtherUser(other)
 
-    // Set up broadcast call channel
-    await setupCallChannel(user.id)
-
-    // Pick up pending call if answered from GlobalCallListener
+    // Pick up pending call navigated here from GlobalCallListener
     const pendingRaw = sessionStorage.getItem('__pendingCall')
     if (pendingRaw) {
       try {
@@ -368,49 +379,75 @@ export default function Chat() {
           callIdRef.current = pending.callId
           setCallType(pending.callType)
           setCallState('receiving')
-          playRingtone('incoming')
+          ctxPlayRing()
         }
       } catch(e) {}
     }
 
     let isService = false
     if (listingId && listingId !== 'undefined') {
-      const { data: svc } = await supabase.from('services').select('*').eq('id', listingId).single()
+      const { data: svc } = await supabase.from('services').select('*').eq('id', listingId).maybeSingle()
       if (svc) {
-        setService(svc); setIsServiceChat(true); isService = true
-        const { data: bk } = await supabase.from('bookings').select('*')
-          .eq('service_id', listingId)
-          .or(`and(customer_id.eq.${user.id},provider_id.eq.${userId}),and(customer_id.eq.${userId},provider_id.eq.${user.id})`)
-          .in('status', ['pending', 'confirmed'])
-          .order('created_at', { ascending: false }).limit(1).single()
-        if (bk) setBooking(bk)
+        setService(svc)
+        setIsServiceChat(true)
+        isServiceChatRef.current = true
+        isService = true
+
+        // Load booking — silently ignore if RLS blocks it or no booking exists
+        try {
+          const foundBooking = await loadBooking(listingId, user.id, userId)
+          if (foundBooking) setBooking(foundBooking)
+        } catch(e) {
+          console.log('No booking found or RLS blocked:', e.message)
+        }
       } else {
-        const { data: lst } = await supabase.from('listings').select('*').eq('id', listingId).single()
+        const { data: lst } = await supabase.from('listings').select('*').eq('id', listingId).maybeSingle()
         if (lst) setListing(lst)
       }
     }
 
     await loadMessages(user.id, isService)
 
-    const readQuery = supabase.from('messages').update({ read: true }).eq('to_user', user.id).eq('from_user', userId)
-    if (isService) readQuery.eq('service_id', listingId)
-    else readQuery.eq('listing_id', listingId)
+    // Mark messages as read
+    let readQuery = supabase.from('messages')
+      .update({ read: true })
+      .eq('to_user', user.id)
+      .eq('from_user', userId)
+    if (isService) readQuery = readQuery.eq('service_id', listingId)
+    else if (listingId && listingId !== 'undefined') readQuery = readQuery.eq('listing_id', listingId)
     await readQuery
 
     setLoading(false)
 
-    const channelName = `chat_${[user.id, userId].sort().join('_')}_${listingId}`
-    const channel = supabase.channel(channelName)
+    // FIX: register all .on() listeners BEFORE calling .subscribe()
+    // Guard: remove any existing channel before creating a new one (handles StrictMode double-invoke)
+    if (channelRef.current) {
+      await supabase.removeChannel(channelRef.current)
+      channelRef.current = null
+    }
+
+    const myId = user.id
+    const hasListing = listingId && listingId !== 'undefined'
+    const channelName = `chat_${[myId, userId].sort().join('_')}${hasListing ? '_' + listingId : ''}`
+    const channel = supabase
+      .channel(channelName)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
         const msg = payload.new
-        const relevant = (msg.from_user === user.id && msg.to_user === userId) ||
-                         (msg.from_user === userId && msg.to_user === user.id)
-        const sameContext = isService ? msg.service_id === listingId : msg.listing_id === listingId
+        const relevant =
+          (msg.from_user === myId && msg.to_user === userId) ||
+          (msg.from_user === userId && msg.to_user === myId)
+        // For direct chats (no listingId), accept any message between these two users
+        const sameContext = !hasListing
+          ? (!msg.service_id && !msg.listing_id)
+          : isService
+            ? msg.service_id === listingId
+            : msg.listing_id === listingId
         if (relevant && sameContext) {
           setMessages(prev => prev.find(m => m.id === msg.id) ? prev : [...prev, msg])
         }
       })
       .subscribe()
+
     channelRef.current = channel
   }
 
