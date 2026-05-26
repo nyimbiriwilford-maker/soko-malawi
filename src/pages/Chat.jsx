@@ -48,6 +48,7 @@ export default function Chat() {
   const pendingCandidates = useRef([])
   const incomingOfferRef = useRef(null)
   const currentUserRef = useRef(null)
+  const remoteStreamRef = useRef(null)
   const isServiceChatRef = useRef(false)
 
   const bottomRef = useRef(null)
@@ -71,10 +72,20 @@ export default function Chat() {
     }
   }, [userId, listingId])
 
-  useEffect(() => {
+ useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  useEffect(() => {
+    if (callState === 'in-call') {
+      if (remoteStreamRef.current && remoteVideoRef.current) {
+        remoteVideoRef.current.srcObject = remoteStreamRef.current
+      }
+      if (localStreamRef.current && localVideoRef.current) {
+        localVideoRef.current.srcObject = localStreamRef.current
+      }
+    }
+  }, [callState])
   function playCallEndSound() {
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)()
@@ -134,8 +145,9 @@ export default function Chat() {
     stream.getTracks().forEach(t => pc.addTrack(t, stream))
 
     pc.ontrack = e => {
-      if (remoteVideoRef.current) remoteVideoRef.current.srcObject = e.streams[0]
-    }
+  remoteStreamRef.current = e.streams[0]
+  if (remoteVideoRef.current) remoteVideoRef.current.srcObject = e.streams[0]
+}
     pc.onicecandidate = async e => {
       if (e.candidate) await sendSignal('ice', { candidate: e.candidate })
     }
@@ -171,8 +183,9 @@ export default function Chat() {
     stream.getTracks().forEach(t => pc.addTrack(t, stream))
 
     pc.ontrack = e => {
-      if (remoteVideoRef.current) remoteVideoRef.current.srcObject = e.streams[0]
-    }
+  remoteStreamRef.current = e.streams[0]
+  if (remoteVideoRef.current) remoteVideoRef.current.srcObject = e.streams[0]
+}
     pc.onicecandidate = async e => {
       if (e.candidate) await sendSignal('ice', { candidate: e.candidate })
     }
