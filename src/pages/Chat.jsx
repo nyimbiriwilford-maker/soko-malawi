@@ -267,13 +267,10 @@ export default function Chat() {
         return true
       }
 
-      // ── Caller receives: callee answered ──
+     // ── Caller receives: callee answered ──
       if (_event === 'answer') {
         if (!pcRef.current) return true
-        if (pcRef.current.signalingState !== 'have-local-offer') {
-          console.warn('Ignoring answer in wrong state:', pcRef.current.signalingState)
-          return true
-        }
+        pcRef.current.setRemoteDescription(new RTCSessionDescription(payload.answer))
         pcRef.current.setRemoteDescription(new RTCSessionDescription(payload.answer))
           .then(async () => {
             for (const c of pendingCandidates.current) {
