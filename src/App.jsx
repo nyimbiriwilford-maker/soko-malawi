@@ -42,7 +42,8 @@ export default function App() {
         <Route path="/listing/:id" element={session ? <ListingDetail /> : <Navigate to="/login" />} />
         <Route path="/post" element={session ? <PostListing /> : <Navigate to="/login" />} />
         <Route path="/chats" element={session ? <ChatList /> : <Navigate to="/login" />} />
-        <Route path="/chat/:userId/:listingId" element={session ? <Chat /> : <Navigate to="/login" />} />
+<Route path="/chat/:userId/:listingId" element={session ? <Chat /> : <Navigate to="/login" />} />
+<Route path="/chat/:userId" element={session ? <Chat /> : <Navigate to="/login" />} />        
         <Route path="/profile" element={session ? <Profile /> : <Navigate to="/login" />} />
         <Route path="/jobs" element={session ? <Jobs /> : <Navigate to="/login" />} />
         <Route path="*" element={<Navigate to="/" />} />
