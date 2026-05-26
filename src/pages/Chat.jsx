@@ -2,13 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
-const ICE_SERVERS = {
-  iceServers: [
-    { urls: 'stun:stun.l.google.com:19302' },
-    { urls: 'stun:stun1.l.google.com:19302' },
-    { urls: 'stun:stun2.l.google.com:19302' },
-  ]
-}
+import { ICE_SERVERS } from '../lib/webrtc'
 
 function generateCallId(uid1, uid2) {
   return [uid1, uid2].sort().join('-') + '-' + Date.now()
@@ -219,14 +213,14 @@ export default function Chat() {
     callChannelRef.current = ch
   }
 
-  // Send a signal to the OTHER user's broadcast channel
   async function sendSignal(event, payload = {}) {
-    const ch = supabase.channel(`call_broadcast_${userId}`)
-    await ch.subscribe()
-    await ch.send({ type: 'broadcast', event, payload: { ...payload, callId: callIdRef.current } })
-    // Don't remove — reuse if possible, but for simplicity we remove after send
-    setTimeout(() => supabase.removeChannel(ch), 2000)
-  }
+  const targetId = userId || incomingOfferRef.current?.fromUser
+  if (!targetId) { console.error('sendSignal: no target userId'); return }
+  const ch = supabase.channel(`call_broadcast_${targetId}`)
+  await ch.subscribe()
+  await ch.send({ type: 'broadcast', event, payload: { ...payload, callId: callIdRef.current } })
+  setTimeout(() => supabase.removeChannel(ch), 2000)
+}
 
   // ── CALL ACTIONS ──────────────────────────────────────────────────────────
 
