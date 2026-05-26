@@ -17,19 +17,7 @@ export function CallProvider({ children }) {
 
   useEffect(() => {
     setupChannel()
-
-    // Re-subscribe when auth token refreshes (prevents CLOSED→SUBSCRIBED cycling)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'TOKEN_REFRESHED' || event === 'SIGNED_IN') {
-        setupChannel()
-      }
-      if (event === 'SIGNED_OUT') {
-        teardownChannel()
-      }
-    })
-
     return () => {
-      subscription.unsubscribe()
       teardownChannel()
       clearTimeout(reconnectTimerRef.current)
     }
@@ -43,18 +31,16 @@ export function CallProvider({ children }) {
   }
 
   async function setupChannel() {
-    // Get current user
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     currentUserRef.current = user
 
-    // Don't create duplicate channels
-    if (channelRef.current) {
-      supabase.removeChannel(channelRef.current)
-      channelRef.current = null
-    }
+    // Don't recreate if already subscribed
+    if (channelRef.current) return
 
-    const channel = supabase.channel(`call_inbox_${user.id}`)
+    const channel = supabase.channel(`call_inbox_${user.id}`, {
+      config: { broadcast: { self: false } }
+    })
 
     channel
       .on('broadcast', { event: 'call_signal' }, ({ payload }) => {
@@ -63,8 +49,8 @@ export function CallProvider({ children }) {
       .subscribe((status) => {
         console.log('CallProvider channel status:', status)
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          // Auto-reconnect after 3 seconds
           clearTimeout(reconnectTimerRef.current)
+          channelRef.current = null
           reconnectTimerRef.current = setTimeout(() => setupChannel(), 3000)
         }
       })
@@ -74,20 +60,15 @@ export function CallProvider({ children }) {
 
   function handleIncomingSignal(payload) {
     const { _event } = payload
-
-    // Route to any registered Chat listener first
     for (const listener of listenersRef.current) {
       const handled = listener(payload)
       if (handled) return
     }
-
-    // No Chat listener handled it — show global incoming overlay for ring events
     if (_event === 'ring') {
       setIncomingCall(payload)
     }
   }
 
-  // Chat.jsx calls this to register itself as a signal handler
   function registerCallListener(fn) {
     listenersRef.current.push(fn)
     return () => {
@@ -99,12 +80,13 @@ export function CallProvider({ children }) {
     setIncomingCall(null)
   }
 
-  // Send a signal to another user's inbox channel
   async function sendSignal(targetUserId, event, payload = {}) {
     if (!targetUserId) { console.error('sendSignal: no targetUserId'); return }
 
     return new Promise((resolve) => {
-      const ch = supabase.channel(`call_inbox_${targetUserId}`)
+      const ch = supabase.channel(`call_inbox_${targetUserId}`, {
+        config: { broadcast: { self: false } }
+      })
       ch.subscribe((status) => {
         if (status === 'SUBSCRIBED') {
           ch.send({
@@ -112,7 +94,7 @@ export function CallProvider({ children }) {
             event: 'call_signal',
             payload: { _event: event, ...payload }
           }).then(() => {
-            supabase.removeChannel(ch)
+            setTimeout(() => supabase.removeChannel(ch), 500)
             resolve()
           }).catch((err) => {
             console.error('sendSignal error:', err)
@@ -134,8 +116,7 @@ export function CallProvider({ children }) {
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)()
       let playing = true
-      ringAudioRef.current = { stop: () => { playing = false; ctx.close() } }
-
+      ringAudioRef.current = { stop: () => { playing = false; try { ctx.close() } catch(e){} } }
       function ring() {
         if (!playing) return
         const notes = [520, 520]
