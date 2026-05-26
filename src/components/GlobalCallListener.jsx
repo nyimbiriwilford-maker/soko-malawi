@@ -78,8 +78,12 @@ export default function GlobalCallListener() {
     stopRing()
     sessionStorage.setItem('__pendingCall', JSON.stringify(incoming))
     setIncoming(null)
-    window.location.href = `/chat/${incoming.fromUser}/undefined`
-  }
+async function answer() {
+  stopRing()
+  sessionStorage.setItem('__pendingCall', JSON.stringify(incoming))
+  setIncoming(null)
+  window.location.href = `/chat/${incoming.fromUser}`
+}  }
 
   async function decline() {
     stopRing()
