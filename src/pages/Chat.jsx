@@ -145,11 +145,9 @@ export default function Chat() {
 
     const offer = await pc.createOffer()
     await pc.setLocalDescription(offer)
-    await new Promise(resolve => setTimeout(resolve, 200))
-
     // Send ring via CallContext — this delivers to the callee
     await ctxSendSignal(userId, 'ring', {
-      offer: pc.localDescription,
+      offer,
       callType: type,
       fromUser: currentUserRef.current.id,
       callId
