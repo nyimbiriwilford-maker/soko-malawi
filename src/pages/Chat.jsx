@@ -141,15 +141,16 @@ export default function Chat() {
       if (e.candidate) await sendSignal('ice', { candidate: e.candidate })
     }
 
-    const offer = await pc.createOffer()
-    await pc.setLocalDescription(offer)
-
     const callId = generateCallId(currentUserRef.current.id, userId)
     callIdRef.current = callId
 
+    const offer = await pc.createOffer()
+    await pc.setLocalDescription(offer)
+    await new Promise(resolve => setTimeout(resolve, 200))
+
     // Send ring via CallContext — this delivers to the callee
     await ctxSendSignal(userId, 'ring', {
-      offer,
+      offer: pc.localDescription,
       callType: type,
       fromUser: currentUserRef.current.id,
       callId
@@ -269,11 +270,11 @@ export default function Chat() {
 
      // ── Caller receives: callee answered ──
  // ── Caller receives: callee answered ──
+      // ── Caller receives: callee answered ──
       if (_event === 'answer') {
         if (!pcRef.current) return true
-        if (pcRef.current.signalingState === 'stable') return true // already set, ignore duplicate
+        if (pcRef.current.signalingState === 'stable') return true
         pcRef.current.setRemoteDescription(new RTCSessionDescription(payload.answer))
-         pcRef.current.setRemoteDescription(new RTCSessionDescription(payload.answer))
           .then(async () => {
             for (const c of pendingCandidates.current) {
               try { await pcRef.current.addIceCandidate(new RTCIceCandidate(c)) } catch(e) {}
