@@ -185,10 +185,19 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
     const offer = await pc.createOffer()
     await pc.setLocalDescription(offer)
 
+    // Include caller name so receiver never needs a DB lookup
+    const cu = currentUserRef.current
+    const fromName =
+      cu.user_metadata?.name ||
+      cu.user_metadata?.full_name ||
+      cu.email ||
+      cu.id
+
     await ctxSendSignal(userId, 'ring', {
       offer: pc.localDescription.toJSON(),
       callType: type,
-      fromUser: currentUserRef.current.id,
+      fromUser: cu.id,
+      fromName,
       callId,
     })
   }

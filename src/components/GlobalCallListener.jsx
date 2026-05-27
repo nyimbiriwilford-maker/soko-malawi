@@ -48,37 +48,16 @@ export default function GlobalCallListener() {
         })
       }
 
-      // Show ring UI immediately with UUID fallback, then update with real name
-      const ringData = {
+      // Caller includes their display name in the ring signal (fromName) —
+      // no DB lookup needed, no RLS issues.
+      setIncoming({
         fromUser: payload.fromUser,
         callType: payload.callType,
         offer: payload.offer,
         callId: payload.callId,
-        callerName: payload.fromUser,
-      }
-      setIncoming(ringData)
+        callerName: payload.fromName || payload.fromUser,
+      })
       playRing()
-
-      // Fetch display name async and patch it in.
-      // Use maybeSingle() not single() — single() returns 400 when RLS blocks 0 rows.
-      // Also ensure auth session is active before querying (GlobalCallListener
-      // may fire before supabase auth is fully initialized in this context).
-      supabase.auth.getSession().then(() =>
-        supabase
-          .from("users")
-          .select("name, email")
-          .eq("id", payload.fromUser)
-          .maybeSingle()
-      ).then(({ data: caller }) => {
-        if (caller) {
-          setIncoming(prev =>
-            prev?.callId === payload.callId
-              ? { ...prev, callerName: caller.name || caller.email || payload.fromUser }
-              : prev
-          )
-        }
-      }).catch(() => {})
-
       return true
     })
 
