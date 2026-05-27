@@ -36,8 +36,10 @@ export default function Chat() {
   const [callDuration, setCallDuration] = useState(0)
   const [isMuted, setIsMuted] = useState(false)
   const [isCamOff, setIsCamOff] = useState(false)
+  // FIX: state-driven remote stream so React re-render assigns srcObject reliably
+  const [remoteStream, setRemoteStream] = useState(null)
 
-  const { sendSignal: ctxSendSignal, registerCallListener, dismissIncoming, stopRing: ctxStopRing, playRing: ctxPlayRing } = useCall()
+  const { sendSignal: ctxSendSignal, registerCallListener, dismissIncoming, stopRing: ctxStopRing, playRing: ctxPlayRing, closeOutboundChannel } = useCall()
 
   const pcRef = useRef(null)
   const localStreamRef = useRef(null)
@@ -60,6 +62,7 @@ export default function Chat() {
   const audioRefs = useRef({})
   const inputRef = useRef(null)
   const channelRef = useRef(null)
+
   useEffect(() => {
     init()
     return () => {
@@ -72,20 +75,33 @@ export default function Chat() {
     }
   }, [userId, listingId])
 
- useEffect(() => {
+  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  // FIX: whenever remoteStream state updates, assign to video element
+  // This fires after React has rendered the video element into the DOM
+  useEffect(() => {
+    if (!remoteStream || !remoteVideoRef.current) return
+    remoteVideoRef.current.srcObject = remoteStream
+    remoteVideoRef.current.play().catch(() => {})
+  }, [remoteStream])
+
+  // FIX: also handle the case where callState becomes in-call
+  // after ontrack already fired (belt-and-suspenders)
   useEffect(() => {
     if (callState === 'in-call') {
       if (remoteStreamRef.current && remoteVideoRef.current) {
         remoteVideoRef.current.srcObject = remoteStreamRef.current
+        remoteVideoRef.current.play().catch(() => {})
       }
       if (localStreamRef.current && localVideoRef.current) {
         localVideoRef.current.srcObject = localStreamRef.current
+        localVideoRef.current.play().catch(() => {})
       }
     }
   }, [callState])
+
   function playCallEndSound() {
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)()
@@ -120,17 +136,16 @@ export default function Chat() {
     } catch(e) {}
   }
 
-  // ── sendSignal (using CallContext) ──
   async function sendSignal(event, payload = {}) {
     if (!userId) { console.error('sendSignal: no targetUserId'); return }
     await ctxSendSignal(userId, event, { ...payload, callId: callIdRef.current })
   }
 
-  // ── CALL ACTIONS ──────────────────────────────────────────────────────────
+  // ── CALL ACTIONS ────────────────────────────────────────────────────────────
+
   async function startCall(type) {
     setCallType(type)
     setCallState('calling')
-    // NOTE: do NOT play ring for the caller — only the callee rings
 
     const stream = await navigator.mediaDevices.getUserMedia({
       audio: true, video: type === 'video'
@@ -138,26 +153,41 @@ export default function Chat() {
     if (!stream) { alert('Microphone/camera access denied'); endCallLocally(); return }
 
     localStreamRef.current = stream
-    if (localVideoRef.current) localVideoRef.current.srcObject = stream
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = stream
+      localVideoRef.current.play().catch(() => {})
+    }
 
     const pc = new RTCPeerConnection(ICE_SERVERS)
     pcRef.current = pc
-    stream.getTracks().forEach(t => pc.addTrack(t, stream))
 
+    // FIX: set ontrack BEFORE addTrack/createOffer so it's registered
+    // when the browser fires it (can happen during setRemoteDescription on other side)
     pc.ontrack = e => {
-  remoteStreamRef.current = e.streams[0]
-  if (remoteVideoRef.current) remoteVideoRef.current.srcObject = e.streams[0]
-}
-    pc.onicecandidate = async e => {
-      if (e.candidate) await sendSignal('ice', { candidate: e.candidate })
+      console.log('🎥 [caller] ontrack fired, streams:', e.streams.length, 'track:', e.track.kind)
+      remoteStreamRef.current = e.streams[0]
+      setRemoteStream(e.streams[0]) // triggers useEffect → assigns srcObject after render
     }
+
+    pc.onicecandidate = async e => {
+      if (e.candidate) {
+        console.log('🧊 [caller] ICE candidate:', e.candidate.type)
+        await sendSignal('ice', { candidate: e.candidate })
+      }
+    }
+
+    // ICE diagnostics — essential for debugging
+    pc.oniceconnectionstatechange = () => console.log('❄️ [caller] ICE state:', pc.iceConnectionState)
+    pc.onconnectionstatechange = () => console.log('🔗 [caller] Connection state:', pc.connectionState)
+
+    stream.getTracks().forEach(t => pc.addTrack(t, stream))
 
     const callId = generateCallId(currentUserRef.current.id, userId)
     callIdRef.current = callId
 
     const offer = await pc.createOffer()
     await pc.setLocalDescription(offer)
-    // Send ring via CallContext — this delivers to the callee
+
     await ctxSendSignal(userId, 'ring', {
       offer,
       callType: type,
@@ -176,23 +206,51 @@ export default function Chat() {
     if (!stream) { alert('Microphone/camera access denied'); await declineCall(); return }
 
     localStreamRef.current = stream
-    if (localVideoRef.current) localVideoRef.current.srcObject = stream
+    if (localVideoRef.current) {
+      localVideoRef.current.srcObject = stream
+      localVideoRef.current.play().catch(() => {})
+    }
 
     const pc = new RTCPeerConnection(ICE_SERVERS)
     pcRef.current = pc
-    stream.getTracks().forEach(t => pc.addTrack(t, stream))
 
+    // FIX: set ontrack BEFORE setRemoteDescription — ontrack can fire during SRD
     pc.ontrack = e => {
-  remoteStreamRef.current = e.streams[0]
-  if (remoteVideoRef.current) remoteVideoRef.current.srcObject = e.streams[0]
-}
-    pc.onicecandidate = async e => {
-      if (e.candidate) await sendSignal('ice', { candidate: e.candidate })
+      console.log('🎥 [callee] ontrack fired, streams:', e.streams.length, 'track:', e.track.kind)
+      remoteStreamRef.current = e.streams[0]
+      setRemoteStream(e.streams[0]) // triggers useEffect → assigns srcObject after render
     }
 
+    pc.onicecandidate = async e => {
+      if (e.candidate) {
+        console.log('🧊 [callee] ICE candidate:', e.candidate.type)
+        await sendSignal('ice', { candidate: e.candidate })
+      }
+    }
+
+    // ICE diagnostics
+    pc.oniceconnectionstatechange = () => console.log('❄️ [callee] ICE state:', pc.iceConnectionState)
+    pc.onconnectionstatechange = () => console.log('🔗 [callee] Connection state:', pc.connectionState)
+
+    // FIX: setRemoteDescription FIRST so createAnswer knows what was offered
     await pc.setRemoteDescription(new RTCSessionDescription(incomingOfferRef.current))
+
+    // FIX: addTrack AFTER setRemoteDescription
+    stream.getTracks().forEach(t => {
+      console.log('➕ [callee] adding track:', t.kind, t.readyState)
+      pc.addTrack(t, stream)
+    })
+
     const answer = await pc.createAnswer()
     await pc.setLocalDescription(answer)
+
+    // FIX: flush ICE candidates that arrived during 'receiving' state (before answerCall ran)
+    console.log('🧊 [callee] flushing', pendingCandidates.current.length, 'pending candidates')
+    for (const c of pendingCandidates.current) {
+      try { await pc.addIceCandidate(new RTCIceCandidate(c)) } catch(e) { console.warn('pending ICE flush error:', e) }
+    }
+    pendingCandidates.current = []
+
     await sendSignal('answer', { answer })
 
     playConnectedSound()
@@ -233,8 +291,11 @@ export default function Chat() {
     pcRef.current?.close(); pcRef.current = null
     localStreamRef.current?.getTracks().forEach(t => t.stop())
     localStreamRef.current = null
+    remoteStreamRef.current = null
+    setRemoteStream(null)            // FIX: clear state so video gets cleaned up
     pendingCandidates.current = []
     incomingOfferRef.current = null
+    if (closeOutboundChannel) closeOutboundChannel(userId) // FIX: clean persistent signal channel
     setCallState('idle')
     setCallDuration(0)
     setIsMuted(false); setIsCamOff(false)
@@ -255,35 +316,33 @@ export default function Chat() {
     setIsCamOff(c => !c)
   }
 
-  // ── Register call listener (routes signals from CallContext) ──
+  // ── Register call listener ──────────────────────────────────────────────────
   useEffect(() => {
     const unregister = registerCallListener((payload) => {
       const { _event } = payload
 
-      // ── Incoming ring ──
       if (_event === 'ring') {
-        // Only handle if this ring is from the user we have open in chat
-        if (payload.fromUser !== userId) return false // let GlobalCallListener handle it
+        if (payload.fromUser !== userId) return false
         callIdRef.current = payload.callId
         incomingOfferRef.current = payload.offer
         setCallType(payload.callType)
         setCallState('receiving')
         ctxPlayRing()
-        return true // handled — suppress GlobalCallListener overlay
+        return true
       }
 
-      // ── Caller receives: callee is ringing ──
       if (_event === 'ringing') {
         setCallState('ringing')
         return true
       }
 
-  // ── Caller receives: callee answered ──
       if (_event === 'answer') {
         if (!pcRef.current) return true
         if (pcRef.current.signalingState !== 'have-local-offer') return true
         pcRef.current.setRemoteDescription(new RTCSessionDescription(payload.answer))
           .then(async () => {
+            // Flush ICE candidates that arrived before answer was processed
+            console.log('🧊 [caller] flushing', pendingCandidates.current.length, 'pending candidates after answer')
             for (const c of pendingCandidates.current) {
               try { await pcRef.current.addIceCandidate(new RTCIceCandidate(c)) } catch(e) {}
             }
@@ -296,7 +355,7 @@ export default function Chat() {
           .catch(err => console.error('setRemoteDescription (answer) error:', err))
         return true
       }
-      // ── ICE candidate ──
+
       if (_event === 'ice') {
         if (!pcRef.current) return true
         try {
@@ -309,7 +368,6 @@ export default function Chat() {
         return true
       }
 
-      // ── Remote hung up / declined ──
       if (_event === 'hangup' || _event === 'decline') {
         playCallEndSound()
         endCallLocally()
@@ -322,29 +380,20 @@ export default function Chat() {
     return unregister
   }, [userId])
 
-  // ── INIT ──────────────────────────────────────────────────────────────────
+  // ── INIT ────────────────────────────────────────────────────────────────────
 
   async function loadBooking(serviceId, myId, otherId) {
-    // Guard: don't query if any ID is missing/undefined
     if (!serviceId || serviceId === 'undefined' || !myId || !otherId) return null
 
-    // Try as customer first
     const { data: bk1, error: e1 } = await supabase.from('bookings').select('*')
-      .eq('service_id', serviceId)
-      .eq('customer_id', myId)
-      .eq('provider_id', otherId)
-      .order('created_at', { ascending: false })
-      .limit(1)
+      .eq('service_id', serviceId).eq('customer_id', myId).eq('provider_id', otherId)
+      .order('created_at', { ascending: false }).limit(1)
     if (e1) console.log('Booking query 1 error (normal if no booking):', e1.code)
     if (!e1 && bk1?.length) return bk1[0]
 
-    // Try as provider
     const { data: bk2, error: e2 } = await supabase.from('bookings').select('*')
-      .eq('service_id', serviceId)
-      .eq('customer_id', otherId)
-      .eq('provider_id', myId)
-      .order('created_at', { ascending: false })
-      .limit(1)
+      .eq('service_id', serviceId).eq('customer_id', otherId).eq('provider_id', myId)
+      .order('created_at', { ascending: false }).limit(1)
     if (e2) console.log('Booking query 2 error (normal if no booking):', e2.code)
     if (!e2 && bk2?.length) return bk2[0]
 
@@ -352,10 +401,8 @@ export default function Chat() {
   }
 
   async function init() {
-    // Refresh session first to avoid 400/406 errors from expired tokens
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
     if (sessionError || !session) {
-      // Try to refresh
       const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession()
       if (refreshError || !refreshData.session) {
         console.warn('Session expired, redirecting to login')
@@ -375,7 +422,6 @@ export default function Chat() {
     const { data: other } = await supabase.from('users').select('*').eq('id', userId).maybeSingle()
     setOtherUser(other)
 
-    // Pick up pending call navigated here from GlobalCallListener
     const pendingRaw = sessionStorage.getItem('__pendingCall')
     if (pendingRaw) {
       try {
@@ -399,8 +445,6 @@ export default function Chat() {
         setIsServiceChat(true)
         isServiceChatRef.current = true
         isService = true
-
-        // Load booking — silently ignore if RLS blocks it or no booking exists
         try {
           const foundBooking = await loadBooking(listingId, user.id, userId)
           if (foundBooking) setBooking(foundBooking)
@@ -415,19 +459,14 @@ export default function Chat() {
 
     await loadMessages(user.id, isService)
 
-    // Mark messages as read
     let readQuery = supabase.from('messages')
-      .update({ read: true })
-      .eq('to_user', user.id)
-      .eq('from_user', userId)
+      .update({ read: true }).eq('to_user', user.id).eq('from_user', userId)
     if (isService) readQuery = readQuery.eq('service_id', listingId)
     else if (listingId && listingId !== 'undefined') readQuery = readQuery.eq('listing_id', listingId)
     await readQuery
 
     setLoading(false)
 
-    // FIX: register all .on() listeners BEFORE calling .subscribe()
-    // Guard: remove any existing channel before creating a new one (handles StrictMode double-invoke)
     if (channelRef.current) {
       await supabase.removeChannel(channelRef.current)
       channelRef.current = null
@@ -443,12 +482,9 @@ export default function Chat() {
         const relevant =
           (msg.from_user === myId && msg.to_user === userId) ||
           (msg.from_user === userId && msg.to_user === myId)
-        // For direct chats (no listingId), accept any message between these two users
         const sameContext = !hasListing
           ? (!msg.service_id && !msg.listing_id)
-          : isService
-            ? msg.service_id === listingId
-            : msg.listing_id === listingId
+          : isService ? msg.service_id === listingId : msg.listing_id === listingId
         if (relevant && sameContext) {
           setMessages(prev => prev.find(m => m.id === msg.id) ? prev : [...prev, msg])
         }
@@ -778,7 +814,11 @@ export default function Chat() {
         <div style={S.callOverlay}>
           {callType === 'video' && (
             <div style={{ position: 'absolute', inset: 0 }}>
-<video ref={el => { remoteVideoRef.current = el; if (el && remoteStreamRef.current) el.srcObject = remoteStreamRef.current }} autoPlay playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />              <video ref={localVideoRef} autoPlay playsInline muted style={{ position: 'absolute', bottom: 100, right: 16, width: 110, height: 150, objectFit: 'cover', borderRadius: 12, border: '2px solid rgba(255,255,255,0.3)', background: '#000' }} />
+              {/* FIX: plain ref — srcObject assigned by useEffect([remoteStream]) */}
+              <video ref={remoteVideoRef} autoPlay playsInline
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <video ref={localVideoRef} autoPlay playsInline muted
+                style={{ position: 'absolute', bottom: 100, right: 16, width: 110, height: 150, objectFit: 'cover', borderRadius: 12, border: '2px solid rgba(255,255,255,0.3)', background: '#000' }} />
             </div>
           )}
           {callType === 'voice' && (
@@ -788,7 +828,9 @@ export default function Chat() {
               <div style={{ fontSize: 22, color: '#5de89e', fontWeight: '700', marginTop: 12, fontVariantNumeric: 'tabular-nums' }}>
                 {formatTime(callDuration)}
               </div>
-<video ref={el => { remoteVideoRef.current = el; if (el && remoteStreamRef.current) el.srcObject = remoteStreamRef.current }} autoPlay playsInline style={{ display: 'none' }} />              <video ref={localVideoRef} autoPlay playsInline muted style={{ display: 'none' }} />
+              {/* Hidden video elements for audio-only calls */}
+              <video ref={remoteVideoRef} autoPlay playsInline style={{ display: 'none' }} />
+              <video ref={localVideoRef} autoPlay playsInline muted style={{ display: 'none' }} />
             </div>
           )}
           <div style={{ position: 'absolute', bottom: 40, display: 'flex', gap: 16, alignItems: 'center', zIndex: 10 }}>

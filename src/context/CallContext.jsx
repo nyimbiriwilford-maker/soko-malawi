@@ -15,11 +15,20 @@ export function CallProvider({ children }) {
   const currentUserRef = useRef(null)
   const reconnectTimerRef = useRef(null)
 
+  // NEW: persistent outbound channels keyed by targetUserId
+  // Reusing a subscribed channel avoids the subscribe-latency drop on rapid ICE sends
+  const outboundChannelsRef = useRef({})
+
   useEffect(() => {
     setupChannel()
     return () => {
       teardownChannel()
       clearTimeout(reconnectTimerRef.current)
+      // Clean up all persistent outbound channels
+      Object.values(outboundChannelsRef.current).forEach(ch => {
+        try { supabase.removeChannel(ch) } catch(e) {}
+      })
+      outboundChannelsRef.current = {}
     }
   }, [])
 
@@ -35,7 +44,6 @@ export function CallProvider({ children }) {
     if (!user) return
     currentUserRef.current = user
 
-    // Don't recreate if already subscribed
     if (channelRef.current) return
 
     const channel = supabase.channel(`call_inbox_${user.id}`, {
@@ -80,35 +88,54 @@ export function CallProvider({ children }) {
     setIncomingCall(null)
   }
 
+  // FIX: Use a persistent channel per targetUserId so ICE candidates aren't dropped
+  // while waiting for subscribe(). The channel is created once and reused.
   async function sendSignal(targetUserId, event, payload = {}) {
     if (!targetUserId) { console.error('sendSignal: no targetUserId'); return }
 
-    return new Promise((resolve) => {
-      const ch = supabase.channel(`call_inbox_${targetUserId}`, {
+    const channelName = `call_inbox_${targetUserId}`
+
+    // Reuse existing subscribed channel if available
+    let ch = outboundChannelsRef.current[targetUserId]
+
+    if (!ch) {
+      // Create and wait for subscription
+      ch = supabase.channel(channelName, {
         config: { broadcast: { self: false } }
       })
-      ch.subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          ch.send({
-            type: 'broadcast',
-            event: 'call_signal',
-            payload: { _event: event, ...payload }
-          }).then(() => {
-            setTimeout(() => supabase.removeChannel(ch), 500)
+      outboundChannelsRef.current[targetUserId] = ch
+
+      await new Promise((resolve) => {
+        ch.subscribe((status) => {
+          if (status === 'SUBSCRIBED') resolve()
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.error('sendSignal subscribe error:', status)
+            delete outboundChannelsRef.current[targetUserId]
             resolve()
-          }).catch((err) => {
-            console.error('sendSignal error:', err)
-            supabase.removeChannel(ch)
-            resolve()
-          })
-        }
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-          console.error('sendSignal channel error:', status)
-          supabase.removeChannel(ch)
-          resolve()
-        }
+          }
+        })
       })
-    })
+    }
+
+    // Channel is now subscribed — send immediately
+    try {
+      await ch.send({
+        type: 'broadcast',
+        event: 'call_signal',
+        payload: { _event: event, ...payload }
+      })
+    } catch(err) {
+      console.error('sendSignal send error:', err)
+    }
+  }
+
+  // Call this when a call ends to clean up the outbound channel for that peer
+  function closeOutboundChannel(targetUserId) {
+    const ch = outboundChannelsRef.current[targetUserId]
+    if (ch) {
+      try { supabase.removeChannel(ch) } catch(e) {}
+      delete outboundChannelsRef.current[targetUserId]
+    }
   }
 
   function playRing() {
@@ -152,6 +179,7 @@ export function CallProvider({ children }) {
       dismissIncoming,
       playRing,
       stopRing,
+      closeOutboundChannel,
     }}>
       {children}
     </CallContext.Provider>
