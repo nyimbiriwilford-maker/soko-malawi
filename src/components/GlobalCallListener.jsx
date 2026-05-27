@@ -59,21 +59,25 @@ export default function GlobalCallListener() {
       setIncoming(ringData)
       playRing()
 
-      // Fetch display name async and patch it in
-      supabase
-        .from("users")
-        .select("name, email")
-        .eq("id", payload.fromUser)
-        .single()
-        .then(({ data: caller }) => {
-          if (caller) {
-            setIncoming(prev =>
-              prev?.callId === payload.callId
-                ? { ...prev, callerName: caller.name || caller.email || payload.fromUser }
-                : prev
-            )
-          }
-        })
+      // Fetch display name async and patch it in.
+      // Use maybeSingle() not single() — single() returns 400 when RLS blocks 0 rows.
+      // Also ensure auth session is active before querying (GlobalCallListener
+      // may fire before supabase auth is fully initialized in this context).
+      supabase.auth.getSession().then(() =>
+        supabase
+          .from("users")
+          .select("name, email")
+          .eq("id", payload.fromUser)
+          .maybeSingle()
+      ).then(({ data: caller }) => {
+        if (caller) {
+          setIncoming(prev =>
+            prev?.callId === payload.callId
+              ? { ...prev, callerName: caller.name || caller.email || payload.fromUser }
+              : prev
+          )
+        }
+      }).catch(() => {})
 
       return true
     })
