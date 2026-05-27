@@ -4,21 +4,50 @@ import { supabase } from '../lib/supabase'
 import { useCall } from '../context/CallContext'
 
 export default function GlobalCallListener() {
-  const [incoming, setIncoming] = useState(null) // { fromUser, callType, offer, callId, callerName }
+  const [incoming, setIncoming] = useState(null)
   const navigate = useNavigate()
-  const { registerCallListener, dismissIncoming, stopRing, playRing } = useCall()
+  const {
+    registerCallListener,
+    dismissIncoming,
+    stopRing,
+    playRing,
+    subscribeToIceCandidatesEarly,
+  } = useCall()
+
+  // Track the current user's ID so we can subscribe to early ICE candidates
+  const myUserIdRef = useRef(null)
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) myUserIdRef.current = user.id
+    })
+  }, [])
 
   useEffect(() => {
     const unregister = registerCallListener((payload) => {
-      const { _event } = payload
-
-      if (_event !== 'ring') return false // only handle ring events
+      if (payload._event !== 'ring') return false
 
       // If already in the chat with this caller, let Chat.jsx handle it
       const callerPath = `/chat/${payload.fromUser}`
       if (window.location.pathname.startsWith(callerPath)) return false
 
-      // Show global incoming overlay
+      // ── KEY FIX ────────────────────────────────────────────────────────────
+      // Subscribe to ICE candidates NOW, before the user even taps Answer.
+      // The caller starts sending candidates immediately after createOffer().
+      // By the time the user taps Answer and Chat.jsx mounts, all those early
+      // candidates are in the DB. The early buffer collects them so
+      // useWebRTC.restorePendingCall() can drain them when it's ready.
+      if (myUserIdRef.current) {
+        subscribeToIceCandidatesEarly(payload.callId, myUserIdRef.current)
+      } else {
+        // myUserId not ready yet — wait for auth then subscribe
+        supabase.auth.getUser().then(({ data: { user } }) => {
+          if (user) {
+            myUserIdRef.current = user.id
+            subscribeToIceCandidatesEarly(payload.callId, user.id)
+          }
+        })
+      }
+
       setIncoming({
         fromUser: payload.fromUser,
         callType: payload.callType,
@@ -26,13 +55,13 @@ export default function GlobalCallListener() {
         callId: payload.callId,
       })
       playRing()
-      return true // handled here — suppress nothing else since Chat isn't open
+      return true
     })
 
     return unregister
   }, [])
 
-  // Also dismiss if user navigates into the relevant chat
+  // Dismiss if user navigates into the relevant chat while ring UI is showing
   useEffect(() => {
     if (!incoming) return
     const callerPath = `/chat/${incoming.fromUser}`
@@ -51,12 +80,13 @@ export default function GlobalCallListener() {
     if (!incoming) return
     stopRing()
 
-    // Get other user's name for display
     const { data: caller } = await supabase
       .from('users').select('name, email').eq('id', incoming.fromUser).single()
     const callerName = caller?.name || caller?.email || 'Unknown'
 
-    // Store call data for Chat.jsx to pick up
+    // Store the pending call for Chat.jsx to pick up via restorePendingCall()
+    // Note: the early ICE subscription stays alive in CallContext — it will be
+    // drained by useWebRTC.restorePendingCall() after the peer connection is built.
     sessionStorage.setItem('__pendingCall', JSON.stringify({
       fromUser: incoming.fromUser,
       callType: incoming.callType,
@@ -74,7 +104,6 @@ export default function GlobalCallListener() {
     if (!incoming) return
     stopRing()
 
-    // Notify caller
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
       const targetChannel = supabase.channel(`call_signal_${incoming.fromUser}_${Date.now()}`)

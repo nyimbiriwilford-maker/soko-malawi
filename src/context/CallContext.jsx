@@ -10,19 +10,19 @@ export function useCall() {
 export function CallProvider({ children }) {
   const [incomingCall, setIncomingCall] = useState(null)
 
-  // Inbound broadcast channel (ring / answer / decline / hangup)
-  const channelRef = useRef(null)
-  const listenersRef = useRef([])
-  const ringAudioRef = useRef(null)
-  const currentUserRef = useRef(null)
+  const channelRef        = useRef(null)
+  const listenersRef      = useRef([])
+  const ringAudioRef      = useRef(null)
+  const currentUserRef    = useRef(null)
   const reconnectTimerRef = useRef(null)
-
-  // Outbound broadcast channel — one persistent channel per target user
-  // Used ONLY for ring / answer / decline / hangup (not ICE)
   const outboundChannelsRef = useRef({})
+  const iceSub            = useRef(null)
 
-  // ICE candidate DB subscription — one subscription per active call
-  const iceSub = useRef(null)
+  // ── Early ICE buffer ───────────────────────────────────────────────────────
+  // Map<callId, { candidates: object[], sub: RealtimeChannel }>
+  // GlobalCallListener subscribes here at ring time so candidates are buffered
+  // before Chat.jsx mounts and the peer connection is created.
+  const earlyIceRef = useRef(new Map())
 
   useEffect(() => {
     setupChannel()
@@ -34,6 +34,11 @@ export function CallProvider({ children }) {
       })
       outboundChannelsRef.current = {}
       stopIceSubscription()
+      // Clean up any lingering early subscriptions
+      for (const [, entry] of earlyIceRef.current) {
+        try { supabase.removeChannel(entry.sub) } catch (e) {}
+      }
+      earlyIceRef.current.clear()
     }
   }, [])
 
@@ -72,9 +77,7 @@ export function CallProvider({ children }) {
       const handled = listener(payload)
       if (handled) return
     }
-    if (payload._event === 'ring') {
-      setIncomingCall(payload)
-    }
+    if (payload._event === 'ring') setIncomingCall(payload)
   }
 
   function registerCallListener(fn) {
@@ -84,12 +87,9 @@ export function CallProvider({ children }) {
     }
   }
 
-  function dismissIncoming() {
-    setIncomingCall(null)
-  }
+  function dismissIncoming() { setIncomingCall(null) }
 
-  // ─── Broadcast signal (ring / answer / decline / hangup) ─────────────────
-  // ICE candidates do NOT go through here — they use sendIceCandidate() below.
+  // ── Signalling (ring / answer / decline / hangup) ──────────────────────────
   async function sendSignal(targetUserId, event, payload = {}) {
     if (!targetUserId) { console.error('sendSignal: no targetUserId'); return }
 
@@ -122,11 +122,8 @@ export function CallProvider({ children }) {
     }
   }
 
-  // ─── ICE candidates via DB (bypasses Realtime WebSocket fallback) ─────────
+  // ── ICE candidates via DB ──────────────────────────────────────────────────
 
-  // Write one ICE candidate to the DB.
-  // callId: shared string (e.g. generated from both user IDs)
-  // fromUserId / toUserId: UUID strings
   async function sendIceCandidate(callId, fromUserId, toUserId, candidate) {
     if (!candidate) return
     const { error } = await supabase
@@ -135,24 +132,16 @@ export function CallProvider({ children }) {
     if (error) console.error('sendIceCandidate insert error:', error)
   }
 
-  // Subscribe to incoming ICE candidates for this call.
-  // onCandidate(candidate) is called for each new row.
   function subscribeToIceCandidates(callId, myUserId, onCandidate) {
-    stopIceSubscription() // clear any previous sub
+    stopIceSubscription()
 
     const sub = supabase
       .channel(`ice_${callId}_${myUserId}`)
       .on(
         'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'ice_candidates',
-          filter: `call_id=eq.${callId}`,
-        },
+        { event: 'INSERT', schema: 'public', table: 'ice_candidates', filter: `call_id=eq.${callId}` },
         (payload) => {
           const row = payload.new
-          // Only process candidates addressed to me
           if (row.to_user !== myUserId) return
           console.log(`[ice-db] received candidate for ${myUserId}`)
           onCandidate(row.candidate)
@@ -173,7 +162,6 @@ export function CallProvider({ children }) {
     }
   }
 
-  // Clean up ICE rows after call ends (optional but keeps DB tidy)
   async function cleanupIceCandidates(callId) {
     await supabase.from('ice_candidates').delete().eq('call_id', callId)
   }
@@ -186,7 +174,64 @@ export function CallProvider({ children }) {
     }
   }
 
-  // ─── Ringtone ─────────────────────────────────────────────────────────────
+  // ── Early ICE buffer (for GlobalCallListener → useWebRTC handoff) ──────────
+  //
+  // When the receiver is NOT on the chat page, GlobalCallListener shows the ring UI.
+  // The caller starts generating ICE candidates immediately after createOffer().
+  // If we wait until the user taps Answer and Chat.jsx mounts before subscribing,
+  // all those early candidates are missed (postgres_changes only fires on new inserts).
+  //
+  // Solution: subscribe here as soon as the ring arrives, buffer the candidates,
+  // then let useWebRTC.restorePendingCall() drain the buffer via drainEarlyCandidates().
+
+  /**
+   * Start buffering ICE candidates for callId/myUserId immediately.
+   * Safe to call multiple times — idempotent on the same callId.
+   */
+  function subscribeToIceCandidatesEarly(callId, myUserId) {
+    if (earlyIceRef.current.has(callId)) return // already buffering
+    console.log(`[ice-early] starting buffer for ${callId}`)
+
+    const entry = { candidates: [], sub: null }
+    earlyIceRef.current.set(callId, entry)
+
+    const sub = supabase
+      .channel(`ice_early_${callId}_${myUserId}`)
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'ice_candidates', filter: `call_id=eq.${callId}` },
+        (payload) => {
+          const row = payload.new
+          if (row.to_user !== myUserId) return
+          console.log(`[ice-early] buffered candidate for ${callId}`)
+          // Store the raw candidate string exactly as it came from the DB
+          // (useWebRTC will JSON.parse it the same way as the normal path)
+          entry.candidates.push(row.candidate)
+        }
+      )
+      .subscribe((status) => {
+        console.log(`[ice-early] ${callId} status: ${status}`)
+      })
+
+    entry.sub = sub
+  }
+
+  /**
+   * Return all buffered candidates and shut down the early subscription.
+   * Call this from useWebRTC when the peer connection is ready.
+   * Returns an array of raw candidate strings (same format as the normal DB path).
+   */
+  function drainEarlyCandidates(callId) {
+    const entry = earlyIceRef.current.get(callId)
+    if (!entry) return []
+    const candidates = [...entry.candidates]
+    console.log(`[ice-early] draining ${candidates.length} buffered candidates for ${callId}`)
+    try { supabase.removeChannel(entry.sub) } catch (e) {}
+    earlyIceRef.current.delete(callId)
+    return candidates
+  }
+
+  // ── Ringtone ───────────────────────────────────────────────────────────────
   function playRing() {
     stopRing()
     try {
@@ -232,6 +277,9 @@ export function CallProvider({ children }) {
       playRing,
       stopRing,
       closeOutboundChannel,
+      // Early ICE buffer — used by GlobalCallListener + useWebRTC.restorePendingCall
+      subscribeToIceCandidatesEarly,
+      drainEarlyCandidates,
     }}>
       {children}
     </CallContext.Provider>
