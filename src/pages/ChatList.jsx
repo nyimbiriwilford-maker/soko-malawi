@@ -23,40 +23,82 @@ export default function ChatList() {
 
     if (!messages || messages.length === 0) { setLoading(false); return }
 
-    // Group by conversation — service chats use service_id, listing chats use listing_id
-    const seen = new Set()
-    const conversations = []
+    // ── Deduplication logic ──────────────────────────────────────────────────
+    // The key must be stable regardless of whether a message has listing_id set.
+    // Rule:
+    //   • Service chats  → keyed by otherId + service_id  (service_id is always present)
+    //   • Listing chats  → keyed by otherId + listing_id  (use the first non-null listing_id seen)
+    //   • Direct chats   → keyed by otherId alone
+    //
+    // We also skip call-log messages (call_type set) when picking the representative
+    // message for a conversation — they're noise. But they still count as part of
+    // the conversation so they don't need to create a new entry.
+
+    // First pass: collect the best (latest real) message and the context for each convo
+    const convos = new Map() // key → { otherId, contextId, isService, lastMsg }
+
     for (const msg of messages) {
       const otherId = msg.from_user === user.id ? msg.to_user : msg.from_user
-      const contextId = msg.service_id || msg.listing_id
-      const key = `${otherId}_${contextId}`
-      if (!seen.has(key)) {
-        seen.add(key)
-        conversations.push({
+      const serviceId = msg.service_id || null
+      const listingId = msg.listing_id || null
+
+      // Determine the canonical key
+      let key
+      if (serviceId) {
+        key = `svc:${otherId}:${serviceId}`
+      } else if (listingId) {
+        key = `lst:${otherId}:${listingId}`
+      } else {
+        // Direct chat or call log with no context — group under the person
+        key = `dir:${otherId}`
+      }
+
+      if (!convos.has(key)) {
+        convos.set(key, {
           otherId,
-          contextId,
-          isService: !!msg.service_id,
-          lastMsg: msg
+          contextId: serviceId || listingId || null,
+          isService: !!serviceId,
+          lastMsg: msg,  // messages are ordered desc so first seen = latest
         })
+      } else {
+        // Already have this convo. If the existing lastMsg is a call log and
+        // this one is a real message, upgrade it so the preview looks better.
+        const existing = convos.get(key)
+        if (existing.lastMsg.call_type && !msg.call_type) {
+          existing.lastMsg = msg
+        }
+        // Also fill in contextId if we now see one and didn't before
+        if (!existing.contextId && (serviceId || listingId)) {
+          existing.contextId = serviceId || listingId
+          existing.isService = !!serviceId
+        }
       }
     }
 
-    const otherIds = [...new Set(conversations.map(c => c.otherId))]
-    const serviceIds = conversations.filter(c => c.isService).map(c => c.contextId).filter(Boolean)
-    const listingIds = conversations.filter(c => !c.isService).map(c => c.contextId).filter(Boolean)
+    const conversations = [...convos.values()]
+
+    // ── Enrich with user / service / listing data ────────────────────────────
+    const otherIds    = [...new Set(conversations.map(c => c.otherId))]
+    const serviceIds  = conversations.filter(c => c.isService && c.contextId).map(c => c.contextId)
+    const listingIds  = conversations.filter(c => !c.isService && c.contextId).map(c => c.contextId)
 
     const [{ data: users }, { data: services }, { data: listings }] = await Promise.all([
       supabase.from('users').select('*').in('id', otherIds),
-      serviceIds.length > 0 ? supabase.from('services').select('id,name,category,rate,city,media_urls').in('id', serviceIds) : { data: [] },
-      listingIds.length > 0 ? supabase.from('listings').select('id,title,images,price').in('id', listingIds) : { data: [] },
+      serviceIds.length > 0
+        ? supabase.from('services').select('id,name,category,rate,city,media_urls').in('id', serviceIds)
+        : { data: [] },
+      listingIds.length > 0
+        ? supabase.from('listings').select('id,title,images,price').in('id', listingIds)
+        : { data: [] },
     ])
 
-    const usersMap = Object.fromEntries((users || []).map(u => [u.id, u]))
+    const usersMap    = Object.fromEntries((users    || []).map(u => [u.id, u]))
     const servicesMap = Object.fromEntries((services || []).map(s => [s.id, s]))
     const listingsMap = Object.fromEntries((listings || []).map(l => [l.id, l]))
 
     const enriched = await Promise.all(conversations.map(async c => {
-      let unreadQuery = supabase.from('messages')
+      let unreadQuery = supabase
+        .from('messages')
         .select('*', { count: 'exact', head: true })
         .eq('from_user', c.otherId)
         .eq('to_user', user.id)
@@ -73,9 +115,9 @@ export default function ChatList() {
       return {
         ...c,
         otherUser: usersMap[c.otherId],
-        service: c.isService ? servicesMap[c.contextId] : null,
-        listing: !c.isService ? listingsMap[c.contextId] : null,
-        unread: count || 0,
+        service:   c.isService ? servicesMap[c.contextId] : null,
+        listing:   !c.isService && c.contextId ? listingsMap[c.contextId] : null,
+        unread:    count || 0,
       }
     }))
 
@@ -91,18 +133,23 @@ export default function ChatList() {
 
   const filtered = chats.filter(c => {
     if (activeTab === 'services') return c.isService
-    if (activeTab === 'listings') return !c.isService
+    if (activeTab === 'listings') return !c.isService && c.contextId  // exclude direct chats from listings tab
     return true
   })
 
-  const totalUnread = chats.reduce((sum, c) => sum + c.unread, 0)
+  const totalUnread   = chats.reduce((sum, c) => sum + c.unread, 0)
   const serviceUnread = chats.filter(c => c.isService).reduce((sum, c) => sum + c.unread, 0)
-  const listingUnread = chats.filter(c => !c.isService).reduce((sum, c) => sum + c.unread, 0)
+  const listingUnread = chats.filter(c => !c.isService && c.contextId).reduce((sum, c) => sum + c.unread, 0)
 
   function renderLastMsg(chat) {
     const msg = chat.lastMsg
     const isMine = msg.from_user === currentUser?.id
     const prefix = isMine ? 'You: ' : ''
+    if (msg.call_type) {
+      const isVideo = msg.call_type === 'video'
+      if (msg.call_status === 'missed') return prefix + (isVideo ? '📹 Missed video call' : '📞 Missed call')
+      if (msg.call_status === 'ended') return prefix + (isVideo ? '📹 Video call' : '📞 Voice call')
+    }
     if (msg.media_type === 'image') return prefix + '📷 Photo'
     if (msg.media_type === 'video') return prefix + '🎥 Video'
     if (msg.media_type === 'audio') return prefix + '🎤 Voice note'
@@ -136,24 +183,19 @@ export default function ChatList() {
             <div style={S.headerTitle}>Messages</div>
             <div style={S.headerSub}>{chats.length} conversation{chats.length !== 1 ? 's' : ''}{totalUnread > 0 ? ` · ${totalUnread} unread` : ''}</div>
           </div>
-          {totalUnread > 0 && (
-            <div style={S.totalBadge}>{totalUnread}</div>
-          )}
+          {totalUnread > 0 && <div style={S.totalBadge}>{totalUnread}</div>}
         </div>
 
         {/* Tabs */}
         <div style={S.tabs}>
-          <button style={{ ...S.tab, ...(activeTab === 'all' ? S.tabActive : {}) }} onClick={() => setActiveTab('all')}>
-            All
-            {totalUnread > 0 && <span style={S.tabBadge}>{totalUnread}</span>}
+          <button style={{ ...S.tab, ...(activeTab === 'all'      ? S.tabActive : {}) }} onClick={() => setActiveTab('all')}>
+            All {totalUnread > 0 && <span style={S.tabBadge}>{totalUnread}</span>}
           </button>
           <button style={{ ...S.tab, ...(activeTab === 'services' ? S.tabActive : {}) }} onClick={() => setActiveTab('services')}>
-            🔧 Services
-            {serviceUnread > 0 && <span style={S.tabBadge}>{serviceUnread}</span>}
+            🔧 Services {serviceUnread > 0 && <span style={S.tabBadge}>{serviceUnread}</span>}
           </button>
           <button style={{ ...S.tab, ...(activeTab === 'listings' ? S.tabActive : {}) }} onClick={() => setActiveTab('listings')}>
-            🛍️ Listings
-            {listingUnread > 0 && <span style={S.tabBadge}>{listingUnread}</span>}
+            🛍️ Listings {listingUnread > 0 && <span style={S.tabBadge}>{listingUnread}</span>}
           </button>
         </div>
       </div>
@@ -191,10 +233,8 @@ export default function ChatList() {
 
       {/* Chat list */}
       <div style={S.list}>
-        {/* Section headers when showing all */}
-        {activeTab === 'all' && chats.some(c => c.isService) && chats.some(c => !c.isService) && (
+        {activeTab === 'all' && chats.some(c => c.isService) && chats.some(c => !c.isService) ? (
           <>
-            {/* Service chats section */}
             {chats.filter(c => c.isService).length > 0 && (
               <>
                 <div style={S.sectionHeader}>
@@ -211,10 +251,7 @@ export default function ChatList() {
               </>
             )}
           </>
-        )}
-
-        {/* When filtered or only one type exists */}
-        {(activeTab !== 'all' || !chats.some(c => c.isService) || !chats.some(c => !c.isService)) && (
+        ) : (
           filtered.map((chat, i) => renderChatRow(chat, i))
         )}
       </div>
@@ -245,7 +282,7 @@ export default function ChatList() {
     const hasUnread = chat.unread > 0
     const contextLabel = isService
       ? (chat.service?.name || 'Service')
-      : (chat.listing?.title || 'Listing')
+      : (chat.listing?.title || (chat.contextId ? 'Listing' : 'Direct message'))
     const contextSub = isService
       ? (chat.service?.rate ? chat.service.rate + ' · ' + (chat.service.city || '') : chat.service?.city || '')
       : (chat.listing?.price ? 'MWK ' + Number(chat.listing.price).toLocaleString() : '')
@@ -253,11 +290,16 @@ export default function ChatList() {
     const avatarImg = isService && chat.service?.media_urls?.[0]
     const listingImg = !isService && chat.listing?.images?.[0]
 
+    // Navigate to chat — use contextId if present, else just the user
+    const chatPath = chat.contextId
+      ? `/chat/${chat.otherId}/${chat.contextId}`
+      : `/chat/${chat.otherId}`
+
     return (
       <div
-        key={`${chat.otherId}_${chat.contextId}`}
+        key={`${chat.otherId}_${chat.contextId || 'direct'}`}
         style={{ ...S.chatRow, animationDelay: i * 0.04 + 's', background: hasUnread ? '#fafffd' : '#fff' }}
-        onClick={() => navigate(`/chat/${chat.otherId}/${chat.contextId}`)}
+        onClick={() => navigate(chatPath)}
       >
         {/* Avatar */}
         <div style={S.avatarWrap}>
@@ -272,7 +314,6 @@ export default function ChatList() {
               </span>
             )}
           </div>
-          {/* Type badge */}
           <div style={{ ...S.typeDot, background: isService ? '#1a7a4a' : '#2980b9' }}>
             {isService ? catIcon : '🛍️'}
           </div>
@@ -286,12 +327,13 @@ export default function ChatList() {
             </div>
           </div>
 
-          {/* Context pill */}
-          <div style={S.contextPill}>
-            <span style={{ ...S.contextPillDot, background: isService ? '#1a7a4a' : '#2980b9' }} />
-            <span style={S.contextPillText}>{contextLabel}</span>
-            {contextSub ? <span style={S.contextPillSub}> · {contextSub}</span> : null}
-          </div>
+          {chat.contextId && (
+            <div style={S.contextPill}>
+              <span style={{ ...S.contextPillDot, background: isService ? '#1a7a4a' : '#2980b9' }} />
+              <span style={S.contextPillText}>{contextLabel}</span>
+              {contextSub ? <span style={S.contextPillSub}> · {contextSub}</span> : null}
+            </div>
+          )}
 
           <div style={S.chatBottom}>
             <span style={{ ...S.lastMsg, fontWeight: hasUnread ? '600' : '400', color: hasUnread ? '#0f1410' : '#888' }}>
