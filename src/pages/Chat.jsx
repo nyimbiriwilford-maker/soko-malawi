@@ -1,67 +1,71 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { useCall } from '../context/CallContext'
-import { ICE_SERVERS } from '../lib/webrtc'
-
-function generateCallId(uid1, uid2) {
-  return [uid1, uid2].sort().join('-') + '-' + Date.now()
-}
+import { useWebRTC, formatTime } from '../hooks/useWebRTC'
 
 export default function Chat() {
   const { userId, listingId } = useParams()
   const navigate = useNavigate()
 
-  const [messages, setMessages] = useState([])
-  const [newMsg, setNewMsg] = useState('')
+  // ── Chat state ───────────────────────────────────────────────────────
+  const [messages, setMessages]     = useState([])
+  const [newMsg, setNewMsg]         = useState('')
   const [currentUser, setCurrentUser] = useState(null)
-  const [otherUser, setOtherUser] = useState(null)
-  const [listing, setListing] = useState(null)
-  const [service, setService] = useState(null)
-  const [booking, setBooking] = useState(null)
+  const [otherUser, setOtherUser]   = useState(null)
+  const [listing, setListing]       = useState(null)
+  const [service, setService]       = useState(null)
+  const [booking, setBooking]       = useState(null)
   const [isServiceChat, setIsServiceChat] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [uploading, setUploading] = useState(false)
-  const [recording, setRecording] = useState(false)
+  const [loading, setLoading]       = useState(true)
+  const [uploading, setUploading]   = useState(false)
+  const [recording, setRecording]   = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
   const [waveHeights, setWaveHeights] = useState(Array(40).fill(2))
-  const [playingId, setPlayingId] = useState(null)
+  const [playingId, setPlayingId]   = useState(null)
   const [audioProgress, setAudioProgress] = useState({})
   const [audioDuration, setAudioDuration] = useState({})
-  const [preview, setPreview] = useState(null)
+  const [preview, setPreview]       = useState(null)
 
-  // WebRTC call state
-  const [callState, setCallState] = useState('idle') // idle|calling|ringing|receiving|in-call
-  const [callType, setCallType] = useState(null)
-  const [callDuration, setCallDuration] = useState(0)
-  const [isMuted, setIsMuted] = useState(false)
-  const [isCamOff, setIsCamOff] = useState(false)
-  // FIX: state-driven remote stream so React re-render assigns srcObject reliably
-  const [remoteStream, setRemoteStream] = useState(null)
-
-  const { sendSignal: ctxSendSignal, registerCallListener, dismissIncoming, stopRing: ctxStopRing, playRing: ctxPlayRing, closeOutboundChannel } = useCall()
-
-  const pcRef = useRef(null)
-  const localStreamRef = useRef(null)
-  const localVideoRef = useRef(null)
-  const remoteVideoRef = useRef(null)
-  const callIdRef = useRef(null)
-  const callTimerRef = useRef(null)
-  const pendingCandidates = useRef([])
-  const incomingOfferRef = useRef(null)
-  const currentUserRef = useRef(null)
-  const remoteStreamRef = useRef(null)
   const isServiceChatRef = useRef(false)
-
-  const bottomRef = useRef(null)
+  const currentUserRef   = useRef(null)
+  const bottomRef        = useRef(null)
   const mediaRecorderRef = useRef(null)
-  const chunksRef = useRef([])
-  const timerRef = useRef(null)
-  const analyserRef = useRef(null)
-  const animFrameRef = useRef(null)
-  const audioRefs = useRef({})
-  const inputRef = useRef(null)
-  const channelRef = useRef(null)
+  const chunksRef        = useRef([])
+  const timerRef         = useRef(null)
+  const analyserRef      = useRef(null)
+  const animFrameRef     = useRef(null)
+  const audioRefs        = useRef({})
+  const inputRef         = useRef(null)
+  const channelRef       = useRef(null)
+
+  // ── WebRTC hook ──────────────────────────────────────────────────────
+  const {
+    callState,
+    callType,
+    callDuration,
+    isMuted,
+    isCamOff,
+    remoteStream,
+    localVideoRef,
+    remoteVideoRef,
+    startCall,
+    answerCall,
+    declineCall,
+    hangUp,
+    endCallLocally,
+    toggleMute,
+    toggleCam,
+    setupCallListener,
+    assignRemoteStream,
+    assignLocalStream,
+    restorePendingCall,
+  } = useWebRTC({
+    userId,
+    currentUser,
+    onCallMessage: (fields) => sendMessage('', 'text', null, fields),
+  })
+
+  // ── Effects ──────────────────────────────────────────────────────────
 
   useEffect(() => {
     init()
@@ -70,8 +74,7 @@ export default function Chat() {
         supabase.removeChannel(channelRef.current)
         channelRef.current = null
       }
-      clearInterval(callTimerRef.current)
-      ctxStopRing()
+      endCallLocally()
     }
   }, [userId, listingId])
 
@@ -79,333 +82,32 @@ export default function Chat() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
-  // FIX: whenever remoteStream state updates, assign to video element
-  // This fires after React has rendered the video element into the DOM
+  // Assign remote stream to video element after React re-renders
   useEffect(() => {
-    if (!remoteStream || !remoteVideoRef.current) return
-    remoteVideoRef.current.srcObject = remoteStream
-    remoteVideoRef.current.play().catch(() => {})
+    assignRemoteStream()
   }, [remoteStream])
 
-  // FIX: also handle the case where callState becomes in-call
-  // after ontrack already fired (belt-and-suspenders)
+  // Belt-and-suspenders: also assign when in-call state is reached
   useEffect(() => {
     if (callState === 'in-call') {
-      if (remoteStreamRef.current && remoteVideoRef.current) {
-        remoteVideoRef.current.srcObject = remoteStreamRef.current
-        remoteVideoRef.current.play().catch(() => {})
-      }
-      if (localStreamRef.current && localVideoRef.current) {
-        localVideoRef.current.srcObject = localStreamRef.current
-        localVideoRef.current.play().catch(() => {})
-      }
+      assignRemoteStream()
+      assignLocalStream()
     }
   }, [callState])
 
-  function playCallEndSound() {
-    try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)()
-      const notes = [480, 360, 300]
-      notes.forEach((freq, i) => {
-        const osc = ctx.createOscillator()
-        const gain = ctx.createGain()
-        osc.connect(gain); gain.connect(ctx.destination)
-        osc.type = 'sine'; osc.frequency.value = freq
-        const t = ctx.currentTime + i * 0.15
-        gain.gain.setValueAtTime(0.18, t)
-        gain.gain.linearRampToValueAtTime(0, t + 0.12)
-        osc.start(t); osc.stop(t + 0.15)
-      })
-    } catch(e) {}
-  }
-
-  function playConnectedSound() {
-    try {
-      const ctx = new (window.AudioContext || window.webkitAudioContext)()
-      const notes = [380, 480]
-      notes.forEach((freq, i) => {
-        const osc = ctx.createOscillator()
-        const gain = ctx.createGain()
-        osc.connect(gain); gain.connect(ctx.destination)
-        osc.type = 'sine'; osc.frequency.value = freq
-        const t = ctx.currentTime + i * 0.12
-        gain.gain.setValueAtTime(0.15, t)
-        gain.gain.linearRampToValueAtTime(0, t + 0.1)
-        osc.start(t); osc.stop(t + 0.12)
-      })
-    } catch(e) {}
-  }
-
-  async function sendSignal(event, payload = {}) {
-    if (!userId) { console.error('sendSignal: no targetUserId'); return }
-    await ctxSendSignal(userId, event, { ...payload, callId: callIdRef.current })
-  }
-
-  // ── CALL ACTIONS ────────────────────────────────────────────────────────────
-
-  async function startCall(type) {
-    setCallType(type)
-    setCallState('calling')
-
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: true, video: type === 'video'
-    }).catch(() => null)
-    if (!stream) { alert('Microphone/camera access denied'); endCallLocally(); return }
-
-    localStreamRef.current = stream
-    if (localVideoRef.current) {
-      localVideoRef.current.srcObject = stream
-      localVideoRef.current.play().catch(() => {})
-    }
-
-    const pc = new RTCPeerConnection(ICE_SERVERS)
-    pcRef.current = pc
-
-    // FIX: set ontrack BEFORE addTrack/createOffer so it's registered
-    // when the browser fires it (can happen during setRemoteDescription on other side)
-    pc.ontrack = e => {
-      console.log('🎥 [caller] ontrack fired, streams:', e.streams.length, 'track:', e.track.kind)
-      remoteStreamRef.current = e.streams[0]
-      setRemoteStream(e.streams[0]) // triggers useEffect → assigns srcObject after render
-    }
-
-    pc.onicecandidate = async e => {
-      if (e.candidate) {
-        console.log('🧊 [caller] ICE candidate:', e.candidate.type)
-        await sendSignal('ice', { candidate: e.candidate })
-      }
-    }
-
-    // ICE diagnostics — essential for debugging
-    pc.oniceconnectionstatechange = () => console.log('❄️ [caller] ICE state:', pc.iceConnectionState)
-    pc.onconnectionstatechange = () => console.log('🔗 [caller] Connection state:', pc.connectionState)
-
-    stream.getTracks().forEach(t => pc.addTrack(t, stream))
-
-    const callId = generateCallId(currentUserRef.current.id, userId)
-    callIdRef.current = callId
-
-    const offer = await pc.createOffer()
-    await pc.setLocalDescription(offer)
-
-    await ctxSendSignal(userId, 'ring', {
-      offer,
-      callType: type,
-      fromUser: currentUserRef.current.id,
-      callId
-    })
-  }
-
-  async function answerCall() {
-    ctxStopRing()
-    dismissIncoming()
-
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: true, video: callType === 'video'
-    }).catch(() => null)
-    if (!stream) { alert('Microphone/camera access denied'); await declineCall(); return }
-
-    localStreamRef.current = stream
-    if (localVideoRef.current) {
-      localVideoRef.current.srcObject = stream
-      localVideoRef.current.play().catch(() => {})
-    }
-
-    const pc = new RTCPeerConnection(ICE_SERVERS)
-    pcRef.current = pc
-
-    // FIX: set ontrack BEFORE setRemoteDescription — ontrack can fire during SRD
-    pc.ontrack = e => {
-      console.log('🎥 [callee] ontrack fired, streams:', e.streams.length, 'track:', e.track.kind)
-      remoteStreamRef.current = e.streams[0]
-      setRemoteStream(e.streams[0]) // triggers useEffect → assigns srcObject after render
-    }
-
-    pc.onicecandidate = async e => {
-      if (e.candidate) {
-        console.log('🧊 [callee] ICE candidate:', e.candidate.type)
-        await sendSignal('ice', { candidate: e.candidate })
-      }
-    }
-
-    // ICE diagnostics
-    pc.oniceconnectionstatechange = () => console.log('❄️ [callee] ICE state:', pc.iceConnectionState)
-    pc.onconnectionstatechange = () => console.log('🔗 [callee] Connection state:', pc.connectionState)
-
-    // FIX: setRemoteDescription FIRST so createAnswer knows what was offered
-    await pc.setRemoteDescription(new RTCSessionDescription(incomingOfferRef.current))
-
-    // FIX: addTrack AFTER setRemoteDescription
-    stream.getTracks().forEach(t => {
-      console.log('➕ [callee] adding track:', t.kind, t.readyState)
-      pc.addTrack(t, stream)
-    })
-
-    const answer = await pc.createAnswer()
-    await pc.setLocalDescription(answer)
-
-    // FIX: flush ICE candidates that arrived during 'receiving' state (before answerCall ran)
-    console.log('🧊 [callee] flushing', pendingCandidates.current.length, 'pending candidates')
-    for (const c of pendingCandidates.current) {
-      try { await pc.addIceCandidate(new RTCIceCandidate(c)) } catch(e) { console.warn('pending ICE flush error:', e) }
-    }
-    pendingCandidates.current = []
-
-    await sendSignal('answer', { answer })
-
-    playConnectedSound()
-    setCallState('in-call')
-    startCallTimer()
-
-    await sendMessage('', 'text', null, {
-      call_type: callType, call_status: 'answered',
-      body: callType === 'video' ? '📹 Video call' : '📞 Voice call'
-    })
-  }
-
-  async function declineCall() {
-    ctxStopRing()
-    dismissIncoming()
-    await sendSignal('decline')
-    await sendMessage('', 'text', null, {
-      call_type: callType, call_status: 'missed',
-      body: callType === 'video' ? '📹 Missed video call' : '📞 Missed call'
-    })
-    endCallLocally()
-  }
-
-  async function hangUp() {
-    playCallEndSound()
-    const dur = callDuration
-    await sendSignal('hangup')
-    await sendMessage('', 'text', null, {
-      call_type: callType, call_status: 'ended', call_duration: dur,
-      body: (callType === 'video' ? '📹 Video call' : '📞 Voice call') + ' · ' + formatTime(dur)
-    })
-    endCallLocally()
-  }
-
-  function endCallLocally() {
-    ctxStopRing()
-    clearInterval(callTimerRef.current)
-    pcRef.current?.close(); pcRef.current = null
-    localStreamRef.current?.getTracks().forEach(t => t.stop())
-    localStreamRef.current = null
-    remoteStreamRef.current = null
-    setRemoteStream(null)            // FIX: clear state so video gets cleaned up
-    pendingCandidates.current = []
-    incomingOfferRef.current = null
-    if (closeOutboundChannel) closeOutboundChannel(userId) // FIX: clean persistent signal channel
-    setCallState('idle')
-    setCallDuration(0)
-    setIsMuted(false); setIsCamOff(false)
-  }
-
-  function startCallTimer() {
-    setCallDuration(0)
-    callTimerRef.current = setInterval(() => setCallDuration(d => d + 1), 1000)
-  }
-
-  function toggleMute() {
-    localStreamRef.current?.getAudioTracks().forEach(t => { t.enabled = !t.enabled })
-    setIsMuted(m => !m)
-  }
-
-  function toggleCam() {
-    localStreamRef.current?.getVideoTracks().forEach(t => { t.enabled = !t.enabled })
-    setIsCamOff(c => !c)
-  }
-
-  // ── Register call listener ──────────────────────────────────────────────────
+  // Register call listener once userId is stable
   useEffect(() => {
-    const unregister = registerCallListener((payload) => {
-      const { _event } = payload
-
-      if (_event === 'ring') {
-        if (payload.fromUser !== userId) return false
-        callIdRef.current = payload.callId
-        incomingOfferRef.current = payload.offer
-        setCallType(payload.callType)
-        setCallState('receiving')
-        ctxPlayRing()
-        return true
-      }
-
-      if (_event === 'ringing') {
-        setCallState('ringing')
-        return true
-      }
-
-      if (_event === 'answer') {
-        if (!pcRef.current) return true
-        if (pcRef.current.signalingState !== 'have-local-offer') return true
-        pcRef.current.setRemoteDescription(new RTCSessionDescription(payload.answer))
-          .then(async () => {
-            // Flush ICE candidates that arrived before answer was processed
-            console.log('🧊 [caller] flushing', pendingCandidates.current.length, 'pending candidates after answer')
-            for (const c of pendingCandidates.current) {
-              try { await pcRef.current.addIceCandidate(new RTCIceCandidate(c)) } catch(e) {}
-            }
-            pendingCandidates.current = []
-            ctxStopRing()
-            playConnectedSound()
-            setCallState('in-call')
-            startCallTimer()
-          })
-          .catch(err => console.error('setRemoteDescription (answer) error:', err))
-        return true
-      }
-
-      if (_event === 'ice') {
-        if (!pcRef.current) return true
-        try {
-          if (pcRef.current.remoteDescription) {
-            pcRef.current.addIceCandidate(new RTCIceCandidate(payload.candidate))
-          } else {
-            pendingCandidates.current.push(payload.candidate)
-          }
-        } catch(e) {}
-        return true
-      }
-
-      if (_event === 'hangup' || _event === 'decline') {
-        playCallEndSound()
-        endCallLocally()
-        return true
-      }
-
-      return false
-    })
-
-    return unregister
+    if (!userId) return
+    return setupCallListener()
   }, [userId])
 
-  // ── INIT ────────────────────────────────────────────────────────────────────
-
-  async function loadBooking(serviceId, myId, otherId) {
-    if (!serviceId || serviceId === 'undefined' || !myId || !otherId) return null
-
-    const { data: bk1, error: e1 } = await supabase.from('bookings').select('*')
-      .eq('service_id', serviceId).eq('customer_id', myId).eq('provider_id', otherId)
-      .order('created_at', { ascending: false }).limit(1)
-    if (e1) console.log('Booking query 1 error (normal if no booking):', e1.code)
-    if (!e1 && bk1?.length) return bk1[0]
-
-    const { data: bk2, error: e2 } = await supabase.from('bookings').select('*')
-      .eq('service_id', serviceId).eq('customer_id', otherId).eq('provider_id', myId)
-      .order('created_at', { ascending: false }).limit(1)
-    if (e2) console.log('Booking query 2 error (normal if no booking):', e2.code)
-    if (!e2 && bk2?.length) return bk2[0]
-
-    return null
-  }
+  // ── Init ─────────────────────────────────────────────────────────────
 
   async function init() {
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
     if (sessionError || !session) {
       const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession()
       if (refreshError || !refreshData.session) {
-        console.warn('Session expired, redirecting to login')
         navigate('/login')
         return
       }
@@ -422,20 +124,7 @@ export default function Chat() {
     const { data: other } = await supabase.from('users').select('*').eq('id', userId).maybeSingle()
     setOtherUser(other)
 
-    const pendingRaw = sessionStorage.getItem('__pendingCall')
-    if (pendingRaw) {
-      try {
-        const pending = JSON.parse(pendingRaw)
-        sessionStorage.removeItem('__pendingCall')
-        if (pending.fromUser === userId) {
-          incomingOfferRef.current = pending.offer
-          callIdRef.current = pending.callId
-          setCallType(pending.callType)
-          setCallState('receiving')
-          ctxPlayRing()
-        }
-      } catch(e) {}
-    }
+    restorePendingCall(userId)
 
     let isService = false
     if (listingId && listingId !== 'undefined') {
@@ -448,7 +137,7 @@ export default function Chat() {
         try {
           const foundBooking = await loadBooking(listingId, user.id, userId)
           if (foundBooking) setBooking(foundBooking)
-        } catch(e) {
+        } catch (e) {
           console.log('No booking found or RLS blocked:', e.message)
         }
       } else {
@@ -494,6 +183,22 @@ export default function Chat() {
     channelRef.current = channel
   }
 
+  async function loadBooking(serviceId, myId, otherId) {
+    if (!serviceId || serviceId === 'undefined' || !myId || !otherId) return null
+
+    const { data: bk1, error: e1 } = await supabase.from('bookings').select('*')
+      .eq('service_id', serviceId).eq('customer_id', myId).eq('provider_id', otherId)
+      .order('created_at', { ascending: false }).limit(1)
+    if (!e1 && bk1?.length) return bk1[0]
+
+    const { data: bk2, error: e2 } = await supabase.from('bookings').select('*')
+      .eq('service_id', serviceId).eq('customer_id', otherId).eq('provider_id', myId)
+      .order('created_at', { ascending: false }).limit(1)
+    if (!e2 && bk2?.length) return bk2[0]
+
+    return null
+  }
+
   async function loadMessages(myId, isService) {
     let query = supabase.from('messages').select('*')
       .or(`and(from_user.eq.${myId},to_user.eq.${userId}),and(from_user.eq.${userId},to_user.eq.${myId})`)
@@ -504,16 +209,18 @@ export default function Chat() {
     if (!error) setMessages(data || [])
   }
 
+  // ── Messaging ────────────────────────────────────────────────────────
+
   async function sendMessage(body, type = 'text', mediaUrl = null, extraFields = {}) {
     if (!body.trim() && !mediaUrl && !extraFields.call_status) return
     const { data: { user } } = await supabase.auth.getUser()
     const msgData = {
       from_user: user.id, to_user: userId,
       body: body.trim(), media_url: mediaUrl, media_type: type, read: false,
-      ...extraFields
+      ...extraFields,
     }
-    if (isServiceChat && listingId !== 'undefined') msgData.service_id = listingId
-    else if (!isServiceChat && listingId !== 'undefined') msgData.listing_id = listingId
+    if (isServiceChatRef.current && listingId !== 'undefined') msgData.service_id = listingId
+    else if (!isServiceChatRef.current && listingId !== 'undefined') msgData.listing_id = listingId
     const { error } = await supabase.from('messages').insert(msgData)
     if (error) { console.error(error); alert('Failed to send: ' + error.message); return }
     setNewMsg('')
@@ -530,7 +237,8 @@ export default function Chat() {
       const { data } = supabase.storage.from('listings').getPublicUrl(path)
       await sendMessage(caption, type, data.publicUrl)
     } catch (e) { alert('Upload failed: ' + e.message) }
-    setUploading(false); setPreview(null)
+    setUploading(false)
+    setPreview(null)
   }
 
   function pickFile(accept, type) {
@@ -542,6 +250,8 @@ export default function Chat() {
     }
     input.click()
   }
+
+  // ── Voice recording ──────────────────────────────────────────────────
 
   async function startRecording() {
     try {
@@ -570,7 +280,9 @@ export default function Chat() {
     const dataArray = new Uint8Array(analyser.frequencyBinCount)
     function frame() {
       analyser.getByteFrequencyData(dataArray)
-      setWaveHeights(Array(40).fill(0).map((_, i) => Math.max(2, (dataArray[Math.floor(i * dataArray.length / 40)] / 255) * 36)))
+      setWaveHeights(Array(40).fill(0).map((_, i) =>
+        Math.max(2, (dataArray[Math.floor(i * dataArray.length / 40)] / 255) * 36)
+      ))
       animFrameRef.current = requestAnimationFrame(frame)
     }
     frame()
@@ -593,9 +305,7 @@ export default function Chat() {
     setRecordingTime(0); setWaveHeights(Array(40).fill(2))
   }
 
-  function formatTime(s) {
-    return `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}`
-  }
+  // ── Audio playback ───────────────────────────────────────────────────
 
   function toggleAudio(id) {
     const audio = audioRefs.current[id]; if (!audio) return
@@ -604,8 +314,10 @@ export default function Chat() {
       if (playingId && audioRefs.current[playingId]) audioRefs.current[playingId].pause()
       audio.play(); setPlayingId(id)
       audio.onended = () => setPlayingId(null)
-      audio.ontimeupdate = () => setAudioProgress(p => ({ ...p, [id]: audio.duration ? audio.currentTime / audio.duration : 0 }))
-      audio.onloadedmetadata = () => setAudioDuration(d => ({ ...d, [id]: audio.duration }))
+      audio.ontimeupdate = () =>
+        setAudioProgress(p => ({ ...p, [id]: audio.duration ? audio.currentTime / audio.duration : 0 }))
+      audio.onloadedmetadata = () =>
+        setAudioDuration(d => ({ ...d, [id]: audio.duration }))
     }
   }
 
@@ -613,23 +325,23 @@ export default function Chat() {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(newMsg) }
   }
 
+  // ── Render helpers ───────────────────────────────────────────────────
+
   function renderCallMessage(msg) {
     const isMine = msg.from_user === currentUser?.id
     const isVideo = msg.call_type === 'video'
-    const icon = isVideo ? '📹' : '📞'
     const missed = msg.call_status === 'missed'
     const ended = msg.call_status === 'ended'
-    const dur = msg.call_duration
     if (!missed && !ended) return null
     return (
       <div style={{ ...S.callMsgBubble, background: isMine ? 'rgba(255,255,255,0.15)' : '#f0f4f1' }}>
-        <span style={{ fontSize: 18 }}>{icon}</span>
+        <span style={{ fontSize: 18 }}>{isVideo ? '📹' : '📞'}</span>
         <div style={{ flex: 1 }}>
           <div style={{ fontSize: 13, fontWeight: '600', color: isMine ? '#fff' : '#0f1410' }}>
             {isVideo ? 'Video call' : 'Voice call'}
           </div>
           <div style={{ fontSize: 11, color: missed ? '#e74c3c' : (isMine ? 'rgba(255,255,255,0.6)' : '#888') }}>
-            {missed ? '📵 Missed' : (dur ? formatTime(dur) : 'Ended')}
+            {missed ? '📵 Missed' : (msg.call_duration ? formatTime(msg.call_duration) : 'Ended')}
           </div>
         </div>
       </div>
@@ -644,15 +356,39 @@ export default function Chat() {
     const isPlaying = playingId === id
     return (
       <div style={{ ...S.voiceNote, background: isMine ? 'rgba(255,255,255,0.18)' : '#edf7f1' }}>
-        <audio ref={el => { if (el) { audioRefs.current[id] = el; el.onloadedmetadata = () => setAudioDuration(d => ({ ...d, [id]: el.duration })) } }} src={url} />
-        <button style={{ ...S.playBtn, background: isMine ? 'rgba(255,255,255,0.25)' : '#1a7a4a' }} onClick={() => toggleAudio(id)}>
+        <audio
+          ref={el => {
+            if (el) {
+              audioRefs.current[id] = el
+              el.onloadedmetadata = () => setAudioDuration(d => ({ ...d, [id]: el.duration }))
+            }
+          }}
+          src={url}
+        />
+        <button
+          style={{ ...S.playBtn, background: isMine ? 'rgba(255,255,255,0.25)' : '#1a7a4a' }}
+          onClick={() => toggleAudio(id)}
+        >
           <span style={{ fontSize: 14, color: '#fff' }}>{isPlaying ? '⏸' : '▶'}</span>
         </button>
         <div style={S.voiceBody}>
           <div style={S.waveTrack}>
             {Array(28).fill(0).map((_, i) => (
-              <div key={i} style={{ width: '3px', borderRadius: '2px', height: `${6 + Math.sin(i * 0.8) * 5 + Math.cos(i * 0.4) * 4}px`, background: progress * 28 > i ? (isMine ? '#5de89e' : '#1a7a4a') : (isMine ? 'rgba(255,255,255,0.35)' : '#c0d8c8'), transition: 'background 0.1s', cursor: 'pointer' }}
-                onClick={() => { const a = audioRefs.current[id]; if (a?.duration) a.currentTime = (i / 28) * a.duration }} />
+              <div
+                key={i}
+                style={{
+                  width: '3px', borderRadius: '2px',
+                  height: `${6 + Math.sin(i * 0.8) * 5 + Math.cos(i * 0.4) * 4}px`,
+                  background: progress * 28 > i
+                    ? (isMine ? '#5de89e' : '#1a7a4a')
+                    : (isMine ? 'rgba(255,255,255,0.35)' : '#c0d8c8'),
+                  transition: 'background 0.1s', cursor: 'pointer',
+                }}
+                onClick={() => {
+                  const a = audioRefs.current[id]
+                  if (a?.duration) a.currentTime = (i / 28) * a.duration
+                }}
+              />
             ))}
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -676,10 +412,14 @@ export default function Chat() {
     return <a href={url} target="_blank" rel="noreferrer" style={{ color: '#5de89e', fontSize: 13 }}>📎 File</a>
   }
 
+  // ── Guard ────────────────────────────────────────────────────────────
+
   if (loading) return <div style={S.center}>Loading…</div>
 
   const callerName = otherUser?.name || otherUser?.email || 'User'
   const callerInitial = callerName[0].toUpperCase()
+
+  // ── Render ───────────────────────────────────────────────────────────
 
   return (
     <div style={S.page}>
@@ -696,7 +436,9 @@ export default function Chat() {
       {/* ── Top bar ── */}
       <div style={S.topbar}>
         <button style={S.back} onClick={() => navigate(isServiceChat ? '/services' : '/chats')}>
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1a7a4a" strokeWidth="2.5" strokeLinecap="round"><path d="M19 12H5M12 5l-7 7 7 7" /></svg>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1a7a4a" strokeWidth="2.5" strokeLinecap="round">
+            <path d="M19 12H5M12 5l-7 7 7 7" />
+          </svg>
         </button>
         <div style={S.topInfo}>
           <div style={S.avatar}>{callerInitial}</div>
@@ -707,10 +449,14 @@ export default function Chat() {
         </div>
         <div style={{ display: 'flex', gap: '6px' }}>
           <button style={S.callBtn} onClick={() => startCall('voice')} title="Voice call" disabled={callState !== 'idle'}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1a7a4a" strokeWidth="2" strokeLinecap="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.03 1.19 2 2 0 012 0h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 14.92v2z" /></svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1a7a4a" strokeWidth="2" strokeLinecap="round">
+              <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.03 1.19 2 2 0 012 0h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 14.92v2z" />
+            </svg>
           </button>
           <button style={S.callBtn} onClick={() => startCall('video')} title="Video call" disabled={callState !== 'idle'}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1a7a4a" strokeWidth="2" strokeLinecap="round"><polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" /></svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#1a7a4a" strokeWidth="2" strokeLinecap="round">
+              <polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" />
+            </svg>
           </button>
         </div>
       </div>
@@ -719,7 +465,10 @@ export default function Chat() {
       {isServiceChat && service ? (
         <div style={S.serviceBar}>
           <div style={S.serviceBarIcon}>
-            {service.media_urls?.[0] ? <img src={service.media_urls[0]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '10px' }} /> : <span style={{ fontSize: 20 }}>🔧</span>}
+            {service.media_urls?.[0]
+              ? <img src={service.media_urls[0]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '10px' }} />
+              : <span style={{ fontSize: 20 }}>🔧</span>
+            }
           </div>
           <div style={S.listingInfo}>
             <div style={{ ...S.listingTag, color: '#1a7a4a' }}>SERVICE</div>
@@ -729,19 +478,29 @@ export default function Chat() {
         </div>
       ) : listing ? (
         <div style={S.listingBar} onClick={() => navigate(`/listing/${listing.id}`)}>
-          {listing.images?.[0] ? <img src={listing.images[0]} alt="" style={S.listingThumb} /> : <div style={S.listingThumbPh}>🛒</div>}
+          {listing.images?.[0]
+            ? <img src={listing.images[0]} alt="" style={S.listingThumb} />
+            : <div style={S.listingThumbPh}>🛒</div>
+          }
           <div style={S.listingInfo}>
             <div style={S.listingTag}>LISTING</div>
             <div style={S.listingTitle}>{listing.title}</div>
             <div style={S.listingPrice}>MWK {listing.price?.toLocaleString()}</div>
           </div>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1a7a4a" strokeWidth="2.5" strokeLinecap="round"><path d="M9 18l6-6-6-6" /></svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1a7a4a" strokeWidth="2.5" strokeLinecap="round">
+            <path d="M9 18l6-6-6-6" />
+          </svg>
         </div>
       ) : null}
 
       {/* ── Booking status ── */}
       {isServiceChat && booking && (() => {
-        const cfg = { pending: { bg: '#fff8e6', color: '#d4920a', icon: '⏳', text: 'Booking pending' }, confirmed: { bg: '#e6f7ee', color: '#1a7a4a', icon: '✅', text: 'Booking confirmed' }, completed: { bg: '#e8eaff', color: '#3b4dd4', icon: '🏁', text: 'Job completed' }, cancelled: { bg: '#fef0f0', color: '#c0392b', icon: '❌', text: 'Cancelled' } }[booking.status] || {}
+        const cfg = {
+          pending:   { bg: '#fff8e6', color: '#d4920a', icon: '⏳', text: 'Booking pending' },
+          confirmed: { bg: '#e6f7ee', color: '#1a7a4a', icon: '✅', text: 'Booking confirmed' },
+          completed: { bg: '#e8eaff', color: '#3b4dd4', icon: '🏁', text: 'Job completed' },
+          cancelled: { bg: '#fef0f0', color: '#c0392b', icon: '❌', text: 'Cancelled' },
+        }[booking.status] || {}
         return (
           <div style={{ background: cfg.bg, borderBottom: `1px solid ${cfg.color}22`, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
             <span style={{ fontSize: 16 }}>{cfg.icon}</span>
@@ -771,7 +530,9 @@ export default function Chat() {
             </div>
             <div style={{ marginTop: 36 }}>
               <button style={S.hangUpBtn} onClick={hangUp}>
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="white"><path d="M23.71 16.67C22.69 15.65 21.38 15.1 20 15.1s-2.69.55-3.71 1.57l-2.15 2.15c-3.63-1.97-6.99-5.33-8.96-8.96l2.15-2.15C8.45 6.69 9 5.38 9 4s-.55-2.69-1.57-3.71C6.41-.71 5.13-1.3 3.8-1.3c-1.33 0-2.63.57-3.5 1.57l-1.5 1.5C-3.2 4.27-1.66 10.17 3.3 15.12c4.96 4.97 10.86 6.51 13.35 4.5l1.5-1.5c.98-.87 1.55-2.13 1.55-3.45 0-1.33-.57-2.63-1.99-3.5z" /></svg>
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="white">
+                  <path d="M23.71 16.67C22.69 15.65 21.38 15.1 20 15.1s-2.69.55-3.71 1.57l-2.15 2.15c-3.63-1.97-6.99-5.33-8.96-8.96l2.15-2.15C8.45 6.69 9 5.38 9 4s-.55-2.69-1.57-3.71C6.41-.71 5.13-1.3 3.8-1.3c-1.33 0-2.63.57-3.5 1.57l-1.5 1.5C-3.2 4.27-1.66 10.17 3.3 15.12c4.96 4.97 10.86 6.51 13.35 4.5l1.5-1.5c.98-.87 1.55-2.13 1.55-3.45 0-1.33-.57-2.63-1.99-3.5z" />
+                </svg>
               </button>
             </div>
           </div>
@@ -794,13 +555,17 @@ export default function Chat() {
             <div style={{ display: 'flex', gap: '40px', marginTop: 36, justifyContent: 'center' }}>
               <div style={{ textAlign: 'center' }}>
                 <button style={S.declineBtn} onClick={declineCall}>
-                  <svg width="26" height="26" viewBox="0 0 24 24" fill="white"><path d="M23.71 16.67C22.69 15.65 21.38 15.1 20 15.1s-2.69.55-3.71 1.57l-2.15 2.15c-3.63-1.97-6.99-5.33-8.96-8.96l2.15-2.15C8.45 6.69 9 5.38 9 4s-.55-2.69-1.57-3.71C6.41-.71 5.13-1.3 3.8-1.3c-1.33 0-2.63.57-3.5 1.57l-1.5 1.5C-3.2 4.27-1.66 10.17 3.3 15.12c4.96 4.97 10.86 6.51 13.35 4.5l1.5-1.5c.98-.87 1.55-2.13 1.55-3.45 0-1.33-.57-2.63-1.99-3.5z" /></svg>
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="white">
+                    <path d="M23.71 16.67C22.69 15.65 21.38 15.1 20 15.1s-2.69.55-3.71 1.57l-2.15 2.15c-3.63-1.97-6.99-5.33-8.96-8.96l2.15-2.15C8.45 6.69 9 5.38 9 4s-.55-2.69-1.57-3.71C6.41-.71 5.13-1.3 3.8-1.3c-1.33 0-2.63.57-3.5 1.57l-1.5 1.5C-3.2 4.27-1.66 10.17 3.3 15.12c4.96 4.97 10.86 6.51 13.35 4.5l1.5-1.5c.98-.87 1.55-2.13 1.55-3.45 0-1.33-.57-2.63-1.99-3.5z" />
+                  </svg>
                 </button>
                 <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, marginTop: 8 }}>Decline</div>
               </div>
               <div style={{ textAlign: 'center' }}>
                 <button style={S.answerBtn} onClick={answerCall}>
-                  <svg width="26" height="26" viewBox="0 0 24 24" fill="white"><path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z" /></svg>
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="white">
+                    <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z" />
+                  </svg>
                 </button>
                 <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12, marginTop: 8 }}>Answer</div>
               </div>
@@ -814,7 +579,6 @@ export default function Chat() {
         <div style={S.callOverlay}>
           {callType === 'video' && (
             <div style={{ position: 'absolute', inset: 0 }}>
-              {/* FIX: plain ref — srcObject assigned by useEffect([remoteStream]) */}
               <video ref={remoteVideoRef} autoPlay playsInline
                 style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               <video ref={localVideoRef} autoPlay playsInline muted
@@ -828,7 +592,7 @@ export default function Chat() {
               <div style={{ fontSize: 22, color: '#5de89e', fontWeight: '700', marginTop: 12, fontVariantNumeric: 'tabular-nums' }}>
                 {formatTime(callDuration)}
               </div>
-              {/* Hidden video elements for audio-only calls */}
+              {/* Hidden video elements needed for audio track assignment */}
               <video ref={remoteVideoRef} autoPlay playsInline style={{ display: 'none' }} />
               <video ref={localVideoRef} autoPlay playsInline muted style={{ display: 'none' }} />
             </div>
@@ -850,12 +614,16 @@ export default function Chat() {
             )}
             <div style={{ textAlign: 'center' }}>
               <button style={{ ...S.ctrlBtn, background: '#e74c3c' }} onClick={hangUp}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="white"><path d="M23.71 16.67C22.69 15.65 21.38 15.1 20 15.1s-2.69.55-3.71 1.57l-2.15 2.15c-3.63-1.97-6.99-5.33-8.96-8.96l2.15-2.15C8.45 6.69 9 5.38 9 4s-.55-2.69-1.57-3.71C6.41-.71 5.13-1.3 3.8-1.3c-1.33 0-2.63.57-3.5 1.57l-1.5 1.5C-3.2 4.27-1.66 10.17 3.3 15.12c4.96 4.97 10.86 6.51 13.35 4.5l1.5-1.5c.98-.87 1.55-2.13 1.55-3.45 0-1.33-.57-2.63-1.99-3.5z" /></svg>
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
+                  <path d="M23.71 16.67C22.69 15.65 21.38 15.1 20 15.1s-2.69.55-3.71 1.57l-2.15 2.15c-3.63-1.97-6.99-5.33-8.96-8.96l2.15-2.15C8.45 6.69 9 5.38 9 4s-.55-2.69-1.57-3.71C6.41-.71 5.13-1.3 3.8-1.3c-1.33 0-2.63.57-3.5 1.57l-1.5 1.5C-3.2 4.27-1.66 10.17 3.3 15.12c4.96 4.97 10.86 6.51 13.35 4.5l1.5-1.5c.98-.87 1.55-2.13 1.55-3.45 0-1.33-.57-2.63-1.99-3.5z" />
+                </svg>
               </button>
               <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 11, marginTop: 6 }}>End</div>
             </div>
             {callType === 'video' && (
-              <div style={{ color: '#fff', fontSize: 13, fontWeight: '700', fontVariantNumeric: 'tabular-nums' }}>{formatTime(callDuration)}</div>
+              <div style={{ color: '#fff', fontSize: 13, fontWeight: '700', fontVariantNumeric: 'tabular-nums' }}>
+                {formatTime(callDuration)}
+              </div>
             )}
           </div>
         </div>
@@ -876,15 +644,30 @@ export default function Chat() {
           const grouped = i > 0 && (messages[i - 1].from_user === currentUser?.id) === isMine && !showDate
           return (
             <div key={msg.id}>
-              {showDate && <div style={S.dateDivider}><span style={S.dateLabel}>{new Date(msg.created_at).toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'short' })}</span></div>}
+              {showDate && (
+                <div style={S.dateDivider}>
+                  <span style={S.dateLabel}>
+                    {new Date(msg.created_at).toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'short' })}
+                  </span>
+                </div>
+              )}
               <div style={{ ...S.msgRow, justifyContent: isMine ? 'flex-end' : 'flex-start', marginBottom: grouped ? '2px' : '6px' }}>
                 {!isMine && <div style={{ ...S.msgAvatar, opacity: grouped ? 0 : 1 }}>{callerInitial}</div>}
-                <div style={{ ...S.bubble, ...(isMine ? S.bubbleMine : S.bubbleOther), borderBottomRightRadius: isMine ? (grouped ? '18px' : '4px') : '18px', borderBottomLeftRadius: !isMine ? (grouped ? '18px' : '4px') : '18px' }}>
+                <div style={{
+                  ...S.bubble,
+                  ...(isMine ? S.bubbleMine : S.bubbleOther),
+                  borderBottomRightRadius: isMine ? (grouped ? '18px' : '4px') : '18px',
+                  borderBottomLeftRadius: !isMine ? (grouped ? '18px' : '4px') : '18px',
+                }}>
                   {renderMedia(msg)}
                   {msg.body && !msg.call_type && <div style={S.bubbleText}>{msg.body}</div>}
                   <div style={{ ...S.bubbleTime, color: isMine ? 'rgba(255,255,255,0.55)' : '#bbb' }}>
                     {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    {isMine && <span style={{ marginLeft: 3, color: msg.read ? '#5de89e' : 'rgba(255,255,255,0.5)' }}>{msg.read ? '✓✓' : '✓'}</span>}
+                    {isMine && (
+                      <span style={{ marginLeft: 3, color: msg.read ? '#5de89e' : 'rgba(255,255,255,0.5)' }}>
+                        {msg.read ? '✓✓' : '✓'}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
@@ -895,7 +678,9 @@ export default function Chat() {
           <div style={{ ...S.msgRow, justifyContent: 'flex-end' }}>
             <div style={{ ...S.bubble, ...S.bubbleMine }}>
               <div style={{ display: 'flex', gap: 4, padding: '2px 4px' }}>
-                {[0, 0.2, 0.4].map((d, i) => <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: 'rgba(255,255,255,0.8)', animation: `pulse 1s ${d}s infinite` }} />)}
+                {[0, 0.2, 0.4].map((d, i) => (
+                  <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: 'rgba(255,255,255,0.8)', animation: `pulse 1s ${d}s infinite` }} />
+                ))}
               </div>
             </div>
           </div>
@@ -914,15 +699,27 @@ export default function Chat() {
             <div style={S.previewMedia}>
               {preview.type === 'image' && <img src={preview.url} alt="" style={{ maxWidth: '100%', maxHeight: '280px', borderRadius: 12, objectFit: 'contain' }} />}
               {preview.type === 'video' && <video src={preview.url} controls style={{ maxWidth: '100%', maxHeight: '280px', borderRadius: 12 }} />}
-              {preview.type === 'audio' && <div style={{ textAlign: 'center', padding: '20px' }}><div style={{ fontSize: 48, marginBottom: 12 }}>🎵</div><audio src={preview.url} controls style={{ marginTop: 12, width: '100%' }} /></div>}
+              {preview.type === 'audio' && (
+                <div style={{ textAlign: 'center', padding: '20px' }}>
+                  <div style={{ fontSize: 48, marginBottom: 12 }}>🎵</div>
+                  <audio src={preview.url} controls style={{ marginTop: 12, width: '100%' }} />
+                </div>
+              )}
             </div>
             <div style={S.previewCaptionWrap}>
-              <input style={S.previewCaption} placeholder="Add a caption..." value={preview.caption}
+              <input
+                style={S.previewCaption}
+                placeholder="Add a caption..."
+                value={preview.caption}
                 onChange={e => setPreview(p => ({ ...p, caption: e.target.value }))}
-                onKeyDown={e => { if (e.key === 'Enter') uploadAndSend(preview.file, preview.type, preview.caption) }} />
+                onKeyDown={e => { if (e.key === 'Enter') uploadAndSend(preview.file, preview.type, preview.caption) }}
+              />
             </div>
             <button style={S.previewSendBtn} onClick={() => uploadAndSend(preview.file, preview.type, preview.caption)}>
-              {uploading ? <div style={{ width: 18, height: 18, border: '2px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} /> : '➤ Send'}
+              {uploading
+                ? <div style={{ width: 18, height: 18, border: '2px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                : '➤ Send'
+              }
             </button>
           </div>
         </div>
@@ -932,10 +729,14 @@ export default function Chat() {
       {recording && (
         <div style={S.recordingBar}>
           <button style={S.cancelRecBtn} onClick={cancelRecording}>
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c0392b" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c0392b" strokeWidth="2.5" strokeLinecap="round">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
           </button>
           <div style={S.waveContainer}>
-            {waveHeights.map((h, i) => <div key={i} style={{ width: '3px', height: `${h}px`, borderRadius: '2px', background: `hsl(${140 + i * 2}, 60%, ${40 + i % 4 * 5}%)`, transition: 'height 0.05s ease' }} />)}
+            {waveHeights.map((h, i) => (
+              <div key={i} style={{ width: '3px', height: `${h}px`, borderRadius: '2px', background: `hsl(${140 + i * 2}, 60%, ${40 + i % 4 * 5}%)`, transition: 'height 0.05s ease' }} />
+            ))}
           </div>
           <div style={S.recInfo}><div style={S.recDot} /><span style={S.recTime}>{formatTime(recordingTime)}</span></div>
           <button style={S.sendRecBtn} onClick={stopRecording}>
@@ -948,20 +749,47 @@ export default function Chat() {
       {!recording && callState === 'idle' && (
         <div style={S.inputBar}>
           <div style={S.attachMenu}>
-            <button style={S.attachBtn} onClick={() => pickFile('image/*', 'image')}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#637068" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" /></svg></button>
-            <button style={S.attachBtn} onClick={() => pickFile('video/*', 'video')}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#637068" strokeWidth="2" strokeLinecap="round"><polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" /></svg></button>
-            <button style={S.attachBtn} onClick={() => pickFile('audio/*', 'audio')}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#637068" strokeWidth="2" strokeLinecap="round"><path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" /></svg></button>
+            <button style={S.attachBtn} onClick={() => pickFile('image/*', 'image')}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#637068" strokeWidth="2" strokeLinecap="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" /><circle cx="8.5" cy="8.5" r="1.5" /><path d="M21 15l-5-5L5 21" />
+              </svg>
+            </button>
+            <button style={S.attachBtn} onClick={() => pickFile('video/*', 'video')}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#637068" strokeWidth="2" strokeLinecap="round">
+                <polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" />
+              </svg>
+            </button>
+            <button style={S.attachBtn} onClick={() => pickFile('audio/*', 'audio')}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#637068" strokeWidth="2" strokeLinecap="round">
+                <path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" />
+              </svg>
+            </button>
           </div>
           <div style={S.inputWrap}>
-            <textarea ref={inputRef} style={S.input}
+            <textarea
+              ref={inputRef}
+              style={S.input}
               placeholder={isServiceChat ? `Message about ${service?.name || 'service'}…` : 'Message…'}
               value={newMsg}
-              onChange={e => { setNewMsg(e.target.value); e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px' }}
-              onKeyDown={handleKey} rows={1} />
+              onChange={e => {
+                setNewMsg(e.target.value)
+                e.target.style.height = 'auto'
+                e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'
+              }}
+              onKeyDown={handleKey}
+              rows={1}
+            />
           </div>
           {newMsg.trim()
-            ? <button style={S.sendBtn} onClick={() => sendMessage(newMsg)}><svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2z" /></svg></button>
-            : <button style={S.micBtn} onClick={startRecording}><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#637068" strokeWidth="2" strokeLinecap="round"><rect x="9" y="2" width="6" height="12" rx="3" /><path d="M5 10a7 7 0 0014 0" /><line x1="12" y1="19" x2="12" y2="22" /><line x1="8" y1="22" x2="16" y2="22" /></svg></button>
+            ? <button style={S.sendBtn} onClick={() => sendMessage(newMsg)}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2z" /></svg>
+              </button>
+            : <button style={S.micBtn} onClick={startRecording}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#637068" strokeWidth="2" strokeLinecap="round">
+                  <rect x="9" y="2" width="6" height="12" rx="3" /><path d="M5 10a7 7 0 0014 0" />
+                  <line x1="12" y1="19" x2="12" y2="22" /><line x1="8" y1="22" x2="16" y2="22" />
+                </svg>
+              </button>
           }
         </div>
       )}
@@ -969,6 +797,7 @@ export default function Chat() {
   )
 }
 
+// ── Styles ───────────────────────────────────────────────────────────────────
 const S = {
   page: { display: 'flex', flexDirection: 'column', height: '100vh', background: '#f0f4f1', fontFamily: 'system-ui, sans-serif' },
   center: { display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: '#888' },

@@ -9,26 +9,31 @@ export function useCall() {
 
 export function CallProvider({ children }) {
   const [incomingCall, setIncomingCall] = useState(null)
+
+  // Inbound broadcast channel (ring / answer / decline / hangup)
   const channelRef = useRef(null)
   const listenersRef = useRef([])
   const ringAudioRef = useRef(null)
   const currentUserRef = useRef(null)
   const reconnectTimerRef = useRef(null)
 
-  // NEW: persistent outbound channels keyed by targetUserId
-  // Reusing a subscribed channel avoids the subscribe-latency drop on rapid ICE sends
+  // Outbound broadcast channel — one persistent channel per target user
+  // Used ONLY for ring / answer / decline / hangup (not ICE)
   const outboundChannelsRef = useRef({})
+
+  // ICE candidate DB subscription — one subscription per active call
+  const iceSub = useRef(null)
 
   useEffect(() => {
     setupChannel()
     return () => {
       teardownChannel()
       clearTimeout(reconnectTimerRef.current)
-      // Clean up all persistent outbound channels
       Object.values(outboundChannelsRef.current).forEach(ch => {
-        try { supabase.removeChannel(ch) } catch(e) {}
+        try { supabase.removeChannel(ch) } catch (e) {}
       })
       outboundChannelsRef.current = {}
+      stopIceSubscription()
     }
   }, [])
 
@@ -43,14 +48,10 @@ export function CallProvider({ children }) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     currentUserRef.current = user
-
     if (channelRef.current) return
 
-    const channel = supabase.channel(`call_inbox_${user.id}`, {
-      config: { broadcast: { self: false } }
-    })
-
-    channel
+    const channel = supabase
+      .channel(`call_inbox_${user.id}`, { config: { broadcast: { self: false } } })
       .on('broadcast', { event: 'call_signal' }, ({ payload }) => {
         handleIncomingSignal(payload)
       })
@@ -67,12 +68,11 @@ export function CallProvider({ children }) {
   }
 
   function handleIncomingSignal(payload) {
-    const { _event } = payload
     for (const listener of listenersRef.current) {
       const handled = listener(payload)
       if (handled) return
     }
-    if (_event === 'ring') {
+    if (payload._event === 'ring') {
       setIncomingCall(payload)
     }
   }
@@ -88,23 +88,17 @@ export function CallProvider({ children }) {
     setIncomingCall(null)
   }
 
-  // FIX: Use a persistent channel per targetUserId so ICE candidates aren't dropped
-  // while waiting for subscribe(). The channel is created once and reused.
+  // ─── Broadcast signal (ring / answer / decline / hangup) ─────────────────
+  // ICE candidates do NOT go through here — they use sendIceCandidate() below.
   async function sendSignal(targetUserId, event, payload = {}) {
     if (!targetUserId) { console.error('sendSignal: no targetUserId'); return }
 
     const channelName = `call_inbox_${targetUserId}`
-
-    // Reuse existing subscribed channel if available
     let ch = outboundChannelsRef.current[targetUserId]
 
     if (!ch) {
-      // Create and wait for subscription
-      ch = supabase.channel(channelName, {
-        config: { broadcast: { self: false } }
-      })
+      ch = supabase.channel(channelName, { config: { broadcast: { self: false } } })
       outboundChannelsRef.current[targetUserId] = ch
-
       await new Promise((resolve) => {
         ch.subscribe((status) => {
           if (status === 'SUBSCRIBED') resolve()
@@ -117,37 +111,91 @@ export function CallProvider({ children }) {
       })
     }
 
-    // Channel is now subscribed — send immediately
     try {
       await ch.send({
         type: 'broadcast',
         event: 'call_signal',
-        payload: { _event: event, ...payload }
+        payload: { _event: event, ...payload },
       })
-    } catch(err) {
-      console.error('sendSignal send error:', err)
+    } catch (err) {
+      console.error('sendSignal error:', err)
     }
   }
 
-  // Call this when a call ends to clean up the outbound channel for that peer
+  // ─── ICE candidates via DB (bypasses Realtime WebSocket fallback) ─────────
+
+  // Write one ICE candidate to the DB.
+  // callId: shared string (e.g. generated from both user IDs)
+  // fromUserId / toUserId: UUID strings
+  async function sendIceCandidate(callId, fromUserId, toUserId, candidate) {
+    if (!candidate) return
+    const { error } = await supabase
+      .from('ice_candidates')
+      .insert({ call_id: callId, from_user: fromUserId, to_user: toUserId, candidate })
+    if (error) console.error('sendIceCandidate insert error:', error)
+  }
+
+  // Subscribe to incoming ICE candidates for this call.
+  // onCandidate(candidate) is called for each new row.
+  function subscribeToIceCandidates(callId, myUserId, onCandidate) {
+    stopIceSubscription() // clear any previous sub
+
+    const sub = supabase
+      .channel(`ice_${callId}_${myUserId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'ice_candidates',
+          filter: `call_id=eq.${callId}`,
+        },
+        (payload) => {
+          const row = payload.new
+          // Only process candidates addressed to me
+          if (row.to_user !== myUserId) return
+          console.log(`[ice-db] received candidate for ${myUserId}`)
+          onCandidate(row.candidate)
+        }
+      )
+      .subscribe((status) => {
+        console.log(`[ice-db] subscription status: ${status}`)
+      })
+
+    iceSub.current = sub
+    return sub
+  }
+
+  function stopIceSubscription() {
+    if (iceSub.current) {
+      try { supabase.removeChannel(iceSub.current) } catch (e) {}
+      iceSub.current = null
+    }
+  }
+
+  // Clean up ICE rows after call ends (optional but keeps DB tidy)
+  async function cleanupIceCandidates(callId) {
+    await supabase.from('ice_candidates').delete().eq('call_id', callId)
+  }
+
   function closeOutboundChannel(targetUserId) {
     const ch = outboundChannelsRef.current[targetUserId]
     if (ch) {
-      try { supabase.removeChannel(ch) } catch(e) {}
+      try { supabase.removeChannel(ch) } catch (e) {}
       delete outboundChannelsRef.current[targetUserId]
     }
   }
 
+  // ─── Ringtone ─────────────────────────────────────────────────────────────
   function playRing() {
     stopRing()
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)()
       let playing = true
-      ringAudioRef.current = { stop: () => { playing = false; try { ctx.close() } catch(e){} } }
+      ringAudioRef.current = { stop: () => { playing = false; try { ctx.close() } catch (e) {} } }
       function ring() {
         if (!playing) return
-        const notes = [520, 520]
-        notes.forEach((freq, i) => {
+        ;[520, 520].forEach((freq, i) => {
           const osc = ctx.createOscillator()
           const gain = ctx.createGain()
           osc.connect(gain); gain.connect(ctx.destination)
@@ -161,7 +209,7 @@ export function CallProvider({ children }) {
         if (playing) setTimeout(ring, 2000)
       }
       ring()
-    } catch(e) {}
+    } catch (e) {}
   }
 
   function stopRing() {
@@ -175,6 +223,10 @@ export function CallProvider({ children }) {
     <CallContext.Provider value={{
       incomingCall,
       sendSignal,
+      sendIceCandidate,
+      subscribeToIceCandidates,
+      stopIceSubscription,
+      cleanupIceCandidates,
       registerCallListener,
       dismissIncoming,
       playRing,
