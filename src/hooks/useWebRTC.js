@@ -44,10 +44,16 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
   const pendingCandidates  = useRef([])
   const incomingOfferRef   = useRef(null)
   const callTypeRef        = useRef(null) // mirrors callType for use inside closures
+  // Mirror currentUser as a ref so closures (call listeners) always have the latest value
+  // even when currentUser prop is still null on first render
+  const currentUserRef     = useRef(currentUser)
 
   // Video element refs — caller must pass these to <video> elements
   const localVideoRef  = useRef(null)
   const remoteVideoRef = useRef(null)
+
+  // Keep ref in sync with prop on every render
+  currentUserRef.current = currentUser
 
   // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -127,8 +133,9 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
     pc.onicecandidate = async e => {
       if (!e.candidate) return
       console.log(`🧊 [${role}] ICE candidate: ${e.candidate.type}`)
-      if (!callIdRef.current || !currentUser?.id || !userId) return
-      await sendIceCandidate(callIdRef.current, currentUser.id, userId, e.candidate.toJSON())
+      const myId = currentUserRef.current?.id
+      if (!callIdRef.current || !myId || !userId) return
+      await sendIceCandidate(callIdRef.current, myId, userId, e.candidate.toJSON())
     }
 
     pc.oniceconnectionstatechange = () =>
@@ -160,7 +167,7 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
       localVideoRef.current.play().catch(() => {})
     }
 
-    const callId = generateCallId(currentUser.id, userId)
+    const callId = generateCallId(currentUserRef.current.id, userId)
     callIdRef.current = callId
 
     const pc = buildPeerConnection('caller')
@@ -186,7 +193,7 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
     await ctxSendSignal(userId, 'ring', {
       offer: pc.localDescription.toJSON(),
       callType: type,
-      fromUser: currentUser.id,
+      fromUser: currentUserRef.current.id,
       callId,
     })
   }
@@ -213,7 +220,7 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
       localVideoRef.current.play().catch(() => {})
     }
 
-    const callId = callIdRef.current || generateCallId(userId, currentUser.id)
+    const callId = callIdRef.current || generateCallId(userId, currentUserRef.current.id)
     callIdRef.current = callId
 
     const pc = buildPeerConnection('callee')
@@ -318,7 +325,9 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
         // Subscribe to caller's ICE candidates NOW — before answerCall runs.
         // If we wait until answerCall, the caller's candidates arrive during the
         // delay between ring and answer, and the subscription misses them.
-        subscribeToIceCandidates(payload.callId, currentUser.id, async (candidate) => {
+        const myId = currentUserRef.current?.id
+        if (!myId) { console.error('[callee] currentUser not ready at ring time'); return true }
+        subscribeToIceCandidates(payload.callId, myId, async (candidate) => {
           try {
             if (pcRef.current?.remoteDescription) {
               await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate))
