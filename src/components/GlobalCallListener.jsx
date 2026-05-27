@@ -48,13 +48,33 @@ export default function GlobalCallListener() {
         })
       }
 
-      setIncoming({
+      // Show ring UI immediately with UUID fallback, then update with real name
+      const ringData = {
         fromUser: payload.fromUser,
         callType: payload.callType,
         offer: payload.offer,
         callId: payload.callId,
-      })
+        callerName: payload.fromUser,
+      }
+      setIncoming(ringData)
       playRing()
+
+      // Fetch display name async and patch it in
+      supabase
+        .from("users")
+        .select("name, email")
+        .eq("id", payload.fromUser)
+        .single()
+        .then(({ data: caller }) => {
+          if (caller) {
+            setIncoming(prev =>
+              prev?.callId === payload.callId
+                ? { ...prev, callerName: caller.name || caller.email || payload.fromUser }
+                : prev
+            )
+          }
+        })
+
       return true
     })
 
@@ -80,9 +100,8 @@ export default function GlobalCallListener() {
     if (!incoming) return
     stopRing()
 
-    const { data: caller } = await supabase
-      .from('users').select('name, email').eq('id', incoming.fromUser).single()
-    const callerName = caller?.name || caller?.email || 'Unknown'
+    // callerName was already fetched at ring time — no extra DB round-trip needed
+    const callerName = incoming.callerName || incoming.fromUser
 
     // Store the pending call for Chat.jsx to pick up via restorePendingCall()
     // __pendingCallId is a separate flag that tells setupCallListener in Chat
