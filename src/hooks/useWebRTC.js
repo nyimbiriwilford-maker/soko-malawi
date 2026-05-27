@@ -167,7 +167,7 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
 
     stream.getTracks().forEach(t => pc.addTrack(t, stream))
 
-    // Subscribe to callee's ICE candidates via DB
+    // Subscribe BEFORE createOffer so no callee candidates can arrive before we're listening
     subscribeToIceCandidates(callId, currentUser.id, async (candidate) => {
       try {
         if (pc.remoteDescription) {
@@ -218,18 +218,8 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
 
     const pc = buildPeerConnection('callee')
 
-    // Subscribe to caller's ICE candidates via DB
-    subscribeToIceCandidates(callId, currentUser.id, async (candidate) => {
-      try {
-        if (pc.remoteDescription) {
-          await pc.addIceCandidate(new RTCIceCandidate(candidate))
-        } else {
-          pendingCandidates.current.push(candidate)
-        }
-      } catch (err) {
-        console.error('[callee] addIceCandidate error:', err)
-      }
-    })
+    // NOTE: ICE subscription was already set up at ring time (in setupCallListener)
+    // so caller's candidates are already queued in pendingCandidates if they arrived early.
 
     // CORRECT ORDER: setRemoteDescription → addTrack → createAnswer
     await pc.setRemoteDescription(new RTCSessionDescription(incomingOfferRef.current))
@@ -324,6 +314,22 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
         updateCallType(payload.callType)
         setCallState('receiving')
         ctxPlayRing()
+
+        // Subscribe to caller's ICE candidates NOW — before answerCall runs.
+        // If we wait until answerCall, the caller's candidates arrive during the
+        // delay between ring and answer, and the subscription misses them.
+        subscribeToIceCandidates(payload.callId, currentUser.id, async (candidate) => {
+          try {
+            if (pcRef.current?.remoteDescription) {
+              await pcRef.current.addIceCandidate(new RTCIceCandidate(candidate))
+            } else {
+              pendingCandidates.current.push(candidate)
+            }
+          } catch (err) {
+            console.error('[callee] addIceCandidate error:', err)
+          }
+        })
+
         return true
       }
 
