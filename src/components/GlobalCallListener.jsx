@@ -85,8 +85,9 @@ export default function GlobalCallListener() {
     const callerName = caller?.name || caller?.email || 'Unknown'
 
     // Store the pending call for Chat.jsx to pick up via restorePendingCall()
-    // Note: the early ICE subscription stays alive in CallContext — it will be
-    // drained by useWebRTC.restorePendingCall() after the peer connection is built.
+    // __pendingCallId is a separate flag that tells setupCallListener in Chat
+    // to suppress this ring (user already answered here — don't fire a second time).
+    sessionStorage.setItem('__pendingCallId', incoming.callId)
     sessionStorage.setItem('__pendingCall', JSON.stringify({
       fromUser: incoming.fromUser,
       callType: incoming.callType,

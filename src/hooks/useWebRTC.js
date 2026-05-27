@@ -222,8 +222,9 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
 
     const pc = buildPeerConnection('callee')
 
-    // ICE subscription was set up at ring time in setupCallListener.
-    // Candidates that arrived before now are already in pendingCandidates.
+    // ICE subscription + pendingCandidates were set up before this call:
+    // • Direct answer (in-chat): setupCallListener did it at ring time
+    // • Navigate path: restorePendingCall() did it before calling answerCall()
 
     // CORRECT ORDER: setRemoteDescription → addTrack → createAnswer
     await pc.setRemoteDescription(new RTCSessionDescription(incomingOfferRef.current))
@@ -312,6 +313,16 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
 
       if (_event === 'ring') {
         if (payload.fromUser !== userId) return false
+
+        // If GlobalCallListener already handled this ring (user was outside chat,
+        // tapped Answer, and navigated here), restorePendingCall() will handle
+        // everything. Suppress the duplicate ring to prevent a second peer connection.
+        const handledId = sessionStorage.getItem('__pendingCallId')
+        if (handledId === payload.callId) {
+          console.log('[setupCallListener] ring suppressed — already handled by GlobalCallListener')
+          return true // claim it so no other listener fires, but do nothing else
+        }
+
         callIdRef.current = payload.callId
         incomingOfferRef.current = payload.offer
         updateCallType(payload.callType)
@@ -401,20 +412,16 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
 
   // ── restorePendingCall ─────────────────────────────────────────────────────
   // Called by Chat.jsx on mount when navigated from GlobalCallListener.
-  // The key difference from the direct-answer path: we must drain the early ICE
-  // buffer that GlobalCallListener started at ring time, because Chat wasn't
-  // mounted yet when those candidates arrived.
+  // The user ALREADY tapped Answer in GlobalCallListener — so we go straight to
+  // answerCall(), no ring UI, no duplicate listener firing.
   async function restorePendingCall(fromUserId) {
     const raw = sessionStorage.getItem('__pendingCall')
     if (!raw) return
     try {
       const pending = JSON.parse(raw)
       sessionStorage.removeItem('__pendingCall')
+      sessionStorage.removeItem('__pendingCallId') // clean up the suppression flag too
       if (pending.fromUser !== fromUserId) return
-
-      incomingOfferRef.current = pending.offer
-      callIdRef.current = pending.callId
-      updateCallType(pending.callType)
 
       const myId = currentUserRef.current?.id
       if (!myId) {
@@ -422,15 +429,13 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
         return
       }
 
-      // ── THE FIX ─────────────────────────────────────────────────────────────
-      // Drain any ICE candidates that arrived while the user was looking at the
-      // ring UI and navigating. GlobalCallListener subscribed via
-      // subscribeToIceCandidatesEarly() so nothing was missed.
+      console.log('[restorePendingCall] restoring call, draining early ICE buffer...')
+
+      // Drain candidates buffered by GlobalCallListener's early subscription
       const earlyBuffer = drainEarlyCandidates(pending.callId)
       console.log(`[restorePendingCall] drained ${earlyBuffer.length} early ICE candidates`)
 
-      // Now set up the real ICE subscription (for any candidates still in flight)
-      // and seed pendingCandidates with everything we buffered early.
+      // Set up the real ICE subscription for any candidates still in flight
       subscribeToIceCandidates(pending.callId, myId, async (candidate) => {
         try {
           const cand = typeof candidate === 'string' ? JSON.parse(candidate) : candidate
@@ -444,17 +449,24 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
         }
       })
 
-      // Seed the pending queue — answerCall will flush these after setRemoteDescription
-      for (const raw of earlyBuffer) {
+      // Seed the pending queue with early buffered candidates.
+      // answerCall() will flush these after setRemoteDescription.
+      for (const c of earlyBuffer) {
         try {
-          pendingCandidates.current.push(
-            typeof raw === 'string' ? JSON.parse(raw) : raw
-          )
+          pendingCandidates.current.push(typeof c === 'string' ? JSON.parse(c) : c)
         } catch (e) {}
       }
 
-      setCallState('receiving')
-      ctxPlayRing()
+      // Load call metadata into refs so answerCall() can read them
+      incomingOfferRef.current = pending.offer
+      callIdRef.current = pending.callId
+      updateCallType(pending.callType)
+
+      // DO NOT call ctxPlayRing() or setCallState('receiving') here —
+      // the user already tapped Answer. Go straight to answering.
+      // The ring UI from GlobalCallListener is already gone.
+      console.log('[restorePendingCall] auto-answering...')
+      await answerCall()
 
     } catch (e) {
       console.error('[restorePendingCall] error:', e)
