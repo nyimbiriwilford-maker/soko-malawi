@@ -10,51 +10,67 @@ const EMOJI_CATEGORIES = {
   '🐶': ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🦋','🌸','🌺','🌻','🍎','🍕','🍔','☕','🎵','🏆'],
 }
 
+// ── Reply storage: stored in message body as a prefix so no extra DB columns needed
+// Format: "↩[reply_preview|||reply_to_id]actual_body"
+// We encode/decode this client-side only.
+function encodeReply(body, replyTo) {
+  if (!replyTo) return body
+  const preview = (replyTo.body || (replyTo.media_type === 'audio' ? '🎤 Voice note' : replyTo.media_type === 'image' ? '📷 Photo' : '📎 File')).slice(0, 80)
+  return `↩[${preview}|||${replyTo.id}]${body}`
+}
+
+function decodeReply(body) {
+  if (!body) return { body, replyPreview: null, replyToId: null }
+  const match = body.match(/^↩\[(.+?)\|\|\|([^\]]+)\](.*)$/s)
+  if (!match) return { body, replyPreview: null, replyToId: null }
+  return { body: match[3], replyPreview: match[1], replyToId: match[2] }
+}
+
 export default function Chat() {
   const { userId, listingId } = useParams()
   const navigate = useNavigate()
 
   // ── State ────────────────────────────────────────────────────────────────
-  const [messages, setMessages]         = useState([])
-  const [newMsg, setNewMsg]             = useState('')
-  const [currentUser, setCurrentUser]   = useState(null)
-  const [otherUser, setOtherUser]       = useState(null)
-  const [otherProfile, setOtherProfile] = useState(null)
-  const [listing, setListing]           = useState(null)
-  const [service, setService]           = useState(null)
-  const [booking, setBooking]           = useState(null)
+  const [messages, setMessages]           = useState([])
+  const [newMsg, setNewMsg]               = useState('')
+  const [currentUser, setCurrentUser]     = useState(null)
+  const [otherUser, setOtherUser]         = useState(null)
+  const [otherProfile, setOtherProfile]   = useState(null)
+  const [listing, setListing]             = useState(null)
+  const [service, setService]             = useState(null)
+  const [booking, setBooking]             = useState(null)
   const [isServiceChat, setIsServiceChat] = useState(false)
-  const [loading, setLoading]           = useState(true)
-  const [uploading, setUploading]       = useState(false)
-  const [recording, setRecording]       = useState(false)
+  const [loading, setLoading]             = useState(true)
+  const [uploading, setUploading]         = useState(false)
+  const [recording, setRecording]         = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
-  const [waveHeights, setWaveHeights]   = useState(Array(40).fill(2))
-  const [playingId, setPlayingId]       = useState(null)
+  const [waveHeights, setWaveHeights]     = useState(Array(40).fill(2))
+  const [playingId, setPlayingId]         = useState(null)
   const [audioProgress, setAudioProgress] = useState({})
   const [audioDuration, setAudioDuration] = useState({})
-  const [preview, setPreview]           = useState(null)
-  const [showEmoji, setShowEmoji]       = useState(false)
-  const [emojiTab, setEmojiTab]         = useState('😀')
-  const [otherOnline, setOtherOnline]   = useState(false)
+  const [preview, setPreview]             = useState(null)
+  const [showEmoji, setShowEmoji]         = useState(false)
+  const [emojiTab, setEmojiTab]           = useState('😀')
+  const [otherOnline, setOtherOnline]     = useState(false)
   const [otherLastSeen, setOtherLastSeen] = useState(null)
-  const [otherTyping, setOtherTyping]   = useState(false)
-  const [myProfile, setMyProfile]       = useState(null)
-  const [replyTo, setReplyTo]           = useState(null)  // message being replied to
+  const [otherTyping, setOtherTyping]     = useState(false)
+  const [myProfile, setMyProfile]         = useState(null)
+  const [replyTo, setReplyTo]             = useState(null)
 
-  const isServiceChatRef  = useRef(false)
-  const currentUserRef    = useRef(null)
-  const bottomRef         = useRef(null)
-  const mediaRecorderRef  = useRef(null)
-  const chunksRef         = useRef([])
-  const timerRef          = useRef(null)
-  const analyserRef       = useRef(null)
-  const animFrameRef      = useRef(null)
-  const audioRefs         = useRef({})
-  const inputRef          = useRef(null)
-  const channelRef        = useRef(null)
+  const isServiceChatRef   = useRef(false)
+  const currentUserRef     = useRef(null)
+  const bottomRef          = useRef(null)
+  const mediaRecorderRef   = useRef(null)
+  const chunksRef          = useRef([])
+  const timerRef           = useRef(null)
+  const analyserRef        = useRef(null)
+  const animFrameRef       = useRef(null)
+  const audioRefs          = useRef({})
+  const inputRef           = useRef(null)
+  const channelRef         = useRef(null)
   const presenceChannelRef = useRef(null)
-  const typingTimeoutRef  = useRef(null)
-  const emojiPickerRef    = useRef(null)
+  const typingTimeoutRef   = useRef(null)
+  const emojiPickerRef     = useRef(null)
 
   // ── WebRTC ───────────────────────────────────────────────────────────────
   const {
@@ -107,7 +123,6 @@ export default function Chat() {
     currentUserRef.current = user
     await supabase.from('users').upsert({ id: user.id, name: user.email }, { onConflict: 'id' })
 
-    // Load own profile for avatar in message bubbles
     const { data: myProf } = await supabase.from('profiles').select('*').eq('id', user.id).maybeSingle()
     setMyProfile(myProf)
 
@@ -115,9 +130,11 @@ export default function Chat() {
     const { data: other } = await supabase.from('users').select('*').eq('id', userId).maybeSingle()
     setOtherUser(other)
 
-    // Load other person's profile (avatar, full_name)
     const { data: otherProf } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
     setOtherProfile(otherProf)
+
+    // Load last_seen from profile on mount
+    if (otherProf?.last_seen) setOtherLastSeen(new Date(otherProf.last_seen))
 
     restorePendingCall(userId)
 
@@ -162,7 +179,6 @@ export default function Chat() {
           : isService ? msg.service_id === listingId : msg.listing_id === listingId
         if (relevant && sameContext) {
           setMessages(prev => prev.find(m => m.id === msg.id) ? prev : [...prev, msg])
-          // Mark read if from other person
           if (msg.from_user === userId) {
             supabase.from('messages').update({ read: true }).eq('id', msg.id).then(() => {})
           }
@@ -172,24 +188,37 @@ export default function Chat() {
     channelRef.current = channel
   }
 
+  // ── FIXED: Presence channel ──────────────────────────────────────────────
+  // The key fix: channel name must be the SAME for both users so they see each other.
+  // We sort the IDs so both users join the same channel regardless of who opens first.
+  // The presence key is each user's own ID.
   function setupPresenceChannel(myId) {
-    if (presenceChannelRef.current) { supabase.removeChannel(presenceChannelRef.current) }
+    if (presenceChannelRef.current) {
+      supabase.removeChannel(presenceChannelRef.current)
+      presenceChannelRef.current = null
+    }
 
-    const ch = supabase.channel(`presence_${[myId, userId].sort().join('_')}`, {
-      config: { presence: { key: myId } }
+    // Both users must use the SAME channel name — sort IDs
+    const roomName = `presence_room_${[myId, userId].sort().join('_')}`
+
+    const ch = supabase.channel(roomName, {
+      config: {
+        presence: { key: myId },
+      },
     })
 
     ch.on('presence', { event: 'sync' }, () => {
       const state = ch.presenceState()
-      const otherPresence = state[userId]
-      if (otherPresence && otherPresence.length > 0) {
-        const p = otherPresence[0]
+      // Look for the other user's presence key
+      const otherPresences = state[userId]
+      if (otherPresences && otherPresences.length > 0) {
+        const p = otherPresences[0]
         setOtherOnline(true)
         setOtherTyping(p.typing === true)
       } else {
         setOtherOnline(false)
         setOtherTyping(false)
-        // Try to get last_seen from profiles
+        // Fetch last_seen from profiles as fallback
         supabase.from('profiles').select('last_seen').eq('id', userId).maybeSingle().then(({ data }) => {
           if (data?.last_seen) setOtherLastSeen(new Date(data.last_seen))
         })
@@ -197,22 +226,32 @@ export default function Chat() {
     })
 
     ch.on('presence', { event: 'join' }, ({ key, newPresences }) => {
-      if (key === userId) { setOtherOnline(true); setOtherTyping(newPresences[0]?.typing === true) }
+      if (key === userId) {
+        setOtherOnline(true)
+        setOtherTyping(newPresences[0]?.typing === true)
+      }
     })
 
     ch.on('presence', { event: 'leave' }, ({ key }) => {
       if (key === userId) {
-        setOtherOnline(false); setOtherTyping(false)
-        setOtherLastSeen(new Date())
-        supabase.from('profiles').upsert({ id: userId, last_seen: new Date().toISOString() }).then(() => {})
+        setOtherOnline(false)
+        setOtherTyping(false)
+        const now = new Date()
+        setOtherLastSeen(now)
+        // Persist last_seen to profiles so it survives page refreshes
+        supabase.from('profiles')
+          .upsert({ id: userId, last_seen: now.toISOString() }, { onConflict: 'id' })
+          .then(() => {})
       }
     })
 
     ch.subscribe(async (status) => {
       if (status === 'SUBSCRIBED') {
+        // Broadcast my own presence
         await ch.track({ user_id: myId, typing: false, online_at: new Date().toISOString() })
-        // Update my own last_seen on mount
-        await supabase.from('profiles').upsert({ id: myId, last_seen: new Date().toISOString() })
+        // Also persist my own last_seen so others can read it on load
+        await supabase.from('profiles')
+          .upsert({ id: myId, last_seen: new Date().toISOString() }, { onConflict: 'id' })
       }
     })
 
@@ -254,24 +293,34 @@ export default function Chat() {
     if (!error) setMessages(data || [])
   }
 
-  // ── Messaging ────────────────────────────────────────────────────────────
+  // ── FIXED: sendMessage — no reply_preview / reply_to_id columns needed ──
+  // Reply context is encoded inside the message body itself.
   async function sendMessage(body, type = 'text', mediaUrl = null, extraFields = {}) {
-    if (!body.trim() && !mediaUrl && !extraFields.call_status) return
+    const trimmed = body.trim()
+    if (!trimmed && !mediaUrl && !extraFields.call_status) return
     const { data: { user } } = await supabase.auth.getUser()
+
+    // Encode reply into the body string — no extra DB columns required
+    const encodedBody = encodeReply(trimmed, replyTo)
+
     const msgData = {
-      from_user: user.id, to_user: userId,
-      body: body.trim(), media_url: mediaUrl, media_type: type, read: false,
+      from_user: user.id,
+      to_user: userId,
+      body: encodedBody,
+      media_url: mediaUrl,
+      media_type: type,
+      read: false,
       ...extraFields,
     }
     if (isServiceChatRef.current && listingId !== 'undefined') msgData.service_id = listingId
     else if (!isServiceChatRef.current && listingId !== 'undefined') msgData.listing_id = listingId
-    if (replyTo) { msgData.reply_to_id = replyTo.id; msgData.reply_preview = replyTo.body?.slice(0, 60) }
+
     const { error } = await supabase.from('messages').insert(msgData)
     if (error) { alert('Failed to send: ' + error.message); return }
+
     setNewMsg('')
     setReplyTo(null)
     if (inputRef.current) inputRef.current.style.height = 'auto'
-    // Stop typing indicator
     presenceChannelRef.current?.track({ user_id: currentUserRef.current?.id, typing: false })
     clearTimeout(typingTimeoutRef.current)
   }
@@ -430,14 +479,25 @@ export default function Chat() {
 
   function renderVoiceNote(msg) {
     const { id, media_url: url } = msg
-    const isMine   = msg.from_user === currentUser?.id
-    const progress = audioProgress[id] || 0
-    const duration = audioDuration[id] || 0
+    const isMine    = msg.from_user === currentUser?.id
+    const progress  = audioProgress[id] || 0
+    const duration  = audioDuration[id] || 0
     const isPlaying = playingId === id
     return (
       <div style={{ ...S.voiceNote, background: isMine ? 'rgba(255,255,255,0.15)' : '#edf7f1' }}>
-        <audio ref={el => { if (el) { audioRefs.current[id] = el; el.onloadedmetadata = () => setAudioDuration(d => ({ ...d, [id]: el.duration })) } }} src={url} />
-        <button style={{ ...S.playBtn, background: isMine ? 'rgba(255,255,255,0.22)' : '#1a7a4a' }} onClick={() => toggleAudio(id)}>
+        <audio
+          ref={el => {
+            if (el) {
+              audioRefs.current[id] = el
+              el.onloadedmetadata = () => setAudioDuration(d => ({ ...d, [id]: el.duration }))
+            }
+          }}
+          src={url}
+        />
+        <button
+          style={{ ...S.playBtn, background: isMine ? 'rgba(255,255,255,0.22)' : '#1a7a4a' }}
+          onClick={() => toggleAudio(id)}
+        >
           <span style={{ fontSize: 13, color: '#fff' }}>{isPlaying ? '⏸' : '▶'}</span>
         </button>
         <div style={S.voiceBody}>
@@ -492,6 +552,7 @@ export default function Chat() {
         @keyframes ripple{0%{transform:scale(1);opacity:0.6}100%{transform:scale(2.2);opacity:0}}
         @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
         @keyframes typingDot{0%,80%,100%{transform:scale(0.6);opacity:0.4}40%{transform:scale(1);opacity:1}}
+        @keyframes onlinePulse{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,0.5)}50%{box-shadow:0 0 0 4px rgba(34,197,94,0)}}
         textarea:focus{outline:none;border-color:#1a7a4a !important;}
         .msg-row:hover .reply-btn{opacity:1!important}
         .emoji-btn:hover{transform:scale(1.25);transition:transform 0.1s}
@@ -511,8 +572,9 @@ export default function Chat() {
             <Avatar url={otherAvatar} initial={otherInitial} size={42} />
             <div style={{
               ...S.onlineDot,
-              background: otherOnline ? '#22c55e' : '#d1d5db',
-              boxShadow: otherOnline ? '0 0 0 2px #fff, 0 0 6px rgba(34,197,94,0.5)' : '0 0 0 2px #fff',
+              background: otherOnline ? '#22c55e' : '#9ca3af',
+              boxShadow: otherOnline ? '0 0 0 2px #fff' : '0 0 0 2px #fff',
+              animation: otherOnline ? 'onlinePulse 2s infinite' : 'none',
             }} />
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -528,7 +590,10 @@ export default function Chat() {
                   </span>
                 </span>
               ) : otherOnline ? (
-                <span style={{ color: '#22c55e' }}>● Online</span>
+                <span style={{ color: '#22c55e', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', display: 'inline-block' }} />
+                  Online
+                </span>
               ) : otherLastSeen ? (
                 <span style={{ color: '#9ca3af' }}>last seen {lastSeenLabel(otherLastSeen)}</span>
               ) : (
@@ -691,11 +756,14 @@ export default function Chat() {
         )}
 
         {messages.map((msg, i) => {
-          const isMine = msg.from_user === currentUser?.id
+          const isMine   = msg.from_user === currentUser?.id
           const showDate = i === 0 || new Date(msg.created_at).toDateString() !== new Date(messages[i - 1].created_at).toDateString()
-          const nextSame = i < messages.length - 1 && (messages[i + 1].from_user === msg.from_user)
-          const prevSame = i > 0 && (messages[i - 1].from_user === msg.from_user) && !showDate
-          const isLast   = !nextSame  // show avatar only on last in a group
+          const nextSame = i < messages.length - 1 && messages[i + 1].from_user === msg.from_user
+          const prevSame = i > 0 && messages[i - 1].from_user === msg.from_user && !showDate
+          const isLast   = !nextSame
+
+          // Decode reply prefix from body
+          const decoded = decodeReply(msg.body)
 
           return (
             <div key={msg.id}>
@@ -711,7 +779,6 @@ export default function Chat() {
                 className="msg-row"
                 style={{ display: 'flex', justifyContent: isMine ? 'flex-end' : 'flex-start', alignItems: 'flex-end', gap: 8, marginBottom: nextSame ? '2px' : '8px', paddingLeft: isMine ? 48 : 0, paddingRight: isMine ? 0 : 48, position: 'relative' }}
               >
-                {/* Avatar — other person only, on last message of group */}
                 {!isMine && (
                   <div style={{ opacity: isLast ? 1 : 0, flexShrink: 0 }}>
                     <Avatar url={otherAvatar} initial={otherInitial} size={30} />
@@ -719,15 +786,15 @@ export default function Chat() {
                 )}
 
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start', maxWidth: '74%' }}>
-                  {/* Reply preview */}
-                  {msg.reply_preview && (
+                  {/* Reply preview — decoded from body */}
+                  {decoded.replyPreview && (
                     <div style={{
                       ...S.replyPreview,
                       background: isMine ? 'rgba(255,255,255,0.12)' : '#e8f0eb',
                       color: isMine ? 'rgba(255,255,255,0.7)' : '#637068',
                       alignSelf: isMine ? 'flex-end' : 'flex-start',
                     }}>
-                      ↩ {msg.reply_preview}
+                      ↩ {decoded.replyPreview}
                     </div>
                   )}
 
@@ -740,7 +807,8 @@ export default function Chat() {
                     borderTopLeftRadius: !isMine ? (nextSame ? '4px' : '18px') : '18px',
                   }}>
                     {renderMedia(msg)}
-                    {msg.body && !msg.call_type && <div style={S.bubbleText}>{msg.body}</div>}
+                    {/* Show decoded body (without reply prefix) */}
+                    {decoded.body && !msg.call_type && <div style={S.bubbleText}>{decoded.body}</div>}
                     <div style={{ ...S.bubbleTime, color: isMine ? 'rgba(255,255,255,0.5)' : '#bbb' }}>
                       {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       {isMine && (
@@ -752,7 +820,6 @@ export default function Chat() {
                   </div>
                 </div>
 
-                {/* Reply button — appears on hover */}
                 <button
                   className="reply-btn"
                   style={{ ...S.replyBtn, opacity: 0, order: isMine ? -1 : 1 }}
@@ -762,7 +829,6 @@ export default function Chat() {
                   ↩
                 </button>
 
-                {/* My avatar — on last message of group */}
                 {isMine && (
                   <div style={{ opacity: isLast ? 1 : 0, flexShrink: 0 }}>
                     <Avatar url={myAvatar} initial={myInitial} size={30} isMine />
@@ -813,12 +879,16 @@ export default function Chat() {
               {preview.type === 'video' && <video src={preview.url} controls style={{ maxWidth: '100%', maxHeight: '280px', borderRadius: 12 }} />}
               {preview.type === 'audio' && <div style={{ textAlign: 'center', padding: 20 }}><div style={{ fontSize: 48, marginBottom: 12 }}>🎵</div><audio src={preview.url} controls style={{ marginTop: 12, width: '100%' }} /></div>}
             </div>
-            <input style={{ width: '100%', border: '1.5px solid #d8e5dc', borderRadius: 12, padding: '10px 14px', fontSize: 15, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', marginBottom: 12 }}
+            <input
+              style={{ width: '100%', border: '1.5px solid #d8e5dc', borderRadius: 12, padding: '10px 14px', fontSize: 15, outline: 'none', fontFamily: 'inherit', boxSizing: 'border-box', marginBottom: 12 }}
               placeholder="Add a caption..." value={preview.caption}
               onChange={e => setPreview(p => ({ ...p, caption: e.target.value }))}
-              onKeyDown={e => { if (e.key === 'Enter') uploadAndSend(preview.file, preview.type, preview.caption) }} />
-            <button style={{ width: '100%', background: 'linear-gradient(135deg,#1a7a4a,#22a05e)', color: '#fff', border: 'none', borderRadius: 14, padding: 14, fontSize: 16, fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-              onClick={() => uploadAndSend(preview.file, preview.type, preview.caption)}>
+              onKeyDown={e => { if (e.key === 'Enter') uploadAndSend(preview.file, preview.type, preview.caption) }}
+            />
+            <button
+              style={{ width: '100%', background: 'linear-gradient(135deg,#1a7a4a,#22a05e)', color: '#fff', border: 'none', borderRadius: 14, padding: 14, fontSize: 16, fontWeight: '700', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+              onClick={() => uploadAndSend(preview.file, preview.type, preview.caption)}
+            >
               {uploading ? <div style={{ width: 18, height: 18, border: '2px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} /> : '➤ Send'}
             </button>
           </div>
@@ -828,7 +898,6 @@ export default function Chat() {
       {/* ── Emoji Picker ── */}
       {showEmoji && (
         <div ref={emojiPickerRef} style={S.emojiPicker}>
-          {/* Category tabs */}
           <div style={{ display: 'flex', gap: 4, padding: '8px 8px 0', borderBottom: '1px solid #f0f0f0', marginBottom: 6 }}>
             {Object.keys(EMOJI_CATEGORIES).map(cat => (
               <button key={cat} onClick={() => setEmojiTab(cat)} style={{
@@ -838,7 +907,6 @@ export default function Chat() {
               }}>{cat}</button>
             ))}
           </div>
-          {/* Emoji grid */}
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 2, padding: '6px 8px 8px', maxHeight: 180, overflowY: 'auto' }}>
             {EMOJI_CATEGORIES[emojiTab].map(emoji => (
               <button
@@ -869,7 +937,7 @@ export default function Chat() {
               Replying to {replyTo.from_user === currentUser?.id ? 'yourself' : otherName}
             </span>
             <span style={{ fontSize: 12, color: '#637068', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {replyTo.body || (replyTo.media_type === 'audio' ? '🎤 Voice note' : replyTo.media_type === 'image' ? '📷 Photo' : '📎 File')}
+              {decodeReply(replyTo.body).body || (replyTo.media_type === 'audio' ? '🎤 Voice note' : replyTo.media_type === 'image' ? '📷 Photo' : '📎 File')}
             </span>
           </div>
           <button style={{ background: 'none', border: 'none', fontSize: 18, color: '#888', cursor: 'pointer', padding: '0 4px' }} onClick={() => setReplyTo(null)}>✕</button>
@@ -902,7 +970,6 @@ export default function Chat() {
       {/* ── Input bar ── */}
       {!recording && callState === 'idle' && (
         <div style={S.inputBar}>
-          {/* Attach buttons */}
           <div style={{ display: 'flex', gap: '1px', alignItems: 'flex-end', paddingBottom: '2px' }}>
             <button style={S.attachBtn} onClick={() => pickFile('image/*', 'image')} title="Image">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#637068" strokeWidth="2" strokeLinecap="round">
@@ -916,7 +983,6 @@ export default function Chat() {
             </button>
           </div>
 
-          {/* Text input */}
           <div style={{ flex: 1, position: 'relative' }}>
             <textarea
               ref={inputRef}
@@ -933,20 +999,20 @@ export default function Chat() {
             />
           </div>
 
-          {/* Emoji button */}
           <button style={{ ...S.attachBtn, color: showEmoji ? '#1a7a4a' : '#637068' }} onClick={e => { e.stopPropagation(); setShowEmoji(v => !v) }} title="Emoji">
             <span style={{ fontSize: 20 }}>😊</span>
           </button>
 
-          {/* Send / Mic */}
           {newMsg.trim()
             ? <button style={S.sendBtn} onClick={() => sendMessage(newMsg)}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2z" /></svg>
               </button>
             : <button style={S.micBtn} onClick={startRecording} title="Voice note">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#637068" strokeWidth="2" strokeLinecap="round">
-                  <rect x="9" y="2" width="6" height="12" rx="3" /><path d="M5 10a7 7 0 0014 0" />
-                  <line x1="12" y1="19" x2="12" y2="22" /><line x1="8" y1="22" x2="16" y2="22" />
+                  <rect x="9" y="2" width="6" height="12" rx="3" />
+                  <path d="M5 10a7 7 0 0014 0" />
+                  <line x1="12" y1="19" x2="12" y2="22" />
+                  <line x1="8" y1="22" x2="16" y2="22" />
                 </svg>
               </button>
           }
@@ -956,7 +1022,7 @@ export default function Chat() {
   )
 }
 
-// ── Small SVG icon components ────────────────────────────────────────────────
+// ── Icon components ──────────────────────────────────────────────────────────
 function HangupIcon() {
   return (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
@@ -980,7 +1046,7 @@ const S = {
   topbar: { background: '#fff', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between', borderBottom: '1px solid #e8f0eb', flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' },
   back: { background: 'none', border: 'none', cursor: 'pointer', padding: '6px', display: 'flex', alignItems: 'center', borderRadius: 8, flexShrink: 0 },
   topInfo: { display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 },
-  onlineDot: { position: 'absolute', bottom: 1, right: 1, width: 11, height: 11, borderRadius: '50%', transition: 'background 0.3s' },
+  onlineDot: { position: 'absolute', bottom: 1, right: 1, width: 12, height: 12, borderRadius: '50%', transition: 'background 0.3s' },
   topName: { fontSize: '15px', fontWeight: '700', color: '#0f1410', lineHeight: 1.2 },
   topStatus: { fontSize: '12px', marginTop: 2, display: 'flex', alignItems: 'center' },
   callBtn: { background: '#f0f4f1', border: 'none', borderRadius: '50%', width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 },
