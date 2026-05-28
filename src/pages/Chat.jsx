@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useWebRTC, formatTime } from '../hooks/useWebRTC'
-import { watchUserOnline } from '../hooks/usePresence'
+import { watchUserOnline, globalChannel } from '../hooks/usePresence'
 
 // ── Emoji picker data ────────────────────────────────────────────────────────
 const EMOJI_CATEGORIES = {
@@ -215,19 +215,15 @@ export default function Chat() {
     presenceChannelRef.current = unsub
   }
 
-  // ── Typing indicator — broadcast via the global presence channel ─────────
+  // ── Typing indicator — broadcast via the singleton global presence channel ─
   function handleTyping(val) {
     setNewMsg(val)
-    // The global channel is managed by useGlobalPresence in App.jsx.
-    // We broadcast typing state by directly tracking on it here.
-    const gCh = supabase.getChannels().find(c => c.topic === 'realtime:app_presence_global')
-    if (gCh) {
-      gCh.track({ user_id: currentUserRef.current?.id, typing: true })
-      clearTimeout(typingTimeoutRef.current)
-      typingTimeoutRef.current = setTimeout(() => {
-        gCh.track({ user_id: currentUserRef.current?.id, typing: false })
-      }, 1500)
-    }
+    if (!globalChannel) return
+    globalChannel.track({ user_id: currentUserRef.current?.id, typing: true })
+    clearTimeout(typingTimeoutRef.current)
+    typingTimeoutRef.current = setTimeout(() => {
+      globalChannel?.track({ user_id: currentUserRef.current?.id, typing: false })
+    }, 1500)
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────
@@ -282,9 +278,7 @@ export default function Chat() {
     setNewMsg('')
     setReplyTo(null)
     if (inputRef.current) inputRef.current.style.height = 'auto'
-    // Clear typing indicator on global channel
-    const gCh = supabase.getChannels().find(c => c.topic === 'realtime:app_presence_global')
-    if (gCh) gCh.track({ user_id: currentUserRef.current?.id, typing: false })
+    globalChannel?.track({ user_id: currentUserRef.current?.id, typing: false })
     clearTimeout(typingTimeoutRef.current)
   }
 

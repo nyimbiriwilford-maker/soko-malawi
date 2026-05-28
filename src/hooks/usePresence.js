@@ -1,44 +1,84 @@
 import { useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 
-// ── Global channel name — same for every user on every page ──────────────────
 const GLOBAL_CHANNEL = 'app_presence_global'
 
-let globalChannel = null
-let globalChannelUsers = 0 // reference count so we only create one channel
+// ── Singleton — one channel object shared across the whole app ───────────────
+// Exported so Chat.jsx can call .track() on it directly for typing.
+export let globalChannel = null
+let refCount = 0
+
+// ── Listeners registry — Chat.jsx registers callbacks here ───────────────────
+// Key: otherUserId, Value: { onOnline, onTyping }
+const listeners = new Map()
+
+function notifyListeners(state) {
+  listeners.forEach(({ onOnline, onTyping }, uid) => {
+    const presences = state[uid]
+    const isOnline = !!(presences && presences.length > 0 && !presences[0].away)
+    const isTyping = !!(presences && presences.length > 0 && presences[0].typing === true)
+    onOnline(isOnline)
+    if (onTyping) onTyping(isTyping)
+  })
+}
+
+function buildChannel(userId) {
+  const ch = supabase.channel(GLOBAL_CHANNEL, {
+    config: { presence: { key: userId } },
+  })
+
+  ch.on('presence', { event: 'sync' }, () => {
+    notifyListeners(ch.presenceState())
+  })
+
+  ch.on('presence', { event: 'join' }, ({ key, newPresences }) => {
+    const cb = listeners.get(key)
+    if (cb) {
+      cb.onOnline(true)
+      if (cb.onTyping) cb.onTyping(newPresences[0]?.typing === true)
+    }
+  })
+
+  ch.on('presence', { event: 'leave' }, ({ key }) => {
+    const cb = listeners.get(key)
+    if (cb) {
+      cb.onOnline(false)
+      if (cb.onTyping) cb.onTyping(false)
+    }
+  })
+
+  ch.subscribe(async (status) => {
+    if (status === 'SUBSCRIBED') {
+      await ch.track({
+        user_id: userId,
+        typing: false,
+        online_at: new Date().toISOString(),
+      })
+      await supabase
+        .from('profiles')
+        .upsert({ id: userId, last_seen: new Date().toISOString() }, { onConflict: 'id' })
+      // Fire sync immediately so existing online users are detected
+      notifyListeners(ch.presenceState())
+    }
+  })
+
+  return ch
+}
 
 /**
- * useGlobalPresence
- * Call this ONCE at the app root (e.g. App.jsx or a layout wrapper).
- * It broadcasts the current user's presence on a single shared channel
- * so they appear online to everyone else regardless of which page they're on.
+ * useGlobalPresence — call once in App.jsx.
+ * Creates/reuses the singleton presence channel and broadcasts this user as online.
  */
 export function useGlobalPresence(userId) {
-  const channelRef = useRef(null)
-
   useEffect(() => {
     if (!userId) return
 
-    // Reuse the singleton channel if already open
+    refCount++
+
     if (!globalChannel) {
-      globalChannel = supabase.channel(GLOBAL_CHANNEL, {
-        config: { presence: { key: userId } },
-      })
-      globalChannel.subscribe(async (status) => {
-        if (status === 'SUBSCRIBED') {
-          await globalChannel.track({
-            user_id: userId,
-            typing: false,
-            online_at: new Date().toISOString(),
-          })
-          // Persist last_seen so Chat.jsx can read it on load
-          await supabase
-            .from('profiles')
-            .upsert({ id: userId, last_seen: new Date().toISOString() }, { onConflict: 'id' })
-        }
-      })
+      globalChannel = buildChannel(userId)
     } else {
-      // Channel already exists — re-track with this user id
+      // Already subscribed — just re-track
       globalChannel.track({
         user_id: userId,
         typing: false,
@@ -46,83 +86,59 @@ export function useGlobalPresence(userId) {
       })
     }
 
-    globalChannelUsers++
-    channelRef.current = globalChannel
-
-    // Update last_seen every 2 minutes while alive
-    const heartbeat = setInterval(async () => {
-      await supabase
-        .from('profiles')
-        .upsert({ id: userId, last_seen: new Date().toISOString() }, { onConflict: 'id' })
+    // Heartbeat: refresh last_seen + presence every 90s
+    const heartbeat = setInterval(() => {
       globalChannel?.track({ user_id: userId, typing: false, online_at: new Date().toISOString() })
-    }, 120_000)
+      supabase.from('profiles').upsert({ id: userId, last_seen: new Date().toISOString() }, { onConflict: 'id' })
+    }, 90_000)
 
-    // On tab hide/show — update presence state
-    function handleVisibility() {
+    // Tab visibility
+    function onVisibility() {
       if (document.hidden) {
-        globalChannel?.track({ user_id: userId, typing: false, away: true })
+        globalChannel?.track({ user_id: userId, away: true, typing: false })
       } else {
-        globalChannel?.track({ user_id: userId, typing: false, away: false, online_at: new Date().toISOString() })
+        globalChannel?.track({ user_id: userId, away: false, typing: false, online_at: new Date().toISOString() })
         supabase.from('profiles').upsert({ id: userId, last_seen: new Date().toISOString() }, { onConflict: 'id' })
       }
     }
-    document.addEventListener('visibilitychange', handleVisibility)
+    document.addEventListener('visibilitychange', onVisibility)
 
     return () => {
       clearInterval(heartbeat)
-      document.removeEventListener('visibilitychange', handleVisibility)
-      globalChannelUsers--
-      // Persist last_seen on unmount (tab close / logout)
+      document.removeEventListener('visibilitychange', onVisibility)
       supabase.from('profiles').upsert({ id: userId, last_seen: new Date().toISOString() }, { onConflict: 'id' })
-      if (globalChannelUsers <= 0) {
+      refCount--
+      if (refCount <= 0) {
         supabase.removeChannel(globalChannel)
         globalChannel = null
-        globalChannelUsers = 0
+        refCount = 0
       }
     }
   }, [userId])
 }
 
 /**
- * watchUserOnline
- * Call inside Chat.jsx (or anywhere) to watch whether a specific OTHER user is online.
- * Returns an unsubscribe function.
- *
- * @param {string} otherUserId  — the user to watch
- * @param {function} onOnline   — called with true/false
- * @param {function} onTyping   — called with true/false (optional)
+ * watchUserOnline — call in Chat.jsx to watch another user's online/typing state.
+ * Registers callbacks on the SAME singleton channel — no new subscription needed.
+ * Returns an unregister function.
  */
 export function watchUserOnline(otherUserId, onOnline, onTyping) {
-  // Listen on the same global channel
-  const ch = supabase.channel(GLOBAL_CHANNEL + '_watch_' + otherUserId)
+  if (!otherUserId) return () => {}
 
-  ch.on('presence', { event: 'sync' }, () => {
-    // We can't read globalChannel.presenceState() from a different channel object,
-    // so we use a separate join/leave listener instead (see below).
-  })
+  listeners.set(otherUserId, { onOnline, onTyping })
 
-  // The reliable way: subscribe to the SAME global channel and check presenceState
-  const watchCh = supabase.channel(GLOBAL_CHANNEL, {
-    config: { presence: { key: otherUserId + '_watcher' } },
-  })
-
-  watchCh.on('presence', { event: 'sync' }, () => {
-    const state = watchCh.presenceState()
-    const present = state[otherUserId]
-    const isOnline = !!(present && present.length > 0 && !present[0].away)
+  // If the channel is already subscribed, run a sync immediately
+  // so we don't wait for the next presence event
+  if (globalChannel) {
+    const state = globalChannel.presenceState()
+    const presences = state[otherUserId]
+    const isOnline = !!(presences && presences.length > 0 && !presences[0].away)
+    const isTyping = !!(presences && presences.length > 0 && presences[0].typing === true)
     onOnline(isOnline)
-    if (onTyping) onTyping(present?.[0]?.typing === true)
-  })
+    if (onTyping) onTyping(isTyping)
+  }
 
-  watchCh.on('presence', { event: 'join' }, ({ key }) => {
-    if (key === otherUserId) onOnline(true)
-  })
-
-  watchCh.on('presence', { event: 'leave' }, ({ key }) => {
-    if (key === otherUserId) { onOnline(false); if (onTyping) onTyping(false) }
-  })
-
-  watchCh.subscribe()
-
-  return () => supabase.removeChannel(watchCh)
+  return () => {
+    listeners.delete(otherUserId)
+  }
 }
