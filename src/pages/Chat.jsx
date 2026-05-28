@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useWebRTC, formatTime } from '../hooks/useWebRTC'
+import { watchUserOnline } from '../hooks/usePresence'
 
 // ── Emoji picker data ────────────────────────────────────────────────────────
 const EMOJI_CATEGORIES = {
@@ -90,7 +91,7 @@ export default function Chat() {
     init()
     return () => {
       if (channelRef.current) { supabase.removeChannel(channelRef.current); channelRef.current = null }
-      if (presenceChannelRef.current) { supabase.removeChannel(presenceChannelRef.current); presenceChannelRef.current = null }
+      if (presenceChannelRef.current) { presenceChannelRef.current(); presenceChannelRef.current = null }
       endCallLocally()
     }
   }, [userId, listingId])
@@ -188,85 +189,45 @@ export default function Chat() {
     channelRef.current = channel
   }
 
-  // ── FIXED: Presence channel ──────────────────────────────────────────────
-  // The key fix: channel name must be the SAME for both users so they see each other.
-  // We sort the IDs so both users join the same channel regardless of who opens first.
-  // The presence key is each user's own ID.
+  // ── Presence: watch other user via global channel ────────────────────────
+  // useGlobalPresence (called in App.jsx) broadcasts MY presence app-wide.
+  // Here we only WATCH the other user using the global channel.
   function setupPresenceChannel(myId) {
     if (presenceChannelRef.current) {
-      supabase.removeChannel(presenceChannelRef.current)
+      presenceChannelRef.current()
       presenceChannelRef.current = null
     }
 
-    // Both users must use the SAME channel name — sort IDs
-    const roomName = `presence_room_${[myId, userId].sort().join('_')}`
-
-    const ch = supabase.channel(roomName, {
-      config: {
-        presence: { key: myId },
+    const unsub = watchUserOnline(
+      userId,
+      (isOnline) => {
+        setOtherOnline(isOnline)
+        if (!isOnline) {
+          supabase.from('profiles').select('last_seen').eq('id', userId).maybeSingle().then(({ data }) => {
+            if (data?.last_seen) setOtherLastSeen(new Date(data.last_seen))
+            else setOtherLastSeen(new Date())
+          })
+        }
       },
-    })
+      (isTyping) => setOtherTyping(isTyping),
+    )
 
-    ch.on('presence', { event: 'sync' }, () => {
-      const state = ch.presenceState()
-      // Look for the other user's presence key
-      const otherPresences = state[userId]
-      if (otherPresences && otherPresences.length > 0) {
-        const p = otherPresences[0]
-        setOtherOnline(true)
-        setOtherTyping(p.typing === true)
-      } else {
-        setOtherOnline(false)
-        setOtherTyping(false)
-        // Fetch last_seen from profiles as fallback
-        supabase.from('profiles').select('last_seen').eq('id', userId).maybeSingle().then(({ data }) => {
-          if (data?.last_seen) setOtherLastSeen(new Date(data.last_seen))
-        })
-      }
-    })
-
-    ch.on('presence', { event: 'join' }, ({ key, newPresences }) => {
-      if (key === userId) {
-        setOtherOnline(true)
-        setOtherTyping(newPresences[0]?.typing === true)
-      }
-    })
-
-    ch.on('presence', { event: 'leave' }, ({ key }) => {
-      if (key === userId) {
-        setOtherOnline(false)
-        setOtherTyping(false)
-        const now = new Date()
-        setOtherLastSeen(now)
-        // Persist last_seen to profiles so it survives page refreshes
-        supabase.from('profiles')
-          .upsert({ id: userId, last_seen: now.toISOString() }, { onConflict: 'id' })
-          .then(() => {})
-      }
-    })
-
-    ch.subscribe(async (status) => {
-      if (status === 'SUBSCRIBED') {
-        // Broadcast my own presence
-        await ch.track({ user_id: myId, typing: false, online_at: new Date().toISOString() })
-        // Also persist my own last_seen so others can read it on load
-        await supabase.from('profiles')
-          .upsert({ id: myId, last_seen: new Date().toISOString() }, { onConflict: 'id' })
-      }
-    })
-
-    presenceChannelRef.current = ch
+    presenceChannelRef.current = unsub
   }
 
-  // ── Typing indicator ─────────────────────────────────────────────────────
+  // ── Typing indicator — broadcast via the global presence channel ─────────
   function handleTyping(val) {
     setNewMsg(val)
-    if (!presenceChannelRef.current) return
-    presenceChannelRef.current.track({ user_id: currentUserRef.current?.id, typing: true })
-    clearTimeout(typingTimeoutRef.current)
-    typingTimeoutRef.current = setTimeout(() => {
-      presenceChannelRef.current?.track({ user_id: currentUserRef.current?.id, typing: false })
-    }, 1500)
+    // The global channel is managed by useGlobalPresence in App.jsx.
+    // We broadcast typing state by directly tracking on it here.
+    const gCh = supabase.getChannels().find(c => c.topic === 'realtime:app_presence_global')
+    if (gCh) {
+      gCh.track({ user_id: currentUserRef.current?.id, typing: true })
+      clearTimeout(typingTimeoutRef.current)
+      typingTimeoutRef.current = setTimeout(() => {
+        gCh.track({ user_id: currentUserRef.current?.id, typing: false })
+      }, 1500)
+    }
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────
@@ -321,7 +282,9 @@ export default function Chat() {
     setNewMsg('')
     setReplyTo(null)
     if (inputRef.current) inputRef.current.style.height = 'auto'
-    presenceChannelRef.current?.track({ user_id: currentUserRef.current?.id, typing: false })
+    // Clear typing indicator on global channel
+    const gCh = supabase.getChannels().find(c => c.topic === 'realtime:app_presence_global')
+    if (gCh) gCh.track({ user_id: currentUserRef.current?.id, typing: false })
     clearTimeout(typingTimeoutRef.current)
   }
 

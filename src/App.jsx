@@ -12,6 +12,7 @@ import Jobs from './pages/Jobs'
 import Services from './pages/Services'
 import GlobalCallListener from './components/GlobalCallListener'
 import { CallProvider } from './context/CallContext'
+import { useGlobalPresence } from './hooks/usePresence'
 
 export default function App() {
   const [session, setSession] = useState(undefined)
@@ -27,6 +28,10 @@ export default function App() {
 
     return () => subscription.unsubscribe()
   }, [])
+
+  // Broadcast this user's presence globally — makes them show as "online"
+  // on any page of the app, not just when they're inside a chat.
+  useGlobalPresence(session?.user?.id ?? null)
 
   if (session === undefined) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: '#637068' }}>
@@ -45,7 +50,7 @@ export default function App() {
           <Route path="/post" element={session ? <PostListing /> : <Navigate to="/login" />} />
           <Route path="/chats" element={session ? <ChatList /> : <Navigate to="/login" />} />
           <Route path="/chat/:userId/:listingId" element={session ? <Chat /> : <Navigate to="/login" />} />
-          <Route path="/chat/:userId" element={session ? <Chat /> : <Navigate to="/login" />} />        
+          <Route path="/chat/:userId" element={session ? <Chat /> : <Navigate to="/login" />} />
           <Route path="/profile" element={session ? <Profile /> : <Navigate to="/login" />} />
           <Route path="/jobs" element={session ? <Jobs /> : <Navigate to="/login" />} />
           <Route path="*" element={<Navigate to="/" />} />
