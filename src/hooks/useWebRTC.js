@@ -6,13 +6,6 @@ function generateCallId(uid1, uid2) {
   return [uid1, uid2].sort().join('-') + '-' + Date.now()
 }
 
-/**
- * useWebRTC — encapsulates all WebRTC peer connection logic for Chat.jsx
- *
- * @param {string}   userId        — the other user's ID (from URL params)
- * @param {object}   currentUser   — the authenticated user object
- * @param {function} onCallMessage — called when a call ends / is missed
- */
 export function useWebRTC({ userId, currentUser, onCallMessage }) {
   const {
     sendSignal: ctxSendSignal,
@@ -25,18 +18,16 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
     playRing: ctxPlayRing,
     stopRing: ctxStopRing,
     closeOutboundChannel,
-    drainEarlyCandidates, // ← drains early buffer from GlobalCallListener
+    drainEarlyCandidates,
   } = useCall()
 
-  // ── State exposed to the UI ────────────────────────────────────────────────
-  const [callState, setCallState] = useState('idle') // idle|calling|ringing|receiving|in-call
-  const [callType, setCallType]   = useState(null)   // 'video'|'voice'
+  const [callState, setCallState]       = useState('idle')
+  const [callType, setCallType]         = useState(null)
   const [callDuration, setCallDuration] = useState(0)
-  const [isMuted, setIsMuted]     = useState(false)
-  const [isCamOff, setIsCamOff]   = useState(false)
+  const [isMuted, setIsMuted]           = useState(false)
+  const [isCamOff, setIsCamOff]         = useState(false)
   const [remoteStream, setRemoteStream] = useState(null)
 
-  // ── Refs ───────────────────────────────────────────────────────────────────
   const pcRef             = useRef(null)
   const localStreamRef    = useRef(null)
   const remoteStreamRef   = useRef(null)
@@ -45,14 +36,14 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
   const pendingCandidates = useRef([])
   const incomingOfferRef  = useRef(null)
   const callTypeRef       = useRef(null)
-  const currentUserRef    = useRef(currentUser)
   const localVideoRef     = useRef(null)
   const remoteVideoRef    = useRef(null)
 
-  // Keep ref in sync with prop on every render
+  // KEY FIX: always-current refs for userId and currentUser
+  const userIdRef      = useRef(userId)
+  const currentUserRef = useRef(currentUser)
+  userIdRef.current      = userId
   currentUserRef.current = currentUser
-
-  // ── Helpers ────────────────────────────────────────────────────────────────
 
   function updateCallType(type) {
     setCallType(type)
@@ -60,8 +51,9 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
   }
 
   async function sendSignal(event, payload = {}) {
-    if (!userId) { console.error('sendSignal: no targetUserId'); return }
-    await ctxSendSignal(userId, event, { ...payload, callId: callIdRef.current })
+    const target = userIdRef.current
+    if (!target) { console.error('sendSignal: no targetUserId'); return }
+    await ctxSendSignal(target, event, { ...payload, callId: callIdRef.current })
   }
 
   function startCallTimer() {
@@ -73,8 +65,7 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)()
       ;[380, 480].forEach((freq, i) => {
-        const osc = ctx.createOscillator()
-        const gain = ctx.createGain()
+        const osc = ctx.createOscillator(), gain = ctx.createGain()
         osc.connect(gain); gain.connect(ctx.destination)
         osc.type = 'sine'; osc.frequency.value = freq
         const t = ctx.currentTime + i * 0.12
@@ -89,8 +80,7 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)()
       ;[480, 360, 300].forEach((freq, i) => {
-        const osc = ctx.createOscillator()
-        const gain = ctx.createGain()
+        const osc = ctx.createOscillator(), gain = ctx.createGain()
         osc.connect(gain); gain.connect(ctx.destination)
         osc.type = 'sine'; osc.frequency.value = freq
         const t = ctx.currentTime + i * 0.15
@@ -113,13 +103,12 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
     localVideoRef.current.play().catch(() => {})
   }
 
-  // ── Build peer connection ──────────────────────────────────────────────────
   function buildPeerConnection(role) {
     const pc = new RTCPeerConnection(ICE_SERVERS)
     pcRef.current = pc
 
     pc.ontrack = e => {
-      console.log(`🎥 [${role}] ontrack fired — track: ${e.track.kind}`)
+      console.log(`🎥 [${role}] ontrack — track: ${e.track.kind}`)
       const s = e.streams[0]
       remoteStreamRef.current = s
       setRemoteStream(s)
@@ -127,22 +116,24 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
 
     pc.onicecandidate = async e => {
       if (!e.candidate) return
-      console.log(`🧊 [${role}] ICE candidate: ${e.candidate.type}`)
-      const myId = currentUserRef.current?.id
-      if (!callIdRef.current || !myId || !userId) return
-      await sendIceCandidate(callIdRef.current, myId, userId, e.candidate.toJSON())
+      const myId   = currentUserRef.current?.id
+      const target = userIdRef.current
+      if (!callIdRef.current || !myId || !target) return
+      await sendIceCandidate(callIdRef.current, myId, target, e.candidate.toJSON())
     }
 
     pc.oniceconnectionstatechange = () =>
-      console.log(`❄️  [${role}] ICE state: ${pc.iceConnectionState}`)
+      console.log(`❄️  [${role}] ICE: ${pc.iceConnectionState}`)
     pc.onconnectionstatechange = () =>
-      console.log(`🔗 [${role}] Connection state: ${pc.connectionState}`)
+      console.log(`🔗 [${role}] Conn: ${pc.connectionState}`)
 
     return pc
   }
 
-  // ── startCall ──────────────────────────────────────────────────────────────
   async function startCall(type) {
+    const target = userIdRef.current
+    if (!target) { console.error('startCall: no userId'); return }
+
     updateCallType(type)
     setCallState('calling')
 
@@ -162,18 +153,18 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
       localVideoRef.current.play().catch(() => {})
     }
 
-    const callId = generateCallId(currentUserRef.current.id, userId)
+    const cu     = currentUserRef.current
+    const callId = generateCallId(cu.id, target)
     callIdRef.current = callId
 
     const pc = buildPeerConnection('caller')
     stream.getTracks().forEach(t => pc.addTrack(t, stream))
 
-    // Subscribe before createOffer — so no callee candidates are missed
-    subscribeToIceCandidates(callId, currentUserRef.current.id, async (candidate) => {
+    subscribeToIceCandidates(callId, cu.id, async (candidate) => {
       try {
         const cand = typeof candidate === 'string' ? JSON.parse(candidate) : candidate
-        if (pc.remoteDescription) {
-          await pc.addIceCandidate(new RTCIceCandidate(cand))
+        if (pcRef.current?.remoteDescription) {
+          await pcRef.current.addIceCandidate(new RTCIceCandidate(cand))
         } else {
           pendingCandidates.current.push(cand)
         }
@@ -185,15 +176,13 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
     const offer = await pc.createOffer()
     await pc.setLocalDescription(offer)
 
-    // Include caller name so receiver never needs a DB lookup
-    const cu = currentUserRef.current
     const fromName =
       cu.user_metadata?.name ||
       cu.user_metadata?.full_name ||
       cu.email ||
       cu.id
 
-    await ctxSendSignal(userId, 'ring', {
+    await ctxSendSignal(target, 'ring', {
       offer: pc.localDescription.toJSON(),
       callType: type,
       fromUser: cu.id,
@@ -202,14 +191,13 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
     })
   }
 
-  // ── answerCall ─────────────────────────────────────────────────────────────
-  // Called when the user taps Answer while already on the chat page.
-  // For the GlobalCallListener → navigate path, use restorePendingCall() instead.
   async function answerCall() {
     ctxStopRing()
     dismissIncoming()
 
-    const type = callTypeRef.current || 'voice'
+    const type   = callTypeRef.current || 'voice'
+    const target = userIdRef.current
+
     const stream = await navigator.mediaDevices
       .getUserMedia({ audio: true, video: type === 'video' })
       .catch(() => null)
@@ -226,16 +214,11 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
       localVideoRef.current.play().catch(() => {})
     }
 
-    const callId = callIdRef.current || generateCallId(userId, currentUserRef.current.id)
+    const callId = callIdRef.current || generateCallId(target, currentUserRef.current.id)
     callIdRef.current = callId
 
     const pc = buildPeerConnection('callee')
 
-    // ICE subscription + pendingCandidates were set up before this call:
-    // • Direct answer (in-chat): setupCallListener did it at ring time
-    // • Navigate path: restorePendingCall() did it before calling answerCall()
-
-    // CORRECT ORDER: setRemoteDescription → addTrack → createAnswer
     await pc.setRemoteDescription(new RTCSessionDescription(incomingOfferRef.current))
 
     stream.getTracks().forEach(t => {
@@ -265,7 +248,6 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
     })
   }
 
-  // ── declineCall ────────────────────────────────────────────────────────────
   async function declineCall() {
     ctxStopRing()
     dismissIncoming()
@@ -278,7 +260,6 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
     endCallLocally()
   }
 
-  // ── hangUp ─────────────────────────────────────────────────────────────────
   async function hangUp() {
     playCallEndSound()
     const dur = callDuration
@@ -293,7 +274,6 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
     endCallLocally()
   }
 
-  // ── endCallLocally ─────────────────────────────────────────────────────────
   function endCallLocally() {
     ctxStopRing()
     clearInterval(callTimerRef.current)
@@ -308,37 +288,34 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
     pendingCandidates.current = []
     incomingOfferRef.current = null
     callIdRef.current = null
-    closeOutboundChannel?.(userId)
+    closeOutboundChannel?.(userIdRef.current)
     setCallState('idle')
     setCallDuration(0)
     setIsMuted(false)
     setIsCamOff(false)
   }
 
-  // ── setupCallListener ──────────────────────────────────────────────────────
   function setupCallListener() {
     return registerCallListener((payload) => {
       const { _event } = payload
 
       if (_event === 'ring') {
-        if (payload.fromUser !== userId) return false
+        // KEY FIX: read from ref — never stale regardless of chat type
+        const expectedFrom = userIdRef.current
+        if (payload.fromUser !== expectedFrom) return false
 
-        // If GlobalCallListener already handled this ring (user was outside chat,
-        // tapped Answer, and navigated here), restorePendingCall() will handle
-        // everything. Suppress the duplicate ring to prevent a second peer connection.
         const handledId = sessionStorage.getItem('__pendingCallId')
         if (handledId === payload.callId) {
-          console.log('[setupCallListener] ring suppressed — already handled by GlobalCallListener')
-          return true // claim it so no other listener fires, but do nothing else
+          console.log('[setupCallListener] suppressed — handled by GlobalCallListener')
+          return true
         }
 
-        callIdRef.current = payload.callId
+        callIdRef.current      = payload.callId
         incomingOfferRef.current = payload.offer
         updateCallType(payload.callType)
         setCallState('receiving')
         ctxPlayRing()
 
-        // Subscribe to ICE candidates immediately — before the user taps Answer.
         const myId = currentUserRef.current?.id
         if (!myId) { console.error('[callee] currentUser not ready at ring time'); return true }
 
@@ -369,7 +346,6 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
         pcRef.current
           .setRemoteDescription(new RTCSessionDescription(payload.answer))
           .then(async () => {
-            console.log(`🧊 [caller] flushing ${pendingCandidates.current.length} pending candidates after answer`)
             for (const c of pendingCandidates.current) {
               try { await pcRef.current?.addIceCandidate(new RTCIceCandidate(c)) } catch (e) {}
             }
@@ -379,11 +355,10 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
             setCallState('in-call')
             startCallTimer()
           })
-          .catch(err => console.error('setRemoteDescription (answer) error:', err))
+          .catch(err => console.error('setRemoteDescription error:', err))
         return true
       }
 
-      // Broadcast ICE fallback (old clients)
       if (_event === 'ice') {
         if (!pcRef.current) return true
         try {
@@ -408,7 +383,6 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
     })
   }
 
-  // ── Controls ───────────────────────────────────────────────────────────────
   function toggleMute() {
     localStreamRef.current?.getAudioTracks().forEach(t => { t.enabled = !t.enabled })
     setIsMuted(m => !m)
@@ -419,32 +393,20 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
     setIsCamOff(c => !c)
   }
 
-  // ── restorePendingCall ─────────────────────────────────────────────────────
-  // Called by Chat.jsx on mount when navigated from GlobalCallListener.
-  // The user ALREADY tapped Answer in GlobalCallListener — so we go straight to
-  // answerCall(), no ring UI, no duplicate listener firing.
   async function restorePendingCall(fromUserId) {
     const raw = sessionStorage.getItem('__pendingCall')
     if (!raw) return
     try {
       const pending = JSON.parse(raw)
       sessionStorage.removeItem('__pendingCall')
-      sessionStorage.removeItem('__pendingCallId') // clean up the suppression flag too
+      sessionStorage.removeItem('__pendingCallId')
       if (pending.fromUser !== fromUserId) return
 
       const myId = currentUserRef.current?.id
-      if (!myId) {
-        console.error('[restorePendingCall] currentUser not ready')
-        return
-      }
+      if (!myId) { console.error('[restorePendingCall] currentUser not ready'); return }
 
-      console.log('[restorePendingCall] restoring call, draining early ICE buffer...')
-
-      // Drain candidates buffered by GlobalCallListener's early subscription
       const earlyBuffer = drainEarlyCandidates(pending.callId)
-      console.log(`[restorePendingCall] drained ${earlyBuffer.length} early ICE candidates`)
 
-      // Set up the real ICE subscription for any candidates still in flight
       subscribeToIceCandidates(pending.callId, myId, async (candidate) => {
         try {
           const cand = typeof candidate === 'string' ? JSON.parse(candidate) : candidate
@@ -458,53 +420,26 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
         }
       })
 
-      // Seed the pending queue with early buffered candidates.
-      // answerCall() will flush these after setRemoteDescription.
       for (const c of earlyBuffer) {
-        try {
-          pendingCandidates.current.push(typeof c === 'string' ? JSON.parse(c) : c)
-        } catch (e) {}
+        try { pendingCandidates.current.push(typeof c === 'string' ? JSON.parse(c) : c) } catch (e) {}
       }
 
-      // Load call metadata into refs so answerCall() can read them
       incomingOfferRef.current = pending.offer
-      callIdRef.current = pending.callId
+      callIdRef.current        = pending.callId
       updateCallType(pending.callType)
 
-      // DO NOT call ctxPlayRing() or setCallState('receiving') here —
-      // the user already tapped Answer. Go straight to answering.
-      // The ring UI from GlobalCallListener is already gone.
-      console.log('[restorePendingCall] auto-answering...')
       await answerCall()
-
     } catch (e) {
       console.error('[restorePendingCall] error:', e)
     }
   }
 
   return {
-    // State
-    callState,
-    callType,
-    callDuration,
-    isMuted,
-    isCamOff,
-    remoteStream,
-    // Refs
-    localVideoRef,
-    remoteVideoRef,
-    // Actions
-    startCall,
-    answerCall,
-    declineCall,
-    hangUp,
-    endCallLocally,
-    toggleMute,
-    toggleCam,
-    setupCallListener,
-    assignRemoteStream,
-    assignLocalStream,
-    restorePendingCall,
+    callState, callType, callDuration, isMuted, isCamOff, remoteStream,
+    localVideoRef, remoteVideoRef,
+    startCall, answerCall, declineCall, hangUp, endCallLocally,
+    toggleMute, toggleCam, setupCallListener,
+    assignRemoteStream, assignLocalStream, restorePendingCall,
   }
 }
 
