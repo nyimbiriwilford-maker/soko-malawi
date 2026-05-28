@@ -23,59 +23,80 @@ export default function ChatList() {
 
     if (!messages || messages.length === 0) { setLoading(false); return }
 
-    // ── One conversation per person ──────────────────────────────────────────
-    // Group ALL messages by the other person. Within each person's messages,
-    // pick the best context: service > listing > direct.
-    // Messages are already ordered desc so first-seen = most recent.
+    // ── Grouping strategy ────────────────────────────────────────────────────
+    // One row per (person × context). Context = service_id OR listing_id.
+    // The same person asking about your listing AND booking your service = 2 rows
+    // (genuinely different conversations).
+    // Call-log messages with no context attach to the person's most-relevant
+    // existing context, or create a direct row only if no other context exists.
 
-    const byPerson = new Map() // otherId → { bestContext, isService, lastRealMsg, lastMsg }
+    const convos = new Map() // key → convo object
 
     for (const msg of messages) {
-      const otherId = msg.from_user === user.id ? msg.to_user : msg.from_user
+      const otherId   = msg.from_user === user.id ? msg.to_user : msg.from_user
       const serviceId = msg.service_id || null
       const listingId = msg.listing_id || null
       const isCallLog = !!msg.call_type
 
-      if (!byPerson.has(otherId)) {
-        byPerson.set(otherId, {
+      let key
+      if (serviceId)      key = `svc:${otherId}:${serviceId}`
+      else if (listingId) key = `lst:${otherId}:${listingId}`
+      else                key = `dir:${otherId}`  // call logs / direct messages
+
+      if (!convos.has(key)) {
+        convos.set(key, {
+          key,
           otherId,
-          contextId: serviceId || listingId || null,
-          isService: !!serviceId,
-          lastMsg: msg,
+          contextId:  serviceId || listingId || null,
+          isService:  !!serviceId,
+          isDirect:   !serviceId && !listingId,
+          lastMsg:    msg,
           lastRealMsg: isCallLog ? null : msg,
         })
       } else {
-        const existing = byPerson.get(otherId)
-
-        // Upgrade context: service beats listing beats nothing
-        const existingRank = existing.isService ? 2 : existing.contextId ? 1 : 0
-        const newRank = serviceId ? 2 : listingId ? 1 : 0
-        if (newRank > existingRank) {
-          existing.contextId = serviceId || listingId
-          existing.isService = !!serviceId
-        }
-
-        // Upgrade lastMsg preview: real message beats call log
-        if (!existing.lastRealMsg && !isCallLog) {
-          existing.lastRealMsg = msg
-          existing.lastMsg = msg
+        const c = convos.get(key)
+        // Upgrade preview from call-log to real message
+        if (!c.lastRealMsg && !isCallLog) {
+          c.lastRealMsg = msg
+          c.lastMsg = msg
         }
       }
     }
 
-    const conversations = [...byPerson.values()].map(c => ({
+    // Merge orphan "dir:" rows into a real-context row if one exists for the same person
+    const allKeys = [...convos.keys()]
+    for (const k of allKeys) {
+      if (!k.startsWith('dir:')) continue
+      const c = convos.get(k)
+      // Find any context row for the same person
+      const contextKey = allKeys.find(
+        ok => !ok.startsWith('dir:') && ok.includes(`:${c.otherId}:`)
+      )
+      if (contextKey) {
+        // Merge: upgrade lastMsg on the context row if this call-log is newer
+        const ctx = convos.get(contextKey)
+        const dirTime = new Date(c.lastMsg.created_at)
+        const ctxTime = new Date(ctx.lastMsg.created_at)
+        if (dirTime > ctxTime && !c.lastMsg.call_type) {
+          ctx.lastMsg = c.lastMsg
+        }
+        convos.delete(k)  // remove orphan direct row
+      }
+    }
+
+    const conversations = [...convos.values()].map(c => ({
       ...c,
-      // If we have a real message use it for preview, otherwise use the call log
       lastMsg: c.lastRealMsg || c.lastMsg,
     }))
 
-    // ── Enrich with user / service / listing data ────────────────────────────
+    // ── Enrich ───────────────────────────────────────────────────────────────
     const otherIds   = [...new Set(conversations.map(c => c.otherId))]
     const serviceIds = conversations.filter(c => c.isService && c.contextId).map(c => c.contextId)
     const listingIds = conversations.filter(c => !c.isService && c.contextId).map(c => c.contextId)
 
-    const [{ data: users }, { data: services }, { data: listings }] = await Promise.all([
-      supabase.from('users').select('*').in('id', otherIds),
+    const [{ data: profiles }, { data: services }, { data: listings }] = await Promise.all([
+      // Use profiles table for real avatar + name (same as Profile.jsx)
+      supabase.from('profiles').select('id,full_name,avatar_url,city').in('id', otherIds),
       serviceIds.length > 0
         ? supabase.from('services').select('id,name,category,rate,city,media_urls').in('id', serviceIds)
         : { data: [] },
@@ -84,31 +105,43 @@ export default function ChatList() {
         : { data: [] },
     ])
 
+    // Fallback: also load users table for name/email if profile has no full_name
+    const { data: users } = await supabase.from('users').select('id,name,email').in('id', otherIds)
+
+    const profilesMap = Object.fromEntries((profiles || []).map(p => [p.id, p]))
     const usersMap    = Object.fromEntries((users    || []).map(u => [u.id, u]))
     const servicesMap = Object.fromEntries((services || []).map(s => [s.id, s]))
     const listingsMap = Object.fromEntries((listings || []).map(l => [l.id, l]))
 
     const enriched = await Promise.all(conversations.map(async c => {
-      // Count unread across ALL messages from this person (regardless of context)
-      const { count } = await supabase
+      // Unread: count all unread from this person for this specific context
+      let unreadQ = supabase
         .from('messages')
         .select('*', { count: 'exact', head: true })
         .eq('from_user', c.otherId)
         .eq('to_user', user.id)
         .eq('read', false)
+      if (c.isService && c.contextId)        unreadQ = unreadQ.eq('service_id', c.contextId)
+      else if (!c.isService && c.contextId)  unreadQ = unreadQ.eq('listing_id', c.contextId)
+      const { count } = await unreadQ
+
+      const profile = profilesMap[c.otherId] || {}
+      const userRow = usersMap[c.otherId] || {}
+      // Best display name: profile.full_name > users.name > users.email > fallback
+      const displayName = profile.full_name || userRow.name || userRow.email || 'User'
+      const avatarUrl   = profile.avatar_url || null
 
       return {
         ...c,
-        otherUser: usersMap[c.otherId],
-        service:   c.isService ? servicesMap[c.contextId] : null,
-        listing:   !c.isService && c.contextId ? listingsMap[c.contextId] : null,
-        unread:    count || 0,
+        displayName,
+        avatarUrl,
+        service:  c.isService ? servicesMap[c.contextId] : null,
+        listing:  !c.isService && c.contextId ? listingsMap[c.contextId] : null,
+        unread:   count || 0,
       }
     }))
 
-    // Sort by most recent message
     enriched.sort((a, b) => new Date(b.lastMsg.created_at) - new Date(a.lastMsg.created_at))
-
     setChats(enriched)
     setLoading(false)
   }
@@ -121,13 +154,13 @@ export default function ChatList() {
 
   const filtered = chats.filter(c => {
     if (activeTab === 'services') return c.isService
-    if (activeTab === 'listings') return !c.isService && c.contextId
+    if (activeTab === 'listings') return !c.isService && !c.isDirect
     return true
   })
 
   const totalUnread   = chats.reduce((sum, c) => sum + c.unread, 0)
   const serviceUnread = chats.filter(c => c.isService).reduce((sum, c) => sum + c.unread, 0)
-  const listingUnread = chats.filter(c => !c.isService && c.contextId).reduce((sum, c) => sum + c.unread, 0)
+  const listingUnread = chats.filter(c => !c.isService && !c.isDirect).reduce((sum, c) => sum + c.unread, 0)
 
   function renderLastMsg(chat) {
     const msg = chat.lastMsg
@@ -169,7 +202,10 @@ export default function ChatList() {
         <div style={S.headerTop}>
           <div>
             <div style={S.headerTitle}>Messages</div>
-            <div style={S.headerSub}>{chats.length} conversation{chats.length !== 1 ? 's' : ''}{totalUnread > 0 ? ` · ${totalUnread} unread` : ''}</div>
+            <div style={S.headerSub}>
+              {chats.length} conversation{chats.length !== 1 ? 's' : ''}
+              {totalUnread > 0 ? ` · ${totalUnread} unread` : ''}
+            </div>
           </div>
           {totalUnread > 0 && <div style={S.totalBadge}>{totalUnread}</div>}
         </div>
@@ -194,8 +230,8 @@ export default function ChatList() {
             <div key={i} style={S.skeletonRow}>
               <div style={S.skeletonAvatar} />
               <div style={{ flex: 1 }}>
-                <div style={{ ...S.skeletonLine, width: '60%', marginBottom: '8px' }} />
-                <div style={{ ...S.skeletonLine, width: '85%' }} />
+                <div style={{ ...S.skeletonLine, width: '55%', marginBottom: '8px' }} />
+                <div style={{ ...S.skeletonLine, width: '80%' }} />
               </div>
             </div>
           ))}
@@ -207,10 +243,14 @@ export default function ChatList() {
         <div style={S.empty}>
           <div style={S.emptyIcon}>{activeTab === 'services' ? '🔧' : activeTab === 'listings' ? '🛍️' : '💬'}</div>
           <p style={S.emptyTitle}>
-            {activeTab === 'services' ? 'No service chats yet' : activeTab === 'listings' ? 'No listing chats yet' : 'No messages yet'}
+            {activeTab === 'services' ? 'No service chats yet'
+              : activeTab === 'listings' ? 'No listing chats yet'
+              : 'No messages yet'}
           </p>
           <p style={S.emptySub}>
-            {activeTab === 'services' ? 'Book a service and chat with the provider' : 'Chat with sellers when browsing listings'}
+            {activeTab === 'services'
+              ? 'Book a service and chat with the provider'
+              : 'Chat with sellers when browsing listings'}
           </p>
           <button style={S.browseBtn} onClick={() => navigate(activeTab === 'services' ? '/services' : '/')}>
             {activeTab === 'services' ? 'Browse Services' : 'Browse Listings'}
@@ -218,7 +258,7 @@ export default function ChatList() {
         </div>
       )}
 
-      {/* Chat list — flat, no sections, one row per person */}
+      {/* Chat list */}
       <div style={S.list}>
         {filtered.map((chat, i) => renderChatRow(chat, i))}
       </div>
@@ -232,78 +272,80 @@ export default function ChatList() {
           <span style={S.navIcon}>💼</span><span style={S.navLabel}>Jobs</span>
         </button>
         <button style={S.navPost} onClick={() => navigate('/post')}>+</button>
-        <button style={{ ...S.navItem, color: '#1a7a4a' }} onClick={() => navigate('/chats')}>
-          <span style={S.navIcon}>💬</span>
-          <span style={{ ...S.navLabel, color: '#1a7a4a', fontWeight: '700' }}>Chats</span>
+        <button style={{ ...S.navItem }} onClick={() => navigate('/chats')}>
+          <span style={S.navIcon}>💬</span><span style={S.navLabel}>Chats</span>
         </button>
-        <button style={S.navItem} onClick={() => navigate('/profile')}>
-          <span style={S.navIcon}>👤</span><span style={S.navLabel}>Me</span>
+        <button style={{ ...S.navItem, color: '#1a7a4a' }} onClick={() => navigate('/profile')}>
+          <span style={S.navIcon}>👤</span>
+          <span style={{ ...S.navLabel, color: '#1a7a4a', fontWeight: '700' }}>Me</span>
         </button>
       </div>
     </div>
   )
 
   function renderChatRow(chat, i) {
-    const isService = chat.isService
-    const catIcon = isService ? (SERVICE_CAT_ICONS[chat.service?.category] || '🔧') : null
-    const hasUnread = chat.unread > 0
+    const { isService, isDirect, service, listing, displayName, avatarUrl, unread: hasUnreadCount } = chat
+    const hasUnread = hasUnreadCount > 0
+    const catIcon   = isService ? (SERVICE_CAT_ICONS[service?.category] || '🔧') : null
 
-    // Context label — service name or listing title shown as a subtitle pill
+    // Context label shown as subtitle pill
     const contextLabel = isService
-      ? (chat.service?.name || 'Service')
-      : chat.listing?.title || null
+      ? (service?.name || 'Service')
+      : listing?.title || null
     const contextSub = isService
-      ? [chat.service?.rate, chat.service?.city].filter(Boolean).join(' · ')
-      : chat.listing?.price ? 'MWK ' + Number(chat.listing.price).toLocaleString() : ''
+      ? [service?.rate, service?.city].filter(Boolean).join(' · ')
+      : listing?.price ? 'MWK ' + Number(listing.price).toLocaleString() : ''
 
-    const avatarImg = isService && chat.service?.media_urls?.[0]
-    const listingImg = !isService && chat.listing?.images?.[0]
+    // Context type badge color
+    const ctxColor = isService ? '#1a7a4a' : '#2563eb'
 
-    // Always navigate using the best contextId we have
     const chatPath = chat.contextId
       ? `/chat/${chat.otherId}/${chat.contextId}`
       : `/chat/${chat.otherId}`
 
+    // Avatar: real profile photo > initials
+    const initial = (displayName || 'U')[0].toUpperCase()
+
     return (
       <div
-        key={chat.otherId}
+        key={chat.key}
         style={{ ...S.chatRow, animationDelay: i * 0.04 + 's', background: hasUnread ? '#fafffd' : '#fff' }}
         onClick={() => navigate(chatPath)}
       >
-        {/* Avatar */}
+        {/* Avatar — real profile picture */}
         <div style={S.avatarWrap}>
-          <div style={{ ...S.avatar, background: isService ? '#0f1410' : 'linear-gradient(135deg,#1a7a4a,#22a05e)' }}>
-            {avatarImg ? (
-              <img src={avatarImg} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
-            ) : listingImg ? (
-              <img src={listingImg} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
-            ) : (
-              <span style={{ fontSize: '18px', fontWeight: '800', color: '#fff' }}>
-                {(chat.otherUser?.name || 'U')[0].toUpperCase()}
-              </span>
-            )}
+          <div style={S.avatar}>
+            {avatarUrl
+              ? <img src={avatarUrl} alt="" style={S.avatarImg} />
+              : (
+                <span style={S.avatarInitial}>{initial}</span>
+              )
+            }
           </div>
-          {chat.contextId && (
-            <div style={{ ...S.typeDot, background: isService ? '#1a7a4a' : '#2980b9' }}>
-              {isService ? catIcon : '🛍️'}
+          {/* Context type dot — only if not a bare direct chat */}
+          {!isDirect && (
+            <div style={{ ...S.typeDot, background: ctxColor }}>
+              <span style={{ fontSize: '8px', lineHeight: 1 }}>{isService ? catIcon : '🛍️'}</span>
             </div>
           )}
         </div>
 
         <div style={S.chatInfo}>
           <div style={S.chatTop}>
-            <div style={S.chatName}>{chat.otherUser?.name || 'User'}</div>
+            <div style={S.chatName}>{displayName}</div>
             <div style={{ ...S.chatTime, color: hasUnread ? '#1a7a4a' : '#bbb', fontWeight: hasUnread ? '700' : '400' }}>
               {timeLabel(chat.lastMsg.created_at)}
             </div>
           </div>
 
-          {/* Service/listing caption */}
+          {/* Service name or listing title — clearly labelled */}
           {contextLabel && (
             <div style={S.contextPill}>
-              <span style={{ ...S.contextPillDot, background: isService ? '#1a7a4a' : '#2980b9' }} />
-              <span style={S.contextPillText}>{contextLabel}</span>
-              {contextSub ? <span style={S.contextPillSub}> · {contextSub}</span> : null}
+              <div style={{ ...S.contextBadge, background: isService ? '#e6f7ee' : '#eff6ff', color: ctxColor }}>
+                {isService ? '🔧' : '🛍️'} {isService ? 'Service' : 'Listing'}
+              </div>
+              <span style={S.contextName}>{contextLabel}</span>
+              {contextSub ? <span style={S.contextSub}> · {contextSub}</span> : null}
             </div>
           )}
 
@@ -312,7 +354,7 @@ export default function ChatList() {
               {renderLastMsg(chat)}
             </span>
             {hasUnread && (
-              <span style={S.unreadBadge}>{chat.unread > 9 ? '9+' : chat.unread}</span>
+              <span style={S.unreadBadge}>{hasUnreadCount > 9 ? '9+' : hasUnreadCount}</span>
             )}
           </div>
         </div>
@@ -328,7 +370,7 @@ const S = {
   headerTitle: { fontSize: '22px', fontWeight: '800', color: '#0f1410' },
   headerSub: { fontSize: '12px', color: '#888', marginTop: '2px' },
   totalBadge: { background: '#e74c3c', color: '#fff', borderRadius: '50%', width: '26px', height: '26px', fontSize: '12px', fontWeight: '800', display: 'flex', alignItems: 'center', justifyContent: 'center' },
-  tabs: { display: 'flex', padding: '0 14px', gap: '4px', paddingBottom: '0', borderBottom: '1px solid #f0f0f0' },
+  tabs: { display: 'flex', padding: '0 14px', gap: '4px', borderBottom: '1px solid #f0f0f0' },
   tab: { flex: 1, background: 'none', border: 'none', borderBottom: '2px solid transparent', padding: '10px 4px', fontSize: '13px', fontWeight: '600', color: '#888', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '5px', fontFamily: 'inherit' },
   tabActive: { color: '#1a7a4a', borderBottomColor: '#1a7a4a' },
   tabBadge: { background: '#e74c3c', color: '#fff', borderRadius: '10px', padding: '1px 6px', fontSize: '10px', fontWeight: '800' },
@@ -343,16 +385,18 @@ const S = {
   list: { paddingBottom: '8px' },
   chatRow: { display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderBottom: '1px solid #f0f4f1', cursor: 'pointer', animation: 'fadeUp 0.3s ease both', transition: 'background 0.15s' },
   avatarWrap: { position: 'relative', flexShrink: 0 },
-  avatar: { width: '52px', height: '52px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' },
-  typeDot: { position: 'absolute', bottom: '0px', right: '0px', width: '18px', height: '18px', borderRadius: '50%', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '9px' },
+  avatar: { width: '52px', height: '52px', borderRadius: '50%', background: 'linear-gradient(135deg,#1a7a4a,#22a05e)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.12)' },
+  avatarImg: { width: '100%', height: '100%', objectFit: 'cover' },
+  avatarInitial: { fontSize: '20px', fontWeight: '800', color: '#fff' },
+  typeDot: { position: 'absolute', bottom: 0, right: 0, width: '20px', height: '20px', borderRadius: '50%', border: '2px solid #fff', display: 'flex', alignItems: 'center', justifyContent: 'center' },
   chatInfo: { flex: 1, minWidth: 0 },
   chatTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' },
   chatName: { fontSize: '15px', fontWeight: '700', color: '#0f1410' },
   chatTime: { fontSize: '11px', flexShrink: 0, marginLeft: '8px' },
-  contextPill: { display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' },
-  contextPillDot: { width: '6px', height: '6px', borderRadius: '50%', flexShrink: 0 },
-  contextPillText: { fontSize: '11px', fontWeight: '700', color: '#1a7a4a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px' },
-  contextPillSub: { fontSize: '11px', color: '#888', whiteSpace: 'nowrap' },
+  contextPill: { display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '4px', flexWrap: 'nowrap', overflow: 'hidden' },
+  contextBadge: { fontSize: '10px', fontWeight: '700', borderRadius: '6px', padding: '2px 6px', flexShrink: 0, whiteSpace: 'nowrap' },
+  contextName: { fontSize: '11px', fontWeight: '700', color: '#333', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '130px' },
+  contextSub: { fontSize: '11px', color: '#888', whiteSpace: 'nowrap', flexShrink: 0 },
   chatBottom: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
   lastMsg: { fontSize: '13px', color: '#888', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 },
   unreadBadge: { background: '#1a7a4a', color: '#fff', borderRadius: '10px', minWidth: '20px', height: '20px', fontSize: '10px', fontWeight: '800', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: '8px', padding: '0 5px' },
