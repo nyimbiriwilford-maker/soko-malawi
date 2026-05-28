@@ -7,7 +7,7 @@ export default function ChatList() {
   const [chats, setChats] = useState([])
   const [loading, setLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState(null)
-  const [activeTab, setActiveTab] = useState('all') // all | services | listings
+  const [activeTab, setActiveTab] = useState('all')
 
   useEffect(() => { loadChats() }, [])
 
@@ -23,64 +23,56 @@ export default function ChatList() {
 
     if (!messages || messages.length === 0) { setLoading(false); return }
 
-    // ── Deduplication logic ──────────────────────────────────────────────────
-    // The key must be stable regardless of whether a message has listing_id set.
-    // Rule:
-    //   • Service chats  → keyed by otherId + service_id  (service_id is always present)
-    //   • Listing chats  → keyed by otherId + listing_id  (use the first non-null listing_id seen)
-    //   • Direct chats   → keyed by otherId alone
-    //
-    // We also skip call-log messages (call_type set) when picking the representative
-    // message for a conversation — they're noise. But they still count as part of
-    // the conversation so they don't need to create a new entry.
+    // ── One conversation per person ──────────────────────────────────────────
+    // Group ALL messages by the other person. Within each person's messages,
+    // pick the best context: service > listing > direct.
+    // Messages are already ordered desc so first-seen = most recent.
 
-    // First pass: collect the best (latest real) message and the context for each convo
-    const convos = new Map() // key → { otherId, contextId, isService, lastMsg }
+    const byPerson = new Map() // otherId → { bestContext, isService, lastRealMsg, lastMsg }
 
     for (const msg of messages) {
       const otherId = msg.from_user === user.id ? msg.to_user : msg.from_user
       const serviceId = msg.service_id || null
       const listingId = msg.listing_id || null
+      const isCallLog = !!msg.call_type
 
-      // Determine the canonical key
-      let key
-      if (serviceId) {
-        key = `svc:${otherId}:${serviceId}`
-      } else if (listingId) {
-        key = `lst:${otherId}:${listingId}`
-      } else {
-        // Direct chat or call log with no context — group under the person
-        key = `dir:${otherId}`
-      }
-
-      if (!convos.has(key)) {
-        convos.set(key, {
+      if (!byPerson.has(otherId)) {
+        byPerson.set(otherId, {
           otherId,
           contextId: serviceId || listingId || null,
           isService: !!serviceId,
-          lastMsg: msg,  // messages are ordered desc so first seen = latest
+          lastMsg: msg,
+          lastRealMsg: isCallLog ? null : msg,
         })
       } else {
-        // Already have this convo. If the existing lastMsg is a call log and
-        // this one is a real message, upgrade it so the preview looks better.
-        const existing = convos.get(key)
-        if (existing.lastMsg.call_type && !msg.call_type) {
-          existing.lastMsg = msg
-        }
-        // Also fill in contextId if we now see one and didn't before
-        if (!existing.contextId && (serviceId || listingId)) {
+        const existing = byPerson.get(otherId)
+
+        // Upgrade context: service beats listing beats nothing
+        const existingRank = existing.isService ? 2 : existing.contextId ? 1 : 0
+        const newRank = serviceId ? 2 : listingId ? 1 : 0
+        if (newRank > existingRank) {
           existing.contextId = serviceId || listingId
           existing.isService = !!serviceId
+        }
+
+        // Upgrade lastMsg preview: real message beats call log
+        if (!existing.lastRealMsg && !isCallLog) {
+          existing.lastRealMsg = msg
+          existing.lastMsg = msg
         }
       }
     }
 
-    const conversations = [...convos.values()]
+    const conversations = [...byPerson.values()].map(c => ({
+      ...c,
+      // If we have a real message use it for preview, otherwise use the call log
+      lastMsg: c.lastRealMsg || c.lastMsg,
+    }))
 
     // ── Enrich with user / service / listing data ────────────────────────────
-    const otherIds    = [...new Set(conversations.map(c => c.otherId))]
-    const serviceIds  = conversations.filter(c => c.isService && c.contextId).map(c => c.contextId)
-    const listingIds  = conversations.filter(c => !c.isService && c.contextId).map(c => c.contextId)
+    const otherIds   = [...new Set(conversations.map(c => c.otherId))]
+    const serviceIds = conversations.filter(c => c.isService && c.contextId).map(c => c.contextId)
+    const listingIds = conversations.filter(c => !c.isService && c.contextId).map(c => c.contextId)
 
     const [{ data: users }, { data: services }, { data: listings }] = await Promise.all([
       supabase.from('users').select('*').in('id', otherIds),
@@ -97,20 +89,13 @@ export default function ChatList() {
     const listingsMap = Object.fromEntries((listings || []).map(l => [l.id, l]))
 
     const enriched = await Promise.all(conversations.map(async c => {
-      let unreadQuery = supabase
+      // Count unread across ALL messages from this person (regardless of context)
+      const { count } = await supabase
         .from('messages')
         .select('*', { count: 'exact', head: true })
         .eq('from_user', c.otherId)
         .eq('to_user', user.id)
         .eq('read', false)
-
-      if (c.isService && c.contextId) {
-        unreadQuery = unreadQuery.eq('service_id', c.contextId)
-      } else if (c.contextId) {
-        unreadQuery = unreadQuery.eq('listing_id', c.contextId)
-      }
-
-      const { count } = await unreadQuery
 
       return {
         ...c,
@@ -120,6 +105,9 @@ export default function ChatList() {
         unread:    count || 0,
       }
     }))
+
+    // Sort by most recent message
+    enriched.sort((a, b) => new Date(b.lastMsg.created_at) - new Date(a.lastMsg.created_at))
 
     setChats(enriched)
     setLoading(false)
@@ -133,7 +121,7 @@ export default function ChatList() {
 
   const filtered = chats.filter(c => {
     if (activeTab === 'services') return c.isService
-    if (activeTab === 'listings') return !c.isService && c.contextId  // exclude direct chats from listings tab
+    if (activeTab === 'listings') return !c.isService && c.contextId
     return true
   })
 
@@ -148,7 +136,7 @@ export default function ChatList() {
     if (msg.call_type) {
       const isVideo = msg.call_type === 'video'
       if (msg.call_status === 'missed') return prefix + (isVideo ? '📹 Missed video call' : '📞 Missed call')
-      if (msg.call_status === 'ended') return prefix + (isVideo ? '📹 Video call' : '📞 Voice call')
+      if (msg.call_status === 'ended')  return prefix + (isVideo ? '📹 Video call' : '📞 Voice call')
     }
     if (msg.media_type === 'image') return prefix + '📷 Photo'
     if (msg.media_type === 'video') return prefix + '🎥 Video'
@@ -186,7 +174,6 @@ export default function ChatList() {
           {totalUnread > 0 && <div style={S.totalBadge}>{totalUnread}</div>}
         </div>
 
-        {/* Tabs */}
         <div style={S.tabs}>
           <button style={{ ...S.tab, ...(activeTab === 'all'      ? S.tabActive : {}) }} onClick={() => setActiveTab('all')}>
             All {totalUnread > 0 && <span style={S.tabBadge}>{totalUnread}</span>}
@@ -231,29 +218,9 @@ export default function ChatList() {
         </div>
       )}
 
-      {/* Chat list */}
+      {/* Chat list — flat, no sections, one row per person */}
       <div style={S.list}>
-        {activeTab === 'all' && chats.some(c => c.isService) && chats.some(c => !c.isService) ? (
-          <>
-            {chats.filter(c => c.isService).length > 0 && (
-              <>
-                <div style={S.sectionHeader}>
-                  <span style={S.sectionHeaderText}>🔧 Service Chats</span>
-                  <span style={S.sectionCount}>{chats.filter(c => c.isService).length}</span>
-                </div>
-                {chats.filter(c => c.isService).map((chat, i) => renderChatRow(chat, i))}
-                <div style={S.sectionDivider} />
-                <div style={S.sectionHeader}>
-                  <span style={S.sectionHeaderText}>🛍️ Listing Chats</span>
-                  <span style={S.sectionCount}>{chats.filter(c => !c.isService).length}</span>
-                </div>
-                {chats.filter(c => !c.isService).map((chat, i) => renderChatRow(chat, i))}
-              </>
-            )}
-          </>
-        ) : (
-          filtered.map((chat, i) => renderChatRow(chat, i))
-        )}
+        {filtered.map((chat, i) => renderChatRow(chat, i))}
       </div>
 
       {/* Bottom Nav */}
@@ -280,24 +247,26 @@ export default function ChatList() {
     const isService = chat.isService
     const catIcon = isService ? (SERVICE_CAT_ICONS[chat.service?.category] || '🔧') : null
     const hasUnread = chat.unread > 0
+
+    // Context label — service name or listing title shown as a subtitle pill
     const contextLabel = isService
       ? (chat.service?.name || 'Service')
-      : (chat.listing?.title || (chat.contextId ? 'Listing' : 'Direct message'))
+      : chat.listing?.title || null
     const contextSub = isService
-      ? (chat.service?.rate ? chat.service.rate + ' · ' + (chat.service.city || '') : chat.service?.city || '')
-      : (chat.listing?.price ? 'MWK ' + Number(chat.listing.price).toLocaleString() : '')
+      ? [chat.service?.rate, chat.service?.city].filter(Boolean).join(' · ')
+      : chat.listing?.price ? 'MWK ' + Number(chat.listing.price).toLocaleString() : ''
 
     const avatarImg = isService && chat.service?.media_urls?.[0]
     const listingImg = !isService && chat.listing?.images?.[0]
 
-    // Navigate to chat — use contextId if present, else just the user
+    // Always navigate using the best contextId we have
     const chatPath = chat.contextId
       ? `/chat/${chat.otherId}/${chat.contextId}`
       : `/chat/${chat.otherId}`
 
     return (
       <div
-        key={`${chat.otherId}_${chat.contextId || 'direct'}`}
+        key={chat.otherId}
         style={{ ...S.chatRow, animationDelay: i * 0.04 + 's', background: hasUnread ? '#fafffd' : '#fff' }}
         onClick={() => navigate(chatPath)}
       >
@@ -314,9 +283,11 @@ export default function ChatList() {
               </span>
             )}
           </div>
-          <div style={{ ...S.typeDot, background: isService ? '#1a7a4a' : '#2980b9' }}>
-            {isService ? catIcon : '🛍️'}
-          </div>
+          {chat.contextId && (
+            <div style={{ ...S.typeDot, background: isService ? '#1a7a4a' : '#2980b9' }}>
+              {isService ? catIcon : '🛍️'}
+            </div>
+          )}
         </div>
 
         <div style={S.chatInfo}>
@@ -327,7 +298,8 @@ export default function ChatList() {
             </div>
           </div>
 
-          {chat.contextId && (
+          {/* Service/listing caption */}
+          {contextLabel && (
             <div style={S.contextPill}>
               <span style={{ ...S.contextPillDot, background: isService ? '#1a7a4a' : '#2980b9' }} />
               <span style={S.contextPillText}>{contextLabel}</span>
@@ -369,10 +341,6 @@ const S = {
   emptySub: { fontSize: '14px', color: '#888', marginBottom: '24px', lineHeight: '1.6' },
   browseBtn: { background: '#1a7a4a', color: '#fff', border: 'none', borderRadius: '10px', padding: '12px 24px', fontSize: '15px', fontWeight: '600', cursor: 'pointer' },
   list: { paddingBottom: '8px' },
-  sectionHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px 6px', background: '#f4f8f5' },
-  sectionHeaderText: { fontSize: '12px', fontWeight: '800', color: '#637068', textTransform: 'uppercase', letterSpacing: '0.5px' },
-  sectionCount: { background: '#e6f7ee', color: '#1a7a4a', borderRadius: '10px', padding: '2px 8px', fontSize: '11px', fontWeight: '700' },
-  sectionDivider: { height: '8px', background: '#f4f8f5' },
   chatRow: { display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderBottom: '1px solid #f0f4f1', cursor: 'pointer', animation: 'fadeUp 0.3s ease both', transition: 'background 0.15s' },
   avatarWrap: { position: 'relative', flexShrink: 0 },
   avatar: { width: '52px', height: '52px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' },
@@ -383,7 +351,7 @@ const S = {
   chatTime: { fontSize: '11px', flexShrink: 0, marginLeft: '8px' },
   contextPill: { display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' },
   contextPillDot: { width: '6px', height: '6px', borderRadius: '50%', flexShrink: 0 },
-  contextPillText: { fontSize: '11px', fontWeight: '700', color: '#1a7a4a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '120px' },
+  contextPillText: { fontSize: '11px', fontWeight: '700', color: '#1a7a4a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px' },
   contextPillSub: { fontSize: '11px', color: '#888', whiteSpace: 'nowrap' },
   chatBottom: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
   lastMsg: { fontSize: '13px', color: '#888', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 },
