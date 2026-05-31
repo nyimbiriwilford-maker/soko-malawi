@@ -202,7 +202,24 @@ export function CallProvider({ children }) {
     return candidates
   }
 
-  function playRing() {
+ function playRing() {
+    stopRing()
+    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+    if (isMobile) {
+      try {
+        const audio = new Audio('/ringtone.mp3')
+        audio.loop = true
+        audio.volume = 1.0
+        const playPromise = audio.play()
+        if (playPromise) playPromise.catch(() => playRingSynth())
+        ringAudioRef.current = { stop: () => { audio.pause(); audio.currentTime = 0 } }
+        return
+      } catch (e) {}
+    }
+    playRingSynth()
+  }
+
+  function playRingSynth() {
     stopRing()
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)()
