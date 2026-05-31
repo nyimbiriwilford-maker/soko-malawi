@@ -78,7 +78,7 @@ export default function Chat() {
     callState, callType, callDuration, isMuted, isCamOff,
     remoteStream, localVideoRef, remoteVideoRef,
     startCall, answerCall, declineCall, hangUp, endCallLocally,
-    toggleMute, toggleCam, setupCallListener, assignRemoteStream,
+    toggleMute, toggleCam, switchCamera, setupCallListener, assignRemoteStream,
     assignLocalStream, restorePendingCall,
   } = useWebRTC({
     userId,
@@ -691,6 +691,20 @@ export default function Chat() {
                   <span style={{ fontSize: 22 }}>{isCamOff ? '📷' : '📹'}</span>
                 </button>
                 <div style={S.callBtnLabel}>Camera</div>
+              </div>
+            )}
+            {callType === 'video' && (
+              <div style={{ textAlign: 'center' }}>
+                <button style={{ ...S.ctrlBtn, background: 'rgba(255,255,255,0.2)' }} onClick={switchCamera}>
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
+                    <path d="M20 7l-1.5-2h-5L12 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z" stroke="white" strokeWidth="0" fill="none"/>
+                    <path d="M20 7l-1.5-2h-5L12 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z" fill="rgba(255,255,255,0.15)" stroke="white" strokeWidth="1.5"/>
+                    <path d="M12 10.5a3.5 3.5 0 100 7 3.5 3.5 0 000-7z" fill="white"/>
+                    <path d="M18 8.5l1.5 1.5-1.5 1.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
+                    <path d="M6 8.5L4.5 10 6 11.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
+                  </svg>
+                </button>
+                <div style={S.callBtnLabel}>Flip</div>
               </div>
             )}
             <div style={{ textAlign: 'center' }}>
