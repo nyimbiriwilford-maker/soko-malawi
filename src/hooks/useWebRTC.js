@@ -39,6 +39,7 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
   const pendingCandidates = useRef([])
   const incomingOfferRef  = useRef(null)
   const callTypeRef       = useRef(null)
+  const callerIdRef       = useRef(null)
   const localVideoRef     = useRef(null)
   const remoteVideoRef    = useRef(null)
 
@@ -185,7 +186,6 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
       cu.email ||
       cu.id
     playRingback()
-    playRingback()
     await ctxSendSignal(target, 'ring', {
       offer: pc.localDescription.toJSON(),
       callType: type,
@@ -239,7 +239,12 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
     const answer = await pc.createAnswer()
     await pc.setLocalDescription(answer)
 
-    await sendSignal('answer', { answer: pc.localDescription.toJSON() })
+    const callerId = userIdRef.current
+    if (!callerId) { console.error('answerCall: no callerId'); return }
+    await ctxSendSignal(callerId, 'answer', { 
+      answer: pc.localDescription.toJSON(), 
+      callId: callIdRef.current 
+    })
 
     playConnectedSound()
     setCallState('in-call')
@@ -255,7 +260,8 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
   async function declineCall() {
     ctxStopRing()
     dismissIncoming()
-    await sendSignal('decline')
+    const target = callerIdRef.current || userIdRef.current
+    await ctxSendSignal(target, 'decline', { callId: callIdRef.current })
     onCallMessage?.({
       call_type: callTypeRef.current,
       call_status: 'missed',
@@ -267,7 +273,8 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
   async function hangUp() {
     playCallEndSound()
     const dur = callDuration
-    await sendSignal('hangup')
+    const target = callerIdRef.current || userIdRef.current
+    await ctxSendSignal(target, 'hangup', { callId: callIdRef.current })
     onCallMessage?.({
       call_type: callTypeRef.current,
       call_status: 'ended',
@@ -298,6 +305,7 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
     setCallDuration(0)
     setIsMuted(false)
     setIsCamOff(false)
+    callerIdRef.current = null
   }
 
   function setupCallListener() {
@@ -315,8 +323,9 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
           return true
         }
 
-        callIdRef.current      = payload.callId
+        callIdRef.current        = payload.callId
         incomingOfferRef.current = payload.offer
+        callerIdRef.current      = payload.fromUser
         updateCallType(payload.callType)
         setCallState('receiving')
         ctxPlayRing()
@@ -399,6 +408,26 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
     setIsCamOff(c => !c)
   }
 
+  async function switchCamera() {
+    if (!localStreamRef.current || !pcRef.current) return
+    const newFacing = facingMode === 'user' ? 'environment' : 'user'
+    try {
+      const newStream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { facingMode: newFacing }
+      })
+      const newTrack = newStream.getVideoTracks()[0]
+      const sender = pcRef.current.getSenders().find(s => s.track?.kind === 'video')
+      if (sender) await sender.replaceTrack(newTrack)
+      localStreamRef.current.getVideoTracks().forEach(t => t.stop())
+      localStreamRef.current.addTrack(newTrack)
+      if (localVideoRef.current) localVideoRef.current.srcObject = localStreamRef.current
+      setFacingMode(newFacing)
+    } catch (e) {
+      console.error('switchCamera error:', e)
+    }
+  }
+
   async function restorePendingCall(fromUserId) {
     const raw = sessionStorage.getItem('__pendingCall')
     if (!raw) return
@@ -444,7 +473,7 @@ return {
     callState, callType, callDuration, isMuted, isCamOff, remoteStream,
     localVideoRef, remoteVideoRef, facingMode,
     startCall, answerCall, declineCall, hangUp, endCallLocally,
-    toggleMute, toggleCam, setupCallListener,
+    toggleMute, toggleCam, switchCamera, setupCallListener,
     assignRemoteStream, assignLocalStream, restorePendingCall,
   }
 }
