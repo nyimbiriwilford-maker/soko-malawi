@@ -1,12 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../../lib/supabase'
-import { SERVICE_CATS, CITIES, SORT_OPTIONS, S, avatarColor, initials, renderStars, formatWhatsApp } from './serviceData'
-import ServiceForm from './ServiceForm'
-import ProviderModal from './ProviderModal'
-import MyListings from './MyListings'
-import BottomNav from '../../components/BottomNav'
-
+import { supabase } from '../lib/supabase'
+import { SERVICE_CATS, CITIES, SORT_OPTIONS, S, avatarColor, initials, renderStars, formatWhatsApp } from './Services/serviceData'
+import ServiceForm from './Services/ServiceForm'
+import ProviderModal from './Services/ProviderModal'
+import MyListings from './Services/MyListings'
+import BottomNav from '../components/BottomNav'
 const TABS = [
   { id: 'browse', label: 'Browse',      icon: '🔍' },
   { id: 'post',   label: 'Offer',       icon: '🚀' },
