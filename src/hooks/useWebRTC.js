@@ -439,25 +439,27 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
  async function switchCamera() {
     if (!localStreamRef.current || !pcRef.current) return
     try {
-      // Get all video input devices
       const devices = await navigator.mediaDevices.enumerateDevices()
       const videoDevices = devices.filter(d => d.kind === 'videoinput')
-      
+
       if (videoDevices.length < 2) {
         alert('No second camera found on this device.')
         return
       }
 
-      // Find current deviceId
       const currentTrack = localStreamRef.current.getVideoTracks()[0]
       const currentDeviceId = currentTrack?.getSettings()?.deviceId
-
-      // Pick the next camera in the list
       const currentIndex = videoDevices.findIndex(d => d.deviceId === currentDeviceId)
-      const nextIndex = (currentIndex + 1) % videoDevices.length
-      const nextDevice = videoDevices[nextIndex]
+      const nextDevice = videoDevices[(currentIndex + 1) % videoDevices.length]
 
-      console.log('[switchCamera] switching to device:', nextDevice.label)
+      console.log('[switchCamera] switching to:', nextDevice.label)
+
+      // CRITICAL: stop old track FIRST to release hardware before acquiring new one
+      currentTrack?.stop()
+      localStreamRef.current.removeTrack(currentTrack)
+
+      // Small delay to let the hardware fully release
+      await new Promise(r => setTimeout(r, 200))
 
       const newStream = await navigator.mediaDevices.getUserMedia({
         audio: false,
@@ -471,19 +473,15 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
       const sender = pcRef.current.getSenders().find(s => s.track?.kind === 'video')
       if (sender) await sender.replaceTrack(newTrack)
 
-      // Replace in local stream
-      localStreamRef.current.getVideoTracks().forEach(t => {
-        t.stop()
-        localStreamRef.current.removeTrack(t)
-      })
+      // Add new track to stream
       localStreamRef.current.addTrack(newTrack)
 
       // Update local preview
       if (localVideoRef.current) {
+        localVideoRef.current.srcObject = null
         localVideoRef.current.srcObject = localStreamRef.current
       }
 
-      // Toggle facingMode state for UI
       setFacingMode(f => f === 'user' ? 'environment' : 'user')
       console.log('[switchCamera] success')
     } catch (e) {
