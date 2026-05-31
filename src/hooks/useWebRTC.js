@@ -355,8 +355,11 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
       }
 
       if (_event === 'answer') {
-        if (!pcRef.current) return true
-        if (pcRef.current.signalingState !== 'have-local-offer') return true
+        if (!pcRef.current) { console.error('[answer] no pcRef'); return true }
+        if (pcRef.current.signalingState !== 'have-local-offer') {
+          console.error('[answer] wrong signalingState:', pcRef.current.signalingState)
+          return true
+        }
         pcRef.current
           .setRemoteDescription(new RTCSessionDescription(payload.answer))
           .then(async () => {
@@ -461,6 +464,7 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
 
       incomingOfferRef.current = pending.offer
       callIdRef.current        = pending.callId
+      callerIdRef.current      = pending.fromUser
       updateCallType(pending.callType)
 
       await answerCall()
