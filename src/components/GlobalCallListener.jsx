@@ -109,16 +109,18 @@ export default function GlobalCallListener() {
 
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
-      const targetChannel = supabase.channel(`call_signal_${incoming.fromUser}_${Date.now()}`)
-      targetChannel.subscribe(status => {
-        if (status === 'SUBSCRIBED') {
-          targetChannel.send({
-            type: 'broadcast',
-            event: 'call_signal',
-            payload: { _event: 'decline', callId: incoming.callId, fromUser: user.id }
-          }).then(() => supabase.removeChannel(targetChannel))
-        }
-      })
+     const targetChannel = supabase.channel(`call_inbox_${incoming.fromUser}`, {
+  config: { broadcast: { self: false } }
+})
+targetChannel.subscribe(status => {
+  if (status === 'SUBSCRIBED') {
+    targetChannel.send({
+      type: 'broadcast',
+      event: 'call_signal',
+      payload: { _event: 'decline', callId: incoming.callId, fromUser: user.id }
+    }).then(() => supabase.removeChannel(targetChannel))
+  }
+})
     }
 
     setIncoming(null)

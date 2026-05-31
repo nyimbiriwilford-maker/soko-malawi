@@ -9,43 +9,72 @@ import Chat from './pages/Chat'
 import ChatList from './pages/ChatList'
 import Profile from './pages/Profile'
 import Jobs from './pages/Jobs'
-import Services from './pages/Services'
+import Services from './pages/Services/Services'
+import Admin from './pages/Admin'
 import GlobalCallListener from './components/GlobalCallListener'
 import { CallProvider } from './context/CallContext'
 import { useGlobalPresence } from './hooks/usePresence'
-
+import PublicProfile from './pages/PublicProfile'
 export default function App() {
   const [session, setSession] = useState(undefined)
+  const [role, setRole] = useState(undefined)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session)
+      if (data.session) fetchRole(data.session.user.id)
+      else setRole(null)
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
+      if (session) fetchRole(session.user.id)
+      else setRole(null)
     })
 
     return () => subscription.unsubscribe()
   }, [])
 
-  // Broadcast this user's presence globally — makes them show as "online"
-  // on any page of the app, not just when they're inside a chat.
+  async function fetchRole(userId) {
+    console.log('Fetching role for userId:', userId)
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', userId)
+      .single()
+    console.log('Role data:', data)
+    console.log('Role error:', error)
+    const fetchedRole = data?.role ?? 'user'
+    console.log('Setting role to:', fetchedRole)
+    setRole(fetchedRole)
+  }
+
   useGlobalPresence(session?.user?.id ?? null)
 
-  if (session === undefined) return (
+  if (session === undefined || (session && role === undefined)) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: '#637068' }}>
       Loading...
     </div>
   )
+
+  const isAdmin = role === 'admin'
+
+  console.log('App render — session:', !!session, '| role:', role, '| isAdmin:', isAdmin)
 
   return (
     <CallProvider>
       <BrowserRouter>
         {session && <GlobalCallListener />}
         <Routes>
-          <Route path="/login" element={!session ? <Login /> : <Navigate to="/" />} />
-          <Route path="/" element={session ? <Home /> : <Navigate to="/login" />} />
+          <Route path="/login" element={!session ? <Login /> : <Navigate to={isAdmin ? '/admin' : '/'} />} />
+
+          <Route path="/admin/*" element={
+            !session ? <Navigate to="/login" /> :
+            isAdmin ? <Admin /> :
+            <Navigate to="/" />
+          } />
+
+          <Route path="/" element={session ? (isAdmin ? <Navigate to="/admin" /> : <Home />) : <Navigate to="/login" />} />
           <Route path="/listing/:id" element={session ? <ListingDetail /> : <Navigate to="/login" />} />
           <Route path="/post" element={session ? <PostListing /> : <Navigate to="/login" />} />
           <Route path="/chats" element={session ? <ChatList /> : <Navigate to="/login" />} />
@@ -53,8 +82,10 @@ export default function App() {
           <Route path="/chat/:userId" element={session ? <Chat /> : <Navigate to="/login" />} />
           <Route path="/profile" element={session ? <Profile /> : <Navigate to="/login" />} />
           <Route path="/jobs" element={session ? <Jobs /> : <Navigate to="/login" />} />
-          <Route path="*" element={<Navigate to="/" />} />
           <Route path="/services" element={session ? <Services /> : <Navigate to="/login" />} />
+          <Route path="/profile/:id" element={session ? <PublicProfile /> : <Navigate to="/login" />} />
+          <Route path="/post/edit/:id" element={session ? <PostListing /> : <Navigate to="/login" />} />
+          <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </BrowserRouter>
     </CallProvider>

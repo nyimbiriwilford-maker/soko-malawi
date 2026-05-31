@@ -19,6 +19,8 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
     stopRing: ctxStopRing,
     closeOutboundChannel,
     drainEarlyCandidates,
+    playRingback,
+    stopRingback,
   } = useCall()
 
   const [callState, setCallState]       = useState('idle')
@@ -26,6 +28,7 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
   const [callDuration, setCallDuration] = useState(0)
   const [isMuted, setIsMuted]           = useState(false)
   const [isCamOff, setIsCamOff]         = useState(false)
+  const [facingMode, setFacingMode]     = useState('user')
   const [remoteStream, setRemoteStream] = useState(null)
 
   const pcRef             = useRef(null)

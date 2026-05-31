@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
 export default function Login() {
@@ -7,6 +8,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [isSignUp, setIsSignUp] = useState(false)
+  const navigate = useNavigate()
 
   async function handleSubmit() {
     setError('')
@@ -18,11 +20,30 @@ export default function Login() {
       if (error) { setError(error.message); setLoading(false); return }
       setError('Check your email to confirm your account')
       setLoading(false)
-    } else {
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) { setError(error.message); setLoading(false); return }
+      return
     }
+
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+    if (error) { setError(error.message); setLoading(false); return }
+
+    // Check role — admin goes to /admin, everyone else goes to /
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', data.user.id)
+      .single()
+
+    if (profile?.role === 'admin') {
+      navigate('/admin')
+    } else {
+      navigate('/')
+    }
+
     setLoading(false)
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === 'Enter') handleSubmit()
   }
 
   return (
@@ -41,6 +62,7 @@ export default function Login() {
           placeholder="Email address"
           value={email}
           onChange={e => setEmail(e.target.value)}
+          onKeyDown={handleKeyDown}
         />
         <input
           style={styles.input}
@@ -48,6 +70,7 @@ export default function Login() {
           placeholder="Password"
           value={password}
           onChange={e => setPassword(e.target.value)}
+          onKeyDown={handleKeyDown}
         />
 
         {error && <p style={styles.error}>{error}</p>}
@@ -76,7 +99,7 @@ const styles = {
   card: { background: '#fff', borderRadius: '20px', padding: '32px 24px', width: '100%', maxWidth: '400px' },
   title: { fontSize: '22px', fontWeight: '700', color: '#0f1410', marginBottom: '6px' },
   sub: { fontSize: '14px', color: '#637068', marginBottom: '24px' },
-  input: { width: '100%', border: '1.5px solid #d8e5dc', borderRadius: '10px', padding: '12px 14px', fontSize: '15px', outline: 'none', marginBottom: '12px', display: 'block' },
+  input: { width: '100%', border: '1.5px solid #d8e5dc', borderRadius: '10px', padding: '12px 14px', fontSize: '15px', outline: 'none', marginBottom: '12px', display: 'block', boxSizing: 'border-box' },
   btn: { width: '100%', background: '#1a7a4a', color: '#fff', border: 'none', borderRadius: '10px', padding: '14px', fontSize: '15px', fontWeight: '600', cursor: 'pointer', marginTop: '4px' },
   error: { color: '#c0392b', fontSize: '13px', marginBottom: '10px' },
   toggle: { textAlign: 'center', fontSize: '13px', color: '#637068', marginTop: '16px' },

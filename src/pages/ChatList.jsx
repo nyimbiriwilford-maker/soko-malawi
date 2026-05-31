@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import BottomNav from '../components/BottomNav'
 
 export default function ChatList() {
   const navigate = useNavigate()
@@ -105,11 +106,8 @@ export default function ChatList() {
         : { data: [] },
     ])
 
-    // Fallback: also load users table for name/email if profile has no full_name
-    const { data: users } = await supabase.from('users').select('id,name,email').in('id', otherIds)
-
     const profilesMap = Object.fromEntries((profiles || []).map(p => [p.id, p]))
-    const usersMap    = Object.fromEntries((users    || []).map(u => [u.id, u]))
+    const usersMap    = {}
     const servicesMap = Object.fromEntries((services || []).map(s => [s.id, s]))
     const listingsMap = Object.fromEntries((listings || []).map(l => [l.id, l]))
 
@@ -128,7 +126,7 @@ export default function ChatList() {
       const profile = profilesMap[c.otherId] || {}
       const userRow = usersMap[c.otherId] || {}
       // Best display name: profile.full_name > users.name > users.email > fallback
-      const displayName = profile.full_name || userRow.name || userRow.email || 'User'
+      const displayName = profile.full_name || 'User'
       const avatarUrl   = profile.avatar_url || null
 
       return {
@@ -263,24 +261,8 @@ export default function ChatList() {
         {filtered.map((chat, i) => renderChatRow(chat, i))}
       </div>
 
-      {/* Bottom Nav */}
-      <div style={S.nav}>
-        <button style={S.navItem} onClick={() => navigate('/')}>
-          <span style={S.navIcon}>🏠</span><span style={S.navLabel}>Home</span>
-        </button>
-        <button style={S.navItem} onClick={() => navigate('/jobs')}>
-          <span style={S.navIcon}>💼</span><span style={S.navLabel}>Jobs</span>
-        </button>
-        <button style={S.navPost} onClick={() => navigate('/post')}>+</button>
-        <button style={{ ...S.navItem }} onClick={() => navigate('/chats')}>
-          <span style={S.navIcon}>💬</span><span style={S.navLabel}>Chats</span>
-        </button>
-        <button style={{ ...S.navItem, color: '#1a7a4a' }} onClick={() => navigate('/profile')}>
-          <span style={S.navIcon}>👤</span>
-          <span style={{ ...S.navLabel, color: '#1a7a4a', fontWeight: '700' }}>Me</span>
-        </button>
+      <BottomNav />
       </div>
-    </div>
   )
 
   function renderChatRow(chat, i) {
@@ -400,9 +382,4 @@ const S = {
   chatBottom: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
   lastMsg: { fontSize: '13px', color: '#888', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 },
   unreadBadge: { background: '#1a7a4a', color: '#fff', borderRadius: '10px', minWidth: '20px', height: '20px', fontSize: '10px', fontWeight: '800', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: '8px', padding: '0 5px' },
-  nav: { position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: '480px', background: '#fff', borderTop: '1px solid #eee', display: 'flex', alignItems: 'center', justifyContent: 'space-around', padding: '8px 0', zIndex: 100 },
-  navItem: { background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', cursor: 'pointer' },
-  navIcon: { fontSize: '20px' },
-  navLabel: { fontSize: '10px', color: '#888' },
-  navPost: { width: '48px', height: '48px', background: '#1a7a4a', color: '#fff', border: 'none', borderRadius: '50%', fontSize: '24px', cursor: 'pointer', marginTop: '-16px', boxShadow: '0 3px 10px rgba(26,122,74,0.4)' },
 }

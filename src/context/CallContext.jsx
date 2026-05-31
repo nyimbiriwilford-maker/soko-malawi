@@ -257,12 +257,45 @@ export function CallProvider({ children }) {
     } catch (e) {}
   }
 
-  function stopRing() {
-    if (ringAudioRef.current) {
-      ringAudioRef.current.stop()
-      ringAudioRef.current = null
-    }
+ function stopRing() {
+  if (ringAudioRef.current) {
+    ringAudioRef.current.stop()
+    ringAudioRef.current = null
   }
+}
+
+function playRingback() {
+  stopRingback()
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)()
+    let playing = true
+    ringbackAudioRef.current = { stop: () => { playing = false; try { ctx.close() } catch (e) {} } }
+    function tone() {
+      if (!playing) return
+      // Classic ringback: two beeps then silence
+      [[440, 0], [440, 0.5]].forEach(([freq, delay]) => {
+        const osc = ctx.createOscillator()
+        const gain = ctx.createGain()
+        osc.connect(gain); gain.connect(ctx.destination)
+        osc.type = 'sine'; osc.frequency.value = freq
+        const t = ctx.currentTime + delay
+        gain.gain.setValueAtTime(0, t)
+        gain.gain.linearRampToValueAtTime(0.15, t + 0.05)
+        gain.gain.linearRampToValueAtTime(0, t + 0.45)
+        osc.start(t); osc.stop(t + 0.5)
+      })
+      if (playing) setTimeout(tone, 4000)
+    }
+    tone()
+  } catch (e) {}
+}
+
+function stopRingback() {
+  if (ringbackAudioRef.current) {
+    ringbackAudioRef.current.stop()
+    ringbackAudioRef.current = null
+  }
+}
 
   return (
     <CallContext.Provider value={{
