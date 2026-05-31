@@ -191,6 +191,9 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
       cu.id
 
     playRingback()
+    // Get chatId from current URL — format is /chat/{chatId}
+    const chatId = window.location.pathname.split('/chat/')[1] || null
+
     // Send push notification to wake up receiver's device
     supabase.functions.invoke('send-call-push', {
       body: {
@@ -200,6 +203,7 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
         callType: type,
         callId,
         fromUser: cu.id,
+        chatId,
       }
     }).catch(e => console.log('[push] invoke error:', e))
     await ctxSendSignal(target, 'ring', {

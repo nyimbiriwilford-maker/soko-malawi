@@ -2,6 +2,11 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import webpush from 'https://esm.sh/web-push@3.6.6'
 
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+}
+
 const VAPID_PUBLIC  = Deno.env.get('VAPID_PUBLIC_KEY')!
 const VAPID_PRIVATE = Deno.env.get('VAPID_PRIVATE_KEY')!
 const VAPID_EMAIL   = Deno.env.get('VAPID_EMAIL')!
@@ -9,28 +14,43 @@ const VAPID_EMAIL   = Deno.env.get('VAPID_EMAIL')!
 webpush.setVapidDetails(VAPID_EMAIL, VAPID_PUBLIC, VAPID_PRIVATE)
 
 serve(async req => {
-  const { targetUserId, callerName, callerAvatar, callType, callId, fromUser } = await req.json()
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
 
-  const supabase = createClient(
-    Deno.env.get('SUPABASE_URL')!,
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-  )
+  try {
+    const { targetUserId, callerName, callerAvatar, callType, callId, fromUser, chatId } = await req.json()
 
-  const { data: subs } = await supabase
-    .from('push_subscriptions')
-    .select('*')
-    .eq('user_id', targetUserId)
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    )
 
-  if (!subs?.length) return new Response('no subscription', { status: 200 })
+    const { data: subs } = await supabase
+      .from('push_subscriptions')
+      .select('*')
+      .eq('user_id', targetUserId)
 
-  const payload = JSON.stringify({ callerName, callerAvatar, callType, callId, fromUser })
+    if (!subs?.length) {
+      return new Response('no subscription', { status: 200, headers: corsHeaders })
+    }
 
-  await Promise.all(subs.map(sub =>
-    webpush.sendNotification(
-      { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
-      payload
-    ).catch(e => console.error('push error:', e))
-  ))
+    // chatId included so the notification tap opens the correct chat
+    const payload = JSON.stringify({ callerName, callerAvatar, callType, callId, fromUser, chatId })
 
-  return new Response('ok', { status: 200 })
+    await Promise.all(subs.map(sub =>
+      webpush.sendNotification(
+        { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
+        payload
+      ).catch(e => console.error('push error:', e))
+    ))
+
+    return new Response('ok', { status: 200, headers: corsHeaders })
+
+  } catch (error) {
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    )
+  }
 })
