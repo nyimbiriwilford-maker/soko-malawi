@@ -73,6 +73,13 @@ export default function App() {
       onIncomingCall: ({ callId, fromUser, chatId, callType, callerName }) => {
         console.log('[app] INCOMING_CALL from SW — playing ringtone')
         playRingtone()
+        // Dispatch event so GlobalCallListener shows Answer/Decline UI
+        const callerPath = `/chat/${fromUser}`
+        if (!window.location.pathname.startsWith(callerPath)) {
+          window.dispatchEvent(new CustomEvent('sw-incoming-call', {
+            detail: { callId, fromUser, chatId, callType, callerName }
+          }))
+        }
       },
       onAnswer: (fromUser, callId, chatId) => {
         stopRingtone()

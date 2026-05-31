@@ -3,6 +3,14 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useCall } from '../context/CallContext'
 
+function stopRingtone() {
+  if (window._ringtoneAudio) {
+    window._ringtoneAudio.pause()
+    window._ringtoneAudio.currentTime = 0
+    window._ringtoneAudio = null
+  }
+}
+
 export default function GlobalCallListener() {
   const [incoming, setIncoming] = useState(null)
   const navigate = useNavigate()
@@ -14,7 +22,6 @@ export default function GlobalCallListener() {
     subscribeToIceCandidatesEarly,
   } = useCall()
 
-  // Track the current user's ID so we can subscribe to early ICE candidates
   const myUserIdRef = useRef(null)
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -22,24 +29,44 @@ export default function GlobalCallListener() {
     })
   }, [])
 
+  // Listen for push notification incoming call (when app is open)
+  useEffect(() => {
+    function handleSwIncoming(e) {
+      const { callId, fromUser, chatId, callType, callerName } = e.detail
+
+      const callerPath = `/chat/${fromUser}`
+      if (window.location.pathname.startsWith(callerPath)) return
+
+      if (myUserIdRef.current) {
+        subscribeToIceCandidatesEarly(callId, myUserIdRef.current)
+      }
+
+      setIncoming({
+        fromUser,
+        callType,
+        offer: null,
+        callId,
+        callerName: callerName || fromUser,
+        chatId,
+      })
+      playRing()
+    }
+
+    window.addEventListener('sw-incoming-call', handleSwIncoming)
+    return () => window.removeEventListener('sw-incoming-call', handleSwIncoming)
+  }, [])
+
+  // Listen for realtime ring signal
   useEffect(() => {
     const unregister = registerCallListener((payload) => {
       if (payload._event !== 'ring') return false
 
-      // If already in the chat with this caller, let Chat.jsx handle it
       const callerPath = `/chat/${payload.fromUser}`
       if (window.location.pathname.startsWith(callerPath)) return false
 
-      // ── KEY FIX ────────────────────────────────────────────────────────────
-      // Subscribe to ICE candidates NOW, before the user even taps Answer.
-      // The caller starts sending candidates immediately after createOffer().
-      // By the time the user taps Answer and Chat.jsx mounts, all those early
-      // candidates are in the DB. The early buffer collects them so
-      // useWebRTC.restorePendingCall() can drain them when it's ready.
       if (myUserIdRef.current) {
         subscribeToIceCandidatesEarly(payload.callId, myUserIdRef.current)
       } else {
-        // myUserId not ready yet — wait for auth then subscribe
         supabase.auth.getUser().then(({ data: { user } }) => {
           if (user) {
             myUserIdRef.current = user.id
@@ -48,14 +75,13 @@ export default function GlobalCallListener() {
         })
       }
 
-      // Caller includes their display name in the ring signal (fromName) —
-      // no DB lookup needed, no RLS issues.
       setIncoming({
         fromUser: payload.fromUser,
         callType: payload.callType,
         offer: payload.offer,
         callId: payload.callId,
         callerName: payload.fromName || payload.fromUser,
+        chatId: null,
       })
       playRing()
       return true
@@ -64,7 +90,6 @@ export default function GlobalCallListener() {
     return unregister
   }, [])
 
-  // Dismiss if user navigates into the relevant chat while ring UI is showing
   useEffect(() => {
     if (!incoming) return
     const callerPath = `/chat/${incoming.fromUser}`
@@ -75,6 +100,7 @@ export default function GlobalCallListener() {
 
   function handleDismiss() {
     stopRing()
+    stopRingtone()
     setIncoming(null)
     dismissIncoming()
   }
@@ -82,13 +108,10 @@ export default function GlobalCallListener() {
   async function handleAnswer() {
     if (!incoming) return
     stopRing()
+    stopRingtone()
 
-    // callerName was already fetched at ring time — no extra DB round-trip needed
     const callerName = incoming.callerName || incoming.fromUser
 
-    // Store the pending call for Chat.jsx to pick up via restorePendingCall()
-    // __pendingCallId is a separate flag that tells setupCallListener in Chat
-    // to suppress this ring (user already answered here — don't fire a second time).
     sessionStorage.setItem('__pendingCallId', incoming.callId)
     sessionStorage.setItem('__pendingCall', JSON.stringify({
       fromUser: incoming.fromUser,
@@ -100,27 +123,33 @@ export default function GlobalCallListener() {
 
     setIncoming(null)
     dismissIncoming()
-    navigate(`/chat/${incoming.fromUser}`)
+
+    // Navigate to correct chat
+    const dest = incoming.chatId
+      ? `/chat/${incoming.chatId}`
+      : `/chat/${incoming.fromUser}`
+    navigate(dest)
   }
 
   async function handleDecline() {
     if (!incoming) return
     stopRing()
+    stopRingtone()
 
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
-     const targetChannel = supabase.channel(`call_inbox_${incoming.fromUser}`, {
-  config: { broadcast: { self: false } }
-})
-targetChannel.subscribe(status => {
-  if (status === 'SUBSCRIBED') {
-    targetChannel.send({
-      type: 'broadcast',
-      event: 'call_signal',
-      payload: { _event: 'decline', callId: incoming.callId, fromUser: user.id }
-    }).then(() => supabase.removeChannel(targetChannel))
-  }
-})
+      const targetChannel = supabase.channel(`call_inbox_${incoming.fromUser}`, {
+        config: { broadcast: { self: false } }
+      })
+      targetChannel.subscribe(status => {
+        if (status === 'SUBSCRIBED') {
+          targetChannel.send({
+            type: 'broadcast',
+            event: 'call_signal',
+            payload: { _event: 'decline', callId: incoming.callId, fromUser: user.id }
+          }).then(() => supabase.removeChannel(targetChannel))
+        }
+      })
     }
 
     setIncoming(null)
