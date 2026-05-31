@@ -442,20 +442,58 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
     try {
       const newStream = await navigator.mediaDevices.getUserMedia({
         audio: false,
-        video: { facingMode: newFacing }
+        video: { facingMode: { exact: newFacing } }
       })
       const newTrack = newStream.getVideoTracks()[0]
+      if (!newTrack) { console.error('switchCamera: no video track'); return }
+
+      // Replace track in the peer connection sender
       const sender = pcRef.current.getSenders().find(s => s.track?.kind === 'video')
-      if (sender) await sender.replaceTrack(newTrack)
-      localStreamRef.current.getVideoTracks().forEach(t => t.stop())
+      if (sender) {
+        await sender.replaceTrack(newTrack)
+      }
+
+      // Stop old video tracks
+      localStreamRef.current.getVideoTracks().forEach(t => {
+        t.stop()
+        localStreamRef.current.removeTrack(t)
+      })
+
+      // Add new track to existing stream
       localStreamRef.current.addTrack(newTrack)
-      if (localVideoRef.current) localVideoRef.current.srcObject = localStreamRef.current
+
+      // Update local preview
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = localStreamRef.current
+      }
+
       setFacingMode(newFacing)
+      console.log('[switchCamera] switched to', newFacing)
     } catch (e) {
       console.error('switchCamera error:', e)
+      // Fallback: try without 'exact' constraint (some devices need this)
+      try {
+        const newStream = await navigator.mediaDevices.getUserMedia({
+          audio: false,
+          video: { facingMode: newFacing }
+        })
+        const newTrack = newStream.getVideoTracks()[0]
+        if (!newTrack) return
+        const sender = pcRef.current.getSenders().find(s => s.track?.kind === 'video')
+        if (sender) await sender.replaceTrack(newTrack)
+        localStreamRef.current.getVideoTracks().forEach(t => {
+          t.stop()
+          localStreamRef.current.removeTrack(t)
+        })
+        localStreamRef.current.addTrack(newTrack)
+        if (localVideoRef.current) localVideoRef.current.srcObject = localStreamRef.current
+        setFacingMode(newFacing)
+      } catch (e2) {
+        console.error('switchCamera fallback error:', e2)
+        alert('Camera switch failed. Your device may not support switching cameras during a call.')
+      }
     }
   }
-
   async function restorePendingCall(fromUserId) {
     const raw = sessionStorage.getItem('__pendingCall')
     if (!raw) return
