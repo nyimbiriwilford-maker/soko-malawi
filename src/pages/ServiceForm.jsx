@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { supabase } from '../../lib/supabase'
+import { supabase } from '../lib/supabase'
 import { SERVICE_CATS, CITIES, AVAILABILITY_OPTIONS, S } from './serviceData'
 
 export default function ServiceForm({ editingService, onSuccess, onCancel }) {

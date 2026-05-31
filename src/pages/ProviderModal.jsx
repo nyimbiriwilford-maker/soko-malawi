@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../../lib/supabase'
+import { supabase } from '../lib/supabase'
 import { SERVICE_CATS, S, avatarColor, initials, renderStars, formatWhatsApp, timeAgo } from './serviceData'
 import ReviewSection from './ReviewSection'
 

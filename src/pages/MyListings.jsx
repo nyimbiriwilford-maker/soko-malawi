@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { supabase } from '../../lib/supabase'
+import { supabase } from '../lib/supabase'
 import { SERVICE_CATS, S, avatarColor, initials, renderStars } from './serviceData'
 
 export default function MyListings({ myServices, onEdit, onRefresh, onPostNew }) {
