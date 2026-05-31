@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { supabase } from './lib/supabase'
 import Login from './pages/Login'
 import Home from './pages/Home'
@@ -15,6 +15,8 @@ import GlobalCallListener from './components/GlobalCallListener'
 import { CallProvider } from './context/CallContext'
 import { useGlobalPresence } from './hooks/usePresence'
 import PublicProfile from './pages/PublicProfile'
+import { registerPushNotifications, listenForServiceWorkerMessages } from './lib/pushNotifications'
+
 export default function App() {
   const [session, setSession] = useState(undefined)
   const [role, setRole] = useState(undefined)
@@ -22,30 +24,45 @@ export default function App() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session)
-      if (data.session) fetchRole(data.session.user.id)
-      else setRole(null)
+      if (data.session) {
+        fetchRole(data.session.user.id)
+        setupPush(data.session)
+      } else {
+        setRole(null)
+      }
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session)
-      if (session) fetchRole(session.user.id)
-      else setRole(null)
+      if (session) {
+        fetchRole(session.user.id)
+        setupPush(session)
+      } else {
+        setRole(null)
+      }
     })
 
     return () => subscription.unsubscribe()
   }, [])
 
+  function setupPush(session) {
+    if (!session?.user) return
+    registerPushNotifications(session.user.id, supabase)
+    listenForServiceWorkerMessages({
+      onAnswer: (fromUser) => {
+        window.location.href = `/chat/${fromUser}`
+      },
+      onDecline: () => {},
+    })
+  }
+
   async function fetchRole(userId) {
-    console.log('Fetching role for userId:', userId)
     const { data, error } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', userId)
       .single()
-    console.log('Role data:', data)
-    console.log('Role error:', error)
     const fetchedRole = data?.role ?? 'user'
-    console.log('Setting role to:', fetchedRole)
     setRole(fetchedRole)
   }
 
@@ -58,8 +75,6 @@ export default function App() {
   )
 
   const isAdmin = role === 'admin'
-
-  console.log('App render — session:', !!session, '| role:', role, '| isAdmin:', isAdmin)
 
   return (
     <CallProvider>

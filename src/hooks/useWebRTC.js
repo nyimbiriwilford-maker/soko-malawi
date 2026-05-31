@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react'
 import { useCall } from '../context/CallContext'
 import { ICE_SERVERS } from '../lib/webrtc'
+import { supabase } from '../lib/supabase'
 
 function generateCallId(uid1, uid2) {
   return [uid1, uid2].sort().join('-') + '-' + Date.now()
@@ -190,6 +191,17 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
       cu.id
 
     playRingback()
+    // Send push notification to wake up receiver's device
+    supabase.functions.invoke('send-call-push', {
+      body: {
+        targetUserId: target,
+        callerName: fromName,
+        callerAvatar: cu.user_metadata?.avatar_url || null,
+        callType: type,
+        callId,
+        fromUser: cu.id,
+      }
+    }).catch(e => console.log('[push] invoke error:', e))
     await ctxSendSignal(target, 'ring', {
       offer: pc.localDescription.toJSON(),
       callType: type,
