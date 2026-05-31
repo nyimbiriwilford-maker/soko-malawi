@@ -1,71 +1,46 @@
-self.addEventListener('install', e => self.skipWaiting())
-self.addEventListener('activate', e => e.waitUntil(self.clients.claim()))
+self.addEventListener('push', event => {
+  const data = event.data?.json() || {}
 
-// Listen for push notifications
-self.addEventListener('push', e => {
-  const data = e.data?.json() || {}
-  const { callerName, callerAvatar, callType, callId, fromUser } = data
+  const options = {
+    body: `${data.callerName} is calling you`,
+    icon: data.callerAvatar || '/icon-192.png',
+    badge: '/icon-192.png',
+    tag: 'incoming-call',          // replaces duplicate notifications
+    renotify: true,                // re-rings even if tag exists
+    requireInteraction: true,      // keeps notification visible (doesn't auto-dismiss)
+    vibrate: [200, 100, 200, 100, 200],  // vibration pattern
+    data: {
+      callId: data.callId,
+      fromUser: data.fromUser,
+      callType: data.callType,
+      url: `/chat/${data.fromUser}`  // where to go on tap
+    },
+    actions: [
+      { action: 'answer', title: '✅ Answer' },
+      { action: 'decline', title: '❌ Decline' }
+    ]
+  }
 
-  e.waitUntil(
-    self.registration.showNotification('Incoming Call', {
-      body: `${callerName} is calling you${callType === 'video' ? ' (video)' : ''}`,
-      icon: callerAvatar || '/favicon.svg',
-      image: callerAvatar || '/favicon.svg',
-      badge: '/favicon.svg',
-      tag: 'incoming-call-' + callId,
-      renotify: true,
-      requireInteraction: true, // keeps notification until user acts
-      vibrate: [500, 200, 500, 200, 500],
-      actions: [
-        { action: 'decline', title: '❌ Decline' },
-        { action: 'answer',  title: '✅ Answer'  },
-      ],
-      data: { callId, fromUser, callType, callerName, url: `/chat/${fromUser}` }
-    })
+  event.waitUntil(
+    self.registration.showNotification(`Incoming ${data.callType} Call`, options)
   )
 })
 
 // Handle notification button clicks
-self.addEventListener('notificationclick', e => {
-  e.notification.close()
-  const { action } = e
-  const { url, callId, fromUser } = e.notification.data
+self.addEventListener('notificationclick', event => {
+  event.notification.close()
 
-  if (action === 'decline') {
-    // Post to app if open, otherwise store decline for next open
-    e.waitUntil(
-      self.clients.matchAll({ type: 'window' }).then(clients => {
-        if (clients.length > 0) {
-          clients[0].postMessage({ type: 'DECLINE_CALL', callId, fromUser })
-        } else {
-          // Store in IndexedDB for app to pick up on next open
-          self.registration.showNotification('Call declined', {
-            body: 'You declined the call',
-            tag: 'call-declined',
-            requireInteraction: false,
-          })
-        }
-      })
+  if (event.action === 'answer') {
+    event.waitUntil(
+      clients.openWindow(event.notification.data.url)
     )
-    return
+  } else if (event.action === 'decline') {
+    // optionally send a decline signal here
+    console.log('Call declined')
+  } else {
+    // tapped the notification body
+    event.waitUntil(
+      clients.openWindow(event.notification.data.url)
+    )
   }
-
-  // Answer or tap — open the chat
-  e.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clients => {
-      const target = clients.find(c => c.url.includes(fromUser))
-      if (target) {
-        target.focus()
-        target.postMessage({ type: 'ANSWER_CALL', callId, fromUser })
-      } else {
-        self.clients.openWindow(url).then(win => {
-          if (win) {
-            setTimeout(() => {
-              win.postMessage({ type: 'ANSWER_CALL', callId, fromUser })
-            }, 2000)
-          }
-        })
-      }
-    })
-  )
 })
