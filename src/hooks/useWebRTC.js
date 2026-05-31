@@ -192,7 +192,8 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
 
     playRingback()
     // Get chatId from current URL — format is /chat/{chatId}
-    const chatId = window.location.pathname.split('/chat/')[1] || null
+    // CORRECT — gets everything after /chat/
+const chatId = window.location.pathname.replace('/chat/', '') || null
 
     // Send push notification to wake up receiver's device
     supabase.functions.invoke('send-call-push', {
