@@ -184,7 +184,8 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
       cu.user_metadata?.full_name ||
       cu.email ||
       cu.id
-
+    playRingback()
+    playRingback()
     await ctxSendSignal(target, 'ring', {
       offer: pc.localDescription.toJSON(),
       callType: type,
@@ -279,6 +280,7 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
 
   function endCallLocally() {
     ctxStopRing()
+    stopRingback()
     clearInterval(callTimerRef.current)
     stopIceSubscription()
     if (callIdRef.current) cleanupIceCandidates(callIdRef.current)
@@ -354,6 +356,7 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
             }
             pendingCandidates.current = []
             ctxStopRing()
+            stopRingback()
             playConnectedSound()
             setCallState('in-call')
             startCallTimer()
@@ -376,12 +379,12 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
         return true
       }
 
-      if (_event === 'hangup' || _event === 'decline') {
+     if (_event === 'hangup' || _event === 'decline') {
+        stopRingback()
         playCallEndSound()
         endCallLocally()
         return true
       }
-
       return false
     })
   }
@@ -437,9 +440,9 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
     }
   }
 
-  return {
+return {
     callState, callType, callDuration, isMuted, isCamOff, remoteStream,
-    localVideoRef, remoteVideoRef,
+    localVideoRef, remoteVideoRef, facingMode,
     startCall, answerCall, declineCall, hangUp, endCallLocally,
     toggleMute, toggleCam, setupCallListener,
     assignRemoteStream, assignLocalStream, restorePendingCall,
