@@ -204,19 +204,21 @@ export function CallProvider({ children }) {
 
  function playRing() {
     stopRing()
-    const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
-    if (isMobile) {
-      try {
-        const audio = new Audio('/ringtone.mp3')
-        audio.loop = true
-        audio.volume = 1.0
-        const playPromise = audio.play()
-        if (playPromise) playPromise.catch(() => playRingSynth())
-        ringAudioRef.current = { stop: () => { audio.pause(); audio.currentTime = 0 } }
-        return
-      } catch (e) {}
+    try {
+      const audio = new Audio('/ringtone.mp3')
+      audio.loop = true
+      audio.volume = 1.0
+      const playPromise = audio.play()
+      if (playPromise) {
+        playPromise.catch(() => {
+          // Autoplay blocked — fall back to synth
+          playRingSynth()
+        })
+      }
+      ringAudioRef.current = { stop: () => { audio.pause(); audio.currentTime = 0 } }
+    } catch (e) {
+      playRingSynth()
     }
-    playRingSynth()
   }
 
   function playRingSynth() {
