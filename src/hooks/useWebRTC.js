@@ -436,30 +436,46 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
     setIsCamOff(c => !c)
   }
 
-  async function switchCamera() {
+ async function switchCamera() {
     if (!localStreamRef.current || !pcRef.current) return
-    const newFacing = facingMode === 'user' ? 'environment' : 'user'
     try {
-      const newStream = await navigator.mediaDevices.getUserMedia({
-        audio: false,
-        video: { facingMode: { exact: newFacing } }
-      })
-      const newTrack = newStream.getVideoTracks()[0]
-      if (!newTrack) { console.error('switchCamera: no video track'); return }
-
-      // Replace track in the peer connection sender
-      const sender = pcRef.current.getSenders().find(s => s.track?.kind === 'video')
-      if (sender) {
-        await sender.replaceTrack(newTrack)
+      // Get all video input devices
+      const devices = await navigator.mediaDevices.enumerateDevices()
+      const videoDevices = devices.filter(d => d.kind === 'videoinput')
+      
+      if (videoDevices.length < 2) {
+        alert('No second camera found on this device.')
+        return
       }
 
-      // Stop old video tracks
+      // Find current deviceId
+      const currentTrack = localStreamRef.current.getVideoTracks()[0]
+      const currentDeviceId = currentTrack?.getSettings()?.deviceId
+
+      // Pick the next camera in the list
+      const currentIndex = videoDevices.findIndex(d => d.deviceId === currentDeviceId)
+      const nextIndex = (currentIndex + 1) % videoDevices.length
+      const nextDevice = videoDevices[nextIndex]
+
+      console.log('[switchCamera] switching to device:', nextDevice.label)
+
+      const newStream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: { deviceId: { exact: nextDevice.deviceId } }
+      })
+
+      const newTrack = newStream.getVideoTracks()[0]
+      if (!newTrack) return
+
+      // Replace in peer connection
+      const sender = pcRef.current.getSenders().find(s => s.track?.kind === 'video')
+      if (sender) await sender.replaceTrack(newTrack)
+
+      // Replace in local stream
       localStreamRef.current.getVideoTracks().forEach(t => {
         t.stop()
         localStreamRef.current.removeTrack(t)
       })
-
-      // Add new track to existing stream
       localStreamRef.current.addTrack(newTrack)
 
       // Update local preview
@@ -467,31 +483,12 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
         localVideoRef.current.srcObject = localStreamRef.current
       }
 
-      setFacingMode(newFacing)
-      console.log('[switchCamera] switched to', newFacing)
+      // Toggle facingMode state for UI
+      setFacingMode(f => f === 'user' ? 'environment' : 'user')
+      console.log('[switchCamera] success')
     } catch (e) {
       console.error('switchCamera error:', e)
-      // Fallback: try without 'exact' constraint (some devices need this)
-      try {
-        const newStream = await navigator.mediaDevices.getUserMedia({
-          audio: false,
-          video: { facingMode: newFacing }
-        })
-        const newTrack = newStream.getVideoTracks()[0]
-        if (!newTrack) return
-        const sender = pcRef.current.getSenders().find(s => s.track?.kind === 'video')
-        if (sender) await sender.replaceTrack(newTrack)
-        localStreamRef.current.getVideoTracks().forEach(t => {
-          t.stop()
-          localStreamRef.current.removeTrack(t)
-        })
-        localStreamRef.current.addTrack(newTrack)
-        if (localVideoRef.current) localVideoRef.current.srcObject = localStreamRef.current
-        setFacingMode(newFacing)
-      } catch (e2) {
-        console.error('switchCamera fallback error:', e2)
-        alert('Camera switch failed. Your device may not support switching cameras during a call.')
-      }
+      alert('Camera switch failed: ' + e.message)
     }
   }
   async function restorePendingCall(fromUserId) {
