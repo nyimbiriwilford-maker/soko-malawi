@@ -17,6 +17,27 @@ import { useGlobalPresence } from './hooks/usePresence'
 import PublicProfile from './pages/PublicProfile'
 import { registerPushNotifications, listenForServiceWorkerMessages } from './lib/pushNotifications'
 
+function stopRingtone() {
+  if (window._ringtoneAudio) {
+    window._ringtoneAudio.pause()
+    window._ringtoneAudio.currentTime = 0
+    window._ringtoneAudio = null
+  }
+}
+
+function playRingtone() {
+  stopRingtone()
+  try {
+    const audio = new Audio('/ringtone.mp3')
+    audio.loop = true
+    audio.volume = 1.0
+    audio.play().catch(e => console.log('[ringtone] play blocked:', e))
+    window._ringtoneAudio = audio
+  } catch (e) {
+    console.log('[ringtone] error:', e)
+  }
+}
+
 export default function App() {
   const [session, setSession] = useState(undefined)
   const [role, setRole] = useState(undefined)
@@ -49,21 +70,28 @@ export default function App() {
     if (!session?.user) return
     registerPushNotifications(session.user.id, supabase)
     listenForServiceWorkerMessages({
-      onAnswer: (fromUser) => {
-        window.location.href = `/chat/${fromUser}`
+      onIncomingCall: ({ callId, fromUser, chatId, callType, callerName }) => {
+        console.log('[app] INCOMING_CALL from SW — playing ringtone')
+        playRingtone()
       },
-      onDecline: () => {},
+      onAnswer: (fromUser, callId, chatId) => {
+        stopRingtone()
+        const url = chatId ? `/chat/${chatId}` : `/chat/${fromUser}`
+        window.location.href = url
+      },
+      onDecline: () => {
+        stopRingtone()
+      },
     })
   }
 
   async function fetchRole(userId) {
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from('profiles')
       .select('role')
       .eq('id', userId)
       .single()
-    const fetchedRole = data?.role ?? 'user'
-    setRole(fetchedRole)
+    setRole(data?.role ?? 'user')
   }
 
   useGlobalPresence(session?.user?.id ?? null)
@@ -82,13 +110,11 @@ export default function App() {
         {session && <GlobalCallListener />}
         <Routes>
           <Route path="/login" element={!session ? <Login /> : <Navigate to={isAdmin ? '/admin' : '/'} />} />
-
           <Route path="/admin/*" element={
             !session ? <Navigate to="/login" /> :
             isAdmin ? <Admin /> :
             <Navigate to="/" />
           } />
-
           <Route path="/" element={session ? (isAdmin ? <Navigate to="/admin" /> : <Home />) : <Navigate to="/login" />} />
           <Route path="/listing/:id" element={session ? <ListingDetail /> : <Navigate to="/login" />} />
           <Route path="/post" element={session ? <PostListing /> : <Navigate to="/login" />} />

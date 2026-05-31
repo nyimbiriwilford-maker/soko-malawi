@@ -8,7 +8,7 @@ self.addEventListener('push', event => {
     tag: 'incoming-call',
     renotify: true,
     requireInteraction: true,
-    vibrate: [500, 200, 500, 200, 500, 200, 500],
+    vibrate: [500, 200, 500, 200, 500, 200, 500, 200, 500, 200, 500],
     data: {
       callId: data.callId,
       fromUser: data.fromUser,
@@ -27,7 +27,8 @@ self.addEventListener('push', event => {
         `📞 Incoming ${data.callType || 'Video'} Call from ${data.callerName}`,
         options
       ),
-      self.clients.matchAll({ type: 'window' }).then(clientList => {
+      // Forward to app if open so it can play ringtone
+      self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
         clientList.forEach(client => {
           client.postMessage({ type: 'INCOMING_CALL', ...data })
         })
@@ -40,9 +41,16 @@ self.addEventListener('notificationclick', event => {
   event.notification.close()
   const { callId, fromUser, chatId } = event.notification.data
 
-  if (event.action === 'decline') return
+  if (event.action === 'decline') {
+    // Notify app to stop ringtone
+    event.waitUntil(
+      self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
+        clientList.forEach(c => c.postMessage({ type: 'DECLINE_CALL', callId, fromUser }))
+      })
+    )
+    return
+  }
 
-  // chatId may contain slashes (e.g. uuid/uuid) so use it as-is
   const url = chatId ? `/chat/${chatId}` : `/chat/${fromUser}`
 
   event.waitUntil(
@@ -54,6 +62,7 @@ self.addEventListener('notificationclick', event => {
           return
         }
       }
+      // App is closed — open it, call will be handled via restorePendingCall
       return self.clients.openWindow(url)
     })
   )
