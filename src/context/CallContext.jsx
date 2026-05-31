@@ -10,19 +10,15 @@ export function useCall() {
 export function CallProvider({ children }) {
   const [incomingCall, setIncomingCall] = useState(null)
 
-  const channelRef        = useRef(null)
-  const listenersRef      = useRef([])
-  const ringAudioRef      = useRef(null)
-  const currentUserRef    = useRef(null)
-  const reconnectTimerRef = useRef(null)
+  const channelRef          = useRef(null)
+  const listenersRef        = useRef([])
+  const ringAudioRef        = useRef(null)
+  const ringbackAudioRef    = useRef(null)
+  const currentUserRef      = useRef(null)
+  const reconnectTimerRef   = useRef(null)
   const outboundChannelsRef = useRef({})
-  const iceSub            = useRef(null)
-
-  // ── Early ICE buffer ───────────────────────────────────────────────────────
-  // Map<callId, { candidates: object[], sub: RealtimeChannel }>
-  // GlobalCallListener subscribes here at ring time so candidates are buffered
-  // before Chat.jsx mounts and the peer connection is created.
-  const earlyIceRef = useRef(new Map())
+  const iceSub              = useRef(null)
+  const earlyIceRef         = useRef(new Map())
 
   useEffect(() => {
     setupChannel()
@@ -34,7 +30,6 @@ export function CallProvider({ children }) {
       })
       outboundChannelsRef.current = {}
       stopIceSubscription()
-      // Clean up any lingering early subscriptions
       for (const [, entry] of earlyIceRef.current) {
         try { supabase.removeChannel(entry.sub) } catch (e) {}
       }
@@ -89,7 +84,6 @@ export function CallProvider({ children }) {
 
   function dismissIncoming() { setIncomingCall(null) }
 
-  // ── Signalling (ring / answer / decline / hangup) ──────────────────────────
   async function sendSignal(targetUserId, event, payload = {}) {
     if (!targetUserId) { console.error('sendSignal: no targetUserId'); return }
 
@@ -121,8 +115,6 @@ export function CallProvider({ children }) {
       console.error('sendSignal error:', err)
     }
   }
-
-  // ── ICE candidates via DB ──────────────────────────────────────────────────
 
   async function sendIceCandidate(callId, fromUserId, toUserId, candidate) {
     if (!candidate) return
@@ -174,22 +166,8 @@ export function CallProvider({ children }) {
     }
   }
 
-  // ── Early ICE buffer (for GlobalCallListener → useWebRTC handoff) ──────────
-  //
-  // When the receiver is NOT on the chat page, GlobalCallListener shows the ring UI.
-  // The caller starts generating ICE candidates immediately after createOffer().
-  // If we wait until the user taps Answer and Chat.jsx mounts before subscribing,
-  // all those early candidates are missed (postgres_changes only fires on new inserts).
-  //
-  // Solution: subscribe here as soon as the ring arrives, buffer the candidates,
-  // then let useWebRTC.restorePendingCall() drain the buffer via drainEarlyCandidates().
-
-  /**
-   * Start buffering ICE candidates for callId/myUserId immediately.
-   * Safe to call multiple times — idempotent on the same callId.
-   */
   function subscribeToIceCandidatesEarly(callId, myUserId) {
-    if (earlyIceRef.current.has(callId)) return // already buffering
+    if (earlyIceRef.current.has(callId)) return
     console.log(`[ice-early] starting buffer for ${callId}`)
 
     const entry = { candidates: [], sub: null }
@@ -204,8 +182,6 @@ export function CallProvider({ children }) {
           const row = payload.new
           if (row.to_user !== myUserId) return
           console.log(`[ice-early] buffered candidate for ${callId}`)
-          // Store the raw candidate string exactly as it came from the DB
-          // (useWebRTC will JSON.parse it the same way as the normal path)
           entry.candidates.push(row.candidate)
         }
       )
@@ -216,11 +192,6 @@ export function CallProvider({ children }) {
     entry.sub = sub
   }
 
-  /**
-   * Return all buffered candidates and shut down the early subscription.
-   * Call this from useWebRTC when the peer connection is ready.
-   * Returns an array of raw candidate strings (same format as the normal DB path).
-   */
   function drainEarlyCandidates(callId) {
     const entry = earlyIceRef.current.get(callId)
     if (!entry) return []
@@ -231,7 +202,6 @@ export function CallProvider({ children }) {
     return candidates
   }
 
-  // ── Ringtone ───────────────────────────────────────────────────────────────
   function playRing() {
     stopRing()
     try {
@@ -257,45 +227,44 @@ export function CallProvider({ children }) {
     } catch (e) {}
   }
 
- function stopRing() {
-  if (ringAudioRef.current) {
-    ringAudioRef.current.stop()
-    ringAudioRef.current = null
-  }
-}
-
-function playRingback() {
-  stopRingback()
-  try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)()
-    let playing = true
-    ringbackAudioRef.current = { stop: () => { playing = false; try { ctx.close() } catch (e) {} } }
-    function tone() {
-      if (!playing) return
-      // Classic ringback: two beeps then silence
-      [[440, 0], [440, 0.5]].forEach(([freq, delay]) => {
-        const osc = ctx.createOscillator()
-        const gain = ctx.createGain()
-        osc.connect(gain); gain.connect(ctx.destination)
-        osc.type = 'sine'; osc.frequency.value = freq
-        const t = ctx.currentTime + delay
-        gain.gain.setValueAtTime(0, t)
-        gain.gain.linearRampToValueAtTime(0.15, t + 0.05)
-        gain.gain.linearRampToValueAtTime(0, t + 0.45)
-        osc.start(t); osc.stop(t + 0.5)
-      })
-      if (playing) setTimeout(tone, 4000)
+  function stopRing() {
+    if (ringAudioRef.current) {
+      ringAudioRef.current.stop()
+      ringAudioRef.current = null
     }
-    tone()
-  } catch (e) {}
-}
-
-function stopRingback() {
-  if (ringbackAudioRef.current) {
-    ringbackAudioRef.current.stop()
-    ringbackAudioRef.current = null
   }
-}
+
+  function playRingback() {
+    stopRingback()
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)()
+      let playing = true
+      ringbackAudioRef.current = { stop: () => { playing = false; try { ctx.close() } catch (e) {} } }
+      function tone() {
+        if (!playing) return
+        [[440, 0], [440, 0.5]].forEach(([freq, delay]) => {
+          const osc = ctx.createOscillator()
+          const gain = ctx.createGain()
+          osc.connect(gain); gain.connect(ctx.destination)
+          osc.type = 'sine'; osc.frequency.value = freq
+          const t = ctx.currentTime + delay
+          gain.gain.setValueAtTime(0, t)
+          gain.gain.linearRampToValueAtTime(0.15, t + 0.05)
+          gain.gain.linearRampToValueAtTime(0, t + 0.45)
+          osc.start(t); osc.stop(t + 0.5)
+        })
+        if (playing) setTimeout(tone, 4000)
+      }
+      tone()
+    } catch (e) {}
+  }
+
+  function stopRingback() {
+    if (ringbackAudioRef.current) {
+      ringbackAudioRef.current.stop()
+      ringbackAudioRef.current = null
+    }
+  }
 
   return (
     <CallContext.Provider value={{
@@ -309,8 +278,9 @@ function stopRingback() {
       dismissIncoming,
       playRing,
       stopRing,
+      playRingback,
+      stopRingback,
       closeOutboundChannel,
-      // Early ICE buffer — used by GlobalCallListener + useWebRTC.restorePendingCall
       subscribeToIceCandidatesEarly,
       drainEarlyCandidates,
     }}>
