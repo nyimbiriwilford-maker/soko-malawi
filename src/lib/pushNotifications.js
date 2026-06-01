@@ -31,7 +31,6 @@ export async function registerPushNotifications(userId, supabase) {
       })
     }
 
-    // Save subscription to Supabase
     const subJson = sub.toJSON()
     await supabase.from('push_subscriptions').upsert({
       user_id: userId,
@@ -51,9 +50,18 @@ export async function registerPushNotifications(userId, supabase) {
 
 export async function listenForServiceWorkerMessages(handlers) {
   if (!('serviceWorker' in navigator)) return
+
   navigator.serviceWorker.addEventListener('message', e => {
-    const { type, callId, fromUser } = e.data || {}
-    if (type === 'ANSWER_CALL' && handlers.onAnswer) handlers.onAnswer(fromUser, callId)
-    if (type === 'DECLINE_CALL' && handlers.onDecline) handlers.onDecline(fromUser, callId)
+    const { type, callId, fromUser, chatId, callType, callerName } = e.data || {}
+
+    if (type === 'INCOMING_CALL' && handlers.onIncomingCall) {
+      handlers.onIncomingCall({ callId, fromUser, chatId, callType, callerName })
+    }
+    if (type === 'ANSWER_CALL' && handlers.onAnswer) {
+      handlers.onAnswer(fromUser, callId, chatId)
+    }
+    if (type === 'DECLINE_CALL' && handlers.onDecline) {
+      handlers.onDecline(fromUser, callId)
+    }
   })
 }

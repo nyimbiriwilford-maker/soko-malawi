@@ -16,6 +16,7 @@ import { CallProvider } from './context/CallContext'
 import { useGlobalPresence } from './hooks/usePresence'
 import PublicProfile from './pages/PublicProfile'
 import { registerPushNotifications, listenForServiceWorkerMessages } from './lib/pushNotifications'
+import ResetPassword from './pages/ResetPassword'   // ← NEW
 
 function stopRingtone() {
   if (window._ringtoneAudio) {
@@ -40,7 +41,10 @@ function playRingtone() {
 
 export default function App() {
   const [session, setSession] = useState(undefined)
-  const [role, setRole] = useState(undefined)
+  const [role, setRole]       = useState(undefined)
+  // Track whether we're in a password-recovery flow so we don't redirect
+  // the temporary session away from /reset-password
+  const [isRecovery, setIsRecovery] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -53,18 +57,36 @@ export default function App() {
       }
     })
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      // PASSWORD_RECOVERY fires when the user follows the reset link.
+      // Keep them on /reset-password; don't treat this as a normal login.
+      if (event === 'PASSWORD_RECOVERY') {
+        setIsRecovery(true)
+        setSession(session)   // session exists but is a recovery token only
+        setRole(null)
+        return
+      }
+
+      // SIGNED_IN after a recovery means the user just updated their password —
+      // sign them out and clear the recovery flag so they log in fresh.
+      if (event === 'SIGNED_IN' && isRecovery) {
+        // ResetPassword.jsx handles sign-out itself; just clear the flag here.
+        setIsRecovery(false)
+        return
+      }
+
       setSession(session)
       if (session) {
         fetchRole(session.user.id)
         setupPush(session)
       } else {
         setRole(null)
+        setIsRecovery(false)
       }
     })
 
     return () => subscription.unsubscribe()
-  }, [])
+  }, [])   // eslint-disable-line react-hooks/exhaustive-deps
 
   function setupPush(session) {
     if (!session?.user) return
@@ -73,7 +95,6 @@ export default function App() {
       onIncomingCall: ({ callId, fromUser, chatId, callType, callerName }) => {
         console.log('[app] INCOMING_CALL from SW — playing ringtone')
         playRingtone()
-        // Dispatch event so GlobalCallListener shows Answer/Decline UI
         const callerPath = `/chat/${fromUser}`
         if (!window.location.pathname.startsWith(callerPath)) {
           window.dispatchEvent(new CustomEvent('sw-incoming-call', {
@@ -86,9 +107,7 @@ export default function App() {
         const url = chatId ? `/chat/${chatId}` : `/chat/${fromUser}`
         window.location.href = url
       },
-      onDecline: () => {
-        stopRingtone()
-      },
+      onDecline: () => { stopRingtone() },
     })
   }
 
@@ -103,36 +122,48 @@ export default function App() {
 
   useGlobalPresence(session?.user?.id ?? null)
 
-  if (session === undefined || (session && role === undefined)) return (
+  // Still loading
+  if (session === undefined || (session && !isRecovery && role === undefined)) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: '#637068' }}>
       Loading...
     </div>
   )
 
-  const isAdmin = role === 'admin'
+  const isAdmin    = role === 'admin'
+  // A "real" authenticated session (not a password-recovery token)
+  const authed     = !!session && !isRecovery
 
   return (
     <CallProvider>
       <BrowserRouter>
-        {session && <GlobalCallListener />}
+        {authed && <GlobalCallListener />}
         <Routes>
-          <Route path="/login" element={!session ? <Login /> : <Navigate to={isAdmin ? '/admin' : '/'} />} />
+          {/* ── Public / auth routes ─────────────────────── */}
+          <Route path="/login"          element={!authed ? <Login /> : <Navigate to={isAdmin ? '/admin' : '/'} />} />
+
+          {/* Password reset — always accessible (Supabase redirects here) */}
+          <Route path="/reset-password" element={<ResetPassword />} />
+
+          {/* ── Admin ───────────────────────────────────── */}
           <Route path="/admin/*" element={
-            !session ? <Navigate to="/login" /> :
-            isAdmin ? <Admin /> :
-            <Navigate to="/" />
+            !authed   ? <Navigate to="/login" /> :
+            isAdmin   ? <Admin />               :
+                        <Navigate to="/" />
           } />
-          <Route path="/" element={session ? (isAdmin ? <Navigate to="/admin" /> : <Home />) : <Navigate to="/login" />} />
-          <Route path="/listing/:id" element={session ? <ListingDetail /> : <Navigate to="/login" />} />
-          <Route path="/post" element={session ? <PostListing /> : <Navigate to="/login" />} />
-          <Route path="/chats" element={session ? <ChatList /> : <Navigate to="/login" />} />
-          <Route path="/chat/:userId/:listingId" element={session ? <Chat /> : <Navigate to="/login" />} />
-          <Route path="/chat/:userId" element={session ? <Chat /> : <Navigate to="/login" />} />
-          <Route path="/profile" element={session ? <Profile /> : <Navigate to="/login" />} />
-          <Route path="/jobs" element={session ? <Jobs /> : <Navigate to="/login" />} />
-          <Route path="/services" element={session ? <Services /> : <Navigate to="/login" />} />
-          <Route path="/profile/:id" element={session ? <PublicProfile /> : <Navigate to="/login" />} />
-          <Route path="/post/edit/:id" element={session ? <PostListing /> : <Navigate to="/login" />} />
+
+          {/* ── Protected routes ────────────────────────── */}
+          <Route path="/"                        element={authed ? (isAdmin ? <Navigate to="/admin" /> : <Home />)        : <Navigate to="/login" />} />
+          <Route path="/listing/:id"             element={authed ? <ListingDetail />  : <Navigate to="/login" />} />
+          <Route path="/post"                    element={authed ? <PostListing />    : <Navigate to="/login" />} />
+          <Route path="/chats"                   element={authed ? <ChatList />       : <Navigate to="/login" />} />
+          <Route path="/chat/:userId/:listingId" element={authed ? <Chat />           : <Navigate to="/login" />} />
+          <Route path="/chat/:userId"            element={authed ? <Chat />           : <Navigate to="/login" />} />
+          <Route path="/profile"                 element={authed ? <Profile />        : <Navigate to="/login" />} />
+          <Route path="/jobs"                    element={authed ? <Jobs />           : <Navigate to="/login" />} />
+          <Route path="/services"                element={authed ? <Services />       : <Navigate to="/login" />} />
+          <Route path="/profile/:id"             element={authed ? <PublicProfile />  : <Navigate to="/login" />} />
+          <Route path="/post/edit/:id"           element={authed ? <PostListing />    : <Navigate to="/login" />} />
+
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </BrowserRouter>
