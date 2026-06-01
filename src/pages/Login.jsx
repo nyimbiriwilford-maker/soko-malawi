@@ -2,19 +2,17 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
-// modes: 'choose' | 'email' | 'phone' | 'phone_otp' | 'phone_pass' | 'forgot' | 'otp' | 'newpass'
+// modes: 'choose' | 'email' | 'email_otp' | 'forgot' | 'otp' | 'newpass'
 export default function Login() {
-  const [mode, setMode]             = useState('choose')
-  const [email, setEmail]           = useState('')
-  const [password, setPassword]     = useState('')
-  const [phone, setPhone]           = useState('')
-  const [otpCode, setOtpCode]       = useState('')
-  const [newPass, setNewPass]       = useState('')
+  const [mode, setMode]               = useState('choose')
+  const [email, setEmail]             = useState('')
+  const [password, setPassword]       = useState('')
+  const [otpCode, setOtpCode]         = useState('')
+  const [newPass, setNewPass]         = useState('')
   const [confirmPass, setConfirmPass] = useState('')
-  const [identifier, setIdentifier] = useState('') // for reset flow
-  const [loading, setLoading]       = useState(false)
+  const [loading, setLoading]         = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
-  const [message, setMessage]       = useState({ text: '', isError: false })
+  const [message, setMessage]         = useState({ text: '', isError: false })
   const navigate = useNavigate()
 
   const SUPABASE_URL = supabase.supabaseUrl
@@ -22,12 +20,6 @@ export default function Login() {
   function setError(text) { setMessage({ text, isError: true }) }
   function setInfo(text)  { setMessage({ text, isError: false }) }
   function clearMsg()     { setMessage({ text: '', isError: false }) }
-
-  function normalisePhone(raw) {
-    let p = raw.trim().replace(/[\s\-]/g, '')
-    if (!p.startsWith('+')) p = '+265' + p.replace(/^0/, '')
-    return p
-  }
 
   // ── Google OAuth ─────────────────────────────────────────
   async function handleGoogle() {
@@ -40,86 +32,6 @@ export default function Login() {
       },
     })
     if (error) { setError(error.message); setGoogleLoading(false) }
-  }
-
-  // ── Phone: Send OTP ──────────────────────────────────────
-  async function handleSendPhoneOtp() {
-    if (!phone.trim()) { setError('Enter your phone number'); return }
-    setLoading(true); clearMsg()
-
-    const formatted = normalisePhone(phone)
-
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/send-otp`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify({ identifier: formatted }),
-    })
-
-    const data = await res.json()
-    setLoading(false)
-    if (!res.ok || data.error) { setError(data.error || 'Failed to send code'); return }
-    setInfo('✅ Code sent via SMS. Enter it below.')
-    setMode('phone_otp')
-  }
-
-  // ── Phone: Verify OTP ────────────────────────────────────
-  async function handleVerifyPhoneOtp() {
-    if (!otpCode || otpCode.length !== 6) { setError('Enter the 6-digit code'); return }
-    setLoading(true); clearMsg()
-
-    const formatted = normalisePhone(phone)
-
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/verify-otp`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify({ identifier: formatted, code: otpCode }),
-    })
-
-    const data = await res.json()
-    setLoading(false)
-    if (!res.ok || data.error) { setError(data.error || 'Invalid code'); return }
-    setInfo('✅ Phone verified! Now set a password.')
-    setMode('phone_pass')
-  }
-
-  // ── Phone: Set password + create account ─────────────────
-  async function handlePhoneSetPassword() {
-    if (!newPass || !confirmPass)  { setError('Fill in both fields'); return }
-    if (newPass.length < 8)        { setError('Password must be at least 8 characters'); return }
-    if (newPass !== confirmPass)    { setError('Passwords do not match'); return }
-    setLoading(true); clearMsg()
-
-    const formatted = normalisePhone(phone)
-    const fakeEmail = `${formatted.replace('+', '')}@sokomw.app`
-
-    const { data, error } = await supabase.auth.signUp({
-      email: fakeEmail,
-      password: newPass,
-      options: {
-        data: { phone: formatted, signup_method: 'phone' },
-        emailRedirectTo: null,
-      },
-    })
-
-    if (error) { setError(error.message); setLoading(false); return }
-
-    const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
-      email: fakeEmail,
-      password: newPass,
-    })
-
-    setLoading(false)
-    if (signInErr) { setError(signInErr.message); return }
-
-    const { data: profile } = await supabase
-      .from('profiles').select('role').eq('id', signInData.user.id).single()
-    navigate(profile?.role === 'admin' ? '/admin' : '/')
   }
 
   // ── Email Sign In ────────────────────────────────────────
@@ -156,14 +68,13 @@ export default function Login() {
     const { error } = await supabase.auth.signUp({ email, password })
     setLoading(false)
     if (error) { setError(error.message); return }
-    setInfo('✅ Check your email to confirm your account.')
-    setMode('email')
+    setInfo('✅ Check your email to confirm your account before signing in.')
     setPassword('')
   }
 
   // ── Forgot: send OTP ─────────────────────────────────────
   async function handleSendResetOtp() {
-    if (!identifier.trim()) { setError('Enter your phone or email'); return }
+    if (!email.trim()) { setError('Enter your email address'); return }
     setLoading(true); clearMsg()
 
     const res = await fetch(`${SUPABASE_URL}/functions/v1/send-otp`, {
@@ -172,12 +83,12 @@ export default function Login() {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
       },
-      body: JSON.stringify({ identifier: identifier.trim() }),
+      body: JSON.stringify({ identifier: email.trim() }),
     })
     const data = await res.json()
     setLoading(false)
     if (!res.ok || data.error) { setError(data.error || 'Failed to send code'); return }
-    setInfo(`✅ Code sent via ${data.method === 'sms' ? 'SMS' : 'email'}.`)
+    setInfo('✅ Code sent to your email.')
     setMode('otp')
   }
 
@@ -192,7 +103,7 @@ export default function Login() {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
       },
-      body: JSON.stringify({ identifier: identifier.trim(), code: otpCode }),
+      body: JSON.stringify({ identifier: email.trim(), code: otpCode }),
     })
     const data = await res.json()
     setLoading(false)
@@ -214,25 +125,22 @@ export default function Login() {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
       },
-      body: JSON.stringify({ identifier: identifier.trim(), code: otpCode, newPassword: newPass }),
+      body: JSON.stringify({ identifier: email.trim(), code: otpCode, newPassword: newPass }),
     })
     const data = await res.json()
     setLoading(false)
     if (!res.ok || data.error) { setError(data.error || 'Failed to update password'); return }
-    setInfo('✅ Password updated! Signing you in…')
+    setInfo('✅ Password updated! You can now sign in.')
     setTimeout(() => { setMode('choose'); clearMsg(); setOtpCode(''); setNewPass(''); setConfirmPass('') }, 2000)
   }
 
   function handleKeyDown(e) {
     if (e.key !== 'Enter') return
     const actions = {
-      email:      handleEmailSignIn,
-      phone:      handleSendPhoneOtp,
-      phone_otp:  handleVerifyPhoneOtp,
-      phone_pass: handlePhoneSetPassword,
-      forgot:     handleSendResetOtp,
-      otp:        handleVerifyResetOtp,
-      newpass:    handleSetNewPassword,
+      email:   handleEmailSignIn,
+      forgot:  handleSendResetOtp,
+      otp:     handleVerifyResetOtp,
+      newpass: handleSetNewPassword,
     }
     actions[mode]?.()
   }
@@ -263,13 +171,13 @@ export default function Login() {
             </>}
           </button>
 
-          <div style={s.divider}><span style={s.dividerText}>or</span></div>
+          <div style={s.divider}>
+            <div style={s.dividerLine} />
+            <span style={s.dividerText}>or</span>
+            <div style={s.dividerLine} />
+          </div>
 
-          <button style={s.optionBtn} onClick={() => { setMode('phone'); clearMsg() }}>
-            <span style={s.optionIcon}>📱</span> Continue with Phone Number
-          </button>
-
-          <button style={{ ...s.optionBtn, marginTop: 10 }} onClick={() => { setMode('email'); clearMsg() }}>
+          <button style={s.optionBtn} onClick={() => { setMode('email'); clearMsg() }}>
             <span style={s.optionIcon}>✉️</span> Continue with Email
           </button>
 
@@ -279,7 +187,7 @@ export default function Login() {
         {/* ── EMAIL screen ── */}
         {mode === 'email' && <>
           <h2 style={s.title}>Email</h2>
-          <p style={s.sub}>Sign in or create an account</p>
+          <p style={s.sub}>Sign in or create a new account</p>
           <input style={s.input} type="email" placeholder="Email address"
             value={email} onChange={e => setEmail(e.target.value)} onKeyDown={handleKeyDown} autoComplete="email" />
           <input style={s.input} type="password" placeholder="Password (min. 8 characters)"
@@ -299,78 +207,25 @@ export default function Login() {
           </p>
         </>}
 
-        {/* ── PHONE: enter number ── */}
-        {mode === 'phone' && <>
-          <h2 style={s.title}>Phone number</h2>
-          <p style={s.sub}>We'll send a verification code via SMS</p>
-          <div style={s.phoneRow}>
-            <div style={s.flagBox}>🇲🇼 +265</div>
-            <input style={{ ...s.input, marginBottom: 0, flex: 1 }}
-              type="tel" placeholder="0999 123 456"
-              value={phone} onChange={e => setPhone(e.target.value)} onKeyDown={handleKeyDown} autoComplete="tel" />
-          </div>
-          <div style={{ height: 12 }} />
-          {message.text && <p style={message.isError ? s.error : s.info}>{message.text}</p>}
-          <button style={s.btn} onClick={handleSendPhoneOtp} disabled={loading}>
-            {loading ? 'Sending…' : 'Send Code'}
-          </button>
-          <p style={s.toggle}>
-            <span style={s.link} onClick={() => { setMode('choose'); clearMsg() }}>← Other sign in options</span>
-          </p>
-        </>}
-
-        {/* ── PHONE OTP ── */}
-        {mode === 'phone_otp' && <>
-          <h2 style={s.title}>Enter code</h2>
-          <p style={s.sub}>Sent to {normalisePhone(phone)}</p>
-          <input
-            style={{ ...s.input, fontSize: '28px', fontWeight: '800', letterSpacing: '10px', textAlign: 'center' }}
-            type="text" inputMode="numeric" maxLength={6} placeholder="000000"
-            value={otpCode} onChange={e => setOtpCode(e.target.value.replace(/\D/g, ''))}
-            onKeyDown={handleKeyDown} autoComplete="one-time-code" />
-          <p style={s.resendWrap}>
-            Didn't get it?{' '}
-            <span style={s.link} onClick={() => { setMode('phone'); clearMsg(); setOtpCode('') }}>Resend</span>
-          </p>
-          {message.text && <p style={message.isError ? s.error : s.info}>{message.text}</p>}
-          <button style={s.btn} onClick={handleVerifyPhoneOtp} disabled={loading}>
-            {loading ? 'Verifying…' : 'Verify Code'}
-          </button>
-        </>}
-
-        {/* ── PHONE SET PASSWORD ── */}
-        {mode === 'phone_pass' && <>
-          <h2 style={s.title}>Set password</h2>
-          <p style={s.sub}>Create a password for your account</p>
-          <input style={s.input} type="password" placeholder="Password (min. 8 characters)"
-            value={newPass} onChange={e => setNewPass(e.target.value)} onKeyDown={handleKeyDown} autoComplete="new-password" />
-          <input style={s.input} type="password" placeholder="Confirm password"
-            value={confirmPass} onChange={e => setConfirmPass(e.target.value)} onKeyDown={handleKeyDown} autoComplete="new-password" />
-          {message.text && <p style={message.isError ? s.error : s.info}>{message.text}</p>}
-          <button style={s.btn} onClick={handlePhoneSetPassword} disabled={loading}>
-            {loading ? 'Creating account…' : 'Create Account'}
-          </button>
-        </>}
-
-        {/* ── FORGOT: enter identifier ── */}
+        {/* ── FORGOT: enter email ── */}
         {mode === 'forgot' && <>
           <h2 style={s.title}>Reset password</h2>
-          <p style={s.sub}>Enter your phone number or email</p>
-          <input style={s.input} type="text" placeholder="Phone number or email"
-            value={identifier} onChange={e => setIdentifier(e.target.value)} onKeyDown={handleKeyDown} autoComplete="off" />
+          <p style={s.sub}>Enter your email to receive a reset code</p>
+          <input style={s.input} type="email" placeholder="Email address"
+            value={email} onChange={e => setEmail(e.target.value)} onKeyDown={handleKeyDown} autoComplete="email" />
           {message.text && <p style={message.isError ? s.error : s.info}>{message.text}</p>}
           <button style={s.btn} onClick={handleSendResetOtp} disabled={loading}>
             {loading ? 'Sending…' : 'Send Code'}
           </button>
           <p style={s.toggle}>
-            <span style={s.link} onClick={() => { setMode('choose'); clearMsg() }}>← Back</span>
+            <span style={s.link} onClick={() => { setMode('email'); clearMsg() }}>← Back</span>
           </p>
         </>}
 
         {/* ── RESET OTP ── */}
         {mode === 'otp' && <>
           <h2 style={s.title}>Enter code</h2>
-          <p style={s.sub}>Sent to {identifier}</p>
+          <p style={s.sub}>Sent to {email}</p>
           <input
             style={{ ...s.input, fontSize: '28px', fontWeight: '800', letterSpacing: '10px', textAlign: 'center' }}
             type="text" inputMode="numeric" maxLength={6} placeholder="000000"
@@ -405,35 +260,28 @@ export default function Login() {
   )
 }
 
-function normalisePhone(raw = '') {
-  let p = raw.trim().replace(/[\s\-]/g, '')
-  if (!p.startsWith('+')) p = '+265' + p.replace(/^0/, '')
-  return p
-}
-
 const s = {
-  page:       { minHeight: '100vh', background: '#0f1410', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px', fontFamily: "'DM Sans', system-ui, sans-serif" },
-  logoWrap:   { textAlign: 'center', marginBottom: '32px' },
-  logo:       { fontSize: '32px', fontWeight: '800', color: '#5de89e', letterSpacing: '-1px' },
-  tagline:    { color: 'rgba(255,255,255,0.4)', fontSize: '14px', marginTop: '6px' },
-  card:       { background: '#fff', borderRadius: '24px', padding: '32px 24px', width: '100%', maxWidth: '400px' },
-  title:      { fontSize: '22px', fontWeight: '700', color: '#0f1410', marginBottom: '6px' },
-  sub:        { fontSize: '14px', color: '#637068', marginBottom: '24px' },
-  input:      { width: '100%', border: '1.5px solid #d8e5dc', borderRadius: '10px', padding: '12px 14px', fontSize: '15px', outline: 'none', marginBottom: '12px', display: 'block', boxSizing: 'border-box' },
-  btn:        { width: '100%', background: '#1a7a4a', color: '#fff', border: 'none', borderRadius: '10px', padding: '14px', fontSize: '15px', fontWeight: '600', cursor: 'pointer', marginTop: '4px' },
-  ghostBtn:   { width: '100%', background: 'none', color: '#1a7a4a', border: '1.5px solid #1a7a4a', borderRadius: '10px', padding: '13px', fontSize: '15px', fontWeight: '600', cursor: 'pointer', marginTop: '10px' },
-  googleBtn:  { width: '100%', background: '#fff', color: '#0f1410', border: '1.5px solid #d8e5dc', borderRadius: '10px', padding: '13px 16px', fontSize: '15px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' },
-  optionBtn:  { width: '100%', background: '#f7f8f6', color: '#0f1410', border: '1.5px solid #d8e5dc', borderRadius: '10px', padding: '13px 16px', fontSize: '15px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10 },
-  optionIcon: { fontSize: '20px' },
-  divider:    { display: 'flex', alignItems: 'center', margin: '16px 0', gap: 10 },
-  dividerText:{ fontSize: '13px', color: '#aaa', background: '#fff', padding: '0 8px', whiteSpace: 'nowrap' },
-  error:      { color: '#c0392b', fontSize: '13px', marginBottom: '10px' },
-  info:       { color: '#1a7a4a', fontSize: '13px', marginBottom: '10px', background: '#e6f4ec', borderRadius: '8px', padding: '10px 12px' },
-  forgotWrap: { textAlign: 'right', marginTop: '-4px', marginBottom: '12px' },
-  resendWrap: { textAlign: 'center', fontSize: '13px', color: '#637068', marginBottom: '8px' },
-  toggle:     { textAlign: 'center', fontSize: '13px', color: '#637068', marginTop: '16px' },
-  link:       { color: '#1a7a4a', cursor: 'pointer', fontWeight: '600' },
-  footer2:    { textAlign: 'center', fontSize: '12px', color: '#aaa', marginTop: '20px' },
-  phoneRow:   { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 0 },
-  flagBox:    { background: '#f7f8f6', border: '1.5px solid #d8e5dc', borderRadius: '10px', padding: '12px 10px', fontSize: '14px', fontWeight: '600', whiteSpace: 'nowrap', color: '#0f1410' },
+  page:        { minHeight: '100vh', background: '#0f1410', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px', fontFamily: "'DM Sans', system-ui, sans-serif" },
+  logoWrap:    { textAlign: 'center', marginBottom: '32px' },
+  logo:        { fontSize: '32px', fontWeight: '800', color: '#5de89e', letterSpacing: '-1px' },
+  tagline:     { color: 'rgba(255,255,255,0.4)', fontSize: '14px', marginTop: '6px' },
+  card:        { background: '#fff', borderRadius: '24px', padding: '32px 24px', width: '100%', maxWidth: '400px' },
+  title:       { fontSize: '22px', fontWeight: '700', color: '#0f1410', marginBottom: '6px' },
+  sub:         { fontSize: '14px', color: '#637068', marginBottom: '24px' },
+  input:       { width: '100%', border: '1.5px solid #d8e5dc', borderRadius: '10px', padding: '12px 14px', fontSize: '15px', outline: 'none', marginBottom: '12px', display: 'block', boxSizing: 'border-box' },
+  btn:         { width: '100%', background: '#1a7a4a', color: '#fff', border: 'none', borderRadius: '10px', padding: '14px', fontSize: '15px', fontWeight: '600', cursor: 'pointer', marginTop: '4px' },
+  ghostBtn:    { width: '100%', background: 'none', color: '#1a7a4a', border: '1.5px solid #1a7a4a', borderRadius: '10px', padding: '13px', fontSize: '15px', fontWeight: '600', cursor: 'pointer', marginTop: '10px' },
+  googleBtn:   { width: '100%', background: '#fff', color: '#0f1410', border: '1.5px solid #d8e5dc', borderRadius: '10px', padding: '13px 16px', fontSize: '15px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 1px 3px rgba(0,0,0,0.08)' },
+  optionBtn:   { width: '100%', background: '#f7f8f6', color: '#0f1410', border: '1.5px solid #d8e5dc', borderRadius: '10px', padding: '13px 16px', fontSize: '15px', fontWeight: '600', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10 },
+  optionIcon:  { fontSize: '20px' },
+  divider:     { display: 'flex', alignItems: 'center', margin: '16px 0', gap: 10 },
+  dividerLine: { flex: 1, height: '1px', background: '#d8e5dc' },
+  dividerText: { fontSize: '13px', color: '#aaa', whiteSpace: 'nowrap' },
+  error:       { color: '#c0392b', fontSize: '13px', marginBottom: '10px' },
+  info:        { color: '#1a7a4a', fontSize: '13px', marginBottom: '10px', background: '#e6f4ec', borderRadius: '8px', padding: '10px 12px' },
+  forgotWrap:  { textAlign: 'right', marginTop: '-4px', marginBottom: '12px' },
+  resendWrap:  { textAlign: 'center', fontSize: '13px', color: '#637068', marginBottom: '8px' },
+  toggle:      { textAlign: 'center', fontSize: '13px', color: '#637068', marginTop: '16px' },
+  link:        { color: '#1a7a4a', cursor: 'pointer', fontWeight: '600' },
+  footer2:     { textAlign: 'center', fontSize: '12px', color: '#aaa', marginTop: '20px' },
 }
