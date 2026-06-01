@@ -151,11 +151,10 @@ export default function ChatList() {
   }
 
   const filtered = chats.filter(c => {
-    if (activeTab === 'services') return c.isService
-    if (activeTab === 'listings') return !c.isService && !c.isDirect
-    return true
-  })
-
+  if (activeTab === 'services') return c.isService
+  if (activeTab === 'listings') return !c.isService && !c.isDirect
+  return !c.isDirect  // "All" tab also excludes bare direct chats
+})
   const totalUnread   = chats.reduce((sum, c) => sum + c.unread, 0)
   const serviceUnread = chats.filter(c => c.isService).reduce((sum, c) => sum + c.unread, 0)
   const listingUnread = chats.filter(c => !c.isService && !c.isDirect).reduce((sum, c) => sum + c.unread, 0)
@@ -299,13 +298,21 @@ export default function ChatList() {
           <div style={S.avatar}>
             {avatarUrl
               ? <img src={avatarUrl} alt="" style={S.avatarImg} />
-              : (
-                <span style={S.avatarInitial}>{initial}</span>
-              )
+              : <span style={S.avatarInitial}>{initial}</span>
             }
           </div>
-          {/* Context type dot — only if not a bare direct chat */}
-          {!isDirect && (
+          {/* Product thumbnail — bottom-right corner */}
+          {!isDirect && (isService ? service?.media_urls?.[0] : listing?.images?.[0]) && (
+            <div style={S.productThumb}>
+              <img
+                src={isService ? service.media_urls[0] : listing.images[0]}
+                alt=""
+                style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '6px', imageRendering: 'crisp-edges', filter: 'contrast(1.05) saturate(1.1)' }}
+              />
+            </div>
+          )}
+          {/* Fallback dot if no image */}
+          {!isDirect && !(isService ? service?.media_urls?.[0] : listing?.images?.[0]) && (
             <div style={{ ...S.typeDot, background: ctxColor }}>
               <span style={{ fontSize: '8px', lineHeight: 1 }}>{isService ? catIcon : '🛍️'}</span>
             </div>
@@ -366,7 +373,7 @@ const S = {
   browseBtn: { background: '#1a7a4a', color: '#fff', border: 'none', borderRadius: '10px', padding: '12px 24px', fontSize: '15px', fontWeight: '600', cursor: 'pointer' },
   list: { paddingBottom: '8px' },
   chatRow: { display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 16px', borderBottom: '1px solid #f0f4f1', cursor: 'pointer', animation: 'fadeUp 0.3s ease both', transition: 'background 0.15s' },
-  avatarWrap: { position: 'relative', flexShrink: 0 },
+  avatarWrap: { position: 'relative', flexShrink: 0, marginBottom: '4px', marginRight: '4px' },
   avatar: { width: '52px', height: '52px', borderRadius: '50%', background: 'linear-gradient(135deg,#1a7a4a,#22a05e)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.12)' },
   avatarImg: { width: '100%', height: '100%', objectFit: 'cover' },
   avatarInitial: { fontSize: '20px', fontWeight: '800', color: '#fff' },
@@ -382,4 +389,5 @@ const S = {
   chatBottom: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
   lastMsg: { fontSize: '13px', color: '#888', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 },
   unreadBadge: { background: '#1a7a4a', color: '#fff', borderRadius: '10px', minWidth: '20px', height: '20px', fontSize: '10px', fontWeight: '800', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: '8px', padding: '0 5px' },
+productThumb: { position: 'absolute', bottom: -3, right: -3, width: '26px', height: '26px', borderRadius: '8px', border: '2px solid #fff', overflow: 'hidden', background: '#e8f0eb', boxShadow: '0 2px 10px rgba(0,0,0,0.3)', outline: '1px solid rgba(0,0,0,0.08)' },
 }

@@ -234,14 +234,12 @@ function CommentBox({ listingId, parentId, currentUser, onSubmit, placeholder, a
   const vidRef = useRef()
 
   async function uploadFile(file, type) {
-    const ext = file.name.split('.').pop()
-    const path = `${currentUser.id}/${type}_${Date.now()}.${ext}`
-    const { error } = await supabase.storage.from('comments').upload(path, file)
-    if (error) throw error
-    const { data: prof } = await supabase.from('profiles').select('id, full_name, avatar_url').eq('id', currentUser.id).single()
-data.profiles = prof || null
-    return supabase.storage.from('comments').getPublicUrl(path).data.publicUrl
-  }
+  const ext = file.name.split('.').pop()
+  const path = `${currentUser.id}/${type}_${Date.now()}.${ext}`
+  const { error } = await supabase.storage.from('comments').upload(path, file)
+  if (error) throw error
+  return supabase.storage.from('comments').getPublicUrl(path).data.publicUrl
+}
 
   async function handleSubmit() {
     if (!text.trim() && images.length === 0 && videos.length === 0) return

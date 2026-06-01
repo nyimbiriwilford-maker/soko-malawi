@@ -16,15 +16,20 @@ const EMOJI_CATEGORIES = {
 // We encode/decode this client-side only.
 function encodeReply(body, replyTo) {
   if (!replyTo) return body
-  const preview = (replyTo.body || (replyTo.media_type === 'audio' ? '🎤 Voice note' : replyTo.media_type === 'image' ? '📷 Photo' : '📎 File')).slice(0, 80)
-  return `↩[${preview}|||${replyTo.id}]${body}`
+  const rawBody = decodeReply(replyTo.body).body
+  const preview = (rawBody || (replyTo.media_type === 'audio' ? '🎤 Voice note' : replyTo.media_type === 'image' ? '📷 Photo' : '📎 File')).slice(0, 80)
+  return `\x02[${preview}|||${replyTo.id}]\x03${body}`
 }
 
 function decodeReply(body) {
   if (!body) return { body, replyPreview: null, replyToId: null }
-  const match = body.match(/^↩\[(.+?)\|\|\|([^\]]+)\](.*)$/s)
-  if (!match) return { body, replyPreview: null, replyToId: null }
-  return { body: match[3], replyPreview: match[1], replyToId: match[2] }
+  // New format: \x02[preview|||id]\x03body
+  const match = body.match(/^\x02\[(.+?)\|\|\|([^\]]+)\]\x03(.*)$/s)
+  if (match) return { body: match[3], replyPreview: match[1], replyToId: match[2] }
+  // Fallback for old corrupted messages: preview|||uuid]body
+  const fallback = body.match(/^(.+?)\|\|\|([a-f0-9-]{36})\](.*)$/s)
+  if (fallback) return { body: fallback[3], replyPreview: fallback[1], replyToId: fallback[2] }
+  return { body, replyPreview: null, replyToId: null }
 }
 
 export default function Chat() {
@@ -57,6 +62,7 @@ export default function Chat() {
   const [otherTyping, setOtherTyping]     = useState(false)
   const [myProfile, setMyProfile]         = useState(null)
   const [replyTo, setReplyTo]             = useState(null)
+  const [showScrollBtn, setShowScrollBtn] = useState(false)
 
   const isServiceChatRef   = useRef(false)
   const currentUserRef     = useRef(null)
@@ -83,6 +89,8 @@ export default function Chat() {
   } = useWebRTC({
     userId,
     currentUser,
+    listingId,
+    isServiceChat: isServiceChatRef,
     onCallMessage: (fields) => sendMessage('', 'text', null, fields),
   })
 
@@ -137,6 +145,8 @@ export default function Chat() {
     // Load last_seen from profile on mount
     if (otherProf?.last_seen) setOtherLastSeen(new Date(otherProf.last_seen))
 
+   if (!listingId || listingId === 'undefined') { navigate('/chats'); return }
+
     restorePendingCall(userId)
 
     let isService = false
@@ -156,11 +166,10 @@ export default function Chat() {
 
     await loadMessages(user.id, isService)
 
-    let readQuery = supabase.from('messages').update({ read: true }).eq('to_user', user.id).eq('from_user', userId)
-    if (isService) readQuery = readQuery.eq('service_id', listingId)
-    else if (listingId && listingId !== 'undefined') readQuery = readQuery.eq('listing_id', listingId)
-    await readQuery
-
+   let readQuery = supabase.from('messages').update({ read: true }).eq('to_user', user.id).eq('from_user', userId).eq('read', false)
+if (isService && listingId && listingId !== 'undefined') readQuery = readQuery.eq('service_id', listingId)
+else if (!isService && listingId && listingId !== 'undefined') readQuery = readQuery.eq('listing_id', listingId)
+await readQuery
     setLoading(false)
     setupRealtimeChannel(user.id, isService)
     setupPresenceChannel(user.id)
@@ -169,15 +178,15 @@ export default function Chat() {
   function setupRealtimeChannel(myId, isService) {
     if (channelRef.current) { supabase.removeChannel(channelRef.current); channelRef.current = null }
     const hasListing = listingId && listingId !== 'undefined'
-    const channelName = `chat_${[myId, userId].sort().join('_')}${hasListing ? '_' + listingId : ''}`
+    const channelName = `chat_${[myId, userId].sort().join('_')}${hasListing ? '_' + listingId : ''}_${Date.now()}`
     const channel = supabase
       .channel(channelName)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
         const msg = payload.new
         const relevant = (msg.from_user === myId && msg.to_user === userId) || (msg.from_user === userId && msg.to_user === myId)
-        const sameContext = !hasListing
-          ? (!msg.service_id && !msg.listing_id)
-          : isService ? msg.service_id === listingId : msg.listing_id === listingId
+const sameContext = !hasListing
+  ? true
+  : isService ? msg.service_id === listingId : msg.listing_id === listingId
         if (relevant && sameContext) {
           setMessages(prev => prev.find(m => m.id === msg.id) ? prev : [...prev, msg])
           if (msg.from_user === userId) {
@@ -209,7 +218,13 @@ export default function Chat() {
           })
         }
       },
-      (isTyping) => setOtherTyping(isTyping),
+      (isTyping) => {
+        setOtherTyping(isTyping)
+        if (isTyping) {
+          clearTimeout(typingTimeoutRef.current)
+          typingTimeoutRef.current = setTimeout(() => setOtherTyping(false), 3000)
+        }
+      },
     )
 
     presenceChannelRef.current = unsub
@@ -219,10 +234,20 @@ export default function Chat() {
   function handleTyping(val) {
     setNewMsg(val)
     if (!globalChannel) return
-    globalChannel.track({ user_id: currentUserRef.current?.id, typing: true })
+    globalChannel.track({
+      user_id: currentUserRef.current?.id,
+      typing: true,
+      away: false,
+      online_at: new Date().toISOString(),
+    })
     clearTimeout(typingTimeoutRef.current)
     typingTimeoutRef.current = setTimeout(() => {
-      globalChannel?.track({ user_id: currentUserRef.current?.id, typing: false })
+      globalChannel?.track({
+        user_id: currentUserRef.current?.id,
+        typing: false,
+        away: false,
+        online_at: new Date().toISOString(),
+      })
     }, 1500)
   }
 
@@ -241,11 +266,12 @@ export default function Chat() {
   }
 
   async function loadMessages(myId, isService) {
+    if (!listingId || listingId === 'undefined') return
     let query = supabase.from('messages').select('*')
       .or(`and(from_user.eq.${myId},to_user.eq.${userId}),and(from_user.eq.${userId},to_user.eq.${myId})`)
       .order('created_at', { ascending: true })
     if (isService) query = query.eq('service_id', listingId)
-    else if (listingId && listingId !== 'undefined') query = query.eq('listing_id', listingId)
+    else query = query.eq('listing_id', listingId)
     const { data, error } = await query
     if (!error) setMessages(data || [])
   }
@@ -717,7 +743,15 @@ export default function Chat() {
       )}
 
       {/* ── Messages ── */}
-      <div style={S.messages} onClick={() => setShowEmoji(false)}>
+      <div
+        style={S.messages}
+        onClick={() => setShowEmoji(false)}
+        onScroll={e => {
+          const el = e.currentTarget
+          const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
+          setShowScrollBtn(distFromBottom > 120)
+        }}
+      >
         {messages.length === 0 && !isServiceChat && (
           <div style={S.emptyWrap}>
             <div style={{ fontSize: 52, marginBottom: 12 }}>👋</div>
@@ -737,7 +771,7 @@ export default function Chat() {
           const decoded = decodeReply(msg.body)
 
           return (
-            <div key={msg.id}>
+            <div key={msg.id} id={`msg-${msg.id}`}>
               {showDate && (
                 <div style={S.dateDivider}>
                   <span style={S.dateLabel}>
@@ -759,12 +793,24 @@ export default function Chat() {
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: isMine ? 'flex-end' : 'flex-start', maxWidth: '74%' }}>
                   {/* Reply preview — decoded from body */}
                   {decoded.replyPreview && (
-                    <div style={{
-                      ...S.replyPreview,
-                      background: isMine ? 'rgba(255,255,255,0.12)' : '#e8f0eb',
-                      color: isMine ? 'rgba(255,255,255,0.7)' : '#637068',
-                      alignSelf: isMine ? 'flex-end' : 'flex-start',
-                    }}>
+                    <div
+                      style={{
+                        ...S.replyPreview,
+                       background: isMine ? 'rgba(0,0,0,0.25)' : '#c8e0d0',
+color: isMine ? '#ffffff' : '#1a4a2e',
+                        alignSelf: isMine ? 'flex-end' : 'flex-start',
+                        cursor: 'pointer',
+                      }}
+                      onClick={() => {
+                        const el = document.getElementById(`msg-${decoded.replyToId}`)
+                        if (el) {
+                          el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                          el.style.transition = 'background 0.3s'
+                          el.style.background = '#d4ead9'
+                          setTimeout(() => { el.style.background = '' }, 1200)
+                        }
+                      }}
+                    >
                       ↩ {decoded.replyPreview}
                     </div>
                   )}
@@ -836,6 +882,33 @@ export default function Chat() {
         )}
         <div ref={bottomRef} />
       </div>
+
+      {/* ── Scroll to bottom button ── */}
+      {showScrollBtn && (
+        <button
+          onClick={() => bottomRef.current?.scrollIntoView({ behavior: 'smooth' })}
+          style={{
+            position: 'absolute',
+            bottom: recording ? 80 : (replyTo ? 130 : 80),
+            right: 16,
+            width: 40,
+            height: 40,
+            borderRadius: '50%',
+            background: '#1a7a4a',
+            border: 'none',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 3px 12px rgba(26,122,74,0.4)',
+            zIndex: 100,
+          }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round">
+            <path d="M12 5v14M5 12l7 7 7-7" />
+          </svg>
+        </button>
+      )}
 
       {/* ── Preview modal ── */}
       {preview && (
@@ -1036,7 +1109,7 @@ const S = {
   bubbleOther: { background: '#fff', color: '#0f1410' },
   bubbleText: { fontSize: '15px', lineHeight: '1.5' },
   bubbleTime: { fontSize: '10px', marginTop: '4px', textAlign: 'right', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 2 },
-  replyPreview: { fontSize: 11, borderRadius: '8px 8px 0 0', padding: '4px 10px', marginBottom: -4, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', borderLeft: '3px solid #1a7a4a' },
+  replyPreview: { fontSize: 12, fontWeight: '600', borderRadius: '10px 10px 0 0', padding: '6px 12px', marginBottom: -6, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', borderLeft: '3px solid #1a7a4a' },
   replyBtn: { background: '#f0f4f1', border: 'none', borderRadius: '50%', width: 28, height: 28, cursor: 'pointer', fontSize: 13, color: '#637068', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'opacity 0.15s' },
   callMsgBubble: { display: 'flex', alignItems: 'center', gap: 10, borderRadius: 12, padding: '10px 12px', marginBottom: 4 },
   mediaImg: { width: '100%', maxWidth: '240px', borderRadius: 12, cursor: 'pointer', display: 'block', marginBottom: 5 },

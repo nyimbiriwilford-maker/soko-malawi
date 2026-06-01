@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import BottomNav from '../components/BottomNav' // adjust path as needed
 
 const CITIES = ['Lilongwe', 'Blantyre', 'Mzuzu', 'Zomba', 'Kasungu', 'Mangochi', 'Karonga', 'Salima']
 
@@ -240,6 +241,7 @@ async function loadListings(uid) {
               >
                 {listing.status === 'sold' ? '↩ Relist' : '✓ Mark sold'}
               </button>
+              <button style={S.editListingBtn} onClick={() => navigate('/post/edit/' + listing.id)}>✏️ Edit</button>
               <button style={S.deleteBtn} onClick={() => setDeleteConfirm(listing.id)}>🗑</button>
             </div>
           </div>
@@ -259,23 +261,7 @@ async function loadListings(uid) {
           </div>
         </div>
       )}
-
-      {/* Bottom Nav */}
-      <div style={S.nav}>
-        <button style={S.navItem} onClick={() => navigate('/')}>
-          <span style={S.navIcon}>🏠</span><span style={S.navLabel}>Home</span>
-        </button>
-        <button style={S.navItem} onClick={() => navigate('/jobs')}>
-          <span style={S.navIcon}>💼</span><span style={S.navLabel}>Jobs</span>
-        </button>
-        <button style={S.navPost} onClick={() => navigate('/post')}>+</button>
-        <button style={S.navItem} onClick={() => navigate('/chats')}>
-          <span style={S.navIcon}>💬</span><span style={S.navLabel}>Chats</span>
-        </button>
-        <button style={{ ...S.navItem, color: '#1a7a4a' }} onClick={() => navigate('/profile')}>
-          <span style={S.navIcon}>👤</span><span style={{ ...S.navLabel, color: '#1a7a4a', fontWeight: '700' }}>Me</span>
-        </button>
-      </div>
+      <BottomNav />
     </div>
   )
 }
@@ -341,9 +327,5 @@ const S = {
   confirmBtns: { display: 'flex', gap: '10px' },
   confirmCancel: { flex: 1, background: '#f0f4f1', border: 'none', borderRadius: '12px', padding: '11px', fontSize: '14px', fontWeight: '600', color: '#637068', cursor: 'pointer' },
   confirmDelete: { flex: 1, background: '#e74c3c', border: 'none', borderRadius: '12px', padding: '11px', fontSize: '14px', fontWeight: '700', color: '#fff', cursor: 'pointer' },
-  nav: { position: 'fixed', bottom: 0, left: '50%', transform: 'translateX(-50%)', width: '100%', maxWidth: '480px', background: '#fff', borderTop: '1px solid #eee', display: 'flex', alignItems: 'center', justifyContent: 'space-around', padding: '8px 0', zIndex: 100 },
-  navItem: { background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px', cursor: 'pointer' },
-  navIcon: { fontSize: '20px' },
-  navLabel: { fontSize: '10px', color: '#888' },
-  navPost: { width: '48px', height: '48px', background: '#1a7a4a', color: '#fff', border: 'none', borderRadius: '50%', fontSize: '24px', cursor: 'pointer', marginTop: '-16px', boxShadow: '0 3px 10px rgba(26,122,74,0.4)' },
+  editListingBtn: { background: '#e8f4ff', border: 'none', borderRadius: '8px', padding: '6px 10px', fontSize: '11px', fontWeight: '700', color: '#1d4ed8', cursor: 'pointer', whiteSpace: 'nowrap' },
 }

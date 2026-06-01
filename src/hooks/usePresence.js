@@ -34,8 +34,18 @@ function buildChannel(userId) {
   ch.on('presence', { event: 'join' }, ({ key, newPresences }) => {
     const cb = listeners.get(key)
     if (cb) {
-      cb.onOnline(true)
-      if (cb.onTyping) cb.onTyping(newPresences[0]?.typing === true)
+      const p = newPresences[0]
+      cb.onOnline(!p?.away)
+      if (cb.onTyping) cb.onTyping(p?.typing === true)
+    }
+  })
+
+  ch.on('presence', { event: 'update' }, ({ key, newPresences }) => {
+    const cb = listeners.get(key)
+    if (cb) {
+      const p = newPresences[0]
+      cb.onOnline(!p?.away)
+      if (cb.onTyping) cb.onTyping(p?.typing === true)
     }
   })
 

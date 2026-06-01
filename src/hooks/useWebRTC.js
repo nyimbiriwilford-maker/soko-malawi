@@ -7,7 +7,7 @@ function generateCallId(uid1, uid2) {
   return [uid1, uid2].sort().join('-') + '-' + Date.now()
 }
 
-export function useWebRTC({ userId, currentUser, onCallMessage }) {
+export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isServiceChat }) {
   const {
     sendSignal: ctxSendSignal,
     sendIceCandidate,
@@ -37,6 +37,7 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
   const remoteStreamRef   = useRef(null)
   const callIdRef         = useRef(null)
   const callTimerRef      = useRef(null)
+  const autoHangupRef     = useRef(null)
   const pendingCandidates = useRef([])
   const incomingOfferRef  = useRef(null)
   const callTypeRef       = useRef(null)
@@ -45,6 +46,7 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
   const callerIdRef       = useRef(null)
   const localVideoRef     = useRef(null)
   const remoteVideoRef    = useRef(null)
+  const callStateRef      = useRef('idle')
 
   // Always-current refs — never stale in closures
   const userIdRef      = useRef(userId)
@@ -140,7 +142,7 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
     if (!target) { console.error('startCall: no userId'); return }
 
     updateCallType(type)
-    setCallState('calling')
+    callStateRef.current = 'calling'; setCallState('calling')
 
     const stream = await navigator.mediaDevices
       .getUserMedia({ audio: true, video: type === 'video' })
@@ -191,6 +193,22 @@ export function useWebRTC({ userId, currentUser, onCallMessage }) {
       cu.id
 
     playRingback()
+
+    // Auto-cancel after 30 seconds if no answer
+    autoHangupRef.current = setTimeout(async () => {
+      if (callStateRef.current !== 'in-call' && callStateRef.current !== 'idle') {
+        stopRingback()
+        await ctxSendSignal(target, 'decline', { callId: callIdRef.current })
+        onCallMessage?.({
+          call_type: type,
+          call_status: 'missed',
+          body: type === 'video' ? '📹 Missed video call' : '📞 Missed call',
+          ...(isServiceChat?.current && listingId ? { service_id: listingId } : listingId ? { listing_id: listingId } : {}),
+        })
+        endCallLocally()
+      }
+    }, 30000)
+
     // Get chatId from current URL — format is /chat/{chatId}
     // CORRECT — gets everything after /chat/
 const chatId = window.location.pathname.replace('/chat/', '') || null
@@ -218,6 +236,10 @@ const chatId = window.location.pathname.replace('/chat/', '') || null
 
   async function answerCall() {
     ctxStopRing()
+    dismissIncoming()
+    // ADD THESE TWO LINES:
+    window._ringtoneAudio?.pause()
+    window._ringtoneAudio = null
     dismissIncoming()
 
     const type = callTypeRef.current || 'voice'
@@ -274,13 +296,14 @@ const chatId = window.location.pathname.replace('/chat/', '') || null
     })
 
     playConnectedSound()
-    setCallState('in-call')
+    callStateRef.current = 'in-call'; setCallState('in-call')
     startCallTimer()
 
     onCallMessage?.({
       call_type: type,
       call_status: 'answered',
       body: type === 'video' ? '📹 Video call' : '📞 Voice call',
+      ...(isServiceChat?.current && listingId ? { service_id: listingId } : listingId ? { listing_id: listingId } : {}),
     })
   }
 
@@ -295,6 +318,7 @@ const chatId = window.location.pathname.replace('/chat/', '') || null
       call_type: callTypeRef.current,
       call_status: 'missed',
       body: callTypeRef.current === 'video' ? '📹 Missed video call' : '📞 Missed call',
+      ...(isServiceChat?.current && listingId ? { service_id: listingId } : listingId ? { listing_id: listingId } : {}),
     })
     endCallLocally()
   }
@@ -314,6 +338,7 @@ const chatId = window.location.pathname.replace('/chat/', '') || null
       call_duration: dur,
       body: (callTypeRef.current === 'video' ? '📹 Video call' : '📞 Voice call') +
             ' · ' + formatTime(dur),
+      ...(isServiceChat?.current && listingId ? { service_id: listingId } : listingId ? { listing_id: listingId } : {}),
     })
     endCallLocally()
   }
@@ -321,7 +346,12 @@ const chatId = window.location.pathname.replace('/chat/', '') || null
   function endCallLocally() {
     ctxStopRing()
     stopRingback()
+    // ADD THESE TWO LINES:
+    window._ringtoneAudio?.pause()
+    window._ringtoneAudio = null
     clearInterval(callTimerRef.current)
+    clearTimeout(autoHangupRef.current)
+    autoHangupRef.current = null
     stopIceSubscription()
     if (callIdRef.current) cleanupIceCandidates(callIdRef.current)
     pcRef.current?.close()
@@ -335,7 +365,7 @@ const chatId = window.location.pathname.replace('/chat/', '') || null
     callIdRef.current = null
     closeOutboundChannel?.(callerIdRef.current || userIdRef.current)
     callerIdRef.current = null
-    setCallState('idle')
+    callStateRef.current = 'idle'; setCallState('idle')
     setCallDuration(0)
     setIsMuted(false)
     setIsCamOff(false)
@@ -358,12 +388,13 @@ const chatId = window.location.pathname.replace('/chat/', '') || null
 
         callIdRef.current        = payload.callId
         incomingOfferRef.current = payload.offer
-        // CRITICAL: store who is calling us so answerCall/declineCall/hangUp
-        // know where to send signals
         callerIdRef.current      = payload.fromUser
         updateCallType(payload.callType)
-        setCallState('receiving')
+        callStateRef.current = 'receiving'; setCallState('receiving')
         ctxPlayRing()
+
+        // Notify caller that we are ringing so they see "Ringing…" instead of "Calling…"
+        ctxSendSignal(payload.fromUser, 'ringing', { callId: payload.callId }).catch(() => {})
 
         const myId = currentUserRef.current?.id
         if (!myId) { console.error('[callee] currentUser not ready at ring time'); return true }
@@ -386,7 +417,7 @@ const chatId = window.location.pathname.replace('/chat/', '') || null
       }
 
       if (_event === 'ringing') {
-        setCallState('ringing')
+        callStateRef.current = 'ringing'; setCallState('ringing')
         return true
       }
 
@@ -411,7 +442,7 @@ const chatId = window.location.pathname.replace('/chat/', '') || null
             ctxStopRing()
             stopRingback()
             playConnectedSound()
-            setCallState('in-call')
+            callStateRef.current = 'in-call'; setCallState('in-call')
             startCallTimer()
           })
           .catch(err => console.error('[answer] setRemoteDescription error:', err))
