@@ -36,13 +36,11 @@ export default function Login() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${window.location.origin}/`,
+        redirectTo: 'https://soko-malawi.vercel.app',
         queryParams: { access_type: 'offline', prompt: 'consent' },
       },
     })
     if (error) { setError(error.message); setGoogleLoading(false) }
-    // On success Supabase redirects — App.jsx onAuthStateChange handles the rest.
-    // The trigger below (in Supabase) auto-creates the profile from Google metadata.
   }
 
   // ── Phone: Send OTP ──────────────────────────────────────
@@ -99,9 +97,6 @@ export default function Login() {
     setLoading(true); clearMsg()
 
     const formatted = normalisePhone(phone)
-
-    // Create the account using a derived email (phone@sokomw.app) since Supabase
-    // Auth requires email. The real identifier is the phone stored in metadata.
     const fakeEmail = `${formatted.replace('+', '')}@sokomw.app`
 
     const { data, error } = await supabase.auth.signUp({
@@ -109,14 +104,12 @@ export default function Login() {
       password: newPass,
       options: {
         data: { phone: formatted, signup_method: 'phone' },
-        // Skip email confirmation for phone signups — phone was already verified via OTP
         emailRedirectTo: null,
       },
     })
 
     if (error) { setError(error.message); setLoading(false); return }
 
-    // Auto-confirm: sign in immediately (phone was verified via OTP)
     const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
       email: fakeEmail,
       password: newPass,
@@ -245,9 +238,6 @@ export default function Login() {
     actions[mode]?.()
   }
 
-  // ── Render helpers ───────────────────────────────────────
-  const isSignUp = mode === 'email' && !email  // reuse email screen for both
-
   return (
     <div style={s.page}>
       <div style={s.logoWrap}>
@@ -262,7 +252,6 @@ export default function Login() {
           <h2 style={s.title}>Welcome</h2>
           <p style={s.sub}>Sign in or create an account</p>
 
-          {/* Google */}
           <button style={s.googleBtn} onClick={handleGoogle} disabled={googleLoading}>
             {googleLoading ? 'Redirecting…' : <>
               <svg width="18" height="18" viewBox="0 0 48 48" style={{ marginRight: 10, flexShrink: 0 }}>
@@ -277,12 +266,10 @@ export default function Login() {
 
           <div style={s.divider}><span style={s.dividerText}>or</span></div>
 
-          {/* Phone */}
           <button style={s.optionBtn} onClick={() => { setMode('phone'); clearMsg() }}>
             <span style={s.optionIcon}>📱</span> Continue with Phone Number
           </button>
 
-          {/* Email */}
           <button style={{ ...s.optionBtn, marginTop: 10 }} onClick={() => { setMode('email'); clearMsg() }}>
             <span style={s.optionIcon}>✉️</span> Continue with Email
           </button>
