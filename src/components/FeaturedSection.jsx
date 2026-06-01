@@ -167,7 +167,7 @@ function FeaturedCard({ item, index: i, navigate, size, adminMode, isFeatured, t
       {/* Image block */}
       <div style={{ ...S.imgWrap, height: imgH, background: catMeta.color + 'cc' }}>
         {item.images?.[0] ? (
-          <img src={item.images[0]} alt={item.title} style={S.img} loading="lazy" />
+          <img src={item.images[0]} alt={item.title} style={S.img} loading="lazy" width={size === 'large' ? 175 : 220} height={size === 'large' ? 200 : 130} />
         ) : (
           <div style={S.emojiWrap}>
             <span style={{ fontSize: size === 'large' ? 52 : 38 }}>{emoji}</span>

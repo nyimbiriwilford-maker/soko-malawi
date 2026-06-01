@@ -38,7 +38,7 @@ export default function FlashSaleStrip({ listings, navigate }) {
               <div key={item.id} style={S.card} onClick={() => navigate('/listing/' + item.id)}>
                 <div style={S.imgWrap}>
                   {item.images?.[0]
-                    ? <img src={item.images[0]} alt={item.title} style={S.img} />
+                    ? <img src={item.images[0]} alt={item.title} style={S.img} width="110" height="72" loading="lazy" />
                     : <div style={S.imgFallback}>📦</div>
                   }
                   <div style={S.discountPill}>-{discount}%</div>

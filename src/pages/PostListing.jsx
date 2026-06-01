@@ -1,7 +1,26 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-
+async function compressImage(file) {
+  return new Promise((resolve) => {
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      const MAX = 1200
+      let { width, height } = img
+      if (width > MAX || height > MAX) {
+        if (width > height) { height = Math.round(height * MAX / width); width = MAX }
+        else { width = Math.round(width * MAX / height); height = MAX }
+      }
+      const canvas = document.createElement('canvas')
+      canvas.width = width; canvas.height = height
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height)
+      canvas.toBlob(blob => resolve(new File([blob], file.name.replace(/\.[^.]+$/, '.webp'), { type: 'image/webp' })), 'image/webp', 0.82)
+    }
+    img.src = url
+  })
+}
 
 const CATEGORIES = [
   { id: 'Electronics', icon: '📱', color: '#1a7a4a', bg: '#e6f4ec', desc: 'Phones, TVs, Laptops' },
@@ -200,14 +219,15 @@ useEffect(() => {
     : basePrice
 
   // ── UPLOAD & SUBMIT ──
-  async function uploadFile(file, userId, type) {
-    const ext = file.name.split('.').pop()
-    const path = `${userId}/${type}_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
-    const { error } = await supabase.storage.from('listings').upload(path, file)
-    if (error) throw error
-    return supabase.storage.from('listings').getPublicUrl(path).data.publicUrl
-  }
-
+ async function uploadFile(file, userId, type) {
+  const isImage = file.type.startsWith('image/')
+  const processed = isImage ? await compressImage(file) : file
+  const ext = isImage ? 'webp' : file.name.split('.').pop()
+  const path = `${userId}/${type}_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+  const { error } = await supabase.storage.from('listings').upload(path, processed)
+  if (error) throw error
+  return supabase.storage.from('listings').getPublicUrl(path).data.publicUrl
+}
   async function handleSubmit() {
     setError('')
     setLoading(true)

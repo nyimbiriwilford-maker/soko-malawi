@@ -248,7 +248,7 @@ export default function ListingDetail() {
         {allMedia.length > 0 ? (
           <>
             {allMedia[mediaIndex].type === 'image'
-              ? <img src={allMedia[mediaIndex].url} alt={listing.title} style={S.mainMedia} />
+              ? <img src={allMedia[mediaIndex].url} alt={listing.title} style={S.mainMedia} width="480" height="320" fetchpriority="high" />
               : <video src={allMedia[mediaIndex].url} controls style={S.mainMedia} playsInline />
             }
             {/* Gradient overlay */}
@@ -294,7 +294,7 @@ export default function ListingDetail() {
           {allMedia.map((m, i) => (
             <div key={i} style={{ ...S.thumb, ...(i === mediaIndex ? S.thumbActive : {}) }} onClick={() => setMediaIndex(i)}>
               {m.type === 'image'
-                ? <img src={m.url} alt="" style={S.thumbInner} />
+                ? <img src={m.url} alt="" style={S.thumbInner} width="54" height="54" loading="lazy" />
                 : <div style={{ ...S.thumbInner, background: '#111', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>▶</div>
               }
             </div>
