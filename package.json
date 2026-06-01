@@ -13,6 +13,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@fontsource/dm-sans": "^5.2.8",
+    "@fontsource/sora": "^5.2.8",
     "@huggingface/transformers": "^4.2.0",
     "@supabase/supabase-js": "^2.106.2",
     "react": "^19.2.6",

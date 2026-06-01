@@ -62,9 +62,11 @@ export default function Home() {
  async function loadListings() {
   setLoading(true)
   const { data } = await supabase
-    .from('listings').select('*')
-    .or('status.eq.active,featured.eq.true')
-    .order('created_at', { ascending: false })
+  .from('listings')
+  .select('id, title, price, price_type, images, city, category, condition, featured, is_featured, flash_sale_price, flash_sale_expires_at, promo_badge, bulk_pricing, stock_qty, created_at, seller_id, latitude, longitude, status, description, tags')
+  .or('status.eq.active,featured.eq.true')
+  .order('created_at', { ascending: false })
+  .limit(40)
   setListings(data || [])
   setLoading(false)
 }
