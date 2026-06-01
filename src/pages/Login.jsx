@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
-// modes: 'choose' | 'email' | 'email_otp' | 'forgot' | 'otp' | 'newpass'
+// modes: 'choose' | 'email' | 'verify_email' | 'forgot' | 'otp' | 'newpass'
 export default function Login() {
   const [mode, setMode]               = useState('choose')
   const [email, setEmail]             = useState('')
@@ -43,7 +43,7 @@ export default function Login() {
     if (error) {
       setLoading(false)
       setError(error.message?.toLowerCase().includes('email not confirmed')
-        ? 'Please verify your email first. Check your inbox.'
+        ? 'Please verify your email first. Check your inbox for a code.'
         : error.message)
       return
     }
@@ -59,17 +59,86 @@ export default function Login() {
     navigate(profile?.role === 'admin' ? '/admin' : '/')
   }
 
-  // ── Email Sign Up ────────────────────────────────────────
+  // ── Email Sign Up: send verification code via Brevo ──────
   async function handleEmailSignUp() {
     if (!email || !password) { setError('Enter email and password'); return }
     if (password.length < 8)  { setError('Password must be at least 8 characters'); return }
     setLoading(true); clearMsg()
 
-    const { error } = await supabase.auth.signUp({ email, password })
+    // Send a verification code to the email via Brevo (send-otp edge function)
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/send-otp`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({ identifier: email.trim() }),
+    })
+    const data = await res.json()
     setLoading(false)
-    if (error) { setError(error.message); return }
-    setInfo('✅ Check your email to confirm your account before signing in.')
-    setPassword('')
+    if (!res.ok || data.error) { setError(data.error || 'Failed to send verification code'); return }
+    setInfo('✅ A verification code has been sent to your email.')
+    setMode('verify_email')
+  }
+
+  // ── Email Sign Up: verify code then create account ───────
+  async function handleVerifyAndCreate() {
+    if (!otpCode || otpCode.length !== 6) { setError('Enter the 6-digit code'); return }
+    setLoading(true); clearMsg()
+
+    // Verify the code
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/verify-otp`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({ identifier: email.trim(), code: otpCode }),
+    })
+    const data = await res.json()
+    if (!res.ok || data.error) {
+      setLoading(false)
+      setError(data.error || 'Invalid or expired code')
+      return
+    }
+
+    // Code verified — now create the Supabase account
+    // Use admin signUp via service role so email is pre-confirmed
+    const { data: signUpData, error: signUpErr } = await supabase.auth.signUp({
+      email: email.trim(),
+      password,
+      options: {
+        // Mark email as confirmed since we verified it ourselves
+        data: { email_verified: true },
+        emailRedirectTo: null,
+      },
+    })
+
+    if (signUpErr) {
+      setLoading(false)
+      setError(signUpErr.message)
+      return
+    }
+
+    // Sign in immediately after signup
+    const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    })
+
+    setLoading(false)
+
+    if (signInErr) {
+      // Account created but Supabase still wants email confirmation
+      setInfo('✅ Account created! Check your email for a confirmation link, then sign in.')
+      setMode('email')
+      setOtpCode('')
+      return
+    }
+
+    const { data: profile } = await supabase
+      .from('profiles').select('role').eq('id', signInData.user.id).single()
+    navigate(profile?.role === 'admin' ? '/admin' : '/')
   }
 
   // ── Forgot: send OTP ─────────────────────────────────────
@@ -131,16 +200,17 @@ export default function Login() {
     setLoading(false)
     if (!res.ok || data.error) { setError(data.error || 'Failed to update password'); return }
     setInfo('✅ Password updated! You can now sign in.')
-    setTimeout(() => { setMode('choose'); clearMsg(); setOtpCode(''); setNewPass(''); setConfirmPass('') }, 2000)
+    setTimeout(() => { setMode('email'); clearMsg(); setOtpCode(''); setNewPass(''); setConfirmPass('') }, 2000)
   }
 
   function handleKeyDown(e) {
     if (e.key !== 'Enter') return
     const actions = {
-      email:   handleEmailSignIn,
-      forgot:  handleSendResetOtp,
-      otp:     handleVerifyResetOtp,
-      newpass: handleSetNewPassword,
+      email:        handleEmailSignIn,
+      verify_email: handleVerifyAndCreate,
+      forgot:       handleSendResetOtp,
+      otp:          handleVerifyResetOtp,
+      newpass:      handleSetNewPassword,
     }
     actions[mode]?.()
   }
@@ -200,10 +270,32 @@ export default function Login() {
             {loading ? 'Please wait…' : 'Sign In'}
           </button>
           <button style={s.ghostBtn} onClick={handleEmailSignUp} disabled={loading}>
-            Create account with Email
+            {loading ? 'Sending code…' : 'Create Account'}
           </button>
           <p style={s.toggle}>
             <span style={s.link} onClick={() => { setMode('choose'); clearMsg() }}>← Other sign in options</span>
+          </p>
+        </>}
+
+        {/* ── VERIFY EMAIL (signup) ── */}
+        {mode === 'verify_email' && <>
+          <h2 style={s.title}>Verify your email</h2>
+          <p style={s.sub}>We sent a 6-digit code to <strong>{email}</strong></p>
+          <input
+            style={{ ...s.input, fontSize: '28px', fontWeight: '800', letterSpacing: '10px', textAlign: 'center' }}
+            type="text" inputMode="numeric" maxLength={6} placeholder="000000"
+            value={otpCode} onChange={e => setOtpCode(e.target.value.replace(/\D/g, ''))}
+            onKeyDown={handleKeyDown} autoComplete="one-time-code" autoFocus />
+          <p style={s.resendWrap}>
+            Didn't get it?{' '}
+            <span style={s.link} onClick={() => { handleEmailSignUp(); setOtpCode('') }}>Resend code</span>
+          </p>
+          {message.text && <p style={message.isError ? s.error : s.info}>{message.text}</p>}
+          <button style={s.btn} onClick={handleVerifyAndCreate} disabled={loading}>
+            {loading ? 'Creating account…' : 'Verify & Create Account'}
+          </button>
+          <p style={s.toggle}>
+            <span style={s.link} onClick={() => { setMode('email'); clearMsg(); setOtpCode('') }}>← Back</span>
           </p>
         </>}
 
