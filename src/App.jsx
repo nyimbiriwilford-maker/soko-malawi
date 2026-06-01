@@ -17,6 +17,7 @@ import { useGlobalPresence } from './hooks/usePresence'
 import PublicProfile from './pages/PublicProfile'
 import { registerPushNotifications, listenForServiceWorkerMessages } from './lib/pushNotifications'
 import ResetPassword from './pages/ResetPassword'
+import AuthCallback from './pages/AuthCallback'
 
 function stopRingtone() {
   if (window._ringtoneAudio) {
@@ -45,7 +46,6 @@ export default function App() {
   const [isRecovery, setIsRecovery] = useState(false)
 
   useEffect(() => {
-    // getSession handles the OAuth callback token in the URL automatically
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session)
       if (data.session) {
@@ -69,7 +69,6 @@ export default function App() {
         return
       }
 
-      // SIGNED_IN covers both normal login and Google OAuth callback
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
         setSession(session)
         if (session) {
@@ -133,7 +132,6 @@ export default function App() {
 
   useGlobalPresence(session?.user?.id ?? null)
 
-  // Still loading
   if (session === undefined || (session && !isRecovery && role === undefined)) return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: '#637068' }}>
       Loading...
@@ -150,6 +148,9 @@ export default function App() {
         <Routes>
           {/* ── Public / auth routes ─────────────────────── */}
           <Route path="/login" element={!authed ? <Login /> : <Navigate to={isAdmin ? '/admin' : '/'} />} />
+
+          {/* Google OAuth callback — always accessible */}
+          <Route path="/auth/callback" element={<AuthCallback />} />
 
           {/* Password reset — always accessible */}
           <Route path="/reset-password" element={<ResetPassword />} />
