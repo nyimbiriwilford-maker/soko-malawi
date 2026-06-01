@@ -7,18 +7,21 @@ export default defineConfig({
     port: 4173,
   },
   build: {
-    // Split chunks so each page loads only what it needs
     rollupOptions: {
       output: {
-        manualChunks: {
-          // Core React — always needed
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          // Supabase — loaded once on auth
-          'vendor-supabase': ['@supabase/supabase-js'],
-        },
-      },
+        manualChunks(id) {
+          if (id.includes('react-router-dom') || id.includes('react-dom') || id.includes('node_modules/react/')) {
+            return 'vendor-react'
+          }
+          if (id.includes('@supabase')) {
+            return 'vendor-supabase'
+          }
+          if (id.includes('node_modules')) {
+            return 'vendor'
+          }
+        }
+      }
     },
-    // Warn if any chunk exceeds 500kb
     chunkSizeWarningLimit: 500,
   },
 })
