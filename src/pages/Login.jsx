@@ -36,8 +36,7 @@ export default function Login() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-       redirectTo: 'https://soko-malawi.vercel.app/auth/callback',
-        queryParams: { access_type: 'offline', prompt: 'consent' },
+        redirectTo: 'https://soko-malawi.vercel.app/auth/callback',
       },
     })
     if (error) { setError(error.message); setGoogleLoading(false) }
