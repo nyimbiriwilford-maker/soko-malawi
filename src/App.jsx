@@ -1,23 +1,51 @@
-import { useEffect, useState } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import { useEffect, useState, lazy, Suspense } from 'react'
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { supabase } from './lib/supabase'
-import Login from './pages/Login'
-import Home from './pages/Home'
-import ListingDetail from './pages/ListingDetail'
-import PostListing from './pages/PostListing'
-import Chat from './pages/Chat'
-import ChatList from './pages/ChatList'
-import Profile from './pages/Profile'
-import Jobs from './pages/Jobs'
-import Services from './pages/ServicesPage'
-import Admin from './pages/Admin'
-import GlobalCallListener from './components/GlobalCallListener'
-import { CallProvider } from './context/CallContext'
-import { useGlobalPresence } from './hooks/usePresence'
-import PublicProfile from './pages/PublicProfile'
-import { registerPushNotifications, listenForServiceWorkerMessages } from './lib/pushNotifications'
-import ResetPassword from './pages/ResetPassword'
+
+// ── Eagerly loaded (needed immediately on first paint) ────
+import Login        from './pages/Login'
 import AuthCallback from './pages/AuthCallback'
+
+// ── Lazy loaded (only fetched when route is visited) ──────
+const Home          = lazy(() => import('./pages/Home'))
+const ListingDetail = lazy(() => import('./pages/ListingDetail'))
+const PostListing   = lazy(() => import('./pages/PostListing'))
+const Chat          = lazy(() => import('./pages/Chat'))
+const ChatList      = lazy(() => import('./pages/ChatList'))
+const Profile       = lazy(() => import('./pages/Profile'))
+const Jobs          = lazy(() => import('./pages/Jobs'))
+const Services      = lazy(() => import('./pages/ServicesPage'))
+const Admin         = lazy(() => import('./pages/Admin'))
+const PublicProfile = lazy(() => import('./pages/PublicProfile'))
+const ResetPassword = lazy(() => import('./pages/ResetPassword'))
+
+import GlobalCallListener from './components/GlobalCallListener'
+import { CallProvider }   from './context/CallContext'
+import { useGlobalPresence } from './hooks/usePresence'
+import { registerPushNotifications, listenForServiceWorkerMessages } from './lib/pushNotifications'
+
+// ── Spinner shown while lazy chunks download ──────────────
+function PageLoader() {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      height: '100vh', background: '#0f1410',
+    }}>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{
+          width: 36, height: 36,
+          border: '3px solid #1a7a4a',
+          borderTopColor: '#5de89e',
+          borderRadius: '50%',
+          animation: 'spin 0.7s linear infinite',
+          margin: '0 auto 12px',
+        }} />
+        <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
+        <p style={{ color: '#637068', fontSize: 13 }}>Loading…</p>
+      </div>
+    </div>
+  )
+}
 
 function stopRingtone() {
   if (window._ringtoneAudio) {
@@ -41,8 +69,8 @@ function playRingtone() {
 }
 
 export default function App() {
-  const [session, setSession] = useState(undefined)
-  const [role, setRole]       = useState(undefined)
+  const [session,    setSession]    = useState(undefined)
+  const [role,       setRole]       = useState(undefined)
   const [isRecovery, setIsRecovery] = useState(false)
 
   useEffect(() => {
@@ -132,11 +160,9 @@ export default function App() {
 
   useGlobalPresence(session?.user?.id ?? null)
 
-  if (session === undefined || (session && !isRecovery && role === undefined)) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', color: '#637068' }}>
-      Loading...
-    </div>
-  )
+  if (session === undefined || (session && !isRecovery && role === undefined)) {
+    return <PageLoader />
+  }
 
   const isAdmin = role === 'admin'
   const authed  = !!session && !isRecovery
@@ -145,38 +171,35 @@ export default function App() {
     <CallProvider>
       <BrowserRouter>
         {authed && <GlobalCallListener />}
-        <Routes>
-          {/* ── Public / auth routes ─────────────────────── */}
-          <Route path="/login" element={!authed ? <Login /> : <Navigate to={isAdmin ? '/admin' : '/'} />} />
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            {/* ── Auth routes ───────────────────────────── */}
+            <Route path="/login"          element={!authed ? <Login /> : <Navigate to={isAdmin ? '/admin' : '/'} />} />
+            <Route path="/auth/callback"  element={<AuthCallback />} />
+            <Route path="/reset-password" element={<ResetPassword />} />
 
-          {/* Google OAuth callback — always accessible */}
-          <Route path="/auth/callback" element={<AuthCallback />} />
+            {/* ── Admin ─────────────────────────────────── */}
+            <Route path="/admin/*" element={
+              !authed ? <Navigate to="/login" /> :
+              isAdmin ? <Admin />               :
+                        <Navigate to="/" />
+            } />
 
-          {/* Password reset — always accessible */}
-          <Route path="/reset-password" element={<ResetPassword />} />
-
-          {/* ── Admin ───────────────────────────────────── */}
-          <Route path="/admin/*" element={
-            !authed ? <Navigate to="/login" /> :
-            isAdmin ? <Admin />               :
-                      <Navigate to="/" />
-          } />
-
-          {/* ── Protected routes ────────────────────────── */}
-          <Route path="/"                        element={authed ? (isAdmin ? <Navigate to="/admin" /> : <Home />)       : <Navigate to="/login" />} />
-          <Route path="/listing/:id"             element={authed ? <ListingDetail />  : <Navigate to="/login" />} />
-          <Route path="/post"                    element={authed ? <PostListing />    : <Navigate to="/login" />} />
-          <Route path="/chats"                   element={authed ? <ChatList />       : <Navigate to="/login" />} />
-          <Route path="/chat/:userId/:listingId" element={authed ? <Chat />           : <Navigate to="/login" />} />
-          <Route path="/chat/:userId"            element={authed ? <Chat />           : <Navigate to="/login" />} />
-          <Route path="/profile"                 element={authed ? <Profile />        : <Navigate to="/login" />} />
-          <Route path="/jobs"                    element={authed ? <Jobs />           : <Navigate to="/login" />} />
-          <Route path="/services"                element={authed ? <Services />       : <Navigate to="/login" />} />
-          <Route path="/profile/:id"             element={authed ? <PublicProfile />  : <Navigate to="/login" />} />
-          <Route path="/post/edit/:id"           element={authed ? <PostListing />    : <Navigate to="/login" />} />
-
-          <Route path="*" element={<Navigate to="/" />} />
-        </Routes>
+            {/* ── Protected routes ──────────────────────── */}
+            <Route path="/"                        element={authed ? (isAdmin ? <Navigate to="/admin" /> : <Home />)      : <Navigate to="/login" />} />
+            <Route path="/listing/:id"             element={authed ? <ListingDetail />  : <Navigate to="/login" />} />
+            <Route path="/post"                    element={authed ? <PostListing />    : <Navigate to="/login" />} />
+            <Route path="/chats"                   element={authed ? <ChatList />       : <Navigate to="/login" />} />
+            <Route path="/chat/:userId/:listingId" element={authed ? <Chat />           : <Navigate to="/login" />} />
+            <Route path="/chat/:userId"            element={authed ? <Chat />           : <Navigate to="/login" />} />
+            <Route path="/profile"                 element={authed ? <Profile />        : <Navigate to="/login" />} />
+            <Route path="/jobs"                    element={authed ? <Jobs />           : <Navigate to="/login" />} />
+            <Route path="/services"                element={authed ? <Services />       : <Navigate to="/login" />} />
+            <Route path="/profile/:id"             element={authed ? <PublicProfile />  : <Navigate to="/login" />} />
+            <Route path="/post/edit/:id"           element={authed ? <PostListing />    : <Navigate to="/login" />} />
+            <Route path="*"                        element={<Navigate to="/" />} />
+          </Routes>
+        </Suspense>
       </BrowserRouter>
     </CallProvider>
   )

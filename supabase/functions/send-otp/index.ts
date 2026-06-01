@@ -7,6 +7,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// ── Rate limit config ─────────────────────────────────────
+const MAX_REQUESTS   = 3    // max OTP requests
+const WINDOW_MINUTES = 60   // per this many minutes
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
@@ -28,35 +32,66 @@ serve(async (req) => {
       })
     }
 
-    const code = Math.floor(100000 + Math.random() * 900000).toString()
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString()
-
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
+    const field = isPhone ? 'phone' : 'email'
+
+    // ── Rate limit check ─────────────────────────────────
+    const windowStart = new Date(Date.now() - WINDOW_MINUTES * 60 * 1000).toISOString()
+
+    const { count, error: countErr } = await supabase
+      .from('otp_codes')
+      .select('*', { count: 'exact', head: true })
+      .eq(field, identifier)
+      .gte('created_at', windowStart)
+
+    if (countErr) throw new Error('Rate limit check failed: ' + countErr.message)
+
+    if ((count ?? 0) >= MAX_REQUESTS) {
+      return new Response(JSON.stringify({
+        error: `Too many attempts. Please wait ${WINDOW_MINUTES} minutes before requesting a new code.`
+      }), {
+        status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
+    // ── Generate OTP ──────────────────────────────────────
+    const code      = Math.floor(100000 + Math.random() * 900000).toString()
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString()
+
+    // Invalidate previous unused OTPs for this identifier
     await supabase
       .from('otp_codes')
       .update({ used: true })
-      .eq(isPhone ? 'phone' : 'email', identifier)
+      .eq(field, identifier)
       .eq('used', false)
 
     const { error: insertError } = await supabase.from('otp_codes').insert({
-      [isPhone ? 'phone' : 'email']: identifier,
+      [field]: identifier,
       code,
       expires_at: expiresAt,
     })
 
     if (insertError) throw new Error('Failed to save OTP: ' + insertError.message)
 
+    // ── Send OTP ──────────────────────────────────────────
     if (isPhone) {
       await sendSMS(identifier, code)
     } else {
       await sendEmailBrevo(identifier, code)
     }
 
-    return new Response(JSON.stringify({ success: true, method: isPhone ? 'sms' : 'email' }), {
+    // Tell the client how many attempts remain
+    const remaining = MAX_REQUESTS - ((count ?? 0) + 1)
+
+    return new Response(JSON.stringify({
+      success: true,
+      method: isPhone ? 'sms' : 'email',
+      attemptsRemaining: remaining,
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     })
 
@@ -108,7 +143,7 @@ async function sendEmailBrevo(email: string, code: string) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      sender: { name: 'Soko Malawi', email: 'jameswl4d@gmail.com' },
+      sender: { name: 'Soko Malawi', email: 'nyimbiriwilford@gmail.com' },
       to: [{ email }],
       subject: 'Your Soko Malawi verification code',
       htmlContent: `

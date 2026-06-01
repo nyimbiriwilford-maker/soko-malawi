@@ -7,6 +7,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+// ── Rate limit config ─────────────────────────────────────
+const MAX_VERIFY_ATTEMPTS = 5   // max wrong guesses per code
+const WINDOW_MINUTES      = 10  // within the code's lifetime
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
@@ -27,10 +31,25 @@ serve(async (req) => {
     const isPhone = !identifier.includes('@')
     const field   = isPhone ? 'phone' : 'email'
 
-    // ── Look up OTP ─────────────────────────────────────
-    // If newPassword is provided, the OTP may already be marked used (step 3 flow).
-    // So we allow used=true if newPassword is present — we just check it exists and
-    // is not expired.
+    // ── Rate limit: count recent failed attempts ──────────
+    const windowStart = new Date(Date.now() - WINDOW_MINUTES * 60 * 1000).toISOString()
+
+    const { count: failCount } = await supabase
+      .from('otp_attempts')
+      .select('*', { count: 'exact', head: true })
+      .eq('identifier', identifier)
+      .eq('success', false)
+      .gte('created_at', windowStart)
+
+    if ((failCount ?? 0) >= MAX_VERIFY_ATTEMPTS) {
+      return new Response(JSON.stringify({
+        error: 'Too many incorrect attempts. Please request a new code.'
+      }), {
+        status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      })
+    }
+
+    // ── Look up OTP ───────────────────────────────────────
     let query = supabase
       .from('otp_codes')
       .select('*')
@@ -40,8 +59,6 @@ serve(async (req) => {
       .order('created_at', { ascending: false })
       .limit(1)
 
-    // Step 2 (just verifying): must be unused
-    // Step 3 (setting password): allow already-used (same session)
     if (!newPassword) {
       query = query.eq('used', false)
     }
@@ -51,32 +68,42 @@ serve(async (req) => {
     if (fetchError) throw new Error(fetchError.message)
 
     if (!otpRows || otpRows.length === 0) {
+      // Log the failed attempt
+      await supabase.from('otp_attempts').insert({
+        identifier,
+        success: false,
+      })
+
       return new Response(JSON.stringify({ error: 'Invalid or expired code. Please request a new one.' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
 
-    // ── Mark as used (step 2 only) ───────────────────────
+    // ── Log successful attempt ────────────────────────────
+    await supabase.from('otp_attempts').insert({
+      identifier,
+      success: true,
+    })
+
+    // ── Mark as used (step 2 only) ────────────────────────
     if (!newPassword) {
       await supabase
         .from('otp_codes')
         .update({ used: true })
         .eq('id', otpRows[0].id)
 
-      // OTP verified, no password yet — frontend shows new password form
       return new Response(JSON.stringify({ success: true, passwordUpdated: false }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
 
-    // ── Step 3: update password ──────────────────────────
+    // ── Step 3: update password ───────────────────────────
     if (newPassword.length < 8) {
       return new Response(JSON.stringify({ error: 'Password must be at least 8 characters' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
 
-    // Find user by email or phone metadata
     const { data: { users }, error: listErr } = await supabase.auth.admin.listUsers()
     if (listErr) throw new Error(listErr.message)
 
@@ -103,8 +130,9 @@ serve(async (req) => {
     const { error: updateErr } = await supabase.auth.admin.updateUserById(userId, { password: newPassword })
     if (updateErr) throw new Error('Password update failed: ' + updateErr.message)
 
-    // Clean up — delete all OTPs for this identifier
+    // Clean up OTPs and attempts for this identifier
     await supabase.from('otp_codes').delete().eq(field, identifier)
+    await supabase.from('otp_attempts').delete().eq('identifier', identifier)
 
     return new Response(JSON.stringify({ success: true, passwordUpdated: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
