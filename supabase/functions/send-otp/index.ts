@@ -124,7 +124,7 @@ async function sendEmail(email: string, code: string) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      from: 'Soko Malawi <noreply@sokomw.com>',  // change to your verified Resend domain
+      from: 'Soko Malawi <onboarding@resend.dev>',  // change to your verified Resend domain
       to: [email],
       subject: 'Your Soko Malawi password reset code',
       html: `
