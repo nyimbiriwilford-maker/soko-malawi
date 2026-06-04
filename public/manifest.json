@@ -7,6 +7,22 @@
   "background_color": "#ffffff",
   "theme_color": "#1a7a4a",
   "orientation": "portrait",
+  "screenshots": [
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Soko Malawi Home"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Soko Malawi Home"
+    }
+  ],
   "icons": [
     {
       "src": "/icons/icon-192.png",
