@@ -51,14 +51,13 @@ export default function HomeHeader({
         <div style={S.topRow}>
 
           {/* Logo */}
-          <div style={S.logoWrap}>
-            <div style={S.brand}>
-              <span style={{ animation: 'brandReveal 0.4s ease 0.15s both' }}>
-                Soko<span style={{ color: '#f59e0b' }}>MW</span>
-              </span>
-            </div>
-          </div>
-
+   <div style={S.logoWrap}>
+  <div style={S.brand}>
+    <span style={{ animation: 'brandReveal 0.4s ease 0.15s both' }}>
+      Soko<span style={{ color: '#f59e0b' }}>Mw</span>
+    </span>
+  </div>
+</div>
           {/* Search bar — grows to fill all available space */}
           <div style={{
             ...S.searchBox,
@@ -82,18 +81,19 @@ export default function HomeHeader({
                 onBlur={() => setIsFocused(false)}
                 onKeyDown={e => e.key === 'Enter' && handleSearchSubmit()}
               />
-              {!search && !isFocused && (
-                <div style={S.animPlaceholder} onClick={handleSearchBarClick}>
-                  <span style={S.animPrefix}>Search </span>
-                  <span style={S.animKeyword}>{animText}</span>
-                  <span style={{
-                    ...S.animCursor,
-                    animation: animPhase === 'paused'
-                      ? 'cursorBlink 0.9s step-end infinite'
-                      : 'cursorSolid 1s linear infinite',
-                  }} />
-                </div>
-              )}
+             {!search && !isFocused && (
+  <div style={S.animPlaceholder} onClick={handleSearchBarClick}>
+    <span style={S.animPrefix}>Search </span>
+    <div style={S.animSlotOuter}>
+      <span
+        key={animIdx}
+        style={S.animSlotWord}
+      >
+        {animKeywords[animIdx % animKeywords.length]}
+      </span>
+    </div>
+  </div>
+)}
             </div>
 
             {search ? (
@@ -398,11 +398,30 @@ const S = {
   searchIconBtn:   { background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0, flexShrink: 0 },
   searchInputWrap: { flex: 1, position: 'relative', height: 20 },
   searchInput:     { position: 'absolute', inset: 0, width: '100%', border: 'none', background: 'transparent', fontSize: 13.5, color: '#111', fontFamily: "'DM Sans',system-ui,sans-serif", zIndex: 1 },
-  animPlaceholder: { position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', fontSize: 13.5, pointerEvents: 'auto', cursor: 'text', whiteSpace: 'nowrap', overflow: 'hidden' },
-  animPrefix:      { color: '#bbb', fontWeight: 400 },
-  animKeyword:     { color: '#333', fontWeight: 600, letterSpacing: '-0.1px' },
-  animCursor:      { display: 'inline-block', width: 2, height: 15, background: '#1a7a4a', marginLeft: 0.5, borderRadius: 1, verticalAlign: 'middle', flexShrink: 0 },
-  clearBtn:        { background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#999', padding: '2px 4px', flexShrink: 0 },
+ animPlaceholder: {
+  position: 'absolute', inset: 0,
+  display: 'flex', alignItems: 'center',
+  fontSize: 13.5, pointerEvents: 'auto',
+  cursor: 'text', whiteSpace: 'nowrap', overflow: 'hidden',
+},
+animPrefix: { color: '#bbb', fontWeight: 400, flexShrink: 0 },
+animSlotOuter: {
+  overflow: 'hidden',
+  height: 20,
+  display: 'flex',
+  alignItems: 'center',
+  marginLeft: 3,
+  position: 'relative',
+},
+animSlotWord: {
+  display: 'inline-block',
+  color: '#333',
+  fontWeight: 600,
+  letterSpacing: '-0.1px',
+animation: 'wordSlideUp 3.5s cubic-bezier(0.16,1,0.3,1) forwards',},
+// keep these so nothing else breaks
+animKeyword: { color: '#333', fontWeight: 600, letterSpacing: '-0.1px' },
+animCursor:  { display: 'none' },clearBtn:        { background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#999', padding: '2px 4px', flexShrink: 0 },
   searchDivider:   { width: 1, height: 16, background: '#d4dfd6', flexShrink: 0, margin: '0 2px' },
   camInsideBtn:    { background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '2px 4px', flexShrink: 0 },
 
@@ -550,4 +569,5 @@ const S = {
     background: 'rgba(255,255,255,0.25)', borderRadius: 20,
     padding: '2px 9px', fontSize: 11, fontWeight: 700,
   },
+  
 }

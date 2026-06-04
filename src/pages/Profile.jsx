@@ -153,14 +153,12 @@ async function loadListings(uid) {
               onChange={e => setForm(f => ({ ...f, full_name: e.target.value }))}
             />
             <label style={S.label}>City</label>
-            <select
+            <input
               style={S.input}
+              placeholder="e.g. Lilongwe, Blantyre..."
               value={form.city}
               onChange={e => setForm(f => ({ ...f, city: e.target.value }))}
-            >
-              <option value="">Select city...</option>
-              {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
+            />
             {saveMsg && <p style={S.saveMsg}>{saveMsg}</p>}
             <div style={S.editBtns}>
               <button style={S.cancelBtn} onClick={() => { setEditMode(false); setForm({ full_name: profile.full_name || '', city: profile.city || '' }) }}>

@@ -32,7 +32,13 @@ export default function HomeStyles() {
       @keyframes pricePopIn    { 0%{opacity:0;transform:scale(0.7) translateY(6px)} 70%{transform:scale(1.1) translateY(-2px)} 100%{opacity:1;transform:scale(1) translateY(0)} }
       @keyframes starSpin      { 0%{transform:rotate(0deg) scale(1)} 25%{transform:rotate(-15deg) scale(1.3)} 75%{transform:rotate(10deg) scale(1.15)} 100%{transform:rotate(0deg) scale(1)} }
       @keyframes flashStripIn  { from{opacity:0;max-height:0;padding:0} to{opacity:1;max-height:400px} }
-
+@keyframes wordSlideUp {
+  0%   { transform: translateY(100%); opacity: 0;   }
+  15%  { transform: translateY(0);    opacity: 1;   }
+  70%  { transform: translateY(0);    opacity: 1;   }
+  85%  { transform: translateY(-100%);opacity: 0;   }
+  100% { transform: translateY(-100%);opacity: 0;   }
+}
       input:focus { outline: none; }
       ::-webkit-scrollbar { display: none; }
       button, select { font-family: 'DM Sans', system-ui, sans-serif; }

@@ -8,6 +8,7 @@ import FlashSaleStrip  from '../components/FlashSaleStrip'
 import FeaturedSection from '../components/FeaturedSection'
 import { ProductCard, SkeletonCard } from '../components/ProductCard'
 import BottomNav       from '../components/BottomNav'
+import InstallPrompt   from '../components/InstallPrompt'
 
 import useSearchAnimation  from '../hooks/useSearchAnimation'
 import { useUserLocation } from '../hooks/useUserLocation'
@@ -52,12 +53,19 @@ export default function Home() {
   // ── Init ──────────────────────────────────
   useEffect(() => { init() }, [])
 
-  async function init() {
-    const { data: { user } } = await supabase.auth.getUser()
-    setUser(user)
-    await loadListings()
-    if (user) loadNotifs(user.id)
+ async function init() {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (user) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('avatar_url, full_name')
+      .eq('id', user.id)
+      .maybeSingle()
+    setUser({ ...user, avatar_url: profile?.avatar_url || null })
+    loadNotifs(user.id)
   }
+  await loadListings()
+}
 
  async function loadListings() {
   setLoading(true)
@@ -213,6 +221,12 @@ export default function Home() {
     <div style={page}>
       <HomeStyles />
 
+      {/* Test banner */}
+      <div style={testBanner}>
+        <span style={{ fontSize: 15, flexShrink: 0 }}>🧪</span>
+        <span style={testBannerText}>Early access — you're testing Soko Malawi. Official launch date will be announced soon.</span>
+      </div>
+
       <HomeHeader
         user={user}
         notifCount={notifCount}
@@ -312,6 +326,7 @@ export default function Home() {
       </div>
 
       <BottomNav />
+      <InstallPrompt />
     </div>
   )
 }
@@ -336,3 +351,6 @@ const resultsClearBtn    = { background: 'none', border: '1.5px solid #a3d4b5', 
 const grid     = { padding: '8px 10px 6px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }
 const empty    = { gridColumn: '1/-1', textAlign: 'center', padding: '60px 24px' }
 const emptyBtn = { background: '#1a7a4a', color: '#fff', border: 'none', borderRadius: 12, padding: '11px 24px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }
+
+const testBanner     = { background: '#fffbeb', borderBottom: '1px solid #fde68a', padding: '9px 14px', display: 'flex', alignItems: 'center', gap: 8 }
+const testBannerText = { fontSize: 12, color: '#92400e', fontWeight: 600, lineHeight: 1.5 }

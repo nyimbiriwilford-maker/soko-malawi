@@ -10,6 +10,15 @@ export function useCall() {
 export function CallProvider({ children }) {
   const [incomingCall, setIncomingCall] = useState(null)
 
+  // Persistent WebRTC state — survives Chat.jsx unmount
+  const pcRef           = useRef(null)
+  const localStreamRef  = useRef(null)
+  const callIdRef       = useRef(null)
+  const callerIdRef     = useRef(null)
+  const callTimerRef    = useRef(null)
+  const [activeCall, setActiveCall] = useState(null) // { callType, chatPath }
+  const [miniCallVisible, setMiniCallVisible] = useState(false)
+
   const channelRef          = useRef(null)
   const listenersRef        = useRef([])
   const ringAudioRef        = useRef(null)
@@ -45,10 +54,10 @@ export function CallProvider({ children }) {
   }
 
   async function setupChannel() {
+    if (channelRef.current) return
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
     currentUserRef.current = user
-    if (channelRef.current) return
 
     const channel = supabase
       .channel(`call_inbox_${user.id}`, { config: { broadcast: { self: false } } })
@@ -57,6 +66,13 @@ export function CallProvider({ children }) {
       })
       .subscribe((status) => {
         console.log('CallProvider channel status:', status)
+        if (status === 'CLOSED') {
+          if (channelRef.current) {
+            channelRef.current = null
+            reconnectTimerRef.current = setTimeout(() => setupChannel(), 1000)
+          }
+          return
+        }
         if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
           clearTimeout(reconnectTimerRef.current)
           channelRef.current = null
@@ -68,6 +84,7 @@ export function CallProvider({ children }) {
   }
 
   function handleIncomingSignal(payload) {
+    console.log('[CallContext] signal received:', payload._event, 'listeners:', listenersRef.current.length)
     for (const listener of listenersRef.current) {
       const handled = listener(payload)
       if (handled) return
@@ -203,19 +220,24 @@ export function CallProvider({ children }) {
   }
 
  function playRing() {
-    stopRing()
+    const prev = ringAudioRef.current
+    ringAudioRef.current = null
     try {
       const audio = new Audio('/ringtone.mp3')
       audio.loop = true
       audio.volume = 1.0
+      ringAudioRef.current = { stop: () => { audio.pause(); audio.currentTime = 0 } }
       const playPromise = audio.play()
       if (playPromise) {
-        playPromise.catch(() => {
-          // Autoplay blocked — fall back to synth
-          playRingSynth()
-        })
+        playPromise
+          .then(() => { if (prev) prev.stop() })
+          .catch(() => {
+            if (prev) prev.stop()
+            playRingSynth()
+          })
+      } else {
+        if (prev) prev.stop()
       }
-      ringAudioRef.current = { stop: () => { audio.pause(); audio.currentTime = 0 } }
     } catch (e) {
       playRingSynth()
     }
@@ -288,6 +310,15 @@ export function CallProvider({ children }) {
   return (
     <CallContext.Provider value={{
       incomingCall,
+      activeCall,
+      setActiveCall,
+      miniCallVisible,
+      setMiniCallVisible,
+      pcRef,
+      localStreamRef,
+      callIdRef,
+      callerIdRef,
+      callTimerRef,
       sendSignal,
       sendIceCandidate,
       subscribeToIceCandidates,

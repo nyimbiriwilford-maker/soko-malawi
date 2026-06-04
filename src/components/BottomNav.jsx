@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { supabase } from '../lib/supabase'
 import { useNavigate, useLocation } from 'react-router-dom'
 
 function NavBtn({ icon, label, active, badge, onClick }) {
@@ -58,6 +59,42 @@ export default function BottomNav() {
   const navigate = useNavigate()
   const location = useLocation()
   const [showPostMenu, setShowPostMenu] = useState(false)
+  const [unreadCount, setUnreadCount] = useState(0)
+
+  useEffect(() => {
+    let channel
+    let cancelled = false
+supabase.auth.getUser().then(async ({ data: { user } }) => {
+  if (!user || cancelled) return
+
+      const fetchUnread = async () => {
+        const { count } = await supabase
+          .from('messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('to_user', user.id)
+          .eq('read', false)
+        setUnreadCount(count || 0)
+      }
+
+      fetchUnread()
+
+     await supabase.removeAllChannels()
+channel = supabase
+  .channel(`unread_badge_${user.id}`)
+  .on('postgres_changes', {
+    event: '*',
+    schema: 'public',
+    table: 'messages',
+    filter: `to_user=eq.${user.id}`,
+  }, fetchUnread)
+  .subscribe()
+    })
+
+    return () => {
+  cancelled = true
+  if (channel) supabase.removeChannel(channel)
+}
+  }, [])
 
   const path = location.pathname
 
@@ -141,10 +178,11 @@ export default function BottomNav() {
         </button>
 
         {/* Chats */}
-        <button style={{ ...S.navItem, ...(path.startsWith('/chats') ? S.navItemActive : {}) }} onClick={() => navigate('/chats')}>
-          <IconChat active={path.startsWith('/chats')} />
-          <span style={{ ...S.navLabel, ...(path.startsWith('/chats') ? { color: '#1a7a4a', fontWeight: '700' } : {}) }}>Chats</span>
-        </button>
+       <button style={{ ...S.navItem, ...(path.startsWith('/chats') ? S.navItemActive : {}) }} onClick={() => navigate('/chats')}>
+  <IconChat active={path.startsWith('/chats')} />
+  <span style={{ ...S.navLabel, ...(path.startsWith('/chats') ? { color: '#1a7a4a', fontWeight: '700' } : {}) }}>Chats</span>
+{unreadCount > 0 && <span style={S.navBadge}>{unreadCount > 9 ? '9+' : unreadCount}</span>}
+</button>
 
         {/* Jobs — swapped to last position */}
         <button style={{ ...S.navItem, ...(path.startsWith('/jobs') ? S.navItemActive : {}) }} onClick={() => navigate('/jobs')}>

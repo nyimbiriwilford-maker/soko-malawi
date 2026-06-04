@@ -17,7 +17,8 @@ const Jobs          = lazy(() => import('./pages/Jobs'))
 const Services      = lazy(() => import('./pages/ServicesPage'))
 const Admin         = lazy(() => import('./pages/Admin'))
 const PublicProfile = lazy(() => import('./pages/PublicProfile'))
-const ResetPassword = lazy(() => import('./pages/ResetPassword'))
+const ResetPassword   = lazy(() => import('./pages/ResetPassword'))
+const Notifications   = lazy(() => import('./pages/Notifications'))
 
 import GlobalCallListener from './components/GlobalCallListener'
 import { CallProvider }   from './context/CallContext'
@@ -56,13 +57,13 @@ function stopRingtone() {
 }
 
 function playRingtone() {
-  stopRingtone()
+  if (window._ringtoneAudio) return  // already playing — don't restart
   try {
     const audio = new Audio('/ringtone.mp3')
     audio.loop = true
     audio.volume = 1.0
-    audio.play().catch(e => console.log('[ringtone] play blocked:', e))
     window._ringtoneAudio = audio
+    audio.play().catch(e => console.log('[ringtone] play blocked:', e))
   } catch (e) {
     console.log('[ringtone] error:', e)
   }
@@ -132,13 +133,16 @@ export default function App() {
     listenForServiceWorkerMessages({
       onIncomingCall: ({ callId, fromUser, chatId, callType, callerName }) => {
         console.log('[app] INCOMING_CALL from SW — playing ringtone')
+        // Deduplicate — SW sometimes fires multiple times for same call
+        const dedupKey = `${fromUser}`
+        if (window.__lastSwCall?.[dedupKey] && Date.now() - window.__lastSwCall[dedupKey] < 35000) return
+        window.__lastSwCall = { ...(window.__lastSwCall || {}), [dedupKey]: Date.now() }
+        setTimeout(() => { if (window.__lastSwCall) delete window.__lastSwCall[dedupKey] }, 60000)
+
         playRingtone()
-        const callerPath = `/chat/${fromUser}`
-        if (!window.location.pathname.startsWith(callerPath)) {
-          window.dispatchEvent(new CustomEvent('sw-incoming-call', {
-            detail: { callId, fromUser, chatId, callType, callerName }
-          }))
-        }
+        window.dispatchEvent(new CustomEvent('sw-incoming-call', {
+          detail: { callId, fromUser, chatId, callType, callerName }
+        }))
       },
       onAnswer: (fromUser, callId, chatId) => {
         stopRingtone()
@@ -197,8 +201,8 @@ export default function App() {
             <Route path="/services"                element={authed ? <Services />       : <Navigate to="/login" />} />
             <Route path="/profile/:id"             element={authed ? <PublicProfile />  : <Navigate to="/login" />} />
             <Route path="/post/edit/:id"           element={authed ? <PostListing />    : <Navigate to="/login" />} />
-            <Route path="*"                        element={<Navigate to="/" />} />
-          </Routes>
+<Route path="/notifications"           element={authed ? <Notifications />  : <Navigate to="/login" />} />
+<Route path="*"                        element={<Navigate to="/" />} /></Routes>
         </Suspense>
       </BrowserRouter>
     </CallProvider>

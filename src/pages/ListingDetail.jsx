@@ -82,6 +82,7 @@ export default function ListingDetail() {
   const [showShareSheet, setShowShareSheet] = useState(false)
   const [copied, setCopied] = useState(false)
   const touchStartX = useRef(null)
+  const viewNotifSent = useRef(false)
 
   useEffect(() => { loadListing() }, [id])
 
@@ -112,12 +113,69 @@ export default function ListingDetail() {
       }
     }
     setLoading(false)
+
+    // ── Notify seller of a view (skip if owner, dedupe per render) ──
+    if (user && data && data.seller_id && user.id !== data.seller_id && !viewNotifSent.current) {
+      viewNotifSent.current = true
+      try {
+        const { data: myProf } = await supabase
+          .from('profiles').select('full_name').eq('id', user.id).single()
+        const viewerName = myProf?.full_name || 'Someone'
+
+        await supabase.from('notifications').insert({
+          user_id: data.seller_id,
+          type: 'listing_view',
+          title: '👁️ Someone viewed your listing',
+          body: `${viewerName} viewed "${data.title}"`,
+          message: `${viewerName} viewed "${data.title}"`,
+          data: {
+            listing_id: data.id,
+            listing_title: data.title,
+            listing_image: (data.images || [])[0] || null,
+            viewer_id: user.id,
+            viewer_name: viewerName,
+          },
+          read: false,
+        })
+      } catch (viewErr) {
+        console.warn('View notification error:', viewErr)
+      }
+    }
   }
 
   async function deleteListing() {
     setDeleting(true)
     await supabase.from('listings').delete().eq('id', id)
     navigate('/')
+  }
+
+  async function handleChatWithSeller() {
+    if (currentUser) {
+      try {
+        const { data: myProf } = await supabase
+          .from('profiles').select('full_name').eq('id', currentUser.id).single()
+        const buyerName = myProf?.full_name || 'Someone'
+
+        await supabase.from('notifications').insert({
+          user_id: listing.seller_id,
+          type: 'listing_offer',
+          title: '💰 New inquiry on your listing',
+          body: `${buyerName} is interested in "${listing.title}"`,
+          message: `${buyerName} is interested in "${listing.title}"`,
+          data: {
+            listing_id: listing.id,
+            listing_title: listing.title,
+            listing_image: (listing.images || [])[0] || null,
+            buyer_id: currentUser.id,
+            buyer_name: buyerName,
+          },
+          read: false,
+        })
+      } catch (offerErr) {
+        console.warn('Offer notification error:', offerErr)
+      }
+    }
+    navigate(`/chat/${listing.seller_id}/${listing.id}`)
   }
 
  function handleShare() {
@@ -544,7 +602,7 @@ export default function ListingDetail() {
       {/* ── STICKY FOOTER ACTIONS ── */}
       {!isOwner && (
         <div style={S.stickyFooter}>
-          <button style={S.chatBtn} onClick={() => navigate(`/chat/${listing.seller_id}/${listing.id}`)}>
+          <button style={S.chatBtn} onClick={() => handleChatWithSeller()}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
             Chat with Seller
           </button>

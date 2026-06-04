@@ -63,6 +63,9 @@ export default function Chat() {
   const [myProfile, setMyProfile]         = useState(null)
   const [replyTo, setReplyTo]             = useState(null)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
+const [chatSearch, setChatSearch]       = useState(null)
+const [searchMatches, setSearchMatches] = useState([])
+const [searchIdx, setSearchIdx]         = useState(0)
 
   const isServiceChatRef   = useRef(false)
   const currentUserRef     = useRef(null)
@@ -100,14 +103,62 @@ export default function Chat() {
     return () => {
       if (channelRef.current) { supabase.removeChannel(channelRef.current); channelRef.current = null }
       if (presenceChannelRef.current) { presenceChannelRef.current(); presenceChannelRef.current = null }
-      endCallLocally()
     }
   }, [userId, listingId])
 
   useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }) }, [messages])
+
+  // Scroll to specific message if navigated from notification
+  useEffect(() => {
+    const state = window.history.state?.usr
+    const msgId = state?.scrollToMessageId
+    if (!msgId || messages.length === 0) return
+    const el = document.getElementById(`msg-${msgId}`)
+    if (el) {
+      setTimeout(() => {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        el.style.transition = 'background 0.3s'
+        el.style.background = '#d4ead9'
+        setTimeout(() => { el.style.background = '' }, 1500)
+      }, 400)
+    }
+  }, [messages])
   useEffect(() => { assignRemoteStream() }, [remoteStream])
   useEffect(() => { if (callState === 'in-call') { assignRemoteStream(); assignLocalStream() } }, [callState])
   useEffect(() => { if (!userId) return; return setupCallListener() }, [userId])
+
+  // Chat search
+  useEffect(() => {
+    if (!chatSearch || !chatSearch.trim()) { setSearchMatches([]); return }
+    const q = chatSearch.toLowerCase()
+    const ids = messages
+      .filter(m => decodeReply(m.body || '').body?.toLowerCase().includes(q))
+      .map(m => m.id)
+    setSearchMatches(ids)
+    setSearchIdx(0)
+    if (ids.length > 0) {
+      setTimeout(() => {
+        const el = document.getElementById(`msg-${ids[0]}`)
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        el && highlightMsg(el)
+      }, 50)
+    }
+  }, [chatSearch, messages])
+
+  function highlightMsg(el) {
+    el.style.transition = 'background 0.3s'
+    el.style.background = '#d4ead9'
+    setTimeout(() => { el.style.background = '' }, 1400)
+  }
+
+  function jumpToMatch(dir) {
+    if (!searchMatches.length) return
+    const next = (searchIdx + dir + searchMatches.length) % searchMatches.length
+    setSearchIdx(next)
+    const el = document.getElementById(`msg-${searchMatches[next]}`)
+    el?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    el && highlightMsg(el)
+  }
 
   // Close emoji picker on outside click
   useEffect(() => {
@@ -145,7 +196,11 @@ export default function Chat() {
     // Load last_seen from profile on mount
     if (otherProf?.last_seen) setOtherLastSeen(new Date(otherProf.last_seen))
 
-   if (!listingId || listingId === 'undefined') { navigate('/chats'); return }
+   // If there's a pending call, don't redirect — let restorePendingCall handle it
+    const hasPendingCall = !!sessionStorage.getItem('__pendingCall')
+    if ((!listingId || listingId === 'undefined') && !hasPendingCall) {
+      navigate('/chats'); return
+    }
 
     restorePendingCall(userId)
 
@@ -298,7 +353,7 @@ const sameContext = !hasListing
     if (isServiceChatRef.current && listingId !== 'undefined') msgData.service_id = listingId
     else if (!isServiceChatRef.current && listingId !== 'undefined') msgData.listing_id = listingId
 
-    const { error } = await supabase.from('messages').insert(msgData)
+    const { data: inserted, error } = await supabase.from('messages').insert(msgData).select('id').single()
     if (error) { alert('Failed to send: ' + error.message); return }
 
     setNewMsg('')
@@ -306,6 +361,77 @@ const sameContext = !hasListing
     if (inputRef.current) inputRef.current.style.height = 'auto'
     globalChannel?.track({ user_id: currentUserRef.current?.id, typing: false })
     clearTimeout(typingTimeoutRef.current)
+
+    // ── Notify recipient ──────────────────────────────────
+    if (extraFields.call_status === 'missed') {
+      try {
+        const { data: myProf } = await supabase
+          .from('profiles').select('full_name').eq('id', user.id).single()
+        const callerName = myProf?.full_name || 'Someone'
+        const isVideo = extraFields.call_type === 'video'
+        const contextId = listingId && listingId !== 'undefined' ? listingId : null
+
+        await supabase.from('notifications').insert({
+          user_id: userId,
+          type: isVideo ? 'missed_video' : 'missed_call',
+          title: isVideo ? '📹 Missed video call' : '📞 Missed call',
+          body: `You missed a ${isVideo ? 'video' : 'voice'} call from ${callerName}`,
+          message: `You missed a ${isVideo ? 'video' : 'voice'} call from ${callerName}`,
+         data: {
+            caller_id: user.id,
+            caller_name: callerName,
+            context_id: contextId,
+            message_id: inserted?.id || null,
+            listing_title: listing?.title || service?.name || null,
+          },
+          read: false,
+        })
+      } catch (notifErr) {
+        console.warn('Missed call notification error:', notifErr)
+      }
+    }
+
+    if (!extraFields.call_status) {
+      try {
+        const { data: myProf } = await supabase
+          .from('profiles').select('full_name').eq('id', user.id).single()
+        const senderName = myProf?.full_name || 'Someone'
+
+        // Clean preview text
+        let preview = trimmed
+        if (preview.includes('|||')) {
+          preview = preview.replace(/^\x02?\[/, '').split('|||')[0].trim()
+        }
+        if (!preview) {
+          preview = mediaUrl
+            ? (type === 'image' ? '📷 Photo'
+             : type === 'video' ? '🎥 Video'
+             : type === 'audio' ? '🎤 Voice note'
+             : '📎 File')
+            : 'Sent a message'
+        }
+
+        const contextId = listingId && listingId !== 'undefined' ? listingId : null
+
+        await supabase.from('notifications').insert({
+          user_id: userId,
+          type: 'new_message',
+          title: senderName,
+          body: preview.slice(0, 80),
+          message: preview.slice(0, 80),
+          data: {
+            sender_id: user.id,
+            sender_name: senderName,
+            context_id: contextId,
+            message_id: inserted?.id || null,
+            listing_title: listing?.title || service?.name || null,
+          },
+          read: false,
+        })
+      } catch (notifErr) {
+        console.warn('Message notification error:', notifErr)
+      }
+    }
   }
 
   async function uploadAndSend(file, type, caption = '') {
@@ -587,6 +713,11 @@ const sameContext = !hasListing
         </div>
 
         <div style={{ display: 'flex', gap: '6px' }}>
+          <button style={S.callBtn} onClick={() => setChatSearch(s => s === null ? '' : null)} title="Search">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1a7a4a" strokeWidth="2.2" strokeLinecap="round">
+              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+            </svg>
+          </button>
           <button style={S.callBtn} onClick={() => startCall('voice')} disabled={callState !== 'idle'}>
             <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#1a7a4a" strokeWidth="2" strokeLinecap="round">
               <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.03 1.19 2 2 0 012 0h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 14.92v2z" />
@@ -599,6 +730,35 @@ const sameContext = !hasListing
           </button>
         </div>
       </div>
+
+      {/* ── In-chat search bar ── */}
+      {chatSearch !== null && (
+        <div style={{ background: '#fff', borderBottom: '1px solid #e8f0eb', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#aaa" strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0 }}>
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+          <input
+            style={{ flex: 1, border: 'none', background: 'transparent', fontSize: 14, outline: 'none', fontFamily: 'inherit', color: '#111' }}
+            placeholder="Search messages…"
+            value={chatSearch}
+            onChange={e => setChatSearch(e.target.value)}
+          />
+          {searchMatches.length > 0 && (
+            <>
+              <span style={{ fontSize: 11, color: '#888', whiteSpace: 'nowrap' }}>{searchIdx + 1}/{searchMatches.length}</span>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: '#1a7a4a', fontSize: 16 }} onClick={() => jumpToMatch(-1)}>↑</button>
+              <button style={{ background: 'none', border: 'none', cursor: 'pointer', padding: '2px 4px', color: '#1a7a4a', fontSize: 16 }} onClick={() => jumpToMatch(1)}>↓</button>
+            </>
+          )}
+          {chatSearch ? (
+            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#aaa', padding: 0 }} onClick={() => setChatSearch('')}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          ) : null}
+        </div>
+      )}
 
       {/* ── Context bars ── */}
       {isServiceChat && service ? (
@@ -688,56 +848,63 @@ const sameContext = !hasListing
       )}
 
       {callState === 'in-call' && (
-        <div style={S.callOverlay}>
-          {callType === 'video' && (
-            <div style={{ position: 'absolute', inset: 0 }}>
-              <video ref={remoteVideoRef} autoPlay playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              <video ref={localVideoRef} autoPlay playsInline muted style={{ position: 'absolute', bottom: 100, right: 16, width: 110, height: 150, objectFit: 'cover', borderRadius: 12, border: '2px solid rgba(255,255,255,0.3)', background: '#000' }} />
+        <div style={{ position:'fixed',inset:0,zIndex:3000,fontFamily:'system-ui,sans-serif',background:'#000',overflow:'hidden' }}>
+          <video ref={remoteVideoRef} autoPlay playsInline style={{ position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover' }} />
+          <div style={{ position:'absolute',bottom:0,left:0,right:0,height:220,background:'linear-gradient(to top,rgba(0,0,0,0.88) 0%,transparent 100%)',pointerEvents:'none' }} />
+          <div style={{ position:'absolute',top:0,left:0,right:0,height:110,background:'linear-gradient(to bottom,rgba(0,0,0,0.6) 0%,transparent 100%)',pointerEvents:'none' }} />
+          {callType === 'video' ? (
+            <div style={{ position:'absolute',top:20,right:16,width:88,height:124,borderRadius:14,overflow:'hidden',border:'2px solid rgba(255,255,255,0.25)',background:'#111',boxShadow:'0 4px 20px rgba(0,0,0,0.6)',zIndex:2 }}>
+              <video ref={localVideoRef} autoPlay playsInline muted style={{ width:'100%',height:'100%',objectFit:'cover' }} />
             </div>
+          ) : (
+            <video ref={localVideoRef} autoPlay playsInline muted style={{ display:'none' }} />
           )}
-          {callType === 'voice' && (
-            <div style={S.callCard}>
-              <Avatar url={otherAvatar} initial={otherInitial} size={90} />
-              <div style={S.callName}>{otherName}</div>
-              <div style={{ fontSize: 22, color: '#5de89e', fontWeight: '700', marginTop: 12, fontVariantNumeric: 'tabular-nums' }}>{formatTime(callDuration)}</div>
-              <video ref={remoteVideoRef} autoPlay playsInline style={{ display: 'none' }} />
-              <video ref={localVideoRef} autoPlay playsInline muted style={{ display: 'none' }} />
-            </div>
-          )}
-          <div style={{ position: 'absolute', bottom: 40, display: 'flex', gap: 16, alignItems: 'center', zIndex: 10 }}>
-            <div style={{ textAlign: 'center' }}>
-              <button style={{ ...S.ctrlBtn, background: isMuted ? '#ef4444' : 'rgba(255,255,255,0.2)' }} onClick={toggleMute}>
-                <span style={{ fontSize: 22 }}>{isMuted ? '🔇' : '🎤'}</span>
-              </button>
-              <div style={S.callBtnLabel}>{isMuted ? 'Unmute' : 'Mute'}</div>
-            </div>
-            {callType === 'video' && (
-              <div style={{ textAlign: 'center' }}>
-                <button style={{ ...S.ctrlBtn, background: isCamOff ? '#ef4444' : 'rgba(255,255,255,0.2)' }} onClick={toggleCam}>
-                  <span style={{ fontSize: 22 }}>{isCamOff ? '📷' : '📹'}</span>
-                </button>
-                <div style={S.callBtnLabel}>Camera</div>
-              </div>
+          
+          <div style={{ position:'absolute',top:28,left:0,right:0,display:'flex',flexDirection:'column',alignItems:'center',gap:6,zIndex:2 }}>
+            {callType === 'voice' && (
+              <>
+                <div style={{ width:80,height:80,borderRadius:'50%',overflow:'hidden',marginBottom:6,boxShadow:'0 4px 20px rgba(0,0,0,0.5)' }}>
+                  <Avatar url={otherAvatar} initial={otherInitial} size={80} />
+                </div>
+                <div style={{ fontSize:20,fontWeight:'700',color:'#fff',textShadow:'0 2px 8px rgba(0,0,0,0.7)' }}>{otherName}</div>
+              </>
             )}
-            {callType === 'video' && (
-              <div style={{ textAlign: 'center' }}>
-                <button style={{ ...S.ctrlBtn, background: 'rgba(255,255,255,0.2)' }} onClick={switchCamera}>
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
-                    <path d="M20 7l-1.5-2h-5L12 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z" stroke="white" strokeWidth="0" fill="none"/>
-                    <path d="M20 7l-1.5-2h-5L12 7H4a2 2 0 00-2 2v10a2 2 0 002 2h16a2 2 0 002-2V9a2 2 0 00-2-2z" fill="rgba(255,255,255,0.15)" stroke="white" strokeWidth="1.5"/>
-                    <path d="M12 10.5a3.5 3.5 0 100 7 3.5 3.5 0 000-7z" fill="white"/>
-                    <path d="M18 8.5l1.5 1.5-1.5 1.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
-                    <path d="M6 8.5L4.5 10 6 11.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" fill="none"/>
-                  </svg>
-                </button>
-                <div style={S.callBtnLabel}>Flip</div>
-              </div>
-            )}
-            <div style={{ textAlign: 'center' }}>
-              <button style={{ ...S.ctrlBtn, background: '#ef4444' }} onClick={hangUp}><HangupIcon /></button>
-              <div style={S.callBtnLabel}>End</div>
+            <div style={{ display:'inline-flex',alignItems:'center',gap:6,background:'rgba(0,0,0,0.35)',backdropFilter:'blur(8px)',borderRadius:20,padding:'4px 16px' }}>
+              <span style={{ width:7,height:7,borderRadius:'50%',background:'#4ade80',display:'inline-block' }} />
+              <span style={{ fontSize:14,color:'rgba(255,255,255,0.92)',fontWeight:'600',fontVariantNumeric:'tabular-nums' }}>{formatTime(callDuration)}</span>
             </div>
-            {callType === 'video' && <div style={{ color: '#fff', fontSize: 13, fontWeight: '700', fontVariantNumeric: 'tabular-nums' }}>{formatTime(callDuration)}</div>}
+          </div>
+          <div style={{ position:'absolute',bottom:0,left:0,right:0,zIndex:10,paddingBottom:40,paddingTop:16,display:'flex',flexDirection:'column',alignItems:'center' }}>
+            <div style={{ display:'flex',alignItems:'flex-end',justifyContent:'center',gap:20,width:'100%',maxWidth:360,paddingLeft:16,paddingRight:16,boxSizing:'border-box' }}>
+              <div style={{ flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:6 }}>
+                <button onClick={toggleMute} style={{ width:56,height:56,borderRadius:'50%',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',background:isMuted?'rgba(239,68,68,0.9)':'rgba(255,255,255,0.18)',backdropFilter:'blur(10px)',boxShadow:'0 2px 12px rgba(0,0,0,0.4)',transition:'background 0.2s' }}>
+                  <span style={{ fontSize:22 }}>{isMuted ? '🔇' : '🎙️'}</span>
+                </button>
+                <span style={{ color:'rgba(255,255,255,0.7)',fontSize:11,fontWeight:'500' }}>{isMuted?'Unmute':'Mute'}</span>
+              </div>
+              {callType === 'video' && (
+                <div style={{ flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:6 }}>
+                  <button onClick={toggleCam} style={{ width:56,height:56,borderRadius:'50%',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',background:isCamOff?'rgba(239,68,68,0.9)':'rgba(255,255,255,0.18)',backdropFilter:'blur(10px)',boxShadow:'0 2px 12px rgba(0,0,0,0.4)',transition:'background 0.2s' }}>
+                    <span style={{ fontSize:22 }}>{isCamOff ? '📷' : '📹'}</span>
+                  </button>
+                  <span style={{ color:'rgba(255,255,255,0.7)',fontSize:11,fontWeight:'500' }}>Camera</span>
+                </div>
+              )}
+              <div style={{ flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:6 }}>
+                <button onClick={hangUp} style={{ width:64,height:64,borderRadius:'50%',background:'#ef4444',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 24px rgba(239,68,68,0.65)',transform:'scale(1.08)' }}>
+                  <HangupIcon />
+                </button>
+                <span style={{ color:'rgba(255,255,255,0.7)',fontSize:11,fontWeight:'500' }}>End</span>
+              </div>
+              {callType === 'video' && (
+                <div style={{ flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:6 }}>
+                  <button onClick={switchCamera} style={{ width:56,height:56,borderRadius:'50%',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(255,255,255,0.18)',backdropFilter:'blur(10px)',boxShadow:'0 2px 12px rgba(0,0,0,0.4)' }}>
+                    <span style={{ fontSize:22 }}>🔄</span>
+                  </button>
+                  <span style={{ color:'rgba(255,255,255,0.7)',fontSize:11,fontWeight:'500' }}>Flip</span>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

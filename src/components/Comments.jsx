@@ -270,6 +270,80 @@ function CommentBox({ listingId, parentId, currentUser, onSubmit, placeholder, a
       setText('')
       setImages([])
       setVideos([])
+
+      // ── Notify listing owner ──────────────────────────────
+      try {
+        // Get listing to find owner + title
+        const { data: listing } = await supabase
+          .from('listings')
+          .select('seller_id, title, images')
+          .eq('id', listingId)
+          .single()
+
+        // Don't notify yourself
+        if (listing && listing.seller_id !== currentUser.id) {
+          // Get commenter's name
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('full_name')
+            .eq('id', currentUser.id)
+            .single()
+
+          const commenterName = profile?.full_name || 'Someone'
+          const isReply = !!parentId
+
+          // If replying, also notify the parent comment author
+          if (isReply) {
+            const { data: parentComment } = await supabase
+              .from('comments')
+              .select('user_id')
+              .eq('id', parentId)
+              .single()
+
+            if (parentComment && parentComment.user_id !== currentUser.id) {
+              await supabase.from('notifications').insert({
+                user_id: parentComment.user_id,
+                type: 'listing_comment',
+                title: `${commenterName} replied to you`,
+                body: text.trim()
+                  ? `"${text.trim().slice(0, 60)}${text.length > 60 ? '…' : ''}"`
+                  : '📷 Sent a photo',
+                data: {
+                  listing_id: listingId,
+                  listing_title: listing.title,
+                  listing_image: listing.images?.[0] || null,
+                  sender_name: commenterName,
+                  comment_id: data.id,
+                },
+                read: false,
+              })
+            }
+          }
+
+          // Always notify listing owner (if not the commenter and not the parent author)
+          await supabase.from('notifications').insert({
+            user_id: listing.seller_id,
+            type: 'listing_comment',
+            title: isReply
+              ? `${commenterName} commented on your listing`
+              : `${commenterName} commented on "${listing.title}"`,
+            body: text.trim()
+              ? `"${text.trim().slice(0, 60)}${text.length > 60 ? '…' : ''}"`
+              : '📷 Sent a photo',
+            data: {
+              listing_id: listingId,
+              listing_title: listing.title,
+              listing_image: listing.images?.[0] || null,
+              sender_name: commenterName,
+              comment_id: data.id,
+            },
+            read: false,
+          })
+        }
+      } catch (notifErr) {
+        // Notification failure should never block the comment
+        console.warn('Notification error:', notifErr)
+      }
     } catch (e) {
       setError(e.message)
     } finally {

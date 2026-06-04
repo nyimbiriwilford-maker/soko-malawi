@@ -10,6 +10,7 @@ function generateCallId(uid1, uid2) {
 export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isServiceChat }) {
   const {
     sendSignal: ctxSendSignal,
+    setActiveCall,
     sendIceCandidate,
     subscribeToIceCandidates,
     stopIceSubscription,
@@ -32,18 +33,12 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
   const [facingMode, setFacingMode]     = useState('user')
   const [remoteStream, setRemoteStream] = useState(null)
 
-  const pcRef             = useRef(null)
-  const localStreamRef    = useRef(null)
+  const { pcRef, localStreamRef, callIdRef, callerIdRef, callTimerRef } = useCall()
   const remoteStreamRef   = useRef(null)
-  const callIdRef         = useRef(null)
-  const callTimerRef      = useRef(null)
   const autoHangupRef     = useRef(null)
   const pendingCandidates = useRef([])
   const incomingOfferRef  = useRef(null)
   const callTypeRef       = useRef(null)
-  // callerIdRef = the person who called us (set when we receive a ring)
-  // This is separate from userIdRef which is just the chat URL param
-  const callerIdRef       = useRef(null)
   const localVideoRef     = useRef(null)
   const remoteVideoRef    = useRef(null)
   const callStateRef      = useRef('idle')
@@ -186,7 +181,10 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
     const offer = await pc.createOffer()
     await pc.setLocalDescription(offer)
 
+    const { data: myProf } = await supabase
+      .from('profiles').select('full_name').eq('id', cu.id).maybeSingle()
     const fromName =
+      myProf?.full_name ||
       cu.user_metadata?.name ||
       cu.user_metadata?.full_name ||
       cu.email ||
@@ -198,7 +196,8 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
     autoHangupRef.current = setTimeout(async () => {
       if (callStateRef.current !== 'in-call' && callStateRef.current !== 'idle') {
         stopRingback()
-        await ctxSendSignal(target, 'decline', { callId: callIdRef.current })
+        // Send cancel to receiver so their ringing stops
+        await ctxSendSignal(target, 'cancel', { callId: callIdRef.current })
         onCallMessage?.({
           call_type: type,
           call_status: 'missed',
@@ -211,7 +210,11 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
 
     // Get chatId from current URL — format is /chat/{chatId}
     // CORRECT — gets everything after /chat/
-const chatId = window.location.pathname.replace('/chat/', '') || null
+// Build chatId as "userId/listingId" so receiver can navigate to the right chat
+    const pathParts = window.location.pathname.replace('/chat/', '').split('/')
+    const chatId = pathParts.length >= 2
+      ? `${userIdRef.current}/${pathParts[1]}`
+      : userIdRef.current || null
 
     // Send push notification to wake up receiver's device
     supabase.functions.invoke('send-call-push', {
@@ -298,6 +301,7 @@ const chatId = window.location.pathname.replace('/chat/', '') || null
     playConnectedSound()
     callStateRef.current = 'in-call'; setCallState('in-call')
     startCallTimer()
+    setActiveCall?.({ callType: type, chatPath: window.location.pathname })
 
     onCallMessage?.({
       call_type: type,
@@ -310,7 +314,6 @@ const chatId = window.location.pathname.replace('/chat/', '') || null
   async function declineCall() {
     ctxStopRing()
     dismissIncoming()
-    // Send decline to the caller
     const target = callerIdRef.current || userIdRef.current
     console.log(`[decline] sending to: ${target}`)
     await ctxSendSignal(target, 'decline', { callId: callIdRef.current })
@@ -323,15 +326,14 @@ const chatId = window.location.pathname.replace('/chat/', '') || null
     endCallLocally()
   }
 
-  async function hangUp() {
+ async function hangUp() {
     playCallEndSound()
     const dur = callDuration
-    // Send hangup to whoever we are in a call with
-    // If we were the callee: send to callerIdRef
-    // If we were the caller: send to userIdRef (the person we called)
     const target = callerIdRef.current || userIdRef.current
     console.log(`[hangup] sending to: ${target}`)
-    await ctxSendSignal(target, 'hangup', { callId: callIdRef.current })
+    const event = (callStateRef.current === 'calling' || callStateRef.current === 'ringing')
+      ? 'cancel' : 'hangup'
+    await ctxSendSignal(target, event, { callId: callIdRef.current })
     onCallMessage?.({
       call_type: callTypeRef.current,
       call_status: 'ended',
@@ -362,59 +364,26 @@ const chatId = window.location.pathname.replace('/chat/', '') || null
     setRemoteStream(null)
     pendingCandidates.current = []
     incomingOfferRef.current = null
+    const targetToClose = callerIdRef.current || userIdRef.current
     callIdRef.current = null
-    closeOutboundChannel?.(callerIdRef.current || userIdRef.current)
     callerIdRef.current = null
     callStateRef.current = 'idle'; setCallState('idle')
     setCallDuration(0)
     setIsMuted(false)
     setIsCamOff(false)
+    setActiveCall?.(null)
+    // Delay channel close so hangup signal has time to deliver
+    setTimeout(() => {
+      closeOutboundChannel?.(targetToClose)
+    }, 1500)
   }
 
   function setupCallListener() {
-    return registerCallListener((payload) => {
+    function onCallEnded() {}
+    window.addEventListener('call-ended', onCallEnded)
+
+    const unregister = registerCallListener((payload) => {
       const { _event } = payload
-
-      if (_event === 'ring') {
-        // Only handle rings from our chat partner
-        const expectedFrom = userIdRef.current
-        if (payload.fromUser !== expectedFrom) return false
-
-        const handledId = sessionStorage.getItem('__pendingCallId')
-        if (handledId === payload.callId) {
-          console.log('[setupCallListener] suppressed — handled by GlobalCallListener')
-          return true
-        }
-
-        callIdRef.current        = payload.callId
-        incomingOfferRef.current = payload.offer
-        callerIdRef.current      = payload.fromUser
-        updateCallType(payload.callType)
-        callStateRef.current = 'receiving'; setCallState('receiving')
-        ctxPlayRing()
-
-        // Notify caller that we are ringing so they see "Ringing…" instead of "Calling…"
-        ctxSendSignal(payload.fromUser, 'ringing', { callId: payload.callId }).catch(() => {})
-
-        const myId = currentUserRef.current?.id
-        if (!myId) { console.error('[callee] currentUser not ready at ring time'); return true }
-
-        // Callee subscribes to ICE sent to them (from_user=caller, to_user=me)
-        subscribeToIceCandidates(payload.callId, myId, async (candidate) => {
-          try {
-            const cand = typeof candidate === 'string' ? JSON.parse(candidate) : candidate
-            if (pcRef.current?.remoteDescription) {
-              await pcRef.current.addIceCandidate(new RTCIceCandidate(cand))
-            } else {
-              pendingCandidates.current.push(cand)
-            }
-          } catch (err) {
-            console.error('[callee] addIceCandidate error:', err)
-          }
-        })
-
-        return true
-      }
 
       if (_event === 'ringing') {
         callStateRef.current = 'ringing'; setCallState('ringing')
@@ -422,16 +391,8 @@ const chatId = window.location.pathname.replace('/chat/', '') || null
       }
 
       if (_event === 'answer') {
-        // This arrives at the CALLER after receiver answers
-        if (!pcRef.current) {
-          console.error('[answer] no pcRef — caller peer connection missing')
-          return true
-        }
-        if (pcRef.current.signalingState !== 'have-local-offer') {
-          console.error('[answer] wrong signalingState:', pcRef.current.signalingState)
-          return true
-        }
-        console.log('[caller] received answer — setting remote description')
+        if (!pcRef.current) return true
+        if (pcRef.current.signalingState !== 'have-local-offer') return true
         pcRef.current
           .setRemoteDescription(new RTCSessionDescription(payload.answer))
           .then(async () => {
@@ -444,27 +405,16 @@ const chatId = window.location.pathname.replace('/chat/', '') || null
             playConnectedSound()
             callStateRef.current = 'in-call'; setCallState('in-call')
             startCallTimer()
+            setActiveCall?.({ callType: callTypeRef.current, chatPath: window.location.pathname })
           })
           .catch(err => console.error('[answer] setRemoteDescription error:', err))
         return true
       }
 
-      if (_event === 'ice') {
-        if (!pcRef.current) return true
-        try {
-          const cand = typeof payload.candidate === 'string'
-            ? JSON.parse(payload.candidate) : payload.candidate
-          if (pcRef.current.remoteDescription) {
-            pcRef.current.addIceCandidate(new RTCIceCandidate(cand))
-          } else {
-            pendingCandidates.current.push(cand)
-          }
-        } catch (e) {}
-        return true
-      }
-
-      if (_event === 'hangup' || _event === 'decline') {
+      if (_event === 'hangup' || _event === 'decline' || _event === 'cancel') {
+        console.log('[useWebRTC] received:', _event, 'payload callId:', payload.callId, 'local callId:', callIdRef.current)
         stopRingback()
+        ctxStopRing()
         playCallEndSound()
         endCallLocally()
         return true
@@ -472,6 +422,11 @@ const chatId = window.location.pathname.replace('/chat/', '') || null
 
       return false
     })
+
+    return () => {
+      window.removeEventListener('call-ended', onCallEnded)
+      unregister()
+    }
   }
 
   function toggleMute() {
@@ -544,7 +499,8 @@ const chatId = window.location.pathname.replace('/chat/', '') || null
       const pending = JSON.parse(raw)
       sessionStorage.removeItem('__pendingCall')
       sessionStorage.removeItem('__pendingCallId')
-      if (pending.fromUser !== fromUserId) return
+      // Accept call from anyone — not just current chat partner
+      if (!pending.fromUser) return
 
       const myId = currentUserRef.current?.id
       if (!myId) { console.error('[restorePendingCall] currentUser not ready'); return }

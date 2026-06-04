@@ -3,12 +3,21 @@ import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import BottomNav from '../components/BottomNav'
 
+function decodeReply(body) {
+  if (!body) return { body, replyPreview: null, replyToId: null }
+  const match = body.match(/^\x02\[(.+?)\|\|\|([^\]]+)\]\x03(.*)$/s)
+  if (match) return { body: match[3], replyPreview: match[1], replyToId: match[2] }
+  const fallback = body.match(/^(.+?)\|\|\|([a-f0-9-]{36})\](.*)$/s)
+  if (fallback) return { body: fallback[3], replyPreview: fallback[1], replyToId: fallback[2] }
+  return { body, replyPreview: null, replyToId: null }
+}
 export default function ChatList() {
   const navigate = useNavigate()
   const [chats, setChats] = useState([])
   const [loading, setLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState(null)
   const [activeTab, setActiveTab] = useState('all')
+const [search, setSearch] = useState('')
 
   useEffect(() => { loadChats() }, [])
 
@@ -150,10 +159,24 @@ export default function ChatList() {
     'Transport': '🚗', 'Tech & IT': '💻', 'Design': '🎨', 'Catering': '🍳',
   }
 
-  const filtered = chats.filter(c => {
+ const filtered = chats.filter(c => {
   if (activeTab === 'services') return c.isService
   if (activeTab === 'listings') return !c.isService && !c.isDirect
-  return !c.isDirect  // "All" tab also excludes bare direct chats
+  if (c.isDirect) return false
+
+  if (search.trim()) {
+    const q = search.toLowerCase()
+    const nameMatch    = c.displayName?.toLowerCase().includes(q)
+    const contextMatch = (c.service?.name || c.listing?.title || '').toLowerCase().includes(q)
+    const msgBody      = decodeReply(c.lastMsg?.body || '').body?.toLowerCase()
+    const msgMatch     = msgBody?.includes(q)
+    if (nameMatch || contextMatch || msgMatch) {
+      c._matchedMsgId = msgMatch ? c.lastMsg?.id : null
+      return true
+    }
+    return false
+  }
+  return true
 })
   const totalUnread   = chats.reduce((sum, c) => sum + c.unread, 0)
   const serviceUnread = chats.filter(c => c.isService).reduce((sum, c) => sum + c.unread, 0)
@@ -163,16 +186,40 @@ export default function ChatList() {
     const msg = chat.lastMsg
     const isMine = msg.from_user === currentUser?.id
     const prefix = isMine ? 'You: ' : ''
+
+    // ── Call logs ──────────────────────────────────────────
     if (msg.call_type) {
       const isVideo = msg.call_type === 'video'
-      if (msg.call_status === 'missed') return prefix + (isVideo ? '📹 Missed video call' : '📞 Missed call')
-      if (msg.call_status === 'ended')  return prefix + (isVideo ? '📹 Video call' : '📞 Voice call')
+      const icon = isVideo ? '📹' : '📞'
+      if (msg.call_status === 'missed') {
+        return (isMine ? 'Missed ' : 'Missed ') + icon + (isVideo ? ' Video call' : ' Voice call')
+      }
+      if (msg.call_status === 'ended') {
+        const dur = msg.call_duration
+        const durStr = dur
+          ? (dur >= 60
+              ? Math.floor(dur / 60) + 'm ' + (dur % 60) + 's'
+              : dur + 's')
+          : ''
+        return icon + ' ' + (isVideo ? 'Video call' : 'Voice call') + (durStr ? ' · ' + durStr : '')
+      }
+      return icon + ' ' + (isVideo ? 'Video call' : 'Voice call')
     }
+
+    // ── Media ──────────────────────────────────────────────
     if (msg.media_type === 'image') return prefix + '📷 Photo'
     if (msg.media_type === 'video') return prefix + '🎥 Video'
     if (msg.media_type === 'audio') return prefix + '🎤 Voice note'
-    if (!msg.body) return prefix + '📎 File'
-    const text = msg.body.length > 45 ? msg.body.slice(0, 45) + '…' : msg.body
+
+    // ── Clean body text ────────────────────────────────────
+    if (!msg.body) return prefix + '📎 Attachment'
+
+    // Use same decode logic as Chat.jsx
+    const decoded = decodeReply(msg.body)
+    let body = (decoded.body || '').trim()
+
+    if (!body) body = 'Message'
+    const text = body.length > 45 ? body.slice(0, 45) + '…' : body
     return prefix + text
   }
 
@@ -207,7 +254,26 @@ export default function ChatList() {
           {totalUnread > 0 && <div style={S.totalBadge}>{totalUnread}</div>}
         </div>
 
-        <div style={S.tabs}>
+        <div style={S.searchWrap}>
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#aaa" strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0 }}>
+    <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+  </svg>
+  <input
+    style={S.searchInput}
+    placeholder="Search conversations…"
+    value={search}
+    onChange={e => setSearch(e.target.value)}
+  />
+  {search && (
+    <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#aaa', padding: 0 }} onClick={() => setSearch('')}>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round">
+        <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+      </svg>
+    </button>
+  )}
+</div>
+
+<div style={S.tabs}>
           <button style={{ ...S.tab, ...(activeTab === 'all'      ? S.tabActive : {}) }} onClick={() => setActiveTab('all')}>
             All {totalUnread > 0 && <span style={S.tabBadge}>{totalUnread}</span>}
           </button>
@@ -283,6 +349,7 @@ export default function ChatList() {
     const chatPath = chat.contextId
       ? `/chat/${chat.otherId}/${chat.contextId}`
       : `/chat/${chat.otherId}`
+    const chatState = chat._matchedMsgId ? { state: { scrollToMessageId: chat._matchedMsgId } } : {}
 
     // Avatar: real profile photo > initials
     const initial = (displayName || 'U')[0].toUpperCase()
@@ -291,7 +358,7 @@ export default function ChatList() {
       <div
         key={chat.key}
         style={{ ...S.chatRow, animationDelay: i * 0.04 + 's', background: hasUnread ? '#fafffd' : '#fff' }}
-        onClick={() => navigate(chatPath)}
+        onClick={() => navigate(chatPath, chatState)}
       >
         {/* Avatar — real profile picture */}
         <div style={S.avatarWrap}>
@@ -339,7 +406,7 @@ export default function ChatList() {
           )}
 
           <div style={S.chatBottom}>
-            <span style={{ ...S.lastMsg, fontWeight: hasUnread ? '600' : '400', color: hasUnread ? '#0f1410' : '#888' }}>
+            <span style={{ ...S.lastMsg, fontWeight: hasUnread || search ? '600' : '400', color: hasUnread ? '#0f1410' : search && chat._matchedMsgId ? '#1a7a4a' : '#888' }}>
               {renderLastMsg(chat)}
             </span>
             {hasUnread && (
@@ -389,5 +456,17 @@ const S = {
   chatBottom: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' },
   lastMsg: { fontSize: '13px', color: '#888', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 },
   unreadBadge: { background: '#1a7a4a', color: '#fff', borderRadius: '10px', minWidth: '20px', height: '20px', fontSize: '10px', fontWeight: '800', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: '8px', padding: '0 5px' },
+searchWrap: {
+  display: 'flex', alignItems: 'center', gap: 8,
+  margin: '8px 14px',
+  background: '#f4f8f5', borderRadius: 50,
+  padding: '9px 14px',
+  border: '1.5px solid #e0ebe3',
+},
+searchInput: {
+  flex: 1, border: 'none', background: 'transparent',
+  fontSize: 14, color: '#111', outline: 'none',
+  fontFamily: 'inherit',
+},
 productThumb: { position: 'absolute', bottom: -3, right: -3, width: '26px', height: '26px', borderRadius: '8px', border: '2px solid #fff', overflow: 'hidden', background: '#e8f0eb', boxShadow: '0 2px 10px rgba(0,0,0,0.3)', outline: '1px solid rgba(0,0,0,0.08)' },
 }
