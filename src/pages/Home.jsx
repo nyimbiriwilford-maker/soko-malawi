@@ -326,7 +326,6 @@ export default function Home() {
       </div>
 
       <BottomNav />
-      <InstallPrompt />
     </div>
   )
 }
