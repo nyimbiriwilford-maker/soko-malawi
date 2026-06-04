@@ -73,6 +73,7 @@ export default function App() {
   const [session,    setSession]    = useState(undefined)
   const [role,       setRole]       = useState(undefined)
   const [isRecovery, setIsRecovery] = useState(false)
+const [installPrompt, setInstallPrompt] = useState(null)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -127,6 +128,13 @@ export default function App() {
     return () => subscription.unsubscribe()
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault()
+      setInstallPrompt(e)
+    })
+  }, [])
+
   function setupPush(session) {
     if (!session?.user) return
     registerPushNotifications(session.user.id, supabase)
@@ -153,6 +161,12 @@ export default function App() {
     })
   }
 
+  async function handleInstall() {
+    if (!installPrompt) return
+    await installPrompt.prompt()
+    setInstallPrompt(null)
+  }
+
   async function fetchRole(userId) {
     const { data } = await supabase
       .from('profiles')
@@ -173,6 +187,32 @@ export default function App() {
 
   return (
     <CallProvider>
+      {installPrompt && (
+        <div style={{
+          position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 9999,
+          background: '#1a1f1b', borderTop: '1px solid #2e7d32',
+          padding: '12px 16px', display: 'flex',
+          alignItems: 'center', justifyContent: 'space-between', gap: 12,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <img src="/icons/icon-192.png" style={{ width: 36, height: 36, borderRadius: 8 }} />
+            <div>
+              <div style={{ color: '#fff', fontWeight: 600, fontSize: 14 }}>Install SokoMw</div>
+              <div style={{ color: '#8a9e8f', fontSize: 12 }}>Add to home screen for quick access</div>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => setInstallPrompt(null)} style={{
+              background: 'transparent', border: '1px solid #3a4a3d',
+              color: '#8a9e8f', borderRadius: 20, padding: '6px 14px', cursor: 'pointer', fontSize: 13,
+            }}>Not now</button>
+            <button onClick={handleInstall} style={{
+              background: '#2e7d32', border: 'none',
+              color: '#fff', borderRadius: 20, padding: '6px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600,
+            }}>Install</button>
+          </div>
+        </div>
+      )}
       <BrowserRouter>
         {authed && <GlobalCallListener />}
         <Suspense fallback={<PageLoader />}>
