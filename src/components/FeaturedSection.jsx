@@ -150,15 +150,14 @@ function FeaturedCard({ item, index: i, navigate, size, adminMode, isFeatured, t
   const badge   = item.promo_badge && BADGE_META[item.promo_badge]
   const catMeta = CAT_META[item.category] || { color: '#1a7a4a' }
   const emoji   = CAT_EMOJI[item.category] || '📦'
-  const imgH    = size === 'large' ? 200 : 130
-  const cardW   = size === 'large' ? 175 : '100%'
-
+  const imgH    = size === 'large' ? 220 : 130
+  const cardW   = size === 'large' ? '100%' : '100%'
   return (
     <div
       style={{
         ...S.card,
         width: cardW,
-        flexShrink: size === 'large' ? 0 : undefined,
+        flexShrink: undefined,
         animation: `featuredSlideIn 0.4s cubic-bezier(0.34,1.2,0.64,1) ${0.08 + i * 0.06}s both`,
         opacity: adminMode && !isFeatured ? 0.6 : 1,
       }}
@@ -277,10 +276,11 @@ const S = {
   section: {
     padding: '14px 0 6px',
     animation: 'featuredHeaderIn 0.4s ease both',
+    width: '100%',
   },
   header: {
     display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-    padding: '0 14px', marginBottom: 12,
+    padding: '0 16px', marginBottom: 12,
   },
   headerLeft: { display: 'flex', alignItems: 'center', gap: 8 },
   iconWrap: {
@@ -315,7 +315,7 @@ const S = {
   },
   adminHint: {
     display: 'flex', alignItems: 'center', gap: 6,
-    margin: '0 14px 10px',
+    margin: '0 16px 10px',
     background: '#FAEEDA', border: '0.5px solid #FAC775',
     borderRadius: 10, padding: '8px 12px',
     fontSize: 12, fontWeight: 500, color: '#854F0B',
@@ -324,16 +324,16 @@ const S = {
     padding: '20px 14px',
     fontSize: 13, color: '#aaa', textAlign: 'center',
   },
-  scroll: {
-    display: 'flex', gap: 10, overflowX: 'auto',
-    padding: '0 14px 6px',
-    scrollSnapType: 'x mandatory',
-    scrollbarWidth: 'none',
-    msOverflowStyle: 'none',
+ scroll: {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 1fr)',
+    gap: 12,
+    padding: '0 16px 6px',
+    width: '100%',
   },
   grid: {
-    display: 'grid', gridTemplateColumns: '1fr 1fr',
-    gap: 10, padding: '0 14px 6px',
+    display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+    gap: 12, padding: '0 16px 6px',
   },
   card: {
     borderRadius: 14, overflow: 'hidden',

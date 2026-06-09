@@ -2,6 +2,9 @@ import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import Comments from '../components/Comments'
+import VouchChainBanner from '../components/VouchChainBanner'
+import TrustBadge from '../components/TrustBadge'
+import { resolveVouchChain, getTrustScore, getConfirmedDealCount } from '../utils/vouchUtils'
 
 const CAT_META = {
   Electronics: { color: '#1a7a4a', bg: '#e6f4ec' },
@@ -81,6 +84,9 @@ export default function ListingDetail() {
   const [quantity, setQuantity] = useState(1)
   const [showShareSheet, setShowShareSheet] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [vouchChain,  setVouchChain]  = useState(null)
+const [sellerTrust, setSellerTrust] = useState(null)
+const [sellerDeals, setSellerDeals] = useState(0)
   const touchStartX = useRef(null)
   const viewNotifSent = useRef(false)
 
@@ -111,6 +117,17 @@ export default function ListingDetail() {
         const { data: usr } = await supabase.from('users').select('*').eq('id', data.seller_id).single()
         setSeller(usr)
       }
+    }
+    // Load trust + vouch chain for non-owners
+    if (user && data?.seller_id && user.id !== data.seller_id) {
+      const [chain, ts, dc] = await Promise.all([
+        resolveVouchChain(user.id, data.seller_id),
+        getTrustScore(data.seller_id),
+        getConfirmedDealCount(data.seller_id),
+      ])
+      setVouchChain(chain)
+      setSellerTrust(ts)
+      setSellerDeals(dc)
     }
     setLoading(false)
 
@@ -589,6 +606,17 @@ export default function ListingDetail() {
             )}
           </div>
         </div>
+
+        {!isOwner && (
+          <div style={{ marginTop: 10, marginBottom: 4 }}>
+            <VouchChainBanner vouchChain={vouchChain} loading={false} />
+            {sellerTrust && (
+              <div style={{ marginTop: 8 }}>
+                <TrustBadge trustScore={sellerTrust} dealCount={sellerDeals} size="sm" />
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── COMMENTS ── */}
 <div style={S.section}>

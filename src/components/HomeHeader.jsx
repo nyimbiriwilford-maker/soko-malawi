@@ -44,7 +44,7 @@ export default function HomeHeader({
   const totalActive = activeFilters + (sortIdx !== 0 ? 1 : 0)
 
   return (
-    <div style={S.header}>
+    <div style={S.header} className="soko-top-nav-mobile">
       <div style={S.headerInner}>
 
         {/* ══ SINGLE TOP ROW: logo · search · actions ══ */}
@@ -131,8 +131,6 @@ export default function HomeHeader({
             <button
               style={{ ...S.iconBtn, position: 'relative' }}
               onClick={() => navigate('/notifications')}
-              onMouseEnter={e => e.currentTarget.style.animation = 'bellWiggle 0.5s ease'}
-              onMouseLeave={e => e.currentTarget.style.animation = ''}
             >
               <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
@@ -143,7 +141,7 @@ export default function HomeHeader({
 
             {/* Profile */}
             <button
-              style={{ ...S.profileBtn, animation: 'logoPopIn 0.5s cubic-bezier(0.34,1.56,0.64,1) 0.3s both' }}
+              style={S.profileBtn}
               onClick={() => navigate('/profile')}
             >
               {user?.user_metadata?.avatar_url
@@ -338,7 +336,7 @@ const SORT_ICON = [
 const S = {
   // ── header shell ─────────────────────────────────────────
   header:      { background: '#fff', borderBottom: '1px solid #e8ede9', position: 'sticky', top: 0, zIndex: 50, boxShadow: '0 2px 10px rgba(0,0,0,0.05)' },
-  headerInner: { padding: '0 12px' },
+  headerInner: { padding: '0 12px', maxWidth: 1400, margin: '0 auto' },
 
   // ── single top row: logo · search · actions ───────────────
   topRow: {
@@ -352,7 +350,7 @@ const S = {
   },
   brand: {
     fontFamily: "'Sora',system-ui,sans-serif",
-    fontSize: 20,
+    fontSize: 'clamp(18px, 2.5vw, 24px)',
     fontWeight: 800,
     color: '#1a7a4a',
     letterSpacing: '-0.5px',
@@ -439,7 +437,7 @@ animCursor:  { display: 'none' },clearBtn:        { background: 'none', border: 
     display: 'flex',
     alignItems: 'center',
     borderTop: '1px solid #f0f5f1',
-    padding: '9px 0 9px',
+    padding: '9px 0',
     background: '#fff',
   },
   catScroll: {

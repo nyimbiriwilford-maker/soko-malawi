@@ -7,7 +7,7 @@ export default function HomeStyles() {
     <style>{`
       @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=DM+Sans:wght@400;500;600&display=swap');
       * { box-sizing: border-box; }
-      @keyframes fadeUp        { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
+      @keyframes fadeUp        { from{opacity:0} to{opacity:1} }
       @keyframes shimmer       { 0%{background-position:-400px 0} 100%{background-position:400px 0} }
       @keyframes pulse         { 0%,100%{opacity:1} 50%{opacity:0.4} }
       @keyframes slideDown     { from{opacity:0;transform:translateY(-8px)} to{opacity:1;transform:translateY(0)} }
@@ -44,8 +44,8 @@ export default function HomeStyles() {
       button, select { font-family: 'DM Sans', system-ui, sans-serif; }
       .catpill { transition: background 0.16s, color 0.16s, border-color 0.16s, transform 0.1s; }
       .catpill:active { transform: scale(0.93); }
-      .listing-card { transition: transform 0.15s, box-shadow 0.15s; cursor: pointer; }
-      .listing-card:active { transform: scale(0.97); }
+      .listing-card { cursor: pointer; }
+      .listing-card:active { opacity: 0.92; }
       .listing-card:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.12) !important; }
     `}</style>
   )

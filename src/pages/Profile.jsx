@@ -2,6 +2,9 @@ import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import BottomNav from '../components/BottomNav' // adjust path as needed
+import VouchSection from '../components/VouchSection'
+import StatusPicker from '../components/StatusPicker'
+import { useStatuses } from '../hooks/useStatuses'
 
 const CITIES = ['Lilongwe', 'Blantyre', 'Mzuzu', 'Zomba', 'Kasungu', 'Mangochi', 'Karonga', 'Salima']
 
@@ -20,6 +23,9 @@ export default function Profile() {
   const [form, setForm] = useState({ full_name: '', city: '' })
   const [tab, setTab] = useState('listings') // listings | saved
   const [deleteConfirm, setDeleteConfirm] = useState(null)
+  const [showStatusPicker, setShowStatusPicker] = useState(false)
+  const { statuses: myStatuses } = useStatuses(user?.id)
+  const activeStatus = myStatuses[0] || null
 
   useEffect(() => { init() }, [])
 
@@ -190,6 +196,8 @@ async function loadListings(uid) {
         </div>
       </div>
 
+      <VouchSection targetUserId={user?.id} viewerUserId={user?.id} />
+
       {/* Tabs */}
       <div style={S.tabs}>
         <button style={{ ...S.tab, ...(tab === 'listings' ? S.tabActive : {}) }} onClick={() => setTab('listings')}>
@@ -259,6 +267,58 @@ async function loadListings(uid) {
           </div>
         </div>
       )}
+      {/* Status section */}
+      <div style={{ margin: '0 14px 14px' }}>
+        {activeStatus ? (
+          <div style={{
+            background: '#e8f5e9', border: '1.5px solid #a5d6a7',
+            borderRadius: 14, padding: '12px 14px',
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: '#2e7d32', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+              Your active status
+            </div>
+            <div style={{ fontSize: 13, color: '#1b5e20', fontWeight: 600, marginBottom: 8 }}>
+              {activeStatus.content}
+            </div>
+            <button
+              onClick={() => setShowStatusPicker(true)}
+              style={{ background: 'none', border: '1.5px solid #a5d6a7', borderRadius: 8, padding: '5px 12px', fontSize: 12, fontWeight: 700, color: '#2e7d32', cursor: 'pointer' }}
+            >
+              Update
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={() => setShowStatusPicker(true)}
+            style={{
+              width: '100%', background: '#f0faf4',
+              border: '1.5px dashed #a5d6a7', borderRadius: 14,
+              padding: '12px 16px', fontSize: 13, fontWeight: 700,
+              color: '#2e7d32', cursor: 'pointer', display: 'flex',
+              alignItems: 'center', justifyContent: 'center', gap: 8,
+            }}
+          >
+            <span style={{ fontSize: 16 }}>📢</span>
+            Let buyers know you're available today
+          </button>
+        )}
+      </div>
+{/* Status Picker modal */}
+      {showStatusPicker && (
+        <div style={S.overlay} onClick={() => setShowStatusPicker(false)}>
+          <div style={{ ...S.confirmCard, width: '100%', maxWidth: 480, borderRadius: '24px 24px 0 0', padding: '24px 20px 32px', textAlign: 'left' }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: '#0f1410' }}>Post a Status</div>
+              <button onClick={() => setShowStatusPicker(false)} style={{ background: 'none', border: 'none', fontSize: 20, color: '#9ca3af', cursor: 'pointer', lineHeight: 1 }}>✕</button>
+            </div>
+            <StatusPicker
+              userId={user?.id}
+              onDone={() => setShowStatusPicker(false)}
+            />
+          </div>
+        </div>
+      )}
+
       <BottomNav />
     </div>
   )

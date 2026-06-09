@@ -153,7 +153,7 @@ export function SkeletonCard() {
 }
 
 const S = {
-  card: { background: '#fff', borderRadius: 16, overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', animation: 'fadeUp 0.35s ease both', border: '1px solid #edf2ee' },
+  card: { background: '#fff', borderRadius: 16, overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.06)', border: '1px solid #edf2ee', minWidth: 0 },
   cardFlash: { border: '1.5px solid #fecaca', boxShadow: '0 2px 12px rgba(220,38,38,0.12)' },
   cardThumb: { position: 'relative', paddingTop: '78%', background: '#f0f4f1', overflow: 'hidden' },
   cardImg: { position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' },
@@ -165,9 +165,9 @@ const S = {
   cardCatDot: { position: 'absolute', bottom: 7, left: 8, width: 9, height: 9, borderRadius: '50%', boxShadow: '0 0 0 2px rgba(255,255,255,0.9)' },
   cardTimeTag: { position: 'absolute', bottom: 7, right: 7, background: 'rgba(0,0,0,0.52)', color: '#fff', fontSize: 9.5, fontWeight: 600, borderRadius: 5, padding: '2px 6px' },
   cardBody: { padding: '9px 10px 11px' },
-  cardTitle: { fontSize: 13, fontWeight: 600, color: '#111', marginBottom: 5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: '1.35' },
+  cardTitle: { fontSize: 'clamp(11px, 1.8vw, 14px)', fontWeight: 600, color: '#111', marginBottom: 5, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', lineHeight: '1.35' },
   cardPriceBlock: { marginBottom: 4 },
-  cardPrice: { fontSize: 15, fontWeight: 800, color: '#1a7a4a', fontFamily: "'Sora', system-ui, sans-serif" },
+  cardPrice: { fontSize: 'clamp(12px, 2vw, 16px)', fontWeight: 800, color: '#1a7a4a', fontFamily: "'Sora', system-ui, sans-serif" },
   cardPriceFlash: { color: '#dc2626' },
   cardFreePrice: { fontSize: 14, fontWeight: 900, color: '#15803d', background: '#dcfce7', borderRadius: 6, padding: '1px 8px', display: 'inline-block' },
   cardOrigPrice: { fontSize: 10, color: '#bbb', textDecoration: 'line-through', marginLeft: 2 },

@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react'
+import React, { useEffect, useState, useMemo, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
@@ -8,12 +8,224 @@ import FlashSaleStrip  from '../components/FlashSaleStrip'
 import FeaturedSection from '../components/FeaturedSection'
 import { ProductCard, SkeletonCard } from '../components/ProductCard'
 import BottomNav       from '../components/BottomNav'
-import InstallPrompt   from '../components/InstallPrompt'
+import InstallPrompt       from '../components/InstallPrompt'
+
 
 import useSearchAnimation  from '../hooks/useSearchAnimation'
 import { useUserLocation } from '../hooks/useUserLocation'
-import { ALL_CATEGORIES, PRICE_RANGES } from '../constants/homeConstants'
+import { ALL_CATEGORIES, PRICE_RANGES, CAT_META } from '../constants/homeConstants'
 import { isFlashActive, sortProductsSmart, trackSearch } from '../utils/homeUtils'
+
+function HeroBg({ images }) {
+  const [stack, setStack] = useState([0, 1])
+  const [phase, setPhase] = useState('idle') // idle | leaving | entering
+
+  const imgs = images?.length >= 2 ? images : null
+  const len = imgs?.length || 1
+
+  useEffect(() => {
+    if (!imgs) return
+    const interval = setInterval(() => {
+      // Phase 1: current starts sliding + fading out
+      setPhase('leaving')
+      setTimeout(() => {
+        // Phase 2: advance index, new image slides in
+        setStack(([, n]) => [n, (n + 1) % len])
+        setPhase('entering')
+        setTimeout(() => {
+          setPhase('idle')
+        }, 900)
+      }, 800)
+    }, 5500)
+    return () => clearInterval(interval)
+  }, [len])
+
+  const baseStyle = {
+    position: 'absolute', inset: 0, zIndex: 0,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center center',
+    backgroundRepeat: 'no-repeat',
+    willChange: 'transform, opacity',
+  }
+
+  if (!imgs) return (
+    <div style={{
+      position: 'absolute', inset: 0, zIndex: 0,
+      backgroundImage: 'linear-gradient(135deg, #0d4a2c 0%, #1a7a4a 60%, #22a05e 100%)',
+      willChange: 'transform, opacity',
+    }} />
+  )
+
+  const [cur, nxt] = stack
+
+  // Current slide — slow zoom in idle, slides+fades out on leave
+  const curStyle = {
+    ...baseStyle,
+    backgroundImage: `url('${imgs[cur]}')`,
+    opacity: phase === 'leaving' ? 0 : 1,
+    transform: phase === 'leaving'
+      ? 'scale(1.08) translateX(-12px)'
+      : 'scale(1.03) translateX(0)',
+    transition: phase === 'leaving'
+      ? 'opacity 0.8s cubic-bezier(0.4,0,1,1), transform 0.8s cubic-bezier(0.4,0,1,1)'
+      : 'transform 8s linear',
+  }
+
+  // Next slide — starts slightly right + transparent, slides in from right
+  const nxtStyle = {
+    ...baseStyle,
+    backgroundImage: `url('${imgs[nxt]}')`,
+    opacity: phase === 'idle' ? 0 : phase === 'entering' ? 1 : 0.6,
+    transform: phase === 'idle'
+      ? 'scale(1.06) translateX(18px)'
+      : phase === 'entering'
+      ? 'scale(1.03) translateX(0)'
+      : 'scale(1.05) translateX(8px)',
+    transition: phase === 'entering'
+      ? 'opacity 0.9s cubic-bezier(0,0,0.2,1), transform 0.9s cubic-bezier(0,0,0.2,1)'
+      : phase === 'leaving'
+      ? 'opacity 0.5s ease, transform 0.5s ease'
+      : 'none',
+    zIndex: phase !== 'idle' ? 1 : 0,
+  }
+
+  return (
+    <>
+      <div style={curStyle} />
+      <div style={nxtStyle} />
+    </>
+  )
+}
+
+function SidebarDesktop({ category, setCategory, categoriesWithProducts, navigate, sidebarExpanded, setSidebarExpanded }) {
+  return (
+    <aside className="soko-sidebar">
+      <div className="soko-sidebar-section">Browse</div>
+      {categoriesWithProducts.map((key) => (
+        <button key={key} className={`soko-sidebar-cat ${category === key ? 'active' : ''}`}
+          onClick={() => setCategory(key)}
+          style={{ width: '100%', textAlign: 'left', background: category === key ? '#e6f4ec' : 'transparent', borderWidth: 0, color: category === key ? '#1a7a4a' : '#3d5244', fontWeight: category === key ? 700 : 500 }}>
+          <span style={{ fontSize: 18 }}>{CAT_META[key]?.emoji}</span>
+          <span>{key}</span>
+        </button>
+      ))}
+      {categoriesWithProducts.length > 6 && (
+        <button onClick={() => setSidebarExpanded(e => !e)}
+          style={{ width: '100%', textAlign: 'left', background: 'transparent', borderWidth: 0, display: 'flex', alignItems: 'center', gap: 10, padding: '10px 20px', fontSize: 13, fontWeight: 700, color: '#1a7a4a', cursor: 'pointer' }}>
+          <span style={{ fontSize: 16 }}>{sidebarExpanded ? '▲' : '▼'}</span>
+          <span>{sidebarExpanded ? 'Show less' : `${categoriesWithProducts.length - 6} more…`}</span>
+        </button>
+      )}
+      <div className="soko-sidebar-section" style={{ marginTop: 12 }}>Quick links</div>
+      <button className="soko-sidebar-cat" onClick={() => navigate('/post')} style={{ width: '100%', textAlign: 'left', background: 'transparent', borderWidth: 0 }}>
+        <span style={{ fontSize: 18 }}>➕</span><span>Post a listing</span>
+      </button>
+      <button className="soko-sidebar-cat" onClick={() => navigate('/status')} style={{ width: '100%', textAlign: 'left', background: 'transparent', borderWidth: 0 }}>
+        <span style={{ fontSize: 18 }}>📢</span><span>My Status</span>
+      </button>
+      <button className="soko-sidebar-cat" onClick={() => navigate('/services')} style={{ width: '100%', textAlign: 'left', background: 'transparent', borderWidth: 0 }}>
+        <span style={{ fontSize: 18 }}>🛠️</span><span>Services</span>
+      </button>
+      <button className="soko-sidebar-cat" onClick={() => navigate('/jobs')} style={{ width: '100%', textAlign: 'left', background: 'transparent', borderWidth: 0 }}>
+        <span style={{ fontSize: 18 }}>💼</span><span>Jobs</span>
+      </button>
+    </aside>
+  )
+}
+
+function DesktopNav({ search, setSearch, navigate, onImageFile, imgSearchState, animKeywords, animIdx }) {
+  const fileInputRef = useRef(null)
+  const inputRef = useRef(null)
+  const keyword = animKeywords?.length > 0 ? animKeywords[animIdx % animKeywords.length] : 'Samsung Galaxy A57'
+
+  function handleSearch() {
+    if (!search && keyword) setSearch(keyword)
+    inputRef.current?.blur()
+  }
+  return (
+    <nav className="soko-desktop-nav soko-top-nav-desktop">
+      <span className="brand">Soko<span style={{ color: '#f59e0b' }}>Mw</span></span>
+      <div style={{
+        flex: 1, maxWidth: 600,
+        display: 'flex', alignItems: 'center', gap: 5,
+        background: '#f4f8f5', borderRadius: 50,
+        padding: '8px 10px 8px 11px',
+        border: '1.5px solid #e2ebe4',
+        minWidth: 0,
+        position: 'relative',
+      }}>
+        {/* Search icon — clicking it triggers search */}
+        <button onClick={handleSearch} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: 0, flexShrink: 0 }} tabIndex={-1}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1a7a4a" strokeWidth="2.6" strokeLinecap="round">
+            <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+          </svg>
+        </button>
+        {/* Input */}
+        <input
+          ref={inputRef}
+          id="desktop-search-input"
+          type="text"
+          placeholder=""
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && handleSearch()}
+          style={{ flex: 1, border: 'none', background: 'transparent', fontSize: 13.5, color: '#111', outline: 'none', fontFamily: "'DM Sans',system-ui,sans-serif" }}
+        />
+        {/* Animated placeholder */}
+        {!search && (
+          <div style={{ position: 'absolute', left: 36, top: '50%', transform: 'translateY(-50%)', display: 'flex', alignItems: 'center', pointerEvents: 'none', whiteSpace: 'nowrap', overflow: 'hidden' }}>
+            <span style={{ color: '#bbb', fontSize: 13.5 }}>Search </span>
+            <span key={animIdx} style={{ color: '#1a7a4a', fontWeight: 700, fontSize: 13.5, marginLeft: 3, animation: 'wordSlideUp 3.5s cubic-bezier(0.16,1,0.3,1) forwards' }}>
+              {keyword}
+            </span>
+          </div>
+        )}
+        {/* Clear or divider */}
+        {search
+          ? <button style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', color: '#999', padding: '2px 4px', flexShrink: 0 }} onClick={() => setSearch('')}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round">
+                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+          : <div style={{ width: 1, height: 16, background: '#d4dfd6', flexShrink: 0, margin: '0 2px' }} />
+        }
+        {/* Camera button */}
+        {!search && (
+          <button
+            style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '2px 4px', flexShrink: 0, opacity: imgSearchState === 'analyzing' ? 0.5 : 1 }}
+            onClick={() => fileInputRef.current?.click()}
+            disabled={imgSearchState === 'analyzing'}
+            title="Search by photo"
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1a7a4a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+          </button>
+        )}
+        <input ref={fileInputRef} type="file" accept="image/*" capture="environment" style={{ display: 'none' }} onChange={onImageFile} />
+      </div>
+      <div className="nav-actions">
+        <button className="nav-btn" onClick={() => navigate('/chats')}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          Chats
+        </button>
+        <button className="nav-btn" onClick={() => navigate('/notifications')}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          Alerts
+        </button>
+        <button className="nav-btn" onClick={() => navigate('/profile')}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+          Profile
+        </button>
+        <button className="nav-btn primary" onClick={() => navigate('/post')}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Post Listing
+        </button>
+      </div>
+    </nav>
+  )
+}
 
 export default function Home() {
   const navigate = useNavigate()
@@ -28,6 +240,7 @@ export default function Home() {
   const [search,      setSearch]      = useState('')
   const [category,    setCategory]    = useState('All')
   const [city,        setCity]        = useState('All')
+  const [userCity,    setUserCity]    = useState('')
   const [priceIdx,    setPriceIdx]    = useState(0)
   const [sortIdx,     setSortIdx]     = useState(0)
   const [showFilters, setShowFilters] = useState(false)
@@ -58,10 +271,11 @@ export default function Home() {
   if (user) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('avatar_url, full_name')
+      .select('avatar_url, full_name, city')
       .eq('id', user.id)
       .maybeSingle()
     setUser({ ...user, avatar_url: profile?.avatar_url || null })
+    if (profile?.city) setUserCity(profile.city)
     loadNotifs(user.id)
   }
   await loadListings()
@@ -148,6 +362,13 @@ export default function Home() {
 
   const flashCount = listings.filter(l => isFlashActive(l)).length
 
+  const heroImages = useMemo(() =>
+    listings
+      .filter(l => l.images?.[0])
+      .map(l => l.images[0])
+      .slice(0, 10),
+  [listings])
+
   // ── Helpers ───────────────────────────────
   function clearFilters() { setCategory('All'); setCity('All'); setPriceIdx(0); setSearch('') }
 
@@ -217,9 +438,43 @@ export default function Home() {
   }
 
   // ── Render ────────────────────────────────
+  const [sidebarExpanded, setSidebarExpanded] = useState(false)
+  const visibleCats = sidebarExpanded ? categoriesWithProducts : categoriesWithProducts.slice(0, 6)
+
   return (
-    <div style={page}>
+    <div className="soko-page-shell" style={page}>
       <HomeStyles />
+      <DesktopNav search={search} setSearch={setSearch} navigate={navigate} onImageFile={handleImageFile} imgSearchState={imgSearchState} animKeywords={animKeywords} animIdx={animIdx} />
+      <SidebarDesktop category={category} setCategory={setCategory} categoriesWithProducts={visibleCats} navigate={navigate} sidebarExpanded={sidebarExpanded} setSidebarExpanded={setSidebarExpanded} />
+      <div className="soko-main-content">
+      {/* Hero — desktop only */}
+      <div className="soko-hero">
+        <HeroBg images={heroImages} />
+        <div className="soko-hero-overlay" />
+        <div className="soko-hero-text">
+          <div className="soko-hero-eyebrow">🇲🇼 Malawi's Marketplace</div>
+          <h1>Buy &amp; Sell <em>Anything</em><br />in Malawi</h1>
+          <p>Thousands of listings from sellers across every district — electronics, clothing, vehicles and more.</p>
+          <div className="soko-hero-cta">
+            <button className="soko-hero-btn white" onClick={() => navigate('/post')}>＋ Post a Listing</button>
+            <button className="soko-hero-btn outline" onClick={() => setCategory('All')}>Browse All</button>
+          </div>
+        </div>
+        <div className="soko-hero-stats">
+          <div className="soko-hero-stat">
+            <div className="soko-hero-stat-icon">🛍️</div>
+            <div><span className="num">1.2K+</span><span className="lbl">Active listings</span></div>
+          </div>
+          <div className="soko-hero-stat">
+            <div className="soko-hero-stat-icon">🤝</div>
+            <div><span className="num">800+</span><span className="lbl">Verified sellers</span></div>
+          </div>
+          <div className="soko-hero-stat">
+            <div className="soko-hero-stat-icon">📍</div>
+            <div><span className="num">24</span><span className="lbl">Districts covered</span></div>
+          </div>
+        </div>
+      </div>
 
       {/* Test banner */}
       <div style={testBanner}>
@@ -263,6 +518,8 @@ export default function Home() {
     onRefresh={loadListings}
   />
 )}
+
+      
 
       {(activeFilters > 0 || sortIdx !== 0 || search) ? (
         <div style={resultsBanner}>
@@ -326,30 +583,31 @@ export default function Home() {
       </div>
 
       <BottomNav />
+    </div>{/* end soko-main-content */}
     </div>
   )
 }
 
 // ── Styles ─────────────────────────────────────────────────
-const page = { minHeight: '100vh', background: '#f7f8f6', paddingBottom: 90, fontFamily: "'DM Sans', system-ui, sans-serif", maxWidth: 480, margin: '0 auto' }
+const page = { minHeight: '100vh', background: '#f7f8f6', paddingBottom: 90, fontFamily: "'DM Sans', system-ui, sans-serif", isolation: 'isolate' }
 
-const resultsBar   = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px 6px' }
+const resultsBar   = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px 6px', maxWidth: 1400, margin: '0 auto' }
 const resultsCount = { fontSize: 12, fontWeight: 600, color: '#aaa' }
 const locationPill = {
   display: 'flex', alignItems: 'center', gap: 4,
   fontSize: 11, fontWeight: 600, color: '#1a7a4a',
   background: '#e6f4ec', borderRadius: 20, padding: '3px 9px',
 }
-const resultsBanner      = { margin: '10px 14px 2px', background: 'linear-gradient(135deg,#e6f4ec,#f0f9f4)', border: '1.5px solid #a3d4b5', borderRadius: 14, padding: '10px 14px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', animation: 'fadeUp 0.25s ease both' }
+const resultsBanner      = { margin: '10px auto 2px', maxWidth: 1400, padding: '10px 16px', background: 'linear-gradient(135deg,#e6f4ec,#f0f9f4)', border: '1.5px solid #a3d4b5', borderRadius: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', animation: 'fadeUp 0.25s ease both' }
 const resultsBannerLeft  = { display: 'flex', alignItems: 'center', gap: 12 }
 const resultsBannerCount = { fontSize: 28, fontWeight: 900, color: '#1a7a4a', fontFamily: "'Sora', system-ui, sans-serif", lineHeight: 1, letterSpacing: '-1px' }
 const resultsBannerLabel = { fontSize: 13, fontWeight: 700, color: '#1a7a4a', lineHeight: 1.2 }
 const resultsBannerSub   = { fontSize: 11, color: '#5a8a6f', marginTop: 2, fontWeight: 500 }
 const resultsClearBtn    = { background: 'none', border: '1.5px solid #a3d4b5', borderRadius: 20, padding: '5px 12px', fontSize: 11, fontWeight: 700, color: '#1a7a4a', cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }
 
-const grid     = { padding: '8px 10px 6px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }
+const grid     = { padding: '8px 16px 80px', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 14, maxWidth: 1400, margin: '0 auto' }
 const empty    = { gridColumn: '1/-1', textAlign: 'center', padding: '60px 24px' }
 const emptyBtn = { background: '#1a7a4a', color: '#fff', border: 'none', borderRadius: 12, padding: '11px 24px', fontSize: 14, fontWeight: 700, cursor: 'pointer' }
 
-const testBanner     = { background: '#fffbeb', borderBottom: '1px solid #fde68a', padding: '9px 14px', display: 'flex', alignItems: 'center', gap: 8 }
+const testBanner     = { background: '#fffbeb', borderBottom: '1px solid #fde68a', padding: '9px 16px', display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'center' }
 const testBannerText = { fontSize: 12, color: '#92400e', fontWeight: 600, lineHeight: 1.5 }

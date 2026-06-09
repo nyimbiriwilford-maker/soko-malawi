@@ -99,7 +99,7 @@ channel = supabase
   const path = location.pathname
 
   return (
-    <>
+    <div className="soko-bottom-nav">
       {showPostMenu && (
         <>
           <div style={S.postOverlay} onClick={() => setShowPostMenu(false)} />
@@ -155,7 +155,7 @@ channel = supabase
         </>
       )}
 
-      <div style={S.nav}>
+      <div style={S.nav} className="soko-bottom-nav" id="bottom-nav">
         {/* Home */}
         <button style={{ ...S.navItem, ...(path === '/' ? S.navItemActive : {}) }} onClick={() => navigate('/')}>
           <IconHome active={path === '/'} />
@@ -195,7 +195,7 @@ channel = supabase
         @keyframes fadeUp { from { opacity:0; transform:translateY(16px) } to { opacity:1; transform:translateY(0) } }
         @keyframes slideDown { from { opacity:0; transform:translateY(-8px) } to { opacity:1; transform:translateY(0) } }
       `}</style>
-    </>
+    </div>
   )
 }
 
@@ -203,15 +203,15 @@ const S = {
   nav: {
     position: 'fixed',
     bottom: 0,
-    left: '50%',
-    transform: 'translateX(-50%)',
+    left: 0,
+    right: 0,
     width: '100%',
-    maxWidth: 480,
     background: '#fff',
     borderTop: '1px solid #e8ede9',
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'space-around',
+    justifyContent: 'center',
+    gap: 0,
     padding: '6px 0 10px',
     zIndex: 100,
     boxShadow: '0 -4px 16px rgba(0,0,0,0.06)',
@@ -225,7 +225,7 @@ const S = {
     gap: 3,
     cursor: 'pointer',
     position: 'relative',
-    padding: '4px 10px',
+    padding: '4px 24px',
     fontFamily: "'DM Sans', system-ui, sans-serif",
   },
   navItemActive: {},
@@ -272,7 +272,7 @@ const S = {
     bottom: 90,
     left: '50%',
     transform: 'translateX(-50%)',
-    width: 'calc(100% - 28px)',
+    width: 'clamp(300px, 90vw, 452px)',
     maxWidth: 452,
     background: '#fff',
     borderRadius: 20,

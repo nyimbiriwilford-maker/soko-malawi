@@ -29,7 +29,7 @@ self.addEventListener('push', event => {
 
   const options = {
     body: `${data.callerName} is calling you`,
-    icon: data.callerAvatar || '/icon-192.png',
+    icon: '/icon-192.png',
     badge: '/icon-192.png',
     tag: 'incoming-call',
     renotify: true,

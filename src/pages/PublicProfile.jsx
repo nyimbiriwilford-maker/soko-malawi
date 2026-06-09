@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import VouchSection from '../components/VouchSection'
 
 function getOnlineStatus(lastSeen) {
   if (!lastSeen) return { label: 'Offline', color: '#9ca3af' }
@@ -18,10 +19,13 @@ export default function PublicProfile() {
   const [profile, setProfile] = useState(null)
   const [listings, setListings] = useState([])
   const [loading, setLoading] = useState(true)
+  const [currentUserId, setCurrentUserId] = useState(null)
 
   useEffect(() => { load() }, [id])
 
   async function load() {
+    const { data: { user } } = await supabase.auth.getUser()
+    setCurrentUserId(user?.id ?? null)
     const { data: p } = await supabase.from('profiles').select('*').eq('id', id).single()
     setProfile(p)
     const { data: l } = await supabase.from('listings').select('*')
@@ -87,6 +91,8 @@ export default function PublicProfile() {
           <div style={{ fontSize:11, color:'#888', textTransform:'uppercase', letterSpacing:'0.4px' }}>City</div>
         </div>
       </div>
+
+      <VouchSection targetUserId={id} viewerUserId={currentUserId} />
 
       {/* Listings */}
       <div style={{ padding:'0 14px' }}>

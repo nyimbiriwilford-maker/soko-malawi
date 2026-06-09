@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useWebRTC, formatTime } from '../hooks/useWebRTC'
 import { watchUserOnline, globalChannel } from '../hooks/usePresence'
+import DealPillButton from '../components/DealPillButton'
+import DealRequestCard from '../components/DealRequestCard'
 
 // ── Emoji picker data ────────────────────────────────────────────────────────
 const EMOJI_CATEGORIES = {
@@ -63,6 +65,7 @@ export default function Chat() {
   const [myProfile, setMyProfile]         = useState(null)
   const [replyTo, setReplyTo]             = useState(null)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
+  const [dealDone, setDealDone] = useState(false)
 const [chatSearch, setChatSearch]       = useState(null)
 const [searchMatches, setSearchMatches] = useState([])
 const [searchIdx, setSearchIdx]         = useState(0)
@@ -215,6 +218,7 @@ const [searchIdx, setSearchIdx]         = useState(0)
         } catch (e) {}
       } else {
         const { data: lst } = await supabase.from('listings').select('*').eq('id', listingId).maybeSingle()
+        console.log('[Chat] listing loaded:', lst)
         if (lst) setListing(lst)
       }
     }
@@ -982,27 +986,37 @@ color: isMine ? '#ffffff' : '#1a4a2e',
                     </div>
                   )}
 
-                  <div style={{
-                    ...S.bubble,
-                    ...(isMine ? S.bubbleMine : S.bubbleOther),
-                    borderBottomRightRadius: isMine ? (prevSame ? '18px' : '4px') : '18px',
-                    borderBottomLeftRadius: !isMine ? (prevSame ? '18px' : '4px') : '18px',
-                    borderTopRightRadius: isMine ? (nextSame ? '4px' : '18px') : '18px',
-                    borderTopLeftRadius: !isMine ? (nextSame ? '4px' : '18px') : '18px',
-                  }}>
-                    {renderMedia(msg)}
-                    {/* Show decoded body (without reply prefix) */}
-                    {decoded.body && !msg.call_type && <div style={S.bubbleText}>{decoded.body}</div>}
-                    <div style={{ ...S.bubbleTime, color: isMine ? 'rgba(255,255,255,0.5)' : '#bbb' }}>
-                      {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                      {isMine && (
-                        <span style={{ marginLeft: 3, color: msg.read ? '#5de89e' : 'rgba(255,255,255,0.45)' }}>
-                          {msg.read ? '✓✓' : '✓'}
-                        </span>
-                      )}
+                  {msg.media_type === 'deal_request' && (
+                    <div style={{ alignSelf: isMine ? 'flex-end' : 'flex-start' }}>
+                      <DealRequestCard
+                        msg={msg}
+                        currentUser={currentUser}
+                        otherProfile={otherProfile}
+                        listing={listing}
+                      />
                     </div>
-                  </div>
-                </div>
+                  )}
+                  {msg.media_type !== 'deal_request' && (
+                    <div style={{
+                      ...S.bubble,
+                      ...(isMine ? S.bubbleMine : S.bubbleOther),
+                      borderBottomRightRadius: isMine ? (prevSame ? '18px' : '4px') : '18px',
+                      borderBottomLeftRadius: !isMine ? (prevSame ? '18px' : '4px') : '18px',
+                      borderTopRightRadius: isMine ? (nextSame ? '4px' : '18px') : '18px',
+                      borderTopLeftRadius: !isMine ? (nextSame ? '4px' : '18px') : '18px',
+                    }}>
+                      {renderMedia(msg)}
+                      {decoded.body && !msg.call_type && <div style={S.bubbleText}>{decoded.body}</div>}
+                      <div style={{ ...S.bubbleTime, color: isMine ? 'rgba(255,255,255,0.5)' : '#bbb' }}>
+                        {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {isMine && (
+                          <span style={{ marginLeft: 3, color: msg.read ? '#5de89e' : 'rgba(255,255,255,0.45)' }}>
+                            {msg.read ? '✓✓' : '✓'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                 <button
                   className="reply-btn"
@@ -1019,6 +1033,7 @@ color: isMine ? '#ffffff' : '#1a4a2e',
                   </div>
                 )}
               </div>
+            </div>
             </div>
           )
         })}
@@ -1153,6 +1168,17 @@ color: isMine ? '#ffffff' : '#1a4a2e',
           </div>
           <button style={{ background: 'none', border: 'none', fontSize: 18, color: '#888', cursor: 'pointer', padding: '0 4px' }} onClick={() => setReplyTo(null)}>✕</button>
         </div>
+      )}
+
+      {listing && currentUser && userId && (
+        <DealPillButton
+          currentUser={currentUser}
+          otherProfile={otherProfile}
+          listing={listing}
+          messages={messages}
+          isSeller={listing?.seller_id === currentUser?.id}
+          onRequestSent={() => setDealDone(true)}
+        />
       )}
 
       {/* ── Recording bar ── */}

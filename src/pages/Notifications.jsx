@@ -21,6 +21,11 @@ const NOTIF_CONFIG = {
   booking_confirmed:{ icon: '✅', color: '#1a7a4a', bg: '#f0fdf4', label: 'Confirmed' },
   booking_cancelled:{ icon: '❌', color: '#dc2626', bg: '#fef2f2', label: 'Cancelled' },
   booking_completed:{ icon: '🏁', color: '#6366f1', bg: '#eef2ff', label: 'Completed' },
+  // Deal confirmation
+  deal_request:    { icon: '🤝', color: '#1a7a4a', bg: '#e6f4ec', label: 'Deal Request' },
+  deal_confirmed:  { icon: '🎉', color: '#15803d', bg: '#dcfce7', label: 'Deal Confirmed' },
+  deal_vouching:   { icon: '🌟', color: '#b45309', bg: '#fef3c7', label: 'Vouch Reminder' },
+  new_vouch:       { icon: '🌟', color: '#1a7a4a', bg: '#e6f4ec', label: 'New Vouch' },
   // Fallback
   default:         { icon: '🔔', color: '#1a7a4a', bg: '#f0fdf4', label: 'Notification' },
 }
@@ -63,6 +68,7 @@ const TABS = [
   { id: 'messages', label: 'Messages', icon: '💬' },
   { id: 'calls',    label: 'Calls',    icon: '📞' },
   { id: 'listings', label: 'Listings', icon: '🛍️' },
+  { id: 'deals',    label: 'Deals',    icon: '🤝' },
 ]
 
 function filterByTab(notifs, tab) {
@@ -71,6 +77,9 @@ function filterByTab(notifs, tab) {
   if (tab === 'calls')    return notifs.filter(n => ['missed_call','missed_video'].includes(n.type))
   if (tab === 'listings') return notifs.filter(n =>
     ['listing_offer','listing_view','listing_comment','listing_sold','listing_liked'].includes(n.type)
+  )
+  if (tab === 'deals') return notifs.filter(n =>
+    ['deal_request','deal_confirmed','deal_vouching','new_vouch'].includes(n.type)
   )
   return notifs
 }
@@ -203,6 +212,14 @@ export default function Notifications() {
       case 'booking_completed':
         if (data.booking_id) navigate(`/bookings/${data.booking_id}`)
         else navigate('/services')
+        break
+        case 'deal_request':
+      case 'deal_confirmed':
+        if (data.seller_id && data.context_id) navigate(`/chat/${data.seller_id}/${data.context_id}`)
+        else if (data.seller_id) navigate(`/chat/${data.seller_id}`)
+        break
+      case 'deal_vouching':
+        if (data.seller_id) navigate(`/profile/${data.seller_id}`)
         break
       default:
         break
@@ -414,6 +431,12 @@ function renderSmartBody(notif) {
       return `Booking for "${data.service_name || 'a service'}" was cancelled`
     case 'booking_completed':
       return `Job completed: "${data.service_name || 'your service'}"`
+      case 'deal_request':
+      return `${data.seller_name || 'Seller'} wants to confirm the deal for "${data.listing_title || 'a listing'}"`
+    case 'deal_confirmed':
+      return `${data.buyer_name || 'Buyer'} confirmed the deal for "${data.listing_title || 'a listing'}"`
+    case 'deal_vouching':
+      return `Don't forget to vouch for ${data.seller_name || 'the seller'} — your vouch grows their reputation`
     default:
       return 'Tap to view details'
   }
