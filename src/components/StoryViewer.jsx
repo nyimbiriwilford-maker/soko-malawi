@@ -6,8 +6,9 @@ export default function StoryViewer({ stories, startIndex, currentUserId, onClos
   const [idx, setIdx]           = useState(startIndex)
   const [progress, setProgress] = useState(0)
   const [paused, setPaused]     = useState(false)
-  const [saved, setSaved]       = useState(false)
+  const [saved, setSaved]           = useState(false)
   const [saveLoading, setSaveLoading] = useState(false)
+  const [sharing, setSharing]       = useState(false)
   const timerRef                = useRef()
   const holdRef                 = useRef()
   const navigate                = useNavigate()
@@ -109,21 +110,18 @@ export default function StoryViewer({ stories, startIndex, currentUserId, onClos
 
   useEffect(() => {
     const btn = shareRef.current
-    console.log('Share btn ref:', btn)
     if (!btn) return
-    function nativeShare() {
-      console.log('nativeShare fired, navigator.share:', !!navigator.share)
+    async function nativeShare() {
+      setSharing(true)
+      await new Promise(r => setTimeout(r, 100))
       const s   = storyRef.current
       const n   = nameRef.current
       const url = s?.tagged_listing_id
         ? `${window.location.origin}/listing/${s.tagged_listing_id}`
         : window.location.origin
       if (navigator.share) {
-        navigator.share({
-          title: `${n} on SokoMw`,
-          text: s?.content || '',
-          url,
-        }).catch(() => {})
+        try { await navigator.share({ title: `${n} on SokoMw`, text: s?.content || '', url }) } catch(e) {}
+        setSharing(false)
       } else {
         // Fallback: copy to clipboard or show the link
         const fallback = () => {
@@ -142,6 +140,7 @@ export default function StoryViewer({ stories, startIndex, currentUserId, onClos
         } else {
           fallback()
         }
+        setSharing(false)
       }
     }
     btn.addEventListener('click', nativeShare)
@@ -183,6 +182,7 @@ export default function StoryViewer({ stories, startIndex, currentUserId, onClos
     <div
       style={{
         position: 'fixed', inset: 0, zIndex: 998,
+      visibility: sharing ? 'hidden' : 'visible',
         background: '#000',
         fontFamily: "'DM Sans', system-ui, sans-serif",
         userSelect: 'none',
