@@ -9,6 +9,7 @@ export default function StoryViewer({ stories, startIndex, currentUserId, onClos
   const [saved, setSaved]           = useState(false)
   const [saveLoading, setSaveLoading] = useState(false)
   const [sharing, setSharing]       = useState(false)
+  const [shareUrl, setShareUrl]     = useState(null)
   const timerRef                = useRef()
   const holdRef                 = useRef()
   const navigate                = useNavigate()
@@ -122,26 +123,10 @@ export default function StoryViewer({ stories, startIndex, currentUserId, onClos
       const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
       if (isMobile && navigator.share) {
         try { await navigator.share({ title: `${n} on SokoMw`, text: s?.content || '', url }) } catch(e) {}
-        setSharing(false)
       } else {
-        const fallback = () => {
-          const el = document.createElement('textarea')
-          el.value = url
-          document.body.appendChild(el)
-          el.select()
-          document.execCommand('copy')
-          document.body.removeChild(el)
-          alert('✅ Link copied!')
-        }
-        if (navigator.clipboard) {
-          navigator.clipboard.writeText(url)
-            .then(() => alert('✅ Link copied!'))
-            .catch(fallback)
-        } else {
-          fallback()
-        }
-        setSharing(false)
+        setShareUrl(url)
       }
+      setSharing(false)
     }
     btn.addEventListener('click', nativeShare)
     return () => btn.removeEventListener('click', nativeShare)
@@ -182,7 +167,6 @@ export default function StoryViewer({ stories, startIndex, currentUserId, onClos
     <div
       style={{
         position: 'fixed', inset: 0, zIndex: 998,
-      visibility: sharing ? 'hidden' : 'visible',
         background: '#000',
         fontFamily: "'DM Sans', system-ui, sans-serif",
         userSelect: 'none',
@@ -434,6 +418,67 @@ export default function StoryViewer({ stories, startIndex, currentUserId, onClos
                 🔗 Share
               </button>
 
+            </div>
+          </div>
+        )}
+
+        {/* Share link popup */}
+        {shareUrl && (
+          <div style={{
+            position: 'fixed', inset: 0, zIndex: 9999,
+            display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+            background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
+          }}
+            onClick={() => setShareUrl(null)}
+          >
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{
+                width: '100%', maxWidth: 480,
+                background: '#1a1a2e', borderRadius: '20px 20px 0 0',
+                padding: '20px 16px 36px',
+              }}
+            >
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'rgba(255,255,255,0.5)', marginBottom: 10 }}>
+                🔗 Share this status
+              </div>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                background: 'rgba(255,255,255,0.08)',
+                borderRadius: 12, padding: '10px 14px',
+                border: '1px solid rgba(255,255,255,0.15)',
+              }}>
+                <div style={{
+                  flex: 1, fontSize: 12, color: '#fff',
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                  {shareUrl}
+                </div>
+                <button
+                  onClick={() => {
+                    navigator.clipboard?.writeText(shareUrl)
+                      .then(() => { setShareUrl(null); alert('✅ Link copied!') })
+                      .catch(() => {
+                        const el = document.createElement('textarea')
+                        el.value = shareUrl
+                        document.body.appendChild(el)
+                        el.select()
+                        document.execCommand('copy')
+                        document.body.removeChild(el)
+                        setShareUrl(null)
+                        alert('✅ Link copied!')
+                      })
+                  }}
+                  style={{
+                    background: 'linear-gradient(135deg,#1a7a4a,#22a05e)',
+                    border: 'none', borderRadius: 8, padding: '6px 14px',
+                    fontSize: 12, fontWeight: 700, color: '#fff', cursor: 'pointer',
+                    flexShrink: 0,
+                  }}
+                >
+                  Copy
+                </button>
+              </div>
             </div>
           </div>
         )}
