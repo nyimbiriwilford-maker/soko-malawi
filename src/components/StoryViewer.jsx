@@ -118,12 +118,12 @@ export default function StoryViewer({ stories, startIndex, currentUserId, onClos
       const n   = nameRef.current
       const url = s?.tagged_listing_id
         ? `${window.location.origin}/listing/${s.tagged_listing_id}`
-        : window.location.origin
-      if (navigator.share) {
+        : `${window.location.origin}/profile/${s?.user_id}`
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+      if (isMobile && navigator.share) {
         try { await navigator.share({ title: `${n} on SokoMw`, text: s?.content || '', url }) } catch(e) {}
         setSharing(false)
       } else {
-        // Fallback: copy to clipboard or show the link
         const fallback = () => {
           const el = document.createElement('textarea')
           el.value = url
