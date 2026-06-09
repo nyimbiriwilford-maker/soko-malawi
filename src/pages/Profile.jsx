@@ -5,6 +5,8 @@ import BottomNav from '../components/BottomNav' // adjust path as needed
 import VouchSection from '../components/VouchSection'
 import StatusPicker from '../components/StatusPicker'
 import { useStatuses } from '../hooks/useStatuses'
+import FollowersManager from '../components/FollowersManager'
+import FollowingManager from '../components/FollowingManager'
 
 const CITIES = ['Lilongwe', 'Blantyre', 'Mzuzu', 'Zomba', 'Kasungu', 'Mangochi', 'Karonga', 'Salima']
 
@@ -206,10 +208,23 @@ async function loadListings(uid) {
         <button style={{ ...S.tab, ...(tab === 'sold' ? S.tabActive : {}) }} onClick={() => setTab('sold')}>
           Sold ({soldListings.length})
         </button>
+        <button style={{ ...S.tab, ...(tab === 'network' ? S.tabActive : {}) }} onClick={() => setTab('network')}>
+          Network
+        </button>
       </div>
 
-      {/* Listings grid */}
-      <div style={S.grid}>
+      {tab === 'network' ? (
+        <div style={{ padding: '0 14px', display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 80 }}>
+          <div style={{ background: '#fff', borderRadius: 16, boxShadow: '0 1px 6px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
+            <FollowersManager sellerId={user?.id} />
+          </div>
+          <div style={{ background: '#fff', borderRadius: 16, boxShadow: '0 1px 6px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
+            <FollowingManager userId={user?.id} />
+          </div>
+        </div>
+      ) : (
+        <div>
+        <div style={S.grid}>
         {(tab === 'listings' ? activeListing : soldListings).length === 0 && (
           <div style={S.empty}>
             <div style={S.emptyIcon}>{tab === 'listings' ? '🛍️' : '✅'}</div>
@@ -253,6 +268,8 @@ async function loadListings(uid) {
           </div>
         ))}
       </div>
+      </div>
+      )}
 
       {/* Delete confirm modal */}
       {deleteConfirm && (
@@ -267,8 +284,30 @@ async function loadListings(uid) {
           </div>
         </div>
       )}
+      {/* Saved Statuses link */}
+      {<div
+        onClick={() => navigate('/saved-statuses')}
+        style={{
+          margin: '0 14px 14px',
+          background: '#fff', borderRadius: 14,
+          border: '1.5px solid #e5e7eb',
+          padding: '14px 16px',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          cursor: 'pointer',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontSize: 20 }}>🤍</span>
+          <div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#0f1410' }}>Saved Statuses</div>
+            <div style={{ fontSize: 11, color: '#9ca3af' }}>Statuses you saved from sellers</div>
+          </div>
+        </div>
+        <span style={{ fontSize: 18, color: '#9ca3af' }}>›</span>
+      </div>}
+
       {/* Status section */}
-      <div style={{ margin: '0 14px 14px' }}>
+      {tab !== 'network' && <div style={{ margin: '0 14px 14px' }}>
         {activeStatus ? (
           <div style={{
             background: '#e8f5e9', border: '1.5px solid #a5d6a7',
@@ -302,8 +341,8 @@ async function loadListings(uid) {
             Let buyers know you're available today
           </button>
         )}
-      </div>
-{/* Status Picker modal */}
+      </div>}
+      {/* Status Picker modal */}
       {showStatusPicker && (
         <div style={S.overlay} onClick={() => setShowStatusPicker(false)}>
           <div style={{ ...S.confirmCard, width: '100%', maxWidth: 480, borderRadius: '24px 24px 0 0', padding: '24px 20px 32px', textAlign: 'left' }} onClick={e => e.stopPropagation()}>

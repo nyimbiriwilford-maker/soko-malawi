@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import FollowButton from './FollowButton'
 
 export default function StoryViewer({ stories, startIndex, currentUserId, onClose }) {
   const [idx, setIdx]           = useState(startIndex)
@@ -17,6 +18,16 @@ export default function StoryViewer({ stories, startIndex, currentUserId, onClos
 
   const [localStories, setLocalStories] = useState(stories)
   const story = localStories[idx]
+
+  useEffect(() => {
+    if (!story?.id || !currentUserId) return
+    supabase.from('saved_statuses')
+      .select('id')
+      .eq('user_id', currentUserId)
+      .eq('status_id', story.id)
+      .maybeSingle()
+      .then(({ data }) => setSaved(!!data))
+  }, [story?.id])
 
   useEffect(() => {
     setProgress(0)
@@ -96,9 +107,12 @@ export default function StoryViewer({ stories, startIndex, currentUserId, onClos
         .eq('status_id', story.id)
       setSaved(false)
     } else {
-      await supabase.from('saved_statuses')
-        .insert({ user_id: currentUserId, status_id: story.id })
-      setSaved(true)
+      const { error } = await supabase.from('saved_statuses')
+        .upsert(
+          { user_id: currentUserId, status_id: story.id },
+          { onConflict: 'user_id,status_id', ignoreDuplicates: true }
+        )
+      if (!error) setSaved(true)
     }
     setSaveLoading(false)
   }
@@ -243,11 +257,18 @@ export default function StoryViewer({ stories, startIndex, currentUserId, onClos
 
         {/* Name + time */}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{
-            fontSize: 14, fontWeight: 700, color: '#fff',
-            textShadow: '0 1px 3px rgba(0,0,0,0.4)',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>{name}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+            <span style={{
+              fontSize: 14, fontWeight: 700, color: '#fff',
+              textShadow: '0 1px 3px rgba(0,0,0,0.4)',
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>{name}</span>
+            {!isOwn && (
+              <div onPointerDown={e => e.stopPropagation()} onPointerUp={e => e.stopPropagation()}>
+                <FollowButton currentUserId={currentUserId} sellerId={story.user_id} size="sm" />
+              </div>
+            )}
+          </div>
           <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', marginTop: 1 }}>
             {timeLeft}
           </div>

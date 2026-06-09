@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import VouchSection from '../components/VouchSection'
+import FollowButton from '../components/FollowButton'
+import FollowersManager from '../components/FollowersManager'
 
 function getOnlineStatus(lastSeen) {
   if (!lastSeen) return { label: 'Offline', color: '#9ca3af' }
@@ -50,6 +52,7 @@ export default function PublicProfile() {
   )
 
   const status = getOnlineStatus(profile.last_seen)
+  const isOwnProfile = currentUserId === profile?.id
 
   return (
     <div style={{ minHeight:'100vh', background:'#f0f4f1', fontFamily:'system-ui,sans-serif', maxWidth:480, margin:'0 auto', paddingBottom:40 }}>
@@ -77,7 +80,20 @@ export default function PublicProfile() {
           <span style={{ width:8, height:8, borderRadius:'50%', background: status.color, display:'inline-block' }} />
           {status.label}
         </div>
+
+        {!isOwnProfile && (
+          <div style={{ marginTop: 14 }}>
+            <FollowButton currentUserId={currentUserId} sellerId={profile?.id} size="lg" />
+          </div>
+        )}
       </div>
+
+      {/* Followers Manager — only visible to the profile owner */}
+      {isOwnProfile && (
+        <div style={{ background:'#fff', margin:'0 14px 14px', borderRadius:16, boxShadow:'0 1px 6px rgba(0,0,0,0.05)', overflow:'hidden' }}>
+          <FollowersManager sellerId={profile?.id} />
+        </div>
+      )}
 
       {/* Stats */}
       <div style={{ background:'#fff', margin:'0 14px 14px', borderRadius:16, display:'flex', overflow:'hidden', boxShadow:'0 1px 6px rgba(0,0,0,0.05)' }}>

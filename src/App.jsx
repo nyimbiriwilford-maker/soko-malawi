@@ -1,7 +1,8 @@
 import { useEffect, useState, lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { supabase } from './lib/supabase'
-const StatusPage = lazy(() => import('./pages/StatusPage'))
+const StatusPage          = lazy(() => import('./pages/StatusPage'))
+const SavedStatusesPage   = lazy(() => import('./pages/SavedStatusesPage'))
 
 // ── Eagerly loaded (needed immediately on first paint) ────
 import Login        from './pages/Login'
@@ -242,7 +243,8 @@ const [installPrompt, setInstallPrompt] = useState(null)
             <Route path="/services"                element={authed ? <Services />       : <Navigate to="/login" />} />
             <Route path="/profile/:id"             element={authed ? <PublicProfile />  : <Navigate to="/login" />} />
             <Route path="/post/edit/:id"           element={authed ? <PostListing />    : <Navigate to="/login" />} />
-            <Route path="/status" element={authed ? <StatusPage /> : <Navigate to="/login" />} />
+            <Route path="/status"          element={authed ? <StatusPage />        : <Navigate to="/login" />} />
+            <Route path="/saved-statuses"  element={authed ? <SavedStatusesPage /> : <Navigate to="/login" />} />
 <Route path="/notifications"           element={authed ? <Notifications />  : <Navigate to="/login" />} />
 <Route path="*"                        element={<Navigate to="/" />} /></Routes>
         </Suspense>

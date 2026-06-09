@@ -96,33 +96,46 @@ export async function fetchListingStatus(listingId) {
   return data
 }
 
-export async function fetchAllActiveStories(currentUserId = null) {
+export async function fetchAllActiveStories(currentUserId = null, category = null) {
+  const isFiltered = category && category !== 'All'
+
   const { data } = await supabase
     .from('user_statuses')
     .select(`
       id, content, status_type, expires_at, created_at,
       media_urls, tagged_listing_id, user_id, location_hint,
       profiles:user_id ( id, full_name, avatar_url ),
-      tagged:tagged_listing_id ( id, title, price, images )
+      tagged:tagged_listing_id ( id, title, price, images, category )
     `)
     .gt('expires_at', new Date().toISOString())
     .order('created_at', { ascending: false })
-    .limit(30)
-  // Keep all for current user, one per other user
-  // Count per user
+    .limit(200)
+
   const countMap = {}
   for (const s of data || []) {
     countMap[s.user_id] = (countMap[s.user_id] || 0) + 1
   }
-  const seen = new Set()
-  const grouped = []
-  for (const s of data || []) {
-    if (s.user_id === currentUserId || !seen.has(s.user_id)) {
-      if (s.user_id !== currentUserId) seen.add(s.user_id)
-      grouped.push({ ...s, _statusCount: countMap[s.user_id] })
+
+  const applyFilter = (s) => {
+    if (!isFiltered) return true
+    if (category === 'Availability') return s.status_type === 'availability' && !s.tagged_listing_id
+    if (category === 'Work') return s.status_type === 'work_ping'
+    if (category === '🔥 Urgent') {
+      const c = s.content?.toLowerCase() || ''
+      return c.includes('price drop') || c.includes('first to confirm')
     }
+    return s.tagged?.category === category
   }
-  return grouped
+
+  const filtered = (data || []).filter(applyFilter)
+
+  if (isFiltered) {
+    // Show ALL matching statuses — no deduplication
+    return filtered.map(s => ({ ...s, _statusCount: countMap[s.user_id] }))
+  }
+
+  // Return all statuses — grouping is handled in StatusPage
+  return filtered.map(s => ({ ...s, _statusCount: countMap[s.user_id] }))
 }
 
 export async function countRecentAvailabilityStatuses() {

@@ -1,4 +1,4 @@
-const CACHE = 'sokomw-v1'
+const CACHE = 'sokomw-v4'
 const ASSETS = ['/', '/index.html']
 
 // ── Install & cache ──────────────────────────────────────
@@ -18,6 +18,7 @@ self.addEventListener('activate', e => {
 // ── Fetch (network first, cache fallback) ────────────────
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return
+  if (e.request.url.includes('supabase.co')) return
   e.respondWith(
     fetch(e.request).catch(() => caches.match(e.request))
   )

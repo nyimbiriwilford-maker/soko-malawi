@@ -5,6 +5,7 @@ import { useStatuses } from '../hooks/useStatuses'
 import BottomNav from '../components/BottomNav'
 import { fetchAllActiveStories } from '../hooks/useStatuses'
 import StoryViewer from '../components/StoryViewer'
+import FollowButton from '../components/FollowButton'
 
 const TEMPLATES = {
   availability: [
@@ -76,15 +77,82 @@ function StatusPageInner({ user, navigate }) {
 
   const activeStatuses = statuses.slice(0, 5)
   const content = custom.trim() || selected
-  const [stories, setStories]       = useState([])
+  const [stories, setStories]             = useState([])
   const [viewerStories, setViewerStories] = useState([])
-  const [viewing, setViewing]       = useState(null)
+  const [viewing, setViewing]             = useState(null)
+  const [categoryFilter, setCategoryFilter] = useState('All')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [viewedIds, setViewedIds] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('viewedStories') || '[]')) }
+    catch { return new Set() }
+  })
+  const [followedIds, setFollowedIds] = useState(new Set())
 
   useEffect(() => {
-    fetchAllActiveStories(user.id).then(setStories)
+    if (!user) return
+    supabase
+      .from('seller_follows')
+      .select('seller_id')
+      .eq('follower_id', user.id)
+      .then(({ data }) => setFollowedIds(new Set((data || []).map(f => f.seller_id))))
+  }, [user])
+
+  const searchedStories = searchQuery.trim()
+    ? stories.filter(s => {
+        const q = searchQuery.toLowerCase()
+        return (
+          s.content?.toLowerCase().includes(q) ||
+          s.profiles?.full_name?.toLowerCase().includes(q) ||
+          s.tagged?.title?.toLowerCase().includes(q) ||
+          s.tagged?.category?.toLowerCase().includes(q) ||
+          s.tagged?.description?.toLowerCase().includes(q) ||
+          s._taggedDescription?.toLowerCase().includes(q)
+        )
+      })
+    : stories
+
+  const CATEGORY_TABS = [
+    { key: 'All',          emoji: '🌐' },
+    { key: 'Availability', emoji: '🟢' },
+    { key: 'Work',         emoji: '💼' },
+    { key: '🔥 Urgent',    emoji: '🔥' },
+    { key: 'Electronics',  emoji: '📱' },
+    { key: 'Vehicles',     emoji: '🚗' },
+    { key: 'Clothing',     emoji: '👗' },
+    { key: 'Furniture',    emoji: '🛋️' },
+    { key: 'Property',     emoji: '🏠' },
+    { key: 'Agriculture',  emoji: '🌾' },
+    { key: 'Food',         emoji: '🍎' },
+    { key: 'Services',     emoji: '🔧' },
+    { key: 'Other',        emoji: '📦' },
+  ]
+
+
+  useEffect(() => {
+    fetchAllActiveStories(user.id, categoryFilter).then(async data => {
+      // Fetch descriptions for tagged listings separately
+      const listingIds = [...new Set(data.filter(s => s.tagged_listing_id).map(s => s.tagged_listing_id))]
+      if (listingIds.length > 0) {
+        const { data: listings } = await supabase
+          .from('listings')
+          .select('id, description')
+          .in('id', listingIds)
+        const descMap = {}
+        for (const l of listings || []) descMap[l.id] = l.description
+        setStories(data.map(s => ({
+          ...s,
+          _taggedDescription: s.tagged_listing_id ? descMap[s.tagged_listing_id] : null
+        })))
+      } else {
+        setStories(data)
+      }
+    })
+  }, [categoryFilter])
+
+  useEffect(() => {
     const ch = supabase.channel('status-page-stories')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'user_statuses' }, () => {
-        fetchAllActiveStories(user.id).then(setStories)
+        fetchAllActiveStories(user.id, categoryFilter).then(setStories)
       })
       .subscribe()
     return () => supabase.removeChannel(ch)
@@ -206,9 +274,72 @@ function StatusPageInner({ user, navigate }) {
         <div style={{
           fontSize: 11, fontWeight: 800, letterSpacing: 1.2,
           color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase',
-          padding: '0 16px', marginBottom: 12,
+          padding: '0 16px', marginBottom: 10,
         }}>
           Recent Statuses
+        </div>
+
+        {/* Search bar */}
+        <div style={{ padding: '0 16px', marginBottom: 10 }}>
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            background: 'rgba(255,255,255,0.15)',
+            borderRadius: 24, padding: '8px 14px',
+            border: '1px solid rgba(255,255,255,0.2)',
+          }}>
+            <span style={{ fontSize: 14, opacity: 0.7 }}>🔍</span>
+            <input
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search statuses or sellers..."
+              style={{
+                flex: 1, background: 'transparent', border: 'none',
+                outline: 'none', fontSize: 13, fontWeight: 500,
+                color: '#fff',
+              }}
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                style={{
+                  background: 'rgba(255,255,255,0.2)', border: 'none',
+                  borderRadius: '50%', width: 20, height: 20,
+                  fontSize: 11, color: '#fff', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >✕</button>
+            )}
+          </div>
+        </div>
+
+        {/* Category filter tabs */}
+        <div style={{
+          display: 'flex', gap: 6, overflowX: 'auto',
+          padding: '0 16px', marginBottom: 12,
+          scrollbarWidth: 'none',
+        }}>
+          {CATEGORY_TABS.map(cat => (
+            <button
+              key={cat.key}
+              onClick={() => setCategoryFilter(cat.key)}
+              style={{
+                flexShrink: 0,
+                background: categoryFilter === cat.key
+                  ? 'rgba(255,255,255,0.95)'
+                  : 'rgba(255,255,255,0.15)',
+                border: 'none',
+                borderRadius: 20,
+                padding: '5px 12px',
+                fontSize: 12, fontWeight: 700,
+                color: categoryFilter === cat.key ? '#1b5e20' : 'rgba(255,255,255,0.9)',
+                cursor: 'pointer',
+                transition: 'all 0.15s',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {cat.emoji} {cat.key}
+            </button>
+          ))}
         </div>
 
         <div style={{
@@ -262,13 +393,20 @@ function StatusPageInner({ user, navigate }) {
 
           {/* Other story cards */}
           {(() => {
-            // Group own statuses into one card, others stay single
-            const ownStories = stories.filter(s => s.user_id === user.id)
-            const otherStories = stories.filter(s => s.user_id !== user.id)
-            const grouped = ownStories.length > 0
-              ? [{ ...ownStories[0], _ownGroup: ownStories }, ...otherStories]
-              : otherStories
-            return grouped
+            const userMap = new Map()
+            for (const s of searchedStories) {
+              if (!userMap.has(s.user_id)) userMap.set(s.user_id, [])
+              userMap.get(s.user_id).push(s)
+            }
+            const cards = Array.from(userMap.values()).map(group => ({
+              ...group[0],
+              _ownGroup: group,
+              _isCurrentUser: group[0].user_id === user.id,
+            }))
+            // Own card always first
+            const own = cards.filter(c => c.user_id === user.id)
+            const others = cards.filter(c => c.user_id !== user.id)
+            return [...own, ...others]
           })().map((s, i) => {
             const name    = s.profiles?.full_name || 'Seller'
             const avatar  = s.profiles?.avatar_url
@@ -291,20 +429,26 @@ function StatusPageInner({ user, navigate }) {
               <div
                 key={s.id}
                 onClick={async () => {
-                  if (s._ownGroup) {
-                    const own = stories.filter(x => x.user_id === user.id)
-                    const others = stories.filter(x => x.user_id !== user.id)
-                    setViewerStories([...own, ...others])
+                  // Mark all statuses for this user as viewed
+                  const ids = s._ownGroup ? s._ownGroup.map(x => x.id) : [s.id]
+                  setViewedIds(prev => {
+                    const next = new Set([...prev, ...ids])
+                    localStorage.setItem('viewedStories', JSON.stringify([...next]))
+                    return next
+                  })
+                  if (s._ownGroup && s._ownGroup.length > 0) {
+                    const thisUserStories = s._ownGroup
+                    const otherStories = stories.filter(x => x.user_id !== s.user_id)
+                    setViewerStories([...thisUserStories, ...otherStories])
                     setViewing(0)
                   } else {
-                    // Fetch all statuses for this user
                     const { data } = await supabase
                       .from('user_statuses')
                       .select(`
                         id, content, status_type, expires_at, created_at,
                         media_urls, tagged_listing_id, user_id, location_hint,
                         profiles:user_id ( id, full_name, avatar_url ),
-                        tagged:tagged_listing_id ( id, title, price, images )
+                        tagged:tagged_listing_id ( id, title, price, images, category, description )
                       `)
                       .eq('user_id', s.user_id)
                       .gt('expires_at', new Date().toISOString())
@@ -318,7 +462,15 @@ function StatusPageInner({ user, navigate }) {
                   borderRadius: 14, overflow: 'hidden',
                   position: 'relative', cursor: 'pointer',
                   background: CARD_GRADIENTS[i % CARD_GRADIENTS.length],
-                  border: `2.5px solid ${isOwn ? '#1a7a4a' : isUrgent ? '#ff6f00' : 'transparent'}`,
+                  border: `2.5px solid ${
+                    isOwn ? '#1a7a4a'
+                    : (!s._ownGroup?.every(x => viewedIds.has(x.id))) ? '#f9a825'
+                    : isUrgent ? 'rgba(255,111,0,0.4)'
+                    : 'rgba(255,255,255,0.2)'
+                  }`,
+                  boxShadow: (!isOwn && !s._ownGroup?.every(x => viewedIds.has(x.id)))
+                    ? '0 0 0 2px rgba(249,168,37,0.4), 0 2px 12px rgba(0,0,0,0.12)'
+                    : '0 2px 12px rgba(0,0,0,0.12)',
                   boxShadow: '0 2px 12px rgba(0,0,0,0.12)',
                 }}
               >
@@ -332,7 +484,7 @@ function StatusPageInner({ user, navigate }) {
                   <img src={avatar} alt="" style={{
                     position: 'absolute', inset: 0,
                     width: '100%', height: '100%', objectFit: 'cover',
-                    filter: 'brightness(0.7) blur(1px)',
+                    filter: 'brightness(0.9)',
                     transform: 'scale(1.05)',
                   }} />
                 ) : null}
@@ -347,7 +499,11 @@ function StatusPageInner({ user, navigate }) {
                 <div style={{
                   position: 'absolute', top: 8, left: 8,
                   width: 32, height: 32, borderRadius: '50%',
-                  border: `2.5px solid ${isUrgent ? '#ff6f00' : '#fff'}`,
+                  border: `2.5px solid ${
+                    isOwn ? '#fff'
+                    : (!s._ownGroup?.every(x => viewedIds.has(x.id))) ? '#f9a825'
+                    : '#fff'
+                  }`,
                   overflow: 'hidden',
                   background: 'linear-gradient(135deg,#1a7a4a,#22a05e)',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -361,6 +517,7 @@ function StatusPageInner({ user, navigate }) {
                   }
                 </div>
 
+               
                 {/* Urgent badge */}
                 {isUrgent && (
                   <div style={{
@@ -381,7 +538,14 @@ function StatusPageInner({ user, navigate }) {
                     marginBottom: 3,
                     overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                   }}>
-                    {isOwn ? `You (${s._ownGroup ? s._ownGroup.length : 1})` : `${name.split(' ')[0]} (${s._statusCount || 1})`}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center' }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,0.7)', textAlign: 'center', maxWidth: 90, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {isOwn ? `You (${s._ownGroup?.length || 1})` : `${name.split(' ')[0]} (${s._ownGroup?.length || s._statusCount || 1})`}
+                      </span>
+                      {!isOwn && (
+                        <FollowButton currentUserId={user.id} sellerId={s.user_id} size="sm" />
+                      )}
+                    </div>
                   </div>
                   <div style={{
                     fontSize: 10, color: 'rgba(255,255,255,0.8)',
@@ -678,12 +842,13 @@ function StatusPageInner({ user, navigate }) {
 
         .add-status-card {
           position: relative !important;
-          border-radius: 13px !important;
+          border-radius: 16px !important;
           padding: 2px !important;
           box-sizing: border-box !important;
           width: 110px !important;
           height: 170px !important;
           flex-shrink: 0 !important;
+          overflow: hidden !important;
           background: conic-gradient(
             from var(--streak-angle),
             transparent 0deg,
@@ -708,14 +873,20 @@ function StatusPageInner({ user, navigate }) {
           content: '';
           position: absolute;
           inset: 2px;
-          border-radius: 11px;
+          border-radius: 14px;
           background: linear-gradient(160deg,#0a2e1a,#0d3b22);
           z-index: 0;
         }
 
-        .add-status-card > * {
+        .add-status-card > *:not(img) {
           position: relative;
           z-index: 1;
+        }
+
+        .add-status-card img {
+          border-radius: 14px;
+          position: relative;
+          z-index: 0;
         }
 
         @keyframes streakGlow {
