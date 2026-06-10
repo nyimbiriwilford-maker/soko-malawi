@@ -336,12 +336,16 @@ const [search, setSearch] = useState('')
     const catIcon   = isService ? (SERVICE_CAT_ICONS[service?.category] || '🔧') : null
 
     // Context label shown as subtitle pill
+    const isRequestMsg = chat.lastMsg?.body?.includes('I saw your request for') ||
+      chat.lastMsg?.body?.includes('your request for')
     const contextLabel = isService
       ? (service?.name || 'Service')
-      : listing?.title || null
+      : isRequestMsg
+        ? 'Buyer Request'
+        : listing?.title || null
     const contextSub = isService
       ? [service?.rate, service?.city].filter(Boolean).join(' · ')
-      : listing?.price ? 'MWK ' + Number(listing.price).toLocaleString() : ''
+      : isRequestMsg ? '' : listing?.price ? 'MWK ' + Number(listing.price).toLocaleString() : ''
 
     // Context type badge color
     const ctxColor = isService ? '#1a7a4a' : '#2563eb'
@@ -369,7 +373,7 @@ const [search, setSearch] = useState('')
             }
           </div>
           {/* Product thumbnail — bottom-right corner */}
-          {!isDirect && (isService ? service?.media_urls?.[0] : listing?.images?.[0]) && (
+          {!isDirect && !isRequestMsg && (isService ? service?.media_urls?.[0] : listing?.images?.[0]) && (
             <div style={S.productThumb}>
               <img
                 src={isService ? service.media_urls[0] : listing.images[0]}
@@ -379,9 +383,15 @@ const [search, setSearch] = useState('')
             </div>
           )}
           {/* Fallback dot if no image */}
-          {!isDirect && !(isService ? service?.media_urls?.[0] : listing?.images?.[0]) && (
+          {!isDirect && !isRequestMsg && !(isService ? service?.media_urls?.[0] : listing?.images?.[0]) && (
             <div style={{ ...S.typeDot, background: ctxColor }}>
               <span style={{ fontSize: '8px', lineHeight: 1 }}>{isService ? catIcon : '🛍️'}</span>
+            </div>
+          )}
+          {/* Request dot */}
+          {!isDirect && isRequestMsg && (
+            <div style={{ ...S.typeDot, background: '#1a7a4a' }}>
+              <span style={{ fontSize: '8px', lineHeight: 1 }}>🔎</span>
             </div>
           )}
         </div>
@@ -398,7 +408,7 @@ const [search, setSearch] = useState('')
           {contextLabel && (
             <div style={S.contextPill}>
               <div style={{ ...S.contextBadge, background: isService ? '#e6f7ee' : '#eff6ff', color: ctxColor }}>
-                {isService ? '🔧' : '🛍️'} {isService ? 'Service' : 'Listing'}
+                {isService ? '🔧' : isRequestMsg ? '🔎' : '🛍️'} {isService ? 'Service' : isRequestMsg ? 'Request' : 'Listing'}
               </div>
               <span style={S.contextName}>{contextLabel}</span>
               {contextSub ? <span style={S.contextSub}> · {contextSub}</span> : null}

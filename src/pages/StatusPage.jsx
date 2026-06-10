@@ -50,7 +50,7 @@ export default function StatusPage() {
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) { navigate('/login'); return }
-      supabase.from('profiles').select('full_name, avatar_url')
+      supabase.from('profiles').select('full_name, avatar_url, city')
         .eq('id', user.id).maybeSingle()
         .then(({ data }) => setUser({ ...user, ...data }))
     })
@@ -267,13 +267,13 @@ function StatusPageInner({ user, navigate }) {
 
      {/* ── Live Stories Row ── */}
       <div style={{
-        background: 'linear-gradient(135deg, #1b5e20, #2e7d32)',
-        borderBottom: '1px solid #1b5e20',
+        background: '#fff',
+        borderBottom: '1px solid #e5e7eb',
         padding: '14px 0 16px',
       }}>
         <div style={{
           fontSize: 11, fontWeight: 800, letterSpacing: 1.2,
-          color: 'rgba(255,255,255,0.6)', textTransform: 'uppercase',
+          color: '#9ca3af', textTransform: 'uppercase',
           padding: '0 16px', marginBottom: 10,
         }}>
           Recent Statuses
@@ -283,9 +283,9 @@ function StatusPageInner({ user, navigate }) {
         <div style={{ padding: '0 16px', marginBottom: 10 }}>
           <div style={{
             display: 'flex', alignItems: 'center', gap: 8,
-            background: 'rgba(255,255,255,0.15)',
+            background: '#f3f4f6',
             borderRadius: 24, padding: '8px 14px',
-            border: '1px solid rgba(255,255,255,0.2)',
+            border: '1px solid #e5e7eb',
           }}>
             <span style={{ fontSize: 14, opacity: 0.7 }}>🔍</span>
             <input
@@ -295,16 +295,16 @@ function StatusPageInner({ user, navigate }) {
               style={{
                 flex: 1, background: 'transparent', border: 'none',
                 outline: 'none', fontSize: 13, fontWeight: 500,
-                color: '#fff',
+                color: '#0f1410',
               }}
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
                 style={{
-                  background: 'rgba(255,255,255,0.2)', border: 'none',
+                  background: '#e5e7eb', border: 'none',
                   borderRadius: '50%', width: 20, height: 20,
-                  fontSize: 11, color: '#fff', cursor: 'pointer',
+                  fontSize: 11, color: '#6b7280', cursor: 'pointer',
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}
               >✕</button>
@@ -331,7 +331,7 @@ function StatusPageInner({ user, navigate }) {
                 borderRadius: 20,
                 padding: '5px 12px',
                 fontSize: 12, fontWeight: 700,
-                color: categoryFilter === cat.key ? '#1b5e20' : 'rgba(255,255,255,0.9)',
+                color: categoryFilter === cat.key ? '#1b5e20' : '#6b7280',
                 cursor: 'pointer',
                 transition: 'all 0.15s',
                 whiteSpace: 'nowrap',
@@ -803,6 +803,165 @@ function StatusPageInner({ user, navigate }) {
           </div>
         </div>
       </div>
+
+      {/* ── Near You ── */}
+      {console.log('near you debug:', { userCity: user?.city, storyCities: stories.map(s => ({ uid: s.user_id, city: s.profiles?.city })) })}
+      {user?.city && (() => {
+        const nearbyStories = stories.filter(s =>
+          s.user_id !== user.id &&
+          s.profiles?.city &&
+          s.profiles.city.toLowerCase().trim() === user.city.toLowerCase().trim()
+        )
+        if (nearbyStories.length === 0) return null
+        const userMap = new Map()
+        for (const s of nearbyStories) {
+          if (!userMap.has(s.user_id)) userMap.set(s.user_id, [])
+          userMap.get(s.user_id).push(s)
+        }
+        const cards = Array.from(userMap.values())
+        return (
+          <div style={{ margin: '16px 0 0' }}>
+            <div style={{ padding: '0 16px 10px', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 15 }}>📍</span>
+              <span style={{ fontSize: 13, fontWeight: 800, color: '#0f1410' }}>Near You</span>
+              <span style={{ background: '#e65100', color: '#fff', fontSize: 11, fontWeight: 700, borderRadius: 20, padding: '1px 8px' }}>
+                {cards.length}
+              </span>
+              <span style={{ fontSize: 11, color: '#9ca3af', marginLeft: 'auto' }}>
+                📍 {user.city}
+              </span>
+            </div>
+            <div style={{ display: 'flex', gap: 10, overflowX: 'auto', padding: '0 16px 4px', scrollbarWidth: 'none' }}>
+              {cards.map((group, i) => {
+                const s = group[0]
+                const name = s.profiles?.full_name || 'Seller'
+                const avatar = s.profiles?.avatar_url
+                const media = s.media_urls?.[0]
+                const initial = name[0].toUpperCase()
+                const GRADS = [
+                  'linear-gradient(160deg,#1a0a00,#e65100)',
+                  'linear-gradient(160deg,#0a1a00,#2e7d32)',
+                  'linear-gradient(160deg,#0a0a1a,#1a3a6c)',
+                  'linear-gradient(160deg,#1a1a00,#5a6a1a)',
+                ]
+                return (
+                  <div
+                    key={s.user_id}
+                    onClick={() => {
+                      setViewerStories([...group, ...stories.filter(x => x.user_id !== s.user_id)])
+                      setViewing(0)
+                    }}
+                    style={{
+                      flexShrink: 0, width: 110, height: 170,
+                      borderRadius: 14, overflow: 'hidden',
+                      position: 'relative', cursor: 'pointer',
+                      background: GRADS[i % GRADS.length],
+                      border: '2.5px solid #e65100',
+                      boxShadow: '0 0 0 2px rgba(230,81,0,0.25), 0 2px 12px rgba(0,0,0,0.12)',
+                    }}
+                  >
+                    {media
+                      ? <img src={media} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+                      : avatar
+                        ? <img src={avatar} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: 'brightness(0.85)', transform: 'scale(1.05)' }} />
+                        : null
+                    }
+                    <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, transparent 35%, rgba(0,0,0,0.7) 100%)' }} />
+                    <div style={{ position: 'absolute', top: 8, left: 8, width: 32, height: 32, borderRadius: '50%', border: '2.5px solid #e65100', overflow: 'hidden', background: 'linear-gradient(135deg,#e65100,#f9a825)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: '#fff', boxShadow: '0 1px 6px rgba(0,0,0,0.4)' }}>
+                      {avatar ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initial}
+                    </div>
+                    <div style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(230,81,0,0.85)', borderRadius: 20, padding: '2px 7px', fontSize: 9, fontWeight: 800, color: '#fff' }}>
+                      📍 {user.city}
+                    </div>
+                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '6px 7px 8px' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,0.8)', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 3 }}>
+                        {name.split(' ')[0]} ({group.length})
+                      </div>
+                      <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.8)', fontWeight: 500, lineHeight: 1.3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', textShadow: '0 1px 3px rgba(0,0,0,0.7)' }}>
+                        {s.content}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* ── Sellers You Follow ── */}
+      {followedIds.size > 0 && (() => {
+        const followedStories = stories.filter(s => followedIds.has(s.user_id) && s.user_id !== user.id)
+        if (followedStories.length === 0) return null
+        const userMap = new Map()
+        for (const s of followedStories) {
+          if (!userMap.has(s.user_id)) userMap.set(s.user_id, [])
+          userMap.get(s.user_id).push(s)
+        }
+        const cards = Array.from(userMap.values())
+        return (
+          <div style={{ margin: '16px 0 0' }}>
+            <div style={{ padding: '0 16px 10px', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ fontSize: 15 }}>👥</span>
+              <span style={{ fontSize: 13, fontWeight: 800, color: '#0f1410' }}>Sellers You Follow</span>
+              <span style={{ background: '#1a7a4a', color: '#fff', fontSize: 11, fontWeight: 700, borderRadius: 20, padding: '1px 8px' }}>
+                {cards.length}
+              </span>
+            </div>
+            <div style={{ display: 'flex', gap: 10, overflowX: 'auto', padding: '0 16px 4px', scrollbarWidth: 'none' }}>
+              {cards.map((group, i) => {
+                const s = group[0]
+                const name = s.profiles?.full_name || 'Seller'
+                const avatar = s.profiles?.avatar_url
+                const media = s.media_urls?.[0]
+                const initial = name[0].toUpperCase()
+                const GRADS = [
+                  'linear-gradient(160deg,#0a2e1a,#1a7a4a)',
+                  'linear-gradient(160deg,#0d1b2a,#1a3a6c)',
+                  'linear-gradient(160deg,#2a0d0d,#7a2020)',
+                  'linear-gradient(160deg,#1a0a2e,#4a1a7a)',
+                ]
+                return (
+                  <div
+                    key={s.user_id}
+                    onClick={() => {
+                      setViewerStories([...group, ...stories.filter(x => x.user_id !== s.user_id)])
+                      setViewing(0)
+                    }}
+                    style={{
+                      flexShrink: 0, width: 110, height: 170,
+                      borderRadius: 14, overflow: 'hidden',
+                      position: 'relative', cursor: 'pointer',
+                      background: GRADS[i % GRADS.length],
+                      border: '2.5px solid #1a7a4a',
+                      boxShadow: '0 0 0 2px rgba(26,122,74,0.3), 0 2px 12px rgba(0,0,0,0.12)',
+                    }}
+                  >
+                    {media
+                      ? <img src={media} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+                      : avatar
+                        ? <img src={avatar} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: 'brightness(0.85)', transform: 'scale(1.05)' }} />
+                        : null
+                    }
+                    <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.1) 0%, transparent 35%, rgba(0,0,0,0.7) 100%)' }} />
+                    <div style={{ position: 'absolute', top: 8, left: 8, width: 32, height: 32, borderRadius: '50%', border: '2.5px solid #1a7a4a', overflow: 'hidden', background: 'linear-gradient(135deg,#1a7a4a,#22a05e)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 800, color: '#fff', boxShadow: '0 1px 6px rgba(0,0,0,0.4)' }}>
+                      {avatar ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initial}
+                    </div>
+                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: '6px 7px 8px' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,0.8)', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', marginBottom: 3 }}>
+                        {name.split(' ')[0]} ({group.length})
+                      </div>
+                      <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.8)', fontWeight: 500, lineHeight: 1.3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', textShadow: '0 1px 3px rgba(0,0,0,0.7)' }}>
+                        {s.content}
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Story viewer */}
       {viewing !== null && (

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useWebRTC, formatTime } from '../hooks/useWebRTC'
 import { watchUserOnline, globalChannel } from '../hooks/usePresence'
@@ -40,7 +40,11 @@ export default function Chat() {
 
   // ── State ────────────────────────────────────────────────────────────────
   const [messages, setMessages]           = useState([])
-  const [newMsg, setNewMsg]               = useState('')
+  const location = useLocation()
+  const prefillMessage = useRef(location.state?.prefillMessage || '')
+  const isFromRequest = useRef(!!(location.state?.prefillMessage || location.state?.isRequest))
+  const [isRequestChat, setIsRequestChat] = useState(isFromRequest.current)
+  const [newMsg, setNewMsg]               = useState(location.state?.prefillMessage || '')
   const [currentUser, setCurrentUser]     = useState(null)
   const [otherUser, setOtherUser]         = useState(null)
   const [otherProfile, setOtherProfile]   = useState(null)
@@ -332,7 +336,12 @@ const sameContext = !hasListing
     if (isService) query = query.eq('service_id', listingId)
     else query = query.eq('listing_id', listingId)
     const { data, error } = await query
-    if (!error) setMessages(data || [])
+    if (!error) {
+      setMessages(data || [])
+      if (!isFromRequest.current && data?.some(m => m.body?.includes('I saw your request for'))) {
+        setIsRequestChat(true)
+      }
+    }
   }
 
   // ── FIXED: sendMessage — no reply_preview / reply_to_id columns needed ──
@@ -764,6 +773,17 @@ const sameContext = !hasListing
         </div>
       )}
 
+      {/* ── Buyer request context banner ── */}
+      {isRequestChat && (
+        <div style={{ background: '#f0faf4', borderBottom: '1px solid #d1fae5', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <span style={{ fontSize: 16 }}>🔎</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#1a7a4a' }}>Responding to a Buyer Request</div>
+            <div style={{ fontSize: 11, color: '#637068' }}>Your offer is pre-filled below — edit and send</div>
+          </div>
+        </div>
+      )}
+
       {/* ── Context bars ── */}
       {isServiceChat && service ? (
         <div style={S.serviceBar}>
@@ -778,7 +798,7 @@ const sameContext = !hasListing
             <div style={S.ctxSub}>{service.rate} · {service.city}</div>
           </div>
         </div>
-      ) : listing ? (
+      ) : listing && !isRequestChat ? (
         <div style={S.serviceBar} onClick={() => navigate(`/listing/${listing.id}`)}>
           {listing.images?.[0]
             ? <img src={listing.images[0]} alt="" style={{ ...S.serviceBarIcon, objectFit: 'cover' }} />

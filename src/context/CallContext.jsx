@@ -24,7 +24,8 @@ export function CallProvider({ children }) {
   const ringAudioRef        = useRef(null)
   const ringbackAudioRef    = useRef(null)
   const currentUserRef      = useRef(null)
-  const reconnectTimerRef   = useRef(null)
+ const reconnectTimerRef   = useRef(null)
+  const reconnectAttemptsRef = useRef(0)
   const outboundChannelsRef = useRef({})
   const iceSub              = useRef(null)
   const earlyIceRef         = useRef(new Map())
@@ -66,17 +67,17 @@ export function CallProvider({ children }) {
       })
       .subscribe((status) => {
         console.log('CallProvider channel status:', status)
-        if (status === 'CLOSED') {
-          if (channelRef.current) {
-            channelRef.current = null
-            reconnectTimerRef.current = setTimeout(() => setupChannel(), 1000)
-          }
+        if (status === 'SUBSCRIBED') {
+          reconnectAttemptsRef.current = 0
           return
         }
-        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+        if (status === 'CLOSED' || status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          if (reconnectAttemptsRef.current >= 5) return // stop after 5 attempts
           clearTimeout(reconnectTimerRef.current)
           channelRef.current = null
-          reconnectTimerRef.current = setTimeout(() => setupChannel(), 3000)
+          const delay = Math.min(1000 * 2 ** reconnectAttemptsRef.current, 30000)
+          reconnectAttemptsRef.current += 1
+          reconnectTimerRef.current = setTimeout(() => setupChannel(), delay)
         }
       })
 

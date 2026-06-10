@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { supabase } from './lib/supabase'
 const StatusPage          = lazy(() => import('./pages/StatusPage'))
 const SavedStatusesPage   = lazy(() => import('./pages/SavedStatusesPage'))
+const LookingFor = lazy(() => import('./pages/LookingFor'))
 
 // ── Eagerly loaded (needed immediately on first paint) ────
 import Login        from './pages/Login'
@@ -246,6 +247,7 @@ const [installPrompt, setInstallPrompt] = useState(null)
             <Route path="/status"          element={authed ? <StatusPage />        : <Navigate to="/login" />} />
             <Route path="/saved-statuses"  element={authed ? <SavedStatusesPage /> : <Navigate to="/login" />} />
 <Route path="/notifications"           element={authed ? <Notifications />  : <Navigate to="/login" />} />
+<Route path="/looking-for"             element={authed ? <LookingFor />     : <Navigate to="/login" />} />
 <Route path="*"                        element={<Navigate to="/" />} /></Routes>
         </Suspense>
       </BrowserRouter>

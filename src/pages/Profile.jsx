@@ -1,15 +1,179 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import BottomNav from '../components/BottomNav' // adjust path as needed
+import BottomNav from '../components/BottomNav'
 import VouchSection from '../components/VouchSection'
 import StatusPicker from '../components/StatusPicker'
 import { useStatuses } from '../hooks/useStatuses'
-import FollowersManager from '../components/FollowersManager'
-import FollowingManager from '../components/FollowingManager'
 
-const CITIES = ['Lilongwe', 'Blantyre', 'Mzuzu', 'Zomba', 'Kasungu', 'Mangochi', 'Karonga', 'Salima']
+// ─── NetworkTab ────────────────────────────────────────────────────────────────
+function NetworkTab({ sellerId, userId }) {
+  const [followers, setFollowers] = useState([])
+  const [following, setFollowing] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [removing, setRemoving] = useState(null)
+  const navigate = useNavigate()
 
+  useEffect(() => {
+    if (!userId) return
+    Promise.all([
+      supabase.from('seller_follows')
+        .select('id, follower_id, created_at, follower:profiles!seller_follows_follower_id_fkey(full_name, avatar_url)')
+        .eq('seller_id', sellerId),
+      supabase.from('seller_follows')
+        .select('id, seller_id, created_at, seller:profiles!seller_follows_seller_id_fkey(full_name, avatar_url)')
+        .eq('follower_id', userId)
+    ]).then(([{ data: f }, { data: g }]) => {
+      setFollowers(f || [])
+      setFollowing(g || [])
+      setLoading(false)
+    })
+  }, [userId, sellerId])
+
+  const followerIds = new Set(followers.map(f => f.follower_id))
+  const followingIds = new Set(following.map(f => f.seller_id))
+
+  const removeFollower = async (id) => {
+    setRemoving(id)
+    await supabase.from('seller_follows').delete().eq('id', id)
+    setFollowers(p => p.filter(f => f.id !== id))
+    setRemoving(null)
+  }
+  const unfollow = async (id) => {
+    setRemoving(id)
+    await supabase.from('seller_follows').delete().eq('id', id)
+    setFollowing(p => p.filter(f => f.id !== id))
+    setRemoving(null)
+  }
+
+  const timeAgo = (ts) => {
+    const diff = Date.now() - new Date(ts).getTime()
+    const d = Math.floor(diff / 86400000), h = Math.floor(diff / 3600000), m = Math.floor(diff / 60000)
+    return d > 0 ? `${d}d ago` : h > 0 ? `${h}h ago` : m > 0 ? `${m}m ago` : 'Just now'
+  }
+
+  const Avatar = ({ url, name, gradient }) => {
+    const initials = (name || '?').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+    return (
+      <div style={{
+        width: 44, height: 44, borderRadius: '50%', flexShrink: 0, overflow: 'hidden',
+        background: url ? 'transparent' : gradient,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 15, fontWeight: 700, color: '#fff',
+        boxShadow: '0 2px 6px rgba(0,0,0,0.10)',
+      }}>
+        {url ? <img src={url} alt={name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : initials}
+      </div>
+    )
+  }
+
+  const Row = ({ id, name, avatar, gradient, sub, isMutual, profileId, onView, onAction, actionLabel }) => (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 12,
+      padding: '11px 14px',
+      borderBottom: '1px solid #f3f4f6',
+    }}>
+      <Avatar url={avatar} name={name} gradient={gradient} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 14, fontWeight: 700, color: '#0f1410', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {name}
+          </span>
+          {isMutual && (
+            <span style={{ fontSize: 10, fontWeight: 700, background: '#e8f5e9', color: '#1a7a4a', borderRadius: 20, padding: '2px 7px', whiteSpace: 'nowrap' }}>
+              Mutual
+            </span>
+          )}
+        </div>
+        <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>🕐 {sub}</div>
+      </div>
+      <button
+        onClick={onView}
+        style={{ padding: '5px 11px', fontSize: 11, fontWeight: 600, borderRadius: 20, border: '1.5px solid #d1fae5', background: '#f0faf4', color: '#1a7a4a', cursor: 'pointer', whiteSpace: 'nowrap' }}
+      >
+        View
+      </button>
+      <button
+        onClick={onAction}
+        disabled={removing === id}
+        style={{ padding: '5px 11px', fontSize: 11, fontWeight: 600, borderRadius: 20, border: '1.5px solid #fecaca', background: '#fff5f5', color: '#ef4444', cursor: removing === id ? 'default' : 'pointer', opacity: removing === id ? 0.5 : 1, whiteSpace: 'nowrap' }}
+      >
+        {removing === id ? '…' : actionLabel}
+      </button>
+    </div>
+  )
+
+  const SectionHeader = ({ icon, label, count, badgeColor, hint }) => (
+    <div style={{ padding: '14px 14px 10px', display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid #f3f4f6', background: '#fafcfb' }}>
+      <span style={{ fontSize: 16 }}>{icon}</span>
+      <span style={{ fontSize: 13, fontWeight: 800, color: '#0f1410' }}>{label}</span>
+      <span style={{ background: badgeColor, color: '#fff', fontSize: 11, fontWeight: 700, borderRadius: 20, padding: '1px 8px', minWidth: 20, textAlign: 'center' }}>
+        {count}
+      </span>
+      <span style={{ marginLeft: 'auto', fontSize: 11, color: '#9ca3af', fontWeight: 500 }}>{hint}</span>
+    </div>
+  )
+
+  const Empty = ({ icon, text }) => (
+    <div style={{ padding: '24px 14px', textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
+      <div style={{ fontSize: 28, marginBottom: 6 }}>{icon}</div>
+      {text}
+    </div>
+  )
+
+  if (loading) return (
+    <div style={{ padding: 36, textAlign: 'center', color: '#9ca3af', fontSize: 13 }}>
+      Loading…
+    </div>
+  )
+
+  return (
+    <div>
+      {/* ── Followers ── */}
+      <SectionHeader icon="👥" label="Your Followers" count={followers.length} badgeColor="#1a7a4a" hint="People who follow your shop" />
+      {followers.length === 0
+        ? <Empty icon="🌱" text="No followers yet — post regularly to grow your audience" />
+        : followers.map(f => (
+          <Row key={f.id} id={f.id}
+            name={f.follower?.full_name || 'Unknown'}
+            avatar={f.follower?.avatar_url}
+            gradient="linear-gradient(135deg,#1a7a4a,#22a05e)"
+            sub={`Followed ${timeAgo(f.created_at)}`}
+            isMutual={followingIds.has(f.follower_id)}
+            profileId={f.follower_id}
+            onView={() => navigate('/profile/' + f.follower_id)}
+            onAction={() => removeFollower(f.id)}
+            actionLabel="Remove"
+          />
+        ))
+      }
+
+      {/* ── Divider ── */}
+      <div style={{ height: 10, background: '#f3f4f6', borderTop: '1px solid #e8f0eb', borderBottom: '1px solid #e8f0eb' }} />
+
+      {/* ── Following ── */}
+      <SectionHeader icon="🏪" label="Shops You Follow" count={following.length} badgeColor="#f9a825" hint="You get notified on new posts" />
+      {following.length === 0
+        ? <Empty icon="🔍" text="Not following anyone yet — follow sellers to get their updates" />
+        : following.map(f => (
+          <Row key={f.id} id={f.id}
+            name={f.seller?.full_name || 'Unknown'}
+            avatar={f.seller?.avatar_url}
+            gradient="linear-gradient(135deg,#e65100,#f9a825)"
+            sub={`Following since ${timeAgo(f.created_at)}`}
+            isMutual={followerIds.has(f.seller_id)}
+            profileId={f.seller_id}
+            onView={() => navigate('/profile/' + f.seller_id)}
+            onAction={() => unfollow(f.id)}
+            actionLabel="Unfollow"
+          />
+        ))
+      }
+    </div>
+  )
+}
+
+// ─── Profile ───────────────────────────────────────────────────────────────────
 export default function Profile() {
   const navigate = useNavigate()
   const fileRef = useRef()
@@ -23,7 +187,7 @@ export default function Profile() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false)
   const [editMode, setEditMode] = useState(false)
   const [form, setForm] = useState({ full_name: '', city: '' })
-  const [tab, setTab] = useState('listings') // listings | saved
+  const [tab, setTab] = useState('listings')
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [showStatusPicker, setShowStatusPicker] = useState(false)
   const { statuses: myStatuses } = useStatuses(user?.id)
@@ -47,14 +211,14 @@ export default function Profile() {
     }
   }
 
-async function loadListings(uid) {
-  const { data } = await supabase
-    .from('listings')
-    .select('*')
-    .eq('seller_id', uid)
-    .order('created_at', { ascending: false })
-  setListings(data || [])
-}
+  async function loadListings(uid) {
+    const { data } = await supabase
+      .from('listings')
+      .select('*')
+      .eq('seller_id', uid)
+      .order('created_at', { ascending: false })
+    setListings(data || [])
+  }
 
   async function saveProfile() {
     setSaving(true)
@@ -213,62 +377,97 @@ async function loadListings(uid) {
         </button>
       </div>
 
+      {/* Tab content */}
       {tab === 'network' ? (
-        <div style={{ padding: '0 14px', display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 80 }}>
+        <div style={{ padding: '0 14px', paddingBottom: 80 }}>
           <div style={{ background: '#fff', borderRadius: 16, boxShadow: '0 1px 6px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
-            <FollowersManager sellerId={user?.id} />
-          </div>
-          <div style={{ background: '#fff', borderRadius: 16, boxShadow: '0 1px 6px rgba(0,0,0,0.05)', overflow: 'hidden' }}>
-            <FollowingManager userId={user?.id} />
+            <NetworkTab sellerId={user?.id} userId={user?.id} />
           </div>
         </div>
       ) : (
         <div>
-        <div style={S.grid}>
-        {(tab === 'listings' ? activeListing : soldListings).length === 0 && (
-          <div style={S.empty}>
-            <div style={S.emptyIcon}>{tab === 'listings' ? '🛍️' : '✅'}</div>
-            <p style={S.emptyTitle}>{tab === 'listings' ? 'No active listings' : 'No sold items yet'}</p>
-            <p style={S.emptySub}>{tab === 'listings' ? 'Post something to get started!' : 'Mark a listing as sold when it\'s been purchased.'}</p>
-            {tab === 'listings' && (
-              <button style={S.postBtn} onClick={() => navigate('/post')}>+ Post Listing</button>
+          <div style={S.grid}>
+            {(tab === 'listings' ? activeListing : soldListings).length === 0 && (
+              <div style={S.empty}>
+                <div style={S.emptyIcon}>{tab === 'listings' ? '🛍️' : '✅'}</div>
+                <p style={S.emptyTitle}>{tab === 'listings' ? 'No active listings' : 'No sold items yet'}</p>
+                <p style={S.emptySub}>{tab === 'listings' ? 'Post something to get started!' : "Mark a listing as sold when it's been purchased."}</p>
+                {tab === 'listings' && (
+                  <button style={S.postBtn} onClick={() => navigate('/post')}>+ Post Listing</button>
+                )}
+              </div>
+            )}
+            {(tab === 'listings' ? activeListing : soldListings).map((listing, i) => (
+              <div key={listing.id} style={{ ...S.card, animationDelay: i * 0.04 + 's' }}>
+                <div style={S.thumb}>
+                  {listing.images && listing.images[0]
+                    ? <img src={listing.images[0]} alt={listing.title} style={S.thumbImg} />
+                    : <div style={S.thumbPlaceholder}>🖼️</div>
+                  }
+                  {listing.status === 'sold' && <div style={S.soldBadge}>SOLD</div>}
+                </div>
+                <div style={S.cardBody}>
+                  <div style={S.cardTitle}>{listing.title}</div>
+                  <div style={S.cardPrice}>MWK {Number(listing.price || 0).toLocaleString()}</div>
+                  <div style={S.cardCity}>📍 {listing.city || '—'}</div>
+                </div>
+                <div style={S.cardActions}>
+                  <button
+                    style={{ ...S.actionBtn, ...(listing.status === 'sold' ? S.actionBtnGhost : S.actionBtnGreen) }}
+                    onClick={() => toggleSold(listing)}
+                  >
+                    {listing.status === 'sold' ? '↩ Relist' : '✓ Mark sold'}
+                  </button>
+                  <button style={S.editListingBtn} onClick={() => navigate('/post/edit/' + listing.id)}>✏️ Edit</button>
+                  <button style={S.deleteBtn} onClick={() => setDeleteConfirm(listing.id)}>🗑</button>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Saved Statuses link */}
+          <div
+            onClick={() => navigate('/saved-statuses')}
+            style={{ margin: '12px 14px 14px', background: '#fff', borderRadius: 14, border: '1.5px solid #e5e7eb', padding: '14px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: 20 }}>🤍</span>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#0f1410' }}>Saved Statuses</div>
+                <div style={{ fontSize: 11, color: '#9ca3af' }}>Statuses you saved from sellers</div>
+              </div>
+            </div>
+            <span style={{ fontSize: 18, color: '#9ca3af' }}>›</span>
+          </div>
+
+          {/* Status section */}
+          <div style={{ margin: '0 14px 14px' }}>
+            {activeStatus ? (
+              <div style={{ background: '#e8f5e9', border: '1.5px solid #a5d6a7', borderRadius: 14, padding: '12px 14px' }}>
+                <div style={{ fontSize: 11, fontWeight: 800, color: '#2e7d32', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
+                  Your active status
+                </div>
+                <div style={{ fontSize: 13, color: '#1b5e20', fontWeight: 600, marginBottom: 8 }}>
+                  {activeStatus.content}
+                </div>
+                <button
+                  onClick={() => setShowStatusPicker(true)}
+                  style={{ background: 'none', border: '1.5px solid #a5d6a7', borderRadius: 8, padding: '5px 12px', fontSize: 12, fontWeight: 700, color: '#2e7d32', cursor: 'pointer' }}
+                >
+                  Update
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowStatusPicker(true)}
+                style={{ width: '100%', background: '#f0faf4', border: '1.5px dashed #a5d6a7', borderRadius: 14, padding: '12px 16px', fontSize: 13, fontWeight: 700, color: '#2e7d32', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+              >
+                <span style={{ fontSize: 16 }}>📢</span>
+                Let buyers know you're available today
+              </button>
             )}
           </div>
-        )}
-
-        {(tab === 'listings' ? activeListing : soldListings).map((listing, i) => (
-          <div key={listing.id} style={{ ...S.card, animationDelay: i * 0.04 + 's' }}>
-            {/* Thumbnail */}
-            <div style={S.thumb}>
-              {listing.images && listing.images[0]
-                ? <img src={listing.images[0]} alt={listing.title} style={S.thumbImg} />
-                : <div style={S.thumbPlaceholder}>🖼️</div>
-              }
-              {listing.status === 'sold' && <div style={S.soldBadge}>SOLD</div>}
-            </div>
-
-            {/* Info */}
-            <div style={S.cardBody}>
-              <div style={S.cardTitle}>{listing.title}</div>
-              <div style={S.cardPrice}>MWK {Number(listing.price || 0).toLocaleString()}</div>
-              <div style={S.cardCity}>📍 {listing.city || '—'}</div>
-            </div>
-
-            {/* Actions */}
-            <div style={S.cardActions}>
-              <button
-                style={{ ...S.actionBtn, ...(listing.status === 'sold' ? S.actionBtnGhost : S.actionBtnGreen) }}
-                onClick={() => toggleSold(listing)}
-              >
-                {listing.status === 'sold' ? '↩ Relist' : '✓ Mark sold'}
-              </button>
-              <button style={S.editListingBtn} onClick={() => navigate('/post/edit/' + listing.id)}>✏️ Edit</button>
-              <button style={S.deleteBtn} onClick={() => setDeleteConfirm(listing.id)}>🗑</button>
-            </div>
-          </div>
-        ))}
-      </div>
-      </div>
+        </div>
       )}
 
       {/* Delete confirm modal */}
@@ -284,64 +483,7 @@ async function loadListings(uid) {
           </div>
         </div>
       )}
-      {/* Saved Statuses link */}
-      {<div
-        onClick={() => navigate('/saved-statuses')}
-        style={{
-          margin: '0 14px 14px',
-          background: '#fff', borderRadius: 14,
-          border: '1.5px solid #e5e7eb',
-          padding: '14px 16px',
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          cursor: 'pointer',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 20 }}>🤍</span>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#0f1410' }}>Saved Statuses</div>
-            <div style={{ fontSize: 11, color: '#9ca3af' }}>Statuses you saved from sellers</div>
-          </div>
-        </div>
-        <span style={{ fontSize: 18, color: '#9ca3af' }}>›</span>
-      </div>}
 
-      {/* Status section */}
-      {tab !== 'network' && <div style={{ margin: '0 14px 14px' }}>
-        {activeStatus ? (
-          <div style={{
-            background: '#e8f5e9', border: '1.5px solid #a5d6a7',
-            borderRadius: 14, padding: '12px 14px',
-          }}>
-            <div style={{ fontSize: 11, fontWeight: 800, color: '#2e7d32', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>
-              Your active status
-            </div>
-            <div style={{ fontSize: 13, color: '#1b5e20', fontWeight: 600, marginBottom: 8 }}>
-              {activeStatus.content}
-            </div>
-            <button
-              onClick={() => setShowStatusPicker(true)}
-              style={{ background: 'none', border: '1.5px solid #a5d6a7', borderRadius: 8, padding: '5px 12px', fontSize: 12, fontWeight: 700, color: '#2e7d32', cursor: 'pointer' }}
-            >
-              Update
-            </button>
-          </div>
-        ) : (
-          <button
-            onClick={() => setShowStatusPicker(true)}
-            style={{
-              width: '100%', background: '#f0faf4',
-              border: '1.5px dashed #a5d6a7', borderRadius: 14,
-              padding: '12px 16px', fontSize: 13, fontWeight: 700,
-              color: '#2e7d32', cursor: 'pointer', display: 'flex',
-              alignItems: 'center', justifyContent: 'center', gap: 8,
-            }}
-          >
-            <span style={{ fontSize: 16 }}>📢</span>
-            Let buyers know you're available today
-          </button>
-        )}
-      </div>}
       {/* Status Picker modal */}
       {showStatusPicker && (
         <div style={S.overlay} onClick={() => setShowStatusPicker(false)}>
@@ -350,10 +492,7 @@ async function loadListings(uid) {
               <div style={{ fontSize: 16, fontWeight: 800, color: '#0f1410' }}>Post a Status</div>
               <button onClick={() => setShowStatusPicker(false)} style={{ background: 'none', border: 'none', fontSize: 20, color: '#9ca3af', cursor: 'pointer', lineHeight: 1 }}>✕</button>
             </div>
-            <StatusPicker
-              userId={user?.id}
-              onDone={() => setShowStatusPicker(false)}
-            />
+            <StatusPicker userId={user?.id} onDone={() => setShowStatusPicker(false)} />
           </div>
         </div>
       )}

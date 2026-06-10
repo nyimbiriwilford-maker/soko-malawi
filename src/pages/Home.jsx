@@ -510,16 +510,50 @@ export default function Home() {
       )}
 
       {!search && category === 'All' && activeFilters === 0 && (
-  <FeaturedSection
-    featured={featured}
-    navigate={navigate}
-    user={user}
-    allListings={listings}
-    onRefresh={loadListings}
-  />
-)}
+        <FeaturedSection
+          featured={featured}
+          navigate={navigate}
+          user={user}
+          allListings={listings}
+          onRefresh={loadListings}
+        />
+      )}
 
-      
+      {!search && category === 'All' && activeFilters === 0 && (
+        <div
+          onClick={() => navigate('/looking-for')}
+          style={{
+            margin: '0 16px 14px',
+            background: 'linear-gradient(135deg, #0f2a1a 0%, #1a7a4a 100%)',
+            borderRadius: 18,
+            padding: '18px 20px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            boxShadow: '0 4px 20px rgba(26,122,74,0.25)',
+            border: '1px solid rgba(255,255,255,0.08)',
+          }}
+        >
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <span style={{ fontSize: 22 }}>🔎</span>
+              <span style={{ fontSize: 16, fontWeight: 800, color: '#fff' }}>Looking For</span>
+            </div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', lineHeight: 1.5, maxWidth: 220 }}>
+              Post what you need — let sellers come to you
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8 }}>
+            <div style={{ background: 'rgba(255,255,255,0.15)', borderRadius: 20, padding: '5px 14px', fontSize: 12, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap' }}>
+              Browse Requests →
+            </div>
+            <div style={{ background: '#f9a825', borderRadius: 20, padding: '5px 14px', fontSize: 12, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap' }}>
+              + Post Request
+            </div>
+          </div>
+        </div>
+      )}
 
       {(activeFilters > 0 || sortIdx !== 0 || search) ? (
         <div style={resultsBanner}>

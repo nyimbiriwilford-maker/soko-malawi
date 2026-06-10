@@ -12,7 +12,7 @@ export default function FollowingManager({ userId }) {
     if (!userId) return
     supabase
       .from('seller_follows')
-      .select('id, created_at, seller_id, seller:profiles!seller_id(full_name, avatar_url)')
+      .select('id, created_at, seller_id, seller:profiles!seller_follows_seller_id_fkey(full_name, avatar_url)')
       .eq('follower_id', userId)
       .order('created_at', { ascending: false })
       .then(({ data }) => {
