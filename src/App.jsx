@@ -8,6 +8,7 @@ const LookingFor = lazy(() => import('./pages/LookingFor'))
 // ── Eagerly loaded (needed immediately on first paint) ────
 import Login        from './pages/Login'
 import AuthCallback from './pages/AuthCallback'
+import SectionsPreview from './pages/SectionsPreview'
 
 // ── Lazy loaded (only fetched when route is visited) ──────
 const Home          = lazy(() => import('./pages/Home'))
@@ -220,6 +221,8 @@ const [installPrompt, setInstallPrompt] = useState(null)
         {authed && <GlobalCallListener />}
         <Suspense fallback={<PageLoader />}>
           <Routes>
+            {/* ── TEMP preview ──────────────────────────── */}
+            <Route path="/__preview" element={<SectionsPreview />} />
             {/* ── Auth routes ───────────────────────────── */}
             <Route path="/login"          element={!authed ? <Login /> : <Navigate to={isAdmin ? '/admin' : '/'} />} />
             <Route path="/auth/callback"  element={<AuthCallback />} />

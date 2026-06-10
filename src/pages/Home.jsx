@@ -7,8 +7,10 @@ import HomeHeader      from '../components/HomeHeader'
 import FlashSaleStrip  from '../components/FlashSaleStrip'
 import FeaturedSection from '../components/FeaturedSection'
 import { ProductCard, SkeletonCard } from '../components/ProductCard'
+import { CategoryMosaic, SpotlightSection, TrustBand } from '../components/HomeSections'
 import BottomNav       from '../components/BottomNav'
 import InstallPrompt       from '../components/InstallPrompt'
+import '../styles/homeSections.css'
 
 
 import useSearchAnimation  from '../hooks/useSearchAnimation'
@@ -519,6 +521,14 @@ export default function Home() {
         />
       )}
 
+      {!search && category === 'All' && activeFilters === 0 && !loading && (
+        <SpotlightSection listings={listings} navigate={navigate} />
+      )}
+
+      {!search && category === 'All' && activeFilters === 0 && !loading && (
+        <CategoryMosaic listings={listings} setCategory={setCategory} />
+      )}
+
       {!search && category === 'All' && activeFilters === 0 && (
         <div
           onClick={() => navigate('/looking-for')}
@@ -578,19 +588,21 @@ export default function Home() {
           </button>
         </div>
       ) : (
-        <div style={resultsBar}>
-          <span style={resultsCount}>
-            {loading ? 'Loading…' : `${sorted.length} listing${sorted.length !== 1 ? 's' : ''}`}
-          </span>
-          {userLat && (
-            <span style={locationPill}>
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="#1a7a4a">
-                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-              </svg>
-              Sorted by distance
-            </span>
-          )}
-        </div>
+        <>
+          {!loading && <TrustBand listings={listings} />}
+          <div className="grid-lead">
+            <h2>Fresh on the market</h2>
+            <span>{loading ? 'Loading…' : `${sorted.length} listing${sorted.length !== 1 ? 's' : ''}`}</span>
+            {userLat && (
+              <span style={locationPill}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="#1a7a4a">
+                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                </svg>
+                Sorted by distance
+              </span>
+            )}
+          </div>
+        </>
       )}
 
       <div style={grid}>
@@ -625,8 +637,6 @@ export default function Home() {
 // ── Styles ─────────────────────────────────────────────────
 const page = { minHeight: '100vh', background: '#f7f8f6', paddingBottom: 90, fontFamily: "'DM Sans', system-ui, sans-serif", isolation: 'isolate' }
 
-const resultsBar   = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px 6px', maxWidth: 1400, margin: '0 auto' }
-const resultsCount = { fontSize: 12, fontWeight: 600, color: '#aaa' }
 const locationPill = {
   display: 'flex', alignItems: 'center', gap: 4,
   fontSize: 11, fontWeight: 600, color: '#1a7a4a',
