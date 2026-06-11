@@ -13,6 +13,8 @@ jobs:
       contents: read
       issues: write
       pull-requests: write
+    env:
+      GEMINI_CLI_TRUST_WORKSPACE: true
     steps:
       - uses: actions/checkout@v4
       - uses: google-github-actions/run-gemini-cli@v0
