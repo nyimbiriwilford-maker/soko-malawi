@@ -9,21 +9,17 @@ const T = {
 }
 
 export default function VerificationModal({ user, onClose, onSuccess }) {
-  const [step, setStep]           = useState(1) // 1=info, 2=payment, 3=done
-  const [method, setMethod]       = useState('pachangu')
-  const [paymentRef, setPaymentRef] = useState('')
-  const [loading, setLoading]     = useState(false)
-  const [error, setError]         = useState('')
+  const [step, setStep]   = useState(1)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
   const FEE = 'MK 5,000'
 const PACHANGU_NUMBER = '0882 123 456' // replace with your real Pachangu number
 
   async function submit() {
-    if (!paymentRef.trim()) { setError('Enter your payment reference'); return }
     setLoading(true)
     setError('')
     try {
-      // check no pending request already
       const { data: existing } = await supabase
         .from('verification_requests')
         .select('id, status')
@@ -35,21 +31,42 @@ const PACHANGU_NUMBER = '0882 123 456' // replace with your real Pachangu number
         setError('Your account is already verified!'); setLoading(false); return
       }
       if (existing?.status === 'pending') {
-        setError('You already have a pending request.'); setLoading(false); return
+        setError('You already have a pending request under review.'); setLoading(false); return
       }
 
-      const { error: err } = await supabase.from('verification_requests').insert({
+      const tx_ref = `SOKO-VERIFY-${user.id}-${Date.now()}`
+      const baseUrl = window.location.origin
+
+      const { data: fnData, error: fnErr } = await supabase.functions.invoke('initiate-payment', {
+        body: {
+          seller_id: user.id,
+          email: user.email || '',
+          first_name: user.user_metadata?.full_name?.split(' ')[0] || 'Seller',
+          last_name: user.user_metadata?.full_name?.split(' ')[1] || '',
+          tx_ref,
+          callback_url: `${baseUrl}/verify-payment`,
+          return_url: `${baseUrl}/profile`,
+        },
+      })
+
+      if (fnErr) throw new Error(fnErr.message)
+      if (!fnData?.data?.checkout_url) throw new Error(fnData?.message || 'Payment init failed')
+
+      // save pending request
+      await supabase.from('verification_requests').insert({
         seller_id: user.id,
-        payment_ref: paymentRef.trim(),
-        payment_method: method,
+        payment_ref: tx_ref,
+        payment_method: 'pachangu',
         amount_paid: 5000,
       })
-      if (err) throw err
-      setStep(3)
+
+      // redirect to PayChangu checkout
+      window.location.href = fnData.data.checkout_url
+
     } catch (e) {
       setError(e.message)
+      setLoading(false)
     }
-    setLoading(false)
   }
 
   return (
@@ -126,54 +143,19 @@ const PACHANGU_NUMBER = '0882 123 456' // replace with your real Pachangu number
 
         {step === 2 && (
           <>
-            {/* Pachangu instructions */}
             <div style={{
               background: '#f0f7ff', border: '1.5px solid #93c5fd',
-              borderRadius: 14, padding: '14px 16px', marginBottom: 16,
+              borderRadius: 14, padding: '16px', marginBottom: 18,
+              fontSize: 13, lineHeight: 1.8, color: '#1e3a8a',
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                <div style={{
-                  width: 32, height: 32, borderRadius: 8, flexShrink: 0,
-                  background: 'linear-gradient(135deg,#2563eb,#1d4ed8)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 15,
-                }}>💸</div>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: '#1e3a8a' }}>Pay via Pachangu</div>
-                  <div style={{ fontSize: 11, color: '#3b82f6' }}>Accepts Airtel Money & TNM Mpamba</div>
-                </div>
-              </div>
-              <div style={{ fontSize: 13, lineHeight: 1.8, color: '#1e3a8a' }}>
-                <strong>Amount:</strong> {FEE}<br />
-                <strong>Pachangu number:</strong> {PACHANGU_NUMBER}<br />
-                <strong>Reference:</strong> Your phone number
-              </div>
-              <div style={{
-                marginTop: 10, background: '#dbeafe', borderRadius: 8,
-                padding: '8px 12px', fontSize: 12, color: '#1d4ed8', fontWeight: 500,
-              }}>
-                💡 Send via *419# (Airtel) or *115# (TNM), enter the Pachangu number above
+              <div style={{ fontWeight: 800, marginBottom: 6, fontSize: 14 }}>💸 Pay via PayChangu</div>
+              You'll be redirected to PayChangu's secure checkout to pay <strong>MK 5,000</strong> using Airtel Money or TNM Mpamba.
+              <div style={{ marginTop: 8, background: '#dbeafe', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: '#1d4ed8' }}>
+                🧪 Test mode — no real money will be charged.
               </div>
             </div>
 
-            {/* Payment ref input */}
-            <div style={{ marginBottom: 16 }}>
-              <label style={{ fontSize: 12, fontWeight: 700, color: T.gray900, display: 'block', marginBottom: 6 }}>
-                Transaction Reference / Receipt Number *
-              </label>
-              <input
-                value={paymentRef}
-                onChange={e => setPaymentRef(e.target.value)}
-                placeholder="e.g. AIR-20250613-XXXX"
-                style={{
-                  width: '100%', padding: '11px 14px', borderRadius: 12,
-                  border: `1.5px solid ${error ? T.red : T.gray200}`,
-                  fontSize: 14, outline: 'none', boxSizing: 'border-box',
-                  fontFamily: 'inherit',
-                }}
-              />
-              {error && <div style={{ fontSize: 12, color: T.red, marginTop: 5 }}>{error}</div>}
-            </div>
+            {error && <div style={{ fontSize: 12, color: T.red, marginBottom: 12 }}>{error}</div>}
 
             <div style={{ display: 'flex', gap: 10 }}>
               <button onClick={() => setStep(1)} style={{
@@ -183,11 +165,11 @@ const PACHANGU_NUMBER = '0882 123 456' // replace with your real Pachangu number
               }}>← Back</button>
               <button onClick={submit} disabled={loading} style={{
                 flex: 2, padding: '12px 0', borderRadius: 14,
-                background: loading ? T.gray200 : `linear-gradient(135deg, ${T.green}, ${T.greenD})`,
+                background: loading ? T.gray200 : 'linear-gradient(135deg,#1A73E8,#1557b0)',
                 border: 'none', color: loading ? T.gray600 : '#fff',
                 fontSize: 14, fontWeight: 800, cursor: loading ? 'not-allowed' : 'pointer',
               }}>
-                {loading ? 'Submitting...' : 'Submit for Review ✓'}
+                {loading ? 'Redirecting…' : 'Pay MK 5,000 →'}
               </button>
             </div>
           </>
