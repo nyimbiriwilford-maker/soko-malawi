@@ -5,6 +5,7 @@ import BottomNav from '../components/BottomNav'
 import VouchSection from '../components/VouchSection'
 import StatusPicker from '../components/StatusPicker'
 import { useStatuses } from '../hooks/useStatuses'
+import VerificationModal from '../components/VerificationModal'
 
 // ─── NetworkTab ────────────────────────────────────────────────────────────────
 function NetworkTab({ sellerId, userId }) {
@@ -190,6 +191,7 @@ export default function Profile() {
   const [tab, setTab] = useState('listings')
   const [deleteConfirm, setDeleteConfirm] = useState(null)
   const [showStatusPicker, setShowStatusPicker] = useState(false)
+  const [showVerify, setShowVerify] = useState(false)
   const { statuses: myStatuses } = useStatuses(user?.id)
   const activeStatus = myStatuses[0] || null
 
@@ -314,6 +316,33 @@ export default function Profile() {
             <div style={S.emailText}>{user.email}</div>
             {profile.city && <div style={S.cityText}>📍 {profile.city}</div>}
             <button style={S.editBtn} onClick={() => setEditMode(true)}>✏️ Edit Profile</button>
+
+            {/* Verification status */}
+            <div style={{ marginTop: 10 }}>
+              {profile.is_verified ? (
+                <div style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5,
+                  background: '#e8f0fe', borderRadius: 50, padding: '5px 14px',
+                  fontSize: 12, fontWeight: 700, color: '#1A73E8',
+                  border: '1px solid #c5d8fc',
+                }}>
+                  ✅ Verified Seller
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowVerify(true)}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                    background: 'linear-gradient(135deg,#1A73E8,#1557b0)',
+                    border: 'none', borderRadius: 50, padding: '7px 16px',
+                    fontSize: 12, fontWeight: 700, color: '#fff', cursor: 'pointer',
+                    boxShadow: '0 2px 10px rgba(26,115,232,0.3)',
+                  }}
+                >
+                  ✅ Get Verified · MK 5,000
+                </button>
+              )}
+            </div>
           </div>
         ) : (
           <div style={S.editForm}>
@@ -495,6 +524,18 @@ export default function Profile() {
             <StatusPicker userId={user?.id} onDone={() => setShowStatusPicker(false)} />
           </div>
         </div>
+      )}
+
+      {/* Verification modal */}
+      {showVerify && (
+        <VerificationModal
+          user={user}
+          onClose={() => setShowVerify(false)}
+          onSuccess={() => {
+            setShowVerify(false)
+            loadProfile(user.id)
+          }}
+        />
       )}
 
       <BottomNav />

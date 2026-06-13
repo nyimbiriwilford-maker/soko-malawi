@@ -74,7 +74,19 @@ export default function PublicProfile() {
             : <span style={{ fontSize:32, fontWeight:800, color:'#fff' }}>{(profile.full_name || 'U')[0].toUpperCase()}</span>
           }
         </div>
-        <div style={{ fontSize:20, fontWeight:800, color:'#0f1410', marginBottom:4 }}>{profile.full_name || 'Anonymous'}</div>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:8, marginBottom:4 }}>
+          <div style={{ fontSize:20, fontWeight:800, color:'#0f1410' }}>{profile.full_name || 'Anonymous'}</div>
+          {profile.is_verified && (
+            <div style={{
+              display:'inline-flex', alignItems:'center', gap:4,
+              background:'#e8f0fe', borderRadius:50, padding:'3px 10px',
+              fontSize:11, fontWeight:700, color:'#1A73E8',
+              border:'1px solid #c5d8fc', flexShrink:0,
+            }}>
+              ✅ Verified
+            </div>
+          )}
+        </div>
         {profile.city && <div style={{ fontSize:13, color:'#888', marginBottom:6 }}>📍 {profile.city}</div>}
         <div style={{ display:'inline-flex', alignItems:'center', gap:6, fontSize:13, fontWeight:600, color: status.color }}>
           <span style={{ width:8, height:8, borderRadius:'50%', background: status.color, display:'inline-block' }} />

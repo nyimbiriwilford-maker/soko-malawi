@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
-const TABS = ['Dashboard', 'Featured', 'Listings', 'Users']
+const TABS = ['Dashboard', 'Featured', 'Listings', 'Users', 'Verifications']
 
 export default function Admin() {
   const navigate = useNavigate()
@@ -15,6 +15,8 @@ export default function Admin() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [toast, setToast] = useState('')
   const [adminName, setAdminName] = useState('')
+const [verifications, setVerifications] = useState([])
+const [verifyLoading, setVerifyLoading] = useState(false)
 
   useEffect(() => { init() }, [])
 
@@ -31,7 +33,7 @@ export default function Admin() {
     if (profile?.role !== 'admin') { navigate('/'); return }
 
     setAdminName(profile?.full_name || user.email)
-    await Promise.all([loadListings(), loadUsers()])
+    await Promise.all([loadListings(), loadUsers(), loadVerifications()])
     setLoading(false)
   }
 
@@ -53,6 +55,26 @@ export default function Admin() {
     list.forEach(l => { l.profiles = profileMap[l.seller_id] || null })
   }
   setListings(list)
+}
+
+async function loadVerifications() {
+  const { data } = await supabase
+    .from('verification_requests')
+    .select('*, profiles!seller_id(full_name, avatar_url, city)')
+    .order('submitted_at', { ascending: false })
+  setVerifications(data || [])
+}
+
+async function handleVerify(id, status, note = '') {
+  setVerifyLoading(id)
+  await supabase.from('verification_requests').update({
+    status,
+    admin_note: note || null,
+    reviewed_at: new Date().toISOString(),
+  }).eq('id', id)
+  setVerifications(vs => vs.map(v => v.id === id ? { ...v, status, admin_note: note } : v))
+  showToast(status === 'approved' ? '✅ Seller verified!' : '❌ Request rejected')
+  setVerifyLoading(null)
 }
 
 async function loadUsers() {
@@ -129,7 +151,7 @@ async function loadUsers() {
     </div>
   )
 
-  const TAB_ICONS = { Dashboard: '📊', Featured: '⭐', Listings: '📦', Users: '👥' }
+  const TAB_ICONS = { Dashboard: '📊', Featured: '⭐', Listings: '📦', Users: '👥', Verifications: '✅' }
 
   return (
     <div style={S.shell}>
@@ -186,9 +208,14 @@ async function loadUsers() {
                 {t === 'Featured' && (
                   <span style={S.navPill}>{stats.featured}</span>
                 )}
-                {t === 'Users' && (
-                  <span style={S.navPill}>{stats.users}</span>
-                )}
+               {t === 'Users' && (
+  <span style={S.navPill}>{stats.users}</span>
+)}
+{t === 'Verifications' && verifications.filter(v => v.status === 'pending').length > 0 && (
+  <span style={{ ...S.navPill, background: '#dc2626' }}>
+    {verifications.filter(v => v.status === 'pending').length}
+  </span>
+)}
               </button>
             ))}
           </nav>
@@ -445,7 +472,90 @@ async function loadUsers() {
         )}
 
         {/* ══ TAB: USERS ══ */}
-        {tab === 'Users' && (
+        {tab === 'Verifications' && (
+  <div style={S.content}>
+    <div style={S.tableCard}>
+      <div style={S.tableHeader}>
+        <div style={S.tableTitle}>Verification Requests</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {['all','pending','approved','rejected'].map(f => (
+            <button key={f} onClick={() => setStatusFilter(f)} style={{
+              padding: '4px 12px', borderRadius: 20, border: 'none', cursor: 'pointer',
+              fontSize: 11, fontWeight: 700,
+              background: statusFilter === f ? '#1a7a4a' : '#f0f5f2',
+              color: statusFilter === f ? '#fff' : '#555',
+            }}>{f}</button>
+          ))}
+        </div>
+      </div>
+      {verifications
+        .filter(v => statusFilter === 'all' || v.status === statusFilter)
+        .map(v => (
+        <div key={v.id} style={{
+          display: 'flex', alignItems: 'center', gap: 14,
+          padding: '14px 20px', borderBottom: '1px solid #f0f5f2',
+        }}>
+          {/* Avatar */}
+          <div style={{ ...S.userAvatar, flexShrink: 0 }}>
+            {v.profiles?.avatar_url
+              ? <img src={v.profiles.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+              : (v.profiles?.full_name || '?')[0].toUpperCase()
+            }
+          </div>
+          {/* Info */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#111' }}>
+              {v.profiles?.full_name || 'Unknown'}
+            </div>
+            <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>
+              📍 {v.profiles?.city || '—'} · 💸 Pachangu · Ref: <strong>{v.payment_ref}</strong>
+            </div>
+            <div style={{ fontSize: 11, color: '#9ca3af' }}>
+              Submitted: {new Date(v.submitted_at).toLocaleString()}
+            </div>
+            {v.admin_note && (
+              <div style={{ fontSize: 11, color: '#dc2626', marginTop: 2 }}>Note: {v.admin_note}</div>
+            )}
+          </div>
+          {/* Amount */}
+          <div style={{ fontSize: 13, fontWeight: 800, color: '#1a7a4a', flexShrink: 0 }}>
+            MK {Number(v.amount_paid || 5000).toLocaleString()}
+          </div>
+          {/* Status + actions */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
+            <StatusBadge status={v.status} />
+            {v.status === 'pending' && (
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button
+                  disabled={verifyLoading === v.id}
+                  onClick={() => handleVerify(v.id, 'approved')}
+                  style={{ padding: '5px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, background: '#e6f4ec', color: '#1a7a4a' }}
+                >
+                  {verifyLoading === v.id ? '…' : '✓ Approve'}
+                </button>
+                <button
+                  disabled={verifyLoading === v.id}
+                  onClick={() => {
+                    const note = window.prompt('Rejection reason (optional):') || ''
+                    handleVerify(v.id, 'rejected', note)
+                  }}
+                  style={{ padding: '5px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, background: '#fee2e2', color: '#dc2626' }}
+                >
+                  ✕ Reject
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
+      {verifications.filter(v => statusFilter === 'all' || v.status === statusFilter).length === 0 && (
+        <div style={{ padding: 32, textAlign: 'center', color: '#aaa', fontSize: 13 }}>No verification requests.</div>
+      )}
+    </div>
+  </div>
+)}
+
+{tab === 'Users' && (
           <div style={S.content}>
             <div style={S.tableCard}>
               <div style={S.tableHeader}>

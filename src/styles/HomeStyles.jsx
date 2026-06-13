@@ -47,6 +47,9 @@ export default function HomeStyles() {
       .listing-card { cursor: pointer; }
       .listing-card:active { opacity: 0.92; }
       .listing-card:hover { box-shadow: 0 6px 20px rgba(0,0,0,0.12) !important; }
+      /* Add at the bottom of HomeStyles */
+.soko-v2 * { background-color: unset; }
+.soko-v2 .soko-card-bg { background-color: #ffffff !important; }
     `}</style>
   )
 }
