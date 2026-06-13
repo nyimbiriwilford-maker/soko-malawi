@@ -32,15 +32,21 @@ export default function VerifyPayment() {
     }
 
     // auto-approve — PayChangu confirmed payment
-    const { error } = await supabase.from('verification_requests')
+    const { error, data } = await supabase.from('verification_requests')
       .update({
         status: 'approved',
         reviewed_at: new Date().toISOString(),
       })
       .eq('seller_id', user.id)
       .eq('payment_ref', tx_ref)
+      .select()
+
+    console.log('update result:', data, 'error:', error)
+    console.log('tx_ref from url:', tx_ref)
+    console.log('user id:', user.id)
 
     if (error) { setStatus('failed'); return }
+    if (!data || data.length === 0) { setStatus('failed'); return }
     setStatus('success')
   }
 
