@@ -45,12 +45,9 @@ const PACHANGU_NUMBER = '0882 123 456' // replace with your real Pachangu number
           last_name: user.user_metadata?.full_name?.split(' ')[1] || '',
           tx_ref,
           callback_url: `${baseUrl}/verify-payment`,
-          return_url: `${baseUrl}/profile`,
+          return_url: `${baseUrl}/verify-payment`,
         },
       })
-
-      console.log('fnErr:', fnErr)
-      console.log('fnData:', JSON.stringify(fnData))
       if (fnErr) throw new Error(JSON.stringify(fnErr))
       if (!fnData?.data?.checkout_url) throw new Error(JSON.stringify(fnData))
 
