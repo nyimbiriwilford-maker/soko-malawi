@@ -49,8 +49,10 @@ const PACHANGU_NUMBER = '0882 123 456' // replace with your real Pachangu number
         },
       })
 
-      if (fnErr) throw new Error(typeof fnErr === 'object' ? JSON.stringify(fnErr) : fnErr)
-      if (!fnData?.data?.checkout_url) throw new Error(fnData?.message || fnData?.error || JSON.stringify(fnData) || 'Payment init failed')
+      console.log('fnErr:', fnErr)
+      console.log('fnData:', JSON.stringify(fnData))
+      if (fnErr) throw new Error(JSON.stringify(fnErr))
+      if (!fnData?.data?.checkout_url) throw new Error(JSON.stringify(fnData))
 
       // save pending request
       await supabase.from('verification_requests').insert({
