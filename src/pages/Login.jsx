@@ -644,7 +644,16 @@ export default function Login() {
       await supabase.auth.signOut(); setLoading(false)
       setError('Please verify your email before signing in.'); return
     }
-    const { data: profile } = await supabase.from('profiles').select('role').eq('id', data.user.id).single()
+    const { data: profile } = await supabase.from('profiles').select('role, is_disabled').eq('id', data.user.id).single()
+    if (profile?.is_disabled) {
+      await supabase.auth.signOut()
+      setLoading(false)
+      setMessage({
+        isError: false,
+        text: `Thank you for being one of our early testers. Your feedback has been incredibly valuable to us.\n\nWe are currently working on significant improvements to SokoMW based on what you and other testers shared with us. As a result, access has been temporarily paused while we build these new features.\n\nWe will notify you as soon as the updated version is ready — we think you'll love what's coming. Thank you for your patience and continued support.`
+      })
+      return
+    }
     setLoading(false)
     navigate(profile?.role === 'admin' ? '/admin' : '/')
   }
@@ -1009,7 +1018,7 @@ function Msg({ msg }) {
   return (
     <div className={`sk-msg ${msg.isError ? 'sk-msg-error' : 'sk-msg-info'}`}>
       <span style={{ fontSize: 15 }}>{msg.isError ? '⚠️' : '✅'}</span>
-      <div style={{ flex: 1 }}>{msg.text}</div>
+      <div style={{ flex: 1, whiteSpace: 'pre-line' }}>{msg.text}</div>
     </div>
   )
 }

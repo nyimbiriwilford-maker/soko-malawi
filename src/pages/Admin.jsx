@@ -171,6 +171,13 @@ async function loadUsers() {
     showToast('Listing deleted')
   }
 
+  async function toggleAccess(u) {
+    const next = u.is_disabled ? false : true
+    await supabase.from('profiles').update({ is_disabled: next }).eq('id', u.id)
+    setUsers(us => us.map(x => x.id === u.id ? { ...x, is_disabled: next } : x))
+    showToast(next ? `🚫 ${u.full_name || 'User'} access disabled` : `✅ ${u.full_name || 'User'} access restored`)
+  }
+
   async function toggleRole(u) {
     const next = u.role === 'admin' ? 'user' : 'admin'
     await supabase.from('profiles').update({ role: next }).eq('id', u.id)
@@ -796,6 +803,16 @@ async function loadUsers() {
                     onClick={() => toggleRole(u)}
                   >
                     {u.role === 'admin' ? 'Remove admin' : 'Make admin'}
+                  </button>
+                  <button
+                    style={{
+                      ...S.roleBtn,
+                      background: u.is_disabled ? '#fef3c7' : '#fee2e2',
+                      color: u.is_disabled ? '#b45309' : '#dc2626',
+                    }}
+                    onClick={() => toggleAccess(u)}
+                  >
+                    {u.is_disabled ? '✓ Restore access' : '🚫 Disable access'}
                   </button>
                 </div>
               ))}
