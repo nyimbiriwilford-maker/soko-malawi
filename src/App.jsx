@@ -178,6 +178,7 @@ const [installPrompt, setInstallPrompt] = useState(null)
       .eq('id', userId)
       .single()
     if (data?.is_disabled) {
+      localStorage.setItem('sk_disabled', '1')
       await supabase.auth.signOut()
       return
     }
