@@ -179,8 +179,10 @@ const [installPrompt, setInstallPrompt] = useState(null)
       .eq('id', userId)
       .single()
     if (data?.is_disabled) {
-      window.location.href = '/login?disabled=1'
       await supabase.auth.signOut()
+      setSession(null)
+      setRole(null)
+      window.location.replace('/login?disabled=1')
       return
     }
     setRole(data?.role ?? 'user')
