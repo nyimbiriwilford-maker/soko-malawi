@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
-const TABS = ['Dashboard', 'Featured', 'Listings', 'Users', 'Verifications']
+const TABS = ['Dashboard', 'Featured', 'Listings', 'Users', 'Verifications', 'Broadcast']
 
 export default function Admin() {
   const navigate = useNavigate()
@@ -17,6 +17,12 @@ export default function Admin() {
   const [adminName, setAdminName] = useState('')
 const [verifications, setVerifications] = useState([])
 const [verifyLoading, setVerifyLoading] = useState(false)
+const [broadcastSubject, setBroadcastSubject] = useState('')
+const [broadcastMessage, setBroadcastMessage] = useState('')
+const [broadcasting, setBroadcasting] = useState(false)
+const [broadcastResult, setBroadcastResult] = useState(null)
+const [broadcastFilter, setBroadcastFilter] = useState({ role: 'all', city: '' })
+const [selectedUsers, setSelectedUsers] = useState([])
 
   useEffect(() => { init() }, [])
 
@@ -77,12 +83,72 @@ async function handleVerify(id, status, note = '') {
   setVerifyLoading(null)
 }
 
+function getBroadcastFiltered() {
+  return users.filter(u => {
+    const matchRole = broadcastFilter.role === 'all' || u.role === broadcastFilter.role
+    const matchCity = !broadcastFilter.city || (u.city || '').toLowerCase().includes(broadcastFilter.city.toLowerCase())
+    return matchRole && matchCity
+  })
+}
+
+function toggleSelectUser(id) {
+  setSelectedUsers(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+}
+
+function toggleSelectAll() {
+  const filtered = getBroadcastFiltered()
+  const allSelected = filtered.every(u => selectedUsers.includes(u.id))
+  if (allSelected) setSelectedUsers([])
+  else setSelectedUsers(filtered.map(u => u.id))
+}
+
+async function handleBroadcast() {
+  if (!broadcastSubject.trim() || !broadcastMessage.trim()) {
+    showToast('Please fill in subject and message')
+    return
+  }
+  if (selectedUsers.length === 0) {
+    showToast('Select at least one user')
+    return
+  }
+  if (!window.confirm(`Send this email to ${selectedUsers.length} selected user(s)?`)) return
+
+  setBroadcasting(true)
+  setBroadcastResult(null)
+
+  try {
+    const targets = users.filter(u => selectedUsers.includes(u.id))
+    const emails = targets.map(u => u.email).filter(Boolean)
+
+    const { data, error } = await supabase.functions.invoke('broadcast-email', {
+      body: { subject: broadcastSubject.trim(), message: broadcastMessage.trim(), emails }
+    })
+    if (error) throw error
+    setBroadcastResult({ success: true, sent: data?.sent || emails.length })
+    showToast(`✅ Email sent to ${data?.sent || emails.length} users`)
+    setSelectedUsers([])
+  } catch (err) {
+    setBroadcastResult({ success: false, error: err.message })
+    showToast('❌ Failed to send emails')
+  } finally {
+    setBroadcasting(false)
+  }
+}
+
 async function loadUsers() {
-  const { data, error } = await supabase
+  const { data: profiles, error } = await supabase
     .from('profiles')
     .select('*')
   if (error) console.error('Users error:', error)
-  setUsers(data || [])
+
+  // Fetch emails from auth.users via admin API
+  const { data: { users: authUsers }, error: authErr } = await supabase.auth.admin.listUsers()
+  if (authErr) console.error('Auth users error:', authErr)
+
+  // Merge email into each profile
+  const emailMap = Object.fromEntries((authUsers || []).map(u => [u.id, u.email]))
+  const merged = (profiles || []).map(p => ({ ...p, email: emailMap[p.id] || null }))
+  setUsers(merged)
 }
   async function handleLogout() {
     await supabase.auth.signOut()
@@ -151,7 +217,7 @@ async function loadUsers() {
     </div>
   )
 
-  const TAB_ICONS = { Dashboard: '📊', Featured: '⭐', Listings: '📦', Users: '👥', Verifications: '✅' }
+  const TAB_ICONS = { Dashboard: '📊', Featured: '⭐', Listings: '📦', Users: '👥', Verifications: '✅', Broadcast: '📣' }
 
   return (
     <div style={S.shell}>
@@ -554,6 +620,155 @@ async function loadUsers() {
     </div>
   </div>
 )}
+
+{tab === 'Broadcast' && (() => {
+  const filtered = getBroadcastFiltered()
+  const allSelected = filtered.length > 0 && filtered.every(u => selectedUsers.includes(u.id))
+  const cities = [...new Set(users.map(u => u.city).filter(Boolean))].sort()
+
+  return (
+    <div style={S.content}>
+      <div style={{ display: 'flex', gap: 20, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+
+        {/* ── Left: Compose ── */}
+        <div style={{ ...S.tableCard, padding: 24, flex: '1 1 340px' }}>
+          <div style={S.tableTitle}>📣 Compose Message</div>
+          <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 4, marginBottom: 20 }}>
+            {selectedUsers.length === 0
+              ? 'No users selected yet'
+              : <span style={{ color: '#1a7a4a', fontWeight: 700 }}>{selectedUsers.length} user(s) selected</span>}
+          </div>
+
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 12, fontWeight: 700, color: '#555', display: 'block', marginBottom: 6 }}>Subject</label>
+            <input
+              style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1.5px solid #e0e8e2', fontSize: 13, fontFamily: "'DM Sans', system-ui, sans-serif", outline: 'none', boxSizing: 'border-box', display: 'block' }}
+              placeholder="e.g. Important update about SokoMW"
+              value={broadcastSubject}
+              onChange={e => setBroadcastSubject(e.target.value)}
+            />
+          </div>
+
+          <div style={{ marginBottom: 20 }}>
+            <label style={{ fontSize: 12, fontWeight: 700, color: '#555', display: 'block', marginBottom: 6 }}>Message</label>
+            <textarea
+              rows={8}
+              style={{ width: '100%', padding: '10px 14px', borderRadius: 10, border: '1.5px solid #e0e8e2', fontSize: 13, fontFamily: "'DM Sans', system-ui, sans-serif", outline: 'none', resize: 'vertical', boxSizing: 'border-box', lineHeight: 1.6, display: 'block' }}
+              placeholder="Write your message here…"
+              value={broadcastMessage}
+              onChange={e => setBroadcastMessage(e.target.value)}
+            />
+          </div>
+
+          {broadcastResult && (
+            <div style={{
+              padding: '10px 14px', borderRadius: 10, marginBottom: 14, fontSize: 13, fontWeight: 600,
+              background: broadcastResult.success ? '#e6f4ec' : '#fee2e2',
+              color: broadcastResult.success ? '#1a7a4a' : '#dc2626',
+            }}>
+              {broadcastResult.success ? `✅ Sent to ${broadcastResult.sent} users` : `❌ ${broadcastResult.error}`}
+            </div>
+          )}
+
+          <button
+            disabled={broadcasting || selectedUsers.length === 0}
+            onClick={handleBroadcast}
+            style={{
+              background: broadcasting || selectedUsers.length === 0 ? '#9ca3af' : '#1a7a4a',
+              color: '#fff', border: 'none', borderRadius: 10,
+              padding: '12px 24px', fontSize: 14, fontWeight: 700,
+              cursor: broadcasting || selectedUsers.length === 0 ? 'not-allowed' : 'pointer',
+              fontFamily: "'DM Sans', system-ui, sans-serif",
+              display: 'flex', alignItems: 'center', gap: 8, width: '100%', justifyContent: 'center',
+            }}
+          >
+            {broadcasting ? <><div style={S.miniSpinner} /> Sending…</> : `📣 Send to ${selectedUsers.length || 0} User(s)`}
+          </button>
+        </div>
+
+        {/* ── Right: User selector ── */}
+        <div style={{ ...S.tableCard, flex: '1 1 340px', overflow: 'hidden' }}>
+          <div style={{ padding: '16px 20px', borderBottom: '1px solid #e8f0ec', display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+            <select
+              style={{ background: '#f4f7f5', border: '1px solid #e0e8e2', borderRadius: 8, padding: '7px 10px', fontSize: 12, fontFamily: "'DM Sans', system-ui, sans-serif", cursor: 'pointer' }}
+              value={broadcastFilter.role}
+              onChange={e => { setBroadcastFilter(f => ({ ...f, role: e.target.value })); setSelectedUsers([]) }}
+            >
+              <option value="all">All roles</option>
+              <option value="user">Users only</option>
+              <option value="admin">Admins only</option>
+            </select>
+
+            <select
+              style={{ background: '#f4f7f5', border: '1px solid #e0e8e2', borderRadius: 8, padding: '7px 10px', fontSize: 12, fontFamily: "'DM Sans', system-ui, sans-serif", cursor: 'pointer' }}
+              value={broadcastFilter.city}
+              onChange={e => { setBroadcastFilter(f => ({ ...f, city: e.target.value })); setSelectedUsers([]) }}
+            >
+              <option value="">All cities</option>
+              {cities.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+
+            <span style={{ fontSize: 12, color: '#9ca3af', marginLeft: 'auto' }}>{filtered.length} user(s) found</span>
+          </div>
+
+          <div style={{ padding: '10px 20px', borderBottom: '1px solid #f0f5f2', display: 'flex', alignItems: 'center', gap: 10, background: '#f9fbfa' }}>
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={toggleSelectAll}
+              style={{ width: 16, height: 16, cursor: 'pointer', accentColor: '#1a7a4a' }}
+            />
+            <span style={{ fontSize: 12, fontWeight: 700, color: '#555' }}>
+              {allSelected ? 'Deselect all' : `Select all ${filtered.length}`}
+            </span>
+          </div>
+
+          <div style={{ maxHeight: 420, overflowY: 'auto' }}>
+            {filtered.length === 0 && (
+              <div style={{ padding: 32, textAlign: 'center', color: '#aaa', fontSize: 13 }}>No users match filter.</div>
+            )}
+            {filtered.map(u => (
+              <div
+                key={u.id}
+                onClick={() => toggleSelectUser(u.id)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  padding: '11px 20px', borderBottom: '1px solid #f0f5f2',
+                  cursor: 'pointer',
+                  background: selectedUsers.includes(u.id) ? '#f0faf4' : 'transparent',
+                  transition: 'background 0.1s',
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={selectedUsers.includes(u.id)}
+                  onChange={() => toggleSelectUser(u.id)}
+                  onClick={e => e.stopPropagation()}
+                  style={{ width: 15, height: 15, cursor: 'pointer', accentColor: '#1a7a4a', flexShrink: 0 }}
+                />
+                <div style={S.userAvatar}>
+                  {u.avatar_url
+                    ? <img src={u.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                    : (u.full_name || 'U')[0].toUpperCase()}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: '#111', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+                    {u.full_name || 'No name'}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>
+                    {u.city || 'No city'} · {u.role || 'user'}
+                  </div>
+                </div>
+                {selectedUsers.includes(u.id) && <span style={{ fontSize: 11, fontWeight: 700, color: '#1a7a4a' }}>✓</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+
+      </div>
+    </div>
+  )
+})()}
 
 {tab === 'Users' && (
           <div style={S.content}>
