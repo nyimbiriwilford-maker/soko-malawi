@@ -116,6 +116,7 @@ const [installPrompt, setInstallPrompt] = useState(null)
         setSession(null)
         setRole(null)
         setIsRecovery(false)
+        // Don't navigate — if disabled, window.location.href already redirected with ?disabled=1
         return
       }
 
@@ -178,7 +179,7 @@ const [installPrompt, setInstallPrompt] = useState(null)
       .eq('id', userId)
       .single()
     if (data?.is_disabled) {
-      localStorage.setItem('sk_disabled', '1')
+      window.location.href = '/login?disabled=1'
       await supabase.auth.signOut()
       return
     }

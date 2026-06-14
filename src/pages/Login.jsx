@@ -613,8 +613,7 @@ export default function Login() {
   const [loading, setLoading]         = useState(false)
   const [googleLoading, setGoogleLoading] = useState(false)
   const [message, setMessage]         = useState(() => {
-    if (sessionStorage.getItem('sk_disabled')) {
-      sessionStorage.removeItem('sk_disabled')
+    if (new URLSearchParams(window.location.search).get('disabled')) {
       return {
         isError: false,
         text: `Thank you for being one of our early testers. Your feedback has been incredibly valuable to us.\n\nWe are currently working on significant improvements to SokoMW based on what you and other testers shared with us. As a result, access has been temporarily paused while we build these new features.\n\nWe will notify you as soon as the updated version is ready — we think you'll love what's coming. Thank you for your patience and continued support.`
