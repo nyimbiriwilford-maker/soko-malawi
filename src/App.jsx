@@ -22,6 +22,7 @@ const Admin         = lazy(() => import('./pages/Admin'))
 const PublicProfile = lazy(() => import('./pages/PublicProfile'))
 const ResetPassword   = lazy(() => import('./pages/ResetPassword'))
 const Notifications   = lazy(() => import('./pages/Notifications'))
+const VerifyPayment   = lazy(() => import('./pages/VerifyPayment'))
 
 import GlobalCallListener from './components/GlobalCallListener'
 import { CallProvider }   from './context/CallContext'
@@ -103,11 +104,11 @@ const [installPrompt, setInstallPrompt] = useState(null)
       }
 
       if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        setSession(session)
         if (session) {
           fetchRole(session.user.id)
           setupPush(session)
         }
+        setSession(session)
         return
       }
 
@@ -173,9 +174,13 @@ const [installPrompt, setInstallPrompt] = useState(null)
   async function fetchRole(userId) {
     const { data } = await supabase
       .from('profiles')
-      .select('role')
+      .select('role, is_disabled')
       .eq('id', userId)
       .single()
+    if (data?.is_disabled) {
+      await supabase.auth.signOut()
+      return
+    }
     setRole(data?.role ?? 'user')
   }
 
@@ -248,6 +253,7 @@ const [installPrompt, setInstallPrompt] = useState(null)
             <Route path="/saved-statuses"  element={authed ? <SavedStatusesPage /> : <Navigate to="/login" />} />
 <Route path="/notifications"           element={authed ? <Notifications />  : <Navigate to="/login" />} />
 <Route path="/looking-for"             element={authed ? <LookingFor />     : <Navigate to="/login" />} />
+<Route path="/verify-payment"          element={<VerifyPayment />} />
 <Route path="*"                        element={<Navigate to="/" />} /></Routes>
         </Suspense>
       </BrowserRouter>

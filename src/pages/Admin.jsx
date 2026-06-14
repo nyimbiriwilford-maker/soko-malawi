@@ -784,7 +784,12 @@ async function loadUsers() {
                     }
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={S.userName}>{u.full_name || 'No name'}</div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <div style={S.userName}>{u.full_name || 'No name'}</div>
+                      {u.is_disabled && (
+                        <span style={{ fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 20, background: '#fee2e2', color: '#dc2626' }}>DISABLED</span>
+                      )}
+                    </div>
                     <div style={S.userMeta}>{u.city || 'No city'}</div>
                   </div>
                   <span style={{
