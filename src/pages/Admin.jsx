@@ -173,9 +173,14 @@ async function loadUsers() {
 
   async function toggleAccess(u) {
     const next = u.is_disabled ? false : true
-    await supabase.from('profiles').update({ is_disabled: next }).eq('id', u.id)
-    setUsers(us => us.map(x => x.id === u.id ? { ...x, is_disabled: next } : x))
-    showToast(next ? `🚫 ${u.full_name || 'User'} access disabled` : `✅ ${u.full_name || 'User'} access restored`)
+    const { error } = await supabase.from('profiles').update({ is_disabled: next }).eq('id', u.id)
+    if (error) {
+      showToast(`❌ Failed: ${error.message}`)
+      return
+    }
+    const { data: updated } = await supabase.from('profiles').select('is_disabled').eq('id', u.id).single()
+    setUsers(us => us.map(x => x.id === u.id ? { ...x, is_disabled: updated?.is_disabled } : x))
+    showToast(updated?.is_disabled ? `🚫 ${u.full_name || 'User'} access disabled` : `✅ ${u.full_name || 'User'} access restored`)
   }
 
   async function toggleRole(u) {
