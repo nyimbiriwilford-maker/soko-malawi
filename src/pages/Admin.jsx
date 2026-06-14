@@ -117,15 +117,12 @@ async function handleBroadcast() {
   setBroadcastResult(null)
 
   try {
-    const targets = users.filter(u => selectedUsers.includes(u.id))
-    const emails = targets.map(u => u.email).filter(Boolean)
-
     const { data, error } = await supabase.functions.invoke('broadcast-email', {
-      body: { subject: broadcastSubject.trim(), message: broadcastMessage.trim(), emails }
+      body: { subject: broadcastSubject.trim(), message: broadcastMessage.trim(), userIds: selectedUsers }
     })
     if (error) throw error
-    setBroadcastResult({ success: true, sent: data?.sent || emails.length })
-    showToast(`✅ Email sent to ${data?.sent || emails.length} users`)
+    setBroadcastResult({ success: true, sent: data?.sent || selectedUsers.length })
+showToast(`✅ Email sent to ${data?.sent || selectedUsers.length} users`)
     setSelectedUsers([])
   } catch (err) {
     setBroadcastResult({ success: false, error: err.message })
@@ -136,19 +133,11 @@ async function handleBroadcast() {
 }
 
 async function loadUsers() {
-  const { data: profiles, error } = await supabase
+  const { data, error } = await supabase
     .from('profiles')
     .select('*')
   if (error) console.error('Users error:', error)
-
-  // Fetch emails from auth.users via admin API
-  const { data: { users: authUsers }, error: authErr } = await supabase.auth.admin.listUsers()
-  if (authErr) console.error('Auth users error:', authErr)
-
-  // Merge email into each profile
-  const emailMap = Object.fromEntries((authUsers || []).map(u => [u.id, u.email]))
-  const merged = (profiles || []).map(p => ({ ...p, email: emailMap[p.id] || null }))
-  setUsers(merged)
+  setUsers(data || [])
 }
   async function handleLogout() {
     await supabase.auth.signOut()

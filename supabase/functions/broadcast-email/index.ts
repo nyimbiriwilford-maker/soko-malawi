@@ -129,13 +129,13 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders })
 
   try {
-    const { subject, message, emails } = await req.json()
+   const { subject, message, userIds } = await req.json()
 
-    if (!subject || !message || !emails?.length) {
-      return new Response(JSON.stringify({ error: 'Missing subject, message, or emails' }), {
-        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      })
-    }
+if (!subject || !message || !userIds?.length) {
+  return new Response(JSON.stringify({ error: 'Missing subject, message, or userIds' }), {
+    status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  })
+}
 
     // Verify caller is admin
     const supabase = createClient(
