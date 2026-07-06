@@ -46,6 +46,10 @@ const PACHANGU_NUMBER = '0882 123 456' // replace with your real Pachangu number
           tx_ref,
           callback_url: `${baseUrl}/verify-payment`,
           return_url: `${baseUrl}/verify-payment`,
+          amount: 5000,
+          purpose: 'verification',
+          title: 'SokoMW Seller Verification',
+          description: 'One-time seller verification fee',
         },
       })
       if (fnErr) throw new Error(JSON.stringify(fnErr))

@@ -1,76 +1,100 @@
 /**
- * SokoMalawi — Redesigned Homepage
- * Production-quality UI. Drop-in replacement for Home.jsx.
+ * SokoMW — Homepage (v3)
+ * Full information-architecture rebuild: marketplace discovery hub
+ * spanning Listings, Shops, Looking For, Jobs, Services, Stories,
+ * and Verification — with monetization (Featured Listing/Shop/Request,
+ * Story Promotion, Verification) surfaced as a first-class, non-spammy
+ * revenue section rather than scattered upsells.
  *
- * Usage: replace your Home.jsx export with this component.
- * All Supabase / navigate / hook wiring preserved exactly.
- * Tailwind NOT required — all styles are inline or CSS-in-JS.
- * Uses your existing: supabase, useUserLocation, useSearchAnimation,
- *   ALL_CATEGORIES, PRICE_RANGES, CAT_META, isFlashActive,
- *   sortProductsSmart, trackSearch, BottomNav, InstallPrompt,
- *   StoryViewer, StatusUploadModal, fetchAllActiveStories
+ * SokoMW does not process payments. It connects buyers and sellers;
+ * users transact and communicate directly. Nothing here implies
+ * in-app checkout.
  *
- * NEW self-contained sections (no external deps beyond React):
- *   <SokoNav>         — glassmorphism sticky nav
- *   <HeroSection>     — split hero with animated stats
- *   <SokoLive>        — stories reimagined as vertical live cards
- *   <CategoryGrid>    — premium 8-category card grid
- *   <ListingSection>  — tabbed trending/featured/recent
- *   <TrustBar>        — animated trust indicators
- *   <SokoFooter>      — professional footer
+ * Preserves all existing wiring: supabase queries, navigate(), hooks
+ * (useUserLocation, useSearchAnimation), constants (ALL_CATEGORIES),
+ * utils (isFlashActive, sortProductsSmart, trackSearch). Stories use the
+ * same fetchAllActiveStories/StoryViewer/StatusUploadModal building blocks
+ * as HomeStatusRow, but rendered as a compact LiveStoriesCard next to
+ * Featured Listings (matching the reference layout) rather than
+ * HomeStatusRow's full-width dark bar, which doesn't fit that slot.
  */
 
 import React, {
-  useEffect, useState, useMemo, useRef, useCallback,
+  useEffect, useState, useMemo, useRef,
 } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { supabase }           from '../lib/supabase'
-import BottomNav              from '../components/BottomNav'
+import { supabase }              from '../lib/supabase'
+import useSearchAnimation        from '../hooks/useSearchAnimation'
+import { useUserLocation }       from '../hooks/useUserLocation'
 import { fetchAllActiveStories } from '../hooks/useStatuses'
-import StoryViewer            from '../components/StoryViewer'
-import StatusUploadModal      from '../components/StatusUploadModal'
-import useSearchAnimation     from '../hooks/useSearchAnimation'
-import { useUserLocation }    from '../hooks/useUserLocation'
+import StoryViewer                from '../components/StoryViewer'
+import StatusUploadModal          from '../components/StatusUploadModal'
 import {
-  ALL_CATEGORIES, PRICE_RANGES, CAT_META,
+  ALL_CATEGORIES,
 } from '../constants/homeConstants'
 import {
   isFlashActive, sortProductsSmart, trackSearch,
 } from '../utils/homeUtils'
-import HeroSection from '../components/HeroSection'
 
 /* ─────────────────────────────────────────────────────────────────────────────
    DESIGN TOKENS
+   Kept the established SokoMW identity (deep green + gold — already brand
+   equity from the broadcast emails / verification badges) rather than
+   introducing a new palette. Sora/Inter pairing kept for the same reason.
 ───────────────────────────────────────────────────────────────────────────── */
 const T = {
-  green:  '#0F9D58',
-  greenD: '#0a7a44',
-  greenL: '#e8f5ee',
-  amber:  '#F9AB00',
-  amberD: '#c88a00',
-  blue:   '#1A73E8',
-  blueL:  '#e8f0fe',
-  red:    '#ea4335',
-  gray50: '#f8f9fa',
-  gray100:'#f1f3f4',
-  gray200:'#e8eaed',
-  gray400:'#bdc1c6',
-  gray600:'#80868b',
-  gray800:'#3c4043',
-  gray900:'#202124',
-  white:  '#ffffff',
-  shadow: '0 1px 3px rgba(0,0,0,0.12), 0 4px 16px rgba(0,0,0,0.08)',
+  green:   '#0F9D58',
+  greenD:  '#0a7a44',
+  greenDk: '#063d23',   // deep green for hero/dark surfaces
+  greenL:  '#e8f5ee',
+  amber:   '#F9AB00',
+  amberD:  '#c88a00',
+  blue:    '#1A73E8',
+  blueL:   '#e8f0fe',
+  red:     '#ea4335',
+  violet:  '#7c5cff',
+  violetL: '#efeaff',
+  gray50:  '#f8f9fa',
+  gray100: '#f1f3f4',
+  gray200: '#e8eaed',
+  gray300: '#dadce0',
+  gray400: '#bdc1c6',
+  gray500: '#9aa0a6',
+  gray600: '#80868b',
+  gray500: '#9aa0a6',
+  gray700: '#5f6368',
+  gray800: '#3c4043',
+  gray900: '#202124',
+  white:   '#ffffff',
+  shadow:   '0 1px 3px rgba(0,0,0,0.12), 0 4px 16px rgba(0,0,0,0.08)',
   shadowMd: '0 4px 12px rgba(0,0,0,0.12), 0 8px 32px rgba(0,0,0,0.08)',
   shadowLg: '0 8px 24px rgba(0,0,0,0.14), 0 16px 48px rgba(0,0,0,0.1)',
-  radius: '20px',
+  radius:   '20px',
   radiusSm: '12px',
   radiusXl: '28px',
-  font: "'Inter', 'DM Sans', system-ui, sans-serif",
+  font:        "'Inter', 'DM Sans', system-ui, sans-serif",
   fontDisplay: "'Sora', 'Inter', system-ui, sans-serif",
 }
 
+/* Category → emoji + accent, used by the quick-access grid and pills.
+   CAT_META in homeConstants has no emoji key, so it's extended locally
+   rather than mutating the shared constant. */
+const CAT_ICON = {
+  Electronics: { emoji: '📱', bg: '#f0f4ff', fg: '#4f46e5' },
+  Vehicles:    { emoji: '🚘', bg: '#f0f9ff', fg: '#0284c7' },
+  Property:    { emoji: '🏡', bg: '#f0fdf4', fg: '#16a34a' },
+  Clothing:    { emoji: '👔', bg: '#fdf4ff', fg: '#9333ea' },
+  Agriculture: { emoji: '🌿', bg: '#f0fdf4', fg: '#15803d' },
+  Furniture:   { emoji: '🛋️', bg: '#fffbeb', fg: '#d97706' },
+  Food:        { emoji: '🍜', bg: '#fff1f2', fg: '#e11d48' },
+  Services:    { emoji: '⚡', bg: '#f0fdf4', fg: '#0a7a44' },
+  Other:       { emoji: '📦', bg: '#f8fafc', fg: '#64748b' },
+  Jobs:        { emoji: '💼', bg: '#eff6ff', fg: '#2563eb' },
+}
+function catIcon(cat) { return CAT_ICON[cat] || CAT_ICON.Other }
+
 /* ─────────────────────────────────────────────────────────────────────────────
-   GLOBAL STYLES (injected once)
+   GLOBAL STYLES
 ───────────────────────────────────────────────────────────────────────────── */
 function GlobalStyles() {
   return (
@@ -79,204 +103,102 @@ function GlobalStyles() {
 
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-      .soko-v2 { font-family: ${T.font}; background: #f8f9fa; color: ${T.gray900}; }
-      .soko-v2 button { font-family: inherit; }
-      .soko-v2 input  { font-family: inherit; }
+      .soko-v3 { font-family: ${T.font}; background: #f8f9fa; color: ${T.gray900}; }
+      .soko-v3 button { font-family: inherit; }
+      .soko-v3 input  { font-family: inherit; }
+      .soko-v3 a { text-decoration: none; color: inherit; }
 
-      /* scrollbar hide */
       .soko-scroll::-webkit-scrollbar { display: none; }
       .soko-scroll { -ms-overflow-style: none; scrollbar-width: none; }
 
-      /* fade-up entry */
-      @keyframes fadeUp {
-        from { opacity: 0; transform: translateY(18px); }
-        to   { opacity: 1; transform: translateY(0); }
-      }
-      @keyframes fadeIn {
-        from { opacity: 0; } to { opacity: 1; }
-      }
-      @keyframes pulse {
-        0%, 100% { opacity: 1; } 50% { opacity: 0.5; }
-      }
-      @keyframes spin {
-        from { transform: rotate(0deg); } to { transform: rotate(360deg); }
-      }
-      @keyframes shimmer {
-        0%   { background-position: -600px 0; }
-        100% { background-position: 600px 0; }
-      }
-      @keyframes countUp {
-        from { opacity: 0; transform: translateY(6px); }
-        to   { opacity: 1; transform: translateY(0); }
-      }
-      @keyframes liveRing {
-        0%, 100% { box-shadow: 0 0 0 3px rgba(234,67,53,0.25); }
-        50%       { box-shadow: 0 0 0 7px rgba(234,67,53,0.06); }
-      }
-      @keyframes badgePop {
-        0%   { transform: scale(0.7); opacity: 0; }
-        70%  { transform: scale(1.1); }
-        100% { transform: scale(1); opacity: 1; }
-      }
-      @keyframes wordSlide {
-        0%   { opacity: 0; transform: translateY(6px); }
-        15%  { opacity: 1; transform: translateY(0); }
-        85%  { opacity: 1; transform: translateY(0); }
-        100% { opacity: 0; transform: translateY(-6px); }
-      }
-      @keyframes cardHoverFloat {
-        to { transform: translateY(-4px); }
-      }
-      @keyframes heroFloat {
-        0%, 100% { transform: translateY(0px); }
-        50%       { transform: translateY(-8px); }
-      }
-      @keyframes gradientShift {
-        0%   { background-position: 0% 50%; }
-        50%  { background-position: 100% 50%; }
-        100% { background-position: 0% 50%; }
-      }
+      @keyframes fadeUp   { from { opacity:0; transform:translateY(18px);} to { opacity:1; transform:translateY(0);} }
+      @keyframes fadeIn   { from { opacity:0; } to { opacity:1; } }
+      @keyframes pulse    { 0%,100% { opacity:1; } 50% { opacity:.5; } }
+      @keyframes shimmer  { 0% { background-position:-600px 0; } 100% { background-position:600px 0; } }
+      @keyframes liveRing { 0%,100% { box-shadow:0 0 0 3px rgba(234,67,53,.25);} 50% { box-shadow:0 0 0 7px rgba(234,67,53,.06);} }
+      @keyframes badgePop { 0% { transform:scale(.7); opacity:0;} 70% { transform:scale(1.1);} 100% { transform:scale(1); opacity:1;} }
+      @keyframes wordSlide{ 0% { opacity:0; transform:translateY(6px);} 15% { opacity:1; transform:translateY(0);} 85% { opacity:1; transform:translateY(0);} 100% { opacity:0; transform:translateY(-6px);} }
+      @keyframes floatY   { 0%,100% { transform:translateY(0);} 50% { transform:translateY(-6px);} }
 
-      /* ── Isolate cards from any legacy dark HomeStyles ── */
-      .soko-v2 .soko-card-bg {
-        background: #ffffff !important;
-        color: #202124 !important;
-      }
+      .soko-card-bg { background:#fff !important; color:#202124 !important; }
 
-      /* card hover states */
-      .soko-card-hover {
-        transition: transform 0.22s cubic-bezier(0.34,1.2,0.64,1),
-                    box-shadow 0.22s ease;
-        cursor: pointer;
-      }
-      .soko-card-hover:hover {
-        transform: translateY(-4px) scale(1.01);
-        box-shadow: ${T.shadowLg} !important;
-      }
+      .soko-card-hover { transition: transform .22s cubic-bezier(.34,1.2,.64,1), box-shadow .22s ease; cursor:pointer; }
+      .soko-card-hover:hover { transform: translateY(-4px) scale(1.01); box-shadow:${T.shadowLg} !important; }
+
       .soko-btn-primary {
-        background: ${T.green};
-        color: #fff;
-        border: none;
-        border-radius: 14px;
-        padding: 12px 24px;
-        font-size: 14px;
-        font-weight: 700;
-        cursor: pointer;
-        transition: background 0.15s, transform 0.1s, box-shadow 0.15s;
-        display: inline-flex;
-        align-items: center;
-        gap: 7px;
-        white-space: nowrap;
+        background:${T.green}; color:#fff; border:none; border-radius:14px;
+        padding:12px 24px; font-size:14px; font-weight:700; cursor:pointer;
+        transition: background .15s, transform .1s, box-shadow .15s;
+        display:inline-flex; align-items:center; gap:7px; white-space:nowrap;
       }
-      .soko-btn-primary:hover {
-        background: ${T.greenD};
-        box-shadow: 0 4px 16px rgba(15,157,88,0.35);
-        transform: translateY(-1px);
-      }
-      .soko-btn-primary:active { transform: scale(0.98); }
+      .soko-btn-primary:hover { background:${T.greenD}; box-shadow:0 4px 16px rgba(15,157,88,.35); transform:translateY(-1px); }
+      .soko-btn-primary:active { transform: scale(.98); }
 
       .soko-btn-outline {
-        background: rgba(255,255,255,0.12);
-        color: #fff;
-        border: 1.5px solid rgba(255,255,255,0.35);
-        border-radius: 14px;
-        padding: 12px 24px;
-        font-size: 14px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: background 0.15s, transform 0.1s;
-        display: inline-flex;
-        align-items: center;
-        gap: 7px;
-        white-space: nowrap;
-        backdrop-filter: blur(8px);
+        background:rgba(255,255,255,.1); color:#fff; border:1.5px solid rgba(255,255,255,.32);
+        border-radius:14px; padding:12px 24px; font-size:14px; font-weight:600; cursor:pointer;
+        transition: background .15s, transform .1s; display:inline-flex; align-items:center; gap:7px;
+        white-space:nowrap; backdrop-filter: blur(8px);
       }
-      .soko-btn-outline:hover {
-        background: rgba(255,255,255,0.22);
-        transform: translateY(-1px);
-      }
+      .soko-btn-outline:hover { background:rgba(255,255,255,.2); transform:translateY(-1px); }
 
-      /* skeleton */
       .skeleton {
-        background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
-        background-size: 600px 100%;
-        animation: shimmer 1.4s infinite;
-        border-radius: 10px;
+        background: linear-gradient(90deg,#f0f0f0 25%,#e8e8e8 50%,#f0f0f0 75%);
+        background-size: 600px 100%; animation: shimmer 1.4s infinite; border-radius:10px;
       }
 
-      /* pill tabs */
       .soko-tab {
-        padding: 8px 18px;
-        border-radius: 50px;
-        border: 1.5px solid ${T.gray200};
-        background: #fff;
-        font-size: 13px;
-        font-weight: 600;
-        color: ${T.gray600};
-        cursor: pointer;
-        transition: all 0.15s;
-        white-space: nowrap;
+        padding:8px 16px; border-radius:50px; border:1.5px solid ${T.gray200};
+        background:#fff; font-size:13px; font-weight:600; color:${T.gray600};
+        cursor:pointer; transition: all .15s; white-space:nowrap;
       }
-      .soko-tab.active {
-        background: ${T.green} !important;
-        border-color: ${T.green} !important;
-        color: #fff !important;
-        box-shadow: 0 2px 10px rgba(15,157,88,0.3);
-        transform: scale(1.05);
-      }
-      .soko-tab:hover {
-        border-color: ${T.green};
-        color: ${T.green};
-        background: ${T.greenL};
-      }
+      .soko-tab.active { background:${T.green} !important; border-color:${T.green} !important; color:#fff !important; box-shadow:0 2px 10px rgba(15,157,88,.3); }
+      .soko-tab:hover { border-color:${T.green}; color:${T.green}; background:${T.greenL}; }
 
-      /* nav */
       .soko-nav-glass {
-        position: sticky;
-        top: 0;
-        z-index: 100;
-        backdrop-filter: blur(20px) saturate(1.8);
-        -webkit-backdrop-filter: blur(20px) saturate(1.8);
-        background: rgba(255,255,255,0.88);
-        border-bottom: 1px solid rgba(0,0,0,0.07);
-        box-shadow: 0 1px 0 rgba(0,0,0,0.04), 0 4px 20px rgba(0,0,0,0.04);
+        position: sticky; top:0; z-index:100;
+        backdrop-filter: blur(20px) saturate(1.8); -webkit-backdrop-filter: blur(20px) saturate(1.8);
+        background: rgba(255,255,255,.92); border-bottom:1px solid rgba(0,0,0,.07);
+        box-shadow: 0 1px 0 rgba(0,0,0,.04), 0 4px 20px rgba(0,0,0,.04);
       }
 
-      /* dark mode */
-      @media (prefers-color-scheme: dark) {
-        .soko-v2 { background: #111314; color: #e8eaed; }
-        .soko-nav-glass {
-          background: rgba(18,20,22,0.9);
-          border-bottom-color: rgba(255,255,255,0.07);
-        }
-        .soko-card-bg { background: #1c1f21 !important; border-color: rgba(255,255,255,0.07) !important; }
-        .soko-surface { background: #1c1f21 !important; }
-        .soko-tab { background: #1c1f21 !important; border-color: rgba(255,255,255,0.1) !important; color: #9aa0a6 !important; }
-        .soko-tab.active { background: ${T.green} !important; color: #fff !important; }
-      }
+      .soko-pillar-link { transition: background .15s, color .15s, transform .15s; }
+      .soko-pillar-link:hover { background:${T.greenL}; transform: translateY(-1px); }
 
-      /* responsive */
-      @media (max-width: 768px) {
+      .soko-cat-tile:hover { border-color:${T.gray200} !important; box-shadow:${T.shadow}; transform: translateY(-3px); }
+      .soko-cat-tile:active { transform: translateY(-1px); }
+
+      @media (max-width: 980px) {
         .soko-hero-grid { grid-template-columns: 1fr !important; }
-        .soko-hero-right { display: none !important; }
-        .soko-cat-grid { grid-template-columns: repeat(4, 1fr) !important; gap: 10px !important; }
-        .soko-listings-grid { grid-template-columns: repeat(2, 1fr) !important; }
-        .soko-trust-grid { grid-template-columns: repeat(2, 1fr) !important; }
-        .soko-footer-grid { grid-template-columns: 1fr !important; }
-        .soko-nav-desktop { display: none !important; }
-        .soko-nav-mobile { display: flex !important; }
-        .soko-hero-headline { font-size: clamp(26px, 6vw, 36px) !important; }
+        .soko-hero-right { display:none !important; }
+        .soko-trust-grid { grid-template-columns: repeat(2,1fr) !important; }
+        .soko-jobs-services { grid-template-columns: 1fr 1fr !important; }
+        .soko-footer-grid { grid-template-columns: 1fr 1fr !important; }
+        .soko-cat-grid { grid-template-columns: repeat(5,1fr) !important; }
+        .soko-featured-stories-grid { grid-template-columns: 1fr !important; }
+      }
+      @media (max-width: 768px) {
+        .soko-jobs-services { grid-template-columns: 1fr !important; }
+        .soko-cat-grid { grid-template-columns: repeat(4,1fr) !important; gap:10px !important; }
+        .soko-listings-grid { grid-template-columns: repeat(2,1fr) !important; }
+        .soko-nav-desktop { display:none !important; }
+        .soko-nav-mobile  { display:flex !important; }
+        .soko-pillar-row  { display:none !important; }
+        .soko-hero-headline { font-size: clamp(24px,6.4vw,32px) !important; }
+        .soko-shops-grid { grid-template-columns: 1fr !important; }
+        .soko-footer-grid { grid-template-columns: 1fr 1fr !important; }
+        body { padding-bottom: 64px; }
       }
       @media (min-width: 769px) {
-        .soko-nav-mobile { display: none !important; }
-        .soko-bottom-nav-hide { display: none !important; }
+        .soko-nav-mobile { display:none !important; }
+        .soko-bottom-nav-mobile { display:none !important; }
       }
     `}</style>
   )
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   ICON HELPERS (inline SVG, no external dep)
+   ICONS (inline SVG, no external dep)
 ───────────────────────────────────────────────────────────────────────────── */
 const Icon = {
   search: (s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>,
@@ -285,25 +207,37 @@ const Icon = {
   user:   (s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>,
   plus:   (s=16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>,
   heart:  (s=16,fill='none') => <svg width={s} height={s} viewBox="0 0 24 24" fill={fill} stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>,
-  verify: (s=14) => <svg width={s} height={s} viewBox="0 0 24 24" fill={T.blue}><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" stroke="#fff" strokeWidth="1.5" fill="none"/><circle cx="12" cy="12" r="12" fill={T.blue} opacity="0.15"/><path d="M9 12l2 2 4-4" stroke={T.blue} strokeWidth="2" fill="none" strokeLinecap="round"/></svg>,
+  verify: (s=14) => <svg width={s} height={s} viewBox="0 0 24 24"><path fill="#16a34a" d="M12 0a4 4 0 0 1 3.2 1.6 4 4 0 0 1 3.6 1 4 4 0 0 1 1 3.6A4 4 0 0 1 21.4 9.4a4 4 0 0 1 0 5.2A4 4 0 0 1 19.8 17.8a4 4 0 0 1-1 3.6 4 4 0 0 1-3.6 1A4 4 0 0 1 12 24a4 4 0 0 1-3.2-1.6 4 4 0 0 1-3.6-1 4 4 0 0 1-1-3.6A4 4 0 0 1 2.6 14.6a4 4 0 0 1 0-5.2A4 4 0 0 1 4.2 6.2a4 4 0 0 1 1-3.6 4 4 0 0 1 3.6-1A4 4 0 0 1 12 0Z"/><path d="m7.5 12.5 3 3 6-7" stroke="#fff" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>,
   eye:    (s=13) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>,
   pin:    (s=13) => <svg width={s} height={s} viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>,
   clock:  (s=13) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
   chevR:  (s=16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>,
   fire:   (s=14) => <svg width={s} height={s} viewBox="0 0 24 24" fill={T.red}><path d="M17.66 11.2C17.43 10.9 17.15 10.64 16.89 10.38C16.22 9.78 15.46 9.35 14.82 8.72C13.33 7.26 13 4.85 13.95 3C13 3.23 12.17 3.75 11.46 4.32C8.87 6.4 7.85 10.07 9.07 13.22C9.11 13.32 9.15 13.42 9.15 13.55C9.15 13.77 9 13.97 8.8 14.05C8.57 14.15 8.33 14.09 8.14 13.93C8.08 13.88 8.04 13.83 8 13.76C6.87 12.33 6.69 10.28 7.45 8.64C5.78 10 4.87 12.3 5 14.47C5.06 14.97 5.12 15.47 5.29 15.97C5.43 16.57 5.7 17.17 6 17.7C7.08 19.43 8.95 20.67 10.96 20.92C13.1 21.19 15.39 20.8 17.03 19.32C18.86 17.66 19.5 15 18.56 12.72L18.43 12.46C18.22 12 17.66 11.2 17.66 11.2Z"/></svg>,
   shield: (s=20) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
+  shieldCheck: (s=20) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>,
+  statusClock: (s=20) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="13" r="8"/><polyline points="12 9 12 13 15 14.5"/><path d="M9 2h6"/></svg>,
   star:   (s=13,fill='#F9AB00') => <svg width={s} height={s} viewBox="0 0 24 24" fill={fill}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
   cam:    (s=15) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>,
   x:      (s=14) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
-  map:    (s=16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>,
-  globe:  (s=16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>,
-  lightning: (s=16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="currentColor"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>,
   check:  (s=16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>,
-  menu:   (s=20) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>,
+  shop:   (s=14) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>,
+  briefcase: (s=16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>,
+  wrench: (s=16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>,
+  layers: (s=15) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>,
+  megaphone: (s=15) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 11l18-5v12L3 13v-2z"/><path d="M11.6 16.8a3 3 0 0 1-5.8-1.6"/></svg>,
+  handshake: (s=14) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 17l-4-4 5-5 4 4z"/><path d="M2 13l4 4 1-1"/><path d="M21 13l-4 4-1-1"/></svg>,
+  lightning: (s=14) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>,
+  grid:   (s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>,
+  car:    (s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><path d="M5 17h14l1.5-5.5a2 2 0 0 0-1-2.3L17 8H7l-2.5 1.2a2 2 0 0 0-1 2.3z"/><path d="M5 17v2a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-2"/><path d="M16 17v2a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-2"/><circle cx="7.5" cy="14.5" r="0.5"/><circle cx="16.5" cy="14.5" r="0.5"/></svg>,
+  phone:  (s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><rect x="7" y="2" width="10" height="20" rx="2.2"/><line x1="11" y1="18" x2="13" y2="18"/></svg>,
+  shirt:  (s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><path d="M8 3 4 6l1.5 3L8 7.5V21h8V7.5L18.5 9 20 6l-4-3-2 2h-4z"/></svg>,
+  houseFilled: (s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5 2 11h3v9h6v-6h2v6h6v-9h3z"/></svg>,
+  leaf:   (s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><path d="M5 21c0-9 5-15 14-16-1 9-7 14-16 16z"/><path d="M5 21c2-4 5-7 9-9"/></svg>,
+  tools:  (s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l1.9-1.9a4.5 4.5 0 0 1-5.6 5.6L7 21H4v-3l8-8a4.5 4.5 0 0 1 5.6-5.6z"/></svg>,
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   HELPER: time ago
+   FORMAT HELPERS
 ───────────────────────────────────────────────────────────────────────────── */
 function timeAgo(ts) {
   if (!ts) return ''
@@ -315,7 +249,6 @@ function timeAgo(ts) {
   if (m < 1)   return 'just now'
   return `${m}m ago`
 }
-
 function formatPrice(n) {
   if (!n && n !== 0) return ''
   if (n >= 1_000_000) return `MK ${(n/1_000_000).toFixed(1)}M`
@@ -324,84 +257,84 @@ function formatPrice(n) {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   NAV COMPONENT
+   PRIMARY PILLARS — the 7 things Soko offers. Always visible (desktop: row
+   under the header; mobile: horizontal scroll chips). This is the IA fix:
+   Shops / Looking For / Jobs / Services / Stories / Verification are first-
+   class destinations, not buried in a hamburger menu.
 ───────────────────────────────────────────────────────────────────────────── */
+const PILLARS = [
+{ key: 'marketplace', label: 'Marketplace',  path: '/',            icon: (s) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12l9-9 9 9"/><path d="M5 10v10a1 1 0 0 0 1 1h3v-6h6v6h3a1 1 0 0 0 1-1V10"/></svg> },  { key: 'shops',       label: 'Shops',        path: '/shops',       icon: Icon.shop },
+  { key: 'lookingfor',  label: 'People Looking For', path: '/looking-for', icon: (s) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0 1 16 0v1"/></svg> },
+  { key: 'jobs',        label: 'Jobs',         path: '/jobs',        icon: (s) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg> },
+  { key: 'services',    label: 'Services',     path: '/services',   icon: (s) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg> },
+  { key: 'stories',     label: 'Statuses (Stories)', path: '/status', icon: (s) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> },
+  { key: 'verify',      label: 'Verification', path: '/profile',    icon: (s) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg> },
+]
+
 function SokoNav({
   user, notifCount, search, setSearch,
   navigate, onImageFile, animKeywords, animIdx,
   listings, activeCategory, onCategoryChange,
-  activeDistrict, onDistrictChange,
+  activeDistrict, onDistrictChange, onFocusChange,
 }) {
-  const [focused, setFocused]       = useState(false)
-  const [menuOpen, setMenuOpen]     = useState(false)
+  const [focused, setFocusedRaw]    = useState(false)
+  function setFocused(v) { setFocusedRaw(v); onFocusChange?.(v) }
   const [distOpen, setDistOpen]     = useState(false)
-  const district = activeDistrict || 'All Districts'
   const [avatarOpen, setAvatarOpen] = useState(false)
+  const district = activeDistrict || 'All Districts'
   const fileRef  = useRef(null)
   const inputRef = useRef(null)
 
   const districts = ['All Districts','Lilongwe','Blantyre','Mzuzu','Zomba','Kasungu','Mangochi','Salima','Dedza','Ntchisi','Dowa']
   const kw = animKeywords?.length > 0 ? animKeywords[animIdx % animKeywords.length] : 'Samsung Galaxy A57'
 
-  function handleKey(e) { if (e.key === 'Enter') inputRef.current?.blur() }
+  function handleKey(e) { if (e.key === 'Enter' && search.trim()) navigate(`/search?q=${encodeURIComponent(search.trim())}`) }
 
   return (
     <nav className="soko-nav-glass">
+      {/* ── Row 1: brand · district · search · actions ── */}
       <div style={{
-        maxWidth: 1400, margin: '0 auto',
-        padding: '0 20px',
-        display: 'flex', alignItems: 'center', gap: 14,
-        height: 64,
+        maxWidth: 1400, margin: '0 auto', padding: '10px 20px',
+        display: 'flex', alignItems: 'center', gap: 14, minHeight: 70,
       }}>
 
-        {/* ── Brand ── */}
-        <div
-          onClick={() => navigate('/')}
-          style={{
-            fontFamily: T.fontDisplay,
-            fontSize: 22, fontWeight: 800,
-            color: T.green, letterSpacing: '-0.5px',
-            cursor: 'pointer', flexShrink: 0,
-            userSelect: 'none',
-          }}
-        >
-          Soko<span style={{ color: T.amber }}>MW</span>
+        <div onClick={() => navigate('/')} style={{ cursor: 'pointer', flexShrink: 0, userSelect: 'none' }}>
+          <div style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 800, color: T.green, letterSpacing: '-0.5px', lineHeight: 1.1 }}>
+            Soko<span style={{ color: T.amber }}>Mw</span>
+          </div>
+          <div className="soko-nav-desktop" style={{ fontSize: 10.5, color: T.gray600, fontWeight: 500, whiteSpace: 'nowrap' }}>
+            Buy. Sell. Find. Anywhere in Malawi.
+          </div>
         </div>
 
-        {/* ── Desktop: district selector ── */}
+        {/* Desktop: district selector */}
         <div className="soko-nav-desktop" style={{ position: 'relative', flexShrink: 0 }}>
-          <button
-            onClick={() => setDistOpen(d => !d)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              padding: '7px 12px', borderRadius: T.radiusSm,
-              background: T.gray100, border: `1.5px solid ${T.gray200}`,
-              fontSize: 13, fontWeight: 600, color: T.gray800,
-              cursor: 'pointer', whiteSpace: 'nowrap',
-            }}
-          >
+          <button onClick={() => setDistOpen(d => !d)} style={{
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '7px 12px', borderRadius: 50,
+            background: '#fff', border: `1.5px solid ${T.gray200}`,
+            fontSize: 13, fontWeight: 600, color: T.gray800,
+            cursor: 'pointer', whiteSpace: 'nowrap',
+          }}>
             {Icon.pin(13)}
-            <span style={{ color: activeDistrict !== 'All Districts' ? T.amber : T.green, fontWeight: activeDistrict !== 'All Districts' ? 800 : 600 }}>
-              {district}
-            </span>
+            <span style={{ color: district !== 'All Districts' ? T.amber : T.green, fontWeight: district !== 'All Districts' ? 800 : 600 }}>{district}</span>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="6 9 12 15 18 9"/></svg>
-{activeDistrict !== 'All Districts' && (
-  <span onClick={e => { e.stopPropagation(); onDistrictChange('All Districts') }} style={{ marginLeft: 2, color: T.gray400, fontSize: 11, lineHeight: 1 }}>✕</span>
-)}
+            {district !== 'All Districts' && (
+              <span onClick={e => { e.stopPropagation(); onDistrictChange('All Districts') }} style={{ marginLeft: 2, color: T.gray400, fontSize: 11, lineHeight: 1 }}>✕</span>
+            )}
           </button>
           {distOpen && (
             <div style={{
               position: 'absolute', top: 'calc(100% + 8px)', left: 0,
               background: T.white, borderRadius: 16, padding: '8px 0',
               boxShadow: T.shadowLg, minWidth: 200,
-              border: `1px solid ${T.gray200}`, zIndex: 200,
-              animation: 'fadeUp 0.18s ease',
+              border: `1px solid ${T.gray200}`, zIndex: 200, animation: 'fadeUp 0.18s ease',
             }}>
               {districts.map(d => (
                 <button key={d} onClick={() => { onDistrictChange(d); setDistOpen(false) }} style={{
-                  display: 'block', width: '100%', padding: '9px 16px',
-                  textAlign: 'left', background: d === district ? T.greenL : 'transparent',
-                  border: 'none', fontSize: 13.5, fontWeight: d === district ? 700 : 500,
+                  display: 'block', width: '100%', padding: '9px 16px', textAlign: 'left',
+                  background: d === district ? T.greenL : 'transparent', border: 'none',
+                  fontSize: 13.5, fontWeight: d === district ? 700 : 500,
                   color: d === district ? T.green : T.gray800, cursor: 'pointer',
                 }}>{d}</button>
               ))}
@@ -409,246 +342,170 @@ function SokoNav({
           )}
         </div>
 
-        {/* ── Search bar ── */}
-        <div
-          className="soko-nav-desktop"
-          style={{
-            flex: 1, display: 'flex', alignItems: 'center',
-            background: focused ? '#fff' : T.gray100,
-            border: `1.5px solid ${focused ? T.green : T.gray200}`,
-            borderRadius: 50, padding: '9px 14px 9px 14px',
-            gap: 10, transition: 'all 0.2s',
-           boxShadow: focused ? `0 0 0 3px rgba(15,157,88,0.12)` : 'none',
-          cursor: 'text',
-        }}
-        >
-          <button
-            type="button"
-            onClick={e => { e.stopPropagation(); setSearch(search || kw); setTimeout(() => inputRef.current?.focus(), 0) }}
-            style={{ background: 'none', border: 'none', padding: 0, color: focused ? T.green : T.gray400, flexShrink: 0, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-          >{Icon.search(16)}</button>
-          <div style={{ flex: 1, position: 'relative', height: 20 }}>
-            <input
-              ref={inputRef}
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              onFocus={() => setFocused(true)}
-              onBlur={() => setFocused(false)}
-              onKeyDown={handleKey}
-              style={{
-                position: 'absolute', inset: 0, width: '100%',
-                border: 'none', background: 'transparent',
-                fontSize: 14, color: T.gray900, outline: 'none',
-                zIndex: search || focused ? 2 : 0,
-                cursor: search || focused ? 'text' : 'default',
-              }}
-            />
-            {!search && !focused && (
-              <div
-                onClick={() => { setSearch(kw); setTimeout(() => inputRef.current?.focus(), 0) }}
-                style={{
-                  position: 'absolute', inset: 0, display: 'flex',
-                  alignItems: 'center',
-                  zIndex: 3,
-                  fontSize: 14, color: T.gray400, cursor: 'pointer',
-                }}
-              >
-                Search&nbsp;
-                <span key={animIdx} style={{
-                  color: T.green, fontWeight: 600,
-                  animation: 'wordSlide 3.5s ease forwards',
-                }}>{kw}</span>
-              </div>
-            )}
-          </div>
+       {/* Search bar (desktop) */}
+        <div className="soko-nav-desktop" style={{
+          flex: 1, display: 'flex', alignItems: 'center',
+          background: focused ? '#fff' : T.gray100,
+          border: `1.5px solid ${focused ? T.green : 'transparent'}`,
+          borderRadius: 50, padding: '4px 4px 4px 14px', gap: 0,
+          transition: 'border-color 0.2s, background 0.2s',
+          boxShadow: focused ? `0 0 0 3px rgba(15,157,88,0.10)` : 'none',
+          minHeight: 42,
+        }}>
+          <span style={{ color: T.gray500, flexShrink: 0, display: 'flex', alignItems: 'center', marginRight: 8 }}>{Icon.search(15)}</span>
+          <input
+            ref={inputRef} value={search}
+            onChange={e => {
+              const val = e.target.value
+              setSearch(val)
+              navigate(`/search?q=${encodeURIComponent(val)}&focus=1`)
+            }}
+            onFocus={() => { setFocused(true); navigate('/search?focus=1') }}
+            onBlur={() => setFocused(false)}
+            onKeyDown={handleKey}
+            placeholder="Search for anything (e.g. iPhone, Toyota, jobs, services...)"
+            style={{ flex: 1, border: 'none', background: 'transparent', fontSize: 13.5, color: T.gray900, outline: 'none', padding: '0', minWidth: 0, cursor: 'text' }}
+          />
           {search && (
-            <button onClick={() => setSearch('')} style={{
-              background: T.gray200, border: 'none', borderRadius: '50%',
-              width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              cursor: 'pointer', color: T.gray600, flexShrink: 0,
-            }}>{Icon.x(10)}</button>
+            <button onClick={() => setSearch('')} style={{ background: T.gray300, border: 'none', borderRadius: '50%', width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: T.gray600, flexShrink: 0, marginRight: 6 }}>{Icon.x(9)}</button>
           )}
-          <div style={{ width: 1, height: 16, background: T.gray200, flexShrink: 0 }} />
-          <button onClick={() => fileRef.current?.click()} style={{
-            background: 'none', border: 'none', color: T.green, cursor: 'pointer',
-            display: 'flex', alignItems: 'center', flexShrink: 0,
-            padding: '4px', borderRadius: 8, transition: 'background 0.15s',
+          <button onClick={() => { if (search.trim()) navigate(`/search?q=${encodeURIComponent(search.trim())}`) }} style={{
+            flexShrink: 0, background: T.green, color: '#fff', border: 'none',
+            borderRadius: 50, height: 34, padding: '0 20px',
+            fontSize: 13.5, fontWeight: 700, cursor: 'pointer',
+            transition: 'background 0.15s',
           }}
-            onMouseEnter={e => e.currentTarget.style.background = T.greenL}
-            onMouseLeave={e => e.currentTarget.style.background = 'none'}
-          >{Icon.cam(16)}</button>
+            onMouseEnter={e => e.currentTarget.style.background = T.greenD}
+            onMouseLeave={e => e.currentTarget.style.background = T.green}
+          >
+            Search
+          </button>
           <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onImageFile} />
         </div>
 
-        {/* ── Desktop nav actions ── */}
+        {/* Desktop actions */}
         <div className="soko-nav-desktop" style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          {/* Chats */}
           <NavIconBtn icon={Icon.chat(18)} label="Chats" onClick={() => navigate('/chats')} />
-
-          {/* Notifications */}
           <div style={{ position: 'relative' }}>
             <NavIconBtn icon={Icon.bell(18)} label="Alerts" onClick={() => navigate('/notifications')} />
             {notifCount > 0 && (
-              <span style={{
-                position: 'absolute', top: 4, right: 6,
-                background: T.red, color: '#fff', borderRadius: '50%',
-                width: 17, height: 17, fontSize: 9, fontWeight: 800,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                animation: 'badgePop 0.3s ease',
-                border: '2px solid #fff',
-              }}>{notifCount > 9 ? '9+' : notifCount}</span>
+              <span style={{ position: 'absolute', top: 4, right: 6, background: T.red, color: '#fff', borderRadius: '50%', width: 17, height: 17, fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'badgePop 0.3s ease', border: '2px solid #fff' }}>{notifCount > 9 ? '9+' : notifCount}</span>
             )}
           </div>
-
-          {/* Post listing */}
-          <button className="soko-btn-primary" onClick={() => navigate('/post')} style={{ height: 38, padding: '0 16px', fontSize: 13.5 }}>
+           <button onClick={() => navigate('/post')} style={{
+            height: 38, padding: '0 18px', fontSize: 13.5, fontWeight: 700,
+            background: T.green, color: '#fff', border: 'none', borderRadius: 50,
+            cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
+            whiteSpace: 'nowrap', transition: 'background 0.15s',
+          }}
+            onMouseEnter={e => e.currentTarget.style.background = T.greenD}
+            onMouseLeave={e => e.currentTarget.style.background = T.green}
+          >
             {Icon.plus(14)} Sell Now
           </button>
-
-          {/* Avatar */}
           <div style={{ position: 'relative' }}>
-            <button
-              onClick={() => setAvatarOpen(o => !o)}
-              style={{
-                width: 38, height: 38, borderRadius: '50%',
-                background: user?.avatar_url ? 'transparent' : `linear-gradient(135deg, ${T.green}, ${T.greenD})`,
-                border: `2px solid ${T.green}`,
-                cursor: 'pointer', overflow: 'hidden',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#fff', fontSize: 14, fontWeight: 700, flexShrink: 0,
-              }}
-            >
-              {user?.avatar_url
-                ? <img src={user.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                : (user?.email?.[0] || 'S').toUpperCase()
-              }
+            <button onClick={() => setAvatarOpen(o => !o)} style={{
+              width: 38, height: 38, borderRadius: '50%',
+              background: user?.avatar_url ? 'transparent' : `linear-gradient(135deg, ${T.green}, ${T.greenD})`,
+              border: `2px solid ${T.green}`, cursor: 'pointer', overflow: 'hidden',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 14, fontWeight: 700, flexShrink: 0,
+            }}>
+              {user?.avatar_url ? <img src={user.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (user?.email?.[0] || 'S').toUpperCase()}
             </button>
             {avatarOpen && (
-              <div style={{
-                position: 'absolute', top: 'calc(100% + 10px)', right: 0,
-                background: T.white, borderRadius: 16, padding: '8px 0',
-                boxShadow: T.shadowLg, minWidth: 190,
-                border: `1px solid ${T.gray200}`, zIndex: 200,
-                animation: 'fadeUp 0.18s ease',
-              }}>
+              <div style={{ position: 'absolute', top: 'calc(100% + 10px)', right: 0, background: T.white, borderRadius: 16, padding: '8px 0', boxShadow: T.shadowLg, minWidth: 190, border: `1px solid ${T.gray200}`, zIndex: 200, animation: 'fadeUp 0.18s ease' }}>
                 {[
-                  { label: 'My Profile',   path: '/profile' },
-                  { label: 'My Listings',  path: '/my-listings' },
-                  { label: 'My Chats',     path: '/chats' },
-                  { label: 'Settings',     path: '/settings' },
+                  { label: 'My Profile', path: '/profile' },
+                  ...(user?.shop_slug ? [{ label: 'My Shop', path: `/shop/${user.shop_slug}`, green: true, isShop: true }] : [{ label: 'Create My Shop', path: '/shop-setup', green: true, isShop: true }]),
+                  { label: 'My Listings', path: '/my-listings' },
+                  { label: 'My Chats', path: '/chats' },
+                  { label: 'Settings', path: '/settings' },
                   { divider: true },
-                  { label: 'Sign Out',     path: '/logout', red: true },
+                  { label: 'Sign Out', path: '/logout', red: true },
                 ].map((item, i) => item.divider
                   ? <div key={i} style={{ height: 1, background: T.gray200, margin: '4px 0' }} />
-                  : <button key={i} onClick={() => { navigate(item.path); setAvatarOpen(false) }} style={{
-                      display: 'block', width: '100%', padding: '9px 16px',
-                      textAlign: 'left', background: 'transparent', border: 'none',
-                      fontSize: 13.5, fontWeight: 500,
-                      color: item.red ? T.red : T.gray800, cursor: 'pointer',
-                    }}>{item.label}</button>
+                  : <button key={i} onClick={() => { navigate(item.path); setAvatarOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 16px', textAlign: 'left', background: 'transparent', border: 'none', fontSize: 13.5, fontWeight: item.green ? 700 : 500, color: item.red ? T.red : item.green ? T.green : T.gray800, cursor: 'pointer' }}>
+                      {item.isShop && Icon.shop(13)}
+                      {item.label}
+                    </button>
                 )}
               </div>
             )}
           </div>
         </div>
 
-        {/* ── Mobile top bar ── */}
+        {/* Mobile top bar */}
         <div className="soko-nav-mobile" style={{ display: 'none', flex: 1, alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
-            <div style={{
-              flex: 1, display: 'flex', alignItems: 'center', gap: 8,
-              background: T.gray100, borderRadius: 50, padding: '9px 14px',
-              border: `1.5px solid ${focused ? T.green : T.gray200}`,
-              position: 'relative', cursor: 'pointer',
-            }}
-              onClick={() => { if (!search && !focused) { setSearch(kw); setFocused(true) } }}
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, background: T.gray100, borderRadius: 50, padding: '9px 14px', border: `1.5px solid ${focused ? T.green : T.gray200}`, position: 'relative', cursor: 'pointer' }}
+              onClick={() => navigate('/search?focus=1')}
             >
-              <button
-                type="button"
-                onClick={e => { e.stopPropagation(); setSearch(search || kw) }}
-                style={{ background: 'none', border: 'none', padding: 0, color: focused ? T.green : T.gray400, flexShrink: 0, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-              >{Icon.search(15)}</button>
+              <button type="button" onClick={e => { e.stopPropagation(); const q = search || kw; if (q.trim()) navigate(`/search?q=${encodeURIComponent(q.trim())}`) }} style={{ background: 'none', border: 'none', padding: 0, color: focused ? T.green : T.gray400, flexShrink: 0, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>{Icon.search(15)}</button>
               <div style={{ flex: 1, position: 'relative', height: 20 }}>
-                <input
-                  value={search}
-                  onChange={e => { e.stopPropagation(); setSearch(e.target.value) }}
-                  onFocus={() => setFocused(true)}
-                  onBlur={() => setFocused(false)}
-                  style={{
-                    position: 'absolute', inset: 0, width: '100%',
-                    border: 'none', background: 'transparent',
-                    fontSize: 14, color: T.gray900, outline: 'none',
-                    zIndex: search || focused ? 2 : 0,
+                <input value={search}
+                  onChange={e => {
+                    e.stopPropagation()
+                    const val = e.target.value
+                    setSearch(val)
+                    navigate(`/search?q=${encodeURIComponent(val)}&focus=1`)
                   }}
+                  onFocus={() => { setFocused(true); navigate('/search?focus=1') }}
+                  onBlur={() => setFocused(false)}
+                  style={{ position: 'absolute', inset: 0, width: '100%', border: 'none', background: 'transparent', fontSize: 14, color: T.gray900, outline: 'none', zIndex: search || focused ? 2 : 0 }}
                 />
                 {!search && !focused && (
-                  <div style={{
-                    position: 'absolute', inset: 0, display: 'flex',
-                    alignItems: 'center', pointerEvents: 'none',
-                    fontSize: 14, color: T.gray400,
-                  }}>
-                    Search&nbsp;
-                    <span key={animIdx} style={{
-                      color: T.green, fontWeight: 600,
-                      animation: 'wordSlide 3.5s ease forwards',
-                    }}>{kw}</span>
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', pointerEvents: 'none', fontSize: 14, color: T.gray400 }}>
+                    Search&nbsp;<span key={animIdx} style={{ color: T.green, fontWeight: 600, animation: 'wordSlide 3.5s ease forwards' }}>{kw}</span>
                   </div>
                 )}
               </div>
-              {search && (
-                <button onClick={e => { e.stopPropagation(); setSearch('') }} style={{
-                  background: T.gray200, border: 'none', borderRadius: '50%',
-                  width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: 'pointer', color: T.gray600, flexShrink: 0,
-                }}>{Icon.x(10)}</button>
-              )}
+              {search && <button onClick={e => { e.stopPropagation(); setSearch('') }} style={{ background: T.gray200, border: 'none', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: T.gray600, flexShrink: 0 }}>{Icon.x(10)}</button>}
             </div>
             <div style={{ position: 'relative' }}>
-              <button onClick={() => navigate('/notifications')} style={{
-                width: 38, height: 38, borderRadius: '50%',
-                background: T.gray100, border: 'none',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', color: T.gray800,
-              }}>{Icon.bell(18)}</button>
-              {notifCount > 0 && (
-                <span style={{
-                  position: 'absolute', top: 3, right: 3,
-                  background: T.red, color: '#fff', borderRadius: '50%',
-                  width: 15, height: 15, fontSize: 8, fontWeight: 800,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  border: '2px solid #fff',
-                }}>{notifCount > 9 ? '9+' : notifCount}</span>
-              )}
+              <button onClick={() => navigate('/notifications')} style={{ width: 38, height: 38, borderRadius: '50%', background: T.gray100, border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: T.gray800 }}>{Icon.bell(18)}</button>
+              {notifCount > 0 && <span style={{ position: 'absolute', top: 3, right: 3, background: T.red, color: '#fff', borderRadius: '50%', width: 15, height: 15, fontSize: 8, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #fff' }}>{notifCount > 9 ? '9+' : notifCount}</span>}
             </div>
           </div>
         </div>
-
       </div>
 
-      {/* ── Category pills row ── */}
-      <div style={{
-        borderTop: `1px solid ${T.gray100}`,
-        padding: '0 20px',
-        maxWidth: 1400, margin: '0 auto',
-      }}>
-        <div
-          className="soko-scroll"
-          style={{
-            display: 'flex', gap: 8,
-            overflowX: 'auto', padding: '10px 0',
-          }}
-        >
-          {['All', ...ALL_CATEGORIES.filter(c => listings.some(l => l.category === c))].map(cat => (
-  <button key={cat} className={`soko-tab${cat === activeCategory ? ' active' : ''}`} onClick={() => onCategoryChange(cat)} style={{
-    background: cat === activeCategory ? T.green : undefined,
-    border: cat === activeCategory ? undefined : `1.5px solid ${T.gray200}`,
-    color: cat === activeCategory ? '#fff' : T.gray800,
-    transition: 'all 0.18s cubic-bezier(0.34,1.2,0.64,1)',
-  }}>
-    {CAT_META[cat]?.emoji ? `${CAT_META[cat].emoji} ` : ''}{cat}
-  </button>
-))}
-          
+       {/* ── Row 2: Primary pillar navigation (desktop) ── */}
+      <div className="soko-pillar-row soko-nav-desktop" style={{ borderTop: `1px solid ${T.gray100}` }}>
+        <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 20px', display: 'flex', alignItems: 'center', gap: 0 }}>
+          {PILLARS.map(p => {
+            const isActive = p.key === 'marketplace'
+            return (
+              <button key={p.key} onClick={() => navigate(p.path)} style={{
+                position: 'relative', display: 'flex', alignItems: 'center', gap: 6,
+                padding: '10px 16px',
+                background: 'none', border: 'none', borderBottom: isActive ? `2.5px solid ${T.green}` : '2.5px solid transparent',
+                cursor: 'pointer', fontSize: 13.5, fontWeight: isActive ? 700 : 500,
+                color: isActive ? T.green : T.gray700,
+                transition: 'color 0.15s',
+                whiteSpace: 'nowrap',
+              }}
+              onMouseEnter={e => { if (!isActive) { e.currentTarget.style.color = T.green } }}
+              onMouseLeave={e => { if (!isActive) { e.currentTarget.style.color = T.gray700 } }}
+              >
+                <span style={{ color: isActive ? T.green : T.gray500, display: 'flex', alignItems: 'center' }}>{p.icon(15)}</span>
+                {p.label}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      {/* ── Row 4 (mobile only): pillar chip strip ── */}
+      <div className="soko-nav-mobile" style={{ display: 'none', borderTop: `1px solid ${T.gray100}`, padding: '8px 14px' }}>
+        <div className="soko-scroll" style={{ display: 'flex', gap: 7, overflowX: 'auto' }}>
+          {PILLARS.map(p => (
+            <button key={p.key} onClick={() => navigate(p.path)} style={{
+              display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
+              background: p.key === 'marketplace' ? T.greenL : T.gray100, border: 'none',
+              borderRadius: 50, padding: '6px 12px', fontSize: 12, fontWeight: 600,
+              color: p.key === 'marketplace' ? T.green : T.gray800, cursor: 'pointer',
+            }}>{p.icon(13)} {p.label}</button>
+          ))}
         </div>
       </div>
     </nav>
@@ -657,411 +514,769 @@ function SokoNav({
 
 function NavIconBtn({ icon, label, onClick }) {
   return (
-    <button onClick={onClick} style={{
-      display: 'flex', flexDirection: 'column', alignItems: 'center',
-      gap: 3, background: 'none', border: 'none', cursor: 'pointer',
-      padding: '6px 10px', borderRadius: 12, color: T.gray800,
-      fontSize: 10, fontWeight: 600, transition: 'background 0.15s',
-    }}
-      onMouseEnter={e => e.currentTarget.style.background = T.gray100}
-      onMouseLeave={e => e.currentTarget.style.background = 'none'}
-    >
-      {icon}
-      <span>{label}</span>
-    </button>
+    <button onClick={onClick} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, background: 'none', border: 'none', cursor: 'pointer', padding: '6px 10px', borderRadius: 12, color: T.gray800, fontSize: 10, fontWeight: 600, transition: 'background 0.15s' }}
+      onMouseEnter={e => e.currentTarget.style.background = T.gray100} onMouseLeave={e => e.currentTarget.style.background = 'none'}
+    >{icon}<span>{label}</span></button>
   )
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   SOKO LIVE — Stories section
+   REVENUE HERO
+   Left: marketing message + two CTAs (Browse Listings / Post Request).
+   Right: 3-card perspective carousel of FEATURED listings — this is the
+   first monetization surface a visitor sees, framed as social proof
+   ("Featured" badge visible) rather than an ad unit.
 ───────────────────────────────────────────────────────────────────────────── */
-const CAT_COLORS = {
-  Electronics: { bg: '#f97316', text: '#fff', label: 'ELECTRONICS' },
-  Vehicles:    { bg: '#8b5cf6', text: '#fff', label: 'VEHICLES' },
-  Property:    { bg: '#6366f1', text: '#fff', label: 'PROPERTY' },
-  Fashion:     { bg: '#ec4899', text: '#fff', label: 'FASHION' },
-  Agriculture: { bg: '#0d9488', text: '#fff', label: 'AGRICULTURE' },
-  Furniture:   { bg: '#f59e0b', text: '#1a0a00', label: 'HOME' },
-  Jobs:        { bg: '#22d3ee', text: '#0f172a', label: 'JOBS' },
-  Services:    { bg: '#10b981', text: '#fff', label: 'SERVICES' },
-}
+function RevenueHero({ navigate, listings }) {
+  const featured = useMemo(() =>
+    listings.filter(l => (l.featured || l.is_featured) && l.images?.[0]).slice(0, 9),
+  [listings])
 
-function getCatColor(cat) {
-  return CAT_COLORS[cat] || { bg: '#64748b', text: '#fff', label: (cat || 'SOKO').toUpperCase() }
-}
+  const [page, setPage]     = useState(0)
+  const [paused, setPaused] = useState(false)
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
+  const [visible, setVisible] = useState(false)
+  const sectionRef = useRef(null)
+  const perPage = 3
+  const pageCount = Math.max(1, Math.ceil(featured.length / perPage))
 
-function SokoLive({ user, stories, viewedIds, onOpenGroup, onUpload }) {
+  useEffect(() => {
+    if (paused || pageCount < 2) return
+    const t = setInterval(() => setPage(p => (p + 1) % pageCount), 4200)
+    return () => clearInterval(t)
+  }, [paused, pageCount])
+
+  // Entrance animation observer
+  useEffect(() => {
+    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) setVisible(true) }, { threshold: 0.1 })
+    if (sectionRef.current) obs.observe(sectionRef.current)
+    return () => obs.disconnect()
+  }, [])
+
+  // Parallax on mouse move
+  function handleMouseMove(e) {
+    const rect = sectionRef.current?.getBoundingClientRect()
+    if (!rect) return
+    setMousePos({
+      x: ((e.clientX - rect.left) / rect.width - 0.5) * 20,
+      y: ((e.clientY - rect.top)  / rect.height - 0.5) * 12,
+    })
+  }
+
+  function goTo(i) { setPage(((i % pageCount) + pageCount) % pageCount) }
+  function next() { setPage(p => (p + 1) % pageCount) }
+  function prev() { setPage(p => ((p - 1) + pageCount) % pageCount) }
+
+  const visibleCards = featured.slice(page * perPage, page * perPage + perPage)
+
   return (
-    <section style={{
-      background: `
-        radial-gradient(ellipse at 15% 60%, rgba(15,157,88,0.16) 0%, transparent 50%),
-        radial-gradient(ellipse at 85% 15%, rgba(26,115,232,0.12) 0%, transparent 45%),
-        radial-gradient(ellipse at 55% 90%, rgba(249,171,0,0.09) 0%, transparent 40%),
-        linear-gradient(160deg, #060c08 0%, #0b1210 35%, #08101a 70%, #0b0a07 100%)
-      `,
-      position: 'relative',
-      overflow: 'hidden',
-    }}>
+    <section
+      ref={sectionRef}
+      onMouseMove={handleMouseMove}
+      onMouseLeave={() => setMousePos({ x: 0, y: 0 })}
+      style={{ position: 'relative', overflow: 'hidden', minHeight: 340 }}
+    >
+      {/* ── Injected keyframes ── */}
+      <style>{`
+        @keyframes blobFloat1 { 0%,100%{transform:translate(0,0) scale(1)} 33%{transform:translate(30px,-20px) scale(1.05)} 66%{transform:translate(-20px,15px) scale(0.97)} }
+        @keyframes blobFloat2 { 0%,100%{transform:translate(0,0) scale(1)} 40%{transform:translate(-25px,18px) scale(1.04)} 70%{transform:translate(20px,-12px) scale(0.98)} }
+        @keyframes blobFloat3 { 0%,100%{transform:translate(0,0) scale(1)} 30%{transform:translate(15px,22px) scale(1.06)} 60%{transform:translate(-18px,-10px) scale(0.96)} }
+        @keyframes particleDrift { 0%{transform:translateY(0) translateX(0);opacity:0} 10%{opacity:1} 90%{opacity:1} 100%{transform:translateY(-120px) translateX(30px);opacity:0} }
+        @keyframes badgeShimmer { 0%{background-position:-200% center} 100%{background-position:200% center} }
+        @keyframes heroFadeUp { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes cardSlideUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes ctaPulse { 0%,100%{box-shadow:0 4px 18px rgba(249,171,0,0.4)} 50%{box-shadow:0 4px 28px rgba(249,171,0,0.72)} }
+        @keyframes dotGrid { 0%,100%{opacity:0.35} 50%{opacity:0.55} }
+      `}</style>
 
-      {/* Fine dot-grid texture */}
+      {/* ── Layer 1: Deep base gradient ── */}
       <div style={{
-        position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none',
-        backgroundImage: 'radial-gradient(rgba(255,255,255,0.06) 1px, transparent 1px)',
-        backgroundSize: '28px 28px',
-        maskImage: 'linear-gradient(to bottom, transparent 0%, black 20%, black 80%, transparent 100%)',
-        WebkitMaskImage: 'linear-gradient(to bottom, transparent 0%, black 20%, black 80%, transparent 100%)',
+        position: 'absolute', inset: 0,
+        background: `
+          linear-gradient(135deg, #040f07 0%, #071a0d 30%, #0a2015 55%, #060d18 100%)
+        `,
       }} />
 
-      {/* Top edge glow */}
+      {/* ── Layer 2: Mesh radial gradients ── */}
       <div style={{
-        position: 'absolute', top: 0, left: 0, right: 0, height: 1,
-        background: 'linear-gradient(90deg, transparent 0%, rgba(15,157,88,0.4) 30%, rgba(26,115,232,0.3) 70%, transparent 100%)',
-        zIndex: 0,
+        position: 'absolute', inset: 0, pointerEvents: 'none',
+        background: `
+          radial-gradient(ellipse 70% 60% at 8% 90%, rgba(15,157,88,0.22) 0%, transparent 60%),
+          radial-gradient(ellipse 55% 50% at 92% 8%,  rgba(15,157,88,0.18) 0%, transparent 55%),
+          radial-gradient(ellipse 40% 40% at 50% 50%, rgba(10,122,68,0.10) 0%, transparent 65%),
+          radial-gradient(ellipse 35% 45% at 78% 85%, rgba(249,171,0,0.10) 0%, transparent 55%),
+          radial-gradient(ellipse 30% 30% at 18% 18%, rgba(249,171,0,0.07) 0%, transparent 50%)
+        `,
       }} />
 
-      {/* ── Header row ── */}
+      {/* ── Layer 3: Floating blobs (parallax-shifted) ── */}
       <div style={{
-        maxWidth: 1400, margin: '0 auto',
-        display: 'flex', alignItems: 'center',
-        padding: '18px 24px 10px',
-        position: 'relative', zIndex: 1,
-        gap: 12,
+        position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden',
+        transform: `translate(${mousePos.x * 0.4}px, ${mousePos.y * 0.3}px)`,
+        transition: 'transform 0.8s cubic-bezier(0.25,0.46,0.45,0.94)',
       }}>
-        {/* Left: title group */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
-          {/* Animated live dot */}
-          <div style={{ position: 'relative', width: 10, height: 10, flexShrink: 0 }}>
-            <div style={{
-              position: 'absolute', inset: 0, borderRadius: '50%',
-              background: '#ef4444',
-              animation: 'pulse 2s ease infinite',
-            }} />
-            <div style={{
-              position: 'absolute', inset: -4, borderRadius: '50%',
-              background: 'rgba(239,68,68,0.2)',
-              animation: 'pulse 2s ease infinite',
-            }} />
-          </div>
-
-          <span style={{
-            fontFamily: T.fontDisplay, fontSize: 17, fontWeight: 800,
-            color: '#fff', letterSpacing: '-0.3px',
-          }}>Soko Live</span>
-
-          {/* LIVE pill */}
-          <div style={{
-            background: 'rgba(239,68,68,0.15)',
-            border: '1px solid rgba(239,68,68,0.35)',
-            borderRadius: 50, padding: '3px 10px',
-            display: 'flex', alignItems: 'center', gap: 5,
-          }}>
-            <div style={{ width: 5, height: 5, borderRadius: '50%', background: '#ef4444' }} />
-            <span style={{ fontSize: 10, fontWeight: 800, color: '#f87171', letterSpacing: 0.5 }}>LIVE</span>
-          </div>
-
-          {/* Seller count */}
-          <span style={{
-            fontSize: 12, color: 'rgba(255,255,255,0.3)', fontWeight: 500,
-          }}>
-            {stories.length > 0
-              ? `${stories.length} seller${stories.length !== 1 ? 's' : ''} broadcasting`
-              : 'Be the first to broadcast today'}
-          </span>
-        </div>
-
-        {/* Right: actions */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          {/* See All */}
-          <button
-            onClick={onUpload}
-            style={{
-              background: 'none', border: 'none',
-              fontSize: 12, fontWeight: 700,
-              color: T.green, cursor: 'pointer',
-              display: 'flex', alignItems: 'center', gap: 4,
-              padding: '6px 0',
-            }}
-          >
-            See all
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <polyline points="9 18 15 12 9 6"/>
-            </svg>
-          </button>
-
-          {/* Divider */}
-          <div style={{ width: 1, height: 16, background: 'rgba(255,255,255,0.1)' }} />
-
-          {/* Add Promotion */}
-          <button
-            onClick={onUpload}
-            style={{
-              background: 'linear-gradient(135deg, rgba(15,157,88,0.25), rgba(15,157,88,0.12))',
-              border: '1px solid rgba(15,157,88,0.3)',
-              borderRadius: 50, padding: '7px 16px',
-              fontSize: 12, fontWeight: 700, color: '#6ee7a0',
-              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
-              transition: 'all 0.15s',
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = 'linear-gradient(135deg, rgba(15,157,88,0.38), rgba(15,157,88,0.22))'}
-            onMouseLeave={e => e.currentTarget.style.background = 'linear-gradient(135deg, rgba(15,157,88,0.25), rgba(15,157,88,0.12))'}
-          >
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round">
-              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-            </svg>
-            Add Promotion
-          </button>
-        </div>
+        <div style={{ position: 'absolute', top: '-10%', left: '-8%', width: 420, height: 420, borderRadius: '50%', background: 'radial-gradient(circle, rgba(15,157,88,0.18) 0%, transparent 70%)', animation: 'blobFloat1 14s ease-in-out infinite', filter: 'blur(2px)' }} />
+        <div style={{ position: 'absolute', bottom: '-15%', right: '-5%', width: 380, height: 380, borderRadius: '50%', background: 'radial-gradient(circle, rgba(15,157,88,0.14) 0%, transparent 70%)', animation: 'blobFloat2 18s ease-in-out infinite', filter: 'blur(2px)' }} />
+        <div style={{ position: 'absolute', top: '30%', right: '22%', width: 260, height: 260, borderRadius: '50%', background: 'radial-gradient(circle, rgba(249,171,0,0.10) 0%, transparent 70%)', animation: 'blobFloat3 22s ease-in-out infinite', filter: 'blur(1px)' }} />
+        <div style={{ position: 'absolute', top: '60%', left: '15%', width: 200, height: 200, borderRadius: '50%', background: 'radial-gradient(circle, rgba(10,122,68,0.12) 0%, transparent 70%)', animation: 'blobFloat1 16s ease-in-out 4s infinite' }} />
       </div>
 
-      {/* Subtitle */}
-      <div style={{ padding: '0 24px 12px', maxWidth: 1400, margin: '0 auto', position: 'relative', zIndex: 1 }}>
-        <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.28)', fontWeight: 400 }}>
-          Daily promos from trusted Malawian sellers · Tranzakshoni zanyazi!
-        </span>
-      </div>
+      {/* ── Layer 4: Dot-grid pattern ── */}
+      <div style={{
+        position: 'absolute', inset: 0, pointerEvents: 'none',
+        backgroundImage: `radial-gradient(circle, rgba(255,255,255,0.08) 1px, transparent 1px)`,
+        backgroundSize: '28px 28px',
+        animation: 'dotGrid 6s ease-in-out infinite',
+      }} />
 
-      {/* ── Story cards ── */}
-      <div
-        className="soko-scroll"
-        style={{
-          display: 'flex', gap: 10,
-          overflowX: 'auto',
-          padding: '4px 24px 24px',
-          maxWidth: 1400, margin: '0 auto',
-          position: 'relative', zIndex: 1,
-        }}
-      >
-        <LiveCreateCard onPress={onUpload} user={user} />
+      {/* ── Layer 5: Subtle grid lines ── */}
+      <div style={{
+        position: 'absolute', inset: 0, pointerEvents: 'none',
+        backgroundImage: `linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px)`,
+        backgroundSize: '56px 56px',
+      }} />
 
-        {stories.map((s, i) => (
-          <LiveStoryCard
-            key={s.user_id || i}
-            story={s}
-            index={i}
-            isOwn={s.user_id === user?.id}
-            viewed={s._ownGroup?.every(x => viewedIds.has(x.id)) ?? false}
-            onClick={() => onOpenGroup(s)}
-          />
-        ))}
-
-        {stories.length === 0 && [1, 2, 3, 4, 5, 6].map(i => (
+      {/* ── Layer 6: Floating particles ── */}
+      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}>
+        {[...Array(16)].map((_, i) => (
           <div key={i} style={{
-            flexShrink: 0, width: 148, height: 260, borderRadius: 20,
-            background: 'rgba(255,255,255,0.04)',
-            border: '1px solid rgba(255,255,255,0.07)',
-            animation: 'pulse 2s ease infinite',
-            animationDelay: `${i * 0.15}s`,
+            position: 'absolute',
+            width: i % 4 === 0 ? 3 : i % 4 === 1 ? 2 : i % 4 === 2 ? 2 : 1.5,
+            height: i % 4 === 0 ? 3 : i % 4 === 1 ? 2 : i % 4 === 2 ? 2 : 1.5,
+            borderRadius: '50%',
+            background: i % 3 === 0
+              ? `rgba(249,171,0,${0.3 + (i % 3) * 0.12})`
+              : i % 3 === 1
+              ? `rgba(15,157,88,${0.3 + (i % 3) * 0.1})`
+              : `rgba(255,255,255,${0.12 + (i % 4) * 0.06})`,
+            left: `${5 + (i * 6.1) % 90}%`,
+            top: `${10 + (i * 13.7) % 80}%`,
+            animation: `particleDrift ${6 + (i % 5) * 2.4}s linear ${i * 0.7}s infinite`,
           }} />
         ))}
+      </div>
+
+      {/* ── Layer 7: Bottom vignette ── */}
+      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 80, background: 'linear-gradient(to top, rgba(4,15,7,0.4), transparent)', pointerEvents: 'none' }} />
+
+      {/* ── CONTENT ── */}
+      <div className="soko-hero-grid" style={{
+        position: 'relative', zIndex: 1, maxWidth: 1400, margin: '0 auto',
+        display: 'grid', gridTemplateColumns: '34% 1fr', gap: 28,
+        alignItems: 'center', padding: 'clamp(16px,3vw,28px) 20px',
+      }}>
+
+        {/* ── LEFT: unchanged content, entrance animation wrapper ── */}
+        <div style={{
+          animation: visible ? 'heroFadeUp 0.65s ease both' : 'none',
+        }}>
+
+          {/* Badge — shimmer + glow added */}
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            background: 'linear-gradient(135deg, rgba(234,88,12,0.2), rgba(249,171,0,0.12), rgba(234,88,12,0.2))',
+            border: '1px solid rgba(249,171,0,0.38)',
+            borderRadius: 50, padding: '5px 14px', marginBottom: 14,
+            position: 'relative', overflow: 'hidden',
+            boxShadow: '0 0 12px rgba(249,171,0,0.15)',
+            transition: 'box-shadow 0.3s, transform 0.3s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.boxShadow='0 0 22px rgba(249,171,0,0.38)'; e.currentTarget.style.transform='scale(1.04)' }}
+          onMouseLeave={e => { e.currentTarget.style.boxShadow='0 0 12px rgba(249,171,0,0.15)'; e.currentTarget.style.transform='scale(1)' }}
+          >
+            {/* Shimmer sweep */}
+            <div style={{
+              position: 'absolute', inset: 0, borderRadius: 50,
+              background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.18) 50%, transparent 100%)',
+              backgroundSize: '200% 100%',
+              animation: 'badgeShimmer 3s ease-in-out infinite',
+            }} />
+            <span style={{ color: T.red, display: 'flex', position: 'relative', zIndex: 1 }}>{Icon.fire(13)}</span>
+            <span style={{ fontSize: 10.5, fontWeight: 800, color: T.amber, letterSpacing: 0.7, textTransform: 'uppercase', position: 'relative', zIndex: 1 }}>
+              Featured
+            </span>
+          </div>
+
+          <h1 className="soko-hero-headline" style={{
+            fontFamily: T.fontDisplay, fontSize: 'clamp(24px, 2.6vw, 32px)',
+            fontWeight: 800, color: '#fff', lineHeight: 1.15, letterSpacing: '-0.8px',
+            marginBottom: 10,
+          }}>
+            Reach more buyers.<br />
+            <span style={{
+              background: `linear-gradient(90deg, ${T.amber}, #ffce45)`,
+              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+            }}>Get Featured today!</span>
+          </h1>
+
+          <p style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.55)', lineHeight: 1.5, maxWidth: 320, marginBottom: 18 }}>
+            Stand out, get more views and sell faster.
+          </p>
+
+          <div style={{ display: 'flex', flexDirection: 'row', gap: 20, marginBottom: 20, flexWrap: 'nowrap' }}>
+            {[
+              { icon: Icon.star, color: T.amber, label: 'Top placement', sub: 'Be seen by more buyers' },
+              { icon: Icon.eye, color: T.green, label: 'More views', sub: 'Increase your chances' },
+              { icon: Icon.lightning, color: T.amber, label: 'Sell faster', sub: 'Get results quickly' },
+            ].map(({ icon, color, label, sub }) => (
+              <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                <span style={{ color, display: 'flex', flexShrink: 0 }}>{icon(15)}</span>
+                <div>
+                  <div style={{ fontSize: 11.5, fontWeight: 700, color: 'rgba(255,255,255,0.85)', whiteSpace: 'nowrap' }}>{label}</div>
+                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', whiteSpace: 'nowrap' }}>{sub}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            {/* Primary CTA — pulse glow + hover elevation */}
+            <button
+              className="soko-btn-primary"
+              onClick={() => navigate('/my-listings')}
+              style={{
+                background: `linear-gradient(135deg, ${T.amber}, #e09800)`,
+                color: '#1a0a00', fontSize: 14, padding: '11px 22px',
+                animation: 'ctaPulse 2.8s ease-in-out infinite',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+              }}
+              onMouseEnter={e => { e.currentTarget.style.transform='translateY(-3px) scale(1.03)'; e.currentTarget.style.animation='none'; e.currentTarget.style.boxShadow='0 8px 28px rgba(249,171,0,0.55)' }}
+              onMouseLeave={e => { e.currentTarget.style.transform='none'; e.currentTarget.style.animation='ctaPulse 2.8s ease-in-out infinite'; e.currentTarget.style.boxShadow='' }}
+            >
+              Get Featured
+            </button>
+            {/* Secondary CTA — glass + hover */}
+            <button
+              onClick={() => navigate('/my-listings')}
+              className="soko-btn-outline"
+              style={{ fontSize: 14, padding: '11px 22px', transition: 'all 0.25s' }}
+              onMouseEnter={e => { e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.background='rgba(255,255,255,0.18)' }}
+              onMouseLeave={e => { e.currentTarget.style.transform='none'; e.currentTarget.style.background='rgba(255,255,255,0.1)' }}
+            >
+              Learn More
+            </button>
+          </div>
+        </div>
+
+        {/* ── RIGHT: carousel — entrance + enhanced card animations ── */}
+        <div
+          className="soko-hero-right"
+          onMouseEnter={() => setPaused(true)}
+          onMouseLeave={() => setPaused(false)}
+          style={{
+            position: 'relative',
+            animation: visible ? 'heroFadeUp 0.75s ease 0.15s both' : 'none',
+            transform: `translate(${mousePos.x * 0.15}px, ${mousePos.y * 0.1}px)`,
+            transition: 'transform 1s cubic-bezier(0.25,0.46,0.45,0.94)',
+          }}
+        >
+          {featured.length === 0 ? (
+            <div style={{ background: 'rgba(255,255,255,0.05)', border: '2px dashed rgba(255,255,255,0.12)', borderRadius: 16, padding: 28, textAlign: 'center', width: '100%', backdropFilter: 'blur(8px)' }}>
+              <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center' }}>{Icon.star(32)}</div>
+              <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', lineHeight: 1.6, marginBottom: 16 }}>
+                No featured listings yet — be the first sellers see.
+              </p>
+              <button onClick={() => navigate('/post')} style={{ background: `linear-gradient(135deg,${T.amber},#e09800)`, border: 'none', borderRadius: 10, padding: '9px 20px', fontSize: 13, fontWeight: 800, color: '#1a0a00', cursor: 'pointer' }}>
+                Feature My Listing
+              </button>
+            </div>
+          ) : (
+            <>
+              {pageCount > 1 && (
+                <button onClick={prev} style={{ position: 'absolute', left: -16, top: '40%', transform: 'translateY(-50%)', zIndex: 20, width: 32, height: 32, borderRadius: '50%', background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff', fontSize: 17, backdropFilter: 'blur(8px)', transition: 'background 0.2s, transform 0.2s' }}
+                  onMouseEnter={e => { e.currentTarget.style.background='rgba(15,157,88,0.7)'; e.currentTarget.style.transform='translateY(-50%) scale(1.1)' }}
+                  onMouseLeave={e => { e.currentTarget.style.background='rgba(0,0,0,0.6)'; e.currentTarget.style.transform='translateY(-50%) scale(1)' }}
+                >‹</button>
+              )}
+              {pageCount > 1 && (
+                <button onClick={next} style={{ position: 'absolute', right: -16, top: '40%', transform: 'translateY(-50%)', zIndex: 20, width: 32, height: 32, borderRadius: '50%', background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff', fontSize: 17, backdropFilter: 'blur(8px)', transition: 'background 0.2s, transform 0.2s' }}
+                  onMouseEnter={e => { e.currentTarget.style.background='rgba(15,157,88,0.7)'; e.currentTarget.style.transform='translateY(-50%) scale(1.1)' }}
+                  onMouseLeave={e => { e.currentTarget.style.background='rgba(0,0,0,0.6)'; e.currentTarget.style.transform='translateY(-50%) scale(1)' }}
+                >›</button>
+              )}
+
+              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${perPage}, 1fr)`, gap: 16 }}>
+                {visibleCards.map((item, idx) => (
+                  <div
+                    key={item.id}
+                    onClick={() => navigate('/listing/' + item.id)}
+                    style={{
+                      position: 'relative', height: 230, borderRadius: 18,
+                      overflow: 'hidden', cursor: 'pointer',
+                      border: '2px solid transparent',
+                      boxShadow: '0 8px 28px rgba(0,0,0,0.45)',
+                      transition: 'transform 0.35s cubic-bezier(0.34,1.2,0.64,1), box-shadow 0.35s ease, border-color 0.35s ease',
+                      animation: visible ? `cardSlideUp 0.5s ease ${0.1 + idx * 0.1}s both` : 'none',
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.transform = 'translateY(-8px) scale(1.03)'
+                      e.currentTarget.style.boxShadow = '0 20px 48px rgba(0,0,0,0.6), 0 0 0 2px rgba(249,171,0,0.75)'
+                      e.currentTarget.style.borderColor = 'rgba(249,171,0,0.85)'
+                      e.currentTarget.querySelector('img').style.transform = 'scale(1.08)'
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.transform = 'none'
+                      e.currentTarget.style.boxShadow = '0 8px 28px rgba(0,0,0,0.45)'
+                      e.currentTarget.style.borderColor = 'transparent'
+                      e.currentTarget.querySelector('img').style.transform = 'scale(1)'
+                    }}
+                  >
+                    <img
+                      src={item.images?.[0]} alt={item.title}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.5s cubic-bezier(0.34,1.2,0.64,1)' }}
+                    />
+                    <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.08) 0%, transparent 35%, rgba(0,0,0,0.75) 70%, rgba(0,0,0,0.92) 100%)' }} />
+
+                    {/* Badge — shimmer on cards too */}
+                    <div style={{
+                      position: 'absolute', top: 9, left: 9, zIndex: 5,
+                      background: `linear-gradient(135deg,${T.amber},#e09800)`,
+                      borderRadius: 50, padding: '3px 9px',
+                      display: 'flex', alignItems: 'center', gap: 3,
+                      boxShadow: '0 2px 10px rgba(249,171,0,0.5)',
+                      overflow: 'hidden', position: 'absolute',
+                    }}>
+                      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg,transparent,rgba(255,255,255,0.25),transparent)', backgroundSize: '200% 100%', animation: 'badgeShimmer 3s ease-in-out infinite' }} />
+                      <span style={{ color: '#1a0a00', display: 'flex', position: 'relative', zIndex: 1 }}>{Icon.star(9, '#1a0a00')}</span>
+                      <span style={{ fontSize: 8.5, fontWeight: 900, color: '#1a0a00', letterSpacing: 0.4, position: 'relative', zIndex: 1 }}>FEATURED</span>
+                    </div>
+
+                    <div style={{ position: 'absolute', top: 9, right: 9, zIndex: 5, width: 26, height: 26, borderRadius: '50%', background: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {Icon.heart(13, 'none')}
+                    </div>
+
+                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 5, padding: '14px 14px 16px' }}>
+                      <div style={{ fontSize: 14.5, fontWeight: 800, color: '#fff', marginBottom: 5, lineHeight: 1.25, textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>{item.title}</div>
+                      <div style={{ fontFamily: T.fontDisplay, fontSize: 17, fontWeight: 900, color: T.amber, marginBottom: 5, letterSpacing: '-0.4px' }}>{formatPrice(item.price)}</div>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', display: 'flex', alignItems: 'center', gap: 3 }}>{Icon.pin(10)} {item.city || 'Malawi'}</span>
+                        <span style={{ fontSize: 10.5, color: '#7ee0a8', display: 'flex', alignItems: 'center', gap: 3, fontWeight: 700 }}>{Icon.verify(11)} Verified</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {visibleCards.length < perPage && Array.from({ length: perPage - visibleCards.length }).map((_, i) => <div key={`pad-${i}`} />)}
+              </div>
+
+              {pageCount > 1 && (
+                <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginTop: 14 }}>
+                  {Array.from({ length: pageCount }).map((_, i) => (
+                    <div
+                      key={i} onClick={() => goTo(i)}
+                      style={{
+                        width: i === page ? 22 : 6, height: 6, borderRadius: 50,
+                        background: i === page
+                          ? `linear-gradient(90deg, ${T.amber}, #ffce45)`
+                          : 'rgba(255,255,255,0.22)',
+                        cursor: 'pointer',
+                        transition: 'all 0.35s cubic-bezier(0.34,1.2,0.64,1)',
+                        boxShadow: i === page ? '0 0 8px rgba(249,171,0,0.5)' : 'none',
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </div>
     </section>
   )
 }
 
-function LiveCreateCard({ onPress, user }) {
-  const [hov, setHov] = useState(false)
-  return (
-    <div
-      onClick={onPress}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        flexShrink: 0, width: 160, height: 280, borderRadius: 20,
-        background: `linear-gradient(160deg, #0369a1, #0ea5e9 55%, #06b6d4)`,
-        cursor: 'pointer', position: 'relative', overflow: 'hidden',
-        border: '2px solid rgba(255,255,255,0.18)',
-        boxShadow: hov ? '0 8px 30px rgba(6,182,212,0.4)' : '0 3px 14px rgba(0,0,0,0.3)',
-        transform: hov ? 'translateY(-5px) scale(1.02)' : 'none',
-        transition: 'all 0.22s cubic-bezier(0.34,1.2,0.64,1)',
-      }}
-    >
-      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at 70% 20%, rgba(255,255,255,0.15) 0%, transparent 60%)', pointerEvents: 'none' }} />
+/* ─────────────────────────────────────────────────────────────────────────────
+   CATEGORY QUICK ACCESS — one-click entry to every category. Matches the
+   reference's fixed 8-tile layout (All Categories, Vehicles, Electronics,
+   Fashion, Property, Agriculture, Jobs, Services) plus a 9th "More" tile
+   that opens the full category list — rather than dumping every category
+   from ALL_CATEGORIES into the grid (which duplicated "Services" and had
+   no overflow tile).
+───────────────────────────────────────────────────────────────────────────── */
+const QUICK_CATEGORIES = [
+  { key: 'all',         label: 'All Categories', sub: 'Browse all',        icon: Icon.grid,        fg: '#16a34a', bg: '#e8f7ee', isAll: true },
+  { key: 'Vehicles',    label: 'Vehicles',       sub: 'Cars, bikes, more', icon: Icon.car,         fg: '#16a34a', bg: '#e9f7ec' },
+  { key: 'Electronics', label: 'Electronics',    sub: 'Phones, laptops',   icon: Icon.phone,       fg: '#7c3aed', bg: '#f1ebfd' },
+  { key: 'Clothing',    label: 'Fashion',        sub: 'Clothing, shoes',   icon: Icon.shirt,       fg: '#e0245e', bg: '#fdeaf0' },
+  { key: 'Property',    label: 'Property',       sub: 'Houses, land',      icon: Icon.houseFilled, fg: '#ea580c', bg: '#fef0e6' },
+  { key: 'Agriculture', label: 'Agriculture',    sub: 'Machinery, crops',  icon: Icon.leaf,        fg: '#16a34a', bg: '#e8f7ee' },
+  { key: 'Jobs',        label: 'Jobs',           sub: 'Find a job',        icon: Icon.briefcase,   fg: '#2563eb', bg: '#e9f1fd', isJobs: true },
+  { key: 'Services',    label: 'Services',       sub: 'Hire experts',      icon: Icon.tools,       fg: '#5f6368', bg: '#eef0f1', isServices: true },
+]
 
-      {/* LIVE pill */}
-      <div style={{
-        position: 'absolute', top: 10, left: 10,
-        background: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(8px)',
-        borderRadius: 50, padding: '3px 9px',
-        display: 'flex', alignItems: 'center', gap: 4,
-        border: '1px solid rgba(255,255,255,0.25)',
-      }}>
-        <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#34d399', animation: 'liveRing 2s infinite' }} />
-        <span style={{ fontSize: 8, fontWeight: 800, color: '#fff', letterSpacing: 1, textTransform: 'uppercase' }}>BROADCAST</span>
+function CategoryGrid({ navigate, onCategoryChange }) {
+  function handleClick(item) {
+    if (item.isJobs)      return navigate('/jobs')
+    if (item.isServices)  return navigate('/services')
+    if (item.isAll) return navigate('/listings')
+    navigate(`/listings?cat=${encodeURIComponent(item.key)}`)
+  }
+
+  return (
+    <section style={{ padding: '28px 20px 8px', background: '#fff' }}>
+      <div style={{ maxWidth: 1400, margin: '0 auto' }}>
+        <div className="soko-cat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(9, 1fr)', gap: 12 }}>
+          {QUICK_CATEGORIES.map(item => (
+            <button key={item.key} onClick={() => handleClick(item)} className="soko-cat-tile" style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
+              background: '#fff', border: `1px solid ${T.gray100}`, cursor: 'pointer', padding: '18px 8px 16px',
+              borderRadius: 16, transition: 'border-color .15s, box-shadow .15s, transform .15s',
+            }}>
+              <div style={{ width: 44, height: 44, borderRadius: '50%', background: item.bg, color: item.fg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                {item.icon(19)}
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: T.gray900 }}>{item.label}</div>
+                <div style={{ fontSize: 10.5, color: T.gray600, marginTop: 1 }}>{item.sub}</div>
+              </div>
+            </button>
+          ))}
+          <button onClick={() => navigate('/categories')} className="soko-cat-tile" style={{
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
+            background: '#fdf6e8', border: `1.5px dashed ${T.amber}66`, cursor: 'pointer', padding: '18px 8px 16px',
+            borderRadius: 16, transition: 'border-color .15s, box-shadow .15s, transform .15s',
+          }}>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: T.amberD }}>More</div>
+            <div style={{ fontSize: 10.5, color: T.gray600 }}>View all</div>
+          </button>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   FEATURED REVENUE BANNER — slim cream strip matching the reference: one
+   headline + subtext on the left, four inline icon-stats (Featured
+   Listings / Shops / Requests / Story Promotion with starting prices) in
+   the middle, and a single "See Pricing" CTA on the right. This stays
+   compact and out of the way rather than competing with the hero above it
+   — clicking through to a real pricing page is where the detail belongs.
+───────────────────────────────────────────────────────────────────────────── */
+function FeaturedRevenueBanner({ navigate }) {
+  const stats = [
+    { icon: Icon.pin, label: 'Featured Listings', price: 'From MK 2,000' },
+    { icon: Icon.shop, label: 'Featured Shops', price: 'From MK 10,000/mo' },
+    { icon: Icon.handshake, label: 'Featured Requests', price: 'From MK 2,000' },
+    { icon: Icon.megaphone, label: 'Story Promotion', price: 'From MK 1,000/day' },
+  ]
+
+  return (
+    <section style={{ padding: '20px 20px 0' }}>
+      <div style={{ maxWidth: 1400, margin: '0 auto' }}>
+        <div style={{
+          background: 'linear-gradient(90deg, #fdf6e3, #fdf1d6, #fdf6e3)',
+          border: `1px solid ${T.amber}33`, borderRadius: 16,
+          padding: '14px 20px', display: 'flex', alignItems: 'center',
+          gap: 24, flexWrap: 'wrap',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: '1 1 260px', minWidth: 0 }}>
+            <div style={{ width: 38, height: 38, borderRadius: 11, background: '#fff3da', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>⭐</div>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontSize: 14.5, fontWeight: 800, color: T.gray900 }}>Get Featured. Get Results.</div>
+              <div style={{ fontSize: 12, color: T.gray600 }}>Join sellers getting more views and sales every day.</div>
+            </div>
+          </div>
+
+          <div className="soko-nav-desktop" style={{ display: 'flex', alignItems: 'center', gap: 22, flexWrap: 'wrap' }}>
+            {stats.map(s => (
+              <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 7, whiteSpace: 'nowrap' }}>
+                <span style={{ color: T.amberD }}>{s.icon(15)}</span>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: T.gray800 }}>{s.label}</div>
+                  <div style={{ fontSize: 10.5, color: T.gray600 }}>{s.price}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <button onClick={() => navigate('/my-listings')} style={{
+            flexShrink: 0, marginLeft: 'auto', background: T.amber, color: '#1a0a00',
+            border: 'none', borderRadius: 12, padding: '11px 22px', fontSize: 13.5,
+            fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+            boxShadow: '0 2px 12px rgba(249,171,0,0.35)',
+          }}>
+            See Pricing ⚡
+          </button>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   SECTION HEADER
+───────────────────────────────────────────────────────────────────────────── */
+function SectionHeader({ title, subtitle, action }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 8 }}>
+      <div>
+        <h2 style={{ fontFamily: T.fontDisplay, fontSize: 'clamp(19px, 2.4vw, 25px)', fontWeight: 800, color: T.gray900, letterSpacing: '-0.6px', marginBottom: 4 }}>{title}</h2>
+        {subtitle && <p style={{ fontSize: 13.5, color: T.gray600 }}>{subtitle}</p>}
+      </div>
+      {action && (
+        <button onClick={action.onClick} style={{ background: 'none', border: `1.5px solid ${T.gray200}`, borderRadius: 50, padding: '7px 16px', fontSize: 13, fontWeight: 600, color: T.gray800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = T.green; e.currentTarget.style.color = T.green }}
+          onMouseLeave={e => { e.currentTarget.style.borderColor = T.gray200; e.currentTarget.style.color = T.gray800 }}
+        >{action.label} {Icon.chevR(14)}</button>
+      )}
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   LISTING CARD — "featured" gets a visibly larger gold-bordered treatment
+   per the brief ("Featured Listings: Large premium cards. Bigger than
+   normal listings. Gold featured badge.")
+───────────────────────────────────────────────────────────────────────────── */
+function PremiumListingCard({ listing, onClick, delay = 0, large = false }) {
+  const [hov, setHov]     = useState(false)
+  const [liked, setLiked] = useState(false)
+  const [imgErr, setImgErr] = useState(false)
+
+  const price   = isFlashActive(listing) ? listing.flash_sale_price : listing.price
+  const isFlash = isFlashActive(listing)
+  const isVerif = listing.seller_verified || listing.shop_is_verified
+  const isFeat  = listing.featured || listing.is_featured
+
+  function handleLike(e) { e.stopPropagation(); setLiked(l => !l) }
+
+  return (
+    <div onClick={onClick} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} className="soko-card-bg" style={{
+      background: T.white, borderRadius: 12, overflow: 'hidden', cursor: 'pointer',
+      border: isFeat
+        ? `2px solid ${hov ? T.amber : 'transparent'}`
+        : `1px solid ${hov ? T.gray200 : T.gray100}`,
+      boxShadow: hov ? (isFeat ? '0 8px 24px rgba(249,171,0,0.25)' : T.shadowMd) : T.shadow,
+      transform: hov ? 'translateY(-3px)' : 'none',
+      transition: 'all 0.2s ease', animation: `fadeUp 0.4s ease ${delay}s both`,
+      display: 'flex', flexDirection: 'column', height: 220,
+    }}>
+      <div style={{ width: '100%', height: '62%', flexShrink: 0, overflow: 'hidden', position: 'relative', background: T.gray100, borderRadius: '12px 12px 0 0' }}>
+        {listing.images?.[0] && !imgErr
+          ? <img src={listing.images[0]} alt={listing.title} onError={() => setImgErr(true)} style={{ width: '100%', height: '100%', objectFit: 'cover', transform: hov ? 'scale(1.07)' : 'scale(1)', transition: 'transform 0.5s cubic-bezier(0.34,1.2,0.64,1)' }} />
+          : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40, color: T.gray400, background: T.gray100 }}>{catIcon(listing.category).emoji}</div>
+        }
+        {isFeat && (
+          <div style={{ position: 'absolute', top: 10, left: 10, background: `linear-gradient(135deg,${T.amber},#e09800)`, color: '#1a0a00', borderRadius: 50, padding: '3px 10px', fontSize: 10, fontWeight: 900, boxShadow: '0 2px 8px rgba(249,171,0,0.4)', display: 'flex', alignItems: 'center', gap: 4 }}>
+            ⭐ FEATURED
+          </div>
+        )}
+        {isFlash && !isFeat && (
+          <div style={{ position: 'absolute', top: 10, left: 10, background: T.red, color: '#fff', borderRadius: 50, padding: '3px 10px', fontSize: 10, fontWeight: 800, boxShadow: '0 2px 8px rgba(234,67,53,0.4)', display: 'flex', alignItems: 'center', gap: 4 }}>{Icon.fire(11)} FLASH</div>
+        )}
+        
       </div>
 
-      {/* Plus button */}
-      <div style={{
-        position: 'absolute', top: '50%', left: '50%',
-        transform: 'translate(-50%, -60%)',
-        width: 48, height: 48, borderRadius: '50%',
-        background: 'rgba(255,255,255,0.22)', backdropFilter: 'blur(10px)',
-        border: '2px solid rgba(255,255,255,0.45)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 24, color: '#fff', fontWeight: 900,
-      }}>+</div>
-
-      {/* Bottom label */}
-      <div style={{
-        position: 'absolute', bottom: 0, left: 0, right: 0,
-        padding: '0 12px 16px', textAlign: 'center',
-      }}>
-        <div style={{ fontSize: 13, fontWeight: 800, color: '#fff', textShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>Create Story</div>
-        <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.7)', marginTop: 2 }}>Showcase your products</div>
+      <div style={{ padding: '8px 10px 8px', background: '#fff', height: '38%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+        <div style={{ fontSize: 12, fontWeight: 600, color: T.gray900, lineHeight: 1.3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical' }}>{listing.title}</div>
+        <div style={{ fontSize: 14, fontWeight: 800, color: T.gray900, letterSpacing: '-0.3px' }}>{formatPrice(price)}</div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, color: T.gray600 }}>
+            <span style={{ color: T.green }}>{Icon.pin(13)}</span>
+            <span>{listing.city || 'Malawi'}</span>
+          </div>
+          {isVerif && Icon.verify(13)}
+        </div>
       </div>
     </div>
   )
 }
 
-function LiveStoryCard({ story, index, isOwn, viewed, onClick }) {
-  const [hov, setHov] = useState(false)
-  const name    = story.profiles?.full_name || 'Seller'
-  const avatar  = story.profiles?.avatar_url
-  const media   = story.media_urls?.[0]
-  const cat     = getCatColor(story.category || story.status_type)
-  const ring    = isOwn ? T.green : (!viewed ? T.amber : '#475569')
-  const views   = story.view_count || 0
-  const handle  = isOwn ? '@me' : `@${story.profiles?.username || 'seller'}`
-
-  const GRADS = [
-    'linear-gradient(160deg,#0a2e1a,#1a7a4a)',
-    'linear-gradient(160deg,#0d1b2a,#1a3a6c)',
-    'linear-gradient(160deg,#1a0a00,#6a2800)',
-    'linear-gradient(160deg,#1a0a2e,#4a1a7a)',
-    'linear-gradient(160deg,#0a1a2e,#1a5a6a)',
-  ]
-
+function SkeletonListingCard({ large = false }) {
   return (
-    <div
-      onClick={onClick}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      style={{
-        flexShrink: 0, width: 160, height: 280, borderRadius: 20,
-        overflow: 'hidden', position: 'relative', cursor: 'pointer',
-        background: GRADS[index % GRADS.length],
-        border: `2.5px solid ${ring}`,
-        boxShadow: !viewed && !isOwn
-          ? `0 0 0 3px rgba(249,168,37,0.18), 0 4px 18px rgba(0,0,0,0.25)`
-          : '0 3px 14px rgba(0,0,0,0.22)',
-        transform: hov ? 'translateY(-5px) scale(1.02)' : 'none',
-        transition: 'all 0.22s cubic-bezier(0.34,1.2,0.64,1)',
-      }}
-    >
-      {/* Bg image */}
-      {media && (
-        <img src={media} alt="" style={{
-          position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover',
-          transform: hov ? 'scale(1.08)' : 'scale(1.02)',
-          transition: 'transform 0.5s cubic-bezier(0.34,1.2,0.64,1)',
-        }} />
-      )}
-
-      {/* Gradient overlay */}
-      <div style={{
-        position: 'absolute', inset: 0,
-        background: 'linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, transparent 35%, rgba(0,0,0,0.8) 100%)',
-        zIndex: 1,
-      }} />
-
-      {/* Top: avatar + handle + time */}
-      <div style={{
-        position: 'absolute', top: 10, left: 10, right: 10,
-        zIndex: 5, display: 'flex', alignItems: 'center', gap: 6,
-      }}>
-        <div style={{
-          width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-          border: `2px solid ${ring}`, overflow: 'hidden',
-          background: `linear-gradient(135deg, ${T.green}, ${T.greenD})`,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 10, fontWeight: 800, color: '#fff',
-        }}>
-          {avatar
-            ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            : (name[0] || 'S').toUpperCase()
-          }
-        </div>
-        <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{
-            fontSize: 9.5, fontWeight: 800, color: '#fff',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            textShadow: '0 1px 3px rgba(0,0,0,0.7)',
-          }}>{handle}</div>
-          <div style={{ fontSize: 8.5, color: 'rgba(255,255,255,0.65)' }}>{timeAgo(story.created_at)}</div>
-        </div>
-      </div>
-
-      {/* Trending badge */}
-      {views > 5 && (
-        <div style={{
-          position: 'absolute', top: 10, right: 10,
-          zIndex: 5,
-          background: 'rgba(234,67,53,0.85)', backdropFilter: 'blur(4px)',
-          borderRadius: 50, padding: '2px 7px',
-          fontSize: 7.5, fontWeight: 900, color: '#fff', letterSpacing: 0.5,
-        }}>🔥 HOT</div>
-      )}
-
-      {/* Bottom: caption + cat + views */}
-      <div style={{
-        position: 'absolute', bottom: 0, left: 0, right: 0,
-        zIndex: 5, padding: '0 10px 12px',
-      }}>
-        {story.content && (
-          <p style={{
-            fontSize: 10.5, fontWeight: 700, color: '#fff',
-            lineHeight: 1.4, marginBottom: 8,
-            display: '-webkit-box', WebkitLineClamp: 2,
-            WebkitBoxOrient: 'vertical', overflow: 'hidden',
-            textShadow: '0 1px 4px rgba(0,0,0,0.7)',
-          }}>{story.content}</p>
-        )}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{
-            background: cat.bg, color: cat.text,
-            borderRadius: 50, padding: '2px 8px',
-            fontSize: 7.5, fontWeight: 900, letterSpacing: 0.5, textTransform: 'uppercase',
-          }}>{cat.label}</div>
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 3,
-            fontSize: 9.5, fontWeight: 700, color: 'rgba(255,255,255,0.8)',
-          }}>
-            {Icon.eye(10)}{views}
-          </div>
-        </div>
-      </div>
-
-      {/* Hover overlay */}
-      <div style={{
-        position: 'absolute', inset: 0, zIndex: 10,
-        background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(3px)',
-        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10,
-        opacity: hov ? 1 : 0, transition: 'opacity 0.2s',
-        pointerEvents: hov ? 'all' : 'none',
-      }}>
-        <div style={{
-          width: 44, height: 44, borderRadius: '50%',
-          background: T.green,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: '0 2px 14px rgba(0,0,0,0.5)',
-          fontSize: 18,
-        }}>▶</div>
-        <span style={{ fontSize: 9, fontWeight: 800, color: 'rgba(255,255,255,0.85)', textTransform: 'uppercase', letterSpacing: 1 }}>Open Story</span>
+    <div style={{ background: T.white, borderRadius: 20, overflow: 'hidden', border: `1px solid ${T.gray100}`, height: large ? 360 : 320, display: 'flex', flexDirection: 'column' }}>
+      <div className="skeleton" style={{ width: '100%', height: '75%' }} />
+      <div style={{ padding: '8px 12px', height: '25%', display: 'flex', flexDirection: 'column', gap: 6, background: '#fff' }}>
+        <div className="skeleton" style={{ height: 22, width: '50%' }} />
+        <div className="skeleton" style={{ height: 14, width: '90%' }} />
+        <div className="skeleton" style={{ height: 12, width: '60%' }} />
       </div>
     </div>
   )
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   LISTING CARDS
+   LIVE STORIES CARD — compact boxed card matching the reference exactly:
+   circular avatars in a row, "View all" link, "Create Story" CTA. This is
+   a thin presentational wrapper around the same fetchAllActiveStories data
+   HomeStatusRow uses, but sized for the side-column slot next to Featured
+   Listings rather than HomeStatusRow's full-width dark bar (which has
+   200×340px cards and wouldn't fit this slot). Clicking a story or
+   "Create Story" defers to the parent's handlers, which open the real
+   StoryViewer / StatusUploadModal already wired up in HomeStatusRow.
 ───────────────────────────────────────────────────────────────────────────── */
-function PremiumListingCard({ listing, userId, onClick, delay = 0 }) {
-  const [hov,     setHov]     = useState(false)
-  const [liked,   setLiked]   = useState(false)
-  const [imgErr,  setImgErr]  = useState(false)
+function LiveStoriesCard({ navigate, stories, loading, onOpenStory, onCreateStory }) {
+  const groups = useMemo(() => {
+    const seen = new Map()
+    for (const s of stories) {
+      if (!seen.has(s.user_id)) seen.set(s.user_id, s)
+    }
+    return [...seen.values()].slice(0, 4)
+  }, [stories])
 
-  const price   = isFlashActive(listing) ? listing.flash_sale_price : listing.price
-  const isFlash = isFlashActive(listing)
-  const isVerif = listing.seller_verified || listing.featured || listing.is_featured
+  const RING_COLORS = ['linear-gradient(135deg,#0F9D58,#0a7a44)', '#ea4335', '#1A73E8', '#7c5cff']
+
+  return (
+    <div className="soko-card-bg" style={{ background: '#fff', borderRadius: 18, border: `1px solid ${T.gray200}`, boxShadow: T.shadow, padding: 18, height: '100%', display: 'flex', flexDirection: 'column' }}>
+     
+
+      <div style={{ display: 'flex', gap: 14, marginBottom: 16, flexWrap: 'wrap' }}>
+        {loading
+          ? [1,2,3,4].map(i => <div key={i} className="skeleton" style={{ width: 52, height: 52, borderRadius: '50%' }} />)
+          : groups.length > 0
+            ? groups.map((s, i) => (
+              <button key={s.user_id} onClick={() => onOpenStory(s)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: 56 }}>
+                <div style={{ position:'relative', width:52, height:52 }}>
+  <div style={{ width:52, height:52, borderRadius:'50%', padding:2, background:RING_COLORS[i % RING_COLORS.length], display:'flex', alignItems:'center', justifyContent:'center' }}>
+    <div style={{ width:'100%', height:'100%', borderRadius:'50%', overflow:'hidden', border:'2px solid #fff', background:T.gray100, display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, fontWeight:800, color:T.gray600 }}>
+      {s.profiles?.avatar_url
+        ? <img src={s.profiles.avatar_url} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+        : (s.profiles?.full_name?.[0] || 'S').toUpperCase()
+      }
+    </div>
+  </div>
+  {i === 0 && (
+    <div style={{ position:'absolute', bottom:-6, left:'50%', transform:'translateX(-50%)', background:T.red, color:'#fff', fontSize:8, fontWeight:800, borderRadius:50, padding:'2px 5px', whiteSpace:'nowrap', border:'1.5px solid #fff' }}>+LIVE</div>
+  )}
+</div>
+                <span style={{ fontSize: 10, fontWeight: 600, color: T.gray800, maxWidth: 56, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {s.profiles?.full_name?.split(' ')[0] || 'Seller'}
+                </span>
+              </button>
+            ))
+            : <p style={{ fontSize: 12.5, color: T.gray600 }}>No active stories right now.</p>
+        }
+      </div>
+
+      <p style={{ fontSize: 12, color: T.gray600, lineHeight: 1.5, marginBottom: 14, textAlign: 'center' }}>
+        Create a story to showcase your product. Stories disappear in 24 hours.
+      </p>
+
+      <button onClick={onCreateStory} className="soko-btn-primary" style={{ width: '100%', justifyContent: 'center', marginTop: 'auto' }}>
+        {Icon.plus(14)} Create Story
+      </button>
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   FEATURED LISTINGS + LIVE STORIES — two-column row matching the reference:
+   Featured Listings (wide, horizontal scroll) on the left, Live Stories
+   (compact card) on the right.
+───────────────────────────────────────────────────────────────────────────── */
+function FeaturedListingsRow({ listings, navigate, loading, stories, storiesLoading, onOpenStory, onCreateStory }) {
+  const featured = useMemo(() => listings.filter(l => l.featured || l.is_featured), [listings])
+  if (!loading && featured.length === 0) return null
+  return (
+    <section style={{ padding: '24px 20px 4px', background: '#fff' }}>
+      <div style={{ maxWidth: 1400, margin: '0 auto' }}>
+       {/* Shared header row — same grid as content so columns align */}
+        <div className="soko-featured-stories-grid" style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 1fr) 260px',
+          gap: 16,
+          marginBottom: 16,
+        }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+            <span style={{ fontFamily:T.fontDisplay, fontSize:18, fontWeight:800, color:T.gray900 }}>Featured Listings</span>
+            <button onClick={() => navigate('/listings')} style={{ background:'none', border:'none', fontSize:13, fontWeight:600, color:T.green, cursor:'pointer' }}>View all</button>
+          </div>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+            <span style={{ fontFamily:T.fontDisplay, fontSize:18, fontWeight:800, color:T.gray900 }}>Live Stories</span>
+            <button onClick={() => navigate('/status')} style={{ background:'none', border:'none', fontSize:13, fontWeight:600, color:T.green, cursor:'pointer' }}>View all</button>
+          </div>
+        </div>
+
+        <div className="soko-featured-stories-grid" style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 1fr) 260px',
+          gap: 16,
+          alignItems: 'start',
+        }}>
+
+          {/* Featured listings — constrained, never overflows */}
+          <div style={{ minWidth: 0, overflow: 'hidden' }}>
+            <div className="soko-scroll" style={{
+              display: 'flex', gap: 14, overflowX: 'auto',
+              paddingBottom: 8,
+              /* Constrain scroll area so it never pushes the stories column */
+              width: '100%',
+            }}>
+              {loading
+                ? [1,2,3,4].map(i => (
+                   <div key={i} style={{ flexShrink: 0, width: 175 }}>
+  <SkeletonListingCard />
+</div>
+                  ))
+                : featured.slice(0, 10).map((l, i) => (
+                  <div key={l.id} style={{ flexShrink: 0, width: 175 }}>
+  <PremiumListingCard
+    listing={l} delay={i * 0.04}
+    onClick={() => navigate('/listing/' + l.id)}
+  />
+</div>
+                  ))
+              }
+            </div>
+          </div>
+
+          {/* Live Stories — fixed 260px, always visible on desktop */}
+          <div className="soko-nav-desktop" style={{ width: 260, flexShrink: 0 }}>
+            <LiveStoriesCard
+              navigate={navigate} stories={stories}
+              loading={storiesLoading} onOpenStory={onOpenStory}
+              onCreateStory={onCreateStory}
+            />
+          </div>
+
+        </div>
+      </div>
+    </section>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   LATEST LISTINGS — premium discovery grid. Distinct card language from
+   PremiumListingCard's dense scroll-rail style: bigger photo stage (1:1),
+   floating circular wishlist control, soft-glass meta row instead of a
+   gradient-on-image footer, and a "Posted Xh ago" line for freshness scent.
+   "New" (<24h) and "Verified" are separate badge slots so they can co-occur
+   without colliding. 4 / 2 / 1 responsive grid via .soko-latest-grid.
+───────────────────────────────────────────────────────────────────────────── */
+function timeSincePosted(ts) {
+  if (!ts) return ''
+  const diffMs = Date.now() - new Date(ts).getTime()
+  const mins = Math.floor(diffMs / 60000)
+  const hrs  = Math.floor(diffMs / 3600000)
+  const days = Math.floor(diffMs / 86400000)
+  if (mins < 1)   return 'Just now'
+  if (mins < 60)  return `${mins}m ago`
+  if (hrs < 24)   return `${hrs}h ago`
+  if (days < 7)   return `${days}d ago`
+  return `${Math.floor(days / 7)}w ago`
+}
+
+/* Category label shown as a chip on the card — reuses catIcon() emoji/colors
+   already defined for CAT_ICON, mapped to the short display label requested
+   (Vehicle, Electronics, Property, Fashion, etc.) */
+function categoryChipLabel(cat) {
+  const map = {
+    Vehicles: 'Vehicle', Electronics: 'Electronics', Property: 'Property',
+    Clothing: 'Fashion', Agriculture: 'Agriculture', Furniture: 'Furniture',
+    Food: 'Food', Services: 'Services', Jobs: 'Jobs',
+  }
+  return map[cat] || cat || 'Other'
+}
+
+function LatestListingCard({ listing, delay = 0, onClick }) {
+  const [hov, setHov]       = useState(false)
+  const [liked, setLiked]   = useState(false)
+  const [imgErr, setImgErr] = useState(false)
+
+  const isVerif = listing.seller_verified || listing.shop_is_verified
+  const isNew   = listing.created_at && (Date.now() - new Date(listing.created_at).getTime()) < 86400000
+  const meta    = catIcon(listing.category)
+  const trustCount = listing.view_count ?? listing.inquiry_count ?? null
 
   function handleLike(e) {
     e.stopPropagation()
@@ -1073,152 +1288,118 @@ function PremiumListingCard({ listing, userId, onClick, delay = 0 }) {
       onClick={onClick}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
-      className="soko-card-bg"
       style={{
         background: T.white,
-        borderRadius: 20,
+        borderRadius: T.radius,
         overflow: 'hidden',
         cursor: 'pointer',
-        border: `1px solid ${hov ? T.gray200 : T.gray100}`,
-        boxShadow: hov ? T.shadowMd : T.shadow,
-        transform: hov ? 'translateY(-4px) scale(1.01)' : 'none',
-        transition: 'all 0.22s cubic-bezier(0.34,1.2,0.64,1)',
-        animation: `fadeUp 0.4s ease ${delay}s both`,
+        border: `1px solid ${hov ? '#cdeedc' : T.gray100}`,
+        boxShadow: hov ? '0 18px 40px rgba(15,23,42,0.14), 0 6px 14px rgba(15,157,88,0.10)' : T.shadow,
+        transform: hov ? 'translateY(-6px)' : 'translateY(0)',
+        transition: 'transform 0.32s cubic-bezier(0.22,1,0.36,1), box-shadow 0.32s ease, border-color 0.32s ease',
+        animation: `fadeUp 0.5s cubic-bezier(0.22,1,0.36,1) ${delay}s both`,
+        display: 'flex', flexDirection: 'column',
       }}
     >
-      {/* Image */}
-      <div style={{
-        width: '100%', aspectRatio: '4/3', overflow: 'hidden',
-        position: 'relative', background: T.gray100,
-      }}>
-        {listing.images?.[0] && !imgErr
-          ? <img
-              src={listing.images[0]}
-              alt={listing.title}
-              onError={() => setImgErr(true)}
-              style={{
-                width: '100%', height: '100%', objectFit: 'cover',
-                transform: hov ? 'scale(1.07)' : 'scale(1)',
-                transition: 'transform 0.5s cubic-bezier(0.34,1.2,0.64,1)',
-              }}
-            />
-          : <div style={{
-              width: '100%', height: '100%',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 40, color: T.gray400,
-              background: T.gray100,
-            }}>
-              {CAT_META[listing.category]?.emoji || '📦'}
-            </div>
-        }
-
-        {/* Flash badge */}
-        {isFlash && (
-          <div style={{
-            position: 'absolute', top: 10, left: 10,
-            background: T.red, color: '#fff',
-            borderRadius: 50, padding: '3px 10px',
-            fontSize: 10, fontWeight: 800,
-            boxShadow: '0 2px 8px rgba(234,67,53,0.4)',
-            display: 'flex', alignItems: 'center', gap: 4,
-          }}>
-            {Icon.fire(11)} FLASH
+      {/* Photo stage — ~65% of card height via a fixed-height band rather than
+          aspect-ratio, so the body (title/price/meta) keeps a consistent height
+          across cards regardless of image shape. */}
+      <div style={{ position: 'relative', width: '100%', height: 168, flexShrink: 0, overflow: 'hidden', background: T.gray100 }}>
+        {listing.images?.[0] && !imgErr ? (
+          <img
+            src={listing.images[0]}
+            alt={listing.title}
+            loading="lazy"
+            decoding="async"
+            onError={() => setImgErr(true)}
+            style={{
+              width: '100%', height: '100%', objectFit: 'cover',
+              transform: hov ? 'scale(1.07)' : 'scale(1)',
+              transition: 'transform 0.5s cubic-bezier(0.22,1,0.36,1)',
+            }}
+          />
+        ) : (
+          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 38, color: T.gray400 }}>
+            {meta.emoji}
           </div>
         )}
 
-        {/* Favorite button */}
+        {/* Badge slots: NEW always occupies the top slot when present. Verified
+            moved off the image entirely (see body) so it reads as a fact about
+            the seller, not a loud overlay competing with the photo. */}
+        {isNew && (
+          <span style={{
+            position: 'absolute', top: 10, left: 10, zIndex: 3,
+            display: 'inline-flex', alignItems: 'center',
+            height: 21, boxSizing: 'border-box',
+            background: T.green, color: '#fff', borderRadius: 50,
+            padding: '0 9px 0 8px', fontSize: 9.5, fontWeight: 800, lineHeight: 1,
+            letterSpacing: 0.4, boxShadow: '0 3px 10px rgba(15,157,88,0.4)',
+            whiteSpace: 'nowrap',
+          }}>
+            <span style={{ width: 10, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#fff', animation: 'pulse 1.8s ease-in-out infinite' }} />
+            </span>
+            NEW TODAY
+          </span>
+        )}
+
+        {/* Wishlist — floating circular, fills on like */}
         <button
           onClick={handleLike}
+          aria-label={liked ? 'Remove from wishlist' : 'Add to wishlist'}
           style={{
-            position: 'absolute', top: 8, right: 8,
-            width: 34, height: 34, borderRadius: '50%',
-            background: 'rgba(255,255,255,0.92)',
-            backdropFilter: 'blur(8px)',
-            border: 'none', cursor: 'pointer',
+            position: 'absolute', top: 9, right: 9, zIndex: 4,
+            width: 30, height: 30, borderRadius: '50%', border: 'none', cursor: 'pointer',
+            background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(6px)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: liked ? T.red : T.gray400,
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-            transition: 'transform 0.15s, color 0.15s',
-            transform: liked ? 'scale(1.15)' : 'scale(1)',
+            color: liked ? T.red : T.gray700,
+            boxShadow: '0 3px 10px rgba(0,0,0,0.15)',
+            transform: hov || liked ? 'scale(1)' : 'scale(0.92)',
+            opacity: hov || liked ? 1 : 0.88,
+            transition: 'transform 0.2s cubic-bezier(0.34,1.4,0.64,1), opacity 0.2s, color 0.2s',
           }}
         >
-          {Icon.heart(16, liked ? T.red : 'none')}
+          {Icon.heart(14, liked ? 'currentColor' : 'none')}
         </button>
-
-        {/* Condition tag */}
-        {listing.condition && (
-          <div style={{
-            position: 'absolute', bottom: 8, left: 8,
-            background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(6px)',
-            color: '#fff', borderRadius: 50, padding: '3px 9px',
-            fontSize: 10, fontWeight: 600,
-          }}>
-            {listing.condition}
-          </div>
-        )}
       </div>
 
-      {/* Info */}
-      <div style={{ padding: '12px 14px 14px', background: '#ffffff' }}>
-        {/* Price */}
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 7, marginBottom: 5 }}>
+      {/* Body — title first, then price, then location/time. Verified now lives
+          here as a small inline mark next to the title, not a loud image badge. */}
+      <div style={{ padding: '13px 14px 14px', display: 'flex', flexDirection: 'column', gap: 7, flex: 1 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
           <span style={{
-            fontFamily: T.fontDisplay,
-            fontSize: 17, fontWeight: 800,
-            color: isFlash ? T.red : T.gray900,
-            letterSpacing: '-0.5px',
+            fontSize: 13.5, fontWeight: 700, color: T.gray900, lineHeight: 1.3,
+            overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical',
+            minWidth: 0,
           }}>
-            {formatPrice(price)}
+            {listing.title}
           </span>
-          {isFlash && listing.price && (
-            <span style={{
-              fontSize: 12, color: T.gray400,
-              textDecoration: 'line-through',
-            }}>{formatPrice(listing.price)}</span>
-          )}
-          {listing.price_type === 'negotiable' && (
-            <span style={{
-              fontSize: 10, color: T.green, fontWeight: 600,
-              background: T.greenL, borderRadius: 50,
-              padding: '1px 7px',
-            }}>Nego</span>
-          )}
-        </div>
-
-        {/* Title */}
-        <div style={{
-          fontSize: 13.5, fontWeight: 600, color: T.gray900,
-          lineHeight: 1.35, marginBottom: 8,
-          display: '-webkit-box', WebkitLineClamp: 2,
-          WebkitBoxOrient: 'vertical', overflow: 'hidden',
-        }}>{listing.title}</div>
-
-        {/* Meta row */}
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          fontSize: 11.5, color: T.gray600,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-            <span style={{ color: T.green }}>{Icon.pin(11)}</span>
-            <span style={{ fontWeight: 500 }}>{listing.city || 'Malawi'}</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-            {Icon.clock(11)}{timeAgo(listing.created_at)}
-          </div>
-        </div>
-
-        {/* Verified row */}
-        {isVerif && (
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 4,
-            marginTop: 8, paddingTop: 8,
-            borderTop: `1px solid ${T.gray100}`,
-            fontSize: 11, fontWeight: 600, color: T.blue,
-          }}>
-            {Icon.verify(13)} Verified Seller
-            <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 3, color: T.gray600, fontWeight: 500 }}>
-              {Icon.eye(11)} {listing.view_count || Math.floor(Math.random()*80+10)}
+          {isVerif && (
+            <span title="Verified seller" style={{ flexShrink: 0, display: 'flex', opacity: 0.9 }}>
+              {Icon.verify(13)}
             </span>
+          )}
+        </div>
+
+        <div style={{ fontFamily: T.fontDisplay, fontSize: 16.5, fontWeight: 800, color: T.greenD, letterSpacing: '-0.3px' }}>
+          {formatPrice(listing.price)}
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, color: T.gray600 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <span style={{ color: T.green, flexShrink: 0, display: 'flex' }}>{Icon.pin(11)}</span>
+            {listing.city || 'Malawi'}
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, color: T.gray500 }}>
+            {Icon.clock(10)} {timeSincePosted(listing.created_at)}
+          </span>
+        </div>
+
+        {/* Trust indicator — views or inquiries, only renders if data exists */}
+        {trustCount != null && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10.5, color: T.gray500, paddingTop: 2, borderTop: `1px solid ${T.gray100}`, marginTop: 1 }}>
+            {Icon.eye(11)} {trustCount.toLocaleString()} {listing.view_count != null ? 'views' : 'inquiries'}
           </div>
         )}
       </div>
@@ -1226,122 +1407,89 @@ function PremiumListingCard({ listing, userId, onClick, delay = 0 }) {
   )
 }
 
-function SkeletonListingCard() {
+function SkeletonLatestCard() {
   return (
-    <div style={{
-      background: T.white, borderRadius: 20, overflow: 'hidden',
-      border: `1px solid ${T.gray100}`,
-    }}>
-      <div className="skeleton" style={{ width: '100%', aspectRatio: '4/3' }} />
-      <div style={{ padding: '12px 14px 14px', display: 'flex', flexDirection: 'column', gap: 8, background: '#ffffff' }}>
-        <div className="skeleton" style={{ height: 22, width: '50%' }} />
-        <div className="skeleton" style={{ height: 14, width: '90%' }} />
-        <div className="skeleton" style={{ height: 14, width: '70%' }} />
-        <div className="skeleton" style={{ height: 12, width: '60%' }} />
+    <div style={{ background: T.white, borderRadius: T.radius, overflow: 'hidden', border: `1px solid ${T.gray100}` }}>
+      <div className="skeleton" style={{ width: '100%', height: 168 }} />
+      <div style={{ padding: '13px 14px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div className="skeleton" style={{ height: 14, width: '80%', borderRadius: 6 }} />
+        <div className="skeleton" style={{ height: 17, width: '45%', borderRadius: 6 }} />
+        <div className="skeleton" style={{ height: 11, width: '60%', borderRadius: 6 }} />
       </div>
     </div>
   )
 }
 
-/* ─────────────────────────────────────────────────────────────────────────────
-   LISTINGS SECTION (tabbed)
-───────────────────────────────────────────────────────────────────────────── */
-function ListingsSection({ listings, loading, user, navigate, search, activeCategory, activeDistrict }) {
-  const [tab, setTab] = useState(0)
+function LatestListingsSection({ listings, navigate, loading }) {
+  const PAGE_SIZE = 8
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
 
-  const tabs = [
-  { label: '🛍️ All',       key: 'all' },
-  { label: '🔥 Trending', key: 'trending' },
-  { label: '⭐ Featured',  key: 'featured' },
-  { label: '🆕 Just In',  key: 'recent' },
-  { label: '✓ Verified',  key: 'verified' },
-  { label: '📍 Near You', key: 'nearby' },
-]
-  const filtered = useMemo(() => {
-    if (!listings.length) return []
-    let base = listings
-    if (activeCategory && activeCategory !== 'All')
-      base = base.filter(l => l.category === activeCategory)
-    if (activeDistrict && activeDistrict !== 'All Districts')
-      base = base.filter(l => l.city?.toLowerCase() === activeDistrict.toLowerCase())
-    if (search?.trim())
-      base = base.filter(l =>
-        l.title?.toLowerCase().includes(search.toLowerCase()) ||
-        l.description?.toLowerCase().includes(search.toLowerCase()) ||
-        l.city?.toLowerCase().includes(search.toLowerCase())
-      )
-  switch (tabs[tab].key) {
-  case 'all':      return base.slice(0, 24)
-  case 'trending': return [...base].sort((a,b) => (b.view_count||0)-(a.view_count||0)).slice(0, 12)
-      case 'featured': return base.filter(l => l.featured || l.is_featured).slice(0, 12)
-      case 'recent':   return [...base].sort((a,b) => new Date(b.created_at)-new Date(a.created_at)).slice(0, 12)
-      case 'verified': return base.filter(l => l.seller_verified || l.featured).slice(0, 12)
-      case 'nearby':   return base.filter(l => l.city).slice(0, 12)
-      default:         return base.slice(0, 12)
-    }
-  }, [listings, tab, search, activeCategory, activeDistrict])
+  const sorted = useMemo(() =>
+    [...listings].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)),
+  [listings])
+
+  const latest = sorted.slice(0, visibleCount)
+  const hasMore = visibleCount < sorted.length
+
+  if (!loading && sorted.length === 0) return null
 
   return (
-    <section id="listings-section" style={{
-      padding: 'clamp(24px, 4vw, 48px) 20px',
-      background: T.gray50,
-    }}>
-      <div style={{ maxWidth: 1400, margin: '0 auto' }}>
-        <SectionHeader
-          title="Marketplace Listings"
-          subtitle="Thousands of deals updated daily"
-action={{ label: 'See all listings', onClick: () => document.getElementById('listings-section')?.scrollIntoView({ behavior: 'smooth' }) }}        />
+    <section style={{ padding: '0 20px clamp(28px,4.5vw,48px) 20px', background: T.gray50 }}>
+      <style>{`
+        .soko-latest-grid {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 24px;
+        }
+        @media (max-width: 980px) {
+          .soko-latest-grid { grid-template-columns: repeat(2, 1fr); gap: 18px; }
+        }
+        @media (max-width: 560px) {
+          .soko-latest-grid { grid-template-columns: 1fr; gap: 16px; }
+        }
+      `}</style>
 
-        {/* Tabs */}
-        <div
-          className="soko-scroll"
-          style={{
-            display: 'flex', gap: 8,
-            overflowX: 'auto', marginBottom: 24,
-          }}
-        >
-          {tabs.map((t, i) => (
-            <button
-              key={t.key}
-              className={`soko-tab${tab === i ? ' active' : ''}`}
-              onClick={() => setTab(i)}
-            >{t.label}</button>
-          ))}
+      <div style={{ maxWidth: 1400, margin: '0 auto' }}>
+        <div style={{
+          display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
+          marginBottom: 24, flexWrap: 'wrap', gap: 12,
+        }}>
+          <div>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: T.green, boxShadow: `0 0 0 4px ${T.greenL}` }} />
+              <span style={{ fontSize: 11.5, fontWeight: 800, color: T.green, letterSpacing: 0.8, textTransform: 'uppercase' }}>Updated daily</span>
+            </div>
+            <h2 style={{ fontFamily: T.fontDisplay, fontSize: 'clamp(20px, 2.6vw, 27px)', fontWeight: 800, color: T.gray900, letterSpacing: '-0.6px', marginBottom: 5 }}>
+              Latest Listings
+            </h2>
+            <p style={{ fontSize: 13.5, color: T.gray600 }}>Fresh products added across Malawi</p>
+          </div>
+
+          <button
+            onClick={() => navigate('/listings')}
+            className="soko-btn-primary"
+            style={{ background: T.green, fontSize: 13.5, padding: '11px 22px', flexShrink: 0 }}
+            onMouseEnter={e => e.currentTarget.style.background = T.greenD}
+            onMouseLeave={e => e.currentTarget.style.background = T.green}
+          >
+            View All Listings {Icon.chevR(15)}
+          </button>
         </div>
 
-        {/* Grid */}
-        <div
-          className="soko-listings-grid"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
-            gap: 16,
-          }}
-        >
+        <div className="soko-scroll" style={{ display: 'flex', gap: 16, overflowX: 'auto', paddingBottom: 8 }}>
           {loading
-            ? [1,2,3,4,5,6].map(i => <SkeletonListingCard key={i} />)
-            : filtered.length > 0
-              ? filtered.map((l, i) => (
-                  <PremiumListingCard
-                    key={l.id}
+            ? Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} style={{ flexShrink: 0, width: 200 }}><SkeletonLatestCard /></div>
+              ))
+            : sorted.map((l, i) => (
+                <div key={l.id} style={{ flexShrink: 0, width: 200 }}>
+                  <LatestListingCard
                     listing={l}
-                    userId={user?.id}
-                    delay={i * 0.03}
+                    delay={i * 0.04}
                     onClick={() => navigate('/listing/' + l.id)}
                   />
-                ))
-              : (
-                <div style={{
-                  gridColumn: '1/-1', textAlign: 'center', padding: '60px 24px',
-                }}>
-                  <div style={{ fontSize: 48, marginBottom: 12 }}>🔍</div>
-                  <p style={{ fontSize: 16, fontWeight: 700, color: T.gray800 }}>No listings yet</p>
-                  <p style={{ fontSize: 13, color: T.gray600, marginTop: 6 }}>Be the first to post in this category!</p>
-                  <button className="soko-btn-primary" onClick={() => navigate('/post')} style={{ marginTop: 20 }}>
-                    {Icon.plus(14)} Post a Listing
-                  </button>
                 </div>
-              )
+              ))
           }
         </div>
       </div>
@@ -1349,452 +1497,1001 @@ action={{ label: 'See all listings', onClick: () => document.getElementById('lis
   )
 }
 
-function LookingForBanner({ navigate, listings }) {
-  const [hovPost, setHovPost] = useState(false)
+/* ─────────────────────────────────────────────────────────────────────────────
+   LISTINGS SECTION (tabbed) — "Marketplace Listings"
+───────────────────────────────────────────────────────────────────────────── */
 
-  const featured = useMemo(() =>
-    listings.filter(l => (l.featured || l.is_featured) && l.images?.[0]).slice(0, 8),
-  [listings])
 
-  const [slide, setSlide] = useState(0)
-  const [paused, setPaused] = useState(false)
-  const total = featured.length
+/**
+ * LookingForSection — drop-in replacement
+ * Icons replaced with inline SVGs matching the reference image exactly.
+ * Replace everything from `function RequestCard` through closing `}` of
+ * `function LookingForSection` in Home.jsx.
+ */
 
-  useEffect(() => {
-    if (paused || total < 2) return
-    const t = setInterval(() => setSlide(s => (s + 1) % total), 4000)
-    return () => clearInterval(t)
-  }, [paused, total])
+/* ── Inline SVG icon set matching the reference ─────────────────────────── */
+const CatSVG = {
+  all: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/>
+      <rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>
+    </svg>
+  ),
+  Vehicles: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 17H3a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h14l3 4v4a2 2 0 0 1-2 2h-2"/>
+      <circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/>
+    </svg>
+  ),
+  Electronics: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="7" y="2" width="10" height="20" rx="2.2"/><line x1="11" y1="18" x2="13" y2="18"/>
+    </svg>
+  ),
+  Property: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 2.5L2 11h3v9h6v-6h2v6h6v-9h3z"/>
+    </svg>
+  ),
+  Clothing: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M8 3L4 6l1.5 3L8 7.5V21h8V7.5l2.5 1.5L20 6l-4-3-2 2h-4z"/>
+    </svg>
+  ),
+  Agriculture: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M5 21c0-9 5-15 14-16-1 9-7 14-16 16z"/>
+      <path d="M5 21c2-4 5-7 9-9"/>
+    </svg>
+  ),
+  Furniture: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 7h18v10H3z"/><path d="M5 17v2"/><path d="M19 17v2"/><path d="M3 12h18"/>
+    </svg>
+  ),
+  Food: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/>
+      <line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/>
+    </svg>
+  ),
+  Services: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+    </svg>
+  ),
+  Jobs: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
+    </svg>
+  ),
+  Other: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="2" width="20" height="20" rx="3"/><circle cx="12" cy="12" r="3"/>
+    </svg>
+  ),
+}
 
-  function goTo(i) { setSlide(((i % total) + total) % total) }
-  function next() { setSlide(s => (s + 1) % total) }
-  function prev() { setSlide(s => ((s - 1) + total) % total) }
+function getCatSVG(cat) { return CatSVG[cat] || CatSVG.Other }
 
-  const cur = featured[slide]
+/* Fallback emoji for card image placeholder only */
+const CAT_FALLBACK_EMOJI = {
+  Vehicles:'🚘', Electronics:'📱', Property:'🏡', Clothing:'👔',
+  Agriculture:'🌿', Furniture:'🛋️', Food:'🍜', Services:'⚡', Jobs:'💼',
+}
+function catFallbackEmoji(cat) { return CAT_FALLBACK_EMOJI[cat] || '📦' }
+
+/* ── Priority badge config ───────────────────────────────────────────────── */
+const PRIORITY = {
+  urgent:     { label: 'Urgent',      badgeBg: '#ef4444', badgeFg: '#fff' },
+  highbudget: { label: 'High Budget', badgeBg: '#7c3aed', badgeFg: '#fff' },
+  new:        { label: 'New',         badgeBg: '#3b82f6', badgeFg: '#fff' },
+}
+
+function getPriority(r) {
+  if (r.urgency === 'urgent') return 'urgent'
+  if (r.budget && Number(r.budget) >= 300_000) return 'highbudget'
+  return 'new'
+}
+
+function expiryInfo(r) {
+  const exp = r.expires_at || r.deadline
+  if (!exp) return { label: 'Open', color: '#16a34a', bg: '#f0fdf4', dotColor: '#16a34a' }
+  const days = Math.ceil((new Date(exp) - Date.now()) / 86400000)
+  if (days <= 0)  return { label: 'Closing today',    color: '#ef4444', bg: '#fef2f2', dotColor: '#ef4444' }
+  if (days === 1) return { label: 'Closing in 1 day', color: '#ef4444', bg: '#fef2f2', dotColor: '#ef4444' }
+  if (days <= 3)  return { label: 'Closing Soon',     color: '#f59e0b', bg: '#fffbeb', dotColor: '#f59e0b' }
+  return { label: `Expires in ${days} days`, color: '#7c3aed', bg: '#faf5ff', dotColor: '#7c3aed' }
+}
+
+/* Category colors for chips & card badges */
+function catColors(cat) {
+  const m = {
+    Vehicles:    { bg:'#e9f7ec', fg:'#16a34a' },
+    Electronics: { bg:'#eff6ff', fg:'#2563eb' },
+    Property:    { bg:'#fff7ed', fg:'#ea580c' },
+    Clothing:    { bg:'#fdf4ff', fg:'#9333ea' },
+    Agriculture: { bg:'#f0fdf4', fg:'#15803d' },
+    Furniture:   { bg:'#fffbeb', fg:'#d97706' },
+    Food:        { bg:'#fff1f2', fg:'#e11d48' },
+    Services:    { bg:'#f0fdf4', fg:'#0a7a44' },
+    Jobs:        { bg:'#eff6ff', fg:'#2563eb' },
+  }
+  return m[cat] || { bg:'#f8fafc', fg:'#64748b' }
+}
+
+/* Category filter tabs */
+const CAT_FILTERS = [
+  { key: 'all',         label: 'All Requests' },
+  { key: 'Vehicles',    label: 'Vehicles'     },
+  { key: 'Electronics', label: 'Electronics'  },
+  { key: 'Property',    label: 'Property'     },
+  { key: 'Clothing',    label: 'Fashion'      },
+  { key: 'Agriculture', label: 'Agriculture'  },
+]
+
+function catLabel(cat) {
+  const m = { Vehicles:'Vehicles', Electronics:'Electronics', Property:'Property', Clothing:'Fashion & Home', Agriculture:'Agriculture', Furniture:'Furniture', Food:'Food', Services:'Services', Jobs:'Jobs' }
+  return m[cat] || cat || 'Other'
+}
+
+/* ── Expiry clock SVG ── */
+const ClockSVG = ({ color }) => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round">
+    <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+  </svg>
+)
+/* ── Chat SVG ── */
+const ChatSVG = ({ color = '#fff', size = 13 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+  </svg>
+)
+/* ── Pin SVG ── */
+const PinSVG = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="#0F9D58">
+    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+  </svg>
+)
+/* ── Checkmark SVG ── */
+const CheckSVG = ({ color = '#16a34a', size = 11 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.8" strokeLinecap="round">
+    <polyline points="20 6 9 17 4 12"/>
+  </svg>
+)
+/* ── Verified shield-check SVG ── */
+const VerifiedSVG = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24">
+    <path fill="#16a34a" d="M12 0a4 4 0 0 1 3.2 1.6 4 4 0 0 1 3.6 1 4 4 0 0 1 1 3.6A4 4 0 0 1 21.4 9.4a4 4 0 0 1 0 5.2A4 4 0 0 1 19.8 17.8a4 4 0 0 1-1 3.6 4 4 0 0 1-3.6 1A4 4 0 0 1 12 24a4 4 0 0 1-3.2-1.6 4 4 0 0 1-3.6-1 4 4 0 0 1-1-3.6A4 4 0 0 1 2.6 14.6a4 4 0 0 1 0-5.2A4 4 0 0 1 4.2 6.2a4 4 0 0 1 1-3.6 4 4 0 0 1 3.6-1A4 4 0 0 1 12 0Z"/>
+    <path d="m7.5 12.5 3 3 6-7" stroke="#fff" strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+)
+/* ── Offer bubble SVG ── */
+const OfferSVG = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+  </svg>
+)
+/* ── Heart SVG ── */
+const HeartSVG = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="2" strokeLinecap="round">
+    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+  </svg>
+)
+/* ── Shield check (trust banner) ── */
+const ShieldCheckSVG = () => (
+  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0F9D58" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    <polyline points="9 12 11 14 15 10"/>
+  </svg>
+)
+/* ── Urgent flame SVG ── */
+const FlameSVG = () => (
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="#fff">
+    <path d="M17.66 11.2C17.43 10.9 17.15 10.64 16.89 10.38C16.22 9.78 15.46 9.35 14.82 8.72C13.33 7.26 13 4.85 13.95 3C13 3.23 12.17 3.75 11.46 4.32C8.87 6.4 7.85 10.07 9.07 13.22C9.11 13.32 9.15 13.42 9.15 13.55C9.15 13.77 9 13.97 8.8 14.05C8.57 14.15 8.33 14.09 8.14 13.93C8.08 13.88 8.04 13.83 8 13.76C6.87 12.33 6.69 10.28 7.45 8.64C5.78 10 4.87 12.3 5 14.47C5.06 14.97 5.12 15.47 5.29 15.97C5.43 16.57 5.7 17.17 6 17.7C7.08 19.43 8.95 20.67 10.96 20.92C13.1 21.19 15.39 20.8 17.03 19.32C18.86 17.66 19.5 15 18.56 12.72L18.43 12.46C18.22 12 17.66 11.2 17.66 11.2Z"/>
+  </svg>
+)
+
+/* ─────────────────────────────────────────────────────────────────────────── */
+
+function RequestCard({ request: r, delay = 0, navigate }) {
+  const [hov, setHov] = React.useState(false)
+  const priority = getPriority(r)
+  const pCfg     = PRIORITY[priority]
+  const expiry   = expiryInfo(r)
+  const isVerified = r.buyer_verified || r.requester_verified
+  const cc = catColors(r.category)
 
   return (
-    <div style={{ maxWidth: 1400, margin: '0 auto', padding: '16px 20px 24px' }}>
-      <div style={{
-        position: 'relative', borderRadius: 20, overflow: 'hidden',
-        background: `
-          radial-gradient(ellipse at 0% 100%, rgba(249,171,0,0.15) 0%, transparent 50%),
-          radial-gradient(ellipse at 100% 0%, rgba(15,157,88,0.2) 0%, transparent 50%),
-          linear-gradient(135deg, #0a1f12 0%, #0f2d1a 45%, #0a1a2e 100%)
-        `,
-        border: '1px solid rgba(255,255,255,0.08)',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.25)',
-      }}>
-
-        {/* Grid pattern */}
-        <div style={{
-          position: 'absolute', inset: 0, pointerEvents: 'none',
-          backgroundImage: `linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px)`,
-          backgroundSize: '40px 40px',
-        }} />
-
-        <div style={{
-          position: 'relative', zIndex: 1,
-          display: 'grid', gridTemplateColumns: '1fr 1fr',
-          gap: 24, alignItems: 'center',
-          padding: '24px 28px 36px',
-          overflow: 'hidden',
-        }}>
-
-          {/* ── LEFT ── */}
-          <div>
-            {/* Badge */}
-            <div style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              background: 'rgba(249,171,0,0.12)', border: '1px solid rgba(249,171,0,0.28)',
-              borderRadius: 50, padding: '4px 12px', marginBottom: 12,
-            }}>
-              <span style={{ fontSize: 11 }}>🇲🇼</span>
-              <span style={{ fontSize: 10.5, fontWeight: 800, color: T.amber, letterSpacing: 0.7, textTransform: 'uppercase' }}>
-                Malawi's #1 Marketplace
-              </span>
+    <div
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      onClick={() => navigate('/looking-for')}
+      style={{
+        flexShrink: 0,
+        width: 238,
+        background: '#fff',
+        borderRadius: 16,
+        border: `1px solid ${hov ? '#d1d5db' : '#e5e7eb'}`,
+        boxShadow: hov
+          ? '0 20px 48px rgba(15,23,42,0.16), 0 4px 16px rgba(0,0,0,0.06)'
+          : '0 1px 4px rgba(0,0,0,0.07), 0 4px 16px rgba(0,0,0,0.04)',
+        transform: hov ? 'translateY(-6px) scale(1.012)' : 'translateY(0) scale(1)',
+        transition: 'transform 0.28s cubic-bezier(0.22,1,0.36,1), box-shadow 0.28s ease, border-color 0.2s',
+        animation: `fadeUp 0.45s cubic-bezier(0.22,1,0.36,1) ${delay}s both`,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+        cursor: 'pointer',
+      }}
+    >
+      {/* ── Image + overlay badges ── */}
+      <div style={{ position: 'relative', width: '100%', height: 162, background: '#f3f4f6', flexShrink: 0, overflow: 'hidden' }}>
+        {r.image_url
+          ? <img src={r.image_url} alt={r.title} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', transform: hov ? 'scale(1.06)' : 'scale(1)', transition: 'transform 0.5s cubic-bezier(0.22,1,0.36,1)' }} />
+          : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 46, color: '#9ca3af' }}>
+              {catFallbackEmoji(r.category)}
             </div>
+        }
 
-            {/* Headline — tighter, punchy */}
-            <h2 style={{
-              fontFamily: T.fontDisplay, fontSize: 'clamp(20px, 2.2vw, 28px)',
-              fontWeight: 800, color: '#fff', lineHeight: 1.15,
-              letterSpacing: '-0.6px', marginBottom: 8,
-            }}>
-              Buy · Sell · Find Work<br />
-              <span style={{
-                background: `linear-gradient(90deg, ${T.amber}, #ffce45)`,
-                WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-              }}>Anywhere in Malawi.</span>
-            </h2>
+        {/* Priority badge — top left */}
+        <div style={{ position: 'absolute', top: 10, left: 10, display: 'flex', alignItems: 'center', gap: 5 }}>
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            background: pCfg.badgeBg, color: pCfg.badgeFg,
+            borderRadius: 7, padding: '4px 9px',
+            fontSize: 11, fontWeight: 700, lineHeight: 1,
+            boxShadow: '0 2px 6px rgba(0,0,0,0.18)',
+          }}>
+            {priority === 'urgent' && <FlameSVG />}
+            {pCfg.label}
+          </span>
+        </div>
 
-            {/* Sub-copy — one tight sentence */}
-            <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', lineHeight: 1.6, maxWidth: 360, marginBottom: 14 }}>
-              28 districts. Verified sellers. Can't find it? Post a free request and let sellers come to you.
-            </p>
+        {/* Verified Buyer — top right */}
+        <div style={{ position: 'absolute', top: 10, right: 10 }}>
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(4px)',
+            borderRadius: 7, padding: '4px 8px',
+            fontSize: 10.5, fontWeight: 700, color: '#15803d',
+            boxShadow: '0 1px 6px rgba(0,0,0,0.12)',
+          }}>
+            <VerifiedSVG />
+            Verified Buyer
+          </span>
+        </div>
 
-            {/* Trust chips — inline, compact */}
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginBottom: 18 }}>
-              {[
-                { icon: '⚡', label: 'Replies in 15 min' },
-                { icon: '✅', label: 'Verified sellers' },
-                { icon: '🔒', label: 'Private contacts' },
-              ].map(({ icon, label }) => (
-                <div key={label} style={{
-                  display: 'flex', alignItems: 'center', gap: 4,
-                  background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: 50, padding: '4px 10px',
-                  fontSize: 11.5, color: 'rgba(255,255,255,0.65)', fontWeight: 500,
-                }}>
-                  <span style={{ fontSize: 11 }}>{icon}</span>{label}
-                </div>
-              ))}
-            </div>
-
-            {/* CTAs */}
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-              <button
-                onClick={() => navigate('/looking-for', { state: { openComposer: true } })}
-                onMouseEnter={() => setHovPost(true)}
-                onMouseLeave={() => setHovPost(false)}
-                style={{
-                  background: hovPost ? 'linear-gradient(135deg,#ffce45,#F9AB00)' : 'linear-gradient(135deg,#F9AB00,#e09800)',
-                  border: 'none', borderRadius: 12, padding: '10px 20px',
-                  fontSize: 13, fontWeight: 800, color: '#1a0a00', cursor: 'pointer',
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                  boxShadow: hovPost ? '0 4px 18px rgba(249,171,0,0.5)' : '0 2px 12px rgba(249,171,0,0.3)',
-                  transform: hovPost ? 'translateY(-1px)' : 'none',
-                  transition: 'all 0.16s cubic-bezier(0.34,1.2,0.64,1)', whiteSpace: 'nowrap',
-                }}
-              >
-                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Post a Free Request
-              </button>
-              <button
-                onClick={() => document.getElementById('listings-section')?.scrollIntoView({ behavior: 'smooth' })}
-                style={{
-                  background: 'rgba(255,255,255,0.07)', border: '1.5px solid rgba(255,255,255,0.18)',
-                  borderRadius: 12, padding: '10px 18px', fontSize: 13, fontWeight: 600,
-                  color: 'rgba(255,255,255,0.82)', cursor: 'pointer',
-                  display: 'inline-flex', alignItems: 'center', gap: 6, backdropFilter: 'blur(8px)',
-                  transition: 'all 0.15s', whiteSpace: 'nowrap',
-                }}
-              >
-                Browse Listings
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-              </button>
-            </div>
-          </div>
-
-          {/* ── RIGHT: 3D Perspective Carousel ── */}
-          <div onMouseEnter={() => setPaused(true)} onMouseLeave={() => setPaused(false)}
-            style={{ position: 'relative', height: 280, display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'visible' }}
-          >
-            {total === 0 ? (
-              <div style={{
-                background: 'rgba(255,255,255,0.05)', border: '2px dashed rgba(255,255,255,0.12)',
-                borderRadius: 16, padding: '24px', textAlign: 'center', width: '100%',
-              }}>
-                <div style={{ fontSize: 32, marginBottom: 8 }}>⭐</div>
-                <p style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.5)', lineHeight: 1.6, marginBottom: 14 }}>
-                  No featured listings yet. Be first!
-                </p>
-                <button onClick={() => navigate('/post')} style={{
-                  background: `linear-gradient(135deg,${T.amber},#e09800)`,
-                  border: 'none', borderRadius: 10, padding: '8px 18px',
-                  fontSize: 12.5, fontWeight: 800, color: '#1a0a00', cursor: 'pointer',
-                }}>Feature My Listing</button>
-              </div>
-            ) : (
-              <>
-                {/* Arrow buttons */}
-                <button onClick={prev} style={{
-                  position: 'absolute', left: -12, top: '50%', transform: 'translateY(-50%)',
-                  zIndex: 20, width: 32, height: 32, borderRadius: '50%',
-                  background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.2)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: 'pointer', color: '#fff', fontSize: 17, backdropFilter: 'blur(6px)',
-                  transition: 'background 0.15s',
-                }}
-                  onMouseEnter={e => e.currentTarget.style.background='rgba(0,0,0,0.9)'}
-                  onMouseLeave={e => e.currentTarget.style.background='rgba(0,0,0,0.6)'}
-                >‹</button>
-                <button onClick={next} style={{
-                  position: 'absolute', right: -12, top: '50%', transform: 'translateY(-50%)',
-                  zIndex: 20, width: 32, height: 32, borderRadius: '50%',
-                  background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.2)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: 'pointer', color: '#fff', fontSize: 17, backdropFilter: 'blur(6px)',
-                  transition: 'background 0.15s',
-                }}
-                  onMouseEnter={e => e.currentTarget.style.background='rgba(0,0,0,0.9)'}
-                  onMouseLeave={e => e.currentTarget.style.background='rgba(0,0,0,0.6)'}
-                >›</button>
-
-                {/* 3-card stage */}
-                <div style={{
-                  position: 'relative', width: '100%', height: '100%',
-                  perspective: '900px',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}>
-                  {[-1, 0, 1].map(offset => {
-                    const idx = ((slide + offset) % total + total) % total
-                    const item = featured[idx]
-                    const isCenter = offset === 0
-                    const isLeft   = offset === -1
-                    const isRight  = offset === 1
-
-                    return (
-                      <div
-                        key={`${slide}-${offset}`}
-                        onClick={() => { if (!isCenter) { offset === 1 ? next() : prev() } else navigate('/listing/' + item?.id) }}
-                        style={{
-                          position: 'absolute',
-                          width: isCenter ? '62%' : '36%',
-                          height: isCenter ? 240 : 190,
-                          borderRadius: isCenter ? 16 : 12,
-                          overflow: 'hidden',
-                          cursor: 'pointer',
-                          border: isCenter
-                            ? `2px solid rgba(249,171,0,0.5)`
-                            : '1px solid rgba(255,255,255,0.1)',
-                          boxShadow: isCenter
-                            ? '0 16px 48px rgba(0,0,0,0.6), 0 0 0 1px rgba(249,171,0,0.2)'
-                            : '0 6px 20px rgba(0,0,0,0.4)',
-                          left: isLeft ? '-2%' : isRight ? 'auto' : '50%',
-                          right: isRight ? '-2%' : 'auto',
-                          transform: isCenter
-                            ? 'translateX(-50%) scale(1)'
-                            : isLeft
-                              ? 'translateX(-8%) scale(0.84)'
-                              : 'translateX(8%) scale(0.84)',
-                          transformOrigin: isLeft ? 'right center' : isRight ? 'left center' : 'center center',
-                          zIndex: isCenter ? 10 : 5,
-                          filter: isCenter ? 'none' : 'blur(1px) brightness(0.55)',
-                          transition: 'all 0.5s cubic-bezier(0.4, 0, 0.2, 1)',
-                        }}
-                      >
-                        {/* Image */}
-                        <img
-                          src={item?.images?.[0]}
-                          alt={item?.title}
-                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        />
-
-                        {/* Gradient overlay */}
-                        <div style={{
-                          position: 'absolute', inset: 0,
-                          background: isCenter
-                            ? 'linear-gradient(to bottom, transparent 30%, rgba(0,0,0,0.82) 100%)'
-                            : 'linear-gradient(to bottom, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.7) 100%)',
-                        }} />
-
-                        {/* Center card: featured badge + info */}
-                        {isCenter && (
-                          <>
-                            <div style={{
-                              position: 'absolute', top: 10, left: 10, zIndex: 5,
-                              background: `linear-gradient(135deg,${T.amber},#e09800)`,
-                              borderRadius: 50, padding: '3px 10px',
-                              display: 'flex', alignItems: 'center', gap: 3,
-                              boxShadow: '0 2px 8px rgba(249,171,0,0.4)',
-                            }}>
-                              <span style={{ fontSize: 9 }}>⭐</span>
-                              <span style={{ fontSize: 9, fontWeight: 900, color: '#1a0a00', letterSpacing: 0.4 }}>FEATURED</span>
-                            </div>
-
-                            {/* Info overlay at bottom */}
-                            <div style={{
-                              position: 'absolute', bottom: 0, left: 0, right: 0,
-                              zIndex: 5, padding: '8px 12px',
-                              display: 'flex', alignItems: 'center', gap: 10,
-                            }}>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 1 }}>
-                                  <span style={{ fontFamily: T.fontDisplay, fontSize: 15, fontWeight: 900, color: T.amber, letterSpacing: '-0.3px' }}>
-                                    {formatPrice(item?.price)}
-                                  </span>
-                                  {item?.price_type === 'negotiable' && (
-                                    <span style={{ fontSize: 8.5, fontWeight: 700, color: T.green, background: T.greenL, borderRadius: 50, padding: '1px 5px' }}>Nego</span>
-                                  )}
-                                </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                                  <div style={{ fontSize: 11.5, fontWeight: 700, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                                    {item?.title}
-                                  </div>
-                                  <span style={{ fontSize: 9, color: T.blue, fontWeight: 700, flexShrink: 0 }}>✓ Verified</span>
-                                </div>
-                                <div style={{ fontSize: 9.5, color: 'rgba(255,255,255,0.45)', marginTop: 1 }}>
-                                  📍 {item?.city || 'Malawi'} · {timeAgo(item?.created_at)}
-                                </div>
-                              </div>
-                              <button
-                                onClick={e => { e.stopPropagation(); navigate('/listing/' + item?.id) }}
-                                style={{
-                                  flexShrink: 0,
-                                  background: `linear-gradient(135deg,${T.green},#0a7a44)`,
-                                  border: 'none', borderRadius: 8, padding: '7px 13px',
-                                  fontSize: 11.5, fontWeight: 800, color: '#fff', cursor: 'pointer',
-                                  display: 'flex', alignItems: 'center', gap: 3,
-                                  boxShadow: '0 2px 10px rgba(15,157,88,0.4)',
-                                  whiteSpace: 'nowrap',
-                                }}>
-                                View
-                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
-                              </button>
-                            </div>
-                          </>
-                        )}
-
-                        {/* Side cards: just show title hint */}
-                        {!isCenter && (
-                          <div style={{
-                            position: 'absolute', bottom: 8, left: 8, right: 8,
-                            zIndex: 5, fontSize: 10, fontWeight: 700,
-                            color: 'rgba(255,255,255,0.7)',
-                            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                            textAlign: 'center',
-                          }}>
-                            {item?.title}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-
-                {/* Dot indicators */}
-                <div style={{
-                  position: 'absolute', bottom: -18, left: 0, right: 0,
-                  display: 'flex', justifyContent: 'center', gap: 5,
-                }}>
-                  {featured.map((_, i) => (
-                    <div key={i} onClick={() => goTo(i)} style={{
-                      width: i === slide ? 20 : 5, height: 5, borderRadius: 50,
-                      background: i === slide ? T.amber : 'rgba(255,255,255,0.25)',
-                      cursor: 'pointer',
-                      transition: 'all 0.3s cubic-bezier(0.34,1.2,0.64,1)',
-                    }} />
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
+        {/* Category chip — bottom left of image */}
+        <div style={{ position: 'absolute', bottom: 10, left: 10 }}>
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 5,
+            background: 'rgba(255,255,255,0.96)', backdropFilter: 'blur(4px)',
+            borderRadius: 7, padding: '4px 9px',
+            fontSize: 11, fontWeight: 700, color: cc.fg,
+            boxShadow: '0 1px 6px rgba(0,0,0,0.10)',
+          }}>
+            <span style={{ color: cc.fg, display: 'flex', alignItems: 'center' }}>
+              {React.cloneElement(getCatSVG(r.category), { width: 13, height: 13 })}
+            </span>
+            {catLabel(r.category)}
+          </span>
         </div>
       </div>
 
-      {/* Section divider */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '16px 4px 0' }}>
-        <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg, transparent, ${T.gray200})` }} />
-        <div style={{ fontSize: 11, fontWeight: 700, color: T.gray600, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={T.green} strokeWidth="2.5" strokeLinecap="round"><polyline points="6 9 12 15 18 9"/></svg>
-          BROWSE LIVE LISTINGS
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke={T.green} strokeWidth="2.5" strokeLinecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+      {/* ── Card body ── */}
+      <div style={{ padding: '12px 13px 0 13px', display: 'flex', flexDirection: 'column', flex: 1 }}>
+
+        {/* "LOOKING FOR" eyebrow */}
+        <div style={{ fontSize: 9.5, fontWeight: 700, color: '#9ca3af', letterSpacing: 0.9, textTransform: 'uppercase', marginBottom: 4 }}>
+          Looking For
         </div>
-        <div style={{ flex: 1, height: 1, background: `linear-gradient(90deg, ${T.gray200}, transparent)` }} />
+
+        {/* Title */}
+        <div style={{ fontSize: 15, fontWeight: 700, color: '#111827', lineHeight: 1.3, marginBottom: 9, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical' }}>
+          {r.title}
+        </div>
+
+        {/* Budget — HERO number */}
+        <div style={{ marginBottom: 8 }}>
+          <div style={{ fontFamily: "'Sora','Inter',system-ui,sans-serif", fontSize: 20, fontWeight: 800, color: '#0F9D58', letterSpacing: '-0.4px', lineHeight: 1.1 }}>
+            {r.budget ? `MK ${Number(r.budget).toLocaleString()}` : 'Negotiable'}
+          </div>
+          <div style={{ fontSize: 11, color: '#9ca3af', fontWeight: 500, marginTop: 2 }}>
+            {r.is_monthly ? 'Monthly Budget' : 'Budget'}
+          </div>
+        </div>
+
+        {/* Location + time */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, color: '#9ca3af', marginBottom: 9 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+            <PinSVG />
+            {(r.cities?.[0] || r.city) || 'Malawi'}
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+            <ClockSVG color="#9ca3af" />
+            {timeSincePosted(r.created_at)}
+          </span>
+        </div>
+
+        {/* Expiry pill */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 600, color: expiry.color, background: expiry.bg, borderRadius: 7, padding: '5px 9px', marginBottom: 9 }}>
+          {expiry.label === 'Open'
+            ? <span style={{ width: 8, height: 8, borderRadius: '50%', background: expiry.dotColor, flexShrink: 0, display: 'inline-block' }} />
+            : <ClockSVG color={expiry.color} />
+          }
+          {expiry.label}
+        </div>
+
+        {/* Activity stats */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 11.5, color: '#6b7280', marginBottom: 12 }}>
+          {r.offer_count != null && (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <OfferSVG />
+              <strong style={{ color: '#374151', fontWeight: 700 }}>{r.offer_count}</strong> Offers
+            </span>
+          )}
+          {r.interested_count != null && (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+              <HeartSVG />
+              <strong style={{ color: '#374151', fontWeight: 700 }}>{r.interested_count}</strong> Interested
+            </span>
+          )}
+          {/* fallback if neither field exists on DB row */}
+          {r.offer_count == null && r.interested_count == null && (
+            <span style={{ fontSize: 11, color: '#d1d5db' }}>No activity yet</span>
+          )}
+        </div>
+      </div>
+
+      {/* Contact Buyer CTA — full width, flush bottom */}
+      <div style={{ padding: '0 13px 13px' }}>
+        <button
+          onClick={e => { e.stopPropagation(); navigate('/looking-for') }}
+          style={{
+            width: '100%', background: '#0F9D58', color: '#fff', border: 'none', borderRadius: 10,
+            padding: '11px 0', fontSize: 13.5, fontWeight: 700, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+            transition: 'background 0.15s, transform 0.15s',
+          }}
+          onMouseEnter={e => { e.currentTarget.style.background = '#0a7a44'; e.currentTarget.style.transform = 'translateY(-1px)' }}
+          onMouseLeave={e => { e.currentTarget.style.background = '#0F9D58'; e.currentTarget.style.transform = 'none' }}
+        >
+          <ChatSVG />
+          Contact Buyer
+        </button>
       </div>
     </div>
   )
 }
+
+function LookingForSection({ navigate, requests, loading }) {
+  const scrollRef = React.useRef(null)
+  const [canLeft,      setCanLeft]      = React.useState(false)
+  const [canRight,     setCanRight]     = React.useState(false)
+  const [activeFilter, setActiveFilter] = React.useState('all')
+
+  function checkScroll() {
+    const el = scrollRef.current
+    if (!el) return
+    setCanLeft(el.scrollLeft > 8)
+    setCanRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 8)
+  }
+
+  React.useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    setTimeout(checkScroll, 100)
+    el.addEventListener('scroll', checkScroll, { passive: true })
+    window.addEventListener('resize', checkScroll)
+    return () => { el.removeEventListener('scroll', checkScroll); window.removeEventListener('resize', checkScroll) }
+  }, [requests, activeFilter])
+
+  function scrollBy(dir) { scrollRef.current?.scrollBy({ left: dir * 540, behavior: 'smooth' }) }
+
+  const countFor = (key) => key === 'all' ? requests.length : requests.filter(r => r.category === key).length
+  const filtered = (activeFilter === 'all' ? requests : requests.filter(r => r.category === activeFilter))
+    .filter(r => r.status !== 'fulfilled')
+
+  /* Arrow SVG inline */
+  const ArrowL = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+  const ArrowR = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+
+  return (
+    <section style={{ padding: '0 20px 0 20px', background: '#fff' }}>
+      <style>{`
+        .lf3-arrow {
+          position:absolute; top:50%; transform:translateY(-50%); z-index:10;
+          width:38px; height:38px; border-radius:50%;
+          background:#fff; border:1.5px solid #e5e7eb;
+          display:flex; align-items:center; justify-content:center;
+          cursor:pointer; box-shadow:0 2px 10px rgba(0,0,0,0.12);
+          color:#374151; transition:all 0.2s; flex-shrink:0;
+        }
+        .lf3-arrow:hover { background:#0F9D58; border-color:#0F9D58; color:#fff; box-shadow:0 4px 16px rgba(15,157,88,0.35); transform:translateY(-50%) scale(1.08); }
+        .lf3-arrow.hide  { opacity:0; pointer-events:none; }
+        .lf3-chip {
+          display:inline-flex; align-items:center; gap:7px;
+          padding:7px 14px; border-radius:50px;
+          border:1.5px solid #e5e7eb; background:#fff;
+          font-size:13px; font-weight:600; color:#374151;
+          cursor:pointer; white-space:nowrap; transition:all 0.15s;
+          flex-shrink:0;
+        }
+        .lf3-chip.active { background:#0F9D58; border-color:#0F9D58; color:#fff; }
+        .lf3-chip.active .lf3-chip-icon { color:#fff !important; }
+        .lf3-chip:not(.active):hover { border-color:#0F9D58; color:#0F9D58; }
+        .lf3-chip:not(.active):hover .lf3-chip-icon { color:#0F9D58 !important; }
+        .lf3-count { background:#f3f4f6; color:#6b7280; border-radius:50px; padding:1px 8px; font-size:11px; font-weight:700; }
+        .lf3-chip.active .lf3-count { background:rgba(255,255,255,0.22); color:#fff; }
+        .lf3-scroll { display:flex; gap:16px; overflow-x:auto; padding-bottom:8px; padding-top:6px; padding-left:2px; padding-right:2px; scrollbar-width:none; -ms-overflow-style:none; }
+        .lf3-scroll::-webkit-scrollbar { display:none; }
+        .lf3-chips { display:flex; gap:8px; overflow-x:auto; padding-bottom:2px; scrollbar-width:none; -ms-overflow-style:none; }
+        .lf3-chips::-webkit-scrollbar { display:none; }
+        @media(max-width:768px){ .lf3-arrow{display:none!important;} }
+      `}</style>
+
+      <div style={{ maxWidth: 1400, margin: '0 auto' }}>
+
+        {/* ── Header ── */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 14 }}>
+          <div>
+            <h2 style={{ fontFamily: "'Sora','Inter',system-ui,sans-serif", fontSize: 'clamp(22px,2.6vw,28px)', fontWeight: 800, color: '#111827', letterSpacing: '-0.6px', marginBottom: 6, lineHeight: 1.15 }}>
+              People Looking For
+            </h2>
+            <p style={{ fontSize: 14, color: '#6b7280', margin: 0 }}>
+              Connect with buyers actively searching for products and services.
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, flexShrink: 0 }}>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              {/* View All */}
+              <button
+                onClick={() => navigate('/looking-for')}
+                style={{ background: '#fff', border: '1.5px solid #e5e7eb', borderRadius: 10, padding: '10px 18px', fontSize: 13.5, fontWeight: 600, color: '#374151', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap', transition: 'all 0.15s' }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor='#0F9D58'; e.currentTarget.style.color='#0F9D58' }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor='#e5e7eb'; e.currentTarget.style.color='#374151' }}
+              >
+                View All Requests
+                <ArrowR />
+              </button>
+
+              {/* Post Request + FREE badge */}
+              <div style={{ position: 'relative' }}>
+                <button
+                  onClick={() => navigate('/looking-for')}
+                  style={{ background: '#0F9D58', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 20px', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', transition: 'background 0.15s', boxShadow: '0 2px 10px rgba(15,157,88,0.3)' }}
+                  onMouseEnter={e => e.currentTarget.style.background='#0a7a44'}
+                  onMouseLeave={e => e.currentTarget.style.background='#0F9D58'}
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                  Post Request
+                </button>
+                <span style={{ position: 'absolute', top: -10, right: -10, background: '#F9AB00', color: '#1a0a00', fontSize: 9.5, fontWeight: 900, borderRadius: 50, padding: '2px 7px', letterSpacing: 0.4, border: '2px solid #fff', whiteSpace: 'nowrap', zIndex: 2 }}>
+                  FREE
+                </span>
+              </div>
+            </div>
+
+            {/* Trust nudge */}
+            <span style={{ fontSize: 11.5, color: '#9ca3af', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <CheckSVG color="#0F9D58" size={12} />
+              Free to post · Get responses fast
+            </span>
+          </div>
+        </div>
+
+        {/* ── Category filter chips with SVG icons ── */}
+        <div className="lf3-chips" style={{ marginBottom: 22 }}>
+          {CAT_FILTERS.map(f => {
+            const cc = catColors(f.key)
+            const isActive = activeFilter === f.key
+            return (
+              <button
+                key={f.key}
+                className={`lf3-chip${isActive ? ' active' : ''}`}
+                onClick={() => setActiveFilter(f.key)}
+              >
+                <span
+                  className="lf3-chip-icon"
+                  style={{
+                    display: 'flex', alignItems: 'center',
+                    color: isActive ? '#fff' : (f.key === 'all' ? '#0F9D58' : cc.fg),
+                    transition: 'color 0.15s',
+                  }}
+                >
+                  {React.cloneElement(
+                    f.key === 'all' ? CatSVG.all : (CatSVG[f.key] || CatSVG.Other),
+                    { width: 15, height: 15 }
+                  )}
+                </span>
+                {f.label}
+                <span className="lf3-count">{countFor(f.key)}</span>
+              </button>
+            )
+          })}
+          {/* Right arrow hint */}
+          <button style={{ flexShrink: 0, background: '#fff', border: '1.5px solid #e5e7eb', borderRadius: '50%', width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', alignSelf: 'center', color: '#374151', transition: 'all 0.15s' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor='#0F9D58'; e.currentTarget.style.color='#0F9D58' }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor='#e5e7eb'; e.currentTarget.style.color='#374151' }}
+          ><ArrowR /></button>
+        </div>
+
+        {/* ── Carousel ── */}
+        {loading ? (
+          <div style={{ display: 'flex', gap: 16 }}>
+            {[1,2,3,4,5].map(i => (
+              <div key={i} style={{ flexShrink: 0, width: 238, height: 430, borderRadius: 16, background: 'linear-gradient(90deg,#f0f0f0 25%,#e8e8e8 50%,#f0f0f0 75%)', backgroundSize: '600px 100%', animation: 'shimmer 1.4s infinite' }} />
+            ))}
+          </div>
+        ) : filtered.length > 0 ? (
+          <div style={{ position: 'relative' }}>
+            <button className={`lf3-arrow${canLeft ? '' : ' hide'}`} style={{ left: -20 }} onClick={() => scrollBy(-1)} aria-label="Scroll left"><ArrowL /></button>
+            <button className={`lf3-arrow${canRight ? '' : ' hide'}`} style={{ right: -20 }} onClick={() => scrollBy(1)} aria-label="Scroll right"><ArrowR /></button>
+            <div ref={scrollRef} className="lf3-scroll">
+              {filtered.map((r, i) => (
+                <RequestCard key={r.id} request={r} delay={i * 0.04} navigate={navigate} />
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div style={{ textAlign: 'center', padding: '52px 24px', border: '1.5px dashed #e5e7eb', borderRadius: 16, background: '#fafafa' }}>
+            <div style={{ fontSize: 42, marginBottom: 12 }}>🛍️</div>
+            <p style={{ fontSize: 14.5, fontWeight: 600, color: '#374151', marginBottom: 6 }}>No requests in this category yet.</p>
+            <p style={{ fontSize: 13, color: '#9ca3af', marginBottom: 18 }}>Be the first to post what you need!</p>
+            <button onClick={() => navigate('/looking-for')} style={{ background: '#0F9D58', color: '#fff', border: 'none', borderRadius: 10, padding: '11px 24px', fontSize: 13.5, fontWeight: 700, cursor: 'pointer' }}>
+              Post a Request
+            </button>
+            <p style={{ fontSize: 11.5, color: '#9ca3af', marginTop: 9 }}>Free · Responses within minutes</p>
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
 /* ─────────────────────────────────────────────────────────────────────────────
-   TRUST SECTION
+   FEATURED SHOPS — business directory; premium shops surface first
 ───────────────────────────────────────────────────────────────────────────── */
-function TrustSection() {
-  const items = [
-    {
-      icon: '✅',
-      title: 'Verified Sellers',
-      desc: 'Every seller is ID-verified before listing. Shop with confidence.',
-      stat: '800+',
-      statLabel: 'verified sellers',
-      color: T.green,
-      bg: T.greenL,
-    },
-    {
-      icon: '🔒',
-      title: 'Secure Transactions',
-      desc: 'Payments via Airtel Money & TNM Mpamba with buyer protection.',
-      stat: 'MK 500M+',
-      statLabel: 'transacted safely',
-      color: T.blue,
-      bg: T.blueL,
-    },
-    {
-      icon: '⚡',
-      title: 'Instant Communication',
-      desc: 'Real-time chat, voice & video calls built right into the platform.',
-      stat: '<2 min',
-      statLabel: 'avg response time',
-      color: T.amber,
-      bg: '#fff8e1',
-    },
-    {
-      icon: '📍',
-      title: 'Nationwide Coverage',
-      desc: 'Buyers and sellers in all 28 districts across Malawi.',
-      stat: '28',
-      statLabel: 'districts covered',
-      color: '#8b5cf6',
-      bg: '#f3f0ff',
-    },
+function ShopsSection({ navigate, shops, loading }) {
+  const scrollRef = useRef(null)
+  const [canLeft, setCanLeft]   = useState(false)
+  const [canRight, setCanRight] = useState(false)
+
+  function checkScroll() {
+    const el = scrollRef.current
+    if (!el) return
+    setCanLeft(el.scrollLeft > 8)
+    setCanRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 8)
+  }
+
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    setTimeout(checkScroll, 100)
+    el.addEventListener('scroll', checkScroll, { passive: true })
+    window.addEventListener('resize', checkScroll)
+    return () => { el.removeEventListener('scroll', checkScroll); window.removeEventListener('resize', checkScroll) }
+  }, [shops])
+
+  function scrollBy(dir) { scrollRef.current?.scrollBy({ left: dir * 560, behavior: 'smooth' }) }
+
+  
+
+  const trustItems = [
+    { icon: Icon.shieldCheck, label: 'Verified Shops', sub: 'Trusted and vetted' },
+    { icon: Icon.chat,        label: 'Fast Response',  sub: 'Active sellers'      },
+    { icon: Icon.check,       label: 'Quality Assured', sub: 'Reviewed products'  },
+    { icon: Icon.layers,      label: 'Secure Marketplace', sub: 'Safe to transact' },
   ]
 
   return (
-    <section style={{
-      padding: 'clamp(32px, 5vw, 64px) 20px',
-      background: `linear-gradient(180deg, #f8f9fa 0%, #fff 100%)`,
-    }}>
+    <section style={{ padding: '0 20px clamp(32px,4.5vw,52px) 20px', background: 'linear-gradient(to bottom, #fff 0%, #f9fafb 60%)' }}>
+      <style>{`
+        .shops-scroll::-webkit-scrollbar { display: none; }
+        .shops-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+        .shop-arrow {
+          position: absolute; top: 50%; transform: translateY(-50%); z-index: 10;
+          width: 40px; height: 40px; border-radius: 50%;
+          background: #fff; border: 1.5px solid #e5e7eb;
+          display: flex; align-items: center; justify-content: center;
+          cursor: pointer; box-shadow: 0 2px 12px rgba(0,0,0,0.12);
+          color: #374151; transition: all 0.2s; flex-shrink: 0;
+        }
+        .shop-arrow:hover { background: #0F9D58; border-color: #0F9D58; color: #fff; box-shadow: 0 4px 18px rgba(15,157,88,0.35); transform: translateY(-50%) scale(1.08); }
+        .shop-arrow.hidden { opacity: 0; pointer-events: none; }
+        .shop-card {
+          flex-shrink: 0; width: 210px; background: #fff;
+          border-radius: 18px; border: 1px solid #e5e7eb;
+          box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+          overflow: hidden; cursor: pointer;
+          transition: transform 0.28s cubic-bezier(0.22,1,0.36,1), box-shadow 0.28s ease;
+          display: flex; flex-direction: column;
+        }
+        .shop-card:hover { transform: translateY(-6px); box-shadow: 0 18px 44px rgba(0,0,0,0.14); }
+        .shop-logo-wrap { transition: transform 0.28s cubic-bezier(0.22,1,0.36,1); }
+        .shop-card:hover .shop-logo-wrap { transform: scale(1.08); }
+        .visit-btn {
+          width: 100%; background: #0F9D58; color: #fff; border: none;
+          padding: 11px 0; font-size: 13.5px; font-weight: 700; cursor: pointer;
+          transition: background 0.15s;
+        }
+        .visit-btn:hover { background: #0a7a44; }
+        @media (max-width: 768px) { .shop-arrow { display: none !important; } }
+      `}</style>
+
       <div style={{ maxWidth: 1400, margin: '0 auto' }}>
-        <div style={{ textAlign: 'center', marginBottom: 40 }}>
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: 7,
-            background: T.greenL, borderRadius: 50, padding: '6px 16px',
-            marginBottom: 14,
-          }}>
-            {Icon.shield(14)} <span style={{ fontSize: 12, fontWeight: 700, color: T.green }}>WHY BUYERS TRUST SOKOMW</span>
+
+        {/* ── Header ── */}
+        <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 28, flexWrap: 'wrap', gap: 12 }}>
+          <div>
+            <h2 style={{ fontFamily: T.fontDisplay, fontSize: 'clamp(20px,2.6vw,27px)', fontWeight: 800, color: T.gray900, letterSpacing: '-0.6px', marginBottom: 5 }}>
+              Featured Shops
+            </h2>
+            <p style={{ fontSize: 13.5, color: T.gray600 }}>Trusted shops with great products and reliable service.</p>
           </div>
-          <h2 style={{
-            fontFamily: T.fontDisplay, fontSize: 'clamp(24px, 3vw, 36px)',
-            fontWeight: 800, color: T.gray900, letterSpacing: '-1px',
-            marginBottom: 10,
-          }}>Built for trust. Built for Malawi.</h2>
-          <p style={{ fontSize: 16, color: T.gray600, maxWidth: 500, margin: '0 auto', lineHeight: 1.6 }}>
-            We built the safeguards so you can buy and sell with confidence.
-          </p>
+          <button
+            onClick={() => navigate('/shops')}
+            style={{ background: '#fff', border: `1.5px solid ${T.gray200}`, borderRadius: 50, padding: '9px 20px', fontSize: 13.5, fontWeight: 600, color: T.gray800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', transition: 'all 0.15s' }}
+            onMouseEnter={e => { e.currentTarget.style.borderColor = T.green; e.currentTarget.style.color = T.green }}
+            onMouseLeave={e => { e.currentTarget.style.borderColor = T.gray200; e.currentTarget.style.color = T.gray800 }}
+          >
+            View all Shops {Icon.chevR(15)}
+          </button>
         </div>
 
-        <div
-          className="soko-trust-grid"
-          style={{
-            display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 20,
-          }}
-        >
-          {items.map((item, i) => (
-            <div
-              key={item.title}
-              className="soko-card-bg soko-card-hover"
-              style={{
-                background: T.white, borderRadius: 20, padding: 24,
-                border: `1px solid ${T.gray100}`,
-                boxShadow: T.shadow,
-                animation: `fadeUp 0.5s ease ${i * 0.1}s both`,
-              }}
-            >
-              <div style={{
-                width: 52, height: 52, borderRadius: 16,
-                background: item.bg, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: 24, marginBottom: 16,
-                border: `1px solid ${item.color}22`,
-              }}>{item.icon}</div>
-              <div style={{
-                fontFamily: T.fontDisplay,
-                fontSize: 26, fontWeight: 800,
-                color: item.color, letterSpacing: '-1px', marginBottom: 4,
-              }}>{item.stat}</div>
-              <div style={{ fontSize: 11, color: T.gray600, marginBottom: 12, fontWeight: 500 }}>{item.statLabel}</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: T.gray900, marginBottom: 6 }}>{item.title}</div>
-              <p style={{ fontSize: 13, color: T.gray600, lineHeight: 1.6 }}>{item.desc}</p>
+        {/* ── Carousel ── */}
+        {loading ? (
+          <div style={{ display: 'flex', gap: 16 }}>
+            {[1,2,3,4,5].map(i => (
+              <div key={i} style={{ flexShrink: 0, width: 210, borderRadius: 18, overflow: 'hidden', border: `1px solid ${T.gray100}` }}>
+                <div className="skeleton" style={{ width: '100%', height: 120 }} />
+                <div style={{ padding: '44px 14px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <div className="skeleton" style={{ height: 14, width: '70%', borderRadius: 6 }} />
+                  <div className="skeleton" style={{ height: 11, width: '50%', borderRadius: 6 }} />
+                  <div className="skeleton" style={{ height: 11, width: '60%', borderRadius: 6 }} />
+                  <div className="skeleton" style={{ height: 36, borderRadius: 8, marginTop: 8 }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : shops.length > 0 ? (
+          <div style={{ position: 'relative' }}>
+            <button className={`shop-arrow${canLeft ? '' : ' hidden'}`} style={{ left: -20 }} onClick={() => scrollBy(-1)} aria-label="Scroll left">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+            </button>
+            <button className={`shop-arrow${canRight ? '' : ' hidden'}`} style={{ right: -20 }} onClick={() => scrollBy(1)} aria-label="Scroll right">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+
+            <div ref={scrollRef} className="shops-scroll" style={{ display: 'flex', gap: 16, overflowX: 'auto', paddingBottom: 8, paddingTop: 4 }}>
+              {shops.map((s, i) => (
+                <div key={s.id} className="shop-card" onClick={() => navigate('/shop/' + s.slug)}>
+
+                  {/* Cover image */}
+                  <div style={{ position: 'relative', width: '100%', height: 120, flexShrink: 0, overflow: 'hidden', background: T.gray100 }}>
+                    {s.cover_url ? (
+                      <img
+                        src={s.cover_url}
+                        alt=""
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        onError={e => { e.currentTarget.style.display = 'none' }}
+                      />
+                    ) : s.logo_url ? (
+                      <>
+                        <img
+                          src={s.logo_url}
+                          alt=""
+                          style={{ width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(4px) saturate(1.4) brightness(0.85)', transform: 'scale(1.08)' }}
+                          onError={e => { e.currentTarget.style.display = 'none' }}
+                        />
+                        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.15)' }} />
+                      </>
+                    ) : (
+                      <div style={{ width: '100%', height: '100%', background: `linear-gradient(135deg, ${T.greenDk} 0%, ${T.green} 60%, ${T.amber}44 100%)` }} />
+                    )}
+                    {/* Gradient overlay at bottom for logo overlap */}
+                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 48, background: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.18))' }} />
+                  </div>
+
+                  {/* Logo — overlapping cover */}
+                  <div style={{ display: 'flex', justifyContent: 'center', marginTop: -28, marginBottom: 10, position: 'relative', zIndex: 2 }}>
+                    <div className="shop-logo-wrap" style={{
+                      width: 56, height: 56, borderRadius: '50%',
+                      border: '3px solid #fff',
+                      background: s.logo_url ? 'transparent' : `linear-gradient(135deg, ${T.green}, ${T.greenD})`,
+                      overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#fff', fontWeight: 800, fontSize: 20,
+                      boxShadow: '0 2px 10px rgba(0,0,0,0.15)',
+                    }}>
+                      {s.logo_url
+                        ? <img src={s.logo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : (s.name?.[0] || 'S').toUpperCase()
+                      }
+                    </div>
+                  </div>
+
+                  {/* Body */}
+                  <div style={{ padding: '0 14px 14px', display: 'flex', flexDirection: 'column', gap: 5, flex: 1 }}>
+
+                    {/* Verified badge */}
+                    {s.is_verified && (
+                      <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 2 }}>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: '#dcfce7', color: '#15803d', borderRadius: 50, padding: '3px 10px', fontSize: 11, fontWeight: 700 }}>
+                          {Icon.verify(11)} Verified Shop
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Name + category */}
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: 14.5, fontWeight: 800, color: T.gray900, marginBottom: 2 }}>{s.name}</div>
+                      <div style={{ fontSize: 11.5, color: T.gray600 }}>{s.category}</div>
+                    </div>
+
+                    {/* Rating */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, fontSize: 12, color: T.gray700 }}>
+                      {Icon.star(12)}
+                      <span style={{ fontWeight: 700 }}>{s.rating || '—'}</span>
+                      <span style={{ color: T.gray500 }}>
+                        {s.review_count > 0 ? `(${s.review_count} reviews)` : 'No reviews yet'}
+                      </span>
+                    </div>
+
+                    {/* Location */}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, fontSize: 11.5, color: T.gray600 }}>
+                      {Icon.pin(11)} {s.city || 'Malawi'}
+                    </div>
+
+                    {/* Product count */}
+                    <div style={{ textAlign: 'center', fontSize: 12, color: T.gray600, marginBottom: 10 }}>
+                      {s.listing_count || 0}+ products
+                    </div>
+
+                    {/* Visit button */}
+                    <button
+                      className="visit-btn"
+                      style={{ borderRadius: 10 }}
+                      onClick={e => { e.stopPropagation(); navigate('/shop/' + s.slug) }}
+                    >
+                      Visit Shop
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {/* Create shop CTA card */}
+              <div className="shop-card" onClick={() => navigate('/shop-setup')} style={{ border: `2px dashed ${T.gray200}`, background: T.gray50, justifyContent: 'center', alignItems: 'center', minHeight: 300 }}>
+                <div style={{ textAlign: 'center', padding: '20px 16px' }}>
+                  <div style={{ width: 48, height: 48, borderRadius: '50%', background: T.greenL, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', color: T.green }}>
+                    {Icon.plus(22)}
+                  </div>
+                  <div style={{ fontSize: 13.5, fontWeight: 700, color: T.gray800, marginBottom: 6 }}>Open Your Shop</div>
+                  <div style={{ fontSize: 11.5, color: T.gray600, lineHeight: 1.5, marginBottom: 14 }}>Reach buyers across all of Malawi</div>
+                  <span style={{ background: T.green, color: '#fff', borderRadius: 8, padding: '8px 16px', fontSize: 12.5, fontWeight: 700 }}>Get Started</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div style={{ textAlign: 'center', padding: '40px 24px', border: `1.5px dashed ${T.gray200}`, borderRadius: 18 }}>
+            <p style={{ fontSize: 14, color: T.gray600, marginBottom: 14 }}>No shops yet — open the first one.</p>
+            <button className="soko-btn-primary" onClick={() => navigate('/shop-setup')}>Create My Shop</button>
+          </div>
+        )}
+
+        
+
+      </div>
+    </section>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   JOBS + SERVICES — side by side
+───────────────────────────────────────────────────────────────────────────── */
+function JobsServicesSection({ navigate, jobs, services, loading }) {
+  return (
+    <section style={{ padding: 'clamp(24px,4vw,40px) 20px', background: '#fff' }}>
+      <div style={{ maxWidth: 1400, margin: '0 auto' }}>
+        <div className="soko-jobs-services" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+
+          <div>
+            <SectionHeader title="Jobs Near You" subtitle="Recent vacancies" action={{ label: 'View all jobs', onClick: () => navigate('/jobs') }} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {loading
+                ? [1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 58, borderRadius: 14 }} />)
+                : jobs.length > 0
+                  ? jobs.map(j => (
+                    <div key={j.id} onClick={() => navigate('/jobs')} className="soko-card-bg soko-card-hover" style={{ background: '#fff', border: `1px solid ${T.gray200}`, borderRadius: 14, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ width: 38, height: 38, borderRadius: 10, background: T.blueL, color: T.blue, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{Icon.briefcase(17)}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13.5, fontWeight: 700, color: T.gray900 }}>{j.title}</div>
+                        <div style={{ fontSize: 11.5, color: T.gray600 }}>{j.company || j.city} · {j.type || 'Full-time'}</div>
+                      </div>
+                      {Icon.chevR(15)}
+                    </div>
+                  ))
+                  : <EmptyMini text="No jobs posted yet." cta="Post a Job" onClick={() => navigate('/jobs')} />
+              }
+            </div>
+          </div>
+
+          <div>
+            <SectionHeader title="Services Near You" subtitle="Available service providers" action={{ label: 'View all services', onClick: () => navigate('/services') }} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {loading
+                ? [1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 58, borderRadius: 14 }} />)
+                : services.length > 0
+                  ? services.map(s => (
+                    <div key={s.id} onClick={() => navigate('/services')} className="soko-card-bg soko-card-hover" style={{ background: '#fff', border: `1px solid ${T.gray200}`, borderRadius: 14, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ width: 38, height: 38, borderRadius: 10, background: T.greenL, color: T.green, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{Icon.wrench(17)}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13.5, fontWeight: 700, color: T.gray900 }}>{s.name}</div>
+                        <div style={{ fontSize: 11.5, color: T.gray600 }}>{s.category || s.city || 'Malawi'}</div>
+                      </div>
+                      {Icon.chevR(15)}
+                    </div>
+                  ))
+                  : <EmptyMini text="No services listed yet." cta="Offer a Service" onClick={() => navigate('/services')} />
+              }
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function ShopMiniCard({ shop, navigate }) {
+  return (
+    <div onClick={() => navigate('/shop/' + shop.slug)} className="soko-card-bg soko-card-hover" style={{ background: '#fff', border: `1px solid ${T.gray200}`, borderRadius: 14, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+      <div style={{
+        width: 38, height: 38, borderRadius: 10, flexShrink: 0, overflow: 'hidden',
+        background: shop.logo_url ? 'transparent' : `linear-gradient(135deg, ${T.green}, ${T.greenD})`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 14,
+      }}>
+        {shop.logo_url ? <img src={shop.logo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (shop.name?.[0] || 'S').toUpperCase()}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <span style={{ fontSize: 13.5, fontWeight: 700, color: T.gray900, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shop.name}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: T.gray600 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+            {Icon.star(11)} {shop.rating ? Number(shop.rating).toFixed(1) : 'New'}
+            {shop.review_count > 0 && <span style={{ color: T.gray500 }}>({shop.review_count})</span>}
+          </span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, marginTop: 1 }}>
+          <span style={{ color: T.gray500 }}>{shop.listing_count || 0} Listings</span>
+          {shop.is_verified && <span style={{ color: T.green, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3 }}>{Icon.check(10)} Verified Shop</span>}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ShopsJobsServicesRow({ navigate, shops, jobs, services, loading }) {
+  return (
+    <section style={{ padding: 'clamp(24px,4vw,40px) 20px', background: '#fff' }}>
+      <div style={{ maxWidth: 1400, margin: '0 auto' }}>
+        <div className="soko-jobs-services" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 20 }}>
+
+          <div>
+            <SectionHeader title="Shops & Shops" subtitle="Discover trusted sellers" action={{ label: 'View all shops', onClick: () => navigate('/shops') }} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {loading
+                ? [1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 58, borderRadius: 14 }} />)
+                : shops.length > 0
+                  ? shops.slice(0, 4).map(s => <ShopMiniCard key={s.id} shop={s} navigate={navigate} />)
+                  : <EmptyMini text="No shops yet." cta="Open a Shop" onClick={() => navigate('/shop-setup')} />
+              }
+            </div>
+          </div>
+
+          <div>
+            <SectionHeader title="Jobs Near You" subtitle="Recent vacancies" action={{ label: 'View all jobs', onClick: () => navigate('/jobs') }} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {loading
+                ? [1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 58, borderRadius: 14 }} />)
+                : jobs.length > 0
+                  ? jobs.map(j => (
+                    <div key={j.id} onClick={() => navigate('/jobs')} className="soko-card-bg soko-card-hover" style={{ background: '#fff', border: `1px solid ${T.gray200}`, borderRadius: 14, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ width: 38, height: 38, borderRadius: 10, background: T.blueL, color: T.blue, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{Icon.briefcase(17)}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13.5, fontWeight: 700, color: T.gray900 }}>{j.title}</div>
+                        <div style={{ fontSize: 11.5, color: T.gray600 }}>{j.company || j.city} · {j.type || 'Full-time'}</div>
+                      </div>
+                      {Icon.chevR(15)}
+                    </div>
+                  ))
+                  : <EmptyMini text="No jobs posted yet." cta="Post a Job" onClick={() => navigate('/jobs')} />
+              }
+            </div>
+          </div>
+
+          <div>
+            <SectionHeader title="Services Near You" subtitle="Available service providers" action={{ label: 'View all services', onClick: () => navigate('/services') }} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {loading
+                ? [1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 58, borderRadius: 14 }} />)
+                : services.length > 0
+                  ? services.map(s => (
+                    <div key={s.id} onClick={() => navigate('/services')} className="soko-card-bg soko-card-hover" style={{ background: '#fff', border: `1px solid ${T.gray200}`, borderRadius: 14, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ width: 38, height: 38, borderRadius: 10, background: T.greenL, color: T.green, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{Icon.wrench(17)}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13.5, fontWeight: 700, color: T.gray900 }}>{s.name}</div>
+                        <div style={{ fontSize: 11.5, color: T.gray600 }}>{s.category || s.city || 'Malawi'}</div>
+                      </div>
+                      {Icon.chevR(15)}
+                    </div>
+                  ))
+                  : <EmptyMini text="No services listed yet." cta="Offer a Service" onClick={() => navigate('/services')} />
+              }
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function EmptyMini({ text, cta, onClick }) {
+  return (
+    <div style={{ textAlign: 'center', padding: '24px 16px', border: `1.5px dashed ${T.gray200}`, borderRadius: 14 }}>
+      <p style={{ fontSize: 13, color: T.gray600, marginBottom: 10 }}>{text}</p>
+      <button onClick={onClick} style={{ background: T.greenL, color: T.green, border: 'none', borderRadius: 10, padding: '7px 16px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>{cta}</button>
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   VERIFICATION TRUST SECTION
+───────────────────────────────────────────────────────────────────────────── */
+function VerificationTrustSection({ navigate, stats }) {
+  return (
+    <section style={{ padding: '20px 20px', background: '#fff', borderTop: `1px solid ${T.gray100}` }}>
+      <div style={{ maxWidth: 1400, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: '0 0 auto' }}>
+          <div style={{ width: 48, height: 48, borderRadius: '50%', background: T.greenL, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {Icon.shieldCheck(26)}
+          </div>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 800, color: T.gray900 }}>Trade with confidence</div>
+            <div style={{ fontSize: 12.5, color: T.gray600 }}>
+              <span style={{ textDecoration: 'underline', cursor: 'pointer', color: T.green }} onClick={() => navigate('/listings')}>Choose verified sellers</span> and shops for a safer experience.
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 32, flex: 1, flexWrap: 'wrap' }}>
+          {[
+            { stat: stats.sellers || '12K+', label: 'Verified Sellers' },
+            { stat: stats.shops   || '850+', label: 'Verified Shops'   },
+            { stat: stats.reviews || '98%',  label: 'Positive Reviews' },
+          ].map(item => (
+            <div key={item.label}>
+              <div style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 800, color: T.green }}>{item.stat}</div>
+              <div style={{ fontSize: 12, color: T.gray600 }}>{item.label}</div>
             </div>
           ))}
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, background: T.gray50, border: `1px solid ${T.gray200}`, borderRadius: 14, padding: '14px 20px', flexShrink: 0 }}>
+          <div style={{ width: 40, height: 40, borderRadius: '50%', background: T.greenL, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            {Icon.shieldCheck(20)}
+          </div>
+          <div>
+            <div style={{ fontSize: 13.5, fontWeight: 700, color: T.gray900 }}>Become a Verified Seller</div>
+            <div style={{ fontSize: 12, color: T.gray600 }}>Build trust and sell more.</div>
+          </div>
+          <button onClick={() => navigate('/profile')} style={{ background: '#fff', border: `1.5px solid ${T.gray200}`, borderRadius: 50, padding: '9px 18px', fontSize: 13, fontWeight: 700, color: T.gray800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
+            Get Verified {Icon.check(14)}
+          </button>
         </div>
       </div>
     </section>
@@ -1802,49 +2499,78 @@ function TrustSection() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   SELL CTA BANNER
+   SELLER CONVERSION SECTION
 ───────────────────────────────────────────────────────────────────────────── */
+const SellCtaIcon = {
+  free: (s=16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 9.5a2.5 2.5 0 0 1 5 0c0 1.5-2 2-2.5 3.2M12 17h.01"/></svg>,
+  reach: (s=16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z"/></svg>,
+  fast: (s=16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>,
+  noFee: (s=16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg>,
+}
+
 function SellCtaBanner({ navigate }) {
+  const benefits = [
+    { icon: SellCtaIcon.free,  label: "It's Free",      sub: 'List in minutes'     },
+    { icon: SellCtaIcon.reach, label: 'Reach Millions', sub: 'Nationwide exposure' },
+    { icon: SellCtaIcon.fast,  label: 'Sell Faster',    sub: 'Get real results'    },
+    { icon: SellCtaIcon.noFee, label: 'No Commission',  sub: 'Keep what you earn'  },
+  ]
   return (
-    <section style={{
-      padding: 'clamp(24px, 4vw, 48px) 20px',
-      background: T.gray900,
-    }}>
+    <section style={{ padding: '20px 20px clamp(28px,4vw,40px) 20px', background: T.gray900 }}>
       <div style={{
-        maxWidth: 1400, margin: '0 auto',
+        maxWidth: 1400, margin: '0 auto', background: T.greenDk, borderRadius: 20,
+        padding: 'clamp(24px,3vw,36px) clamp(24px,3.5vw,40px)',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        flexWrap: 'wrap', gap: 24,
+        gap: 32, flexWrap: 'wrap', position: 'relative', overflow: 'hidden',
       }}>
-        <div>
-          <h2 style={{
-            fontFamily: T.fontDisplay,
-            fontSize: 'clamp(22px, 3vw, 32px)',
-            fontWeight: 800, color: '#fff',
-            letterSpacing: '-0.8px', marginBottom: 8,
-          }}>
-            Ready to start selling?
+
+        <div style={{ flex: '1 1 260px', position: 'relative', zIndex: 1 }}>
+          <h2 style={{ fontFamily: T.fontDisplay, fontSize: 'clamp(22px,2.8vw,30px)', fontWeight: 800, color: '#fff', letterSpacing: '-0.7px', marginBottom: 6 }}>
+            Have something to sell?
           </h2>
-          <p style={{ fontSize: 15, color: 'rgba(255,255,255,0.6)', maxWidth: 440, lineHeight: 1.6 }}>
-            Post your first listing in under 2 minutes. Reach thousands of buyers across Malawi — for free.
+          <p style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.6)', marginBottom: 18 }}>
+            Join thousands of sellers on SokoMW today.
           </p>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button className="soko-btn-primary" onClick={() => navigate('/post')} style={{ background: T.green, fontSize: 13.5, padding: '11px 24px' }}>
+              Sell Now
+            </button>
+            <button onClick={() => navigate('/profile')} style={{ background: 'rgba(255,255,255,0.08)', border: '1.5px solid rgba(255,255,255,0.2)', borderRadius: 14, padding: '11px 20px', fontSize: 13.5, fontWeight: 700, color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
+              {Icon.plus ? null : null}▶ How it Works
+            </button>
+          </div>
         </div>
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-          <button className="soko-btn-primary" onClick={() => navigate('/post')} style={{
-            background: T.amber, color: '#1a0a00',
-            fontSize: 15, padding: '13px 28px',
-            boxShadow: '0 4px 20px rgba(249,171,0,0.3)',
-          }}>
-            {Icon.plus(16)} Post Free Listing
-          </button>
-          <button onClick={() => navigate('/register')} style={{
-            background: 'rgba(255,255,255,0.1)',
-            border: '1.5px solid rgba(255,255,255,0.2)',
-            borderRadius: 14, padding: '13px 28px',
-            fontSize: 15, fontWeight: 700, color: '#fff', cursor: 'pointer',
-            transition: 'background 0.15s',
-          }}>
-            Create Account
-          </button>
+
+        <div style={{ display: 'flex', gap: 'clamp(16px,2.5vw,32px)', flexWrap: 'wrap', flex: '1 1 320px', justifyContent: 'center', position: 'relative', zIndex: 1 }}>
+          {benefits.map(b => (
+            <div key={b.label} style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 140 }}>
+              <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', color: T.amber, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{b.icon(15)}</div>
+              <div>
+                <div style={{ fontSize: 12.5, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap' }}>{b.label}</div>
+                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', whiteSpace: 'nowrap' }}>{b.sub}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Decorative shop/car illustration */}
+        <div className="soko-nav-desktop" style={{ display: 'flex', alignItems: 'flex-end', gap: 14, flexShrink: 0, position: 'relative', zIndex: 1 }}>
+          <svg width="54" height="54" viewBox="0 0 48 48" fill="none">
+            <rect x="6" y="14" width="36" height="28" rx="3" fill="rgba(255,255,255,0.12)"/>
+            <path d="M6 14l3-8h30l3 8" stroke="rgba(255,255,255,0.55)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+            <path d="M16 22a8 8 0 0 0 16 0" stroke="rgba(255,255,255,0.65)" strokeWidth="2.2" strokeLinecap="round" fill="none"/>
+            <rect x="6" y="14" width="36" height="2.4" fill="rgba(255,255,255,0.3)"/>
+          </svg>
+          <svg width="58" height="40" viewBox="0 0 58 36" fill="none">
+            <path d="M5 24 9 12c1-3 3-4 6-4h18c3 0 5 1 6 4l4 12" stroke={T.amber} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="rgba(249,171,0,0.14)"/>
+            <rect x="2" y="22" width="54" height="9" rx="3.5" fill={T.amber} fillOpacity="0.9"/>
+            <rect x="13" y="13" width="13" height="9" rx="1.5" fill="rgba(6,61,35,0.6)"/>
+            <rect x="28" y="13" width="13" height="9" rx="1.5" fill="rgba(6,61,35,0.6)"/>
+            <circle cx="13" cy="31" r="5" fill="#1a1a1a"/>
+            <circle cx="13" cy="31" r="2" fill="#555"/>
+            <circle cx="45" cy="31" r="5" fill="#1a1a1a"/>
+            <circle cx="45" cy="31" r="2" fill="#555"/>
+          </svg>
         </div>
       </div>
     </section>
@@ -1856,146 +2582,41 @@ function SellCtaBanner({ navigate }) {
 ───────────────────────────────────────────────────────────────────────────── */
 function SokoFooter({ navigate }) {
   const links = {
-    'Marketplace': ['Buy Listings', 'Sell Now', 'Categories', 'Flash Sales', 'Verified Sellers'],
-    'Services':    ['Jobs Board', 'Professional Services', 'Agriculture', 'Property', 'Looking For'],
-    'Company':     ['About SokoMW', 'Blog', 'Press', 'Careers', 'Contact Us'],
-    'Support':     ['Help Center', 'Safety Tips', 'Report Abuse', 'Privacy Policy', 'Terms of Service'],
+    'Marketplace': [['Buy Listings','/'],['Sell Now','/post'],['Categories','/'],['Shops','/shops'],['Looking For','/looking-for']],
+    'Work':        [['Jobs','/jobs'],['Services','/services'],['Stories','/status'],['Verification','/profile']],
+    'Company':     [['About SokoMW','/'],['Contact Us','/'],['Help Center','/']],
+    'Legal':       [['Privacy Policy','/'],['Terms of Service','/'],['Safety Tips','/'],['Report Abuse','/']],
   }
-
   return (
-    <footer style={{ background: '#0d1410', color: 'rgba(255,255,255,0.7)', padding: 'clamp(36px, 5vw, 60px) 20px 32px' }}>
+    <footer style={{ background: '#0d1410', color: 'rgba(255,255,255,0.7)', padding: 'clamp(32px,5vw,56px) 20px 28px' }}>
       <div style={{ maxWidth: 1400, margin: '0 auto' }}>
-
-        <div
-          className="soko-footer-grid"
-          style={{
-            display: 'grid',
-            gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr',
-            gap: 40, marginBottom: 48,
-          }}
-        >
-          {/* Brand col */}
+        <div className="soko-footer-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 36, marginBottom: 40 }}>
           <div>
-            <div style={{
-              fontFamily: T.fontDisplay, fontSize: 26, fontWeight: 800,
-              color: T.green, marginBottom: 12, letterSpacing: '-0.5px',
-            }}>
+            <div style={{ fontFamily: T.fontDisplay, fontSize: 24, fontWeight: 800, color: T.green, marginBottom: 10, letterSpacing: '-0.5px' }}>
               Soko<span style={{ color: T.amber }}>MW</span>
             </div>
-            <p style={{ fontSize: 14, lineHeight: 1.7, color: 'rgba(255,255,255,0.5)', maxWidth: 240, marginBottom: 20 }}>
-              Malawi's premier marketplace connecting buyers and sellers across all 28 districts.
+            <p style={{ fontSize: 13.5, lineHeight: 1.7, color: 'rgba(255,255,255,0.5)', maxWidth: 240 }}>
+              Connecting buyers and sellers across Malawi — no payments processed on the platform, you deal directly.
             </p>
-            {/* Social icons */}
-            <div style={{ display: 'flex', gap: 10 }}>
-              {[
-                { label: 'Facebook', icon: 'f', bg: '#1877f2' },
-                { label: 'WhatsApp', icon: 'w', bg: '#25d366' },
-                { label: 'Instagram', icon: 'ig', bg: 'linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)' },
-                { label: 'Twitter', icon: 'x', bg: '#000' },
-              ].map(s => (
-                <div key={s.label} style={{
-                  width: 36, height: 36, borderRadius: 10,
-                  background: s.bg, display: 'flex', alignItems: 'center',
-                  justifyContent: 'center', cursor: 'pointer',
-                  fontSize: 13, fontWeight: 800, color: '#fff',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  transition: 'transform 0.15s, opacity 0.15s',
-                }}
-                  onMouseEnter={e => e.currentTarget.style.opacity = '0.8'}
-                  onMouseLeave={e => e.currentTarget.style.opacity = '1'}
-                >
-                  {s.icon}
-                </div>
-              ))}
-            </div>
           </div>
-
-          {/* Link cols */}
           {Object.entries(links).map(([group, items]) => (
             <div key={group}>
-              <div style={{
-                fontSize: 11, fontWeight: 800, color: '#fff',
-                letterSpacing: 1, textTransform: 'uppercase', marginBottom: 16,
-              }}>{group}</div>
-              <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {items.map(item => (
-                  <li key={item}>
-                    <span style={{
-                      fontSize: 13.5, color: 'rgba(255,255,255,0.5)',
-                      cursor: 'pointer', transition: 'color 0.15s',
-                    }}
-                      onMouseEnter={e => e.currentTarget.style.color = '#fff'}
-                      onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.5)'}
-                    >{item}</span>
-                  </li>
+              <div style={{ fontSize: 11, fontWeight: 800, color: '#fff', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 14 }}>{group}</div>
+              <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 9 }}>
+                {items.map(([label, path]) => (
+                  <li key={label}><span onClick={() => navigate(path)} style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', cursor: 'pointer' }}
+                    onMouseEnter={e => e.currentTarget.style.color = '#fff'} onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.5)'}
+                  >{label}</span></li>
                 ))}
               </ul>
             </div>
           ))}
         </div>
-
-        {/* Bottom bar */}
-        <div style={{
-          borderTop: '1px solid rgba(255,255,255,0.08)',
-          paddingTop: 24,
-          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-          flexWrap: 'wrap', gap: 12,
-        }}>
-          <div style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.35)' }}>
-            © 2025 SokoMW. All rights reserved. Made with ❤️ in Malawi 🇲🇼
-          </div>
-          <div style={{ display: 'flex', gap: 20 }}>
-            {['Privacy Policy', 'Terms of Service', 'Cookie Policy'].map(l => (
-              <span key={l} style={{
-                fontSize: 12.5, color: 'rgba(255,255,255,0.35)',
-                cursor: 'pointer', transition: 'color 0.15s',
-              }}
-                onMouseEnter={e => e.currentTarget.style.color = 'rgba(255,255,255,0.7)'}
-                onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.35)'}
-              >{l}</span>
-            ))}
-          </div>
+        <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 20, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+          <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.35)' }}>© 2026 SokoMW. All rights reserved. Made in Malawi 🇲🇼</div>
         </div>
       </div>
     </footer>
-  )
-}
-
-/* ─────────────────────────────────────────────────────────────────────────────
-   SECTION HEADER
-───────────────────────────────────────────────────────────────────────────── */
-function SectionHeader({ title, subtitle, action }) {
-  return (
-    <div style={{
-      display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
-      marginBottom: 24, flexWrap: 'wrap', gap: 8,
-    }}>
-      <div>
-        <h2 style={{
-          fontFamily: T.fontDisplay,
-          fontSize: 'clamp(20px, 2.5vw, 26px)',
-          fontWeight: 800, color: T.gray900,
-          letterSpacing: '-0.7px', marginBottom: 4,
-        }}>{title}</h2>
-        {subtitle && (
-          <p style={{ fontSize: 14, color: T.gray600, fontWeight: 400 }}>{subtitle}</p>
-        )}
-      </div>
-      {action && (
-        <button onClick={action.onClick} style={{
-          background: 'none', border: `1.5px solid ${T.gray200}`,
-          borderRadius: 50, padding: '7px 16px',
-          fontSize: 13, fontWeight: 600, color: T.gray800,
-          cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
-          transition: 'all 0.15s', whiteSpace: 'nowrap',
-        }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = T.green; e.currentTarget.style.color = T.green }}
-          onMouseLeave={e => { e.currentTarget.style.borderColor = T.gray200; e.currentTarget.style.color = T.gray800 }}
-        >
-          {action.label} {Icon.chevR(14)}
-        </button>
-      )}
-    </div>
   )
 }
 
@@ -2006,20 +2627,49 @@ function EarlyAccessStrip() {
   const [vis, setVis] = useState(true)
   if (!vis) return null
   return (
-    <div style={{
-      background: 'linear-gradient(90deg, #f59e0b11, #f59e0b22, #f59e0b11)',
-      borderBottom: `1px solid ${T.amber}44`,
-      padding: '9px 20px',
-      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+    <div style={{ background: 'linear-gradient(90deg, #f59e0b11, #f59e0b22, #f59e0b11)', borderBottom: `1px solid ${T.amber}44`, padding: '9px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.amberD} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 3h6l1 8H8L9 3z"/><path d="M6.5 11l-2 7a1 1 0 0 0 1 1.3h9a1 1 0 0 0 1-1.3l-2-7"/><line x1="10" y1="7" x2="10" y2="11"/><line x1="14" y1="7" x2="14" y2="11"/></svg>
+      <span style={{ fontSize: 12.5, fontWeight: 600, color: T.amberD }}>Early access — you're testing SokoMW. Official launch date coming soon.</span>
+      <button onClick={() => setVis(false)} style={{ marginLeft: 8, background: 'none', border: 'none', cursor: 'pointer', color: T.amberD, display: 'flex', alignItems: 'center' }}>{Icon.x(12)}</button>
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   MOBILE BOTTOM NAV — Home / Explore / Sell / Chats / Profile, matching the
+   reference exactly. NOTE: this differs from the app's existing
+   <BottomNav> (Home/Services/Post/Chats/Jobs) used on other pages — see the
+   message below the code for why this is scoped to the homepage only.
+───────────────────────────────────────────────────────────────────────────── */
+function MobileBottomNav({ navigate, unreadCount }) {
+  const items = [
+    { key: 'home',    label: 'Home',    path: '/',        icon: (a) => <svg width="22" height="22" viewBox="0 0 24 24" fill={a?'#e6f4ec':'none'} stroke={a?T.green:'#999'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V9.5z"/><path d="M9 21V12h6v9" stroke={a?T.green:'#999'} fill={a?'#e6f4ec':'none'}/></svg> },
+    { key: 'explore', label: 'Explore', path: '/explore', icon: (a) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a?T.green:'#999'} strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> },
+    { key: 'sell',    label: 'Sell',    path: '/post',    isFab: true },
+    { key: 'chats',   label: 'Chats',   path: '/chats',   icon: (a) => <svg width="22" height="22" viewBox="0 0 24 24" fill={a?'#e6f4ec':'none'} stroke={a?T.green:'#999'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> },
+    { key: 'profile', label: 'Profile', path: '/profile', icon: (a) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a?T.green:'#999'} strokeWidth="2" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> },
+  ]
+  return (
+    <div className="soko-bottom-nav-mobile" style={{
+      position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100,
+      background: '#fff', borderTop: '1px solid #e8ede9', boxShadow: '0 -4px 16px rgba(0,0,0,0.06)',
+      display: 'flex', alignItems: 'center', justifyContent: 'space-around', padding: '6px 4px 10px',
     }}>
-      <span style={{ fontSize: 14 }}>🧪</span>
-      <span style={{ fontSize: 12.5, fontWeight: 600, color: T.amberD }}>
-        Early access — you're testing SokoMW. Official launch date will be announced soon.
-      </span>
-      <button onClick={() => setVis(false)} style={{
-        marginLeft: 8, background: 'none', border: 'none',
-        cursor: 'pointer', color: T.amberD, display: 'flex', alignItems: 'center',
-      }}>{Icon.x(12)}</button>
+      {items.map(it => it.isFab ? (
+        <button key={it.key} onClick={() => navigate(it.path)} style={{
+          width: 52, height: 52, background: `linear-gradient(135deg, ${T.green}, ${T.greenD})`, color: '#fff',
+          border: 'none', borderRadius: '50%', cursor: 'pointer', marginTop: -18,
+          boxShadow: '0 4px 16px rgba(15,157,88,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>{Icon.plus(22)}</button>
+      ) : (
+        <button key={it.key} onClick={() => navigate(it.path)} style={{ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, cursor: 'pointer', padding: '4px 14px', position: 'relative' }}>
+          {it.icon(false)}
+          <span style={{ fontSize: 10.5, color: '#999', fontWeight: 500 }}>{it.label}</span>
+          {it.key === 'chats' && unreadCount > 0 && (
+            <span style={{ position: 'absolute', top: 0, right: 6, background: T.red, color: '#fff', borderRadius: '50%', width: 15, height: 15, fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{unreadCount > 9 ? '9+' : unreadCount}</span>
+          )}
+        </button>
+      ))}
     </div>
   )
 }
@@ -2030,187 +2680,290 @@ function EarlyAccessStrip() {
 export default function Home() {
   const navigate = useNavigate()
 
-  // ── Auth & data ─────────────────────────────────────────
+  // ── Auth & listings (preserved from prior version) ───────
   const [listings,   setListings]   = useState([])
   const [loading,    setLoading]    = useState(true)
   const [user,       setUser]       = useState(null)
   const [notifCount, setNotifCount] = useState(0)
+  const [unreadChats, setUnreadChats] = useState(0)
   const [search, setSearch] = useState('')
 
   function handleSearch(val) {
     setSearch(val)
     if (val.trim()) {
-      setTimeout(() => {
-        document.getElementById('listings-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      }, 100)
+      trackSearch(val, user?.id)
+      navigate(`/search?q=${encodeURIComponent(val.trim())}`)
     }
   }
+
   const [activeCategory, setActiveCategory] = useState('All')
+  function handleCategoryChange(cat) { setActiveCategory(cat) }
+  const [activeDistrict, setActiveDistrict] = useState('All Districts')
 
-  function handleCategoryChange(cat) {
-    setActiveCategory(cat)
-    if (cat !== 'All') {
-      setTimeout(() => {
-        document.getElementById('listings-section')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-      }, 100)
-    }
-  }
-  const [activeDistrict,  setActiveDistrict]  = useState('All Districts')
+  // ── New sections' data ────────────────────────────────────
+  const [shops,    setShops]    = useState([])
+  const [jobs,     setJobs]     = useState([])
+  const [services, setServices] = useState([])
+  const [requests, setRequests] = useState([])
+  const [sectionsLoading, setSectionsLoading] = useState(true)
+  const [trustStats, setTrustStats] = useState({ sellers: '—', shops: '—', reviews: '—' })
 
-  // ── Stories ──────────────────────────────────────────────
-  const [stories,       setStories]       = useState([])
-  const [viewing,       setViewing]       = useState(null)
+  // ── Stories (compact LiveStoriesCard + viewer/upload) ─────
+  const [stories, setStories] = useState([])
+  const [storiesLoading, setStoriesLoading] = useState(true)
+  const [viewing, setViewing] = useState(null)
   const [viewerStories, setViewerStories] = useState([])
-  const [showUpload,    setShowUpload]    = useState(false)
-  const [viewedIds,     setViewedIds]     = useState(() => {
-    try { return new Set(JSON.parse(localStorage.getItem('viewedStories') || '[]')) }
-    catch { return new Set() }
-  })
+  const [showUpload, setShowUpload] = useState(false)
 
-  // ── Animation ───────────────────────────────────────────
-  const [isFocused,     setIsFocused] = useState(false)
-  const { animKeywords, animIdx }     = useSearchAnimation({ listings, search, isFocused })
+  // ── Animation / location (preserved) ──────────────────────
+  const [isFocused, setIsFocused] = useState(false)
+  const { animKeywords, animIdx } = useSearchAnimation({ listings, search, isFocused })
   const { lat: userLat, lng: userLng } = useUserLocation()
 
-  // ── Init ────────────────────────────────────────────────
   useEffect(() => { init() }, [])
+
+  // Stories: fetch + realtime subscription, same pattern HomeStatusRow uses
+  // internally — replicated here (rather than reused) because the compact
+  // LiveStoriesCard needs the raw story list, not HomeStatusRow's own
+  // internal state.
+  useEffect(() => {
+    if (!user?.id) { setStoriesLoading(false); return }
+    let ch
+    setStoriesLoading(true)
+    fetchAllActiveStories(user.id, 'All').then(data => { setStories(data); setStoriesLoading(false) })
+
+    ch = supabase.channel(`home-live-stories-${user.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'user_statuses' }, () => {
+        fetchAllActiveStories(user.id, 'All').then(setStories)
+      })
+      .subscribe()
+    return () => { if (ch) supabase.removeChannel(ch) }
+  }, [user?.id])
+
+  function openStoryGroup(groupLeader) {
+    const group = stories.filter(s => s.user_id === groupLeader.user_id)
+    const ids = group.map(x => x.id)
+    if (user?.id) {
+      ids.forEach(id => {
+        supabase.from('status_views')
+          .upsert({ status_id: id, viewer_id: user.id })
+          .then(() => {}, () => {})
+      })
+    }
+    setViewerStories(group.length > 0 ? group : [groupLeader])
+    setViewing(0)
+  }
+
+  function handleCreateStory() {
+    if (!user) { navigate('/login'); return }
+    setShowUpload(true)
+  }
 
   async function init() {
     const { data: { user } } = await supabase.auth.getUser()
     if (user) {
       const { data: profile } = await supabase.from('profiles')
-        .select('avatar_url, full_name, city').eq('id', user.id).maybeSingle()
-      setUser({ ...user, avatar_url: profile?.avatar_url || null })
+        .select('avatar_url, full_name, city, account_type').eq('id', user.id).maybeSingle()
+      const { data: shop } = await supabase.from('shops')
+        .select('slug').eq('owner_id', user.id).maybeSingle()
+      setUser({ ...user, avatar_url: profile?.avatar_url || null, account_type: profile?.account_type, shop_slug: shop?.slug || null })
       loadNotifs(user.id)
-      fetchAllActiveStories(user.id, 'All').then(setStories)
+      loadUnreadChats(user.id)
     }
     await loadListings()
+    await loadAuxSections()
   }
 
   async function loadListings() {
     setLoading(true)
     const { data } = await supabase.from('listings')
-      .select('id, title, price, price_type, images, city, category, condition, featured, is_featured, flash_sale_price, flash_sale_expires_at, promo_badge, bulk_pricing, stock_qty, created_at, seller_id, latitude, longitude, status, description, tags')
-      .or('status.eq.active,featured.eq.true')
+      .select('id, title, price, price_type, images, city, category, condition, featured, is_featured, flash_sale_price, flash_sale_expires_at, promo_badge, bulk_pricing, stock_qty, created_at, seller_id, shop_id, latitude, longitude, status, description, tags')
+      .eq('status', 'published')
       .order('created_at', { ascending: false })
       .limit(60)
-    setListings(data || [])
+
+    let withShopRatings = data || []
+    const shopIds = [...new Set(withShopRatings.map(l => l.shop_id).filter(Boolean))]
+    const sellerIds = [...new Set(withShopRatings.map(l => l.seller_id).filter(Boolean))]
+
+    if (shopIds.length > 0) {
+      const { data: shopsData } = await supabase.from('shops').select('id, rating, review_count, is_verified').in('id', shopIds)
+      const shopMap = {}
+      shopsData?.forEach(s => { shopMap[s.id] = s })
+      withShopRatings = withShopRatings.map(l => ({
+        ...l,
+        shop_rating: l.shop_id ? shopMap[l.shop_id]?.rating : null,
+        shop_review_count: l.shop_id ? shopMap[l.shop_id]?.review_count : null,
+        shop_is_verified: l.shop_id ? shopMap[l.shop_id]?.is_verified : false,
+      }))
+    }
+    if (sellerIds.length > 0) {
+      const { data: profilesData } = await supabase.from('profiles').select('id, is_verified').in('id', sellerIds)
+      const profileMap = {}
+      profilesData?.forEach(p => { profileMap[p.id] = p })
+      withShopRatings = withShopRatings.map(l => ({ ...l, seller_verified: l.seller_id ? profileMap[l.seller_id]?.is_verified : false }))
+    }
+
+    let blocked = []
+    try { blocked = JSON.parse(localStorage.getItem('soko_blocked_shops') || '[]') } catch {}
+    const blockedStr = blocked.map(id => String(id))
+    const filtered = blockedStr.length > 0
+      ? withShopRatings.filter(l => !l.shop_id || !blockedStr.includes(String(l.shop_id)))
+      : withShopRatings
+
+    // Personalize default ordering by search history + unseen + distance.
+    // Falls back gracefully — sortProductsSmart never throws on missing
+    // location (getDistanceKm treats null lat/lng as "far").
+    const { data: { user: authUser } } = await supabase.auth.getUser()
+    const sorted = await sortProductsSmart(filtered, userLat, userLng, authUser?.id)
+
+    setListings(sorted)
     setLoading(false)
   }
 
+  // Auxiliary sections: shops, jobs, services, looking-for requests, trust
+  // stats. Each query is wrapped so a missing table (e.g. on a fresh DB, or
+  // if a table name differs) can't crash the homepage — it just renders the
+  // section's empty state instead.
+  async function loadAuxSections() {
+    setSectionsLoading(true)
+    await Promise.all([
+      (async () => {
+        try {
+          const { data, error, count } = await supabase.from('shops')
+            .select('id, name, slug, category, logo_url, cover_url, city, rating, review_count, listing_count, is_verified, follower_count', { count: 'exact' })
+            .eq('is_active', true)
+            .order('follower_count', { ascending: false, nullsFirst: false })
+            .limit(8)
+          if (error) console.error('shops query error:', error)
+          setShops(data || [])
+          setTrustStats(s => ({ ...s, shops: count != null ? `${count}+` : s.shops }))
+        } catch (e) { console.error('shops catch:', e); setShops([]) }
+      })(),
+      (async () => {
+        try {
+          const today = new Date().toISOString().split('T')[0]
+          const { data, error } = await supabase.from('jobs')
+            .select('id, title, company, city, type, created_at, deadline')
+            .eq('status', 'published')
+            .or(`deadline.is.null,deadline.gte.${today}`)
+            .order('created_at', { ascending: false }).limit(4)
+          if (error) console.error('jobs query error:', error)
+          setJobs(data || [])
+        } catch (e) { console.error('jobs catch:', e); setJobs([]) }
+      })(),
+      (async () => {
+        try {
+          const { data, error } = await supabase.from('services')
+            .select('id, name, category, city, created_at')
+            .eq('status', 'published')
+            .order('created_at', { ascending: false }).limit(4)
+          if (error) console.error('services query error:', error)
+          setServices(data || [])
+        } catch (e) { console.error('services catch:', e); setServices([]) }
+      })(),
+      (async () => {
+        try {
+          const { data } = await supabase.from('buyer_requests')
+            .select('id, title, description, category, city, cities, created_at, budget, offer_count, urgency, image_url')
+            .not('status', 'eq', 'fulfilled')
+            .order('created_at', { ascending: false })
+            .limit(20)
+          setRequests(data || [])
+        } catch { setRequests([]) }
+      })(),
+      (async () => {
+        try {
+          const { count: sellerCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('is_verified', true)
+          const { count: reviewCount } = await supabase.from('reviews').select('*', { count: 'exact', head: true }).gte('rating', 4)
+          setTrustStats(s => ({
+            ...s,
+            sellers: sellerCount != null ? `${sellerCount}+` : s.sellers,
+            reviews: reviewCount != null ? `${reviewCount}+` : s.reviews,
+          }))
+        } catch {}
+      })(),
+    ])
+    setSectionsLoading(false)
+  }
+
   async function loadNotifs(uid) {
-    const { count } = await supabase.from('notifications')
-      .select('*', { count: 'exact', head: true })
-      .eq('user_id', uid).eq('read', false)
-    setNotifCount(count || 0)
+    try {
+      const { count } = await supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', uid).eq('read', false)
+      setNotifCount(count || 0)
+    } catch {}
   }
 
-  // ── Story groups ─────────────────────────────────────────
-  const storyGroups = useMemo(() => {
-    const map = new Map()
-    for (const s of stories) {
-      if (!map.has(s.user_id)) map.set(s.user_id, [])
-      map.get(s.user_id).push(s)
-    }
-    const cards  = Array.from(map.values()).map(g => ({ ...g[0], _ownGroup: g }))
-    const own    = cards.filter(c => c.user_id === user?.id)
-    const others = cards.filter(c => c.user_id !== user?.id)
-    return [...own, ...others]
-  }, [stories, user?.id])
-
-  function openStoryGroup(groupLeader) {
-    const ids = groupLeader._ownGroup?.map(x => x.id) || [groupLeader.id]
-    setViewedIds(prev => {
-      const next = new Set([...prev, ...ids])
-      localStorage.setItem('viewedStories', JSON.stringify([...next]))
-      return next
-    })
-    setViewerStories(groupLeader._ownGroup || [groupLeader])
-    setViewing(0)
+  async function loadUnreadChats(uid) {
+    try {
+      const { count } = await supabase.from('messages').select('*', { count: 'exact', head: true }).eq('to_user', uid).eq('read', false)
+      setUnreadChats(count || 0)
+    } catch {}
   }
 
-  // ── Image search (preserved from original) ───────────────
+  // ── Image search (preserved hook point — wire in existing handler) ──
   async function handleImageFile(e) {
     const file = e.target.files?.[0]
     if (!file) return
     e.target.value = ''
-    // (original image search logic preserved — omitted here for brevity,
-    //  wire in from your existing Home.jsx handleImageFile)
+    // Existing image-search-by-photo logic from the previous Home.jsx
+    // handleImageFile should be wired in here unchanged.
   }
 
   return (
-    <div className="soko-v2">
+    <div className="soko-v3">
       <GlobalStyles />
 
-      {/* Sticky nav */}
       <SokoNav
-        user={user}
-        notifCount={notifCount}
-        search={search}
-        setSearch={handleSearch}
-        navigate={navigate}
-        onImageFile={handleImageFile}
-        animKeywords={animKeywords}
-        animIdx={animIdx}
-        listings={listings}
-        activeCategory={activeCategory}
-        onCategoryChange={handleCategoryChange}
-        activeDistrict={activeDistrict}
-        onDistrictChange={setActiveDistrict}
+        user={user} notifCount={notifCount} search={search} setSearch={handleSearch}
+        navigate={navigate} onImageFile={handleImageFile} animKeywords={animKeywords} animIdx={animIdx}
+        listings={listings} activeCategory={activeCategory} onCategoryChange={handleCategoryChange}
+        activeDistrict={activeDistrict} onDistrictChange={setActiveDistrict} onFocusChange={setIsFocused}
       />
 
-      {/* Early access strip */}
       <EarlyAccessStrip />
 
-      {/* Soko Live */}
-      {user && (
-        <SokoLive
-          user={user}
-          stories={storyGroups}
-          viewedIds={viewedIds}
-          onOpenGroup={openStoryGroup}
-          onUpload={() => setShowUpload(true)}
-        />
-      )}
+      {/* Revenue hero: marketing message + featured carousel */}
+      <RevenueHero navigate={navigate} listings={listings} />
 
-     {/* Hero + Featured + Buyer Request */}
-      <LookingForBanner navigate={navigate} listings={listings} />
-      {/* Listings */}
-      <ListingsSection
-        listings={listings}
-        loading={loading}
-        user={user}
-        navigate={navigate}
-        search={search}
-        activeCategory={activeCategory}
-        activeDistrict={activeDistrict}
+      {/* One-click category access */}
+      <CategoryGrid navigate={navigate} onCategoryChange={handleCategoryChange} />
+
+      {/* Monetization: slim Featured pricing strip */}
+      <FeaturedRevenueBanner navigate={navigate} />
+
+      {/* Featured Listings (left) + Live Stories card (right) */}
+      <FeaturedListingsRow
+        listings={listings} navigate={navigate} loading={loading}
+        stories={stories} storiesLoading={storiesLoading}
+        onOpenStory={openStoryGroup} onCreateStory={handleCreateStory}
       />
 
-      {/* Trust section */}
-      <TrustSection />
+      {/* Latest Listings — just-posted rail */}
+      <LatestListingsSection listings={listings} navigate={navigate} loading={loading} />
 
-      {/* Sell CTA */}
+      {/* People Looking For — buyer requests, "I Can Help" */}
+      <LookingForSection navigate={navigate} requests={requests} loading={sectionsLoading} />
+
+      {/* Shops + Jobs + Services — three column row matching reference */}
+      <ShopsJobsServicesRow navigate={navigate} shops={shops} jobs={jobs} services={services} loading={sectionsLoading} />
+
+      {/* Verification trust metrics */}
+      <VerificationTrustSection navigate={navigate} stats={trustStats} />
+
+      {/* Seller conversion CTA */}
       <SellCtaBanner navigate={navigate} />
 
       {/* Footer */}
       <SokoFooter navigate={navigate} />
 
-      {/* Mobile bottom nav */}
-      <div className="soko-bottom-nav-hide">
-        <BottomNav />
-      </div>
+      {/* Mobile bottom nav — Home / Explore / Sell / Chats / Profile */}
+      <MobileBottomNav navigate={navigate} unreadCount={unreadChats} />
 
-      {/* Story viewer */}
+      {/* Story viewer + upload modal — same components HomeStatusRow uses */}
       {viewing !== null && (
-        <StoryViewer
-          stories={viewerStories}
-          startIndex={viewing}
-          currentUserId={user?.id}
-          onClose={() => setViewing(null)}
-        />
+        <StoryViewer stories={viewerStories} startIndex={viewing} currentUserId={user?.id} onClose={() => setViewing(null)} />
       )}
-
-      {/* Upload modal */}
       {showUpload && (
         <StatusUploadModal
           user={user}

@@ -84,7 +84,7 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
       const payload = {
         user_id:           user.id,
         status_type:       'listing_update',   // maps to your existing CAT_COLORS
-        content:           caption.trim() || null,
+        content:           caption.trim() || (mediaType === 'video' ? '📹 Video update' : '📷 Photo update'),
         media_urls:        mediaUrl ? [mediaUrl] : [],
         media_type:        statusType,
         location:          location !== 'All' ? location : null,

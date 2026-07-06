@@ -65,8 +65,13 @@ export async function sendDealRequest({ sellerId, buyerId, listingId, messageCou
   }
 
   const listingAge = Date.now() - new Date(listing.created_at)
-  if (listingAge < 0) {
-    return { deal: null, error: { message: 'Listing must be at least 24 hours old.' } }
+  if (listingAge < 24 * 60 * 60 * 1000) {
+    return { deal: null, error: { message: 'This listing must be at least 24 hours old before confirming a deal.' } }
+  }
+
+  // Anti-fraud: minimum 4 messages required
+  if (messageCount < 4) {
+    return { deal: null, error: { message: 'You need at least 4 messages with the buyer before confirming a deal.' } }
   }
 
   // Check no existing active deal
@@ -76,6 +81,17 @@ export async function sendDealRequest({ sellerId, buyerId, listingId, messageCou
   }
   if (existing && existing.status === 'confirmed') {
     return { deal: existing, error: { message: 'This deal was already confirmed.' } }
+  }
+
+  // Anti-fraud: block if seller has 5+ deals in last 7 days
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
+  const { count: recentCount } = await supabase
+    .from('deal_confirmations')
+    .select('*', { count: 'exact', head: true })
+    .eq('seller_id', sellerId)
+    .gte('created_at', sevenDaysAgo)
+  if ((recentCount || 0) >= 5) {
+    return { deal: null, error: { message: 'Too many deal requests this week. Please contact support if this is unexpected.' } }
   }
 
   // Create deal
@@ -142,10 +158,22 @@ export async function confirmDeal(dealId, buyerId) {
 }
 
 async function _onDealFullyConfirmed(deal) {
+  // Check account age — accounts under 30 days get half score weight
+  const { data: sellerProfile } = await supabase
+    .from('profiles')
+    .select('created_at')
+    .eq('id', deal.seller_id)
+    .maybeSingle()
+  const accountAge = sellerProfile?.created_at
+    ? Date.now() - new Date(sellerProfile.created_at)
+    : Infinity
+  const scoreWeight = accountAge < 30 * 24 * 60 * 60 * 1000 ? 0.5 : 1.0
+
   // 1. Update seller trust score via SQL function
   await supabase.rpc('update_trust_score_on_deal', {
-    p_seller_id: deal.seller_id,
-    p_buyer_id:  deal.buyer_id,
+    p_seller_id:    deal.seller_id,
+    p_buyer_id:     deal.buyer_id,
+    p_score_weight: scoreWeight,
   })
 
   // 2. Add to buyer wall
@@ -159,25 +187,15 @@ async function _onDealFullyConfirmed(deal) {
       visible:              true,
     }, { onConflict: 'seller_id,buyer_id,listing_id' })
 
-  // 3. Update trading circle
-  await supabase
-    .from('trading_circle')
-    .upsert({
-      user_id:    deal.seller_id,
-      partner_id: deal.buyer_id,
-      deal_count: 1,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'user_id,partner_id' })
-
-  // Also reverse direction
-  await supabase
-    .from('trading_circle')
-    .upsert({
-      user_id:    deal.buyer_id,
-      partner_id: deal.seller_id,
-      deal_count: 1,
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'user_id,partner_id' })
+  // 3. Update trading circle (increment, not overwrite)
+  await supabase.rpc('increment_trading_circle', {
+    p_user_id:    deal.seller_id,
+    p_partner_id: deal.buyer_id,
+  })
+  await supabase.rpc('increment_trading_circle', {
+    p_user_id:    deal.buyer_id,
+    p_partner_id: deal.seller_id,
+  })
 }
 
 // ── VOUCHING ─────────────────────────────────────────────────────────────────

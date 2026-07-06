@@ -126,7 +126,7 @@ const S = {
   },
   card: {
     flexShrink: 0,
-    width: 110,
+    width: 'clamp(110px, 15vw, 160px)',
     borderRadius: 10,
     border: '1px solid #fecaca',
     background: '#fff',
@@ -135,7 +135,7 @@ const S = {
     boxShadow: '0 1px 6px rgba(220,38,38,0.08)',
     transition: 'transform 0.15s',
   },
-  imgWrap: { position: 'relative', height: 72, background: '#fff5f5' },
+  imgWrap: { position: 'relative', height: 'clamp(72px, 10vw, 110px)', background: '#fff5f5' },
   img: { width: '100%', height: '100%', objectFit: 'cover' },
   imgFallback: {
     width: '100%', height: '100%',

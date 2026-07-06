@@ -104,8 +104,8 @@ export async function fetchAllActiveStories(currentUserId = null, category = nul
     .select(`
       id, content, status_type, expires_at, created_at,
       media_urls, tagged_listing_id, user_id, location_hint,
-      profiles:user_id ( id, full_name, avatar_url ),
-      tagged:tagged_listing_id ( id, title, price, images, category )
+      profiles:user_id ( id, full_name, avatar_url, city ),
+      tagged:tagged_listing_id ( id, title, price, images, category, description )
     `)
     .gt('expires_at', new Date().toISOString())
     .order('created_at', { ascending: false })

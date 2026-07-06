@@ -2,6 +2,10 @@
   "outputDirectory": "dist",
   "rewrites": [
     {
+      "source": "/shop/:slug",
+      "destination": "/api/shop-og/:slug"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }

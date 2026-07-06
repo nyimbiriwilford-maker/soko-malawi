@@ -312,7 +312,15 @@ export default function Profile() {
 
         {!editMode ? (
           <div style={S.nameSection}>
-            <div style={S.nameText}>{profile.full_name || 'No name set'}</div>
+            <div style={S.nameText}>
+              {profile.full_name || 'No name set'}
+              {profile.is_verified && (
+                <svg width="18" height="18" viewBox="0 0 24 24" style={{ marginLeft: 6, verticalAlign: -3 }}>
+                  <path fill="#16a34a" d="M12 0a4 4 0 0 1 3.2 1.6 4 4 0 0 1 3.6 1 4 4 0 0 1 1 3.6A4 4 0 0 1 21.4 9.4a4 4 0 0 1 0 5.2A4 4 0 0 1 19.8 17.8a4 4 0 0 1-1 3.6 4 4 0 0 1-3.6 1A4 4 0 0 1 12 24a4 4 0 0 1-3.2-1.6 4 4 0 0 1-3.6-1 4 4 0 0 1-1-3.6A4 4 0 0 1 2.6 14.6a4 4 0 0 1 0-5.2A4 4 0 0 1 4.2 6.2a4 4 0 0 1 1-3.6 4 4 0 0 1 3.6-1A4 4 0 0 1 12 0Z"/>
+                  <path d="m7.5 12.5 3 3 6-7" stroke="#fff" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              )}
+            </div>
             <div style={S.emailText}>{user.email}</div>
             {profile.city && <div style={S.cityText}>📍 {profile.city}</div>}
             <button style={S.editBtn} onClick={() => setEditMode(true)}>✏️ Edit Profile</button>
@@ -321,12 +329,16 @@ export default function Profile() {
             <div style={{ marginTop: 10 }}>
               {profile.is_verified ? (
                 <div style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 5,
-                  background: '#e8f0fe', borderRadius: 50, padding: '5px 14px',
-                  fontSize: 12, fontWeight: 700, color: '#1A73E8',
-                  border: '1px solid #c5d8fc',
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  background: '#e8f5e9', borderRadius: 50, padding: '5px 14px',
+                  fontSize: 12, fontWeight: 700, color: '#1a7a4a',
+                  border: '1px solid #c1e6c9',
                 }}>
-                  ✅ Verified Seller
+                  <svg width="14" height="14" viewBox="0 0 24 24">
+                    <path fill="#16a34a" d="M12 0a4 4 0 0 1 3.2 1.6 4 4 0 0 1 3.6 1 4 4 0 0 1 1 3.6A4 4 0 0 1 21.4 9.4a4 4 0 0 1 0 5.2A4 4 0 0 1 19.8 17.8a4 4 0 0 1-1 3.6 4 4 0 0 1-3.6 1A4 4 0 0 1 12 24a4 4 0 0 1-3.2-1.6 4 4 0 0 1-3.6-1 4 4 0 0 1-1-3.6A4 4 0 0 1 2.6 14.6a4 4 0 0 1 0-5.2A4 4 0 0 1 4.2 6.2a4 4 0 0 1 1-3.6 4 4 0 0 1 3.6-1A4 4 0 0 1 12 0Z"/>
+                    <path d="m7.5 12.5 3 3 6-7" stroke="#fff" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  Verified Seller
                 </div>
               ) : (
                 <button

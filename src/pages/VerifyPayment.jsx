@@ -21,32 +21,38 @@ export default function VerifyPayment() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setStatus('failed'); return }
 
+    const isFeature = tx_ref.startsWith('SOKO-FEATURE-')
+
     if (payStatus === 'cancelled') {
-      // delete the pending request so they can try again
-      await supabase.from('verification_requests')
-        .delete()
-        .eq('seller_id', user.id)
-        .eq('payment_ref', tx_ref)
+      if (isFeature) {
+        await supabase.from('listing_promotions').delete().eq('seller_id', user.id).eq('tx_ref', tx_ref)
+      } else {
+        await supabase.from('verification_requests').delete().eq('seller_id', user.id).eq('payment_ref', tx_ref)
+      }
       setStatus('cancelled')
       return
     }
 
-    // auto-approve — PayChangu confirmed payment
+    // Verify with PayChangu directly — never trust the URL's status param
+    const { data: verifyData, error: verifyErr } = await supabase.functions.invoke('verify-transaction', {
+      body: { tx_ref },
+    })
+    if (verifyErr || !verifyData?.confirmed) { setStatus('failed'); return }
+
+    if (isFeature) {
+      const { data: confirmData, error: confirmErr } = await supabase.rpc('confirm_feature_payment', { p_tx_ref: tx_ref })
+      if (confirmErr || !confirmData) { setStatus('failed'); return }
+      setStatus('success')
+      return
+    }
+
     const { error, data } = await supabase.from('verification_requests')
-      .update({
-        status: 'approved',
-        reviewed_at: new Date().toISOString(),
-      })
+      .update({ status: 'approved', reviewed_at: new Date().toISOString() })
       .eq('seller_id', user.id)
       .eq('payment_ref', tx_ref)
       .select()
 
-    console.log('update result:', data, 'error:', error)
-    console.log('tx_ref from url:', tx_ref)
-    console.log('user id:', user.id)
-
-    if (error) { setStatus('failed'); return }
-    if (!data || data.length === 0) { setStatus('failed'); return }
+    if (error || !data || data.length === 0) { setStatus('failed'); return }
     setStatus('success')
   }
 

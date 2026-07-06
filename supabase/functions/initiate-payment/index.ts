@@ -1,6 +1,7 @@
+// supabase/functions/initiate-payment/index.ts
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 
-const PAYCHANGU_SECRET = Deno.env.get('sec-test-lPp9CIl4hXGApkRDleEs4qwVfYyCHB3c')!
+const PAYCHANGU_SECRET = Deno.env.get('PAYCHANGU_SECRET_KEY')!
 
 serve(async (req) => {
   // handle CORS for local dev
@@ -14,7 +15,12 @@ serve(async (req) => {
   }
 
   try {
-    const { seller_id, email, first_name, last_name, tx_ref, callback_url, return_url } = await req.json()
+    const {
+      seller_id, email, first_name, last_name, tx_ref, callback_url, return_url,
+      amount, purpose, title, description, listing_id,
+    } = await req.json()
+
+    if (!amount || !purpose) throw new Error('amount and purpose are required')
 
     const res = await fetch('https://api.paychangu.com/payment', {
       method: 'POST',
@@ -24,7 +30,7 @@ serve(async (req) => {
         'Accept': 'application/json',
       },
       body: JSON.stringify({
-        amount: '5000',
+        amount: String(amount),
         currency: 'MWK',
         tx_ref,
         first_name,
@@ -32,10 +38,10 @@ serve(async (req) => {
         email,
         callback_url,
         return_url,
-        meta: JSON.stringify({ seller_id, purpose: 'verification' }),
+        meta: [{ seller_id, purpose, listing_id: listing_id || null }],
         customization: {
-          title: 'SokoMW Seller Verification',
-          description: 'One-time seller verification fee',
+          title: title || 'SokoMW Payment',
+          description: description || 'Payment on SokoMW',
         },
       }),
     })

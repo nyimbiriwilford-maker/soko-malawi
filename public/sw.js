@@ -1,4 +1,4 @@
-const CACHE = 'sokomw-v4'
+const CACHE = 'sokomw-v5'
 const ASSETS = ['/', '/index.html']
 
 // ── Install & cache ──────────────────────────────────────
@@ -19,8 +19,30 @@ self.addEventListener('activate', e => {
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return
   if (e.request.url.includes('supabase.co')) return
+  // Never cache JS/JSX files — always fetch fresh
+  if (e.request.url.includes('.js') || e.request.url.includes('.jsx')) {
+    e.respondWith(fetch(e.request))
+    return
+  }
   e.respondWith(
-    fetch(e.request).catch(() => caches.match(e.request))
+    fetch(e.request).catch(async () => {
+      const cached = await caches.match(e.request)
+      if (cached) return cached
+      // No live response and no cache match — fall back to the cached
+      // app shell so navigations never resolve to undefined (which
+      // throws "Failed to convert value to 'Response'" and breaks the
+      // page load). Only meaningful for navigation requests; other
+      // assets with no cache entry will still correctly fail.
+      if (e.request.mode === 'navigate') {
+        const shell = await caches.match('/index.html')
+        if (shell) return shell
+      }
+      return new Response('Network error and no cache available', {
+        status: 504,
+        statusText: 'Gateway Timeout',
+        headers: { 'Content-Type': 'text/plain' },
+      })
+    })
   )
 })
 

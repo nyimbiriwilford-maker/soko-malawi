@@ -678,11 +678,14 @@ const sameContext = !hasListing
         textarea:focus{outline:none;border-color:#1a7a4a !important;}
         .msg-row:hover .reply-btn{opacity:1!important}
         .emoji-btn:hover{transform:scale(1.25);transition:transform 0.1s}
+        /* On desktop's split view the list is always visible, so the back
+           arrow that returns to it is redundant — hide it there only. */
+        @media (min-width: 900px) { .chat-back-btn { display: none !important; } }
       `}</style>
 
       {/* ── Top bar ── */}
       <div style={S.topbar}>
-        <button style={S.back} onClick={() => navigate(isServiceChat ? '/services' : '/chats')}>
+        <button className="chat-back-btn" style={S.back} onClick={() => navigate(isServiceChat ? '/services' : '/chats')}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1a7a4a" strokeWidth="2.5" strokeLinecap="round">
             <path d="M19 12H5M12 5l-7 7 7 7" />
           </svg>

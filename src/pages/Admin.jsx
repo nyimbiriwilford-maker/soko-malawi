@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 
-const TABS = ['Dashboard', 'Featured', 'Listings', 'Users', 'Verifications', 'Broadcast']
+const TABS = ['Dashboard', 'Featured', 'Listings', 'Users', 'Verifications', 'Shop Reports', 'Broadcast']
 
 export default function Admin() {
   const navigate = useNavigate()
@@ -15,8 +15,13 @@ export default function Admin() {
   const [statusFilter, setStatusFilter] = useState('all')
   const [toast, setToast] = useState('')
   const [adminName, setAdminName] = useState('')
+  const [freeFeaturedEnabled, setFreeFeaturedEnabled] = useState(true)
+  const [settingsLoading, setSettingsLoading] = useState(false)
 const [verifications, setVerifications] = useState([])
 const [verifyLoading, setVerifyLoading] = useState(false)
+const [shopReports, setShopReports] = useState([])
+const [reportFilter, setReportFilter] = useState('pending')
+const [reportActionLoading, setReportActionLoading] = useState(null)
 const [broadcastSubject, setBroadcastSubject] = useState('')
 const [broadcastMessage, setBroadcastMessage] = useState('')
 const [broadcasting, setBroadcasting] = useState(false)
@@ -39,14 +44,34 @@ const [selectedUsers, setSelectedUsers] = useState([])
     if (profile?.role !== 'admin') { navigate('/'); return }
 
     setAdminName(profile?.full_name || user.email)
-    await Promise.all([loadListings(), loadUsers(), loadVerifications()])
+    await Promise.all([loadListings(), loadUsers(), loadVerifications(), loadShopReports(), loadSettings()])
     setLoading(false)
+  }
+
+  async function loadSettings() {
+    const { data } = await supabase.from('app_settings').select('value').eq('key', 'free_featured_enabled').maybeSingle()
+    if (data) setFreeFeaturedEnabled(data.value === true)
+  }
+
+  async function toggleFreeFeatured() {
+    setSettingsLoading(true)
+    const next = !freeFeaturedEnabled
+    const { error } = await supabase.from('app_settings')
+      .update({ value: next, updated_at: new Date().toISOString() })
+      .eq('key', 'free_featured_enabled')
+    if (error) {
+      showToast(`❌ Failed: ${error.message}`)
+    } else {
+      setFreeFeaturedEnabled(next)
+      showToast(next ? '✅ Free featured listing enabled' : '🚫 Free featured listing disabled')
+    }
+    setSettingsLoading(false)
   }
 
  async function loadListings() {
   const { data, error } = await supabase
     .from('listings')
-    .select('id, title, price, city, category, images, status, featured, seller_id, created_at')
+    .select('id, title, price, city, category, images, status, featured, seller_id, created_at, promoted_until')
     .order('created_at', { ascending: false })
   if (error) console.error('Listings error:', error)
   
@@ -71,13 +96,42 @@ async function loadVerifications() {
   setVerifications(data || [])
 }
 
+async function loadShopReports() {
+  const { data, error } = await supabase
+    .from('shop_reports')
+    .select('*, shops(name, slug, logo_url)')
+    .order('created_at', { ascending: false })
+  if (error) console.error('Shop reports error:', error)
+  setShopReports(data || [])
+}
+
+async function handleReportAction(id, status) {
+  setReportActionLoading(id)
+  const note = status === 'dismissed' ? (window.prompt('Note (optional):') || null) : null
+  await supabase.from('shop_reports').update({
+    status,
+    admin_note: note,
+    reviewed_at: new Date().toISOString(),
+  }).eq('id', id)
+  setShopReports(rs => rs.map(r => r.id === id ? { ...r, status, admin_note: note } : r))
+  showToast(status === 'reviewed' ? '✅ Marked as reviewed' : '✕ Report dismissed')
+  setReportActionLoading(null)
+}
+
 async function handleVerify(id, status, note = '') {
   setVerifyLoading(id)
+  const verification = verifications.find(v => v.id === id)
   await supabase.from('verification_requests').update({
     status,
     admin_note: note || null,
     reviewed_at: new Date().toISOString(),
   }).eq('id', id)
+
+  if (status === 'approved' && verification?.seller_id) {
+    await supabase.from('profiles').update({ is_verified: true }).eq('id', verification.seller_id)
+    await supabase.from('shops').update({ is_verified: true }).eq('owner_id', verification.seller_id)
+  }
+
   setVerifications(vs => vs.map(v => v.id === id ? { ...v, status, admin_note: note } : v))
   showToast(status === 'approved' ? '✅ Seller verified!' : '❌ Request rejected')
   setVerifyLoading(null)
@@ -151,9 +205,50 @@ async function loadUsers() {
 
   async function toggleFeatured(listing) {
     setToggling(listing.id)
-    await supabase.from('listings').update({ featured: !listing.is_featured }).eq('id', listing.id)
-    setListings(ls => ls.map(l => l.id === listing.id ? { ...l, is_featured: !l.is_featured } : l))
-    showToast(listing.is_featured ? 'Removed from featured' : 'Added to featured ⭐')
+
+    if (!listing.is_featured) {
+      const daysInput = window.prompt('Feature this listing for how many days?', '14')
+      const days = parseInt(daysInput, 10)
+      if (!daysInput || !days || days <= 0) { setToggling(null); return }
+
+      const startedAt = new Date()
+      const expiresAt = new Date(startedAt)
+      expiresAt.setDate(expiresAt.getDate() + days)
+
+      await supabase.from('listings')
+        .update({ featured: true, promoted_until: expiresAt.toISOString() })
+        .eq('id', listing.id)
+
+      await supabase.from('listing_promotions').insert([{
+        listing_id: listing.id,
+        seller_id: listing.seller_id,
+        promotion_type: 'featured',
+        price_mwk: 0, // admin-granted, no charge
+        status: 'active',
+        started_at: startedAt.toISOString(),
+        expires_at: expiresAt.toISOString(),
+      }])
+
+      setListings(ls => ls.map(l => l.id === listing.id
+        ? { ...l, is_featured: true, promoted_until: expiresAt.toISOString() }
+        : l))
+      showToast(`Featured for ${days} days ⭐`)
+    } else {
+      await supabase.from('listings')
+        .update({ featured: false, promoted_until: null })
+        .eq('id', listing.id)
+
+      await supabase.from('listing_promotions')
+        .update({ status: 'cancelled' })
+        .eq('listing_id', listing.id)
+        .eq('status', 'active')
+
+      setListings(ls => ls.map(l => l.id === listing.id
+        ? { ...l, is_featured: false, promoted_until: null }
+        : l))
+      showToast('Removed from featured')
+    }
+
     setToggling(null)
   }
 
@@ -218,7 +313,7 @@ async function loadUsers() {
     </div>
   )
 
-  const TAB_ICONS = { Dashboard: '📊', Featured: '⭐', Listings: '📦', Users: '👥', Verifications: '✅', Broadcast: '📣' }
+  const TAB_ICONS = { Dashboard: '📊', Featured: '⭐', Listings: '📦', Users: '👥', Verifications: '✅', 'Shop Reports': '🚩', Broadcast: '📣' }
 
   return (
     <div style={S.shell}>
@@ -281,6 +376,11 @@ async function loadUsers() {
 {t === 'Verifications' && verifications.filter(v => v.status === 'pending').length > 0 && (
   <span style={{ ...S.navPill, background: '#dc2626' }}>
     {verifications.filter(v => v.status === 'pending').length}
+  </span>
+)}
+{t === 'Shop Reports' && shopReports.filter(r => r.status === 'pending').length > 0 && (
+  <span style={{ ...S.navPill, background: '#dc2626' }}>
+    {shopReports.filter(r => r.status === 'pending').length}
   </span>
 )}
               </button>
@@ -423,6 +523,35 @@ async function loadUsers() {
         {/* ══ TAB: FEATURED ══ */}
         {tab === 'Featured' && (
           <div style={S.content}>
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              background: '#fff', border: '1px solid #e8f0ec', borderRadius: 14,
+              padding: '16px 20px', marginBottom: 20,
+            }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: '#111' }}>Free First Featured Listing</div>
+                <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
+                  {freeFeaturedEnabled
+                    ? 'New sellers get their first featured listing for free.'
+                    : 'The free first-feature perk is currently turned off for all sellers.'}
+                </div>
+              </div>
+              <button
+                onClick={toggleFreeFeatured}
+                disabled={settingsLoading}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  background: freeFeaturedEnabled ? '#e6f4ec' : '#fee2e2',
+                  color: freeFeaturedEnabled ? '#1a7a4a' : '#dc2626',
+                  border: 'none', borderRadius: 10, padding: '10px 18px',
+                  fontSize: 13, fontWeight: 700, cursor: settingsLoading ? 'not-allowed' : 'pointer',
+                  fontFamily: "'DM Sans', system-ui, sans-serif",
+                }}
+              >
+                {settingsLoading ? <div style={S.miniSpinner} /> : (freeFeaturedEnabled ? '✓ Enabled — Turn Off' : '✕ Disabled — Turn On')}
+              </button>
+            </div>
+
             <SectionLabel icon="⭐" text={`Currently Featured (${featuredListings.length})`} />
             {featuredListings.length === 0
               ? <EmptyBox text="No featured listings yet." />
@@ -617,6 +746,91 @@ async function loadUsers() {
       ))}
       {verifications.filter(v => statusFilter === 'all' || v.status === statusFilter).length === 0 && (
         <div style={{ padding: 32, textAlign: 'center', color: '#aaa', fontSize: 13 }}>No verification requests.</div>
+      )}
+    </div>
+  </div>
+)}
+
+{tab === 'Shop Reports' && (
+  <div style={S.content}>
+    <div style={S.tableCard}>
+      <div style={S.tableHeader}>
+        <div style={S.tableTitle}>Shop Reports</div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          {['all','pending','reviewed','dismissed'].map(f => (
+            <button key={f} onClick={() => setReportFilter(f)} style={{
+              padding: '4px 12px', borderRadius: 20, border: 'none', cursor: 'pointer',
+              fontSize: 11, fontWeight: 700,
+              background: reportFilter === f ? '#1a7a4a' : '#f0f5f2',
+              color: reportFilter === f ? '#fff' : '#555',
+            }}>{f}</button>
+          ))}
+        </div>
+      </div>
+      {shopReports
+        .filter(r => reportFilter === 'all' || r.status === reportFilter)
+        .map(r => (
+        <div key={r.id} style={{
+          display: 'flex', alignItems: 'center', gap: 14,
+          padding: '14px 20px', borderBottom: '1px solid #f0f5f2',
+        }}>
+          {/* Shop avatar */}
+          <div style={{ ...S.userAvatar, flexShrink: 0, borderRadius: 10 }}>
+            {r.shops?.logo_url
+              ? <img src={r.shops.logo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 10 }} />
+              : (r.shops?.name || '?')[0].toUpperCase()
+            }
+          </div>
+          {/* Info */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#111' }}>
+              {r.shops?.name || 'Unknown shop'}
+            </div>
+            <div style={{ fontSize: 11, color: '#dc2626', marginTop: 2, fontWeight: 700, textTransform: 'capitalize' }}>
+              🚩 {r.reason?.replace(/_/g, ' ')}
+            </div>
+            {r.details && (
+              <div style={{ fontSize: 11.5, color: '#555', marginTop: 3, maxWidth: 480 }}>{r.details}</div>
+            )}
+            <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 3 }}>
+              Reported: {new Date(r.created_at).toLocaleString()}
+            </div>
+            {r.admin_note && (
+              <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>Note: {r.admin_note}</div>
+            )}
+          </div>
+          {/* Status + actions */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
+            <StatusBadge status={r.status === 'pending' ? 'inactive' : r.status === 'reviewed' ? 'active' : 'sold'} />
+            {r.shops?.slug && (
+              <button
+                onClick={() => navigate('/shop/' + r.shops.slug)}
+                style={{ fontSize: 11, fontWeight: 700, color: '#1a7a4a', background: 'none', border: 'none', cursor: 'pointer' }}
+              >View shop →</button>
+            )}
+            {r.status === 'pending' && (
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button
+                  disabled={reportActionLoading === r.id}
+                  onClick={() => handleReportAction(r.id, 'reviewed')}
+                  style={{ padding: '5px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, background: '#e6f4ec', color: '#1a7a4a' }}
+                >
+                  {reportActionLoading === r.id ? '…' : '✓ Mark Reviewed'}
+                </button>
+                <button
+                  disabled={reportActionLoading === r.id}
+                  onClick={() => handleReportAction(r.id, 'dismissed')}
+                  style={{ padding: '5px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, background: '#fee2e2', color: '#dc2626' }}
+                >
+                  ✕ Dismiss
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
+      {shopReports.filter(r => reportFilter === 'all' || r.status === reportFilter).length === 0 && (
+        <div style={{ padding: 32, textAlign: 'center', color: '#aaa', fontSize: 13 }}>No reports.</div>
       )}
     </div>
   </div>
@@ -878,6 +1092,11 @@ function FeatCard({ listing, featured, toggling, onToggle, onView }) {
       <div style={{ padding: '10px 12px' }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: '#111', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{listing.title}</div>
         <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{listing.city} · {listing.category}</div>
+        {featured && listing.promoted_until && (
+          <div style={{ fontSize: 10.5, color: '#b45309', marginTop: 4, fontWeight: 600 }}>
+            Expires {new Date(listing.promoted_until).toLocaleDateString()}
+          </div>
+        )}
       </div>
       <div style={{ padding: '0 12px 12px', display: 'flex', justifyContent: 'flex-end' }}>
         <button

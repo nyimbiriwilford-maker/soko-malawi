@@ -10,15 +10,26 @@ export default function FollowersManager({ sellerId }) {
 
   useEffect(() => {
     if (!sellerId) return
-    supabase
-      .from('seller_follows')
-      .select('id, created_at, follower_id, follower:profiles!follower_id(full_name, avatar_url)')
-      .eq('seller_id', sellerId)
-      .order('created_at', { ascending: false })
-      .then(({ data }) => {
-        setFollowers(data || [])
-        setLoading(false)
-      })
+    const load = async () => {
+      const { data: follows } = await supabase
+        .from('seller_follows')
+        .select('id, created_at, follower_id')
+        .eq('seller_id', sellerId)
+        .order('created_at', { ascending: false })
+
+      if (!follows?.length) { setLoading(false); return }
+
+      const ids = follows.map(f => f.follower_id)
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, avatar_url')
+        .in('id', ids)
+
+      const profileMap = Object.fromEntries((profiles || []).map(p => [p.id, p]))
+      setFollowers(follows.map(f => ({ ...f, follower: profileMap[f.follower_id] || null })))
+      setLoading(false)
+    }
+    load()
   }, [sellerId])
 
   const remove = async (followId) => {

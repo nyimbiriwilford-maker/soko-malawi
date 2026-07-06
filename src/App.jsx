@@ -3,7 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { supabase } from './lib/supabase'
 const StatusPage          = lazy(() => import('./pages/StatusPage'))
 const SavedStatusesPage   = lazy(() => import('./pages/SavedStatusesPage'))
-const LookingFor = lazy(() => import('./pages/LookingFor'))
+const LookingFor = lazy(() => import('./pages/LookingFor/LookingFor'))
 
 // ── Eagerly loaded (needed immediately on first paint) ────
 import Login        from './pages/Login'
@@ -13,8 +13,7 @@ import AuthCallback from './pages/AuthCallback'
 const Home          = lazy(() => import('./pages/Home'))
 const ListingDetail = lazy(() => import('./pages/ListingDetail'))
 const PostListing   = lazy(() => import('./pages/PostListing'))
-const Chat          = lazy(() => import('./pages/Chat'))
-const ChatList      = lazy(() => import('./pages/ChatList'))
+const ChatsLayout   = lazy(() => import('./pages/ChatsLayout'))
 const Profile       = lazy(() => import('./pages/Profile'))
 const Jobs          = lazy(() => import('./pages/Jobs'))
 const Services      = lazy(() => import('./pages/ServicesPage'))
@@ -23,6 +22,12 @@ const PublicProfile = lazy(() => import('./pages/PublicProfile'))
 const ResetPassword   = lazy(() => import('./pages/ResetPassword'))
 const Notifications   = lazy(() => import('./pages/Notifications'))
 const VerifyPayment   = lazy(() => import('./pages/VerifyPayment'))
+const Onboarding       = lazy(() => import('./pages/Onboarding'))
+const ShopSetup        = lazy(() => import('./pages/ShopSetup'))
+const ShopPage          = lazy(() => import('./pages/ShopPage'))
+const ShopsPage         = lazy(() => import('./pages/ShopsPage'))
+const SearchPage        = lazy(() => import('./pages/SearchPage'))
+const ListingsPage      = lazy(() => import('./pages/ListingsPage'))
 
 import GlobalCallListener from './components/GlobalCallListener'
 import { CallProvider }   from './context/CallContext'
@@ -175,7 +180,7 @@ const [installPrompt, setInstallPrompt] = useState(null)
   async function fetchRole(userId) {
     const { data } = await supabase
       .from('profiles')
-      .select('role, is_disabled')
+      .select('role, is_disabled, onboarded, onboarding_skipped')
       .eq('id', userId)
       .single()
     if (data?.is_disabled) {
@@ -186,6 +191,10 @@ const [installPrompt, setInstallPrompt] = useState(null)
       return
     }
     setRole(data?.role ?? 'user')
+    const needsOnboarding = data && !data.onboarded && !data.onboarding_skipped
+    if (needsOnboarding && window.location.pathname !== '/onboarding') {
+      window.location.replace('/onboarding')
+    }
   }
 
   useGlobalPresence(session?.user?.id ?? null)
@@ -245,9 +254,9 @@ const [installPrompt, setInstallPrompt] = useState(null)
             <Route path="/"                        element={authed ? (isAdmin ? <Navigate to="/admin" /> : <Home />)      : <Navigate to="/login" />} />
             <Route path="/listing/:id"             element={authed ? <ListingDetail />  : <Navigate to="/login" />} />
             <Route path="/post"                    element={authed ? <PostListing />    : <Navigate to="/login" />} />
-            <Route path="/chats"                   element={authed ? <ChatList />       : <Navigate to="/login" />} />
-            <Route path="/chat/:userId/:listingId" element={authed ? <Chat />           : <Navigate to="/login" />} />
-            <Route path="/chat/:userId"            element={authed ? <Chat />           : <Navigate to="/login" />} />
+            <Route path="/chats"                   element={authed ? <ChatsLayout />    : <Navigate to="/login" />} />
+            <Route path="/chat/:userId/:listingId" element={authed ? <ChatsLayout />    : <Navigate to="/login" />} />
+            <Route path="/chat/:userId"            element={authed ? <ChatsLayout />    : <Navigate to="/login" />} />
             <Route path="/profile"                 element={authed ? <Profile />        : <Navigate to="/login" />} />
             <Route path="/jobs"                    element={authed ? <Jobs />           : <Navigate to="/login" />} />
             <Route path="/services"                element={authed ? <Services />       : <Navigate to="/login" />} />
@@ -258,6 +267,12 @@ const [installPrompt, setInstallPrompt] = useState(null)
 <Route path="/notifications"           element={authed ? <Notifications />  : <Navigate to="/login" />} />
 <Route path="/looking-for"             element={authed ? <LookingFor />     : <Navigate to="/login" />} />
 <Route path="/verify-payment"          element={<VerifyPayment />} />
+<Route path="/onboarding"              element={authed ? <Onboarding />     : <Navigate to="/login" />} />
+<Route path="/shop-setup"              element={authed ? <ShopSetup />      : <Navigate to="/login" />} />
+<Route path="/shop/:slug"              element={authed ? <ShopPage />       : <Navigate to="/login" />} />
+<Route path="/shops"                   element={authed ? <ShopsPage />      : <Navigate to="/login" />} />
+<Route path="/search"                  element={authed ? <SearchPage />     : <Navigate to="/login" />} />
+<Route path="/listings"                element={authed ? <ListingsPage />   : <Navigate to="/login" />} />
 <Route path="*"                        element={<Navigate to="/" />} /></Routes>
         </Suspense>
       </BrowserRouter>
