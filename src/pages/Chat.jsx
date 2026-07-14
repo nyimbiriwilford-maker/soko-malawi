@@ -5,12 +5,17 @@ import { useWebRTC, formatTime } from '../hooks/useWebRTC'
 import { watchUserOnline, globalChannel } from '../hooks/usePresence'
 import DealPillButton from '../components/DealPillButton'
 import DealRequestCard from '../components/DealRequestCard'
+import CallOverlay from '../components/CallOverlay'
 
 // ── Emoji picker data ────────────────────────────────────────────────────────
 const EMOJI_CATEGORIES = {
-  '😀': ['😀','😂','🤣','😊','😍','🥰','😘','😎','🤔','😅','😭','😤','🥺','😱','🤩','😴','🤗','😏','🙄','😬','🥳','😇','🤭','😋','😜'],
-  '👍': ['👍','👎','👏','🙌','🤝','👋','🤙','💪','🫶','❤️','🔥','✨','💯','🎉','🎊','🙏','💀','👀','💅','🫠','🤌','💫','⭐','🌟','💥'],
-  '🐶': ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐸','🐵','🦋','🌸','🌺','🌻','🍎','🍕','🍔','☕','🎵','🏆'],
+  '😀': ['😀','😃','😄','😁','😆','😅','🤣','😂','🙂','🙃','😉','😊','😇','🥰','😍','🤩','😘','😗','😚','😙','😋','😛','😜','🤪','😝','🤑','🤗','🤭','🤫','🤔','🤐','🤨','😐','😑','😶','😏','😒','🙄','😬','🤥','😴','😌','😔','😪','🤤','😷','🤒','🤕','🤢','🤮','🤧','🥵','🥶','🥴','😵','🤯','🤠','🥳','🥸','😎','🤓','🧐','😕','😟','🙁','😮','😯','😲','😳','🥺','😦','😧','😨','😰','😥','😢','😭','😱','😖','😣','😞','😓','😩','😫','🥱','😤','😡','😠','🤬','😈','👿','💀','☠️','💩','🤡','👹','👺','👻','👽','🤖','😺','😸','😹','😻','😼','😽','🙀','😿','😾'],
+  '👍': ['👍','👎','👏','🙌','👐','🤲','🤝','🙏','✍️','💪','🦾','🖐️','✋','🖖','👋','🤙','💅','🤳','👌','🤌','🤏','✌️','🤞','🫰','🤟','🤘','👈','👉','👆','👇','☝️','👊','✊','🤛','🤜','❤️','🧡','💛','💚','💙','💜','🖤','🤍','🤎','💔','❣️','💕','💞','💓','💗','💖','💘','💝','💟','🔥','✨','🌟','⭐','💫','💥','💯','💢','💦','💨','🕳️','💣','💬','👁️‍🗨️','🗨️','🗯️','💭','💤','🎉','🎊','🎈','🎁','🏆','🥇','🥈','🥉','🏅','🎖️'],
+  '🐶': ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🐯','🦁','🐮','🐷','🐽','🐸','🐵','🙈','🙉','🙊','🐔','🐧','🐦','🐤','🦆','🦅','🦉','🦇','🐺','🐗','🐴','🦄','🐝','🪲','🦋','🐌','🐞','🐜','🦗','🕷️','🦂','🐢','🐍','🦎','🦖','🦕','🐙','🦑','🦀','🐡','🐠','🐟','🐬','🐳','🐋','🦈','🐊','🐆','🐅','🐃','🐂','🐄','🐪','🐫','🦙','🦒','🐘','🦣','🦏','🦛','🐐','🐏','🐑','🐎','🐕','🐩','🐈','🐓','🦃','🦤','🕊️','🐇','🦝','🦨','🦡','🦫','🦦','🦥','🐁','🐀','🐿️','🦔'],
+  '🍎': ['🍎','🍏','🍊','🍋','🍌','🍉','🍇','🍓','🫐','🍈','🍒','🍑','🥭','🍍','🥥','🥝','🍅','🍆','🥑','🥦','🥬','🥒','🌶️','🫑','🌽','🥕','🫒','🧄','🧅','🥔','🍠','🥐','🥯','🍞','🥖','🥨','🧀','🥚','🍳','🧈','🥞','🧇','🥓','🥩','🍗','🍖','🌭','🍔','🍟','🍕','🫓','🥪','🥙','🧆','🌮','🌯','🥗','🥘','🫕','🥫','🍝','🍜','🍲','🍛','🍣','🍱','🥟','🦪','🍤','🍙','🍚','🍘','🍥','🥠','🥮','🍢','🍡','🍧','🍨','🍦','🥧','🧁','🍰','🎂','🍮','🍭','🍬','🍫','🍿','🍩','🍪','🌰','🥜','☕','🍵','🧃','🥤','🧋','🍶','🍺','🍻','🥂','🍷','🥃','🍸','🍹','🧉','🍾'],
+  '⚽': ['⚽','🏀','🏈','⚾','🥎','🎾','🏐','🏉','🥏','🎱','🪀','🏓','🏸','🏒','🏑','🥍','🏏','🪃','🥅','⛳','🪁','🏹','🎣','🤿','🥊','🥋','🎽','🛹','🛼','🛷','⛸️','🥌','🎿','⛷️','🏂','🏋️','🤼','🤸','⛹️','🤺','🤾','🏌️','🏇','🧘','🏄','🏊','🤽','🚣','🧗','🚵','🚴','🏆','🥇','🥈','🥉','🏅','🎖️','🏵️','🎗️','🎫','🎟️','🎪','🤹','🎭','🩰','🎨','🎬','🎤','🎧','🎼','🎹','🥁','🪘','🎷','🎺','🪗','🎸','🪕','🎻','🎲','♟️','🎯','🎳','🎮','🎰'],
+  '🚗': ['🚗','🚕','🚙','🚌','🚎','🏎️','🚓','🚑','🚒','🚐','🛻','🚚','🚛','🚜','🦽','🦼','🛴','🚲','🛵','🏍️','🛺','🚨','🚔','🚍','🚘','🚖','🚡','🚠','🚟','🚃','🚋','🚞','🚝','🚄','🚅','🚈','🚂','🚆','🚇','🚊','🚉','✈️','🛫','🛬','🛩️','💺','🛰️','🚀','🛸','🚁','🛶','⛵','🚤','🛥️','🛳️','⛴️','🚢','⚓','🪝','⛽','🚧','🚦','🚥','🗺️','🗿','🗽','🗼','🏰','🏯','🏟️','🎡','🎢','🎠','⛲','⛱️','🏖️','🏝️','🏜️','🌋','⛰️','🏔️','🗻','🏕️','⛺','🏠','🏡','🏘️','🏚️','🏗️','🏭','🏢','🏬','🏣','🏤','🏥','🏦','🏨','🏪','🏫','🏩','💒','🏛️','⛪','🕌','🕍','🛕','🕋'],
+  '🌸': ['🌸','💮','🏵️','🌹','🥀','🌺','🌻','🌼','🌷','🌱','🪴','🌲','🌳','🌴','🌵','🌾','🌿','☘️','🍀','🍁','🍂','🍃','🍄','🌰','🪺','🐚','🪸','🌊','💧','🌈','☀️','🌤️','⛅','🌥️','☁️','🌦️','🌧️','⛈️','🌩️','🌨️','❄️','☃️','⛄','🌬️','💨','🌪️','🌫️','🌙','🌛','🌜','🌚','🌝','🌞','⭐','🌟','💫','✨','☄️','🌠','🌌','🌍','🌎','🌏','🪐','🔥','💥','🌡️','☔','⚡'],
 }
 
 // ── Reply storage: stored in message body as a prefix so no extra DB columns needed
@@ -657,14 +662,14 @@ const sameContext = !hasListing
   }
 
   if (loading) return (
-    <div style={S.loadCenter}>
+    <div className="chat-page" style={S.loadCenter}>
       <div style={S.spinner} />
     </div>
   )
 
   // ── Main render ──────────────────────────────────────────────────────────
   return (
-    <div style={S.page}>
+    <div className="chat-page" style={S.page}>
       <style>{`
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
         @keyframes spin{to{transform:rotate(360deg)}}
@@ -684,7 +689,7 @@ const sameContext = !hasListing
       `}</style>
 
       {/* ── Top bar ── */}
-      <div style={S.topbar}>
+      <div className="chat-topbar" style={S.topbar}>
         <button className="chat-back-btn" style={S.back} onClick={() => navigate(isServiceChat ? '/services' : '/chats')}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1a7a4a" strokeWidth="2.5" strokeLinecap="round">
             <path d="M19 12H5M12 5l-7 7 7 7" />
@@ -835,106 +840,25 @@ const sameContext = !hasListing
       })()}
 
       {/* ── Call overlays ── */}
-      {(callState === 'calling' || callState === 'ringing') && (
-        <div style={S.callOverlay}>
-          <div style={S.callCard}>
-            <div style={{ position: 'relative', width: 90, height: 90, margin: '0 auto 20px' }}>
-              {callState === 'ringing' && <><div style={{ ...S.ripple, animationDelay: '0s' }} /><div style={{ ...S.ripple, animationDelay: '0.5s' }} /></>}
-              <div style={S.callAvatarWrap}><Avatar url={otherAvatar} initial={otherInitial} size={90} /></div>
-            </div>
-            <div style={S.callName}>{otherName}</div>
-            <div style={S.callStatus}>{callState === 'calling' ? (callType === 'video' ? '📹 Starting video call…' : '📞 Calling…') : <span style={{ animation: 'blink 1.2s infinite' }}>🔔 Ringing…</span>}</div>
-            <div style={{ marginTop: 36 }}>
-              <button style={S.hangUpBtn} onClick={hangUp}><HangupIcon /></button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {callState === 'receiving' && (
-        <div style={{ ...S.callOverlay, animation: 'slideUp 0.3s ease' }}>
-          <div style={S.callCard}>
-            <div style={{ position: 'relative', width: 90, height: 90, margin: '0 auto 20px' }}>
-              <div style={{ ...S.ripple, animationDelay: '0s' }} /><div style={{ ...S.ripple, animationDelay: '0.6s' }} />
-              <div style={{ ...S.callAvatarWrap, animation: 'ringPulse 1.4s infinite' }}><Avatar url={otherAvatar} initial={otherInitial} size={90} /></div>
-            </div>
-            <div style={S.callName}>{otherName}</div>
-            <div style={S.callStatus}>{callType === 'video' ? '📹 Incoming video call' : '📞 Incoming voice call'}</div>
-            <div style={{ display: 'flex', gap: 40, marginTop: 36, justifyContent: 'center' }}>
-              <div style={{ textAlign: 'center' }}>
-                <button style={S.declineBtn} onClick={declineCall}><HangupIcon /></button>
-                <div style={S.callBtnLabel}>Decline</div>
-              </div>
-              <div style={{ textAlign: 'center' }}>
-                <button style={S.answerBtn} onClick={answerCall}><AnswerIcon /></button>
-                <div style={S.callBtnLabel}>Answer</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {callState === 'in-call' && (
-        <div style={{ position:'fixed',inset:0,zIndex:3000,fontFamily:'system-ui,sans-serif',background:'#000',overflow:'hidden' }}>
-          <video ref={remoteVideoRef} autoPlay playsInline style={{ position:'absolute',inset:0,width:'100%',height:'100%',objectFit:'cover' }} />
-          <div style={{ position:'absolute',bottom:0,left:0,right:0,height:220,background:'linear-gradient(to top,rgba(0,0,0,0.88) 0%,transparent 100%)',pointerEvents:'none' }} />
-          <div style={{ position:'absolute',top:0,left:0,right:0,height:110,background:'linear-gradient(to bottom,rgba(0,0,0,0.6) 0%,transparent 100%)',pointerEvents:'none' }} />
-          {callType === 'video' ? (
-            <div style={{ position:'absolute',top:20,right:16,width:88,height:124,borderRadius:14,overflow:'hidden',border:'2px solid rgba(255,255,255,0.25)',background:'#111',boxShadow:'0 4px 20px rgba(0,0,0,0.6)',zIndex:2 }}>
-              <video ref={localVideoRef} autoPlay playsInline muted style={{ width:'100%',height:'100%',objectFit:'cover' }} />
-            </div>
-          ) : (
-            <video ref={localVideoRef} autoPlay playsInline muted style={{ display:'none' }} />
-          )}
-          
-          <div style={{ position:'absolute',top:28,left:0,right:0,display:'flex',flexDirection:'column',alignItems:'center',gap:6,zIndex:2 }}>
-            {callType === 'voice' && (
-              <>
-                <div style={{ width:80,height:80,borderRadius:'50%',overflow:'hidden',marginBottom:6,boxShadow:'0 4px 20px rgba(0,0,0,0.5)' }}>
-                  <Avatar url={otherAvatar} initial={otherInitial} size={80} />
-                </div>
-                <div style={{ fontSize:20,fontWeight:'700',color:'#fff',textShadow:'0 2px 8px rgba(0,0,0,0.7)' }}>{otherName}</div>
-              </>
-            )}
-            <div style={{ display:'inline-flex',alignItems:'center',gap:6,background:'rgba(0,0,0,0.35)',backdropFilter:'blur(8px)',borderRadius:20,padding:'4px 16px' }}>
-              <span style={{ width:7,height:7,borderRadius:'50%',background:'#4ade80',display:'inline-block' }} />
-              <span style={{ fontSize:14,color:'rgba(255,255,255,0.92)',fontWeight:'600',fontVariantNumeric:'tabular-nums' }}>{formatTime(callDuration)}</span>
-            </div>
-          </div>
-          <div style={{ position:'absolute',bottom:0,left:0,right:0,zIndex:10,paddingBottom:40,paddingTop:16,display:'flex',flexDirection:'column',alignItems:'center' }}>
-            <div style={{ display:'flex',alignItems:'flex-end',justifyContent:'center',gap:20,width:'100%',maxWidth:360,paddingLeft:16,paddingRight:16,boxSizing:'border-box' }}>
-              <div style={{ flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:6 }}>
-                <button onClick={toggleMute} style={{ width:56,height:56,borderRadius:'50%',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',background:isMuted?'rgba(239,68,68,0.9)':'rgba(255,255,255,0.18)',backdropFilter:'blur(10px)',boxShadow:'0 2px 12px rgba(0,0,0,0.4)',transition:'background 0.2s' }}>
-                  <span style={{ fontSize:22 }}>{isMuted ? '🔇' : '🎙️'}</span>
-                </button>
-                <span style={{ color:'rgba(255,255,255,0.7)',fontSize:11,fontWeight:'500' }}>{isMuted?'Unmute':'Mute'}</span>
-              </div>
-              {callType === 'video' && (
-                <div style={{ flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:6 }}>
-                  <button onClick={toggleCam} style={{ width:56,height:56,borderRadius:'50%',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',background:isCamOff?'rgba(239,68,68,0.9)':'rgba(255,255,255,0.18)',backdropFilter:'blur(10px)',boxShadow:'0 2px 12px rgba(0,0,0,0.4)',transition:'background 0.2s' }}>
-                    <span style={{ fontSize:22 }}>{isCamOff ? '📷' : '📹'}</span>
-                  </button>
-                  <span style={{ color:'rgba(255,255,255,0.7)',fontSize:11,fontWeight:'500' }}>Camera</span>
-                </div>
-              )}
-              <div style={{ flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:6 }}>
-                <button onClick={hangUp} style={{ width:64,height:64,borderRadius:'50%',background:'#ef4444',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 24px rgba(239,68,68,0.65)',transform:'scale(1.08)' }}>
-                  <HangupIcon />
-                </button>
-                <span style={{ color:'rgba(255,255,255,0.7)',fontSize:11,fontWeight:'500' }}>End</span>
-              </div>
-              {callType === 'video' && (
-                <div style={{ flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:6 }}>
-                  <button onClick={switchCamera} style={{ width:56,height:56,borderRadius:'50%',border:'none',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(255,255,255,0.18)',backdropFilter:'blur(10px)',boxShadow:'0 2px 12px rgba(0,0,0,0.4)' }}>
-                    <span style={{ fontSize:22 }}>🔄</span>
-                  </button>
-                  <span style={{ color:'rgba(255,255,255,0.7)',fontSize:11,fontWeight:'500' }}>Flip</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <CallOverlay
+        callState={callState}
+        callType={callType}
+        callDuration={callDuration}
+        otherName={otherName}
+        otherAvatar={otherAvatar}
+        otherInitial={otherInitial}
+        isMuted={isMuted}
+        isCamOff={isCamOff}
+        remoteVideoRef={remoteVideoRef}
+        localVideoRef={localVideoRef}
+        hangUp={hangUp}
+        answerCall={answerCall}
+        declineCall={declineCall}
+        toggleMute={toggleMute}
+        toggleCam={toggleCam}
+        switchCamera={switchCamera}
+        formatTime={formatTime}
+      />
 
       {/* ── Messages ── */}
       <div
@@ -1206,7 +1130,7 @@ color: isMine ? '#ffffff' : '#1a4a2e',
 
       {/* ── Recording bar ── */}
       {recording && (
-        <div style={S.recordingBar}>
+        <div className="chat-recording-bar" style={S.recordingBar}>
           <button style={S.cancelRecBtn} onClick={cancelRecording}>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c0392b" strokeWidth="2.5" strokeLinecap="round">
               <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -1229,7 +1153,7 @@ color: isMine ? '#ffffff' : '#1a4a2e',
 
       {/* ── Input bar ── */}
       {!recording && callState === 'idle' && (
-        <div style={S.inputBar}>
+        <div className="chat-input-bar" style={S.inputBar}>
           <div style={{ display: 'flex', gap: '1px', alignItems: 'flex-end', paddingBottom: '2px' }}>
             <button style={S.attachBtn} onClick={() => pickFile('image/*', 'image')} title="Image">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#637068" strokeWidth="2" strokeLinecap="round">
@@ -1282,26 +1206,12 @@ color: isMine ? '#ffffff' : '#1a4a2e',
   )
 }
 
-// ── Icon components ──────────────────────────────────────────────────────────
-function HangupIcon() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
-      <path d="M23.71 16.67C22.69 15.65 21.38 15.1 20 15.1s-2.69.55-3.71 1.57l-2.15 2.15c-3.63-1.97-6.99-5.33-8.96-8.96l2.15-2.15C8.45 6.69 9 5.38 9 4s-.55-2.69-1.57-3.71C6.41-.71 5.13-1.3 3.8-1.3c-1.33 0-2.63.57-3.5 1.57l-1.5 1.5C-3.2 4.27-1.66 10.17 3.3 15.12c4.96 4.97 10.86 6.51 13.35 4.5l1.5-1.5c.98-.87 1.55-2.13 1.55-3.45 0-1.33-.57-2.63-1.99-3.5z" />
-    </svg>
-  )
-}
-function AnswerIcon() {
-  return (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
-      <path d="M6.6 10.8c1.4 2.8 3.8 5.1 6.6 6.6l2.2-2.2c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1-9.4 0-17-7.6-17-17 0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.3.2 2.5.6 3.6.1.3 0 .7-.2 1L6.6 10.8z" />
-    </svg>
-  )
-}
-
 // ── Styles ───────────────────────────────────────────────────────────────────
 const S = {
-  page: { display: 'flex', flexDirection: 'column', height: '100vh', background: '#f0f4f1', fontFamily: 'system-ui, sans-serif', position: 'relative' },
-  loadCenter: { display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' },
+  // height 100% fills the ChatsLayout thread column (which is already 100dvh).
+  // Using 100vh here double-counted the viewport and overflowed on desktop split.
+  page: { display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: '#f0f4f1', fontFamily: 'system-ui, sans-serif', position: 'relative', overflow: 'hidden' },
+  loadCenter: { display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: 0 },
   spinner: { width: '28px', height: '28px', border: '3px solid #e0ebe3', borderTopColor: '#1a7a4a', borderRadius: '50%', animation: 'spin 0.8s linear infinite' },
   topbar: { background: '#fff', padding: '10px 14px', display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between', borderBottom: '1px solid #e8f0eb', flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.05)' },
   back: { background: 'none', border: 'none', cursor: 'pointer', padding: '6px', display: 'flex', alignItems: 'center', borderRadius: 8, flexShrink: 0 },
@@ -1316,7 +1226,7 @@ const S = {
   ctxTag: { fontSize: '9px', fontWeight: '800', letterSpacing: '0.8px', marginBottom: 1, display: 'inline-block', padding: '1px 5px', borderRadius: 4 },
   ctxTitle: { fontSize: '13px', fontWeight: '600', color: '#0f1410', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
   ctxSub: { fontSize: '11px', color: '#1a7a4a', fontWeight: '600' },
-  messages: { flex: 1, overflowY: 'auto', padding: '14px 12px 8px', display: 'flex', flexDirection: 'column' },
+  messages: { flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', padding: '14px 12px 8px', display: 'flex', flexDirection: 'column', WebkitOverflowScrolling: 'touch' },
   emptyWrap: { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 24px' },
   dateDivider: { display: 'flex', justifyContent: 'center', margin: '14px 0 10px' },
   dateLabel: { background: '#dde8e0', color: '#637068', fontSize: '11px', fontWeight: '600', borderRadius: 10, padding: '4px 12px' },
@@ -1338,22 +1248,12 @@ const S = {
   replyBanner: { background: '#f0f7f3', borderTop: '1px solid #d4ead9', padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 },
   recordingBar: { background: '#fff', borderTop: '2px solid #e8f0eb', padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 },
   cancelRecBtn: { background: '#fef0f0', border: 'none', borderRadius: '50%', width: 38, height: 38, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  inputBar: { background: '#fff', borderTop: '1px solid #eef3ef', padding: '8px 10px', display: 'flex', alignItems: 'flex-end', gap: '4px', flexShrink: 0, position: 'relative' },
+  inputBar: { background: '#fff', borderTop: '1px solid #eef3ef', padding: '8px 10px', display: 'flex', alignItems: 'flex-end', gap: '4px', flexShrink: 0, position: 'relative', zIndex: 5 },
   attachBtn: { background: 'none', border: 'none', cursor: 'pointer', padding: '6px', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   input: { width: '100%', border: '1.5px solid #e0ebe3', borderRadius: 22, padding: '10px 14px', fontSize: 15, resize: 'none', fontFamily: 'inherit', maxHeight: '120px', background: '#f8fbf9', lineHeight: '1.45', display: 'block', boxSizing: 'border-box', transition: 'border-color 0.2s' },
   sendBtn: { width: 44, height: 44, background: 'linear-gradient(135deg,#1a7a4a,#22a05e)', border: 'none', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 3px 10px rgba(26,122,74,0.4)' },
   micBtn: { width: 44, height: 44, background: '#f4f8f5', border: '1.5px solid #e0ebe3', borderRadius: '50%', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   previewOverlay: { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', zIndex: 1000 },
   previewCard: { background: '#fff', borderRadius: '24px 24px 0 0', padding: 20, width: '100%', maxWidth: '480px' },
-  callOverlay: { position: 'fixed', inset: 0, background: 'linear-gradient(160deg,#0a1a10,#0f2d1a)', zIndex: 3000, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' },
-  callCard: { textAlign: 'center', padding: '40px 24px', zIndex: 1 },
-  callAvatarWrap: { position: 'absolute', inset: 0, borderRadius: '50%', overflow: 'hidden' },
-  ripple: { position: 'absolute', inset: -8, borderRadius: '50%', border: '2px solid rgba(26,122,74,0.5)', animation: 'ripple 2s ease-out infinite' },
-  callName: { fontSize: '26px', fontWeight: '800', color: '#fff', marginBottom: 10 },
-  callStatus: { fontSize: '15px', color: 'rgba(255,255,255,0.55)' },
-  callBtnLabel: { color: 'rgba(255,255,255,0.55)', fontSize: 12, marginTop: 8 },
-  hangUpBtn: { width: 64, height: 64, borderRadius: '50%', background: '#ef4444', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto', boxShadow: '0 4px 20px rgba(239,68,68,0.5)' },
-  declineBtn: { width: 64, height: 64, borderRadius: '50%', background: '#ef4444', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 20px rgba(239,68,68,0.4)' },
-  answerBtn: { width: 64, height: 64, borderRadius: '50%', background: '#1a7a4a', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 20px rgba(26,122,74,0.5)', animation: 'ringPulse 1.4s infinite' },
   ctrlBtn: { width: 56, height: 56, borderRadius: '50%', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
 }

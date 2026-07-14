@@ -87,9 +87,7 @@ function formatLocationLine(listing) {
 
   const area = clean(listing.area)
   const city = clean(listing.city)
-  let district = clean(listing.district)
-
-  if (district && !/district$/i.test(district)) district += ' District'
+  let district = clean(listing.district).replace(/\s*district$/i, '')
 
   const parts = []
   if (area && norm(area) !== norm(city)) parts.push(area)
@@ -152,11 +150,30 @@ export default function ListingDetail() {
     return () => clearInterval(t)
   }, [listing])
 
+  async function recordView(listingId) {
+    if (!listingId) return
+    try {
+      let sessionKey = null
+      try {
+        sessionKey = sessionStorage.getItem('soko_view_session')
+        if (!sessionKey) {
+          sessionKey = `s_${Math.random().toString(36).slice(2)}_${Date.now()}`
+          sessionStorage.setItem('soko_view_session', sessionKey)
+        }
+      } catch { /* private mode */ }
+      await supabase.rpc('record_listing_view', {
+        p_listing_id: listingId,
+        p_session_key: sessionKey,
+      })
+    } catch { /* migration optional */ }
+  }
+
   async function loadListing() {
     const { data: { user } } = await supabase.auth.getUser()
     setCurrentUser(user)
     const { data } = await supabase.from('listings').select('*').eq('id', id).single()
     setListing(data)
+    if (data?.id) recordView(data.id)
     if (data?.seller_id) {
       const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.seller_id).single()
       if (profile) {
@@ -1303,7 +1320,7 @@ function YouMayAlsLike({ currentListingId, category, navigate }) {
   const [items, setItems] = useState([])
   useEffect(() => {
     supabase.from('listings')
-      .select('id,title,price,city,images')
+      .select('id,title,price,city,district,area,images')
       .eq('category', category)
       .neq('id', currentListingId)
       .limit(4)
@@ -1326,7 +1343,19 @@ function YouMayAlsLike({ currentListingId, category, navigate }) {
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
             <div style={{ fontSize: 13, fontWeight: 700, color: '#1a7a4a', marginTop: 2 }}>MWK {Number(item.price).toLocaleString()}</div>
-            {item.city && <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 1 }}>{item.city}</div>}
+            {item.city && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="#9ca3af" style={{ flexShrink: 0 }}>
+                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                </svg>
+                <span style={{
+                  fontSize: 10.5, color: '#6b7280', fontWeight: 500,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                }}>
+                  {formatLocationLine(item)}
+                </span>
+              </div>
+            )}
           </div>
           <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#d1d5db', padding: 4 }}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">

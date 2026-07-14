@@ -76,10 +76,10 @@ const PILLS = [
 ]
 
 const CHIPS = [
-  { key: 'starred', label: 'Starred', icon: '⭐' },
-  { key: 'unread', label: 'Unread', icon: '🔔' },
-  { key: 'offers', label: 'Offers', icon: '💰' },
-  { key: 'archived', label: 'Archived', icon: '🗄️' },
+  { key: 'starred', label: 'Starred', Icon: StarFilledIcon },
+  { key: 'unread', label: 'Unread', Icon: BellIcon },
+  { key: 'offers', label: 'Offers', Icon: TagIcon },
+  { key: 'archived', label: 'Archived', Icon: ArchiveBoxIcon },
 ]
 
 function VerifiedBadge() {
@@ -455,22 +455,28 @@ export default function ChatListPanel() {
     const isMine = msg.from_user === currentUser?.id
     const prefix = isMine ? 'You: ' : ''
 
+    const iconRow = (Icon, label) => (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', verticalAlign: 'middle' }}>
+        <Icon size={12} color="currentColor" /> {label}
+      </span>
+    )
+
     if (msg.call_type) {
       const isVideo = msg.call_type === 'video'
-      const icon = isVideo ? '📹' : '📞'
-      if (msg.call_status === 'missed') return 'Missed ' + icon + (isVideo ? ' Video call' : ' Voice call')
+      const CallIcon = isVideo ? VideoMiniIcon : PhoneIcon
+      if (msg.call_status === 'missed') return iconRow(CallIcon, 'Missed ' + (isVideo ? 'Video call' : 'Voice call'))
       if (msg.call_status === 'ended') {
         const dur = msg.call_duration
         const durStr = dur ? (dur >= 60 ? Math.floor(dur / 60) + 'm ' + (dur % 60) + 's' : dur + 's') : ''
-        return icon + ' ' + (isVideo ? 'Video call' : 'Voice call') + (durStr ? ' · ' + durStr : '')
+        return iconRow(CallIcon, (isVideo ? 'Video call' : 'Voice call') + (durStr ? ' · ' + durStr : ''))
       }
-      return icon + ' ' + (isVideo ? 'Video call' : 'Voice call')
+      return iconRow(CallIcon, isVideo ? 'Video call' : 'Voice call')
     }
 
-    if (msg.media_type === 'image') return prefix + '📷 Photo'
-    if (msg.media_type === 'video') return prefix + '🎥 Video'
-    if (msg.media_type === 'audio') return prefix + '🎤 Voice note'
-    if (!msg.body) return prefix + '📎 Attachment'
+    if (msg.media_type === 'image') return iconRow(CameraIcon, prefix + 'Photo')
+    if (msg.media_type === 'video') return iconRow(VideoMiniIcon, prefix + 'Video')
+    if (msg.media_type === 'audio') return iconRow(MicIcon, prefix + 'Voice note')
+    if (!msg.body) return iconRow(PaperclipIcon, prefix + 'Attachment')
 
     const decoded = decodeReply(msg.body)
     let body = (decoded.body || '').trim()
@@ -493,16 +499,16 @@ export default function ChatListPanel() {
 
   function emptyStateCopy() {
     switch (activeFilter) {
-      case 'services': return { icon: '🔧', title: 'No service chats yet', sub: 'Book a service and chat with the provider', cta: 'Browse Services', to: '/services', ...PILL_COLORS.services }
-      case 'marketplace': return { icon: '🛍️', title: 'No marketplace chats yet', sub: 'Chat with sellers when browsing listings', cta: 'Browse Listings', to: '/', ...PILL_COLORS.marketplace }
-      case 'requests': return { icon: '🔎', title: 'No requests yet', sub: 'Conversations from buyer requests will show up here', cta: 'Browse Requests', to: '/looking-for', ...PILL_COLORS.requests }
-      case 'jobs': return { icon: '💼', title: 'No job chats yet', sub: 'Job messaging is on its way', cta: 'Browse Jobs', to: '/jobs', ...PILL_COLORS.jobs }
-      case 'shops': return { icon: '🏬', title: 'No shop chats yet', sub: 'Shop messaging is on its way', cta: 'Browse Shops', to: '/shops', ...PILL_COLORS.shops }
-      case 'starred': return { icon: '⭐', title: 'No starred chats', sub: 'Tap the star on a conversation to pin it here', cta: null, ...CHIP_COLORS.starred }
-      case 'unread': return { icon: '💬', title: "You're all caught up", sub: 'No unread conversations right now', cta: null, ...CHIP_COLORS.unread }
-      case 'offers': return { icon: '💰', title: 'No offers yet', sub: 'Offers made in your chats will show up here', cta: null, ...CHIP_COLORS.offers }
-      case 'archived': return { icon: '🗄️', title: 'No archived chats', sub: 'Archive a conversation from the list to see it here', cta: null, ...CHIP_COLORS.archived }
-      default: return { icon: '💬', title: 'No messages yet', sub: 'Chat with sellers when browsing listings', cta: 'Browse Listings', to: '/', ...PILL_COLORS.marketplace }
+      case 'services': return { Icon: WrenchIcon, title: 'No service chats yet', sub: 'Book a service and chat with the provider', cta: 'Browse Services', to: '/services', ...PILL_COLORS.services }
+      case 'marketplace': return { Icon: BagIcon, title: 'No marketplace chats yet', sub: 'Chat with sellers when browsing listings', cta: 'Browse Listings', to: '/', ...PILL_COLORS.marketplace }
+      case 'requests': return { Icon: SearchGlassIcon, title: 'No requests yet', sub: 'Conversations from buyer requests will show up here', cta: 'Browse Requests', to: '/looking-for', ...PILL_COLORS.requests }
+      case 'jobs': return { Icon: BriefcaseIcon, title: 'No job chats yet', sub: 'Job messaging is on its way', cta: 'Browse Jobs', to: '/jobs', ...PILL_COLORS.jobs }
+      case 'shops': return { Icon: StoreIcon, title: 'No shop chats yet', sub: 'Shop messaging is on its way', cta: 'Browse Shops', to: '/shops', ...PILL_COLORS.shops }
+      case 'starred': return { Icon: StarFilledIcon, title: 'No starred chats', sub: 'Tap the star on a conversation to pin it here', cta: null, ...CHIP_COLORS.starred }
+      case 'unread': return { Icon: ChatBubbleIcon, title: "You're all caught up", sub: 'No unread conversations right now', cta: null, ...CHIP_COLORS.unread }
+      case 'offers': return { Icon: TagIcon, title: 'No offers yet', sub: 'Offers made in your chats will show up here', cta: null, ...CHIP_COLORS.offers }
+      case 'archived': return { Icon: ArchiveBoxIcon, title: 'No archived chats', sub: 'Archive a conversation from the list to see it here', cta: null, ...CHIP_COLORS.archived }
+      default: return { Icon: ChatBubbleIcon, title: 'No messages yet', sub: 'Chat with sellers when browsing listings', cta: 'Browse Listings', to: '/', ...PILL_COLORS.marketplace }
     }
   }
 
@@ -571,7 +577,7 @@ export default function ChatListPanel() {
           <div style={S.chatBottom}>
             <div style={{ flex: 1, minWidth: 0 }}>
               {chat.hasOffer ? (
-                <div style={S.offerLine}>💰 {chat.offerText}</div>
+                <div style={S.offerLine}><TagIcon size={13} color="#1a7a4a" /> {chat.offerText}</div>
               ) : (
                 <div style={{
                   ...S.lastMsg,
@@ -602,26 +608,25 @@ export default function ChatListPanel() {
   const empty = emptyStateCopy()
 
   return (
-    <div style={S.panel}>
+    <div className="chat-list-panel" style={S.panel}>
       <style>{`
         @keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
         .soko-pillrow::-webkit-scrollbar { display: none; }
+        /* Desktop: NavRail handles nav — hide bottom bar so list uses full height */
+        @media (min-width: 900px) {
+          .soko-mobile-bottomnav { display: none !important; }
+        }
       `}</style>
 
       {/* Brand row */}
-      <div style={S.brandRow}>
+      <div className="chat-brand-row" style={S.brandRow}>
         <div>
           <div style={S.logo}>
             <span style={{ color: '#1a7a4a' }}>Soko</span><span style={{ color: '#f5a623' }}>Mw</span>
           </div>
           <div style={S.tagline}>Buy. Sell. Find. Anywhere in Malawi.</div>
         </div>
-        <button style={S.newChatBtn} onClick={() => navigate('/')} title="Start a new chat">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round">
-            <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-          </svg>
-        </button>
       </div>
 
       {/* Search */}
@@ -684,7 +689,7 @@ export default function ChatListPanel() {
               }}
               onClick={() => setActiveFilter(c.key)}
             >
-              <span>{c.icon}</span> {c.label}
+              <c.Icon size={13} color={activeFilter === c.key ? '#fff' : CHIP_COLORS[c.key].color} /> {c.label}
               {!search.trim() && counts[c.key] > 0 && (
                 <span style={{ ...S.pillCount, ...(activeFilter === c.key ? S.pillCountActive : {}) }}>{counts[c.key]}</span>
               )}
@@ -709,22 +714,20 @@ export default function ChatListPanel() {
         </div>
       )}
 
-      {/* Empty state */}
-      {!loading && filtered.length === 0 && (
-        <div style={S.empty}>
-          <div style={{ ...S.emptyIconCircle, background: empty.bg }}>
-            <span style={{ fontSize: '32px' }}>{empty.icon}</span>
+      {/* Scroll body — empty + rows share one scroller so BottomNav padding applies to both */}
+      <div className="chat-list-scroll" style={S.list}>
+        {!loading && filtered.length === 0 && (
+          <div style={S.empty}>
+            <div style={{ ...S.emptyIconCircle, background: empty.bg }}>
+              <empty.Icon size={30} color={empty.color} />
+            </div>
+            <p style={S.emptyTitle}>{empty.title}</p>
+            <p style={S.emptySub}>{empty.sub}</p>
+            {empty.cta && (
+              <button type="button" style={S.browseBtn} onClick={() => navigate(empty.to)}>{empty.cta}</button>
+            )}
           </div>
-          <p style={S.emptyTitle}>{empty.title}</p>
-          <p style={S.emptySub}>{empty.sub}</p>
-          {empty.cta && (
-            <button style={S.browseBtn} onClick={() => navigate(empty.to)}>{empty.cta}</button>
-          )}
-        </div>
-      )}
-
-      {/* Chat list */}
-      <div style={S.list}>
+        )}
         {filtered.map((chat, i) => renderChatRow(chat, i))}
       </div>
 
@@ -736,33 +739,33 @@ export default function ChatListPanel() {
 }
 
 const S = {
-  panel: { display: 'flex', flexDirection: 'column', height: '100%', background: '#fff', fontFamily: 'system-ui, sans-serif', overflow: 'hidden' },
-  brandRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 18px 12px' },
+  panel: { display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: '#fff', fontFamily: 'system-ui, sans-serif', overflow: 'hidden', position: 'relative' },
+  brandRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 10px', flexShrink: 0 },
   logo: { fontSize: '20px', fontWeight: '900', letterSpacing: '-0.4px' },
   tagline: { fontSize: '11px', color: '#9aa39d', marginTop: '2px' },
   newChatBtn: { width: '34px', height: '34px', borderRadius: '50%', border: 'none', background: 'linear-gradient(135deg,#1a7a4a,#22a05e)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, boxShadow: '0 3px 8px rgba(26,122,74,0.35)' },
-  searchWrap: { display: 'flex', alignItems: 'center', gap: 8, background: '#f4f8f5', borderRadius: 50, padding: '10px 16px', border: '1.5px solid #e0ebe3', margin: '0 18px 12px' },
+  searchWrap: { display: 'flex', alignItems: 'center', gap: 8, background: '#f4f8f5', borderRadius: 50, padding: '10px 16px', border: '1.5px solid #e0ebe3', margin: '0 16px 10px', flexShrink: 0 },
   searchInput: { flex: 1, border: 'none', background: 'transparent', fontSize: 14, color: '#111', outline: 'none', fontFamily: 'inherit', minWidth: 0 },
-  pillRow: { display: 'flex', gap: '7px', padding: '0 18px 10px 18px', overflowX: 'auto', scrollbarWidth: 'none' },
+  pillRow: { display: 'flex', gap: '7px', padding: '0 16px 10px 16px', overflowX: 'auto', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' },
   pill: { display: 'flex', alignItems: 'center', gap: '5px', padding: '7px 13px', borderRadius: '999px', border: 'none', fontSize: '12.5px', fontWeight: '700', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', flexShrink: 0, boxShadow: '0 1px 2px rgba(0,0,0,0.04)' },
   pillActive: { background: '#1a7a4a', color: '#fff', boxShadow: '0 3px 10px rgba(26,122,74,0.35)' },
   pillCount: { background: 'rgba(0,0,0,0.08)', color: 'inherit', borderRadius: '10px', padding: '0px 6px', fontSize: '10px', fontWeight: '800' },
   pillCountActive: { background: 'rgba(255,255,255,0.28)', color: '#fff' },
-  rowWrap: { position: 'relative' },
+  rowWrap: { position: 'relative', flexShrink: 0 },
   rowFade: { position: 'absolute', top: 0, bottom: '10px', right: 0, width: '36px', background: 'linear-gradient(to right, rgba(255,255,255,0), #fff 70%)', pointerEvents: 'none' },
-  chipRow: { display: 'flex', gap: '7px', padding: '0 18px 14px 18px', overflowX: 'auto', scrollbarWidth: 'none', borderBottom: '1px solid #eef2ef' },
+  chipRow: { display: 'flex', gap: '7px', padding: '0 16px 12px 16px', overflowX: 'auto', scrollbarWidth: 'none', borderBottom: '1px solid #eef2ef', WebkitOverflowScrolling: 'touch' },
   chip: { display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 11px', borderRadius: '999px', border: 'none', fontSize: '11.5px', fontWeight: '700', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', flexShrink: 0, boxShadow: '0 1px 2px rgba(0,0,0,0.04)' },
   chipActive: { background: '#1a7a4a', color: '#fff', boxShadow: '0 3px 10px rgba(26,122,74,0.3)' },
-  skeletonRow: { display: 'flex', alignItems: 'center', gap: '12px', padding: '13px 18px', background: '#fff', borderBottom: '1px solid #f4f8f5' },
+  skeletonRow: { display: 'flex', alignItems: 'center', gap: '12px', padding: '13px 16px', background: '#fff', borderBottom: '1px solid #f4f8f5' },
   skeletonAvatar: { width: '52px', height: '52px', borderRadius: '15px', background: 'linear-gradient(90deg,#e8f0eb 25%,#f4f8f5 50%,#e8f0eb 75%)', flexShrink: 0, animation: 'pulse 1.5s infinite' },
   skeletonLine: { height: '11px', borderRadius: '6px', background: 'linear-gradient(90deg,#e8f0eb 25%,#f4f8f5 50%,#e8f0eb 75%)', animation: 'pulse 1.5s infinite' },
-  empty: { display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '56px 22px', textAlign: 'center' },
+  empty: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 20px', textAlign: 'center', minHeight: '100%' },
   emptyIconCircle: { width: '76px', height: '76px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' },
   emptyTitle: { fontSize: '15.5px', fontWeight: '800', color: '#0f1410', marginBottom: '6px' },
   emptySub: { fontSize: '12.5px', color: '#888', marginBottom: '20px', lineHeight: '1.6' },
   browseBtn: { background: 'linear-gradient(135deg,#1a7a4a,#22a05e)', color: '#fff', border: 'none', borderRadius: '12px', padding: '11px 22px', fontSize: '13.5px', fontWeight: '700', cursor: 'pointer', boxShadow: '0 4px 12px rgba(26,122,74,0.35)' },
-  list: { flex: 1, overflowY: 'auto', paddingBottom: '8px' },
-  chatRow: { display: 'flex', alignItems: 'center', gap: '12px', padding: '13px 18px', borderBottom: '1px solid #f0f4f1', cursor: 'pointer', animation: 'fadeUp 0.3s ease both', transition: 'background 0.15s' },
+  list: { flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch' },
+  chatRow: { display: 'flex', alignItems: 'center', gap: '12px', padding: '13px 16px', borderBottom: '1px solid #f0f4f1', cursor: 'pointer', animation: 'fadeUp 0.3s ease both', transition: 'background 0.15s' },
   avatarWrap: { position: 'relative', flexShrink: 0 },
   avatar: { width: '52px', height: '52px', borderRadius: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' },
   avatarImg: { width: '100%', height: '100%', objectFit: 'cover' },

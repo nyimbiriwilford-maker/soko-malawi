@@ -86,11 +86,29 @@ const Icon = {
 /* ─────────────────────────────────────────────────────────────────────────────
    HELPERS
 ───────────────────────────────────────────────────────────────────────────── */
+function dedupeLocation(city, area) {
+  const c = (city || '').trim()
+  const a = (area || '').trim()
+  if (!c && !a) return ''
+  if (!a) return c
+  if (!c) return a
+  const norm = s => s.toLowerCase().replace(/[^a-z0-9]/g, '')
+  const nc = norm(c), na = norm(a)
+  // Drop area if it's the same as city or fully contained in it (or vice versa)
+  if (nc === na || nc.includes(na) || na.includes(nc)) return c
+  return `${c}, ${a}`
+}
+
 function formatPrice(n) {
   if (!n && n !== 0) return ''
   if (n >= 1_000_000) return `MK ${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1_000)     return `MK ${(n / 1_000).toFixed(0)}K`
   return `MK ${n.toLocaleString()}`
+}
+
+function isFlashSaleActive(listing) {
+  return listing.flash_sale_price && listing.flash_sale_ends_at &&
+    new Date(listing.flash_sale_ends_at).getTime() > Date.now()
 }
 
 function timeAgo(ts) {
@@ -120,29 +138,99 @@ const SEARCH_TABS = [
 /* ─────────────────────────────────────────────────────────────────────────────
    CATEGORIES (nested for sidebar checkbox tree)
 ───────────────────────────────────────────────────────────────────────────── */
+/* Mirrors PostListing.jsx's SUBCATEGORIES map exactly, so a listing's
+   category/subcategory always resolves to a real node in this tree. */
 const CATEGORY_TREE = [
-  {
-    key: 'Electronics',
-    label: 'Electronics',
-    children: [
-      { key: 'Phones & Tablets', label: 'Phones & Tablets', children: [
-        { key: 'Phones', label: 'Phones' },
-        { key: 'Tablets', label: 'Tablets' },
-      ]},
-      { key: 'Accessories', label: 'Accessories' },
-      { key: 'Laptops', label: 'Laptops' },
-      { key: 'Other Electronics', label: 'Other' },
-    ],
-  },
-  { key: 'Vehicles',    label: 'Vehicles' },
-  { key: 'Property',    label: 'Property' },
-  { key: 'Clothing',    label: 'Fashion' },
-  { key: 'Agriculture', label: 'Agriculture' },
-  { key: 'Furniture',   label: 'Furniture' },
-  { key: 'Food',        label: 'Food' },
-  { key: 'Services',    label: 'Services' },
-  { key: 'Jobs',        label: 'Jobs' },
-  { key: 'Other',       label: 'Other' },
+  { key: 'Electronics', label: 'Electronics', children: [
+    { key: 'Phones & Tablets',    label: 'Phones & Tablets' },
+    { key: 'Laptops & Computers', label: 'Laptops & Computers' },
+    { key: 'TVs & Audio',         label: 'TVs & Audio' },
+    { key: 'Cameras',             label: 'Cameras' },
+    { key: 'Accessories',         label: 'Accessories' },
+    { key: 'Other Electronics',   label: 'Other' },
+  ]},
+  { key: 'Furniture', label: 'Furniture', children: [
+    { key: 'Sofas & Chairs',      label: 'Sofas & Chairs' },
+    { key: 'Beds & Mattresses',   label: 'Beds & Mattresses' },
+    { key: 'Tables & Desks',      label: 'Tables & Desks' },
+    { key: 'Cabinets & Shelves',  label: 'Cabinets & Shelves' },
+    { key: 'Office Furniture',    label: 'Office Furniture' },
+    { key: 'Other Furniture',     label: 'Other' },
+  ]},
+  { key: 'Clothing', label: 'Fashion', children: [
+    { key: "Men's Wear",          label: "Men's Wear" },
+    { key: "Women's Wear",        label: "Women's Wear" },
+    { key: "Kids' Wear",          label: "Kids' Wear" },
+    { key: 'Shoes',                label: 'Shoes' },
+    { key: 'Bags & Accessories',  label: 'Bags & Accessories' },
+    { key: 'Traditional Wear',    label: 'Traditional Wear' },
+  ]},
+  { key: 'Vehicles', label: 'Vehicles', children: [
+    { key: 'Cars',        label: 'Cars' },
+    { key: 'Motorcycles', label: 'Motorcycles' },
+    { key: 'Trucks & Vans', label: 'Trucks & Vans' },
+    { key: 'Auto Parts',  label: 'Auto Parts' },
+    { key: 'Bicycles',    label: 'Bicycles' },
+    { key: 'Other Vehicles', label: 'Other' },
+  ]},
+  { key: 'Property', label: 'Property', children: [
+    { key: 'Houses for Sale', label: 'Houses for Sale' },
+    { key: 'Houses for Rent', label: 'Houses for Rent' },
+    { key: 'Land & Plots',    label: 'Land & Plots' },
+    { key: 'Commercial Property', label: 'Commercial Property' },
+    { key: 'Apartments',      label: 'Apartments' },
+    { key: 'Short Stays',     label: 'Short Stays' },
+  ]},
+  { key: 'Agriculture', label: 'Agriculture', children: [
+    { key: 'Livestock',        label: 'Livestock' },
+    { key: 'Farm Equipment',   label: 'Farm Equipment' },
+    { key: 'Seeds & Fertilizer', label: 'Seeds & Fertilizer' },
+    { key: 'Crops & Produce',  label: 'Crops & Produce' },
+    { key: 'Poultry',          label: 'Poultry' },
+    { key: 'Other Agriculture', label: 'Other' },
+  ]},
+  { key: 'Food', label: 'Food', children: [
+    { key: 'Fresh Produce',   label: 'Fresh Produce' },
+    { key: 'Packaged Foods',  label: 'Packaged Foods' },
+    { key: 'Beverages',       label: 'Beverages' },
+    { key: 'Baked Goods',     label: 'Baked Goods' },
+    { key: 'Catering',        label: 'Catering' },
+    { key: 'Other Food',      label: 'Other' },
+  ]},
+  { key: 'Services', label: 'Services', children: [
+    { key: 'Home Services',           label: 'Home Services' },
+    { key: 'Beauty & Wellness',       label: 'Beauty & Wellness' },
+    { key: 'Repairs & Maintenance',   label: 'Repairs & Maintenance' },
+    { key: 'Events & Rentals',        label: 'Events & Rentals' },
+    { key: 'Professional Services',   label: 'Professional Services' },
+    { key: 'Other Services',          label: 'Other' },
+  ]},
+  { key: 'Jobs',  label: 'Jobs' },
+  { key: 'Other', label: 'Other' },
+]
+
+/* Flat lookup: subcategory key -> parent category key, used to keep the
+   tree's checkbox states in sync in both directions. */
+const SUBCAT_PARENT = CATEGORY_TREE.reduce((map, node) => {
+  (node.children || []).forEach(child => { map[child.key] = node.key })
+  return map
+}, {})
+
+/* Mirrors PostListing.jsx's CONDITIONS exactly, so filter values line up
+   with what's actually stored in listings.condition. */
+const CONDITIONS = [
+  { key: 'new',        label: 'Brand New' },
+  { key: 'like_new',   label: 'Like New' },
+  { key: 'used_good',  label: 'Used - Good' },
+  { key: 'used_fair',  label: 'Used - Fair' },
+  { key: 'for_parts',  label: 'For Parts' },
+]
+
+/* Mirrors PostListing.jsx's availability_status field. */
+const AVAILABILITY_OPTIONS = [
+  { key: 'in_stock',      label: 'In Stock' },
+  { key: 'made_to_order', label: 'Made to Order' },
+  { key: 'not_available', label: 'Not Available' },
 ]
 
 const ALL_DISTRICTS = [
@@ -181,6 +269,11 @@ function GlobalStyles() {
       @keyframes fadeUp   { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
       @keyframes shimmer  { 0% { background-position:-600px 0; } 100% { background-position:600px 0; } }
       @keyframes badgePop { 0% { transform:scale(.7); opacity:0; } 70% { transform:scale(1.1); } 100% { transform:scale(1); opacity:1; } }
+      @keyframes hotDealPulse {
+        0%, 100% { box-shadow: 0 2px 8px rgba(234,67,53,0.4), 0 0 0 0 rgba(234,67,53,0.5); }
+        50%      { box-shadow: 0 2px 8px rgba(234,67,53,0.4), 0 0 0 6px rgba(234,67,53,0); }
+      }
+      .sp-hotdeal-badge { animation: hotDealPulse 1.8s ease-in-out infinite; }
 
       .skeleton {
         background: linear-gradient(90deg,#f0f0f0 25%,#e8e8e8 50%,#f0f0f0 75%);
@@ -211,8 +304,11 @@ function GlobalStyles() {
       }
       .sp-search-tab.active .sp-tab-count { background:${T.greenL}; color:${T.green}; }
 
-      /* filter sidebar */
+      /* filter sidebar — outer element handles sticky positioning only;
+         inner .sp-sidebar-panel handles all animation/transform so the
+         transform never fights with position:sticky's layout math. */
       .sp-sidebar { width: 220px; flex-shrink: 0; }
+      .sp-sidebar-panel { width: 100%; box-sizing: border-box; }
       .sp-check-row { display:flex; align-items:center; gap:8px; cursor:pointer; padding:4px 0; }
       .sp-check-row:hover .sp-check-box { border-color: ${T.green}; }
       .sp-check-box {
@@ -314,6 +410,65 @@ function GlobalStyles() {
         animation: slideInLeft .25s cubic-bezier(.22,1,.36,1);
       }
       @keyframes slideInLeft { from { transform:translateX(-100%); } to { transform:translateX(0); } }
+
+      /* Sidebar — deliberately slower, weightier, more "premium" motion than
+         the card grid's snappy bouncy fadeUp/hover language. This is meant
+         to be clearly visible: a big slide+scale entrance, a real elevation
+         lift on scroll, and a continuous soft ambient glow — nothing subtle. */
+      @keyframes sidebarSettle {
+        0%   { opacity:0; transform:translateX(-48px) scale(.94); }
+        60%  { opacity:1; transform:translateX(6px) scale(1.01); }
+        100% { opacity:1; transform:translateX(0) scale(1); }
+      }
+      @keyframes sidebarGlow {
+        0%, 100% { box-shadow: 0 8px 28px rgba(15,157,88,0.08), ${T.shadow}; }
+        50%      { box-shadow: 0 14px 40px rgba(15,157,88,0.16), ${T.shadow}; }
+      }
+      .sp-sidebar-panel {
+        animation:
+          sidebarSettle .7s cubic-bezier(.16,1,.3,1) both,
+          sidebarGlow 5s ease-in-out 1.2s infinite;
+        transition: box-shadow .5s cubic-bezier(.16,1,.3,1), transform .5s cubic-bezier(.16,1,.3,1), border-color .5s ease;
+      }
+      .sp-sidebar-panel.stuck {
+        box-shadow: ${T.shadowLg}, 0 0 0 1px rgba(15,157,88,0.12);
+        transform: translateY(6px) scale(1.015);
+        border-color: ${T.greenL} !important;
+      }
+      .sp-sidebar-panel .sp-check-row,
+      .sp-sidebar-panel .sp-toggle-track,
+      .sp-sidebar-panel select,
+      .sp-sidebar-panel input {
+        transition: all .3s cubic-bezier(.16,1,.3,1);
+      }
+      .sp-sidebar-panel .sp-check-row:hover {
+        transform: translateX(3px);
+      }
+      .sp-sidebar-panel .sp-check-box {
+        transition: border-color .3s cubic-bezier(.16,1,.3,1), background .3s cubic-bezier(.16,1,.3,1), transform .3s cubic-bezier(.16,1,.3,1);
+      }
+      .sp-sidebar-panel .sp-check-row:active .sp-check-box {
+        transform: scale(.82);
+      }
+      .sp-sidebar-panel .sp-check-box.checked {
+        animation: sidebarCheckPop .4s cubic-bezier(.34,1.6,.64,1);
+      }
+      @keyframes sidebarCheckPop {
+        0%   { transform:scale(.6) rotate(-8deg); }
+        55%  { transform:scale(1.25) rotate(4deg); }
+        100% { transform:scale(1) rotate(0); }
+      }
+      /* Subcategory reveal — a deliberate slide-and-grow unfold, distinct
+         from the checkbox pop and clearly different from card hover motion */
+      .sp-subcat-wrap {
+        animation: sidebarSubReveal .45s cubic-bezier(.16,1,.3,1) both;
+        overflow: hidden;
+        transform-origin: top;
+      }
+      @keyframes sidebarSubReveal {
+        0%   { opacity:0; transform:translateY(-10px) scaleY(.85); max-height:0; }
+        100% { opacity:1; transform:translateY(0) scaleY(1); max-height:600px; }
+      }
 
       @media(max-width:900px) {
         .sp-sidebar { display:none !important; }
@@ -451,9 +606,22 @@ function Checkbox({ checked, onChange, label, indent = 0 }) {
 /* ─────────────────────────────────────────────────────────────────────────────
    CATEGORY CHECKBOX TREE — recursive
 ───────────────────────────────────────────────────────────────────────────── */
-function CategoryTree({ node, checked, onToggle, depth = 0 }) {
-  const [expanded, setExpanded] = useState(depth === 0)
+function CategoryTree({ node, checked, onToggle, depth = 0, forceOpen, defaultOpenKey }) {
+  const [expanded, setExpanded] = useState(node.key === defaultOpenKey)
   const hasChildren = node.children?.length > 0
+
+  // Auto-expand whenever this node is the one that was just clicked.
+  // forceOpen.n changes on every click (even repeat clicks on the same
+  // category), so this effect reliably re-fires and re-opens the node
+  // even if it was manually collapsed via the chevron in between clicks.
+  useEffect(() => {
+    if (forceOpen && forceOpen.key === node.key && hasChildren) setExpanded(true)
+  }, [forceOpen])
+
+  function handleLabelClick() {
+    onToggle(node.key)
+    if (hasChildren) setExpanded(true)
+  }
 
   return (
     <div>
@@ -466,12 +634,12 @@ function CategoryTree({ node, checked, onToggle, depth = 0 }) {
           </button>
         )}
         {!hasChildren && <span style={{ width:15, flexShrink:0 }} />}
-        <Checkbox checked={checked.has(node.key)} onChange={() => onToggle(node.key)} label={node.label} />
+        <Checkbox checked={checked.has(node.key)} onChange={handleLabelClick} label={node.label} />
       </div>
       {hasChildren && expanded && (
-        <div>
+        <div className="sp-subcat-wrap">
           {node.children.map(child => (
-            <CategoryTree key={child.key} node={child} checked={checked} onToggle={onToggle} depth={depth + 1} />
+            <CategoryTree key={child.key} node={child} checked={checked} onToggle={onToggle} depth={depth + 1} forceOpen={forceOpen} defaultOpenKey={defaultOpenKey} />
           ))}
         </div>
       )}
@@ -487,10 +655,21 @@ function FilterPanel({
   priceMin, setPriceMin, priceMax, setPriceMax,
   district, setDistrict,
   conditions, onToggleCondition,
-  delivery, onToggleDelivery,
+  availability, onToggleAvailability,
   verifiedOnly, setVerifiedOnly,
-  onApply,
 }) {
+  const [lastClicked, setLastClicked] = useState(null) // { key, n } — n always changes so repeat clicks on the same category still force-expand it
+
+  // On first render, only the category that arrived pre-checked (e.g. from
+  // ?cat=Clothing on the URL) should start expanded — everything else stays
+  // collapsed until the user clicks it.
+  const [initialOpenKey] = useState(() => {
+    for (const node of CATEGORY_TREE) {
+      if (checkedCats.has(node.key)) return node.key
+    }
+    return null
+  })
+
   return (
     <div>
       {/* Clear All */}
@@ -504,7 +683,12 @@ function FilterPanel({
         <Checkbox checked={checkedCats.size === 0} onChange={onClearAll} label="All Categories" />
         <div style={{ marginTop:6, display:'flex', flexDirection:'column', gap:2 }}>
           {CATEGORY_TREE.map(node => (
-            <CategoryTree key={node.key} node={node} checked={checkedCats} onToggle={onToggleCat} depth={0} />
+            <CategoryTree
+              key={node.key} node={node} checked={checkedCats}
+              onToggle={(key) => { setLastClicked(prev => ({ key, n: (prev?.n || 0) + 1 })); onToggleCat(key) }}
+              depth={0} forceOpen={lastClicked}
+              defaultOpenKey={initialOpenKey}
+            />
           ))}
         </div>
       </div>
@@ -544,21 +728,21 @@ function FilterPanel({
 
       <div style={{ height:1, background:T.gray100, marginBottom:18 }} />
 
-      {/* CONDITION */}
+      {/* CONDITION — keys match PostListing.jsx's CONDITIONS exactly */}
       <div style={{ marginBottom:20 }}>
         <div style={{ fontSize:13, fontWeight:700, color:T.gray900, marginBottom:10 }}>Condition</div>
-        {['New','Used','Refurbished'].map(c => (
-          <Checkbox key={c} checked={conditions.has(c)} onChange={() => onToggleCondition(c)} label={c} />
+        {CONDITIONS.map(c => (
+          <Checkbox key={c.key} checked={conditions.has(c.key)} onChange={() => onToggleCondition(c.key)} label={c.label} />
         ))}
       </div>
 
       <div style={{ height:1, background:T.gray100, marginBottom:18 }} />
 
-      {/* DELIVERY */}
+      {/* AVAILABILITY — matches PostListing.jsx's availability_status field */}
       <div style={{ marginBottom:20 }}>
-        <div style={{ fontSize:13, fontWeight:700, color:T.gray900, marginBottom:10 }}>Delivery Option</div>
-        {['Delivery Available','Pickup Only'].map(d => (
-          <Checkbox key={d} checked={delivery.has(d)} onChange={() => onToggleDelivery(d)} label={d} />
+        <div style={{ fontSize:13, fontWeight:700, color:T.gray900, marginBottom:10 }}>Availability</div>
+        {AVAILABILITY_OPTIONS.map(a => (
+          <Checkbox key={a.key} checked={availability.has(a.key)} onChange={() => onToggleAvailability(a.key)} label={a.label} />
         ))}
       </div>
 
@@ -574,14 +758,7 @@ function FilterPanel({
         </div>
       </div>
 
-      {/* APPLY */}
-      <button onClick={onApply} style={{ width:'100%', background:T.green, color:'#fff', border:'none', borderRadius:12, padding:'13px 0', fontSize:14, fontWeight:700, cursor:'pointer', boxShadow:`0 4px 16px rgba(15,157,88,0.3)`, transition:'background .15s' }}
-        onMouseEnter={e => e.currentTarget.style.background = T.greenD}
-        onMouseLeave={e => e.currentTarget.style.background = T.green}
-      >
-        Apply Filters
-      </button>
-    </div>
+      </div>
   )
 }
 
@@ -595,20 +772,31 @@ function ResultCardGrid({ listing, delay, onClick }) {
   const isVerif = listing.seller_verified || listing.shop_is_verified
   const isFeat  = listing.featured || listing.is_featured
   const isNew   = listing.created_at && (Date.now() - new Date(listing.created_at).getTime()) < 86400000
+  const onSale  = isFlashSaleActive(listing)
+  const hasVideo = listing.videos && listing.videos.length > 0
+  const hasBulk  = listing.price_tiers && listing.price_tiers.length > 0
 
   return (
-    <div className="sp-card" style={{ animationDelay:`${delay}s` }} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} onClick={onClick}>
+    <div className="sp-card" style={{ animationDelay:`${delay}s`, ...(onSale ? { border:`1.5px solid ${T.red}`, boxShadow:`0 0 0 1px rgba(234,67,53,0.15), ${T.shadow}` } : {}) }} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} onClick={onClick}>
       {/* Image */}
       <div style={{ position:'relative', width:'100%', height:185, overflow:'hidden', background:T.gray100, flexShrink:0, borderRadius:'12px 12px 0 0' }}>
         {listing.images?.[0] && !imgErr
           ? <img src={listing.images[0]} alt={listing.title} onError={() => setImgErr(true)} className="sp-card-img" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
           : <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:42, color:T.gray400 }}>📦</div>
         }
-        {isFeat && (
+        {onSale && (
+          <div className="sp-hotdeal-badge" style={{ position:'absolute', top:10, left:10, background:`linear-gradient(135deg,${T.red},#c62828)`, color:'#fff', borderRadius:50, padding:'4px 11px', fontSize:10, fontWeight:900, letterSpacing:'0.3px', display:'flex', alignItems:'center', gap:3, zIndex:2 }}>🔥 HOT DEAL</div>
+        )}
+        {!onSale && isFeat && (
           <div style={{ position:'absolute', top:10, left:10, background:`linear-gradient(135deg,${T.amber},#e09800)`, color:'#1a0a00', borderRadius:50, padding:'3px 10px', fontSize:9.5, fontWeight:900, boxShadow:'0 2px 8px rgba(249,171,0,0.4)', display:'flex', alignItems:'center', gap:4 }}>⭐ FEATURED</div>
         )}
-        {isNew && !isFeat && (
+        {!onSale && !isFeat && isNew && (
           <div style={{ position:'absolute', top:10, left:10, background:T.green, color:'#fff', borderRadius:50, padding:'3px 10px', fontSize:9.5, fontWeight:800 }}>NEW</div>
+        )}
+        {hasVideo && (
+          <div style={{ position:'absolute', bottom:9, left:9, background:'rgba(0,0,0,0.6)', color:'#fff', borderRadius:50, padding:'3px 8px', fontSize:10, fontWeight:700, display:'flex', alignItems:'center', gap:4 }}>
+            🎬 {listing.videos.length}
+          </div>
         )}
         {/* Wishlist */}
         <button onClick={e => { e.stopPropagation(); setLiked(l => !l) }} style={{ position:'absolute', top:9, right:9, width:30, height:30, borderRadius:'50%', border:'none', cursor:'pointer', background:'rgba(255,255,255,0.92)', backdropFilter:'blur(6px)', display:'flex', alignItems:'center', justifyContent:'center', color:liked ? T.red : T.gray700, boxShadow:'0 2px 8px rgba(0,0,0,.12)', transition:'transform .2s' }}>
@@ -617,26 +805,41 @@ function ResultCardGrid({ listing, delay, onClick }) {
       </div>
 
       {/* Body */}
-      <div style={{ padding:'10px 12px 12px', display:'flex', flexDirection:'column', gap:5, flex:1 }}>
+      <div style={{ padding:'10px 12px 12px', display:'flex', flexDirection:'column', gap:5, flex:1, minHeight:100, justifyContent:'flex-start' }}>
         <div style={{ display:'flex', alignItems:'center', gap:4 }}>
           <span style={{ fontSize:13, fontWeight:700, color:T.gray900, overflow:'hidden', display:'-webkit-box', WebkitLineClamp:1, WebkitBoxOrient:'vertical', minWidth:0 }}>{listing.title}</span>
           {isVerif && <span style={{ flexShrink:0 }}>{Icon.verify(13)}</span>}
         </div>
-        <div style={{ fontFamily:T.fontDisplay, fontSize:17, fontWeight:800, color:T.green, letterSpacing:'-0.3px' }}>{formatPrice(listing.price)}</div>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', fontSize:11.5, color:T.gray600 }}>
-          <span style={{ display:'flex', alignItems:'center', gap:3 }}>
-            <span style={{ color:T.green }}>{Icon.pin(11)}</span>{listing.city || 'Malawi'}
+        {onSale ? (
+          <div style={{ display:'flex', alignItems:'baseline', gap:6, flexWrap:'wrap' }}>
+            <span style={{ fontSize:12, color:T.gray500, textDecoration:'line-through' }}>{formatPrice(listing.price)}</span>
+            <span style={{ fontFamily:T.fontDisplay, fontSize:17, fontWeight:800, color:T.red, letterSpacing:'-0.3px' }}>{formatPrice(listing.flash_sale_price)}</span>
+          </div>
+        ) : (
+          <div style={{ fontFamily:T.fontDisplay, fontSize:17, fontWeight:800, color:T.green, letterSpacing:'-0.3px' }}>{formatPrice(listing.price)}</div>
+        )}
+        {hasBulk && (
+          <div style={{ fontSize:10.5, color:T.blue, fontWeight:700, background:T.blueL, borderRadius:6, padding:'2px 6px', display:'inline-block', width:'fit-content' }}>
+            Bulk pricing available
+          </div>
+        )}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', fontSize:11.5, color:T.gray600, gap:6 }}>
+          <span style={{ display:'flex', alignItems:'center', gap:5, minWidth:0, overflow:'hidden' }}>
+            <span style={{ color:T.green, flexShrink:0 }}>{Icon.pin(11)}</span>
+            <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+              {dedupeLocation(listing.city, listing.area) || 'Malawi'}
+            </span>
+            {listing.district && (
+              <span style={{ flexShrink:0, fontSize:9.5, fontWeight:700, color:T.green, background:T.greenL, borderRadius:5, padding:'1.5px 6px', letterSpacing:'0.2px' }}>
+                {listing.district}
+              </span>
+            )}
           </span>
-          <span style={{ display:'flex', alignItems:'center', gap:3 }}>
+          <span style={{ display:'flex', alignItems:'center', gap:3, flexShrink:0 }}>
             {Icon.clock(11)} {timeAgo(listing.created_at)}
           </span>
         </div>
-        {isVerif && (
-          <div style={{ display:'flex', alignItems:'center', gap:4, fontSize:11, color:'#15803d', fontWeight:600 }}>
-            {Icon.verify(11)} Verified
-          </div>
-        )}
-      </div>
+        </div>
     </div>
   )
 }
@@ -649,6 +852,8 @@ function ResultCardList({ listing, delay, onClick }) {
   const [imgErr, setImgErr] = useState(false)
   const isVerif = listing.seller_verified || listing.shop_is_verified
   const isFeat  = listing.featured || listing.is_featured
+  const onSale  = isFlashSaleActive(listing)
+  const hasVideo = listing.videos && listing.videos.length > 0
 
   return (
     <div className="sp-card-list" style={{ animationDelay:`${delay}s` }} onClick={onClick}>
@@ -657,7 +862,11 @@ function ResultCardList({ listing, delay, onClick }) {
           ? <img src={listing.images[0]} alt={listing.title} onError={() => setImgErr(true)} className="sp-card-img" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
           : <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:34, color:T.gray400 }}>📦</div>
         }
-        {isFeat && <div style={{ position:'absolute', top:8, left:8, background:`linear-gradient(135deg,${T.amber},#e09800)`, color:'#1a0a00', borderRadius:50, padding:'2px 8px', fontSize:9, fontWeight:900 }}>⭐</div>}
+        {onSale && <div style={{ position:'absolute', top:8, left:8, background:T.red, color:'#fff', borderRadius:50, padding:'2px 8px', fontSize:9, fontWeight:900 }}>🔥</div>}
+        {!onSale && isFeat && <div style={{ position:'absolute', top:8, left:8, background:`linear-gradient(135deg,${T.amber},#e09800)`, color:'#1a0a00', borderRadius:50, padding:'2px 8px', fontSize:9, fontWeight:900 }}>⭐</div>}
+        {hasVideo && (
+          <div style={{ position:'absolute', bottom:6, left:6, background:'rgba(0,0,0,0.6)', color:'#fff', borderRadius:50, padding:'2px 6px', fontSize:9, fontWeight:700 }}>🎬 {listing.videos.length}</div>
+        )}
       </div>
       <div style={{ flex:1, padding:'12px 14px', display:'flex', flexDirection:'column', justifyContent:'space-between', minWidth:0 }}>
         <div>
@@ -670,9 +879,23 @@ function ResultCardList({ listing, delay, onClick }) {
           )}
         </div>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:8 }}>
-          <div style={{ fontFamily:T.fontDisplay, fontSize:17, fontWeight:800, color:T.green }}>{formatPrice(listing.price)}</div>
+          {onSale ? (
+            <div style={{ display:'flex', alignItems:'baseline', gap:6 }}>
+              <span style={{ fontSize:12, color:T.gray500, textDecoration:'line-through' }}>{formatPrice(listing.price)}</span>
+              <span style={{ fontFamily:T.fontDisplay, fontSize:17, fontWeight:800, color:T.red }}>{formatPrice(listing.flash_sale_price)}</span>
+            </div>
+          ) : (
+            <div style={{ fontFamily:T.fontDisplay, fontSize:17, fontWeight:800, color:T.green }}>{formatPrice(listing.price)}</div>
+          )}
           <div style={{ display:'flex', alignItems:'center', gap:12, fontSize:11.5, color:T.gray600 }}>
-            <span style={{ display:'flex', alignItems:'center', gap:3 }}>{Icon.pin(11)} {listing.city || 'Malawi'}</span>
+            <span style={{ display:'flex', alignItems:'center', gap:3 }}>
+              {Icon.pin(11)} {dedupeLocation(listing.city, listing.area) || 'Malawi'}
+              {listing.district && (
+                <span style={{ marginLeft:4, fontSize:10, fontWeight:700, color:T.green, background:T.greenL, borderRadius:6, padding:'1.5px 7px' }}>
+                  {listing.district}
+                </span>
+              )}
+            </span>
             <span style={{ display:'flex', alignItems:'center', gap:3 }}>{Icon.clock(11)} {timeAgo(listing.created_at)}</span>
             {isVerif && <span style={{ display:'flex', alignItems:'center', gap:3, color:'#15803d', fontWeight:600 }}>{Icon.verify(11)} Verified</span>}
           </div>
@@ -858,12 +1081,13 @@ function Pagination({ page, totalPages, onChange }) {
 /* ─────────────────────────────────────────────────────────────────────────────
    MAIN SEARCH PAGE COMPONENT
 ───────────────────────────────────────────────────────────────────────────── */
-const PAGE_SIZE = 8
+const PAGE_SIZE = 20
 
 export default function SearchPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const queryParam = searchParams.get('q') || ''
+  const catParam    = searchParams.get('cat') || ''
 
   const [search, setSearch]       = useState(queryParam)
   const [user, setUser]           = useState(null)
@@ -885,24 +1109,38 @@ export default function SearchPage() {
   const [priceMax, setPriceMax]         = useState('')
   const [district, setDistrict]         = useState('All Districts')
   const [conditions, setConditions]     = useState(new Set())
-  const [delivery, setDelivery]         = useState(new Set())
+  const [availability, setAvailability] = useState(new Set())
   const [verifiedOnly, setVerifiedOnly] = useState(false)
   const [sortBy, setSortBy]             = useState('relevance')
   const [viewMode, setViewMode]         = useState('grid') // 'grid' | 'list'
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false)
 const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Date.now() / 30000))
+  const [sidebarStuck, setSidebarStuck] = useState(false)
 
-  // ── Applied (committed) filters — only change on "Apply" ──
-  const [applied, setApplied] = useState({
-    cats: new Set(), priceMin:'', priceMax:'', district:'All Districts',
-    conditions: new Set(), delivery: new Set(), verifiedOnly: false,
-  })
-  // Incrementing this guarantees the search useEffect re-fires even when
-  // applied looks structurally identical (e.g. clearing already-empty filters)
-  const [searchTick, setSearchTick] = useState(0)
+  // Sidebar gets a subtle elevation lift once the page has scrolled past
+  // its sticky offset — a quiet cue that it's now "floating" over content,
+  // distinct from the cards' hover-driven lift.
+  useEffect(() => {
+    function onScroll() { setSidebarStuck(window.scrollY > 40) }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    onScroll()
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
+  // Live filters — every change here re-triggers search automatically,
+  // no "Apply" step needed.
+  const liveFilters = useMemo(() => ({
+    cats: checkedCats, priceMin, priceMax, district,
+    conditions, availability, verifiedOnly,
+  }), [checkedCats, priceMin, priceMax, district, conditions, availability, verifiedOnly])
 
   /* Sync URL → search input */
   useEffect(() => { setSearch(queryParam) }, [queryParam])
+
+  /* Sync URL → category filter (e.g. /listings?cat=Agriculture from Home page category tiles) */
+  useEffect(() => {
+    if (catParam) setCheckedCats(new Set([catParam]))
+  }, [catParam])
 
   /* Auth */
   useEffect(() => {
@@ -915,15 +1153,16 @@ const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Date.now() / 3
     })
   }, [])
 
-  /* Reset to page 1 whenever the query or active tab changes */
-  useEffect(() => { setPage(1) }, [queryParam, activeTab])
+  /* Reset to page 1 whenever the query, tab, or any filter changes */
+  useEffect(() => { setPage(1) }, [queryParam, activeTab, liveFilters])
 
   /* Search whenever query, tab, filters, sort, or page change.
+     No early return here — landing on /listings with no q/cat (e.g. from
+     "All Categories") should browse everything, not show a blank page.
      Pass current values as args so doSearch never reads stale closure state. */
   useEffect(() => {
-    if (!queryParam) return
-    doSearch(activeTab, applied, sortBy, page)
-  }, [queryParam, activeTab, applied, sortBy, page, searchTick])
+    doSearch(activeTab, liveFilters, sortBy, page)
+  }, [queryParam, catParam, activeTab, liveFilters, sortBy, page])
 
   /* Fetch lightweight counts for every tab whenever the query changes, so
      tab badges are populated without forcing the user to click each tab. */
@@ -940,7 +1179,7 @@ const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Date.now() / 3
 
     const [listingsC, shopsC, lookingforC, jobsC, servicesC] = await Promise.all([
       safe(async () => {
-        const { count } = await supabase.from('listings').select('id', { count:'exact', head:true }).eq('status', 'active').ilike('title', `%${q}%`)
+        const { count } = await supabase.from('listings').select('id', { count:'exact', head:true }).eq('status', 'published').ilike('title', `%${q}%`)
         return count || 0
       }),
       safe(async () => {
@@ -983,20 +1222,35 @@ const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Date.now() / 3
 
   /* ── Marketplace listings (original logic, unchanged) ── */
   async function searchListings(filters, currentSort, currentPage) {
-    const baseSelect = 'id, title, price, images, city, category, condition, featured, is_featured, created_at, seller_id, shop_id, description'
+    const baseSelect = 'id, title, price, images, videos, city, district, area, category, condition, availability_status, featured, is_featured, created_at, seller_id, shop_id, description, flash_sale_price, flash_sale_ends_at, price_tiers'
 
     let query = supabase
       .from('listings')
       .select(baseSelect, { count: 'exact' })
-      .eq('status', 'active')
-      .ilike('title', `%${queryParam}%`)
+      .eq('status', 'published')
 
-    if (filters.cats.size > 0) query = query.in('category', [...filters.cats])
+    if (queryParam) query = query.ilike('title', `%${queryParam}%`)
+
+    if (filters.cats.size > 0) {
+      // Split checked keys into top-level categories vs subcategories, and
+      // match a listing if either its category OR its subcategory is checked
+      // — this keeps behavior correct whether the user checked a parent,
+      // a leaf, or a mix of both.
+      const topLevelKeys = new Set(CATEGORY_TREE.map(n => n.key))
+      const checkedTop  = [...filters.cats].filter(k => topLevelKeys.has(k))
+      const checkedSub  = [...filters.cats].filter(k => !topLevelKeys.has(k))
+
+      const orParts = []
+      if (checkedTop.length > 0) orParts.push(`category.in.(${checkedTop.join(',')})`)
+      if (checkedSub.length > 0) orParts.push(`subcategory.in.(${checkedSub.join(',')})`)
+      if (orParts.length > 0) query = query.or(orParts.join(','))
+    }
     if (filters.priceMin)      query = query.gte('price', Number(filters.priceMin))
     if (filters.priceMax)      query = query.lte('price', Number(filters.priceMax))
     if (filters.district && filters.district !== 'All Districts')
-      query = query.ilike('city', `%${filters.district}%`)
+      query = query.or(`district.ilike.%${filters.district}%,city.ilike.%${filters.district}%`)
     if (filters.conditions.size > 0) query = query.in('condition', [...filters.conditions])
+    if (filters.availability.size > 0) query = query.in('availability_status', [...filters.availability])
 
     // Fetch ALL matching listings (no pagination yet) so we can pin featured first
     query = query.order('created_at', { ascending: false }).limit(200)
@@ -1027,8 +1281,8 @@ const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Date.now() / 3
       default:           sortedRegular.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     }
 
-    // Merge: featured always first
-    const merged = [...sortedFeatured, ...sortedRegular]
+    // Merge: featured always first, then hard-cap the whole list to 20 max
+    const merged = [...sortedFeatured, ...sortedRegular].slice(0, 20)
 
     // Paginate client-side
     const from = (currentPage - 1) * PAGE_SIZE
@@ -1164,7 +1418,31 @@ const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Date.now() / 3
   function toggleCat(key) {
     setCheckedCats(prev => {
       const next = new Set(prev)
-      next.has(key) ? next.delete(key) : next.add(key)
+      const node = CATEGORY_TREE.find(n => n.key === key)
+      const isParent = node?.children?.length > 0
+      const willCheck = !next.has(key)
+
+      if (isParent) {
+        // Checking/unchecking a parent cascades to all its children
+        if (willCheck) {
+          next.add(key)
+          node.children.forEach(c => next.add(c.key))
+        } else {
+          next.delete(key)
+          node.children.forEach(c => next.delete(c.key))
+        }
+      } else {
+        // Toggling a subcategory
+        willCheck ? next.add(key) : next.delete(key)
+
+        const parentKey = SUBCAT_PARENT[key]
+        if (parentKey) {
+          const parentNode = CATEGORY_TREE.find(n => n.key === parentKey)
+          const allChildrenChecked = parentNode.children.every(c => next.has(c.key))
+          if (allChildrenChecked) next.add(parentKey)
+          else next.delete(parentKey)
+        }
+      }
       return next
     })
   }
@@ -1177,52 +1455,25 @@ const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Date.now() / 3
     })
   }
 
-  function toggleDelivery(key) {
-    setDelivery(prev => {
+  function toggleAvailability(key) {
+    setAvailability(prev => {
       const next = new Set(prev)
       next.has(key) ? next.delete(key) : next.add(key)
       return next
     })
   }
 
-  // Reset pending UI state AND commit empty filters so the search re-runs
-  const EMPTY_FILTERS = {
-    cats: new Set(), priceMin: '', priceMax: '', district: 'All Districts',
-    conditions: new Set(), delivery: new Set(), verifiedOnly: false,
-  }
+  
 
   function clearAll() {
-    // Reset UI controls
     setCheckedCats(new Set())
     setPriceMin('')
     setPriceMax('')
     setDistrict('All Districts')
     setConditions(new Set())
-    setDelivery(new Set())
+    setAvailability(new Set())
     setVerifiedOnly(false)
     setPage(1)
-    // Commit clean filters to state
-    setApplied(EMPTY_FILTERS)
-    // Bump tick so the useEffect always re-fires even if applied was already empty
-    setSearchTick(t => t + 1)
-    // Also call doSearch directly so results clear immediately without
-    // waiting for the React state flush
-    doSearch(activeTab, EMPTY_FILTERS, sortBy, 1)
-  }
-
-  function applyFilters() {
-    const next = {
-      cats: new Set(checkedCats),
-      priceMin, priceMax, district,
-      conditions: new Set(conditions),
-      delivery: new Set(delivery),
-      verifiedOnly,
-    }
-    setPage(1)
-    setApplied(next)
-    setSearchTick(t => t + 1)
-    setMobileFilterOpen(false)
-    doSearch(activeTab, next, sortBy, 1)
   }
 
   function clearFiltersAndSearch() {
@@ -1256,9 +1507,8 @@ const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Date.now() / 3
     priceMin, setPriceMin, priceMax, setPriceMax,
     district, setDistrict,
     conditions, onToggleCondition: toggleCondition,
-    delivery, onToggleDelivery: toggleDelivery,
+    availability, onToggleAvailability: toggleAvailability,
     verifiedOnly, setVerifiedOnly,
-    onApply: applyFilters,
   }
 
   const resultsLabel = {
@@ -1276,7 +1526,11 @@ const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Date.now() / 3
         {/* ── Search summary bar ── */}
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'18px 0 0', flexWrap:'wrap', gap:8 }}>
           <div style={{ fontSize:17, fontWeight:700, color:T.gray900 }}>
-            Search results for <span style={{ color:T.green }}>"{queryParam}"</span>
+            {queryParam
+              ? <>Search results for <span style={{ color:T.green }}>"{queryParam}"</span></>
+              : catParam
+                ? <>Browsing <span style={{ color:T.green }}>{catParam}</span></>
+                : 'Browse listings'}
           </div>
           <div style={{ fontSize:14, color:T.gray600, fontWeight:500 }}>
             {loading ? 'Searching…' : `${totalCount.toLocaleString()} ${resultsLabel} found`}
@@ -1303,10 +1557,18 @@ const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Date.now() / 3
 
         <div style={{ display:'flex', gap:24, alignItems:'flex-start', paddingTop:18, paddingBottom:40 }}>
 
-          {/* ── FILTER SIDEBAR (desktop) — Marketplace tab only ── */}
+          {/* ── FILTER SIDEBAR (desktop) — Marketplace tab only ──
+              Outer wrapper: pure position:sticky, no transform on it —
+              transforms on a sticky element can break its stickiness.
+              Inner wrapper: gets all the animation/transform treatment. */}
           {showFilterSidebar && (
-            <div className="sp-sidebar" style={{ background:'#fff', borderRadius:16, border:`1px solid ${T.gray200}`, padding:'18px 16px', boxShadow:T.shadow, position:'sticky', top:140 }}>
-              <FilterPanel {...filterProps} />
+            <div className="sp-sidebar" style={{ position:'sticky', top:140, maxHeight:'calc(100vh - 160px)', overflowY:'auto' }}>
+              <div
+                className={`sp-sidebar-panel${sidebarStuck ? ' stuck' : ''}`}
+                style={{ background:'#fff', borderRadius:16, border:`1px solid ${T.gray200}`, padding:'18px 16px', boxShadow:T.shadow }}
+              >
+                <FilterPanel {...filterProps} />
+              </div>
             </div>
           )}
 
@@ -1324,9 +1586,9 @@ const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Date.now() / 3
                     onClick={() => setMobileFilterOpen(true)}
                   >
                     {Icon.filter(15)} Filters
-                    {(applied.cats.size > 0 || applied.priceMin || applied.priceMax || applied.verifiedOnly || applied.conditions.size > 0) && (
+                    {(checkedCats.size > 0 || priceMin || priceMax || verifiedOnly || conditions.size > 0) && (
                       <span style={{ background:T.green, color:'#fff', borderRadius:'50%', width:18, height:18, fontSize:10, fontWeight:800, display:'flex', alignItems:'center', justifyContent:'center' }}>
-                        {applied.cats.size + (applied.verifiedOnly ? 1 : 0) + applied.conditions.size}
+                        {checkedCats.size + (verifiedOnly ? 1 : 0) + conditions.size}
                       </span>
                     )}
                   </button>
@@ -1429,6 +1691,9 @@ const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Date.now() / 3
               <button onClick={() => setMobileFilterOpen(false)} style={{ background:'none', border:'none', cursor:'pointer', color:T.gray700, display:'flex' }}>{Icon.x(20)}</button>
             </div>
             <FilterPanel {...filterProps} />
+            <button onClick={() => setMobileFilterOpen(false)} style={{ width:'100%', marginTop:16, background:T.green, color:'#fff', border:'none', borderRadius:12, padding:'13px 0', fontSize:14, fontWeight:700, cursor:'pointer' }}>
+              Done
+            </button>
           </div>
         </div>
       )}

@@ -117,6 +117,17 @@ function GlobalStyles() {
       @keyframes shimmer  { 0% { background-position:-600px 0; } 100% { background-position:600px 0; } }
       @keyframes liveRing { 0%,100% { box-shadow:0 0 0 3px rgba(234,67,53,.25);} 50% { box-shadow:0 0 0 7px rgba(234,67,53,.06);} }
       @keyframes badgePop { 0% { transform:scale(.7); opacity:0;} 70% { transform:scale(1.1);} 100% { transform:scale(1); opacity:1;} }
+      @keyframes hotDealGlow {
+        0%, 100% { box-shadow: 0 2px 8px rgba(234,67,53,0.45), 0 0 0 0 rgba(234,67,53,0.5); }
+        50%      { box-shadow: 0 2px 8px rgba(234,67,53,0.45), 0 0 0 5px rgba(234,67,53,0); }
+      }
+      .soko-hotdeal-pulse { animation: hotDealGlow 1.8s ease-in-out infinite; }
+      .soko-dual-badge-card { position: relative; }
+      .soko-dual-badge-card::after {
+        content: ''; position: absolute; inset: 0; border-radius: inherit;
+        background: linear-gradient(120deg, rgba(249,171,0,0.06), rgba(234,67,53,0.06));
+        pointer-events: none;
+      }
       @keyframes wordSlide{ 0% { opacity:0; transform:translateY(6px);} 15% { opacity:1; transform:translateY(0);} 85% { opacity:1; transform:translateY(0);} 100% { opacity:0; transform:translateY(-6px);} }
       @keyframes floatY   { 0%,100% { transform:translateY(0);} 50% { transform:translateY(-6px);} }
 
@@ -827,18 +838,32 @@ function RevenueHero({ navigate, listings }) {
                     />
                     <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.08) 0%, transparent 35%, rgba(0,0,0,0.75) 70%, rgba(0,0,0,0.92) 100%)' }} />
 
-                    {/* Badge — shimmer on cards too */}
-                    <div style={{
-                      position: 'absolute', top: 9, left: 9, zIndex: 5,
-                      background: `linear-gradient(135deg,${T.amber},#e09800)`,
-                      borderRadius: 50, padding: '3px 9px',
-                      display: 'flex', alignItems: 'center', gap: 3,
-                      boxShadow: '0 2px 10px rgba(249,171,0,0.5)',
-                      overflow: 'hidden', position: 'absolute',
-                    }}>
-                      <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg,transparent,rgba(255,255,255,0.25),transparent)', backgroundSize: '200% 100%', animation: 'badgeShimmer 3s ease-in-out infinite' }} />
-                      <span style={{ color: '#1a0a00', display: 'flex', position: 'relative', zIndex: 1 }}>{Icon.star(9, '#1a0a00')}</span>
-                      <span style={{ fontSize: 8.5, fontWeight: 900, color: '#1a0a00', letterSpacing: 0.4, position: 'relative', zIndex: 1 }}>FEATURED</span>
+                    {/* Badge stack — fire circle takes over while flash deal is active; FEATURED returns once it ends */}
+                    <div style={{ position: 'absolute', top: 9, left: 9, zIndex: 5, display: 'flex', flexDirection: 'column', gap: 5 }}>
+                      {isFlashActive(item) ? (
+                        <div className="soko-hotdeal-pulse" style={{
+                          background: `linear-gradient(135deg,${T.red},#c62828)`, color: '#fff',
+                          borderRadius: '50%', width: 26, height: 26,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          boxShadow: '0 2px 8px rgba(234,67,53,0.5)',
+                        }}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="#fff">
+                            <path d="M17.66 11.2C17.43 10.9 17.15 10.64 16.89 10.38C16.22 9.78 15.46 9.35 14.82 8.72C13.33 7.26 13 4.85 13.95 3C13 3.23 12.17 3.75 11.46 4.32C8.87 6.4 7.85 10.07 9.07 13.22C9.11 13.32 9.15 13.42 9.15 13.55C9.15 13.77 9 13.97 8.8 14.05C8.57 14.15 8.33 14.09 8.14 13.93C8.08 13.88 8.04 13.83 8 13.76C6.87 12.33 6.69 10.28 7.45 8.64C5.78 10 4.87 12.3 5 14.47C5.06 14.97 5.12 15.47 5.29 15.97C5.43 16.57 5.7 17.17 6 17.7C7.08 19.43 8.95 20.67 10.96 20.92C13.1 21.19 15.39 20.8 17.03 19.32C18.86 17.66 19.5 15 18.56 12.72L18.43 12.46C18.22 12 17.66 11.2 17.66 11.2Z"/>
+                          </svg>
+                        </div>
+                      ) : (
+                        <div style={{
+                          background: `linear-gradient(135deg,${T.amber},#e09800)`,
+                          borderRadius: 50, padding: '3px 9px',
+                          display: 'flex', alignItems: 'center', gap: 3,
+                          boxShadow: '0 2px 10px rgba(249,171,0,0.5)',
+                          overflow: 'hidden', position: 'relative', width: 'fit-content',
+                        }}>
+                          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg,transparent,rgba(255,255,255,0.25),transparent)', backgroundSize: '200% 100%', animation: 'badgeShimmer 3s ease-in-out infinite' }} />
+                          <span style={{ color: '#1a0a00', display: 'flex', position: 'relative', zIndex: 1 }}>{Icon.star(9, '#1a0a00')}</span>
+                          <span style={{ fontSize: 8.5, fontWeight: 900, color: '#1a0a00', letterSpacing: 0.4, position: 'relative', zIndex: 1 }}>FEATURED</span>
+                        </div>
+                      )}
                     </div>
 
                     <div style={{ position: 'absolute', top: 9, right: 9, zIndex: 5, width: 26, height: 26, borderRadius: '50%', background: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -1041,12 +1066,18 @@ function PremiumListingCard({ listing, onClick, delay = 0, large = false }) {
   function handleLike(e) { e.stopPropagation(); setLiked(l => !l) }
 
   return (
-    <div onClick={onClick} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} className="soko-card-bg" style={{
+    <div onClick={onClick} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} className={`soko-card-bg${isFeat && isFlash ? ' soko-dual-badge-card' : ''}`} style={{
       background: T.white, borderRadius: 12, overflow: 'hidden', cursor: 'pointer',
-      border: isFeat
+      border: isFeat && isFlash
+        ? `1.5px solid ${hov ? T.red : T.red + '55'}`
+        : isFeat
         ? `2px solid ${hov ? T.amber : 'transparent'}`
+        : isFlash
+        ? `1.5px solid ${T.red}55`
         : `1px solid ${hov ? T.gray200 : T.gray100}`,
-      boxShadow: hov ? (isFeat ? '0 8px 24px rgba(249,171,0,0.25)' : T.shadowMd) : T.shadow,
+      boxShadow: isFeat && isFlash
+        ? (hov ? '0 10px 28px rgba(234,67,53,0.28)' : T.shadow)
+        : hov ? (isFeat ? '0 8px 24px rgba(249,171,0,0.25)' : T.shadowMd) : T.shadow,
       transform: hov ? 'translateY(-3px)' : 'none',
       transition: 'all 0.2s ease', animation: `fadeUp 0.4s ease ${delay}s both`,
       display: 'flex', flexDirection: 'column', height: 220,
@@ -1056,20 +1087,45 @@ function PremiumListingCard({ listing, onClick, delay = 0, large = false }) {
           ? <img src={listing.images[0]} alt={listing.title} onError={() => setImgErr(true)} style={{ width: '100%', height: '100%', objectFit: 'cover', transform: hov ? 'scale(1.07)' : 'scale(1)', transition: 'transform 0.5s cubic-bezier(0.34,1.2,0.64,1)' }} />
           : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40, color: T.gray400, background: T.gray100 }}>{catIcon(listing.category).emoji}</div>
         }
-        {isFeat && (
-          <div style={{ position: 'absolute', top: 10, left: 10, background: `linear-gradient(135deg,${T.amber},#e09800)`, color: '#1a0a00', borderRadius: 50, padding: '3px 10px', fontSize: 10, fontWeight: 900, boxShadow: '0 2px 8px rgba(249,171,0,0.4)', display: 'flex', alignItems: 'center', gap: 4 }}>
-            ⭐ FEATURED
-          </div>
-        )}
-        {isFlash && !isFeat && (
-          <div style={{ position: 'absolute', top: 10, left: 10, background: T.red, color: '#fff', borderRadius: 50, padding: '3px 10px', fontSize: 10, fontWeight: 800, boxShadow: '0 2px 8px rgba(234,67,53,0.4)', display: 'flex', alignItems: 'center', gap: 4 }}>{Icon.fire(11)} FLASH</div>
-        )}
+        <div style={{ position: 'absolute', top: 10, left: 10, display: 'flex', flexDirection: 'column', gap: 5, zIndex: 2 }}>
+          {isFeat && isFlash ? (
+            <div className="soko-hotdeal-pulse" style={{ background: `linear-gradient(135deg,${T.red},#c62828)`, color: '#fff', borderRadius: '50%', width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(234,67,53,0.5)' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff">
+                <path d="M17.66 11.2C17.43 10.9 17.15 10.64 16.89 10.38C16.22 9.78 15.46 9.35 14.82 8.72C13.33 7.26 13 4.85 13.95 3C13 3.23 12.17 3.75 11.46 4.32C8.87 6.4 7.85 10.07 9.07 13.22C9.11 13.32 9.15 13.42 9.15 13.55C9.15 13.77 9 13.97 8.8 14.05C8.57 14.15 8.33 14.09 8.14 13.93C8.08 13.88 8.04 13.83 8 13.76C6.87 12.33 6.69 10.28 7.45 8.64C5.78 10 4.87 12.3 5 14.47C5.06 14.97 5.12 15.47 5.29 15.97C5.43 16.57 5.7 17.17 6 17.7C7.08 19.43 8.95 20.67 10.96 20.92C13.1 21.19 15.39 20.8 17.03 19.32C18.86 17.66 19.5 15 18.56 12.72L18.43 12.46C18.22 12 17.66 11.2 17.66 11.2Z"/>
+              </svg>
+            </div>
+          ) : (
+            <>
+              {isFeat && (
+                <div style={{ display:'flex', alignItems:'center', gap:3, background:'#FF7A1A', color:'#fff', padding:'3px 8px', fontSize:9.5, fontWeight:800, borderRadius:50, boxShadow:'0 2px 6px rgba(255,122,26,0.4)', width:'fit-content' }}>
+                  {Icon.star(9, '#fff')} Featured
+                </div>
+              )}
+              {isFlash && (
+                <div className="soko-hotdeal-pulse" style={{ background: `linear-gradient(135deg,${T.red},#c62828)`, color: '#fff', borderRadius: '50%', width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(234,67,53,0.5)' }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff">
+                    <path d="M17.66 11.2C17.43 10.9 17.15 10.64 16.89 10.38C16.22 9.78 15.46 9.35 14.82 8.72C13.33 7.26 13 4.85 13.95 3C13 3.23 12.17 3.75 11.46 4.32C8.87 6.4 7.85 10.07 9.07 13.22C9.11 13.32 9.15 13.42 9.15 13.55C9.15 13.77 9 13.97 8.8 14.05C8.57 14.15 8.33 14.09 8.14 13.93C8.08 13.88 8.04 13.83 8 13.76C6.87 12.33 6.69 10.28 7.45 8.64C5.78 10 4.87 12.3 5 14.47C5.06 14.97 5.12 15.47 5.29 15.97C5.43 16.57 5.7 17.17 6 17.7C7.08 19.43 8.95 20.67 10.96 20.92C13.1 21.19 15.39 20.8 17.03 19.32C18.86 17.66 19.5 15 18.56 12.72L18.43 12.46C18.22 12 17.66 11.2 17.66 11.2Z"/>
+                  </svg>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
         
       </div>
 
       <div style={{ padding: '8px 10px 8px', background: '#fff', height: '38%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: T.gray900, lineHeight: 1.3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical' }}>{listing.title}</div>
-        <div style={{ fontSize: 14, fontWeight: 800, color: T.gray900, letterSpacing: '-0.3px' }}>{formatPrice(price)}</div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 14, fontWeight: 800, color: isFlash ? T.red : T.gray900, letterSpacing: '-0.3px' }}>{formatPrice(price)}</span>
+          {isFlash && listing.price > price && (
+            <>
+              <span style={{ fontSize: 10.5, fontWeight: 600, color: T.gray500, textDecoration: 'line-through' }}>{formatPrice(listing.price)}</span>
+              <span style={{ fontSize: 9.5, fontWeight: 800, color: T.red }}>-{Math.round((1 - price / listing.price) * 100)}%</span>
+            </>
+          )}
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, color: T.gray600 }}>
             <span style={{ color: T.green }}>{Icon.pin(13)}</span>
@@ -1275,6 +1331,8 @@ function LatestListingCard({ listing, delay = 0, onClick }) {
 
   const isVerif = listing.seller_verified || listing.shop_is_verified
   const isNew   = listing.created_at && (Date.now() - new Date(listing.created_at).getTime()) < 86400000
+  const isFeat  = listing.featured || listing.is_featured
+  const isFlash = isFlashActive(listing)
   const meta    = catIcon(listing.category)
   const trustCount = listing.view_count ?? listing.inquiry_count ?? null
 
@@ -1293,8 +1351,14 @@ function LatestListingCard({ listing, delay = 0, onClick }) {
         borderRadius: T.radius,
         overflow: 'hidden',
         cursor: 'pointer',
-        border: `1px solid ${hov ? '#cdeedc' : T.gray100}`,
-        boxShadow: hov ? '0 18px 40px rgba(15,23,42,0.14), 0 6px 14px rgba(15,157,88,0.10)' : T.shadow,
+        border: isFeat && isFlash
+          ? `1.5px solid ${hov ? T.red : T.amber}`
+          : isFeat ? `1.5px solid ${hov ? T.amber : '#f5dfa3'}`
+          : isFlash ? `1.5px solid ${T.red}44`
+          : `1px solid ${hov ? '#cdeedc' : T.gray100}`,
+        boxShadow: isFeat && isFlash
+          ? '0 10px 28px rgba(249,171,0,0.18), 0 4px 14px rgba(234,67,53,0.16)'
+          : hov ? '0 18px 40px rgba(15,23,42,0.14), 0 6px 14px rgba(15,157,88,0.10)' : T.shadow,
         transform: hov ? 'translateY(-6px)' : 'translateY(0)',
         transition: 'transform 0.32s cubic-bezier(0.22,1,0.36,1), box-shadow 0.32s ease, border-color 0.32s ease',
         animation: `fadeUp 0.5s cubic-bezier(0.22,1,0.36,1) ${delay}s both`,
@@ -1324,25 +1388,59 @@ function LatestListingCard({ listing, delay = 0, onClick }) {
           </div>
         )}
 
-        {/* Badge slots: NEW always occupies the top slot when present. Verified
-            moved off the image entirely (see body) so it reads as a fact about
-            the seller, not a loud overlay competing with the photo. */}
-        {isNew && (
-          <span style={{
-            position: 'absolute', top: 10, left: 10, zIndex: 3,
-            display: 'inline-flex', alignItems: 'center',
-            height: 21, boxSizing: 'border-box',
-            background: T.green, color: '#fff', borderRadius: 50,
-            padding: '0 9px 0 8px', fontSize: 9.5, fontWeight: 800, lineHeight: 1,
-            letterSpacing: 0.4, boxShadow: '0 3px 10px rgba(15,157,88,0.4)',
-            whiteSpace: 'nowrap',
-          }}>
-            <span style={{ width: 10, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#fff', animation: 'pulse 1.8s ease-in-out infinite' }} />
+        {/* Badge stack: Featured / Hot Deal take priority over NEW, since they
+            carry monetization signal — but both can co-occur (stacked), and
+            NEW still shows if there's room and nothing else present. */}
+        <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 3, display: 'flex', flexDirection: 'column', gap: 5 }}>
+         {isFeat && isFlash ? (
+            <span className="soko-hotdeal-pulse" style={{
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              background: `linear-gradient(135deg,${T.red},#c62828)`, color: '#fff', borderRadius: '50%',
+              width: 24, height: 24, boxShadow: '0 3px 10px rgba(234,67,53,0.5)',
+            }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="#fff">
+                <path d="M17.66 11.2C17.43 10.9 17.15 10.64 16.89 10.38C16.22 9.78 15.46 9.35 14.82 8.72C13.33 7.26 13 4.85 13.95 3C13 3.23 12.17 3.75 11.46 4.32C8.87 6.4 7.85 10.07 9.07 13.22C9.11 13.32 9.15 13.42 9.15 13.55C9.15 13.77 9 13.97 8.8 14.05C8.57 14.15 8.33 14.09 8.14 13.93C8.08 13.88 8.04 13.83 8 13.76C6.87 12.33 6.69 10.28 7.45 8.64C5.78 10 4.87 12.3 5 14.47C5.06 14.97 5.12 15.47 5.29 15.97C5.43 16.57 5.7 17.17 6 17.7C7.08 19.43 8.95 20.67 10.96 20.92C13.1 21.19 15.39 20.8 17.03 19.32C18.86 17.66 19.5 15 18.56 12.72L18.43 12.46C18.22 12 17.66 11.2 17.66 11.2Z"/>
+              </svg>
             </span>
-            NEW TODAY
-          </span>
-        )}
+          ) : (
+            <>
+              {isFeat && (
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5, width: 'fit-content',
+                  background: '#FF7A1A', color: '#fff', borderRadius: 50,
+                  padding: '6px 14px', fontSize: 11.5, fontWeight: 800, lineHeight: 1,
+                  boxShadow: '0 3px 10px rgba(255,122,26,0.4)', whiteSpace: 'nowrap',
+                }}>{Icon.star(12, '#fff')} Featured</span>
+              )}
+              {isFlash && (
+                <span className="soko-hotdeal-pulse" style={{
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  background: `linear-gradient(135deg,${T.red},#c62828)`, color: '#fff', borderRadius: '50%',
+                  width: 24, height: 24, boxShadow: '0 3px 10px rgba(234,67,53,0.5)',
+                }}>
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="#fff">
+                    <path d="M17.66 11.2C17.43 10.9 17.15 10.64 16.89 10.38C16.22 9.78 15.46 9.35 14.82 8.72C13.33 7.26 13 4.85 13.95 3C13 3.23 12.17 3.75 11.46 4.32C8.87 6.4 7.85 10.07 9.07 13.22C9.11 13.32 9.15 13.42 9.15 13.55C9.15 13.77 9 13.97 8.8 14.05C8.57 14.15 8.33 14.09 8.14 13.93C8.08 13.88 8.04 13.83 8 13.76C6.87 12.33 6.69 10.28 7.45 8.64C5.78 10 4.87 12.3 5 14.47C5.06 14.97 5.12 15.47 5.29 15.97C5.43 16.57 5.7 17.17 6 17.7C7.08 19.43 8.95 20.67 10.96 20.92C13.1 21.19 15.39 20.8 17.03 19.32C18.86 17.66 19.5 15 18.56 12.72L18.43 12.46C18.22 12 17.66 11.2 17.66 11.2Z"/>
+                  </svg>
+                </span>
+              )}
+            </>
+          )}
+          {isNew && !isFeat && !isFlash && (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', width: 'fit-content',
+              height: 21, boxSizing: 'border-box',
+              background: T.green, color: '#fff', borderRadius: 50,
+              padding: '0 9px 0 8px', fontSize: 9.5, fontWeight: 800, lineHeight: 1,
+              letterSpacing: 0.4, boxShadow: '0 3px 10px rgba(15,157,88,0.4)',
+              whiteSpace: 'nowrap',
+            }}>
+              <span style={{ width: 10, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#fff', animation: 'pulse 1.8s ease-in-out infinite' }} />
+              </span>
+              NEW
+            </span>
+          )}
+        </div>
 
         {/* Wishlist — floating circular, fills on like */}
         <button

@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import {
+  confirmVerificationPayment,
+  cancelVerificationPayment,
+} from '../lib/verification'
 
 const C = {
   green: '#1a7a4a', greenMid: '#22a05e', greenDeep: '#0d4a2c',
@@ -149,7 +153,8 @@ export default function VerifyPayment() {
       if (isFeature) {
         await supabase.from('listing_promotions').delete().eq('seller_id', user.id).eq('tx_ref', tx_ref)
       } else {
-        await supabase.from('verification_requests').delete().eq('seller_id', user.id).eq('payment_ref', tx_ref)
+        // Soft-cancel payment_pending request (no instant delete of audit trail when possible)
+        await cancelVerificationPayment(tx_ref, user.id)
       }
       setStatus('cancelled')
       return
@@ -167,14 +172,13 @@ export default function VerifyPayment() {
       return
     }
 
-    const { error, data } = await supabase.from('verification_requests')
-      .update({ status: 'approved', reviewed_at: new Date().toISOString() })
-      .eq('seller_id', user.id)
-      .eq('payment_ref', tx_ref)
-      .select()
-
-    if (error || !data || data.length === 0) { setStatus('failed'); return }
-    setStatus('success')
+    // PHASE 1: payment success → under_review / payment_confirmed — NEVER auto-approved
+    try {
+      await confirmVerificationPayment(tx_ref)
+      setStatus('success')
+    } catch {
+      setStatus('failed')
+    }
   }
 
   return (
@@ -237,12 +241,12 @@ export default function VerifyPayment() {
           </IconBadge>
 
           <div style={{ fontFamily: SORA, fontSize: 21, fontWeight: 800, color: C.dark, marginBottom: 8, letterSpacing: '-0.01em' }}>
-            {isFeatureFlow ? 'Listing Featured!' : "You're Verified!"}
+            {isFeatureFlow ? 'Listing Featured!' : 'Payment confirmed'}
           </div>
           <p style={{ fontSize: 14, color: C.muted, marginBottom: 26, lineHeight: 1.65 }}>
             {isFeatureFlow
               ? 'Your listing is now live on the homepage with a gold Featured badge — get ready for more views.'
-              : 'Your seller account is now verified. Your listings will display the Verified Seller badge.'}
+              : 'Thanks! Your payment was confirmed. Your verification request is now under review — you will get the Verified badge after our team approves it.'}
           </p>
 
           {isFeatureFlow && (
@@ -260,7 +264,7 @@ export default function VerifyPayment() {
               background: C.greenTint, border: `1px solid #c9e8d6`, borderRadius: 12,
               padding: '10px 14px', marginBottom: 22, fontSize: 12.5, fontWeight: 700, color: C.green,
             }}>
-              {Icon.shieldCheck(14, C.green)} Verified Seller badge is now active
+              {Icon.shieldCheck(14, C.green)} Under review — badge after approval
             </div>
           )}
 

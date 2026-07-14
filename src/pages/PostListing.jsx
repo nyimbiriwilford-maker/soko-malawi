@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import {
   Search, MessageCircle, Bell, Plus, UploadCloud, X, MapPin,
   RefreshCw, Rocket, Star, TrendingUp, Crown, CheckCircle2,
@@ -629,12 +629,54 @@ function ListingPreviewModal({ form, images, videos = [], coverIndex, location, 
 }
 
 /* ────────────────────────────────────────────────────────────
-   Main component
+   Resume Draft Modal — asks whether to continue an unfinished listing
    ──────────────────────────────────────────────────────────── */
-export default function PostListing() {
+function ResumeDraftModal({ draft, onResume, onDiscard }) {
+  return (
+    <div style={{
+      position: 'fixed', inset: 0, zIndex: 9200,
+      background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 20, animation: 'plSlideIn 0.2s ease',
+    }}>
+      <div style={{
+        background: C.white, borderRadius: 20, width: '100%', maxWidth: 400,
+        padding: '24px 24px 20px', boxShadow: '0 24px 64px rgba(0,0,0,0.28)', textAlign: 'center',
+      }}>
+        <div style={{ width: 48, height: 48, borderRadius: 14, background: C.greenLight, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
+          <RefreshCw size={22} color={C.green} />
+        </div>
+        <h3 style={{ fontFamily: SORA, fontSize: 17, fontWeight: 800, color: C.dark, marginBottom: 6 }}>
+          Continue your draft?
+        </h3>
+        <p style={{ fontSize: 13, color: C.muted, lineHeight: 1.5, marginBottom: 20 }}>
+          You have an unfinished listing{draft?.title ? ` — "${draft.title}"` : ''}. Pick up where you left off, or start a new one.
+        </p>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <OutlineButton onClick={onDiscard} style={{ flex: 1, justifyContent: 'center', display: 'flex' }}>
+            Start New
+          </OutlineButton>
+          <PrimaryButton onClick={onResume} style={{ flex: 1, justifyContent: 'center', display: 'flex' }}>
+            Continue Draft
+          </PrimaryButton>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* ────────────────────────────────────────────────────────────
+   Main component
+   ──────────────────────────────────────────────────────────── */export default function PostListing() {
   const navigate = useNavigate()
+  const { id: editId } = useParams()
+  const isEditMode = !!editId
+  const [loadingExisting, setLoadingExisting] = useState(isEditMode)
   const fileInputRef = useRef(null)
-  const imagesRef      = useRef(null)
+  const mapContainerRef = useRef(null)
+  const mapInstanceRef  = useRef(null)
+  const mapMarkerRef    = useRef(null)
+  const imagesRef      = useRef(null)  
   const basicInfoRef   = useRef(null)
   const contactRef     = useRef(null)
   
@@ -666,7 +708,7 @@ export default function PostListing() {
     title: '', category: '', subcategory: '', condition: 'new',
     description: '', keyFeatures: '', price: '',
     fullName: '', phone: '', whatsapp: '', email: '',
-    availability: 'in_stock', contactMethods: ['chat', 'whatsapp'],
+    availability: 'in_stock', contactMethods: ['chat'],
     callNumber: '', whatsappNumber: '',
     flashSaleEnabled: false, flashSalePrice: '', flashSaleDurationHours: 24,
     priceTiers: [], // [{ minQty: '', price: '' }]
@@ -694,12 +736,13 @@ export default function PostListing() {
   const [selectedDates, setSelectedDates] = useState([])
 
   /* UI state */
-  const [submitting, setSubmitting] = useState(false)
+   const [submitting, setSubmitting] = useState(false)
   const [savingDraft, setSavingDraft] = useState(false)
+  const draftIdRef = useRef(isEditMode ? editId : null)
   const [toast, setToast]           = useState({ message: '', type: 'error' })
-  const [showPreview, setShowPreview] = useState(false)
-  const [showGuide,   setShowGuide]   = useState(false)
-
+  const [showGuide, setShowGuide] = useState(false)
+  const [pendingDraft, setPendingDraft] = useState(null) // draft row found on mount, awaiting user's choice
+  const [checkingDraft, setCheckingDraft] = useState(false)
   const showToast = (message, type = 'error', duration = 4500) => {
     setToast({ message, type })
     setTimeout(() => setToast({ message: '', type: 'error' }), duration)
@@ -759,9 +802,65 @@ export default function PostListing() {
     }
   }, [selectedShopId, myShops, profileName])
 
+  /* ── Load Leaflet (CDN) once ── */
+  useEffect(() => {
+    if (window.L) return
+    const link = document.createElement('link')
+    link.rel = 'stylesheet'
+    link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
+    document.head.appendChild(link)
+    const script = document.createElement('script')
+    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
+    script.async = true
+    document.body.appendChild(script)
+  }, [])
+
+  /* ── Init / update Leaflet map whenever coordinates change ── */
+  useEffect(() => {
+    if (!location.lat || !location.lng) return
+
+    const initOrUpdate = () => {
+      const L = window.L
+      if (!L || !mapContainerRef.current) return
+
+      if (!mapInstanceRef.current) {
+        mapInstanceRef.current = L.map(mapContainerRef.current, {
+          zoomControl: false,
+          attributionControl: true,
+        }).setView([location.lat, location.lng], 15)
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap',
+          maxZoom: 19,
+        }).addTo(mapInstanceRef.current)
+
+        mapInstanceRef.current.attributionControl.setPrefix(false)
+
+        const pinIcon = L.divIcon({
+          className: '',
+          html: `<div style="width:26px;height:26px;border-radius:50% 50% 50% 0;background:${C.green};transform:rotate(-45deg);border:2px solid #fff;box-shadow:0 3px 8px rgba(15,20,16,0.35)"></div>`,
+          iconSize: [26, 26],
+          iconAnchor: [13, 26],
+        })
+        mapMarkerRef.current = L.marker([location.lat, location.lng], { icon: pinIcon }).addTo(mapInstanceRef.current)
+      } else {
+        mapInstanceRef.current.setView([location.lat, location.lng], 15)
+        mapMarkerRef.current.setLatLng([location.lat, location.lng])
+      }
+    }
+
+    if (window.L) {
+      initOrUpdate()
+    } else {
+      const interval = setInterval(() => {
+        if (window.L) { clearInterval(interval); initOrUpdate() }
+      }, 150)
+      return () => clearInterval(interval)
+    }
+  }, [location.lat, location.lng])
+
   /* ── Auto-detect location on mount ── */
-  const detectLocation = () => {
-    setLocation(l => ({ ...l, detecting: true }))
+  const detectLocation = () => {    setLocation(l => ({ ...l, detecting: true }))
     setLocationConfirmed(false)
     if (!navigator.geolocation) {
       setLocation({ city: 'Lilongwe', district: 'Lilongwe District', area: '', lat: -13.9626, lng: 33.7741, detected: true, detecting: false })
@@ -817,10 +916,148 @@ export default function PostListing() {
     )
   }
 
-  useEffect(() => { detectLocation() }, [])
+  useEffect(() => { if (!isEditMode) detectLocation() }, [])
 
-  /* ── Check global free-feature toggle + seller's own eligibility ── */
+  /* ── Edit mode: load the existing listing and prefill everything ── */
   useEffect(() => {
+    if (!isEditMode || !user) return
+    let cancelled = false
+    supabase.from('listings').select('*').eq('id', editId).single().then(({ data, error }) => {
+      if (cancelled || error || !data) { if (!cancelled) setLoadingExisting(false); return }
+      if (data.seller_id !== user.id) {
+        showToast('You can only edit your own listings.')
+        navigate('/listings/' + editId)
+        return
+      }
+
+      setForm(f => ({
+        ...f,
+        title: data.title || '',
+        category: data.category || '',
+        subcategory: data.subcategory || '',
+        condition: data.condition || 'new',
+        description: data.description || '',
+        keyFeatures: data.key_features || '',
+        price: data.price != null ? String(data.price) : '',
+        fullName: data.seller_name || f.fullName,
+        phone: data.phone || '',
+        whatsapp: data.seller_whatsapp || '',
+        email: data.seller_email || '',
+        availability: data.availability_status || 'in_stock',
+        contactMethods: data.contact_methods?.length ? data.contact_methods : f.contactMethods,
+        callNumber: data.call_number || '',
+        whatsappNumber: data.whatsapp_number || '',
+        flashSaleEnabled: !!data.flash_sale_price,
+        flashSalePrice: data.flash_sale_price != null ? String(data.flash_sale_price) : '',
+        flashSaleDurationHours: 24,
+        priceTiers: (data.price_tiers || []).map(t => ({ minQty: String(t.min_qty), price: String(t.price) })),
+      }))
+
+      setImages((data.images || []).map(url => ({ file: null, url })))
+      setVideos((data.videos || []).map(url => ({ file: null, url })))
+
+      setLocation({
+        city: data.city || '', district: data.district || '', area: data.area || '',
+        lat: data.latitude || null, lng: data.longitude || null,
+        detected: true, detecting: false,
+      })
+      setLocationConfirmed(true)
+
+      setSelectedPromotion(data.promotion_type || 'none')
+      setBooking({
+        hourly: data.booking_hourly != null ? String(data.booking_hourly) : '',
+        daily:  data.booking_daily  != null ? String(data.booking_daily)  : '',
+        weekly: data.booking_weekly != null ? String(data.booking_weekly) : '',
+        depositRequired: !!data.booking_deposit_required,
+      })
+      setBuyersLookingFor(data.buyers_looking_for ?? true)
+      setSelectedDates(data.availability_dates || [])
+
+      setLoadingExisting(false)
+    })
+    return () => { cancelled = true }
+  }, [isEditMode, editId, user])
+
+  /* ── On a fresh Post Listing visit, check if the user has an unfinished draft ── */
+  useEffect(() => {
+    if (isEditMode || !user) return
+    let cancelled = false
+    setCheckingDraft(true)
+    supabase.from('listings')
+      .select('*')
+      .eq('seller_id', user.id)
+      .eq('status', 'draft')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (cancelled) return
+        setCheckingDraft(false)
+        if (data) setPendingDraft(data)
+      })
+    return () => { cancelled = true }
+  }, [isEditMode, user])
+
+  /* ── Fill the form from a draft row (used by the resume prompt) ── */
+  const loadDraftIntoForm = (data) => {
+    draftIdRef.current = data.id
+    setForm(f => ({
+      ...f,
+      title: data.title || '',
+      category: data.category || '',
+      subcategory: data.subcategory || '',
+      condition: data.condition || 'new',
+      description: data.description || '',
+      keyFeatures: data.key_features || '',
+      price: data.price != null ? String(data.price) : '',
+      fullName: data.seller_name || f.fullName,
+      phone: data.phone || '',
+      whatsapp: data.seller_whatsapp || '',
+      email: data.seller_email || '',
+      availability: data.availability_status || 'in_stock',
+      contactMethods: data.contact_methods?.length ? data.contact_methods : f.contactMethods,
+      callNumber: data.call_number || '',
+      whatsappNumber: data.whatsapp_number || '',
+      flashSaleEnabled: !!data.flash_sale_price,
+      flashSalePrice: data.flash_sale_price != null ? String(data.flash_sale_price) : '',
+      flashSaleDurationHours: 24,
+      priceTiers: (data.price_tiers || []).map(t => ({ minQty: String(t.min_qty), price: String(t.price) })),
+    }))
+    setImages((data.images || []).map(url => ({ file: null, url })))
+    setVideos((data.videos || []).map(url => ({ file: null, url })))
+    if (data.city || data.district) {
+      setLocation({
+        city: data.city || '', district: data.district || '', area: data.area || '',
+        lat: data.latitude || null, lng: data.longitude || null,
+        detected: true, detecting: false,
+      })
+      setLocationConfirmed(true)
+    }
+    setSelectedPromotion(data.promotion_type || 'none')
+    setBooking({
+      hourly: data.booking_hourly != null ? String(data.booking_hourly) : '',
+      daily:  data.booking_daily  != null ? String(data.booking_daily)  : '',
+      weekly: data.booking_weekly != null ? String(data.booking_weekly) : '',
+      depositRequired: !!data.booking_deposit_required,
+    })
+    setBuyersLookingFor(data.buyers_looking_for ?? true)
+    setSelectedDates(data.availability_dates || [])
+  }
+
+  const handleResumeDraft = () => {
+    if (pendingDraft) loadDraftIntoForm(pendingDraft)
+    setPendingDraft(null)
+    navigate(`/post/edit/${pendingDraft.id}`, { replace: true })
+  }
+
+  const handleDiscardDraftPrompt = async () => {
+    if (pendingDraft) {
+      await supabase.from('listings').delete().eq('id', pendingDraft.id)
+    }
+    setPendingDraft(null)
+  }
+
+  /* ── Check global free-feature toggle + seller's own eligibility ── */  useEffect(() => {
     supabase.from('app_settings').select('value').eq('key', 'free_featured_enabled').maybeSingle()
       .then(({ data }) => setFreeFeaturedEnabled(data ? data.value === true : true))
   }, [])
@@ -880,7 +1117,8 @@ export default function PostListing() {
     const urls = []
     setUploadProgress({ current: 0, total: ordered.length })
     for (let i = 0; i < ordered.length; i++) {
-      const { file } = ordered[i]
+      const { file, url: existingUrl } = ordered[i]
+      if (!file) { urls.push(existingUrl); setUploadProgress({ current: i + 1, total: ordered.length }); continue }
       const ext  = file.name.split('.').pop().toLowerCase()
       const path = `${user.id}/${listingId}/${Date.now()}-${i}.${ext}`
       const { error } = await supabase.storage
@@ -905,7 +1143,8 @@ export default function PostListing() {
     let failCount = 0
     setUploadProgress({ current: 0, total: videos.length })
     for (let i = 0; i < videos.length; i++) {
-      const { file } = videos[i]
+      const { file, url: existingUrl } = videos[i]
+      if (!file) { urls.push(existingUrl); setUploadProgress({ current: i + 1, total: videos.length }); continue }
       const ext  = file.name.split('.').pop().toLowerCase()
       const path = `${user.id}/${listingId}/${Date.now()}-vid-${i}.${ext}`
       const { error } = await supabase.storage
@@ -940,7 +1179,7 @@ export default function PostListing() {
     key_features:             form.keyFeatures.trim() || null,
     price:                    parseFloat(form.price),
     flash_sale_price:         form.flashSaleEnabled && form.flashSalePrice ? parseFloat(form.flashSalePrice) : null,
-    flash_sale_ends_at:       form.flashSaleEnabled && form.flashSalePrice
+    flash_sale_expires_at:    form.flashSaleEnabled && form.flashSalePrice
                                 ? new Date(Date.now() + form.flashSaleDurationHours * 3600 * 1000).toISOString()
                                 : null,
     price_tiers:              form.priceTiers.filter(t => t.minQty && t.price).map(t => ({ min_qty: Number(t.minQty), price: Number(t.price) })),
@@ -1017,25 +1256,41 @@ export default function PostListing() {
     return { redirecting: true }
   }
 
-  /* ── Save as draft ── */
+   /* ── Save as draft (creates once, then updates the same row on every subsequent save) ── */
   const handleSaveDraft = async () => {
     if (!user) { showToast('Sign in to save a draft.'); return }
     setSavingDraft(true)
     try {
-      const { data: draft, error } = await supabase
-        .from('listings')
-        .insert([buildRow([], [], 'draft')])
-        .select('id')
-        .single()
-      if (error) throw error
+      let draftId = draftIdRef.current
 
-      // Upload images/videos even for drafts so the preview is accurate
-      if (images.length > 0 || videos.length > 0) {
-        const [imgUrls, vidUrls] = await Promise.all([uploadImages(draft.id), uploadVideos(draft.id)])
+      if (!draftId) {
+        // First save — create the draft row
+        const { data: draft, error } = await supabase
+          .from('listings')
+          .insert([buildRow([], [], 'draft')])
+          .select('id')
+          .single()
+        if (error) throw error
+        draftId = draft.id
+        draftIdRef.current = draftId
+        // Move the URL to the edit route for this draft so it's retrievable later
+        navigate(`/post/edit/${draftId}`, { replace: true })
+      } else {
+        // Already have a draft — update it in place instead of creating a duplicate
+        const { error } = await supabase
+          .from('listings')
+          .update(buildRow([], [], 'draft'))
+          .eq('id', draftId)
+        if (error) throw error
+      }
+
+      // Upload any new images/videos so the draft reflects the latest media
+      if (images.some(i => i.file) || videos.some(v => v.file)) {
+        const [imgUrls, vidUrls] = await Promise.all([uploadImages(draftId), uploadVideos(draftId)])
         const patch = {}
         if (imgUrls.length) patch.images = imgUrls
         if (vidUrls.length) patch.videos = vidUrls
-        if (Object.keys(patch).length) await supabase.from('listings').update(patch).eq('id', draft.id)
+        if (Object.keys(patch).length) await supabase.from('listings').update(patch).eq('id', draftId)
       }
       showToast('Draft saved successfully.', 'success')
     } catch (err) {
@@ -1044,7 +1299,6 @@ export default function PostListing() {
       setSavingDraft(false)
     }
   }
-
   /* ── Publish ── */
   const handlePublish = async () => {
     if (!user) { showToast('Please sign in to post a listing.'); return }
@@ -1053,13 +1307,26 @@ export default function PostListing() {
 
     setSubmitting(true)
     try {
-      // 1. Insert listing (images/videos arrays empty for now)
-      const { data: listing, error: insertErr } = await supabase
-        .from('listings')
-        .insert([buildRow([], [], 'published')])
-        .select('id')
-        .single()
-      if (insertErr) throw insertErr
+      // 1. Insert (new) or update (edit mode) — images/videos patched after upload
+      let listing
+      if (isEditMode) {
+        const { data, error: updateErr } = await supabase
+          .from('listings')
+          .update(buildRow([], [], 'published'))
+          .eq('id', editId)
+          .select('id')
+          .single()
+        if (updateErr) throw updateErr
+        listing = data
+      } else {
+        const { data, error: insertErr } = await supabase
+          .from('listings')
+          .insert([buildRow([], [], 'published')])
+          .select('id')
+          .single()
+        if (insertErr) throw insertErr
+        listing = data
+      }
 
       // 2. Upload images & videos → patch listing
       const [imageUrls, videoUrls] = await Promise.all([uploadImages(listing.id), uploadVideos(listing.id)])
@@ -1074,9 +1341,9 @@ export default function PostListing() {
         if (updateErr) throw updateErr
       }
 
-      // 3. Record promotion if any
+      // 3. Record promotion if any (only for new listings — edits don't re-trigger charges)
       let redirectingToPayment = false
-      if (selectedPromotion !== 'none') {
+      if (!isEditMode && selectedPromotion !== 'none') {
         try {
           const result = await recordPromotion(listing.id, selectedPromotion)
           if (result?.redirecting) redirectingToPayment = true
@@ -1087,7 +1354,7 @@ export default function PostListing() {
 
       if (redirectingToPayment) return // window.location.href is taking over — don't touch the DOM further
 
-      showToast('Listing published successfully!', 'success', 2000)
+      showToast(isEditMode ? 'Listing updated successfully!' : 'Listing published successfully!', 'success', 2000)
       setTimeout(() => navigate(`/listings/${listing.id}`), 2000)
     } catch (err) {
       showToast(err.message || 'Something went wrong. Please try again.')
@@ -1179,6 +1446,14 @@ export default function PostListing() {
   /* ────────────────────────────────────────────────────────
      Render
      ──────────────────────────────────────────────────────── */
+  if (loadingExisting) {
+    return (
+      <div style={{ ...S.page, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Loader size={28} color={C.green} style={{ animation: 'plSpin 0.8s linear infinite' }} />
+      </div>
+    )
+  }
+
   return (
     <div style={S.page} className="pl-page">
       <style>{`
@@ -1223,6 +1498,8 @@ export default function PostListing() {
           }
         }
         html { scroll-behavior: smooth; }
+        .leaflet-control-attribution { font-size: 9px !important; background: rgba(255,255,255,0.75) !important; padding: 1px 4px !important; }
+        .leaflet-control-zoom { display: none !important; }
       `}</style>
 
       <Toast message={toast.message} type={toast.type} />
@@ -1273,13 +1550,15 @@ export default function PostListing() {
           <span style={{ color: C.dark, fontWeight: 600 }}>Post a Listing</span>
         </div>
 
-        <div style={S.pageHeadRow}>
-          <h1 style={S.h1}>Post a New Listing</h1>
+     <div style={S.pageHeadRow}>
+          <h1 style={S.h1}>{isEditMode ? 'Edit Listing' : 'Post a New Listing'}</h1>
           <OutlineButton onClick={handleSaveDraft} disabled={savingDraft}>
             {savingDraft ? 'Saving…' : 'Save as Draft'}
           </OutlineButton>
         </div>
-        <p style={S.subtitle}>Fill in the details below to list your item or service on Soko Malawi.</p>
+        <p style={S.subtitle}>
+          {isEditMode ? 'Update the details below and republish your listing.' : 'Fill in the details below to list your item or service on Soko Malawi.'}
+        </p>
 
         {/* Warn if not signed in */}
         {!user && (
@@ -1874,17 +2153,11 @@ export default function PostListing() {
               )}
 
               {/* Live map — OpenStreetMap iframe, no API key needed */}
-              <div style={{ position: 'relative', height: 136, borderRadius: 14, marginBottom: 12, overflow: 'hidden', border: `1px solid ${C.cardLine}` }}>
+            <div style={{ position: 'relative', height: 136, borderRadius: 14, marginBottom: 12, overflow: 'hidden', border: `1px solid ${C.cardLine}` }}>
                 {location.lat && location.lng ? (
                   <>
-                    <iframe
-                      title="listing-location-map"
-                      src={`https://www.openstreetmap.org/export/embed.html?bbox=${location.lng - 0.012}%2C${location.lat - 0.009}%2C${location.lng + 0.012}%2C${location.lat + 0.009}&layer=mapnik&marker=${location.lat}%2C${location.lng}`}
-                      style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
-                      loading="lazy"
-                    />
-                    {locationConfirmed && (
-                      <div style={{
+                    <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }} />
+                    {locationConfirmed && (                      <div style={{
                         position: 'absolute', top: 8, left: 8,
                         display: 'flex', alignItems: 'center', gap: 5,
                         background: 'rgba(26,122,74,0.95)', color: C.white,
@@ -2066,37 +2339,25 @@ export default function PostListing() {
         <OutlineButton onClick={handleSaveDraft} disabled={savingDraft || submitting}>
           {savingDraft ? 'Saving…' : 'Save as Draft'}
         </OutlineButton>
-        <OutlineButton
-          style={{ display: 'flex', alignItems: 'center', gap: 6 }}
-          disabled={submitting}
-          onClick={() => setShowPreview(true)}>
-          <Eye size={14} /> Preview Listing
-        </OutlineButton>
-        <PrimaryButton loading={submitting} onClick={handlePublish}
+       <PrimaryButton loading={submitting} onClick={handlePublish}
           style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          Publish Listing <Send size={14} />
+          {isEditMode ? 'Save Changes' : 'Publish Listing'} <Send size={14} />
         </PrimaryButton>
       </div>
+
+       {/* ── Resume Draft Modal ── */}
+      {pendingDraft && (
+        <ResumeDraftModal
+          draft={pendingDraft}
+          onResume={handleResumeDraft}
+          onDiscard={handleDiscardDraftPrompt}
+        />
+      )}
 
       {/* ── Listing Guide Modal ── */}
       {showGuide && <ListingGuideModal onClose={() => setShowGuide(false)} />}
 
-      {/* ── Listing Preview Modal ── */}
-      {showPreview && (
-        <ListingPreviewModal
-          form={form}
-          images={images}
-          videos={videos}
-          coverIndex={coverIndex}
-          location={location}
-          selectedPromotion={selectedPromotion}
-          booking={booking}
-          onClose={() => setShowPreview(false)}
-          onPublish={() => { setShowPreview(false); handlePublish() }}
-          submitting={submitting}
-        />
-      )}
-    </div>
+     </div>
   )
 }
 

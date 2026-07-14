@@ -1,6 +1,15 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import {
+  adminTransitionVerification,
+  ADMIN_ACTIONABLE_STATUSES,
+  statusLabel,
+  paymentStatusLabel,
+  adminConfirmPayment,
+  adminRejectPayment,
+  getPaymentsForRequest,
+} from '../lib/verification'
 
 const TABS = ['Dashboard', 'Featured', 'Listings', 'Users', 'Verifications', 'Shop Reports', 'Broadcast']
 
@@ -19,6 +28,8 @@ export default function Admin() {
   const [settingsLoading, setSettingsLoading] = useState(false)
 const [verifications, setVerifications] = useState([])
 const [verifyLoading, setVerifyLoading] = useState(false)
+const [paymentByRequest, setPaymentByRequest] = useState({}) // requestId -> latest payment
+const [paymentLoading, setPaymentLoading] = useState(null)
 const [shopReports, setShopReports] = useState([])
 const [reportFilter, setReportFilter] = useState('pending')
 const [reportActionLoading, setReportActionLoading] = useState(null)
@@ -71,11 +82,11 @@ const [selectedUsers, setSelectedUsers] = useState([])
  async function loadListings() {
   const { data, error } = await supabase
     .from('listings')
-    .select('id, title, price, city, category, images, status, featured, seller_id, created_at, promoted_until')
+    .select('id, title, price, city, category, images, status, featured, is_featured, seller_id, created_at, promoted_until')
     .order('created_at', { ascending: false })
   if (error) console.error('Listings error:', error)
-  
-  const list = (data || []).map(l => ({ ...l, is_featured: l.featured }))
+
+  const list = (data || []).map(l => ({ ...l, is_featured: l.featured || l.is_featured }))
   const sellerIds = [...new Set(list.map(l => l.seller_id).filter(Boolean))]
   if (sellerIds.length > 0) {
     const { data: profiles } = await supabase
@@ -85,15 +96,87 @@ const [selectedUsers, setSelectedUsers] = useState([])
     const profileMap = Object.fromEntries((profiles || []).map(p => [p.id, p]))
     list.forEach(l => { l.profiles = profileMap[l.seller_id] || null })
   }
+
+  // Pull each listing's most recent 'featured' promotion so we can show
+  // amount paid + duration on the Featured tab cards.
+  const listingIds = list.map(l => l.id)
+  if (listingIds.length > 0) {
+    const { data: promos } = await supabase
+      .from('listing_promotions')
+      .select('listing_id, price_mwk, started_at, expires_at, status')
+      .in('listing_id', listingIds)
+      .eq('promotion_type', 'featured')
+      .order('started_at', { ascending: false })
+    const promoMap = {}
+    ;(promos || []).forEach(p => {
+      // Keep only the most recent promotion per listing (list is already
+      // ordered by started_at desc, so first hit wins)
+      if (!promoMap[p.listing_id]) promoMap[p.listing_id] = p
+    })
+    list.forEach(l => {
+      const p = promoMap[l.id]
+      if (p) {
+        l.promo_price = p.price_mwk
+        l.promo_started_at = p.started_at
+        l.promo_expires_at = p.expires_at
+        l.promo_status = p.status
+        if (p.started_at && p.expires_at) {
+          const days = Math.round((new Date(p.expires_at) - new Date(p.started_at)) / 86400000)
+          l.promo_duration_days = days
+        }
+      }
+    })
+  }
+
   setListings(list)
 }
 
 async function loadVerifications() {
-  const { data } = await supabase
+  let rows = []
+  const { data, error } = await supabase
     .from('verification_requests')
     .select('*, profiles!seller_id(full_name, avatar_url, city)')
-    .order('submitted_at', { ascending: false })
-  setVerifications(data || [])
+    .order('created_at', { ascending: false })
+  if (error) {
+    const { data: d2 } = await supabase
+      .from('verification_requests')
+      .select('*, profiles!seller_id(full_name, avatar_url, city)')
+      .order('submitted_at', { ascending: false })
+    rows = d2 || []
+  } else {
+    rows = data || []
+  }
+  setVerifications(rows)
+
+  // Load latest payment per request (Phase 3 ledger)
+  const map = {}
+  await Promise.all(
+    rows.slice(0, 40).map(async (r) => {
+      try {
+        const pays = await getPaymentsForRequest(r.id)
+        if (pays?.[0]) map[r.id] = pays[0]
+      } catch { /* migration optional */ }
+    })
+  )
+  // Also load awaiting_confirmation globally for admin queue
+  try {
+    const { data: openPays } = await supabase
+      .from('verification_payments')
+      .select('*')
+      .in('payment_status', ['awaiting_confirmation', 'initiated', 'pending'])
+      .order('created_at', { ascending: false })
+      .limit(50)
+    ;(openPays || []).forEach((p) => {
+      if (p.request_id && !map[p.request_id]) map[p.request_id] = p
+      else if (p.request_id) {
+        // prefer awaiting_confirmation
+        const cur = map[p.request_id]
+        if (p.payment_status === 'awaiting_confirmation') map[p.request_id] = p
+        else if (!cur) map[p.request_id] = p
+      }
+    })
+  } catch { /* table may not exist yet */ }
+  setPaymentByRequest(map)
 }
 
 async function loadShopReports() {
@@ -120,21 +203,101 @@ async function handleReportAction(id, status) {
 
 async function handleVerify(id, status, note = '') {
   setVerifyLoading(id)
-  const verification = verifications.find(v => v.id === id)
-  await supabase.from('verification_requests').update({
-    status,
-    admin_note: note || null,
-    reviewed_at: new Date().toISOString(),
-  }).eq('id', id)
+  try {
+    // Prefer RPC (syncs profiles + shops via trigger)
+    try {
+      await adminTransitionVerification(id, status, note || null)
+    } catch {
+      // Fallback: direct update + profile sync
+      await supabase.from('verification_requests').update({
+        status,
+        admin_note: note || null,
+        rejection_reason: status === 'rejected' ? (note || null) : null,
+        reviewed_at: new Date().toISOString(),
+        under_review_at: status === 'under_review' ? new Date().toISOString() : undefined,
+      }).eq('id', id)
 
-  if (status === 'approved' && verification?.seller_id) {
-    await supabase.from('profiles').update({ is_verified: true }).eq('id', verification.seller_id)
-    await supabase.from('shops').update({ is_verified: true }).eq('owner_id', verification.seller_id)
+      const verification = verifications.find(v => v.id === id)
+      if (status === 'approved' && verification?.seller_id) {
+        await supabase.from('profiles').update({
+          is_verified: true,
+          verification_status: 'approved',
+          verified_at: new Date().toISOString(),
+          verification_request_id: id,
+          rejection_reason: null,
+        }).eq('id', verification.seller_id)
+        await supabase.from('shops').update({ is_verified: true }).eq('owner_id', verification.seller_id)
+      }
+      if (status === 'rejected' && verification?.seller_id) {
+        await supabase.from('profiles').update({
+          is_verified: false,
+          verification_status: 'rejected',
+          rejection_reason: note || null,
+          verification_request_id: id,
+        }).eq('id', verification.seller_id)
+      }
+    }
+
+    setVerifications(vs => vs.map(v => v.id === id
+      ? {
+          ...v,
+          status,
+          admin_note: note || v.admin_note,
+          rejection_reason: status === 'rejected' ? (note || null) : v.rejection_reason,
+        }
+      : v
+    ))
+    showToast(
+      status === 'approved' ? '✅ Seller verified!'
+        : status === 'rejected' ? '❌ Request rejected'
+          : status === 'additional_info_required' ? 'ℹ️ Additional info requested'
+            : `Status → ${statusLabel(status)}`
+    )
+  } catch (e) {
+    showToast(e.message || 'Verification update failed')
   }
-
-  setVerifications(vs => vs.map(v => v.id === id ? { ...v, status, admin_note: note } : v))
-  showToast(status === 'approved' ? '✅ Seller verified!' : '❌ Request rejected')
   setVerifyLoading(null)
+}
+
+function isVerificationActionable(status) {
+  return ADMIN_ACTIONABLE_STATUSES.includes(status) || status === 'pending'
+}
+
+async function handleConfirmPayment(requestId) {
+  const pay = paymentByRequest[requestId]
+  if (!pay?.id) {
+    showToast('No payment record found for this request')
+    return
+  }
+  const note = window.prompt('Admin notes (optional):') || null
+  setPaymentLoading(pay.id)
+  try {
+    const confirmed = await adminConfirmPayment(pay.id, note, true)
+    setPaymentByRequest((m) => ({ ...m, [requestId]: confirmed }))
+    await loadVerifications()
+    showToast('✅ Payment confirmed — request advanced if applicable')
+  } catch (e) {
+    showToast(e.message || 'Could not confirm payment')
+  }
+  setPaymentLoading(null)
+}
+
+async function handleRejectPayment(requestId) {
+  const pay = paymentByRequest[requestId]
+  if (!pay?.id) {
+    showToast('No payment record found')
+    return
+  }
+  const note = window.prompt('Why reject this payment?') || 'Payment rejected'
+  setPaymentLoading(pay.id)
+  try {
+    const rejected = await adminRejectPayment(pay.id, note)
+    setPaymentByRequest((m) => ({ ...m, [requestId]: rejected }))
+    showToast('Payment marked failed')
+  } catch (e) {
+    showToast(e.message || 'Could not reject payment')
+  }
+  setPaymentLoading(null)
 }
 
 function getBroadcastFiltered() {
@@ -216,7 +379,7 @@ async function loadUsers() {
       expiresAt.setDate(expiresAt.getDate() + days)
 
       await supabase.from('listings')
-        .update({ featured: true, promoted_until: expiresAt.toISOString() })
+        .update({ featured: true, is_featured: true, promoted_until: expiresAt.toISOString() })
         .eq('id', listing.id)
 
       await supabase.from('listing_promotions').insert([{
@@ -230,12 +393,14 @@ async function loadUsers() {
       }])
 
       setListings(ls => ls.map(l => l.id === listing.id
-        ? { ...l, is_featured: true, promoted_until: expiresAt.toISOString() }
+        ? { ...l, is_featured: true, promoted_until: expiresAt.toISOString(),
+            promo_price: 0, promo_started_at: startedAt.toISOString(),
+            promo_expires_at: expiresAt.toISOString(), promo_duration_days: days }
         : l))
       showToast(`Featured for ${days} days ⭐`)
     } else {
       await supabase.from('listings')
-        .update({ featured: false, promoted_until: null })
+        .update({ featured: false, is_featured: false, promoted_until: null })
         .eq('id', listing.id)
 
       await supabase.from('listing_promotions')
@@ -244,7 +409,8 @@ async function loadUsers() {
         .eq('status', 'active')
 
       setListings(ls => ls.map(l => l.id === listing.id
-        ? { ...l, is_featured: false, promoted_until: null }
+        ? { ...l, is_featured: false, promoted_until: null,
+            promo_price: null, promo_started_at: null, promo_expires_at: null, promo_duration_days: null }
         : l))
       showToast('Removed from featured')
     }
@@ -373,9 +539,9 @@ async function loadUsers() {
                {t === 'Users' && (
   <span style={S.navPill}>{stats.users}</span>
 )}
-{t === 'Verifications' && verifications.filter(v => v.status === 'pending').length > 0 && (
+{t === 'Verifications' && verifications.filter(v => isVerificationActionable(v.status)).length > 0 && (
   <span style={{ ...S.navPill, background: '#dc2626' }}>
-    {verifications.filter(v => v.status === 'pending').length}
+    {verifications.filter(v => isVerificationActionable(v.status)).length}
   </span>
 )}
 {t === 'Shop Reports' && shopReports.filter(r => r.status === 'pending').length > 0 && (
@@ -672,9 +838,9 @@ async function loadUsers() {
   <div style={S.content}>
     <div style={S.tableCard}>
       <div style={S.tableHeader}>
-        <div style={S.tableTitle}>Verification Requests</div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          {['all','pending','approved','rejected'].map(f => (
+        <div style={S.tableTitle}>Verification Requests & Payments</div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {['all','pending','under_review','payment_pending','approved','rejected'].map(f => (
             <button key={f} onClick={() => setStatusFilter(f)} style={{
               padding: '4px 12px', borderRadius: 20, border: 'none', cursor: 'pointer',
               fontSize: 11, fontWeight: 700,
@@ -685,11 +851,21 @@ async function loadUsers() {
         </div>
       </div>
       {verifications
-        .filter(v => statusFilter === 'all' || v.status === statusFilter)
-        .map(v => (
+        .filter(v => {
+          if (statusFilter === 'all') return true
+          if (statusFilter === 'pending') {
+            return isVerificationActionable(v.status) || paymentByRequest[v.id]?.payment_status === 'awaiting_confirmation'
+          }
+          return v.status === statusFilter
+        })
+        .map(v => {
+        const pay = paymentByRequest[v.id]
+        const payAwaiting = pay && ['awaiting_confirmation', 'initiated', 'pending'].includes(pay.payment_status)
+        return (
         <div key={v.id} style={{
           display: 'flex', alignItems: 'center', gap: 14,
           padding: '14px 20px', borderBottom: '1px solid #f0f5f2',
+          flexWrap: 'wrap',
         }}>
           {/* Avatar */}
           <div style={{ ...S.userAvatar, flexShrink: 0 }}>
@@ -699,37 +875,91 @@ async function loadUsers() {
             }
           </div>
           {/* Info */}
-          <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ flex: 1, minWidth: 180 }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: '#111' }}>
               {v.profiles?.full_name || 'Unknown'}
             </div>
             <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>
-              📍 {v.profiles?.city || '—'} · 💸 Pachangu · Ref: <strong>{v.payment_ref}</strong>
+              📍 {v.profiles?.city || '—'} · 💸 {pay?.payment_method || v.payment_method || '—'}
+              {(pay?.transaction_reference || v.payment_ref) && (
+                <> · Ref: <strong>{pay?.transaction_reference || v.payment_ref}</strong></>
+              )}
             </div>
             <div style={{ fontSize: 11, color: '#9ca3af' }}>
-              Submitted: {new Date(v.submitted_at).toLocaleString()}
+              Submitted: {new Date(v.submitted_at || v.created_at || Date.now()).toLocaleString()}
+              {v.payment_confirmed_at ? ` · Paid: ${new Date(v.payment_confirmed_at).toLocaleString()}` : ''}
             </div>
+            {pay && (
+              <div style={{
+                marginTop: 6, fontSize: 11, fontWeight: 700,
+                color: pay.payment_status === 'confirmed' ? '#1a7a4a'
+                  : pay.payment_status === 'awaiting_confirmation' ? '#b45309'
+                    : pay.payment_status === 'failed' ? '#dc2626' : '#555',
+              }}>
+                Payment: {paymentStatusLabel(pay.payment_status)}
+                {pay.gateway ? ` · ${pay.gateway}` : ''}
+                {pay.receipt_path ? ' · receipt attached' : ''}
+              </div>
+            )}
             {v.admin_note && (
               <div style={{ fontSize: 11, color: '#dc2626', marginTop: 2 }}>Note: {v.admin_note}</div>
+            )}
+            {v.rejection_reason && (
+              <div style={{ fontSize: 11, color: '#dc2626', marginTop: 2 }}>Rejection: {v.rejection_reason}</div>
             )}
           </div>
           {/* Amount */}
           <div style={{ fontSize: 13, fontWeight: 800, color: '#1a7a4a', flexShrink: 0 }}>
-            MK {Number(v.amount_paid || 5000).toLocaleString()}
+            MK {Number(pay?.payment_amount || v.amount_paid || v.amount_due || 5000).toLocaleString()}
           </div>
           {/* Status + actions */}
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
-            <StatusBadge status={v.status} />
-            {v.status === 'pending' && (
-              <div style={{ display: 'flex', gap: 6 }}>
+            <StatusBadge status={v.status === 'under_review' || v.status === 'payment_confirmed' || v.status === 'payment_pending' ? 'pending' : v.status} />
+            <div style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>{statusLabel(v.status)}</div>
+            {payAwaiting && (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
                 <button
+                  type="button"
+                  disabled={paymentLoading === pay.id}
+                  onClick={() => handleConfirmPayment(v.id)}
+                  style={{ padding: '5px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, background: '#dbeafe', color: '#1d4ed8' }}
+                >
+                  {paymentLoading === pay.id ? '…' : '✓ Confirm payment'}
+                </button>
+                <button
+                  type="button"
+                  disabled={paymentLoading === pay.id}
+                  onClick={() => handleRejectPayment(v.id)}
+                  style={{ padding: '5px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, background: '#fee2e2', color: '#dc2626' }}
+                >
+                  Reject payment
+                </button>
+              </div>
+            )}
+            {isVerificationActionable(v.status) && (
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
                   disabled={verifyLoading === v.id}
                   onClick={() => handleVerify(v.id, 'approved')}
                   style={{ padding: '5px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, background: '#e6f4ec', color: '#1a7a4a' }}
                 >
-                  {verifyLoading === v.id ? '…' : '✓ Approve'}
+                  {verifyLoading === v.id ? '…' : '✓ Approve seller'}
                 </button>
                 <button
+                  type="button"
+                  disabled={verifyLoading === v.id}
+                  onClick={() => {
+                    const note = window.prompt('What additional info do you need?') || ''
+                    if (!note) return
+                    handleVerify(v.id, 'additional_info_required', note)
+                  }}
+                  style={{ padding: '5px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, background: '#fef3c7', color: '#b45309' }}
+                >
+                  Need info
+                </button>
+                <button
+                  type="button"
                   disabled={verifyLoading === v.id}
                   onClick={() => {
                     const note = window.prompt('Rejection reason (optional):') || ''
@@ -737,13 +967,13 @@ async function loadUsers() {
                   }}
                   style={{ padding: '5px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, background: '#fee2e2', color: '#dc2626' }}
                 >
-                  ✕ Reject
+                  ✕ Reject seller
                 </button>
               </div>
             )}
           </div>
         </div>
-      ))}
+      )})}
       {verifications.filter(v => statusFilter === 'all' || v.status === statusFilter).length === 0 && (
         <div style={{ padding: 32, textAlign: 'center', color: '#aaa', fontSize: 13 }}>No verification requests.</div>
       )}
@@ -1076,7 +1306,26 @@ function EmptyBox({ text }) {
   )
 }
 
+function timeRemaining(expiresAt) {
+  if (!expiresAt) return null
+  const diffMs = new Date(expiresAt).getTime() - Date.now()
+  if (diffMs <= 0) return { label: 'Expired', urgent: true }
+
+  const days = Math.floor(diffMs / 86400000)
+  const hours = Math.floor((diffMs % 86400000) / 3600000)
+
+  if (days >= 1) {
+    return { label: `${days}d ${hours}h left`, urgent: days < 2 }
+  }
+  const mins = Math.floor((diffMs % 3600000) / 60000)
+  if (hours >= 1) {
+    return { label: `${hours}h ${mins}m left`, urgent: true }
+  }
+  return { label: `${mins}m left`, urgent: true }
+}
+
 function FeatCard({ listing, featured, toggling, onToggle, onView }) {
+  const remaining = featured ? timeRemaining(listing.promoted_until || listing.promo_expires_at) : null
   return (
     <div className="feat-card" style={S.featCard}>
       <div style={{ position: 'relative', height: 120, background: '#f0f5f1', cursor: 'pointer' }} onClick={onView}>
@@ -1088,13 +1337,42 @@ function FeatCard({ listing, featured, toggling, onToggle, onView }) {
         <div style={{ position: 'absolute', bottom: 8, left: 10, fontSize: 12, fontWeight: 800, color: '#f59e0b' }}>
           MWK {Number(listing.price || 0).toLocaleString()}
         </div>
+        {featured && (
+          <div style={{
+            position: 'absolute', top: 8, right: 8,
+            background: listing.promo_price ? 'rgba(180,83,9,0.92)' : 'rgba(26,122,74,0.9)',
+            color: '#fff', fontSize: 10, fontWeight: 800, borderRadius: 20, padding: '3px 9px',
+          }}>
+            {listing.promo_price ? `MWK ${Number(listing.promo_price).toLocaleString()}` : 'FREE'}
+          </div>
+        )}
       </div>
       <div style={{ padding: '10px 12px' }}>
         <div style={{ fontSize: 13, fontWeight: 700, color: '#111', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>{listing.title}</div>
         <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>{listing.city} · {listing.category}</div>
+        {featured && listing.promo_duration_days != null && (
+          <div style={{ fontSize: 10.5, color: '#1a7a4a', marginTop: 4, fontWeight: 600 }}>
+            {listing.promo_duration_days} day{listing.promo_duration_days !== 1 ? 's' : ''} featured
+          </div>
+        )}
         {featured && listing.promoted_until && (
-          <div style={{ fontSize: 10.5, color: '#b45309', marginTop: 4, fontWeight: 600 }}>
+          <div style={{ fontSize: 10.5, color: '#b45309', marginTop: 2, fontWeight: 600 }}>
             Expires {new Date(listing.promoted_until).toLocaleDateString()}
+          </div>
+        )}
+        {remaining && (
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            fontSize: 10.5, fontWeight: 700, marginTop: 6,
+            padding: '2px 8px', borderRadius: 20,
+            background: remaining.urgent ? '#fee2e2' : '#e6f4ec',
+            color: remaining.urgent ? '#dc2626' : '#1a7a4a',
+          }}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <circle cx="12" cy="12" r="10" />
+              <polyline points="12 6 12 12 16 14" />
+            </svg>
+            {remaining.label}
           </div>
         )}
       </div>

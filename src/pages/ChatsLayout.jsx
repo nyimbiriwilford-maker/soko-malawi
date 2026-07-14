@@ -2,6 +2,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import ChatListPanel from './ChatListPanel'
 import Chat from './Chat'
 import NavRail from './NavRail'
+import '../styles/chats.css'
 
 /**
  * Mount this ONE component at both list and thread routes, e.g. in App.jsx:
@@ -10,12 +11,9 @@ import NavRail from './NavRail'
  *   <Route path="/chat/:userId" element={<ChatsLayout />} />
  *   <Route path="/chat/:userId/:listingId" element={<ChatsLayout />} />
  *
- * Desktop (>=900px): a slim icon rail (Home/Chats/Post/Alerts/Profile) sits
- * on the far left so this screen is never a dead end, the list stays next
- * to it, and the thread renders on the right — a chat click just changes
- * the URL, so the list never unmounts.
- * Mobile (<900px): behaves exactly like before — full-screen list OR
- * full-screen thread (no rail — BottomNav already covers navigation there).
+ * Desktop (>=900px): slim NavRail + list + thread (list stays mounted).
+ * Mobile (<900px): full-screen list OR full-screen thread (BottomNav on list only).
+ * Layout rules live in styles/chats.css so 100dvh / safe-areas stay consistent.
  */
 export default function ChatsLayout() {
   const { userId } = useParams()
@@ -23,29 +21,14 @@ export default function ChatsLayout() {
   const hasThread = !!userId
 
   return (
-    <div className="chats-shell" style={S.shell} data-has-thread={hasThread ? 'true' : 'false'}>
-      <style>{`
-        .soko-navrail { display: none; }
-        .chats-list-col { width: 100%; }
-        .chats-thread-col { width: 100%; }
-        @media (min-width: 900px) {
-          .soko-navrail { display: flex !important; }
-          .chats-list-col { width: 400px !important; flex-shrink: 0; border-right: 1px solid #e8f0eb; }
-          .chats-thread-col { flex: 1; min-width: 0; }
-        }
-        @media (max-width: 899px) {
-          .chats-shell[data-has-thread="true"] .chats-list-col { display: none; }
-          .chats-shell[data-has-thread="false"] .chats-thread-col { display: none; }
-        }
-      `}</style>
-
+    <div className="chats-shell" data-has-thread={hasThread ? 'true' : 'false'}>
       <NavRail />
 
-      <div className="chats-list-col" style={S.listCol}>
+      <div className="chats-list-col">
         <ChatListPanel />
       </div>
 
-      <div className="chats-thread-col" style={S.threadCol}>
+      <div className="chats-thread-col">
         {hasThread ? (
           <Chat />
         ) : (
@@ -58,8 +41,8 @@ export default function ChatsLayout() {
             <p style={S.placeholderTitle}>Select a conversation</p>
             <p style={S.placeholderSub}>Choose a chat from the list to start messaging, or jump back into browsing.</p>
             <div style={S.placeholderActions}>
-              <button style={S.primaryAction} onClick={() => navigate('/')}>Browse Marketplace</button>
-              <button style={S.secondaryAction} onClick={() => navigate('/post')}>Post a Listing</button>
+              <button type="button" style={S.primaryAction} onClick={() => navigate('/')}>Browse Marketplace</button>
+              <button type="button" style={S.secondaryAction} onClick={() => navigate('/post')}>Post a Listing</button>
             </div>
           </div>
         )}
@@ -69,12 +52,9 @@ export default function ChatsLayout() {
 }
 
 const S = {
-  shell: { display: 'flex', height: '100vh', background: '#f4f8f5', fontFamily: 'system-ui, sans-serif' },
-  listCol: { height: '100%', overflow: 'hidden' },
-  threadCol: { height: '100%', overflow: 'hidden' },
   placeholder: {
     height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-    padding: '24px', textAlign: 'center', background: '#f8faf8',
+    padding: '24px', textAlign: 'center', background: '#f8faf8', minHeight: 0,
   },
   placeholderIconCircle: {
     width: '84px', height: '84px', borderRadius: '50%', background: '#e6f7ee',
@@ -82,7 +62,7 @@ const S = {
   },
   placeholderTitle: { fontSize: '19px', fontWeight: '800', color: '#0f1410', marginBottom: '8px' },
   placeholderSub: { fontSize: '13.5px', color: '#888', maxWidth: '300px', lineHeight: '1.6', marginBottom: '24px' },
-  placeholderActions: { display: 'flex', gap: '10px' },
+  placeholderActions: { display: 'flex', gap: '10px', flexWrap: 'wrap', justifyContent: 'center' },
   primaryAction: {
     background: 'linear-gradient(135deg,#1a7a4a,#22a05e)', color: '#fff', border: 'none', borderRadius: '12px',
     padding: '11px 20px', fontSize: '13.5px', fontWeight: '700', cursor: 'pointer', boxShadow: '0 4px 12px rgba(26,122,74,0.35)',

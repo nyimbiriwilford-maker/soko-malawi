@@ -1,0 +1,142 @@
+/* =========================================================
+   SokoMw Messages — desktop + mobile fit
+   Used by ChatsLayout / ChatListPanel / Chat / NavRail
+   ========================================================= */
+
+/* ── Shell (full viewport, no page scroll) ── */
+.chats-shell {
+  display: flex;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  max-height: 100vh;
+  max-height: 100dvh;
+  overflow: hidden;
+  background: #f4f8f5;
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  /* Avoid iOS rubber-band scroll fighting the chat scroller */
+  overscroll-behavior: none;
+}
+
+.chats-list-col,
+.chats-thread-col {
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.chats-list-col {
+  width: 100%;
+}
+
+.chats-thread-col {
+  width: 100%;
+  flex: 1;
+}
+
+/* Nested chat / list panels must fill the column, not the whole window */
+.chats-shell .chat-page,
+.chats-shell .chat-list-panel {
+  height: 100% !important;
+  max-height: 100%;
+  min-height: 0;
+}
+
+/* Desktop nav rail — only from 900px up (BottomNav covers mobile) */
+.soko-navrail {
+  display: none;
+  height: 100% !important;
+  max-height: 100%;
+}
+
+/* Bottom nav inside chat list — mobile only */
+.chats-shell .soko-mobile-bottomnav {
+  display: block;
+}
+
+/* ── Mobile (<900px): list OR thread, full width ── */
+@media (max-width: 899px) {
+  .chats-shell[data-has-thread='true'] .chats-list-col {
+    display: none;
+  }
+  .chats-shell[data-has-thread='false'] .chats-thread-col {
+    display: none;
+  }
+
+  /* Room for fixed BottomNav so last rows / empty state aren't covered */
+  .chats-shell .chat-list-panel .chat-list-scroll {
+    padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .chats-shell .chat-brand-row {
+    padding-top: max(14px, env(safe-area-inset-top, 0px));
+  }
+
+  /* Thread input bar clears home indicator on notched phones */
+  .chats-shell .chat-input-bar,
+  .chats-shell .chat-recording-bar {
+    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .chats-shell .chat-topbar {
+    padding-top: max(10px, env(safe-area-inset-top, 0px));
+  }
+
+  /* Bubbles breathe on narrow screens */
+  .chats-shell .chat-page {
+    width: 100%;
+  }
+}
+
+/* ── Desktop / tablet landscape (>=900px): rail + list + thread ── */
+@media (min-width: 900px) {
+  .soko-navrail {
+    display: flex !important;
+  }
+
+  .chats-list-col {
+    width: min(400px, 36vw) !important;
+    flex-shrink: 0;
+    border-right: 1px solid #e8f0eb;
+  }
+
+  .chats-thread-col {
+    flex: 1;
+    min-width: 0;
+  }
+
+  /* NavRail already navigates — hide BottomNav on chats at this breakpoint
+     (global index.css only hides it from 1024px) */
+  .chats-shell .soko-mobile-bottomnav,
+  .chats-shell .soko-bottom-nav,
+  .chats-shell #bottom-nav {
+    display: none !important;
+  }
+
+  .chats-shell .chat-list-panel .chat-list-scroll {
+    padding-bottom: 12px;
+  }
+
+  /* Optional wide-desktop polish: cap thread content comfort width */
+  .chats-shell .chat-page {
+    max-width: none;
+  }
+}
+
+/* Very wide screens: slightly wider list so threads don't look sparse */
+@media (min-width: 1400px) {
+  .chats-list-col {
+    width: 420px !important;
+  }
+}
+
+/* Short mobile landscape: keep header/input tight */
+@media (max-width: 899px) and (max-height: 500px) {
+  .chats-shell .chat-list-panel .chat-brand-row {
+    padding-top: 10px;
+    padding-bottom: 6px;
+  }
+}

@@ -177,12 +177,15 @@ channel = supabase
           </svg>
         </button>
 
-        {/* Chats */}
-       <button style={{ ...S.navItem, ...(path.startsWith('/chats') ? S.navItemActive : {}) }} onClick={() => navigate('/chats')}>
-  <IconChat active={path.startsWith('/chats')} />
-  <span style={{ ...S.navLabel, ...(path.startsWith('/chats') ? { color: '#1a7a4a', fontWeight: '700' } : {}) }}>Chats</span>
-{unreadCount > 0 && <span style={S.navBadge}>{unreadCount > 9 ? '9+' : unreadCount}</span>}
-</button>
+        {/* Chats — active on both /chats list and /chat/:id thread routes */}
+        <button
+          style={{ ...S.navItem, ...((path.startsWith('/chats') || path.startsWith('/chat')) ? S.navItemActive : {}) }}
+          onClick={() => navigate('/chats')}
+        >
+          <IconChat active={path.startsWith('/chats') || path.startsWith('/chat')} />
+          <span style={{ ...S.navLabel, ...((path.startsWith('/chats') || path.startsWith('/chat')) ? { color: '#1a7a4a', fontWeight: '700' } : {}) }}>Chats</span>
+          {unreadCount > 0 && <span style={S.navBadge}>{unreadCount > 9 ? '9+' : unreadCount}</span>}
+        </button>
 
         {/* Jobs — swapped to last position */}
         <button style={{ ...S.navItem, ...(path.startsWith('/jobs') ? S.navItemActive : {}) }} onClick={() => navigate('/jobs')}>
@@ -212,9 +215,10 @@ const S = {
     alignItems: 'center',
     justifyContent: 'center',
     gap: 0,
-    padding: '6px 0 10px',
+    padding: '6px 0 calc(10px + env(safe-area-inset-bottom, 0px))',
     zIndex: 100,
     boxShadow: '0 -4px 16px rgba(0,0,0,0.06)',
+    boxSizing: 'border-box',
   },
   navItem: {
     background: 'none',

@@ -101,8 +101,6 @@ const Icon = {
 ───────────────────────────────────────────────────────────────────────────── */
 function formatPrice(n) {
   if (!n && n !== 0) return ''
-  if (n >= 1_000_000) return `MK ${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000)     return `MK ${(n / 1_000).toFixed(0)}K`
   return `MK ${n.toLocaleString()}`
 }
 
@@ -142,28 +140,91 @@ const SEARCH_TABS = [
    CATEGORIES (nested for sidebar checkbox tree)
 ───────────────────────────────────────────────────────────────────────────── */
 const CATEGORY_TREE = [
-  {
-    key: 'Electronics',
-    label: 'Electronics',
-    children: [
-      { key: 'Phones & Tablets', label: 'Phones & Tablets', children: [
-        { key: 'Phones', label: 'Phones' },
-        { key: 'Tablets', label: 'Tablets' },
-      ]},
-      { key: 'Accessories', label: 'Accessories' },
-      { key: 'Laptops', label: 'Laptops' },
-      { key: 'Other Electronics', label: 'Other' },
-    ],
-  },
-  { key: 'Vehicles',    label: 'Vehicles' },
-  { key: 'Property',    label: 'Property' },
-  { key: 'Clothing',    label: 'Fashion' },
-  { key: 'Agriculture', label: 'Agriculture' },
-  { key: 'Furniture',   label: 'Furniture' },
-  { key: 'Food',        label: 'Food' },
-  { key: 'Services',    label: 'Services' },
-  { key: 'Jobs',        label: 'Jobs' },
-  { key: 'Other',       label: 'Other' },
+  { key: 'Electronics', label: 'Electronics', children: [
+    { key: 'Phones & Tablets',    label: 'Phones & Tablets' },
+    { key: 'Laptops & Computers', label: 'Laptops & Computers' },
+    { key: 'TVs & Audio',         label: 'TVs & Audio' },
+    { key: 'Cameras',             label: 'Cameras' },
+    { key: 'Accessories',         label: 'Accessories' },
+    { key: 'Other Electronics',   label: 'Other' },
+  ]},
+  { key: 'Furniture', label: 'Furniture', children: [
+    { key: 'Sofas & Chairs',      label: 'Sofas & Chairs' },
+    { key: 'Beds & Mattresses',   label: 'Beds & Mattresses' },
+    { key: 'Tables & Desks',      label: 'Tables & Desks' },
+    { key: 'Cabinets & Shelves',  label: 'Cabinets & Shelves' },
+    { key: 'Office Furniture',    label: 'Office Furniture' },
+    { key: 'Other Furniture',     label: 'Other' },
+  ]},
+  { key: 'Clothing', label: 'Fashion', children: [
+    { key: "Men's Wear",          label: "Men's Wear" },
+    { key: "Women's Wear",        label: "Women's Wear" },
+    { key: "Kids' Wear",          label: "Kids' Wear" },
+    { key: 'Shoes',                label: 'Shoes' },
+    { key: 'Bags & Accessories',  label: 'Bags & Accessories' },
+    { key: 'Traditional Wear',    label: 'Traditional Wear' },
+  ]},
+  { key: 'Vehicles', label: 'Vehicles', children: [
+    { key: 'Cars',        label: 'Cars' },
+    { key: 'Motorcycles', label: 'Motorcycles' },
+    { key: 'Trucks & Vans', label: 'Trucks & Vans' },
+    { key: 'Auto Parts',  label: 'Auto Parts' },
+    { key: 'Bicycles',    label: 'Bicycles' },
+    { key: 'Other Vehicles', label: 'Other' },
+  ]},
+  { key: 'Property', label: 'Property', children: [
+    { key: 'Houses for Sale', label: 'Houses for Sale' },
+    { key: 'Houses for Rent', label: 'Houses for Rent' },
+    { key: 'Land & Plots',    label: 'Land & Plots' },
+    { key: 'Commercial Property', label: 'Commercial Property' },
+    { key: 'Apartments',      label: 'Apartments' },
+    { key: 'Short Stays',     label: 'Short Stays' },
+  ]},
+  { key: 'Agriculture', label: 'Agriculture', children: [
+    { key: 'Livestock',        label: 'Livestock' },
+    { key: 'Farm Equipment',   label: 'Farm Equipment' },
+    { key: 'Seeds & Fertilizer', label: 'Seeds & Fertilizer' },
+    { key: 'Crops & Produce',  label: 'Crops & Produce' },
+    { key: 'Poultry',          label: 'Poultry' },
+    { key: 'Other Agriculture', label: 'Other' },
+  ]},
+  { key: 'Food', label: 'Food', children: [
+    { key: 'Fresh Produce',   label: 'Fresh Produce' },
+    { key: 'Packaged Foods',  label: 'Packaged Foods' },
+    { key: 'Beverages',       label: 'Beverages' },
+    { key: 'Baked Goods',     label: 'Baked Goods' },
+    { key: 'Catering',        label: 'Catering' },
+    { key: 'Other Food',      label: 'Other' },
+  ]},
+  { key: 'Services', label: 'Services', children: [
+    { key: 'Home Services',           label: 'Home Services' },
+    { key: 'Beauty & Wellness',       label: 'Beauty & Wellness' },
+    { key: 'Repairs & Maintenance',   label: 'Repairs & Maintenance' },
+    { key: 'Events & Rentals',        label: 'Events & Rentals' },
+    { key: 'Professional Services',   label: 'Professional Services' },
+    { key: 'Other Services',          label: 'Other' },
+  ]},
+  { key: 'Jobs',  label: 'Jobs' },
+  { key: 'Other', label: 'Other' },
+]
+
+const SUBCAT_PARENT = CATEGORY_TREE.reduce((map, node) => {
+  (node.children || []).forEach(child => { map[child.key] = node.key })
+  return map
+}, {})
+
+const CONDITIONS = [
+  { key: 'new',        label: 'Brand New' },
+  { key: 'like_new',   label: 'Like New' },
+  { key: 'used_good',  label: 'Used - Good' },
+  { key: 'used_fair',  label: 'Used - Fair' },
+  { key: 'for_parts',  label: 'For Parts' },
+]
+
+const AVAILABILITY_OPTIONS = [
+  { key: 'in_stock',      label: 'In Stock' },
+  { key: 'made_to_order', label: 'Made to Order' },
+  { key: 'not_available', label: 'Not Available' },
 ]
 
 const ALL_DISTRICTS = [
@@ -198,6 +259,18 @@ function GlobalStyles() {
       .sp-root input  { font-family: inherit; }
       .sp-scroll::-webkit-scrollbar { display: none; }
       .sp-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+
+      /* Thin visible scrollbar for the sticky filter sidebar */
+      .sp-sidebar-scroll {
+        scrollbar-width: thin;
+        scrollbar-color: ${T.gray300} transparent;
+      }
+      .sp-sidebar-scroll::-webkit-scrollbar { width: 6px; }
+      .sp-sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
+      .sp-sidebar-scroll::-webkit-scrollbar-thumb {
+        background: ${T.gray300}; border-radius: 10px;
+      }
+      .sp-sidebar-scroll::-webkit-scrollbar-thumb:hover { background: ${T.gray400}; }
 
       @keyframes fadeUp   { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
       @keyframes shimmer  { 0% { background-position:-600px 0; } 100% { background-position:600px 0; } }
@@ -274,6 +347,54 @@ function GlobalStyles() {
 
       /* filter sidebar */
       .sp-sidebar { width: 220px; flex-shrink: 0; }
+      .sp-sidebar-panel { width: 100%; box-sizing: border-box; }
+
+      @keyframes sidebarSettle {
+        0%   { opacity:0; transform:translateX(-48px) scale(.94); }
+        60%  { opacity:1; transform:translateX(6px) scale(1.01); }
+        100% { opacity:1; transform:translateX(0) scale(1); }
+      }
+      @keyframes sidebarGlow {
+        0%, 100% { box-shadow: 0 8px 28px rgba(15,157,88,0.08), ${T.shadow}; }
+        50%      { box-shadow: 0 14px 40px rgba(15,157,88,0.16), ${T.shadow}; }
+      }
+      .sp-sidebar-panel {
+        animation:
+          sidebarSettle .7s cubic-bezier(.16,1,.3,1) both,
+          sidebarGlow 5s ease-in-out 1.2s infinite;
+        transition: box-shadow .5s cubic-bezier(.16,1,.3,1), transform .5s cubic-bezier(.16,1,.3,1), border-color .5s ease;
+      }
+      .sp-sidebar-panel.stuck {
+        box-shadow: ${T.shadowLg}, 0 0 0 1px rgba(15,157,88,0.12);
+        transform: translateY(6px) scale(1.015);
+        border-color: ${T.greenL} !important;
+      }
+      .sp-sidebar-panel .sp-check-row,
+      .sp-sidebar-panel .sp-toggle-track,
+      .sp-sidebar-panel select,
+      .sp-sidebar-panel input {
+        transition: all .3s cubic-bezier(.16,1,.3,1);
+      }
+      .sp-sidebar-panel .sp-check-row:hover { transform: translateX(3px); }
+      .sp-sidebar-panel .sp-check-box {
+        transition: border-color .3s cubic-bezier(.16,1,.3,1), background .3s cubic-bezier(.16,1,.3,1), transform .3s cubic-bezier(.16,1,.3,1);
+      }
+      .sp-sidebar-panel .sp-check-row:active .sp-check-box { transform: scale(.82); }
+      .sp-sidebar-panel .sp-check-box.checked { animation: sidebarCheckPop .4s cubic-bezier(.34,1.6,.64,1); }
+      @keyframes sidebarCheckPop {
+        0%   { transform:scale(.6) rotate(-8deg); }
+        55%  { transform:scale(1.25) rotate(4deg); }
+        100% { transform:scale(1) rotate(0); }
+      }
+      .sp-subcat-wrap {
+        animation: sidebarSubReveal .45s cubic-bezier(.16,1,.3,1) both;
+        overflow: hidden;
+        transform-origin: top;
+      }
+      @keyframes sidebarSubReveal {
+        0%   { opacity:0; transform:translateY(-10px) scaleY(.85); max-height:0; }
+        100% { opacity:1; transform:translateY(0) scaleY(1); max-height:600px; }
+      }
       .sp-check-row { display:flex; align-items:center; gap:8px; cursor:pointer; padding:4px 0; }
       .sp-check-row:hover .sp-check-box { border-color: ${T.green}; }
       .sp-check-box {
@@ -526,9 +647,18 @@ function Checkbox({ checked, onChange, label, indent = 0 }) {
 /* ─────────────────────────────────────────────────────────────────────────────
    CATEGORY CHECKBOX TREE — recursive
 ───────────────────────────────────────────────────────────────────────────── */
-function CategoryTree({ node, checked, onToggle, depth = 0 }) {
-  const [expanded, setExpanded] = useState(depth === 0)
+function CategoryTree({ node, checked, onToggle, depth = 0, forceOpen, defaultOpenKey }) {
+  const [expanded, setExpanded] = useState(node.key === defaultOpenKey)
   const hasChildren = node.children?.length > 0
+
+  useEffect(() => {
+    if (forceOpen && forceOpen.key === node.key && hasChildren) setExpanded(true)
+  }, [forceOpen])
+
+  function handleLabelClick() {
+    onToggle(node.key)
+    if (hasChildren) setExpanded(true)
+  }
 
   return (
     <div>
@@ -541,12 +671,12 @@ function CategoryTree({ node, checked, onToggle, depth = 0 }) {
           </button>
         )}
         {!hasChildren && <span style={{ width:15, flexShrink:0 }} />}
-        <Checkbox checked={checked.has(node.key)} onChange={() => onToggle(node.key)} label={node.label} />
+        <Checkbox checked={checked.has(node.key)} onChange={handleLabelClick} label={node.label} />
       </div>
       {hasChildren && expanded && (
-        <div>
+        <div className="sp-subcat-wrap">
           {node.children.map(child => (
-            <CategoryTree key={child.key} node={child} checked={checked} onToggle={onToggle} depth={depth + 1} />
+            <CategoryTree key={child.key} node={child} checked={checked} onToggle={onToggle} depth={depth + 1} forceOpen={forceOpen} defaultOpenKey={defaultOpenKey} />
           ))}
         </div>
       )}
@@ -562,133 +692,115 @@ function FilterPanel({
   priceMin, setPriceMin, priceMax, setPriceMax,
   district, setDistrict,
   conditions, onToggleCondition,
+  availability, onToggleAvailability,
   delivery, onToggleDelivery,
   verifiedOnly, setVerifiedOnly,
-  featuredOnly, setFeaturedOnly,
   nearMe, setNearMe, locating,
-  onApply,
 }) {
-  const activeCount =
-    checkedCats.size + conditions.size + delivery.size +
-    (verifiedOnly ? 1 : 0) + (featuredOnly ? 1 : 0) + (nearMe ? 1 : 0) +
-    (district !== 'All Districts' ? 1 : 0) + (priceMin ? 1 : 0) + (priceMax ? 1 : 0)
+  const [lastClicked, setLastClicked] = useState(null)
+
+  const [initialOpenKey] = useState(() => {
+    for (const node of CATEGORY_TREE) {
+      if (checkedCats.has(node.key)) return node.key
+    }
+    return null
+  })
 
   return (
     <div>
-      {/* Header */}
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:18 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:9 }}>
-          <span style={{ display:'flex', alignItems:'center', justifyContent:'center', width:30, height:30, borderRadius:9, background:T.greenL, color:T.green }}>{Icon.sliders(15)}</span>
-          <span style={{ fontSize:14.5, fontWeight:800, color:T.gray900 }}>Filters</span>
-          {activeCount > 0 && (
-            <span style={{ background:T.green, color:'#fff', borderRadius:50, padding:'1.5px 8px', fontSize:11, fontWeight:800 }}>{activeCount}</span>
-          )}
-        </div>
-        <button onClick={onClearAll} style={{ background:'none', border:'none', color:T.red, fontSize:12.5, fontWeight:700, cursor:'pointer' }}>Clear All</button>
+      {/* Clear All */}
+      <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:14 }}>
+        <button onClick={onClearAll} style={{ background:'none', border:'none', color:T.red, fontSize:13, fontWeight:700, cursor:'pointer' }}>Clear All</button>
       </div>
 
       {/* NEAR ME */}
-      <div className="sp-filter-section">
-        <div className="sp-filter-head">
-          <span className="sp-filter-icon-badge" style={{ background:T.blueL, color:T.blue }}>{Icon.crosshair(14)}</span>
-          <span className="sp-filter-title">Near Me</span>
-        </div>
-        <div className={`sp-pill-toggle${nearMe ? ' on' : ''}`} onClick={() => !locating && setNearMe()}>
-          <span className="sp-pill-label">
-            {locating ? Icon.spinner(15) : Icon.target(15)}
-            {locating ? 'Locating…' : 'Sort by distance'}
-          </span>
-          <div className={`sp-toggle-track${nearMe ? ' on' : ''}`}>
+      <div style={{ marginBottom:20 }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <div style={{ fontSize:13, fontWeight:700, color:T.gray900, display:'flex', alignItems:'center', gap:6 }}>
+            {locating ? Icon.spinner(14) : Icon.crosshair(14)}
+            Near Me
+          </div>
+          <div className={`sp-toggle-track${nearMe ? ' on' : ''}`} onClick={() => !locating && setNearMe()}>
             <div className="sp-toggle-thumb" />
           </div>
         </div>
+        {locating && <div style={{ fontSize:11.5, color:T.gray500, marginTop:6 }}>Locating…</div>}
       </div>
 
+      <div style={{ height:1, background:T.gray100, marginBottom:18 }} />
+
       {/* CATEGORIES */}
-      <div className="sp-filter-section">
-        <div className="sp-filter-head">
-          <span className="sp-filter-icon-badge" style={{ background:T.violetL, color:T.violet }}>{Icon.tag(14)}</span>
-          <span className="sp-filter-title">Categories</span>
-        </div>
+      <div style={{ marginBottom:20 }}>
+        <div style={{ fontSize:13, fontWeight:700, color:T.gray900, marginBottom:10 }}>Categories</div>
         <Checkbox checked={checkedCats.size === 0} onChange={onClearAll} label="All Categories" />
         <div style={{ marginTop:6, display:'flex', flexDirection:'column', gap:2 }}>
           {CATEGORY_TREE.map(node => (
-            <CategoryTree key={node.key} node={node} checked={checkedCats} onToggle={onToggleCat} depth={0} />
+            <CategoryTree
+              key={node.key} node={node} checked={checkedCats}
+              onToggle={(key) => { setLastClicked(prev => ({ key, n: (prev?.n || 0) + 1 })); onToggleCat(key) }}
+              depth={0} forceOpen={lastClicked}
+              defaultOpenKey={initialOpenKey}
+            />
           ))}
         </div>
       </div>
+
+      <div style={{ height:1, background:T.gray100, marginBottom:18 }} />
 
       {/* PRICE RANGE */}
-      <div className="sp-filter-section">
-        <div className="sp-filter-head">
-          <span className="sp-filter-icon-badge" style={{ background:T.greenL, color:T.green }}>{Icon.cash(14)}</span>
-          <span className="sp-filter-title">Price Range</span>
-        </div>
+      <div style={{ marginBottom:20 }}>
+        <div style={{ fontSize:13, fontWeight:700, color:T.gray900, marginBottom:10 }}>Price Range</div>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-          <div className="sp-range-wrap">
-            <span className="sp-range-prefix">MK</span>
-            <input className="sp-range-input" type="number" placeholder="Min" value={priceMin} onChange={e => setPriceMin(e.target.value)} />
-          </div>
-          <span style={{ color:T.gray400, fontSize:12 }}>—</span>
-          <div className="sp-range-wrap">
-            <span className="sp-range-prefix">MK</span>
-            <input className="sp-range-input" type="number" placeholder="Max" value={priceMax} onChange={e => setPriceMax(e.target.value)} />
-          </div>
+          <input
+            type="number" placeholder="Min" value={priceMin}
+            onChange={e => setPriceMin(e.target.value)}
+            style={{ flex:1, border:`1.5px solid ${T.gray200}`, borderRadius:8, padding:'8px 10px', fontSize:13, color:T.gray900, outline:'none', minWidth:0 }}
+          />
+          <span style={{ color:T.gray500, fontSize:12 }}>to</span>
+          <input
+            type="number" placeholder="Max" value={priceMax}
+            onChange={e => setPriceMax(e.target.value)}
+            style={{ flex:1, border:`1.5px solid ${T.gray200}`, borderRadius:8, padding:'8px 10px', fontSize:13, color:T.gray900, outline:'none', minWidth:0 }}
+          />
         </div>
       </div>
 
-      {/* CONDITION */}
-      <div className="sp-filter-section">
-        <div className="sp-filter-head">
-          <span className="sp-filter-icon-badge" style={{ background:T.amber+'1a', color:T.amberD }}>{Icon.award(14)}</span>
-          <span className="sp-filter-title">Condition</span>
-        </div>
-        <div style={{ display:'flex', flexWrap:'wrap', gap:7 }}>
-          {['New','Used','Refurbished'].map(c => (
-            <button key={c} className={`sp-chip${conditions.has(c) ? ' active' : ''}`} onClick={() => onToggleCondition(c)}>
-              {conditions.has(c) && Icon.check(11)} {c}
-            </button>
-          ))}
-        </div>
-      </div>
+      <div style={{ height:1, background:T.gray100, marginBottom:18 }} />
 
-      {/* FEATURED */}
-      <div className="sp-filter-section">
-        <div className="sp-filter-head">
-          <span className="sp-filter-icon-badge" style={{ background:T.amber+'1a', color:T.amberD }}>{Icon.star(14, 'currentColor')}</span>
-          <span className="sp-filter-title">Listing Type</span>
-        </div>
-        <div className={`sp-pill-toggle${featuredOnly ? ' on' : ''}`} onClick={() => setFeaturedOnly()}>
-          <span className="sp-pill-label">{Icon.star(14)} Featured only</span>
-          <div className={`sp-toggle-track${featuredOnly ? ' on' : ''}`}><div className="sp-toggle-thumb" /></div>
-        </div>
-      </div>
-
-      {/* VERIFIED SELLERS */}
-      <div className="sp-filter-section">
-        <div className="sp-filter-head">
-          <span className="sp-filter-icon-badge" style={{ background:'#dcfce7', color:'#16a34a' }}>{Icon.shield(14)}</span>
-          <span className="sp-filter-title">Seller Trust</span>
-        </div>
-        <div className={`sp-pill-toggle${verifiedOnly ? ' on' : ''}`} onClick={() => setVerifiedOnly()}>
-          <span className="sp-pill-label">{Icon.verify(14)} Verified sellers only</span>
-          <div className={`sp-toggle-track${verifiedOnly ? ' on' : ''}`}><div className="sp-toggle-thumb" /></div>
-        </div>
-      </div>
-
-      {/* DISTRICT */}
-      <div className="sp-filter-section">
-        <div className="sp-filter-head">
-          <span className="sp-filter-icon-badge" style={{ background:T.blueL, color:T.blue }}>{Icon.map(14)}</span>
-          <span className="sp-filter-title">District</span>
-        </div>
+      {/* LOCATION */}
+      <div style={{ marginBottom:20 }}>
+        <div style={{ fontSize:13, fontWeight:700, color:T.gray900, marginBottom:10 }}>Location</div>
         <div style={{ position:'relative' }}>
-          <select value={district} onChange={e => setDistrict(e.target.value)} style={{ width:'100%', appearance:'none', border:`1.5px solid ${T.gray200}`, borderRadius:10, padding:'10px 32px 10px 12px', fontSize:13, color:T.gray800, background:'#fff', cursor:'pointer', outline:'none' }}>
+          <select value={district} onChange={e => setDistrict(e.target.value)} style={{ width:'100%', appearance:'none', border:`1.5px solid ${T.gray200}`, borderRadius:10, padding:'9px 32px 9px 12px', fontSize:13, color:T.gray800, background:'#fff', cursor:'pointer', outline:'none' }}>
             {ALL_DISTRICTS.map(d => <option key={d} value={d}>{d}</option>)}
           </select>
           <span style={{ position:'absolute', right:10, top:'50%', transform:'translateY(-50%)', color:T.gray500, pointerEvents:'none' }}>{Icon.chevDown(12)}</span>
         </div>
       </div>
+
+      <div style={{ height:1, background:T.gray100, marginBottom:18 }} />
+
+      {/* CONDITION */}
+      <div style={{ marginBottom:20 }}>
+        <div style={{ fontSize:13, fontWeight:700, color:T.gray900, marginBottom:10 }}>Condition</div>
+        {CONDITIONS.map(c => (
+          <Checkbox key={c.key} checked={conditions.has(c.key)} onChange={() => onToggleCondition(c.key)} label={c.label} />
+        ))}
+      </div>
+
+      <div style={{ height:1, background:T.gray100, marginBottom:18 }} />
+
+      {/* VERIFIED SELLERS */}
+      <div style={{ marginBottom:24 }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <div style={{ fontSize:13, fontWeight:700, color:T.gray900 }}>Verified Sellers</div>
+          <div className={`sp-toggle-track${verifiedOnly ? ' on' : ''}`} onClick={() => setVerifiedOnly()}>
+            <div className="sp-toggle-thumb" />
+          </div>
+        </div>
+      </div>
+
+      
 
       {/* DELIVERY */}
       <div className="sp-filter-section">
@@ -705,14 +817,7 @@ function FilterPanel({
         </div>
       </div>
 
-      {/* APPLY */}
-      <button onClick={onApply} style={{ marginTop:22, width:'100%', background:T.green, color:'#fff', border:'none', borderRadius:12, padding:'13px 0', fontSize:14, fontWeight:700, cursor:'pointer', boxShadow:'0 4px 16px rgba(15,157,88,0.3)', transition:'background .15s' }}
-        onMouseEnter={e => e.currentTarget.style.background = T.greenD}
-        onMouseLeave={e => e.currentTarget.style.background = T.green}
-      >
-        Apply Filters
-      </button>
-    </div>
+      </div>
   )
 }
 
@@ -989,7 +1094,7 @@ function Pagination({ page, totalPages, onChange }) {
 /* ─────────────────────────────────────────────────────────────────────────────
    MAIN SEARCH PAGE COMPONENT
 ───────────────────────────────────────────────────────────────────────────── */
-const PAGE_SIZE = 8
+const PAGE_SIZE = 20
 
 /* ─────────────────────────────────────────────────────────────────────────────
    LIVE SEARCH OVERLAY
@@ -1465,73 +1570,181 @@ function NotifyMeModal({ query, onClose, user }) {
 /* ─────────────────────────────────────────────────────────────────────────────
    FACEBOOK-STYLE LISTING CARD
 ───────────────────────────────────────────────────────────────────────────── */
+const CAT_STYLE = {
+  Electronics:      { color:'#16a34a', bg:null },
+  Furniture:        { color:'#be185d', bg:'#fce7f3' },
+  Fashion:          { color:'#be185d', bg:'#fce7f3' },
+  Clothing:         { color:'#be185d', bg:'#fce7f3' },
+  Vehicles:         { color:'#1d4ed8', bg:'#dbeafe' },
+  Property:         { color:'#1d4ed8', bg:'#dbeafe' },
+  'Home Appliances':{ color:'#1d4ed8', bg:null },
+  Agriculture:      { color:'#15803d', bg:null },
+  Food:             { color:'#c2410c', bg:'#ffedd5' },
+  Services:         { color:'#0a7a44', bg:null },
+  Jobs:             { color:'#2563eb', bg:null },
+}
+function catStyle(cat) { return CAT_STYLE[cat] || { color:T.gray600, bg:null } }
+
+function conditionLabel(listing) {
+  const c = listing.condition
+  if (!c) return null
+  return c === 'new' ? 'Brand New' : (c === 'like_new' ? 'Like New' : 'Used')
+}
+
 function FBListingCard({ listing, onClick }) {
   const [liked, setLiked]   = useState(false)
+  const [hov, setHov]       = useState(false)
   const [imgErr, setImgErr] = useState(false)
-  const isVerif = listing.seller_verified || listing.shop_is_verified
-  const isFeat  = listing.featured || listing.is_featured
-  const isNew   = listing.created_at && (Date.now() - new Date(listing.created_at).getTime()) < 86400000
+  const isVerif  = listing.seller_verified || listing.shop_is_verified
+  const isFeat   = listing.featured || listing.is_featured
+  const cond     = conditionLabel(listing)
+  const catStyleObj = catStyle(listing.category)
+  const sellerName = listing.shop_name || listing.seller_name || 'Seller'
+  const rating   = listing.rating ?? listing.shop_rating
+  const reviews  = listing.review_count ?? listing.shop_review_count
+  const views    = listing.view_count
+  const chats    = listing.inquiry_count ?? listing.chat_count
 
   return (
-    <div onClick={onClick} style={{ background:'#fff', borderRadius:16, border:`1px solid ${T.gray100}`, boxShadow:'0 1px 4px rgba(0,0,0,.08)', cursor:'pointer', overflow:'hidden', transition:'box-shadow .2s', marginBottom:0 }}
-      onMouseEnter={e => e.currentTarget.style.boxShadow = '0 4px 18px rgba(0,0,0,.13)'}
-      onMouseLeave={e => e.currentTarget.style.boxShadow = '0 1px 4px rgba(0,0,0,.08)'}
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={{
+        background:'#fff', borderRadius:20, border:`1px solid ${T.gray100}`,
+        boxShadow: hov ? '0 12px 30px rgba(0,0,0,.15)' : '0 2px 8px rgba(0,0,0,.06)',
+        cursor:'pointer', overflow:'hidden',
+        transform: hov ? 'translateY(-5px)' : 'translateY(0)',
+        transition:'box-shadow .25s ease, transform .25s ease',
+      }}
     >
-      {/* Image */}
-      <div style={{ position:'relative', width:'100%', paddingBottom:'65%', background:T.gray100, overflow:'hidden' }}>
+      {/* Image — 4:3 ratio */}
+      <div style={{ position:'relative', width:'100%', paddingBottom:'75%', background:T.gray100, overflow:'hidden' }}>
         <div style={{ position:'absolute', inset:0 }}>
           {listing.images?.[0] && !imgErr
-            ? <img src={listing.images[0]} alt={listing.title} onError={() => setImgErr(true)} style={{ width:'100%', height:'100%', objectFit:'cover', transition:'transform .4s ease' }}
-                onMouseEnter={e => e.currentTarget.style.transform = 'scale(1.05)'}
-                onMouseLeave={e => e.currentTarget.style.transform = 'scale(1)'}
+            ? <img src={listing.images[0]} alt={listing.title} onError={() => setImgErr(true)}
+                style={{ width:'100%', height:'100%', objectFit:'cover', transition:'transform .45s cubic-bezier(.22,1,.36,1)', transform: hov ? 'scale(1.05)' : 'scale(1)' }}
               />
             : <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:48, color:T.gray300 }}>📦</div>
           }
         </div>
-        {isFeat && <div style={{ position:'absolute', top:10, left:10, background:`linear-gradient(135deg,${T.amber},#e09800)`, color:'#1a0a00', borderRadius:50, padding:'3px 10px', fontSize:9.5, fontWeight:900 }}>⭐ FEATURED</div>}
-        {isNew && !isFeat && <div style={{ position:'absolute', top:10, left:10, background:T.green, color:'#fff', borderRadius:50, padding:'3px 10px', fontSize:9.5, fontWeight:800 }}>NEW</div>}
+
+        {isFeat && (
+          <div style={{ position:'absolute', top:10, left:10, display:'flex', alignItems:'center', gap:5, background:'#FF7A1A', color:'#fff', padding:'6px 14px', fontSize:11.5, fontWeight:800, borderRadius:50, boxShadow:'0 3px 10px rgba(255,122,26,0.4)', zIndex:2 }}>
+            {Icon.star(12, '#fff')} Featured
+          </div>
+        )}
+
         <button onClick={e => { e.stopPropagation(); setLiked(l => !l) }}
-          style={{ position:'absolute', top:9, right:10, width:32, height:32, borderRadius:'50%', border:'none', background:'rgba(255,255,255,.92)', backdropFilter:'blur(6px)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color: liked ? T.red : T.gray600, boxShadow:'0 2px 8px rgba(0,0,0,.13)' }}>
-          {Icon.heart(14, liked ? 'currentColor' : 'none')}
+          style={{ position:'absolute', top:9, right:9, width:28, height:28, borderRadius:'50%', border:'none', background:'rgba(255,255,255,.9)', backdropFilter:'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', color: liked ? T.red : T.gray600, boxShadow:'0 2px 6px rgba(0,0,0,.12)', zIndex:2 }}>
+          {Icon.heart(13, liked ? 'currentColor' : 'none')}
         </button>
+
+        {listing.category && (
+          <div style={{ position:'absolute', bottom:9, left:9, background:'rgba(255,255,255,.95)', color:catStyleObj.color, borderRadius:50, padding:'3px 11px', fontSize:10.5, fontWeight:700, zIndex:2 }}>
+            {listing.category}
+          </div>
+        )}
       </div>
 
       {/* Body */}
-      <div style={{ padding:'12px 14px 14px' }}>
-        <div style={{ fontFamily:T.fontDisplay, fontSize:18, fontWeight:800, color:T.green, letterSpacing:'-0.3px', marginBottom:4 }}>{formatPrice(listing.price)}</div>
-        <div style={{ fontSize:14, fontWeight:600, color:T.gray900, marginBottom:6, overflow:'hidden', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', lineHeight:1.4 }}>{listing.title}</div>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', fontSize:12, color:T.gray500 }}>
-          <span style={{ display:'flex', alignItems:'center', gap:3 }}>{Icon.pin(11)} {listing.city || 'Malawi'}</span>
-          <span style={{ display:'flex', alignItems:'center', gap:3 }}>{Icon.clock(11)} {timeAgo(listing.created_at)}</span>
+      <div style={{ padding:'12px 14px 13px' }}>
+        <div style={{ fontFamily:T.fontDisplay, fontSize:20, fontWeight:900, color:T.green, letterSpacing:'-0.3px', marginBottom:3 }}>
+          {formatPrice(listing.price)}
         </div>
+
+        <div style={{ fontSize:13.5, fontWeight:600, color:T.gray900, marginBottom:9, overflow:'hidden', display:'-webkit-box', WebkitLineClamp:1, WebkitBoxOrient:'vertical' }}>
+          {listing.title}
+        </div>
+
+        {/* Seller row */}
+        <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
+          <div style={{ width:26, height:26, borderRadius:'50%', flexShrink:0, overflow:'hidden', background:`linear-gradient(135deg, ${T.green}, ${T.greenD})`, display:'flex', alignItems:'center', justifyContent:'center', color:'#fff', fontWeight:800, fontSize:11 }}>
+            {listing.shop_logo_url || listing.seller_avatar_url
+              ? <img src={listing.shop_logo_url || listing.seller_avatar_url} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+              : sellerName[0]?.toUpperCase()}
+          </div>
+          <span style={{ display:'flex', alignItems:'center', gap:4, fontSize:12, fontWeight:700, color:T.gray800, overflow:'hidden', minWidth:0, flex:1 }}>
+            <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{sellerName}</span>
+            {isVerif && <span style={{ flexShrink:0, display:'flex' }}>{Icon.verify(13)}</span>}
+          </span>
+          <span style={{ display:'flex', alignItems:'center', gap:3, fontSize:10.5, color:T.gray500, flexShrink:0, marginLeft:'auto' }}>
+            {Icon.clock(10)} {timeAgo(listing.created_at)}
+          </span>
+        </div>
+
+        <div style={{ display:'flex', alignItems:'center', gap:4, fontSize:11.5, color:T.gray600, marginBottom:6, minHeight:15 }}>
+          {rating != null
+            ? <>{Icon.star(11)} <span style={{ fontWeight:700, color:T.gray800 }}>{Number(rating).toFixed(1)}</span> {reviews != null && `(${reviews})`}</>
+            : <span style={{ color:T.gray400, fontStyle:'italic' }}>No ratings yet</span>}
+        </div>
+
+        <div style={{ display:'flex', alignItems:'center', gap:4, fontSize:11.5, color:T.gray500, marginBottom:5 }}>
+          {Icon.pin(11)}
+          <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+            {[listing.district, listing.city].filter(Boolean).join(' • ') || 'Malawi'}
+          </span>
+        </div>
+
         {listing._distanceKm != null && (
-          <div
-            onClick={e => {
-              if (!listing._isPrecise) return
-              e.stopPropagation()
-              const dst = `${listing.latitude},${listing.longitude}`
-              window.open(`https://www.google.com/maps/dir/?api=1&destination=${dst}&travelmode=driving`, '_blank')
-            }}
-            style={{ display:'flex', alignItems:'center', gap:4, fontSize:11.5, color: listing._isPrecise ? T.blue : T.gray500, fontWeight:700, marginTop:4, cursor: listing._isPrecise ? 'pointer' : 'default', textDecoration: listing._isPrecise ? 'underline' : 'none', textUnderlineOffset:2 }}
-            title={listing._isPrecise ? 'Open in Google Maps' : 'Approximate location — contact seller for exact meetup point'}
-          >
-            {Icon.crosshair(11)}
-            {listing._distanceKm < 1 ? `${Math.round(listing._distanceKm * 1000)}m away` : `${listing._distanceKm.toFixed(1)}km away`}
-            <span style={{ fontSize:10.5, fontWeight:600 }}>
-              · {listing._isPrecise ? 'Take me there' : 'Approximate'}
+          <div style={{ display:'flex', alignItems:'center', gap:6, fontSize:11, color:T.gray500, marginBottom:8 }}>
+            <span
+              onClick={e => {
+                if (!listing._isPrecise) return
+                e.stopPropagation()
+                const dst = `${listing.latitude},${listing.longitude}`
+                window.open(`https://www.google.com/maps/dir/?api=1&destination=${dst}&travelmode=driving`, '_blank')
+              }}
+              style={{ display:'flex', alignItems:'center', gap:3, color: listing._isPrecise ? T.blue : T.gray500, fontWeight:600, cursor: listing._isPrecise ? 'pointer' : 'default' }}
+            >
+              {Icon.crosshair(11)} {listing._distanceKm < 1 ? `${Math.round(listing._distanceKm * 1000)}m` : `${listing._distanceKm.toFixed(1)}km`} away
             </span>
           </div>
         )}
-        {isVerif && (
-          <div style={{ display:'flex', alignItems:'center', gap:4, fontSize:11.5, color:'#15803d', fontWeight:600, marginTop:6 }}>
-            {Icon.verify(11)} Verified Seller
+
+        {(views != null || chats != null) && (
+          <div style={{ display:'flex', alignItems:'center', gap:14, fontSize:11, color:T.gray500, marginBottom:10 }}>
+            {views != null && (
+              <span style={{ display:'flex', alignItems:'center', gap:4 }}>
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                {views}
+              </span>
+            )}
+            {chats != null && (
+              <span style={{ display:'flex', alignItems:'center', gap:4 }}>
+                {Icon.chat(13)} {chats}
+              </span>
+            )}
           </div>
         )}
+
+        {/* Quick actions — In-app Chat is always required; WhatsApp/Call show
+            only if the seller configured that contact method in PostListing */}
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', borderTop:`1px solid ${T.gray100}`, paddingTop:9, gap:6 }}>
+          <button onClick={e => { e.stopPropagation(); onClick() }} style={{ display:'flex', alignItems:'center', gap:4, background:'none', border:'none', cursor:'pointer', color:T.amberD, fontSize:11, fontWeight:700, padding:0 }}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            Quick View
+          </button>
+          <button onClick={e => e.stopPropagation()} style={{ display:'flex', alignItems:'center', gap:4, background:'none', border:'none', cursor:'pointer', color:T.amberD, fontSize:11, fontWeight:700, padding:0 }}>
+            {Icon.chat(13)} Chat
+          </button>
+          {listing.contact_methods?.includes('call') && listing.call_number && (
+            <button
+              onClick={e => {
+                e.stopPropagation()
+                window.open(`tel:${listing.call_number}`, '_self')
+              }}
+              style={{ display:'flex', alignItems:'center', gap:4, background:'none', border:'none', cursor:'pointer', color:T.amberD, fontSize:11, fontWeight:700, padding:0 }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+              Call
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )
 }
-
 export default function SearchPage() {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
@@ -1566,6 +1779,7 @@ export default function SearchPage() {
   const [sortBy, setSortBy]             = useState('relevance')
   const [viewMode, setViewMode]         = useState('grid') // 'grid' | 'list'
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false)
+  
   const [notifyOpen, setNotifyOpen]             = useState(false)
   const [searchOpen, setSearchOpen]             = useState(!!searchParams.get('focus'))
   const [liveQuery, setLiveQuery]               = useState(searchParams.get('focus') ? (searchParams.get('q') || '') : '')
@@ -1649,7 +1863,7 @@ export default function SearchPage() {
         safe(async () => {
           const { data, count } = await supabase.from('listings')
             .select('id,title,price,images,city,created_at,featured,is_featured', { count: 'exact' })
-            .eq('status','active').ilike('title',`%${q}%`)
+            .eq('status','published').ilike('title',`%${q}%`)
             .order('is_featured', { ascending: false, nullsFirst: false })
             .order('featured',    { ascending: false, nullsFirst: false })
             .order('created_at',  { ascending: false })
@@ -1719,7 +1933,7 @@ export default function SearchPage() {
 
     const [listingsC, shopsC, lookingforC, jobsC, servicesC] = await Promise.all([
       safe(async () => {
-        const { count } = await supabase.from('listings').select('id', { count:'exact', head:true }).eq('status', 'active').ilike('title', `%${q}%`)
+        const { count } = await supabase.from('listings').select('id', { count:'exact', head:true }).eq('status', 'published').ilike('title', `%${q}%`)
         return count || 0
       }),
       safe(async () => {
@@ -1764,8 +1978,8 @@ export default function SearchPage() {
   async function searchListings(filters, currentSort, currentPage) {
     let query = supabase
       .from('listings')
-      .select('id, title, price, images, city, category, condition, featured, is_featured, created_at, seller_id, shop_id, description, latitude, longitude, precise_location', { count: 'exact' })
-      .eq('status', 'active')
+      .select('id, title, price, images, city, district, category, condition, featured, is_featured, created_at, seller_id, shop_id, description, latitude, longitude, precise_location, contact_methods, whatsapp_number, call_number', { count: 'exact' })
+      .eq('status', 'published')
 
     // Only filter by title when there's an actual search term — an empty
     // query means "browse everything" (needed for Near Me / filter-only browsing)
@@ -1826,21 +2040,33 @@ export default function SearchPage() {
 
     const [shopsRes, profilesRes] = await Promise.all([
       shopIds.length > 0
-        ? supabase.from('shops').select('id, is_verified').in('id', shopIds)
+        ? supabase.from('shops').select('id, name, logo_url, is_verified, rating, review_count').in('id', shopIds)
         : Promise.resolve({ data: [] }),
       sellerIds.length > 0
-        ? supabase.from('profiles').select('id, is_verified').in('id', sellerIds)
+        ? supabase.from('profiles').select('id, full_name, avatar_url, is_verified').in('id', sellerIds)
         : Promise.resolve({ data: [] }),
     ])
 
     const shopMap    = Object.fromEntries((shopsRes.data || []).map(s => [s.id, s]))
     const profileMap = Object.fromEntries((profilesRes.data || []).map(p => [p.id, p]))
 
-    results = results.map(l => ({
-      ...l,
-      shop_is_verified: l.shop_id   ? (shopMap[l.shop_id]?.is_verified    ?? false) : false,
-      seller_verified:  l.seller_id ? (profileMap[l.seller_id]?.is_verified ?? false) : false,
-    }))
+    results = results.map(l => {
+      const shop    = l.shop_id   ? shopMap[l.shop_id]       : null
+      const profile = l.seller_id ? profileMap[l.seller_id]  : null
+      return {
+        ...l,
+        shop_is_verified:   shop?.is_verified ?? false,
+        seller_verified:    profile?.is_verified ?? false,
+        shop_name:          shop?.name || null,
+        shop_logo_url:      shop?.logo_url || null,
+        seller_name:        profile?.full_name || null,
+        seller_avatar_url:  profile?.avatar_url || null,
+        shop_rating:        shop?.rating ?? null,
+        shop_review_count:  shop?.review_count ?? null,
+        rating:             shop?.rating ?? null,
+        review_count:       shop?.review_count ?? null,
+      }
+    })
 
     if (filters.verifiedOnly) {
       results = results.filter(l => l.seller_verified || l.shop_is_verified)
@@ -1949,6 +2175,7 @@ export default function SearchPage() {
     setCheckedCats(prev => {
       const next = new Set(prev)
       next.has(key) ? next.delete(key) : next.add(key)
+      applyFiltersInstant({ cats: next })
       return next
     })
   }
@@ -1957,6 +2184,7 @@ export default function SearchPage() {
     setConditions(prev => {
       const next = new Set(prev)
       next.has(key) ? next.delete(key) : next.add(key)
+      applyFiltersInstant({ conditions: next })
       return next
     })
   }
@@ -1965,6 +2193,7 @@ export default function SearchPage() {
     setDelivery(prev => {
       const next = new Set(prev)
       next.has(key) ? next.delete(key) : next.add(key)
+      applyFiltersInstant({ delivery: next })
       return next
     })
   }
@@ -1997,20 +2226,7 @@ export default function SearchPage() {
     doSearch(activeTab, EMPTY_FILTERS, sortBy, 1)
   }
 
-  function applyFilters() {
-    const next = {
-      cats: new Set(checkedCats),
-      priceMin, priceMax, district,
-      conditions: new Set(conditions),
-      delivery: new Set(delivery),
-      verifiedOnly, featuredOnly, nearMe, userCoords,
-    }
-    setPage(1)
-    setApplied(next)
-    setSearchTick(t => t + 1)
-    setMobileFilterOpen(false)
-    doSearch(activeTab, next, sortBy, 1)
-  }
+  
 
   // Instant-apply variant for simple toggle filters (Near Me, Featured,
   // Verified) — takes explicit overrides so it doesn't depend on React
@@ -2028,6 +2244,7 @@ export default function SearchPage() {
     setPage(1)
     setApplied(next)
     setSearchTick(t => t + 1)
+    setMobileFilterOpen(false)
     doSearch(activeTab, next, sortBy, 1)
   }
 
@@ -2081,16 +2298,28 @@ export default function SearchPage() {
     applyFiltersInstant({ verifiedOnly: next })
   }
 
+  function handlePriceMinChange(val) {
+    setPriceMin(val)
+    applyFiltersInstant({ priceMin: val })
+  }
+  function handlePriceMaxChange(val) {
+    setPriceMax(val)
+    applyFiltersInstant({ priceMax: val })
+  }
+  function handleDistrictChange(val) {
+    setDistrict(val)
+    applyFiltersInstant({ district: val })
+  }
+
   const filterProps = {
     checkedCats, onToggleCat: toggleCat, onClearAll: clearAll,
-    priceMin, setPriceMin, priceMax, setPriceMax,
-    district, setDistrict,
+    priceMin, setPriceMin: handlePriceMinChange, priceMax, setPriceMax: handlePriceMaxChange,
+    district, setDistrict: handleDistrictChange,
     conditions, onToggleCondition: toggleCondition,
     delivery, onToggleDelivery: toggleDelivery,
     verifiedOnly, setVerifiedOnly: toggleVerifiedInstant,
     featuredOnly, setFeaturedOnly: toggleFeaturedInstant,
     nearMe, setNearMe: toggleNearMeInstant, locating,
-    onApply: applyFilters,
   }
 
   const resultsLabel = {
@@ -2178,8 +2407,17 @@ export default function SearchPage() {
 
           {/* ── LEFT SIDEBAR — desktop only, Marketplace tab ── */}
           {showFilterSidebar && (
-            <div className="sp-sidebar" style={{ background:'#fff', borderRadius:T.radiusSm, border:`1px solid ${T.gray100}`, boxShadow:T.shadow, padding:'18px 16px', position:'sticky', top:90 }}>
-              <FilterPanel {...filterProps} />
+            <div className="sp-sidebar" style={{ alignSelf:'flex-start', position:'sticky', top:90 }}>
+              <div
+                className="sp-sidebar-panel sp-sidebar-scroll"
+                style={{
+                  background:'#fff', borderRadius:T.radiusSm, border:`1px solid ${T.gray100}`,
+                  boxShadow:T.shadow, padding:'18px 16px',
+                  maxHeight:'calc(100vh - 110px)', overflowY:'auto',
+                }}
+              >
+                <FilterPanel {...filterProps} />
+              </div>
             </div>
           )}
 

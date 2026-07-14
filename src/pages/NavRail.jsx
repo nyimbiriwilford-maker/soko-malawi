@@ -90,9 +90,9 @@ export default function NavRail() {
 
 const S = {
   rail: {
-    width: '64px', flexShrink: 0, height: '100vh', background: '#fff', borderRight: '1px solid #e8f0eb',
+    width: '64px', flexShrink: 0, height: '100%', background: '#fff', borderRight: '1px solid #e8f0eb',
     display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '20px 0', gap: '12px',
-    fontFamily: 'system-ui, sans-serif',
+    fontFamily: 'system-ui, sans-serif', boxSizing: 'border-box',
   },
   iconBtn: {
     width: '42px', height: '42px', borderRadius: '13px', border: 'none', background: 'transparent',

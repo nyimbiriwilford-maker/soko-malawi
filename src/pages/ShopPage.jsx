@@ -2306,7 +2306,7 @@ if (!shop) {
           onClose={() => setVerifyModalOpen(false)}
           onSuccess={() => {
             setVerifyModalOpen(false)
-            setShop(s => ({ ...s, is_verified: true }))
+            // Payment / submit does not instantly verify — wait for admin approval
           }}
         />
       )}
