@@ -2973,46 +2973,8 @@ function EarlyAccessStrip() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   MOBILE BOTTOM NAV — Home / Explore / Sell / Chats / Profile, matching the
-   reference exactly. NOTE: this differs from the app's existing
-   <BottomNav> (Home/Services/Post/Chats/Jobs) used on other pages — see the
-   message below the code for why this is scoped to the homepage only.
-───────────────────────────────────────────────────────────────────────────── */
-function MobileBottomNav({ navigate, unreadCount }) {
-  const items = [
-    { key: 'home',    label: 'Home',    path: '/',        icon: (a) => <svg width="22" height="22" viewBox="0 0 24 24" fill={a?'#e6f4ec':'none'} stroke={a?T.green:'#999'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9.5L12 3l9 6.5V20a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V9.5z"/><path d="M9 21V12h6v9" stroke={a?T.green:'#999'} fill={a?'#e6f4ec':'none'}/></svg> },
-    { key: 'explore', label: 'Explore', path: '/explore', icon: (a) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a?T.green:'#999'} strokeWidth="2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> },
-    { key: 'sell',    label: 'Sell',    path: '/post',    isFab: true },
-    { key: 'chats',   label: 'Chats',   path: '/chats',   icon: (a) => <svg width="22" height="22" viewBox="0 0 24 24" fill={a?'#e6f4ec':'none'} stroke={a?T.green:'#999'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> },
-    { key: 'profile', label: 'Profile', path: '/profile', icon: (a) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={a?T.green:'#999'} strokeWidth="2" strokeLinecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> },
-  ]
-  return (
-    <div className="soko-bottom-nav-mobile" style={{
-      position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100,
-      background: '#fff', borderTop: '1px solid #e8ede9', boxShadow: '0 -4px 16px rgba(0,0,0,0.06)',
-      display: 'flex', alignItems: 'center', justifyContent: 'space-around', padding: '6px 4px 10px',
-    }}>
-      {items.map(it => it.isFab ? (
-        <button key={it.key} onClick={() => navigate(it.path)} style={{
-          width: 52, height: 52, background: `linear-gradient(135deg, ${T.green}, ${T.greenD})`, color: '#fff',
-          border: 'none', borderRadius: '50%', cursor: 'pointer', marginTop: -18,
-          boxShadow: '0 4px 16px rgba(15,157,88,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>{Icon.plus(22)}</button>
-      ) : (
-        <button key={it.key} onClick={() => navigate(it.path)} style={{ background: 'none', border: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, cursor: 'pointer', padding: '4px 14px', position: 'relative' }}>
-          {it.icon(false)}
-          <span style={{ fontSize: 10.5, color: '#999', fontWeight: 500 }}>{it.label}</span>
-          {it.key === 'chats' && unreadCount > 0 && (
-            <span style={{ position: 'absolute', top: 0, right: 6, background: T.red, color: '#fff', borderRadius: '50%', width: 15, height: 15, fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{unreadCount > 9 ? '9+' : unreadCount}</span>
-          )}
-        </button>
-      ))}
-    </div>
-  )
-}
-
-/* ─────────────────────────────────────────────────────────────────────────────
    MAIN HOME COMPONENT
+   Mobile bottom nav is mounted once in App.jsx (Home / Explore / Sell / Chats / Profile).
 ───────────────────────────────────────────────────────────────────────────── */
 export default function Home() {
   const navigate = useNavigate()
@@ -3340,8 +3302,7 @@ export default function Home() {
       {/* Footer */}
       <SokoFooter navigate={navigate} />
 
-      {/* Mobile bottom nav — Home / Explore / Sell / Chats / Profile */}
-      <MobileBottomNav navigate={navigate} unreadCount={unreadChats} />
+      {/* Mobile bottom nav: mounted once in App.jsx (Home / Explore / Sell / Chats / Profile) */}
 
       {/* Story viewer + upload modal — same components HomeStatusRow uses */}
       {viewing !== null && (

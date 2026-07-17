@@ -48,7 +48,6 @@ import {
   Store,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import BottomNav from '../components/BottomNav'
 import { useUserLocation } from '../hooks/useUserLocation'
 import '../styles/notifications.css'
 
@@ -2839,8 +2838,6 @@ export default function Notifications() {
       {pushBannerVisible && (
         <PushNotificationsBanner onEnable={handlePushEnable} onDismiss={handlePushDismiss} />
       )}
-
-      <BottomNav />
       <div className={`toast ${toast ? `toast-${toast.type} toast-visible` : ''}`} role="status" aria-live="polite" aria-atomic="true">
         {toast && (
           <>

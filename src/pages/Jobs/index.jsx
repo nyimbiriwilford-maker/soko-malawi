@@ -8,7 +8,6 @@ import JobModal from './JobModal'
 import PostJobForm from './PostJobForm'
 import MyJobs from './MyJobs'
 import './Jobs.css'
-import BottomNav from '../../components/BottomNav'
 
 const TABS = [
   { id: 'browse', label: 'Browse', icon: '🔍' },
@@ -334,7 +333,6 @@ export default function Jobs() {
       )}
 
       {/* ── Bottom Nav ── */}
-      <BottomNav />
     </div>
   )
 }

@@ -5,7 +5,6 @@ import { SERVICE_CATS, CITIES, SORT_OPTIONS, S, avatarColor, initials, renderSta
 import ServiceForm from './ServiceForm'
 import ProviderModal from './ProviderModal'
 import MyListings from './MyListings'
-import BottomNav from '../../components/BottomNav'
 
 const TABS = [
   { id: 'browse', label: 'Browse',      icon: '🔍' },
@@ -243,8 +242,6 @@ export default function Services() {
           onClose={() => setSelectedProvider(null)}
         />
       )}
-
-      <BottomNav />
     </div>
   )
 }

@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import BottomNav from '../components/BottomNav'
 
 // Some reply-to-image sends appear to save the body as a bare message id
 // with no `\x02[preview|||id]\x03body` wrapper at all — this matches that
@@ -729,10 +728,6 @@ export default function ChatListPanel() {
           </div>
         )}
         {filtered.map((chat, i) => renderChatRow(chat, i))}
-      </div>
-
-      <div className="soko-mobile-bottomnav">
-        <BottomNav />
       </div>
     </div>
   )

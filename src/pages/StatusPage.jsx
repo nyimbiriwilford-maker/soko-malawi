@@ -2,7 +2,6 @@ import { useEffect, useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useStatuses } from '../hooks/useStatuses'
-import BottomNav from '../components/BottomNav'
 import { fetchAllActiveStories } from '../hooks/useStatuses'
 import StoryViewer from '../components/StoryViewer'
 import FollowButton from '../components/FollowButton'
@@ -997,9 +996,6 @@ function StatusPageInner({ user, navigate }) {
           {toast}
         </div>
       )}
-
-      <BottomNav />
-
       <style>{`
         @property --streak-angle {
           syntax: '<angle>';

@@ -5,7 +5,6 @@ import { SERVICE_CATS, CITIES, SORT_OPTIONS, avatarColor, initials, renderStars,
 import ServiceForm from './ServiceForm'
 import ProviderModal from './ProviderModal'
 import MyListings from './MyListings'
-import BottomNav from '../components/BottomNav'
 
 const G = {
   green:     '#1a7a4a',
@@ -323,8 +322,6 @@ export default function Services() {
       {selectedProvider && (
         <ProviderModal provider={selectedProvider} currentUser={currentUser} onClose={()=>setSelectedProvider(null)} />
       )}
-
-      <BottomNav />
     </div>
   )
 }

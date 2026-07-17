@@ -54,7 +54,8 @@ body {
     padding-top: 64px;
     min-width: 0;
   }
-  .soko-bottom-nav { display: none !important; }
+  .soko-bottom-nav,
+  .soko-bottom-nav-mobile,
   #bottom-nav { display: none !important; }
   .soko-top-nav-desktop { display: flex !important; }
   .soko-top-nav-mobile { display: none !important; }
@@ -65,6 +66,13 @@ body {
   .soko-top-nav-desktop { display: none !important; }
   .soko-top-nav-mobile { display: block !important; }
   .soko-main-content { min-width: 0; }
+}
+
+/* Room for fixed mobile bottom nav (Home · Explore · Sell · Chats · Profile) */
+@media (max-width: 768px) {
+  body {
+    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+  }
 }
 
 /* Sidebar category links */

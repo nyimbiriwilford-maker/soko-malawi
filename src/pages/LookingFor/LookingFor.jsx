@@ -1,7 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
-import BottomNav from '../../components/BottomNav'
 import RequestComposer from '../../components/LookingFor/RequestComposer'
 import { Toast, Spinner } from '../../components/LookingFor/Primitives'
 import { getGPSCity, getDBCities, getMatchScore, fmtMWK } from '../../utils/lookingFor'
@@ -864,8 +863,6 @@ const myAlertsRef = useRef([])
           {toast.msg}
         </div>
       )}
-
-      <BottomNav />
     </div>
   )
 }

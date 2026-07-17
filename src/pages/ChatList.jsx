@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import BottomNav from '../components/BottomNav'
 import ChatSidebar from '../components/ChatSidebar'
 
 // Some reply-to-image sends appear to save the body as a bare message id
@@ -588,10 +587,6 @@ export default function ChatList() {
         {/* Chat list */}
         <div style={S.list}>
           {filtered.map((chat, i) => renderChatRow(chat, i))}
-        </div>
-
-        <div className="soko-mobile-bottomnav">
-          <BottomNav />
         </div>
       </div>
     </div>

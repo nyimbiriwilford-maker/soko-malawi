@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import BottomNav from '../components/BottomNav'
 import StoryViewer from '../components/StoryViewer'
 
 export default function SavedStatusesPage() {
@@ -228,8 +227,6 @@ export default function SavedStatusesPage() {
           onClose={() => setViewing(null)}
         />
       )}
-
-      <BottomNav />
     </div>
   )
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState, lazy, Suspense } from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { supabase } from './lib/supabase'
+import BottomNav from './components/BottomNav'
 const StatusPage          = lazy(() => import('./pages/StatusPage'))
 const SavedStatusesPage   = lazy(() => import('./pages/SavedStatusesPage'))
 const LookingFor = lazy(() => import('./pages/LookingFor/LookingFor'))
@@ -55,6 +56,26 @@ function PageLoader() {
       </div>
     </div>
   )
+}
+
+/** Home-style bottom nav for mobile across authenticated marketplace pages */
+function AppMobileBottomNav({ enabled }) {
+  const location = useLocation()
+  if (!enabled) return null
+  const p = location.pathname
+  // Hide on auth, admin, onboarding, payment, and open chat threads
+  if (
+    p.startsWith('/login') ||
+    p.startsWith('/auth') ||
+    p.startsWith('/reset-password') ||
+    p.startsWith('/admin') ||
+    p.startsWith('/onboarding') ||
+    p.startsWith('/verify-payment') ||
+    p.startsWith('/chat/')
+  ) {
+    return null
+  }
+  return <BottomNav />
 }
 
 function stopRingtone() {
@@ -264,17 +285,20 @@ const [installPrompt, setInstallPrompt] = useState(null)
             <Route path="/post/edit/:id"           element={authed ? <PostListing />    : <Navigate to="/login" />} />
             <Route path="/status"          element={authed ? <StatusPage />        : <Navigate to="/login" />} />
             <Route path="/saved-statuses"  element={authed ? <SavedStatusesPage /> : <Navigate to="/login" />} />
-<Route path="/notifications"           element={authed ? <Notifications />  : <Navigate to="/login" />} />
-<Route path="/looking-for"             element={authed ? <LookingFor />     : <Navigate to="/login" />} />
-<Route path="/verify-payment"          element={<VerifyPayment />} />
-<Route path="/onboarding"              element={authed ? <Onboarding />     : <Navigate to="/login" />} />
-<Route path="/shop-setup"              element={authed ? <ShopSetup />      : <Navigate to="/login" />} />
-<Route path="/shop/:slug"              element={authed ? <ShopPage />       : <Navigate to="/login" />} />
-<Route path="/shops"                   element={authed ? <ShopsPage />      : <Navigate to="/login" />} />
-<Route path="/search"                  element={authed ? <SearchPage />     : <Navigate to="/login" />} />
-<Route path="/listings"                element={authed ? <ListingsPage />   : <Navigate to="/login" />} />
-<Route path="*"                        element={<Navigate to="/" />} /></Routes>
+            <Route path="/notifications"           element={authed ? <Notifications />  : <Navigate to="/login" />} />
+            <Route path="/looking-for"             element={authed ? <LookingFor />     : <Navigate to="/login" />} />
+            <Route path="/verify-payment"          element={<VerifyPayment />} />
+            <Route path="/onboarding"              element={authed ? <Onboarding />     : <Navigate to="/login" />} />
+            <Route path="/shop-setup"              element={authed ? <ShopSetup />      : <Navigate to="/login" />} />
+            <Route path="/shop/:slug"              element={authed ? <ShopPage />       : <Navigate to="/login" />} />
+            <Route path="/shops"                   element={authed ? <ShopsPage />      : <Navigate to="/login" />} />
+            <Route path="/search"                  element={authed ? <SearchPage />     : <Navigate to="/login" />} />
+            <Route path="/listings"                element={authed ? <ListingsPage />   : <Navigate to="/login" />} />
+            <Route path="*"                        element={<Navigate to="/" />} />
+          </Routes>
         </Suspense>
+        {/* Single mobile bottom nav for the whole marketplace app */}
+        <AppMobileBottomNav enabled={authed && !isAdmin && !isRecovery} />
       </BrowserRouter>
     </CallProvider>
   )
