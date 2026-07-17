@@ -318,9 +318,9 @@ function GlobalStyles() {
         }
         .soko-hero-mobile-rail::-webkit-scrollbar { display: none; }
         .soko-hero-mobile-card {
-          flex: 0 0 min(168px, 46vw) !important;
-          width: min(168px, 46vw) !important;
-          height: 168px !important;
+          flex: 0 0 min(196px, 58vw) !important;
+          width: min(196px, 58vw) !important;
+          height: 186px !important;
           scroll-snap-align: start;
           border-radius: 14px !important;
         }
@@ -331,17 +331,43 @@ function GlobalStyles() {
         .soko-hero-mobile-card .soko-hero-card-title {
           font-size: 12px !important;
           -webkit-line-clamp: 1 !important;
-          margin-bottom: 2px !important;
+          margin-bottom: 3px !important;
         }
+        /* Full prices on mobile — allow wrap, never clip with ellipsis */
         .soko-hero-mobile-card .soko-hero-card-price {
-          font-size: 13.5px !important;
+          font-size: 12.5px !important;
+          line-height: 1.2 !important;
           margin-bottom: 2px !important;
+          white-space: normal !important;
+          overflow: visible !important;
+          text-overflow: unset !important;
+          word-break: break-word !important;
+          letter-spacing: -0.35px !important;
         }
         .soko-hero-mobile-card .soko-hero-card-meta {
           font-size: 10px !important;
         }
         .soko-hero-mobile-card .soko-hero-card-body {
           padding: 8px 9px 10px !important;
+        }
+        .soko-hero-mobile-card .soko-hero-price-chip {
+          max-width: calc(100% - 56px);
+          white-space: normal !important;
+          line-height: 1.15 !important;
+          font-size: 11px !important;
+          padding: 4px 7px !important;
+          text-align: right;
+        }
+        /* Latest grid + featured rail: full price visible on phone */
+        .soko-latest-card .soko-latest-price,
+        .soko-featured-card-wrap .soko-card-bg {
+          overflow: visible;
+        }
+        .soko-latest-card .soko-latest-price {
+          font-size: 13px !important;
+          line-height: 1.2 !important;
+          white-space: normal !important;
+          word-break: break-word !important;
         }
         .soko-hero-mobile-empty {
           width: 100%;
@@ -643,7 +669,7 @@ function formatPrice(n) {
   const num = Number(n)
   if (!Number.isFinite(num)) return ''
   // Always show the full amount (e.g. MK 1,500,000) — never K/M shorthand
-  return `MK ${Math.round(num).toLocaleString('en-MW')}`
+  return `MK ${Math.round(num).toLocaleString('en-US')}`
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -1175,7 +1201,7 @@ function RevenueHero({ navigate, listings }) {
           tabIndex={0}
           onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/listing/' + item.id) } }}
           style={{
-            position: 'relative', height: mobile ? 168 : 230, borderRadius: mobile ? 14 : 18,
+            position: 'relative', height: mobile ? 186 : 230, borderRadius: mobile ? 14 : 18,
             overflow: 'hidden', cursor: 'pointer', display: 'flex', flexDirection: 'column',
             flexShrink: mobile ? 0 : undefined,
             transition: 'transform 0.3s ease, box-shadow 0.3s ease',
@@ -1195,8 +1221,9 @@ function RevenueHero({ navigate, listings }) {
               overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: titleClamp, WebkitBoxOrient: 'vertical',
             }}>{item.title}</div>
             <div className="soko-hero-card-price" style={{
-              fontFamily: T.fontDisplay, fontSize: mobile ? 13.5 : 16, fontWeight: 800,
+              fontFamily: T.fontDisplay, fontSize: mobile ? 12.5 : 16, fontWeight: 800,
               color: flash ? T.red : T.greenD, letterSpacing: '-0.3px',
+              whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.2,
             }}>{formatPrice(price)}</div>
             <div className="soko-hero-card-meta" style={{
               marginTop: 2, fontSize: mobile ? 10 : 11, color: T.gray600,
@@ -1222,7 +1249,7 @@ function RevenueHero({ navigate, listings }) {
           tabIndex={0}
           onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/listing/' + item.id) } }}
           style={{
-            position: 'relative', height: mobile ? 168 : 230, borderRadius: mobile ? 14 : 18,
+            position: 'relative', height: mobile ? 186 : 230, borderRadius: mobile ? 14 : 18,
             overflow: 'hidden', cursor: 'pointer', flexShrink: mobile ? 0 : undefined,
             transition: 'transform 0.3s ease, box-shadow 0.3s ease',
             animation: visible && !mobile ? `cardSlideUp 0.5s ease ${0.1 + idx * 0.08}s both` : 'none',
@@ -1246,14 +1273,13 @@ function RevenueHero({ navigate, listings }) {
               fontSize: mobile ? 12 : 14, fontWeight: 700, color: '#fff', marginBottom: 2, lineHeight: 1.25,
               overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: titleClamp, WebkitBoxOrient: 'vertical',
             }}>{item.title}</div>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-              <div className="soko-hero-card-price" style={{
-                fontFamily: T.fontDisplay, fontSize: mobile ? 13 : 16, fontWeight: 800, color: '#fff', letterSpacing: '-0.3px',
-              }}>{formatPrice(price)}</div>
-              <span className="soko-hero-card-meta" style={{ fontSize: mobile ? 10 : 11, color: 'rgba(255,255,255,0.75)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {item.city || 'Malawi'}
-              </span>
-            </div>
+            <div className="soko-hero-card-price" style={{
+              fontFamily: T.fontDisplay, fontSize: mobile ? 12.5 : 16, fontWeight: 800, color: '#fff', letterSpacing: '-0.3px',
+              whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.2, marginBottom: 2,
+            }}>{formatPrice(price)}</div>
+            <span className="soko-hero-card-meta" style={{ fontSize: mobile ? 10 : 11, color: 'rgba(255,255,255,0.75)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>
+              {item.city || 'Malawi'}
+            </span>
           </div>
         </div>
       )
@@ -1270,7 +1296,7 @@ function RevenueHero({ navigate, listings }) {
           tabIndex={0}
           onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/listing/' + item.id) } }}
           style={{
-            position: 'relative', height: mobile ? 168 : 230, borderRadius: mobile ? 14 : 18,
+            position: 'relative', height: mobile ? 186 : 230, borderRadius: mobile ? 14 : 18,
             overflow: 'hidden', cursor: 'pointer', flexShrink: mobile ? 0 : undefined,
             transition: 'transform 0.3s ease, box-shadow 0.3s ease',
             animation: visible && !mobile ? `cardSlideUp 0.5s ease ${0.1 + idx * 0.08}s both` : 'none',
@@ -1282,14 +1308,21 @@ function RevenueHero({ navigate, listings }) {
           <div style={{ position: 'absolute', inset: 0 }}>{photo}</div>
           <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,0.12) 0%, transparent 35%, rgba(0,0,0,0.7) 100%)' }} />
           <div style={{ position: 'absolute', top: mobile ? 7 : 9, left: mobile ? 7 : 9, zIndex: 5 }}>{badge}</div>
-          <div style={{
-            position: 'absolute', top: mobile ? 7 : 9, right: mobile ? 7 : 9, zIndex: 5,
-            background: `linear-gradient(135deg, ${T.amber}, #e09800)`,
-            color: '#1a0a00', borderRadius: 10,
-            padding: mobile ? '5px 8px' : '7px 10px',
-            fontFamily: T.fontDisplay, fontSize: mobile ? 12 : 14, fontWeight: 800,
-            letterSpacing: '-0.3px', boxShadow: '0 4px 14px rgba(249,171,0,0.4)',
-          }}>
+          <div
+            className={mobile ? 'soko-hero-price-chip' : undefined}
+            style={{
+              position: 'absolute', top: mobile ? 7 : 9, right: mobile ? 7 : 9, zIndex: 5,
+              background: `linear-gradient(135deg, ${T.amber}, #e09800)`,
+              color: '#1a0a00', borderRadius: 10,
+              padding: mobile ? '5px 8px' : '7px 10px',
+              fontFamily: T.fontDisplay, fontSize: mobile ? 11.5 : 14, fontWeight: 800,
+              letterSpacing: '-0.3px', boxShadow: '0 4px 14px rgba(249,171,0,0.4)',
+              maxWidth: mobile ? '62%' : 'auto',
+              whiteSpace: mobile ? 'normal' : 'nowrap',
+              lineHeight: 1.15,
+              textAlign: 'right',
+            }}
+          >
             {formatPrice(price)}
           </div>
           <div className="soko-hero-card-body" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 5, padding: pad }}>
@@ -1327,7 +1360,7 @@ function RevenueHero({ navigate, listings }) {
         tabIndex={0}
         onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/listing/' + item.id) } }}
         style={{
-          position: 'relative', height: mobile ? 168 : 230, borderRadius: mobile ? 14 : 18,
+          position: 'relative', height: mobile ? 186 : 230, borderRadius: mobile ? 14 : 18,
           overflow: 'hidden', cursor: 'pointer',
           flexShrink: mobile ? 0 : undefined,
           transition: 'transform 0.35s cubic-bezier(0.34,1.2,0.64,1), box-shadow 0.35s ease, border-color 0.35s ease',
@@ -1369,8 +1402,9 @@ function RevenueHero({ navigate, listings }) {
             overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: titleClamp, WebkitBoxOrient: 'vertical',
           }}>{item.title}</div>
           <div className="soko-hero-card-price" style={{
-            fontFamily: T.fontDisplay, fontSize: mobile ? 13.5 : 17, fontWeight: 800,
+            fontFamily: T.fontDisplay, fontSize: mobile ? 12.5 : 17, fontWeight: 800,
             color: flash ? '#ff8a80' : priceColor, marginBottom: mobile ? 2 : 4, letterSpacing: '-0.3px',
+            whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.2,
           }}>
             {formatPrice(price)}
           </div>
@@ -2146,11 +2180,11 @@ function PremiumListingCard({ listing, onClick, delay = 0, large = false }) {
 
       <div style={{ padding: '8px 10px 8px', background: '#fff', height: '38%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
         <div style={{ fontSize: 12, fontWeight: 600, color: T.gray900, lineHeight: 1.3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical' }}>{listing.title}</div>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 14, fontWeight: 800, color: isFlash ? T.red : T.gray900, letterSpacing: '-0.3px' }}>{formatPrice(price)}</span>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, flexWrap: 'wrap', minWidth: 0 }}>
+          <span style={{ fontSize: 13.5, fontWeight: 800, color: isFlash ? T.red : T.gray900, letterSpacing: '-0.3px', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.2 }}>{formatPrice(price)}</span>
           {isFlash && listing.price > price && (
             <>
-              <span style={{ fontSize: 10.5, fontWeight: 600, color: T.gray500, textDecoration: 'line-through' }}>{formatPrice(listing.price)}</span>
+              <span style={{ fontSize: 10.5, fontWeight: 600, color: T.gray500, textDecoration: 'line-through', whiteSpace: 'normal' }}>{formatPrice(listing.price)}</span>
               <span style={{ fontSize: 9.5, fontWeight: 800, color: T.red }}>-{Math.round((1 - price / listing.price) * 100)}%</span>
             </>
           )}
@@ -2583,7 +2617,7 @@ function LatestListingCard({ listing, delay = 0, onClick }) {
           )}
         </div>
 
-        <div className="soko-latest-price" style={{ fontFamily: T.fontDisplay, fontSize: 16.5, fontWeight: 800, color: T.greenD, letterSpacing: '-0.3px' }}>
+        <div className="soko-latest-price" style={{ fontFamily: T.fontDisplay, fontSize: 16.5, fontWeight: 800, color: T.greenD, letterSpacing: '-0.3px', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.2 }}>
           {formatPrice(listing.price)}
         </div>
 

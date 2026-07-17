@@ -43,10 +43,11 @@ function timeAgo(ts) {
 }
 
 function formatPrice(n) {
-  if (!n && n !== 0) return ''
-  if (n >= 1_000_000) return `MK ${(n/1_000_000).toFixed(1)}M`
-  if (n >= 1_000)     return `MK ${(n/1_000).toFixed(0)}K`
-  return `MK ${n.toLocaleString()}`
+  if (n == null || n === '') return ''
+  const num = Number(n)
+  if (!Number.isFinite(num)) return ''
+  // Full price always (mobile + desktop) — no K/M shorthand
+  return `MK ${Math.round(num).toLocaleString('en-US')}`
 }
 
 function isFlashActive(l) {
