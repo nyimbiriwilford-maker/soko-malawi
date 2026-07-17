@@ -193,12 +193,16 @@ function GlobalStyles() {
 
       @media (max-width: 980px) {
         .soko-hero-grid { grid-template-columns: 1fr !important; }
-        .soko-hero-right { display:none !important; }
+        .soko-hero-desktop-carousel { display: none !important; }
+        .soko-hero-mobile-carousel { display: block !important; }
         .soko-trust-grid { grid-template-columns: repeat(2,1fr) !important; }
         .soko-jobs-services { grid-template-columns: 1fr 1fr !important; }
         .soko-footer-grid { grid-template-columns: 1fr 1fr !important; }
         .soko-cat-grid { grid-template-columns: repeat(5,1fr) !important; }
         .soko-featured-stories-grid { grid-template-columns: 1fr !important; }
+      }
+      @media (min-width: 981px) {
+        .soko-hero-mobile-carousel { display: none !important; }
       }
       @media (max-width: 768px) {
         .soko-v3 {
@@ -257,7 +261,7 @@ function GlobalStyles() {
         }
         .soko-hero-grid {
           padding: 18px 14px 20px !important;
-          gap: 16px !important;
+          gap: 14px !important;
         }
         .soko-hero-cta-row {
           flex-wrap: wrap !important;
@@ -272,9 +276,41 @@ function GlobalStyles() {
           font-size: 13px !important;
         }
         .soko-hero-benefits {
-          flex-direction: column !important;
+          flex-direction: row !important;
+          flex-wrap: wrap !important;
           align-items: flex-start !important;
-          gap: 10px !important;
+          gap: 8px 12px !important;
+        }
+        .soko-hero-benefits > div {
+          flex: 1 1 auto;
+          min-width: 0;
+        }
+        .soko-hero-mobile-carousel {
+          margin-top: 4px;
+          width: 100%;
+          min-width: 0;
+        }
+        .soko-hero-mobile-rail {
+          display: flex !important;
+          gap: 12px !important;
+          overflow-x: auto !important;
+          overflow-y: hidden !important;
+          padding: 4px 2px 10px !important;
+          scroll-snap-type: x mandatory;
+          -webkit-overflow-scrolling: touch;
+          scrollbar-width: none;
+          margin: 0 -2px;
+        }
+        .soko-hero-mobile-rail::-webkit-scrollbar { display: none; }
+        .soko-hero-mobile-card {
+          flex: 0 0 min(248px, 78vw) !important;
+          width: min(248px, 78vw) !important;
+          height: 210px !important;
+          scroll-snap-align: start;
+          border-radius: 16px !important;
+        }
+        .soko-hero-mobile-empty {
+          width: 100%;
         }
 
         /* Category tiles */
@@ -354,9 +390,6 @@ function GlobalStyles() {
         }
         .soko-hero-section {
           min-height: unset !important;
-        }
-        .soko-hero-benefits > div {
-          width: 100%;
         }
         .soko-hero-benefits > div div {
           white-space: normal !important;
@@ -930,6 +963,108 @@ function RevenueHero({ navigate, listings }) {
 
   const visibleCards = featured.slice(page * perPage, page * perPage + perPage)
 
+  function renderHeroCard(item, idx, { mobile = false } = {}) {
+    const price = isFlashActive(item) ? (item.flash_sale_price ?? item.price) : item.price
+    return (
+      <div
+        key={item.id}
+        className={mobile ? 'soko-hero-mobile-card' : undefined}
+        onClick={() => navigate('/listing/' + item.id)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/listing/' + item.id) } }}
+        style={{
+          position: 'relative', height: mobile ? 210 : 230, borderRadius: mobile ? 16 : 18,
+          overflow: 'hidden', cursor: 'pointer',
+          border: '2px solid transparent',
+          boxShadow: '0 8px 28px rgba(0,0,0,0.45)',
+          transition: 'transform 0.35s cubic-bezier(0.34,1.2,0.64,1), box-shadow 0.35s ease, border-color 0.35s ease',
+          animation: visible ? `cardSlideUp 0.5s ease ${0.1 + idx * 0.08}s both` : 'none',
+          flexShrink: mobile ? 0 : undefined,
+        }}
+        onMouseEnter={e => {
+          if (mobile) return
+          e.currentTarget.style.transform = 'translateY(-8px) scale(1.03)'
+          e.currentTarget.style.boxShadow = '0 20px 48px rgba(0,0,0,0.6), 0 0 0 2px rgba(249,171,0,0.75)'
+          e.currentTarget.style.borderColor = 'rgba(249,171,0,0.85)'
+          const img = e.currentTarget.querySelector('img')
+          if (img) img.style.transform = 'scale(1.08)'
+        }}
+        onMouseLeave={e => {
+          if (mobile) return
+          e.currentTarget.style.transform = 'none'
+          e.currentTarget.style.boxShadow = '0 8px 28px rgba(0,0,0,0.45)'
+          e.currentTarget.style.borderColor = 'transparent'
+          const img = e.currentTarget.querySelector('img')
+          if (img) img.style.transform = 'scale(1)'
+        }}
+      >
+        {item.images?.[0] ? (
+          <img
+            src={item.images[0]}
+            alt={item.title}
+            loading={mobile ? 'lazy' : 'eager'}
+            decoding="async"
+            style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.5s cubic-bezier(0.34,1.2,0.64,1)' }}
+          />
+        ) : (
+          <div style={{ width: '100%', height: '100%', background: 'rgba(255,255,255,0.08)', display: 'grid', placeItems: 'center', color: 'rgba(255,255,255,0.4)', fontSize: 28 }}>
+            {Icon.star(28)}
+          </div>
+        )}
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.08) 0%, transparent 35%, rgba(0,0,0,0.75) 70%, rgba(0,0,0,0.92) 100%)' }} />
+
+        <div style={{ position: 'absolute', top: 9, left: 9, zIndex: 5, display: 'flex', flexDirection: 'column', gap: 5 }}>
+          {isFlashActive(item) ? (
+            <div className="soko-hotdeal-pulse" style={{
+              background: `linear-gradient(135deg,${T.red},#c62828)`, color: '#fff',
+              borderRadius: '50%', width: 26, height: 26,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 2px 8px rgba(234,67,53,0.5)',
+            }}>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="#fff">
+                <path d="M17.66 11.2C17.43 10.9 17.15 10.64 16.89 10.38C16.22 9.78 15.46 9.35 14.82 8.72C13.33 7.26 13 4.85 13.95 3C13 3.23 12.17 3.75 11.46 4.32C8.87 6.4 7.85 10.07 9.07 13.22C9.11 13.32 9.15 13.42 9.15 13.55C9.15 13.77 9 13.97 8.8 14.05C8.57 14.15 8.33 14.09 8.14 13.93C8.08 13.88 8.04 13.83 8 13.76C6.87 12.33 6.69 10.28 7.45 8.64C5.78 10 4.87 12.3 5 14.47C5.06 14.97 5.12 15.47 5.29 15.97C5.43 16.57 5.7 17.17 6 17.7C7.08 19.43 8.95 20.67 10.96 20.92C13.1 21.19 15.39 20.8 17.03 19.32C18.86 17.66 19.5 15 18.56 12.72L18.43 12.46C18.22 12 17.66 11.2 17.66 11.2Z"/>
+              </svg>
+            </div>
+          ) : (
+            <div style={{
+              background: `linear-gradient(135deg,${T.amber},#e09800)`,
+              borderRadius: 50, padding: '3px 9px',
+              display: 'flex', alignItems: 'center', gap: 3,
+              boxShadow: '0 2px 10px rgba(249,171,0,0.5)',
+              overflow: 'hidden', position: 'relative', width: 'fit-content',
+            }}>
+              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg,transparent,rgba(255,255,255,0.25),transparent)', backgroundSize: '200% 100%', animation: 'badgeShimmer 3s ease-in-out infinite' }} />
+              <span style={{ color: '#1a0a00', display: 'flex', position: 'relative', zIndex: 1 }}>{Icon.star(9, '#1a0a00')}</span>
+              <span style={{ fontSize: 8.5, fontWeight: 900, color: '#1a0a00', letterSpacing: 0.4, position: 'relative', zIndex: 1 }}>FEATURED</span>
+            </div>
+          )}
+        </div>
+
+        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 5, padding: mobile ? '12px 12px 14px' : '14px 14px 16px' }}>
+          <div style={{
+            fontSize: mobile ? 13.5 : 14.5, fontWeight: 800, color: '#fff', marginBottom: 4, lineHeight: 1.25,
+            textShadow: '0 1px 4px rgba(0,0,0,0.5)',
+            overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+          }}>{item.title}</div>
+          <div style={{ fontFamily: T.fontDisplay, fontSize: mobile ? 16 : 17, fontWeight: 900, color: T.amber, marginBottom: 4, letterSpacing: '-0.4px' }}>
+            {formatPrice(price)}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', display: 'flex', alignItems: 'center', gap: 3, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {Icon.pin(10)} {item.city || 'Malawi'}
+            </span>
+            {(item.seller_verified || item.shop_is_verified) && (
+              <span style={{ fontSize: 10.5, color: '#7ee0a8', display: 'flex', alignItems: 'center', gap: 3, fontWeight: 700, flexShrink: 0 }}>
+                {Icon.verify(11)} Verified
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <section
       ref={sectionRef}
@@ -1120,9 +1255,9 @@ function RevenueHero({ navigate, listings }) {
           </div>
         </div>
 
-        {/* ── RIGHT: carousel — entrance + enhanced card animations ── */}
+        {/* ── RIGHT: desktop 3-card carousel ── */}
         <div
-          className="soko-hero-right"
+          className="soko-hero-right soko-hero-desktop-carousel"
           onMouseEnter={() => setPaused(true)}
           onMouseLeave={() => setPaused(false)}
           style={{
@@ -1138,109 +1273,40 @@ function RevenueHero({ navigate, listings }) {
               <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', lineHeight: 1.6, marginBottom: 16 }}>
                 No featured listings yet — be the first sellers see.
               </p>
-              <button onClick={() => navigate('/post')} style={{ background: `linear-gradient(135deg,${T.amber},#e09800)`, border: 'none', borderRadius: 10, padding: '9px 20px', fontSize: 13, fontWeight: 800, color: '#1a0a00', cursor: 'pointer' }}>
+              <button type="button" onClick={() => navigate('/post')} style={{ background: `linear-gradient(135deg,${T.amber},#e09800)`, border: 'none', borderRadius: 10, padding: '9px 20px', fontSize: 13, fontWeight: 800, color: '#1a0a00', cursor: 'pointer' }}>
                 Feature My Listing
               </button>
             </div>
           ) : (
             <>
               {pageCount > 1 && (
-                <button onClick={prev} style={{ position: 'absolute', left: -16, top: '40%', transform: 'translateY(-50%)', zIndex: 20, width: 32, height: 32, borderRadius: '50%', background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff', fontSize: 17, backdropFilter: 'blur(8px)', transition: 'background 0.2s, transform 0.2s' }}
+                <button type="button" onClick={prev} aria-label="Previous featured" style={{ position: 'absolute', left: -16, top: '40%', transform: 'translateY(-50%)', zIndex: 20, width: 32, height: 32, borderRadius: '50%', background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff', fontSize: 17, backdropFilter: 'blur(8px)', transition: 'background 0.2s, transform 0.2s' }}
                   onMouseEnter={e => { e.currentTarget.style.background='rgba(15,157,88,0.7)'; e.currentTarget.style.transform='translateY(-50%) scale(1.1)' }}
                   onMouseLeave={e => { e.currentTarget.style.background='rgba(0,0,0,0.6)'; e.currentTarget.style.transform='translateY(-50%) scale(1)' }}
                 >‹</button>
               )}
               {pageCount > 1 && (
-                <button onClick={next} style={{ position: 'absolute', right: -16, top: '40%', transform: 'translateY(-50%)', zIndex: 20, width: 32, height: 32, borderRadius: '50%', background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff', fontSize: 17, backdropFilter: 'blur(8px)', transition: 'background 0.2s, transform 0.2s' }}
+                <button type="button" onClick={next} aria-label="Next featured" style={{ position: 'absolute', right: -16, top: '40%', transform: 'translateY(-50%)', zIndex: 20, width: 32, height: 32, borderRadius: '50%', background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff', fontSize: 17, backdropFilter: 'blur(8px)', transition: 'background 0.2s, transform 0.2s' }}
                   onMouseEnter={e => { e.currentTarget.style.background='rgba(15,157,88,0.7)'; e.currentTarget.style.transform='translateY(-50%) scale(1.1)' }}
                   onMouseLeave={e => { e.currentTarget.style.background='rgba(0,0,0,0.6)'; e.currentTarget.style.transform='translateY(-50%) scale(1)' }}
                 >›</button>
               )}
 
               <div style={{ display: 'grid', gridTemplateColumns: `repeat(${perPage}, 1fr)`, gap: 16 }}>
-                {visibleCards.map((item, idx) => (
-                  <div
-                    key={item.id}
-                    onClick={() => navigate('/listing/' + item.id)}
-                    style={{
-                      position: 'relative', height: 230, borderRadius: 18,
-                      overflow: 'hidden', cursor: 'pointer',
-                      border: '2px solid transparent',
-                      boxShadow: '0 8px 28px rgba(0,0,0,0.45)',
-                      transition: 'transform 0.35s cubic-bezier(0.34,1.2,0.64,1), box-shadow 0.35s ease, border-color 0.35s ease',
-                      animation: visible ? `cardSlideUp 0.5s ease ${0.1 + idx * 0.1}s both` : 'none',
-                    }}
-                    onMouseEnter={e => {
-                      e.currentTarget.style.transform = 'translateY(-8px) scale(1.03)'
-                      e.currentTarget.style.boxShadow = '0 20px 48px rgba(0,0,0,0.6), 0 0 0 2px rgba(249,171,0,0.75)'
-                      e.currentTarget.style.borderColor = 'rgba(249,171,0,0.85)'
-                      e.currentTarget.querySelector('img').style.transform = 'scale(1.08)'
-                    }}
-                    onMouseLeave={e => {
-                      e.currentTarget.style.transform = 'none'
-                      e.currentTarget.style.boxShadow = '0 8px 28px rgba(0,0,0,0.45)'
-                      e.currentTarget.style.borderColor = 'transparent'
-                      e.currentTarget.querySelector('img').style.transform = 'scale(1)'
-                    }}
-                  >
-                    <img
-                      src={item.images?.[0]} alt={item.title}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.5s cubic-bezier(0.34,1.2,0.64,1)' }}
-                    />
-                    <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.08) 0%, transparent 35%, rgba(0,0,0,0.75) 70%, rgba(0,0,0,0.92) 100%)' }} />
-
-                    {/* Badge stack — fire circle takes over while flash deal is active; FEATURED returns once it ends */}
-                    <div style={{ position: 'absolute', top: 9, left: 9, zIndex: 5, display: 'flex', flexDirection: 'column', gap: 5 }}>
-                      {isFlashActive(item) ? (
-                        <div className="soko-hotdeal-pulse" style={{
-                          background: `linear-gradient(135deg,${T.red},#c62828)`, color: '#fff',
-                          borderRadius: '50%', width: 26, height: 26,
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          boxShadow: '0 2px 8px rgba(234,67,53,0.5)',
-                        }}>
-                          <svg width="13" height="13" viewBox="0 0 24 24" fill="#fff">
-                            <path d="M17.66 11.2C17.43 10.9 17.15 10.64 16.89 10.38C16.22 9.78 15.46 9.35 14.82 8.72C13.33 7.26 13 4.85 13.95 3C13 3.23 12.17 3.75 11.46 4.32C8.87 6.4 7.85 10.07 9.07 13.22C9.11 13.32 9.15 13.42 9.15 13.55C9.15 13.77 9 13.97 8.8 14.05C8.57 14.15 8.33 14.09 8.14 13.93C8.08 13.88 8.04 13.83 8 13.76C6.87 12.33 6.69 10.28 7.45 8.64C5.78 10 4.87 12.3 5 14.47C5.06 14.97 5.12 15.47 5.29 15.97C5.43 16.57 5.7 17.17 6 17.7C7.08 19.43 8.95 20.67 10.96 20.92C13.1 21.19 15.39 20.8 17.03 19.32C18.86 17.66 19.5 15 18.56 12.72L18.43 12.46C18.22 12 17.66 11.2 17.66 11.2Z"/>
-                          </svg>
-                        </div>
-                      ) : (
-                        <div style={{
-                          background: `linear-gradient(135deg,${T.amber},#e09800)`,
-                          borderRadius: 50, padding: '3px 9px',
-                          display: 'flex', alignItems: 'center', gap: 3,
-                          boxShadow: '0 2px 10px rgba(249,171,0,0.5)',
-                          overflow: 'hidden', position: 'relative', width: 'fit-content',
-                        }}>
-                          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg,transparent,rgba(255,255,255,0.25),transparent)', backgroundSize: '200% 100%', animation: 'badgeShimmer 3s ease-in-out infinite' }} />
-                          <span style={{ color: '#1a0a00', display: 'flex', position: 'relative', zIndex: 1 }}>{Icon.star(9, '#1a0a00')}</span>
-                          <span style={{ fontSize: 8.5, fontWeight: 900, color: '#1a0a00', letterSpacing: 0.4, position: 'relative', zIndex: 1 }}>FEATURED</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <div style={{ position: 'absolute', top: 9, right: 9, zIndex: 5, width: 26, height: 26, borderRadius: '50%', background: 'rgba(255,255,255,0.18)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      {Icon.heart(13, 'none')}
-                    </div>
-
-                    <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 5, padding: '14px 14px 16px' }}>
-                      <div style={{ fontSize: 14.5, fontWeight: 800, color: '#fff', marginBottom: 5, lineHeight: 1.25, textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>{item.title}</div>
-                      <div style={{ fontFamily: T.fontDisplay, fontSize: 17, fontWeight: 900, color: T.amber, marginBottom: 5, letterSpacing: '-0.4px' }}>{formatPrice(item.price)}</div>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                        <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', display: 'flex', alignItems: 'center', gap: 3 }}>{Icon.pin(10)} {item.city || 'Malawi'}</span>
-                        <span style={{ fontSize: 10.5, color: '#7ee0a8', display: 'flex', alignItems: 'center', gap: 3, fontWeight: 700 }}>{Icon.verify(11)} Verified</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
+                {visibleCards.map((item, idx) => renderHeroCard(item, idx))}
                 {visibleCards.length < perPage && Array.from({ length: perPage - visibleCards.length }).map((_, i) => <div key={`pad-${i}`} />)}
               </div>
 
               {pageCount > 1 && (
                 <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginTop: 14 }}>
                   {Array.from({ length: pageCount }).map((_, i) => (
-                    <div
-                      key={i} onClick={() => goTo(i)}
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => goTo(i)}
+                      aria-label={`Featured page ${i + 1}`}
                       style={{
-                        width: i === page ? 22 : 6, height: 6, borderRadius: 50,
+                        width: i === page ? 22 : 6, height: 6, borderRadius: 50, border: 'none', padding: 0,
                         background: i === page
                           ? `linear-gradient(90deg, ${T.amber}, #ffce45)`
                           : 'rgba(255,255,255,0.22)',
@@ -1252,6 +1318,49 @@ function RevenueHero({ navigate, listings }) {
                   ))}
                 </div>
               )}
+            </>
+          )}
+        </div>
+
+        {/* ── Mobile: horizontal featured product rail (swipe) ── */}
+        <div className="soko-hero-mobile-carousel" style={{ display: 'none' }}>
+          {featured.length === 0 ? (
+            <div className="soko-hero-mobile-empty" style={{
+              background: 'rgba(255,255,255,0.05)', border: '2px dashed rgba(255,255,255,0.14)',
+              borderRadius: 14, padding: '18px 16px', textAlign: 'center', backdropFilter: 'blur(8px)',
+            }}>
+              <div style={{ marginBottom: 6, display: 'flex', justifyContent: 'center' }}>{Icon.star(24)}</div>
+              <p style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.55)', lineHeight: 1.5, marginBottom: 12 }}>
+                No featured listings yet — be the first sellers see.
+              </p>
+              <button
+                type="button"
+                onClick={() => navigate('/post')}
+                style={{
+                  background: `linear-gradient(135deg,${T.amber},#e09800)`, border: 'none', borderRadius: 10,
+                  padding: '10px 18px', fontSize: 13, fontWeight: 800, color: '#1a0a00', cursor: 'pointer', minHeight: 44,
+                }}
+              >
+                Feature My Listing
+              </button>
+            </div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: 'rgba(255,255,255,0.78)', letterSpacing: 0.3, textTransform: 'uppercase' }}>
+                  Featured now
+                </span>
+                <button
+                  type="button"
+                  onClick={() => navigate('/listings')}
+                  style={{ background: 'none', border: 'none', color: T.amber, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', padding: '4px 0', minHeight: 36 }}
+                >
+                  View all
+                </button>
+              </div>
+              <div className="soko-hero-mobile-rail">
+                {featured.map((item, idx) => renderHeroCard(item, idx, { mobile: true }))}
+              </div>
             </>
           )}
         </div>
