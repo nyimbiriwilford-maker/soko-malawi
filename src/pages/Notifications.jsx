@@ -49,6 +49,14 @@ import {
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useUserLocation } from '../hooks/useUserLocation'
+import DealEducationModal from '../components/DealEducationModal'
+import {
+  MIN_DEAL_MESSAGES,
+  sendDealFromNotification,
+  confirmDealFromNotification,
+  declineDealFromNotification,
+  markNotificationHandled,
+} from '../utils/dealNotificationFlow'
 import '../styles/notifications.css'
 
 const ICON_PROPS = { size: 18, strokeWidth: 1.75, 'aria-hidden': true }
@@ -195,8 +203,10 @@ const NOTIF_CONFIG = {
   booking_confirmed:{ Icon: CheckCircle2,   color: '#1A73E8', bg: '#e8f0fe', label: 'Confirmed',       category: 'bookings' },
   booking_cancelled:{ Icon: X,              color: '#ea4335', bg: '#fce8e6', label: 'Cancelled',       category: 'bookings' },
   booking_completed:{ Icon: Flag,           color: '#0F9D58', bg: '#e8f5ee', label: 'Completed',       category: 'bookings' },
+  deal_ready:       { Icon: Handshake,      color: '#0F9D58', bg: '#e8f5ee', label: 'Confirm Deal',    category: 'deals' },
   deal_request:     { Icon: Handshake,      color: '#0F9D58', bg: '#e8f5ee', label: 'Deal Request',    category: 'deals' },
   deal_confirmed:   { Icon: PartyPopper,    color: '#0a7a44', bg: '#e8f5ee', label: 'Deal Confirmed',  category: 'deals' },
+  deal_declined:    { Icon: X,              color: '#ea4335', bg: '#fce8e6', label: 'Deal Declined',   category: 'deals' },
   deal_vouching:    { Icon: Sparkles,       color: '#c88a00', bg: '#fff8e1', label: 'Vouch Reminder',  category: 'deals' },
   new_vouch:        { Icon: Star,           color: '#F9AB00', bg: '#fff8e1', label: 'New Vouch',       category: 'deals' },
   order_placed:     { Icon: Package,        color: '#1A73E8', bg: '#e8f0fe', label: 'Order Placed',    category: 'orders' },
@@ -245,6 +255,11 @@ function getConfig(type) {
 
 function getActorId(notif) {
   const d = notif.data || {}
+  // Prefer the *other* party for deal notifications (avatar / name)
+  if (notif.type === 'deal_ready') return d.buyer_id || d.other_user_id || null
+  if (notif.type === 'deal_request') return d.seller_id || null
+  if (notif.type === 'deal_confirmed' || notif.type === 'deal_declined') return d.buyer_id || null
+  if (notif.type === 'deal_vouching') return d.seller_id || null
   return d.sender_id || d.caller_id || d.seller_id || d.buyer_id || d.user_id || null
 }
 
@@ -307,7 +322,7 @@ function matchCategory(notif, category) {
   if (category === 'calls')    return ['missed_call', 'missed_video'].includes(notif.type)
   if (category === 'listings') return notif.type.startsWith('listing_')
   if (category === 'offers')   return notif.type === 'listing_offer'
-  if (category === 'deals')    return notif.type.startsWith('deal_')
+  if (category === 'deals')    return notif.type.startsWith('deal_') || notif.type === 'new_vouch'
   if (category === 'orders')   return notif.type.startsWith('order_')
   if (category === 'bookings') return notif.type.startsWith('booking_')
   if (category === 'system') {
@@ -367,10 +382,14 @@ function renderSmartBody(notif, sender) {
       return `Booking for "${data.service_name || 'a service'}" was cancelled`
     case 'booking_completed':
       return `Job completed: "${data.service_name || 'your service'}"`
+    case 'deal_ready':
+      return `You've chatted with ${data.buyer_name || 'a buyer'} about "${data.listing_title || 'a listing'}". Confirm the deal here if the sale happened.`
     case 'deal_request':
       return `${data.seller_name || 'Seller'} wants to confirm the deal for "${data.listing_title || 'a listing'}"`
     case 'deal_confirmed':
       return `${data.buyer_name || 'Buyer'} confirmed the deal for "${data.listing_title || 'a listing'}"`
+    case 'deal_declined':
+      return `${data.buyer_name || 'Buyer'} declined the deal confirmation for "${data.listing_title || 'a listing'}"`
     case 'deal_vouching':
       return `Don't forget to vouch for ${data.seller_name || 'the seller'} — your vouch grows their reputation`
     case 'new_vouch':
@@ -791,17 +810,32 @@ function NotificationActions({ notif, onAction }) {
           { id: 'confirm', label: 'Confirm', Icon: Check, variant: 'primary', onClick: handler('confirm') },
           { id: 'decline', label: 'Decline', Icon: X, variant: 'danger', onClick: handler('decline') },
         ]
-      case 'deal_request':
+      case 'deal_ready': {
+        // Seller: start deal confirmation from Notifications
+        if (notif.data?.handled) return []
+        return [
+          { id: 'send_deal', label: 'Confirm deal', Icon: Handshake, variant: 'primary', onClick: handler('send_deal') },
+          { id: 'dismiss', label: 'Later', Icon: X, variant: 'secondary', onClick: handler('dismiss') },
+        ]
+      }
+      case 'deal_request': {
+        if (notif.data?.handled) return []
         return [
           { id: 'confirm', label: 'Confirm deal', Icon: Check, variant: 'primary', onClick: handler('confirm') },
           { id: 'decline', label: 'Decline', Icon: X, variant: 'danger', onClick: handler('decline') },
         ]
+      }
       case 'deal_confirmed':
       case 'deal_vouching':
-      case 'new_vouch':
         return [
           { id: 'vouch', label: 'Vouch', Icon: Star, variant: 'primary', onClick: handler('vouch') },
         ]
+      case 'new_vouch':
+        return [
+          { id: 'thank', label: 'View profile', Icon: Star, variant: 'primary', onClick: handler('thank') },
+        ]
+      case 'deal_declined':
+        return []
       default:
         return []
     }
@@ -2457,6 +2491,9 @@ export default function Notifications() {
   const [toast, setToast] = useState(null)
   const [user, setUser] = useState(null)
   const [pushBannerVisible, setPushBannerVisible] = useState(() => typeof Notification !== 'undefined' ? Notification.permission === 'default' : true)
+  /** Seller deal education modal (opened from deal_ready action) */
+  const [dealModal, setDealModal] = useState(null) // { notif, listing, buyerProfile, sending, error }
+  const [actionBusy, setActionBusy] = useState(null) // `${notifId}:${action}`
   const { senders, loading: sendersLoading } = useSenderProfiles(notifications)
   const { products, loading: productsLoading } = useProductContext(notifications)
 
@@ -2595,13 +2632,15 @@ export default function Notifications() {
         if (data.booking_id) navigate(`/bookings/${data.booking_id}`)
         else navigate('/services')
         break
+      // Deal flow stays in Notifications — do not open chat for deal actions
+      case 'deal_ready':
       case 'deal_request':
       case 'deal_confirmed':
-        if (data.seller_id && data.context_id) navigate(`/chat/${data.seller_id}/${data.context_id}`)
-        else if (data.seller_id) navigate(`/chat/${data.seller_id}`)
+      case 'deal_declined':
+        if (data.listing_id) navigate(`/listing/${data.listing_id}`)
         break
       case 'deal_vouching':
-        if (data.seller_id) navigate(`/profile/${data.seller_id}`)
+        if (data.seller_id) navigate(`/profile/${data.seller_id}?vouch=1`)
         break
       case 'order_placed':
       case 'order_shipped':
@@ -2641,8 +2680,21 @@ export default function Notifications() {
     navigateByType(notif)
   }, [markOneRead, navigateByType])
 
-  const handleAction = useCallback((action, notif) => {
+  const patchNotifData = useCallback((id, dataPatch) => {
+    setNotifications((prev) =>
+      prev.map((n) =>
+        n.id === id
+          ? { ...n, read: true, data: { ...(n.data || {}), ...dataPatch } }
+          : n
+      )
+    )
+  }, [])
+
+  const handleAction = useCallback(async (action, notif) => {
     const data = notif.data || {}
+    const busyKey = `${notif.id}:${action}`
+    if (actionBusy === busyKey) return
+
     switch (action) {
       case 'reply':
         if (!notif.read) markOneRead(notif.id)
@@ -2678,25 +2730,220 @@ export default function Notifications() {
       case 'counter':
         showToast('Counter offer feature coming soon', 'info')
         break
-      case 'decline':
-        showToast('Offer declined', 'info')
+
+      // ── Deal flow (100% in Notifications) ──────────────────────────────
+      case 'send_deal': {
+        // Seller opens education modal then sends deal_request to buyer
+        if (!user?.id || !data.listing_id || !data.buyer_id) {
+          showToast('Missing deal details', 'error')
+          break
+        }
+        setActionBusy(busyKey)
+        try {
+          let listing = products[data.listing_id]
+            ? {
+                id: data.listing_id,
+                title: products[data.listing_id].title || data.listing_title,
+                price: products[data.listing_id].price ?? data.listing_price,
+                images: products[data.listing_id].image
+                  ? [products[data.listing_id].image]
+                  : [],
+                seller_id: user.id,
+              }
+            : null
+          if (!listing) {
+            const { data: row } = await supabase
+              .from('listings')
+              .select('id, title, price, images, seller_id')
+              .eq('id', data.listing_id)
+              .maybeSingle()
+            listing = row || {
+              id: data.listing_id,
+              title: data.listing_title,
+              price: data.listing_price,
+              images: [],
+              seller_id: user.id,
+            }
+          }
+          const buyerProfile = senders[data.buyer_id] || {
+            id: data.buyer_id,
+            full_name: data.buyer_name || 'Buyer',
+          }
+          setDealModal({
+            notif,
+            listing,
+            buyerProfile: { id: data.buyer_id, ...buyerProfile },
+            sending: false,
+            error: '',
+          })
+        } finally {
+          setActionBusy(null)
+        }
         break
-      case 'confirm':
+      }
+
+      case 'confirm': {
+        // Buyer confirms deal_request
+        if (notif.type === 'deal_request') {
+          if (!user?.id || !data.deal_id) {
+            showToast('Missing deal details', 'error')
+            break
+          }
+          setActionBusy(busyKey)
+          try {
+            const { data: myProf } = await supabase
+              .from('profiles')
+              .select('full_name')
+              .eq('id', user.id)
+              .maybeSingle()
+            const { deal, error } = await confirmDealFromNotification({
+              dealId: data.deal_id,
+              buyerId: user.id,
+              buyerName: myProf?.full_name,
+              listingTitle: data.listing_title,
+              sellerId: data.seller_id,
+              listingId: data.listing_id,
+            })
+            if (error) {
+              showToast(error.message || 'Could not confirm deal', 'error')
+            } else {
+              await markNotificationHandled(notif.id, { handled: true, status: deal?.status })
+              patchNotifData(notif.id, { handled: true, status: deal?.status })
+              showToast(
+                deal?.status === 'confirmed'
+                  ? 'Deal confirmed! You can vouch for the seller.'
+                  : 'Confirmation recorded',
+                'success'
+              )
+            }
+          } finally {
+            setActionBusy(null)
+          }
+          break
+        }
+        // Booking confirm (existing toast stub)
         showToast('Confirmed', 'success')
         break
-      case 'vouch':
-        showToast('Vouch sent', 'success')
+      }
+
+      case 'decline': {
+        if (notif.type === 'deal_request') {
+          if (!user?.id || !data.deal_id) {
+            showToast('Missing deal details', 'error')
+            break
+          }
+          if (!window.confirm('Decline this deal confirmation?')) break
+          setActionBusy(busyKey)
+          try {
+            const { data: myProf } = await supabase
+              .from('profiles')
+              .select('full_name')
+              .eq('id', user.id)
+              .maybeSingle()
+            const { error } = await declineDealFromNotification({
+              dealId: data.deal_id,
+              buyerId: user.id,
+              buyerName: myProf?.full_name,
+              listingTitle: data.listing_title,
+              sellerId: data.seller_id,
+            })
+            if (error) {
+              showToast(error.message || 'Could not decline deal', 'error')
+            } else {
+              await markNotificationHandled(notif.id, { handled: true, status: 'declined' })
+              patchNotifData(notif.id, { handled: true, status: 'declined' })
+              showToast('Deal declined', 'info')
+            }
+          } finally {
+            setActionBusy(null)
+          }
+          break
+        }
+        showToast('Offer declined', 'info')
         break
-      case 'thank':
-        showToast('Thank you sent', 'success')
+      }
+
+      case 'dismiss': {
+        // Keep actions available — seller can confirm later from Deals tab
+        if (!notif.read) markOneRead(notif.id)
+        showToast('You can confirm the deal later from the Deals tab', 'info')
         break
+      }
+
+      case 'vouch': {
+        const sellerId = data.seller_id || data.vouchee_id
+        if (sellerId) {
+          if (!notif.read) markOneRead(notif.id)
+          navigate(`/profile/${sellerId}?vouch=1`)
+        } else {
+          showToast('Seller profile not found', 'error')
+        }
+        break
+      }
+
+      case 'thank': {
+        const actorId = data.sender_id || data.voucher_id || data.buyer_id || getActorId(notif)
+        if (actorId) navigate(`/profile/${actorId}`)
+        else showToast('Profile not found', 'info')
+        break
+      }
       case 'archive':
         showToast('Archived', 'info')
         break
       default:
         showToast('Action coming soon', 'info')
     }
-  }, [markOneRead, navigateByType, navigate, showToast])
+  }, [
+    actionBusy,
+    markOneRead,
+    navigateByType,
+    navigate,
+    showToast,
+    user,
+    products,
+    senders,
+    patchNotifData,
+  ])
+
+  const handleDealModalSend = useCallback(async () => {
+    if (!dealModal || !user?.id) return
+    const { notif, listing, buyerProfile } = dealModal
+    const data = notif.data || {}
+    setDealModal((m) => (m ? { ...m, sending: true, error: '' } : m))
+    try {
+      const { data: myProf } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user.id)
+        .maybeSingle()
+
+      const { deal, error } = await sendDealFromNotification({
+        sellerId: user.id,
+        buyerId: data.buyer_id || buyerProfile?.id,
+        listingId: listing?.id || data.listing_id,
+        listingTitle: listing?.title || data.listing_title,
+        listingPrice: listing?.price ?? data.listing_price,
+        messageCount: data.message_count || MIN_DEAL_MESSAGES,
+        sellerName: myProf?.full_name,
+      })
+
+      if (error) {
+        setDealModal((m) => (m ? { ...m, sending: false, error: error.message || 'Failed to send' } : m))
+        return
+      }
+
+      await markNotificationHandled(notif.id, {
+        handled: true,
+        deal_id: deal?.id,
+        status: 'pending',
+      })
+      patchNotifData(notif.id, { handled: true, deal_id: deal?.id, status: 'pending' })
+      setDealModal(null)
+      showToast('Deal request sent to buyer', 'success')
+    } catch (e) {
+      setDealModal((m) => (m ? { ...m, sending: false, error: e.message || 'Failed to send' } : m))
+    }
+  }, [dealModal, user, patchNotifData, showToast])
 
   // ── Filtering / sorting ──────────────────────────────────────────────────
   const updateFilter = useCallback((updates) => setFilter((prev) => ({ ...prev, ...updates })), [])
@@ -2838,6 +3085,19 @@ export default function Notifications() {
       {pushBannerVisible && (
         <PushNotificationsBanner onEnable={handlePushEnable} onDismiss={handlePushDismiss} />
       )}
+
+      {dealModal && user && (
+        <DealEducationModal
+          currentUser={user}
+          otherProfile={dealModal.buyerProfile}
+          listing={dealModal.listing}
+          sending={dealModal.sending}
+          error={dealModal.error}
+          onSend={handleDealModalSend}
+          onClose={() => setDealModal(null)}
+        />
+      )}
+
       <div className={`toast ${toast ? `toast-${toast.type} toast-visible` : ''}`} role="status" aria-live="polite" aria-atomic="true">
         {toast && (
           <>

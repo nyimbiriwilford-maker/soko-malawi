@@ -16,8 +16,44 @@ export function CallProvider({ children }) {
   const callIdRef       = useRef(null)
   const callerIdRef     = useRef(null)
   const callTimerRef    = useRef(null)
-  const [activeCall, setActiveCall] = useState(null) // { callType, chatPath }
+  /** Live remote MediaStream for mini/PiP (not React state — avoids re-renders) */
+  const remoteMediaStreamRef = useRef(null)
+  const localMediaStreamRef  = useRef(null)
+
+  /**
+   * Active call UI session (survives route changes).
+   * { source, status, callType, peerId, peerName, peerAvatar, peerInitial,
+   *   duration, isMuted, isCamOff, chatPath, listingId }
+   */
+  const [activeCall, setActiveCall] = useState(null)
+  /** 'hidden' | 'full' | 'mini' — full = overlay, mini = floating bar */
+  const [callUiMode, setCallUiMode] = useState('hidden')
   const [miniCallVisible, setMiniCallVisible] = useState(false)
+
+  /**
+   * Bound chat peer for PersistentCallShell (outgoing + chat-scoped WebRTC).
+   * Kept while a call is active even after leaving the chat page.
+   */
+  const [boundChat, setBoundChat] = useState(null)
+  const boundChatRef = useRef(null)
+  boundChatRef.current = boundChat
+
+  /** Controllers registered by the stack that owns media (chat or global) */
+  const mediaControlsRef = useRef({
+    hangUp: null,
+    toggleMute: null,
+    toggleCam: null,
+    switchCamera: null,
+  })
+
+  /** Live actions from PersistentCallShell for chat header buttons */
+  const chatCallActionsRef = useRef(null)
+  const [chatCallActionsVersion, setChatCallActionsVersion] = useState(0)
+
+  function setChatCallActions(actions) {
+    chatCallActionsRef.current = actions
+    setChatCallActionsVersion((v) => v + 1)
+  }
 
   const channelRef          = useRef(null)
   const listenersRef        = useRef([])
@@ -28,6 +64,8 @@ export function CallProvider({ children }) {
   const reconnectAttemptsRef = useRef(0)
   const outboundChannelsRef = useRef({})
   const iceSub              = useRef(null)
+  const iceOwnerRef         = useRef(null) // 'chat' | 'global' | null — single ICE owner
+  const callStackOwnerRef   = useRef(null) // who owns the active media path
   const earlyIceRef         = useRef(new Map())
 
   useEffect(() => {
@@ -44,8 +82,88 @@ export function CallProvider({ children }) {
         try { supabase.removeChannel(entry.sub) } catch (e) {}
       }
       earlyIceRef.current.clear()
+      iceOwnerRef.current = null
+      callStackOwnerRef.current = null
     }
   }, [])
+
+  /** Only one stack (chat useWebRTC vs GlobalCallListener) should own media/ICE. */
+  function claimCallStack(owner) {
+    if (!owner) return
+    if (callStackOwnerRef.current && callStackOwnerRef.current !== owner) {
+      console.warn(`[CallContext] claimCallStack ${owner} replaces ${callStackOwnerRef.current}`)
+    }
+    callStackOwnerRef.current = owner
+  }
+
+  function releaseCallStack(owner) {
+    if (!owner || callStackOwnerRef.current === owner) {
+      callStackOwnerRef.current = null
+    }
+  }
+
+  function getCallStackOwner() {
+    return callStackOwnerRef.current
+  }
+
+  function registerMediaControls(controls = {}) {
+    mediaControlsRef.current = {
+      ...mediaControlsRef.current,
+      ...controls,
+    }
+  }
+
+  function clearMediaControls() {
+    mediaControlsRef.current = {
+      hangUp: null,
+      toggleMute: null,
+      toggleCam: null,
+      switchCamera: null,
+    }
+  }
+
+  function publishActiveCall(partial) {
+    setActiveCall((prev) => {
+      const next = { ...(prev || {}), ...partial, updatedAt: Date.now() }
+      return next
+    })
+  }
+
+  function clearActiveCall() {
+    setActiveCall(null)
+    setCallUiMode('hidden')
+    setMiniCallVisible(false)
+    remoteMediaStreamRef.current = null
+    localMediaStreamRef.current = null
+    clearMediaControls()
+  }
+
+  function minimizeCall() {
+    setCallUiMode('mini')
+    setMiniCallVisible(true)
+  }
+
+  function expandCall() {
+    setCallUiMode('full')
+    setMiniCallVisible(false)
+  }
+
+  function bindChatCall(payload) {
+    if (!payload?.userId) return
+    setBoundChat(payload)
+    boundChatRef.current = payload
+  }
+
+  function unbindChatCall({ keepIfInCall = true } = {}) {
+    // Leaving the chat page mid-call — keep peer binding + show mini bar
+    if (keepIfInCall && (callStackOwnerRef.current === 'chat' || callIdRef.current)) {
+      setCallUiMode('mini')
+      setMiniCallVisible(true)
+      return
+    }
+    setBoundChat(null)
+    boundChatRef.current = null
+  }
 
   function teardownChannel() {
     if (channelRef.current) {
@@ -142,33 +260,48 @@ export function CallProvider({ children }) {
     if (error) console.error('sendIceCandidate insert error:', error)
   }
 
-  function subscribeToIceCandidates(callId, myUserId, onCandidate) {
+  function subscribeToIceCandidates(callId, myUserId, onCandidate, owner = 'default') {
+    // Do not steal ICE from another active stack mid-call
+    if (iceOwnerRef.current && iceOwnerRef.current !== owner && callStackOwnerRef.current && callStackOwnerRef.current !== owner) {
+      console.warn(`[ice-db] skip subscribe — owned by ${iceOwnerRef.current}, requester ${owner}`)
+      return null
+    }
+
     stopIceSubscription()
+    iceOwnerRef.current = owner
 
     const sub = supabase
-      .channel(`ice_${callId}_${myUserId}`)
+      .channel(`ice_${callId}_${myUserId}_${owner}`)
       .on(
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'ice_candidates', filter: `call_id=eq.${callId}` },
         (payload) => {
+          if (iceOwnerRef.current !== owner) return
           const row = payload.new
           if (row.to_user !== myUserId) return
-          console.log(`[ice-db] received candidate for ${myUserId}`)
+          console.log(`[ice-db] received candidate for ${myUserId} (${owner})`)
           onCandidate(row.candidate)
         }
       )
       .subscribe((status) => {
-        console.log(`[ice-db] subscription status: ${status}`)
+        console.log(`[ice-db] subscription status: ${status} owner=${owner}`)
       })
 
     iceSub.current = sub
     return sub
   }
 
-  function stopIceSubscription() {
+  function stopIceSubscription(owner) {
+    // If owner specified, only stop when it matches
+    if (owner && iceOwnerRef.current && iceOwnerRef.current !== owner) {
+      return
+    }
     if (iceSub.current) {
       try { supabase.removeChannel(iceSub.current) } catch (e) {}
       iceSub.current = null
+    }
+    if (!owner || iceOwnerRef.current === owner) {
+      iceOwnerRef.current = null
     }
   }
 
@@ -313,8 +446,26 @@ export function CallProvider({ children }) {
       incomingCall,
       activeCall,
       setActiveCall,
+      publishActiveCall,
+      clearActiveCall,
+      callUiMode,
+      setCallUiMode,
+      minimizeCall,
+      expandCall,
       miniCallVisible,
       setMiniCallVisible,
+      boundChat,
+      bindChatCall,
+      unbindChatCall,
+      boundChatRef,
+      mediaControlsRef,
+      registerMediaControls,
+      clearMediaControls,
+      chatCallActionsRef,
+      setChatCallActions,
+      chatCallActionsVersion,
+      remoteMediaStreamRef,
+      localMediaStreamRef,
       pcRef,
       localStreamRef,
       callIdRef,
@@ -334,6 +485,9 @@ export function CallProvider({ children }) {
       closeOutboundChannel,
       subscribeToIceCandidatesEarly,
       drainEarlyCandidates,
+      claimCallStack,
+      releaseCallStack,
+      getCallStackOwner,
     }}>
       {children}
     </CallContext.Provider>

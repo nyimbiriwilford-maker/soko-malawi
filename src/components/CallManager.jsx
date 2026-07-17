@@ -1,8 +1,17 @@
+/**
+ * @deprecated LEGACY — do not mount.
+ * Production call path: CallContext + useWebRTC (ChatCallHost) + GlobalCallListener.
+ * This file uses the old `call_signals` table and a separate PC stack.
+ * Kept only for reference; remove when confirmed unused.
+ */
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { ICE_SERVERS, generateCallId } from '../lib/webrtc'
 
 export default function CallManager({ currentUser, otherUser, onClose }) {
+  useEffect(() => {
+    console.warn('[CallManager] DEPRECATED — use ChatCallHost / GlobalCallListener instead')
+  }, [])
   const [callState, setCallState] = useState('idle') // idle|calling|receiving|in-call
   const [callType, setCallType] = useState(null)
   const [callId, setCallId] = useState(null)

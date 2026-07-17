@@ -40,6 +40,23 @@ import {
 
    UI-only redesign. All data, routes, hooks, and handlers are preserved.
    Layout: sticky vertical nav (desktop) · bottom section nav (mobile) · detail.
+
+   Function map for maintainers (search by name; full guide in docs/PROFILE_PAGE.md):
+   Top-level: VerifiedSeal · profileCompleteness · getOnlineStatus · NetworkTab
+   NetworkTab: flash · removeFollower · unfollow · messageUser · inviteToShop ·
+     blockPerson · followSuggested · timeAgo · durationLabel · normalize
+   Overview UI: SectionHeader · AnalyticsCard · QuickActionCard · InsightCard ·
+     EmptyState · ActivityTimeline · OverviewSkeleton
+   Profile(): openGroup · isNavActive · profilePublicUrl · shareProfile ·
+     copyProfileLink · init · loadProfile · loadListings · loadNetworkCounts ·
+     loadShop · saveProfile · uploadAvatar · uploadCover · removeCover ·
+     toggleSold · deleteListing · shareListing · bulkMarkSold · bulkRelist ·
+     bulkDeleteSelected · featureListing · bulkBoostSelected · ensureSaleOrder ·
+     showSaleInvoice · downloadSaleReceipt · cycleDeliveryStatus ·
+     showBuyerReviews · setInventoryStatus · toggleInvSelect ·
+     toggleSelectAllInventory · signOut · confirmSignOut · handleRevokeSession ·
+     openFeatureChoice · chooseFeatureNewListing · chooseFeatureExisting ·
+     timeAgoShort · handleNextCompleteness · buyerBadge
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const CITIES = [

@@ -31,6 +31,8 @@ const SearchPage        = lazy(() => import('./pages/SearchPage'))
 const ListingsPage      = lazy(() => import('./pages/ListingsPage'))
 
 import GlobalCallListener from './components/GlobalCallListener'
+import PersistentCallShell from './components/PersistentCallShell'
+import MiniCallBar from './components/MiniCallBar'
 import { CallProvider }   from './context/CallContext'
 import { useGlobalPresence } from './hooks/usePresence'
 import { registerPushNotifications, listenForServiceWorkerMessages } from './lib/pushNotifications'
@@ -198,7 +200,13 @@ const [installPrompt, setInstallPrompt] = useState(null)
       },
       onAnswer: (fromUser, callId, chatId) => {
         stopRingtone()
-        const url = chatId ? `/chat/${chatId}` : `/chat/${fromUser}`
+        // chatId is "callerId" or "callerId/listingId" (never the callee's self-chat)
+        const cleaned = chatId
+          ? String(chatId).replace(/^\/chat\//, '').replace(/^\//, '')
+          : ''
+        const url = cleaned
+          ? `/chat/${cleaned}`
+          : (fromUser ? `/chat/${fromUser}` : '/chats')
         window.location.href = url
       },
       onDecline: () => { stopRingtone() },
@@ -270,6 +278,8 @@ const [installPrompt, setInstallPrompt] = useState(null)
       )}
       <BrowserRouter>
         {authed && <GlobalCallListener />}
+        {authed && <PersistentCallShell />}
+        {authed && <MiniCallBar />}
         <Suspense fallback={<PageLoader />}>
           <Routes>
             {/* ── Auth routes ───────────────────────────── */}

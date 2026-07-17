@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { useParams, useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { useWebRTC, formatTime } from '../hooks/useWebRTC'
+import { formatTime } from '../hooks/useWebRTC'
 import { watchUserOnline, globalChannel } from '../hooks/usePresence'
-import DealPillButton from '../components/DealPillButton'
-import DealRequestCard from '../components/DealRequestCard'
-import CallOverlay from '../components/CallOverlay'
+import ChatCallHost, { CallHeaderButtons, HideDuringCall } from '../components/ChatCallHost'
+import CallMessageBubble from '../components/CallMessageBubble'
+import { maybePromptDealReady } from '../utils/dealNotificationFlow'
+import { notifyMissedCall, notifyCallDeclined } from '../utils/callNotifications'
 
 // ── Emoji picker data ────────────────────────────────────────────────────────
 const EMOJI_CATEGORIES = {
@@ -74,7 +75,6 @@ export default function Chat() {
   const [myProfile, setMyProfile]         = useState(null)
   const [replyTo, setReplyTo]             = useState(null)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
-  const [dealDone, setDealDone] = useState(false)
 const [chatSearch, setChatSearch]       = useState(null)
 const [searchMatches, setSearchMatches] = useState([])
 const [searchIdx, setSearchIdx]         = useState(0)
@@ -93,21 +93,6 @@ const [searchIdx, setSearchIdx]         = useState(0)
   const presenceChannelRef = useRef(null)
   const typingTimeoutRef   = useRef(null)
   const emojiPickerRef     = useRef(null)
-
-  // ── WebRTC ───────────────────────────────────────────────────────────────
-  const {
-    callState, callType, callDuration, isMuted, isCamOff,
-    remoteStream, localVideoRef, remoteVideoRef,
-    startCall, answerCall, declineCall, hangUp, endCallLocally,
-    toggleMute, toggleCam, switchCamera, setupCallListener, assignRemoteStream,
-    assignLocalStream, restorePendingCall,
-  } = useWebRTC({
-    userId,
-    currentUser,
-    listingId,
-    isServiceChat: isServiceChatRef,
-    onCallMessage: (fields) => sendMessage('', 'text', null, fields),
-  })
 
   // ── Effects ──────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -135,9 +120,6 @@ const [searchIdx, setSearchIdx]         = useState(0)
       }, 400)
     }
   }, [messages])
-  useEffect(() => { assignRemoteStream() }, [remoteStream])
-  useEffect(() => { if (callState === 'in-call') { assignRemoteStream(); assignLocalStream() } }, [callState])
-  useEffect(() => { if (!userId) return; return setupCallListener() }, [userId])
 
   // Chat search
   useEffect(() => {
@@ -181,6 +163,22 @@ const [searchIdx, setSearchIdx]         = useState(0)
     return () => document.removeEventListener('mousedown', handler)
   }, [])
 
+  // Deal confirmation runs only in Notifications. After enough listing messages,
+  // silently create a deal_ready notification for the seller.
+  useEffect(() => {
+    if (!listing?.id || !currentUser?.id || !userId) return
+    if (listing.seller_id !== currentUser.id) return
+    const realCount = messages.filter(m => m.media_type !== 'deal_request' && !m.call_type).length
+    if (realCount < 4) return
+    maybePromptDealReady({
+      listing,
+      currentUserId: currentUser.id,
+      otherUserId: userId,
+      messageCount: realCount,
+      otherName: otherProfile?.full_name,
+    }).catch(() => {})
+  }, [listing?.id, listing?.seller_id, currentUser?.id, userId, messages.length, otherProfile?.full_name])
+
   // ── Init ─────────────────────────────────────────────────────────────────
   async function init() {
     const { data: { session }, error: sessionError } = await supabase.auth.getSession()
@@ -209,8 +207,7 @@ const [searchIdx, setSearchIdx]         = useState(0)
     if (otherProf?.last_seen) setOtherLastSeen(new Date(otherProf.last_seen))
 
     // Allow direct user chats (e.g. Message Seller from public profile) without a listing.
-    // Pending-call restore still works when listingId is absent.
-    restorePendingCall(userId)
+    // Pending-call restore is handled by ChatCallHost.
 
     let isService = false
     if (listingId && listingId !== 'undefined') {
@@ -357,14 +354,17 @@ const sameContext = !hasListing
     // Encode reply into the body string — no extra DB columns required
     const encodedBody = encodeReply(trimmed, replyTo)
 
+    // call_notify is client-only (not a DB column)
+    const { call_notify: callNotify, ...persistFields } = extraFields
+
     const msgData = {
       from_user: user.id,
       to_user: userId,
-      body: encodedBody,
+      body: encodedBody || persistFields.body || '',
       media_url: mediaUrl,
       media_type: type,
       read: false,
-      ...extraFields,
+      ...persistFields,
     }
     if (listingId && listingId !== 'undefined') {
       if (isServiceChatRef.current) msgData.service_id = listingId
@@ -380,33 +380,29 @@ const sameContext = !hasListing
     globalChannel?.track({ user_id: currentUserRef.current?.id, typing: false })
     clearTimeout(typingTimeoutRef.current)
 
-    // ── Notify recipient ──────────────────────────────────
-    if (extraFields.call_status === 'missed') {
-      try {
-        const { data: myProf } = await supabase
-          .from('profiles').select('full_name').eq('id', user.id).single()
-        const callerName = myProf?.full_name || 'Someone'
-        const isVideo = extraFields.call_type === 'video'
-        const contextId = listingId && listingId !== 'undefined' ? listingId : null
-
-        await supabase.from('notifications').insert({
-          user_id: userId,
-          type: isVideo ? 'missed_video' : 'missed_call',
-          title: isVideo ? '📹 Missed video call' : '📞 Missed call',
-          body: `You missed a ${isVideo ? 'video' : 'voice'} call from ${callerName}`,
-          message: `You missed a ${isVideo ? 'video' : 'voice'} call from ${callerName}`,
-         data: {
-            caller_id: user.id,
-            caller_name: callerName,
-            context_id: contextId,
-            message_id: inserted?.id || null,
-            listing_title: listing?.title || service?.name || null,
-          },
-          read: false,
-        })
-      } catch (notifErr) {
-        console.warn('Missed call notification error:', notifErr)
-      }
+    // ── Call notifications (only when useWebRTC sets call_notify) ──
+    const contextId = listingId && listingId !== 'undefined' ? listingId : null
+    const callType = extraFields.call_type === 'video' ? 'video' : 'voice'
+    if (callNotify === 'missed_to_peer') {
+      // Caller → callee only
+      await notifyMissedCall({
+        toUserId: userId,
+        callerId: user.id,
+        callType,
+        contextId,
+        messageId: inserted?.id || null,
+        listingTitle: listing?.title || service?.name || null,
+      })
+    } else if (callNotify === 'declined_to_peer') {
+      // Callee → caller only
+      await notifyCallDeclined({
+        toUserId: userId,
+        declinerId: user.id,
+        callType,
+        contextId,
+        messageId: inserted?.id || null,
+        listingTitle: listing?.title || service?.name || null,
+      })
     }
 
     if (!extraFields.call_status) {
@@ -583,27 +579,6 @@ const sameContext = !hasListing
   }
 
   // ── Render helpers ───────────────────────────────────────────────────────
-  function renderCallMessage(msg) {
-    const isMine = msg.from_user === currentUser?.id
-    const isVideo = msg.call_type === 'video'
-    const missed = msg.call_status === 'missed'
-    const ended  = msg.call_status === 'ended'
-    if (!missed && !ended) return null
-    return (
-      <div style={{ ...S.callMsgBubble, background: isMine ? 'rgba(255,255,255,0.12)' : '#f0f4f1' }}>
-        <span style={{ fontSize: 18 }}>{isVideo ? '📹' : '📞'}</span>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 13, fontWeight: '600', color: isMine ? '#fff' : '#0f1410' }}>
-            {isVideo ? 'Video call' : 'Voice call'}
-          </div>
-          <div style={{ fontSize: 11, color: missed ? '#ef4444' : (isMine ? 'rgba(255,255,255,0.55)' : '#888') }}>
-            {missed ? '📵 Missed' : (msg.call_duration ? formatTime(msg.call_duration) : 'Ended')}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   function renderVoiceNote(msg) {
     const { id, media_url: url } = msg
     const isMine    = msg.from_user === currentUser?.id
@@ -652,7 +627,14 @@ const sameContext = !hasListing
   }
 
   function renderMedia(msg) {
-    if (msg.call_type) return renderCallMessage(msg)
+    if (msg.call_type) {
+      return (
+        <CallMessageBubble
+          msg={msg}
+          isMine={msg.from_user === currentUser?.id}
+        />
+      )
+    }
     const { media_type: type, media_url: url } = msg
     if (!url) return null
     if (type === 'image') return <img src={url} alt="" style={S.mediaImg} onClick={() => window.open(url)} />
@@ -661,14 +643,30 @@ const sameContext = !hasListing
     return <a href={url} target="_blank" rel="noreferrer" style={{ color: '#5de89e', fontSize: 13 }}>📎 File</a>
   }
 
-  if (loading) return (
-    <div className="chat-page" style={S.loadCenter}>
-      <div style={S.spinner} />
-    </div>
-  )
+  const callHostProps = {
+    userId,
+    currentUser,
+    listingId,
+    isServiceChatRef,
+    otherName,
+    otherAvatar,
+    otherInitial,
+    onCallMessage: (fields) => sendMessage('', 'text', null, fields),
+  }
+
+  if (loading) {
+    return (
+      <ChatCallHost {...callHostProps}>
+        <div className="chat-page" style={S.loadCenter}>
+          <div style={S.spinner} />
+        </div>
+      </ChatCallHost>
+    )
+  }
 
   // ── Main render ──────────────────────────────────────────────────────────
   return (
+    <ChatCallHost {...callHostProps}>
     <div className="chat-page" style={S.page}>
       <style>{`
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
@@ -739,16 +737,8 @@ const sameContext = !hasListing
               <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
             </svg>
           </button>
-          <button style={S.callBtn} onClick={() => startCall('voice')} disabled={callState !== 'idle'}>
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#1a7a4a" strokeWidth="2" strokeLinecap="round">
-              <path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81 19.79 19.79 0 01.03 1.19 2 2 0 012 0h3a2 2 0 012 1.72 12.84 12.84 0 00.7 2.81 2 2 0 01-.45 2.11L6.09 7.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 14.92v2z" />
-            </svg>
-          </button>
-          <button style={S.callBtn} onClick={() => startCall('video')} disabled={callState !== 'idle'}>
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#1a7a4a" strokeWidth="2" strokeLinecap="round">
-              <polygon points="23 7 16 12 23 17 23 7" /><rect x="1" y="5" width="15" height="14" rx="2" />
-            </svg>
-          </button>
+          {/* Voice / video call controls — ChatCallHost */}
+          <CallHeaderButtons style={S.callBtn} />
         </div>
       </div>
 
@@ -839,26 +829,7 @@ const sameContext = !hasListing
         )
       })()}
 
-      {/* ── Call overlays ── */}
-      <CallOverlay
-        callState={callState}
-        callType={callType}
-        callDuration={callDuration}
-        otherName={otherName}
-        otherAvatar={otherAvatar}
-        otherInitial={otherInitial}
-        isMuted={isMuted}
-        isCamOff={isCamOff}
-        remoteVideoRef={remoteVideoRef}
-        localVideoRef={localVideoRef}
-        hangUp={hangUp}
-        answerCall={answerCall}
-        declineCall={declineCall}
-        toggleMute={toggleMute}
-        toggleCam={toggleCam}
-        switchCamera={switchCamera}
-        formatTime={formatTime}
-      />
+      {/* Call overlay is rendered by ChatCallHost (outside this page shell) */}
 
       {/* ── Messages ── */}
       <div
@@ -933,14 +904,41 @@ color: isMine ? '#ffffff' : '#1a4a2e',
                     </div>
                   )}
 
+                  {/* Legacy deal_request chat cards — deal flow moved to Notifications */}
                   {msg.media_type === 'deal_request' && (
-                    <div style={{ alignSelf: isMine ? 'flex-end' : 'flex-start' }}>
-                      <DealRequestCard
-                        msg={msg}
-                        currentUser={currentUser}
-                        otherProfile={otherProfile}
-                        listing={listing}
-                      />
+                    <div
+                      style={{
+                        alignSelf: isMine ? 'flex-end' : 'flex-start',
+                        maxWidth: '74%',
+                        background: isMine ? 'rgba(26,122,74,0.12)' : '#f0fdf4',
+                        border: '1px solid #b8d8c4',
+                        borderRadius: 14,
+                        padding: '10px 12px',
+                        fontSize: 12,
+                        color: '#15803d',
+                        fontWeight: 600,
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      🤝 Deal confirmation moved to Notifications.
+                      <button
+                        type="button"
+                        onClick={() => navigate('/notifications')}
+                        style={{
+                          display: 'block',
+                          marginTop: 6,
+                          background: '#1a7a4a',
+                          color: '#fff',
+                          border: 'none',
+                          borderRadius: 8,
+                          padding: '6px 10px',
+                          fontSize: 12,
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        Open Notifications
+                      </button>
                     </div>
                   )}
                   {msg.media_type !== 'deal_request' && (
@@ -1117,17 +1115,6 @@ color: isMine ? '#ffffff' : '#1a4a2e',
         </div>
       )}
 
-      {listing && currentUser && userId && (
-        <DealPillButton
-          currentUser={currentUser}
-          otherProfile={otherProfile}
-          listing={listing}
-          messages={messages}
-          isSeller={listing?.seller_id === currentUser?.id}
-          onRequestSent={() => setDealDone(true)}
-        />
-      )}
-
       {/* ── Recording bar ── */}
       {recording && (
         <div className="chat-recording-bar" style={S.recordingBar}>
@@ -1151,8 +1138,9 @@ color: isMine ? '#ffffff' : '#1a4a2e',
         </div>
       )}
 
-      {/* ── Input bar ── */}
-      {!recording && callState === 'idle' && (
+      {/* ── Input bar (hidden during active call via HideDuringCall) ── */}
+      {!recording && (
+        <HideDuringCall>
         <div className="chat-input-bar" style={S.inputBar}>
           <div style={{ display: 'flex', gap: '1px', alignItems: 'flex-end', paddingBottom: '2px' }}>
             <button style={S.attachBtn} onClick={() => pickFile('image/*', 'image')} title="Image">
@@ -1201,8 +1189,10 @@ color: isMine ? '#ffffff' : '#1a4a2e',
               </button>
           }
         </div>
+        </HideDuringCall>
       )}
     </div>
+    </ChatCallHost>
   )
 }
 
@@ -1237,7 +1227,6 @@ const S = {
   bubbleTime: { fontSize: '10px', marginTop: '4px', textAlign: 'right', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 2 },
   replyPreview: { fontSize: 12, fontWeight: '600', borderRadius: '10px 10px 0 0', padding: '6px 12px', marginBottom: -6, maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', borderLeft: '3px solid #1a7a4a' },
   replyBtn: { background: '#f0f4f1', border: 'none', borderRadius: '50%', width: 28, height: 28, cursor: 'pointer', fontSize: 13, color: '#637068', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, transition: 'opacity 0.15s' },
-  callMsgBubble: { display: 'flex', alignItems: 'center', gap: 10, borderRadius: 12, padding: '10px 12px', marginBottom: 4 },
   mediaImg: { width: '100%', maxWidth: '240px', borderRadius: 12, cursor: 'pointer', display: 'block', marginBottom: 5 },
   mediaVideo: { width: '100%', maxWidth: '240px', borderRadius: 12, display: 'block', marginBottom: 5 },
   voiceNote: { display: 'flex', alignItems: 'center', gap: 10, borderRadius: 14, padding: '10px 12px', minWidth: '200px', marginBottom: 4 },

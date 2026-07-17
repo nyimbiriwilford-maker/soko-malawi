@@ -1,4 +1,6 @@
 // src/components/DealPillButton.jsx
+// DEPRECATED: Deal confirmation now lives in Notifications (dealNotificationFlow.js).
+// Chat no longer mounts this component. Kept for reference / emergency rollback only.
 // Floating green pill shown to seller above input bar when there are messages.
 // Tapping it opens the DealEducationModal.
 
