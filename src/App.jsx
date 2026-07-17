@@ -1,6 +1,6 @@
 import { useEffect, useState, lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
-import { supabase } from './lib/supabase'
+import { supabase, isSupabaseConfigured } from './lib/supabase'
 import BottomNav from './components/BottomNav'
 const StatusPage          = lazy(() => import('./pages/StatusPage'))
 const SavedStatusesPage   = lazy(() => import('./pages/SavedStatusesPage'))
@@ -106,15 +106,28 @@ export default function App() {
 const [installPrompt, setInstallPrompt] = useState(null)
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session)
-      if (data.session) {
-        fetchRole(data.session.user.id)
-        setupPush(data.session)
-      } else {
+    if (!isSupabaseConfigured) {
+      // Avoid infinite PageLoader when Vercel build is missing VITE_ env vars
+      setSession(null)
+      setRole(null)
+      return undefined
+    }
+
+    supabase.auth.getSession()
+      .then(({ data }) => {
+        setSession(data.session)
+        if (data.session) {
+          fetchRole(data.session.user.id)
+          setupPush(data.session)
+        } else {
+          setRole(null)
+        }
+      })
+      .catch((err) => {
+        console.error('[SokoMw] getSession failed', err)
+        setSession(null)
         setRole(null)
-      }
-    })
+      })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY') {
