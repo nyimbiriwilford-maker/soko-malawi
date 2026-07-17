@@ -317,7 +317,37 @@ function GlobalStyles() {
           margin: 0 !important;
           border-radius: 14px !important;
           padding: 12px !important;
-          gap: 12px !important;
+          gap: 10px !important;
+          flex-direction: column !important;
+          align-items: stretch !important;
+        }
+        .soko-featured-banner .soko-feat-banner-title {
+          flex: 1 1 auto !important;
+        }
+        .soko-featured-banner .soko-feat-banner-pricing {
+          display: flex !important;
+          width: 100% !important;
+          flex-wrap: wrap !important;
+          gap: 8px !important;
+        }
+        .soko-featured-banner .soko-feat-price-chip {
+          flex: 1 1 auto !important;
+          min-width: 0 !important;
+          width: 100% !important;
+          justify-content: flex-start !important;
+          padding: 10px 12px !important;
+          min-height: 48px;
+        }
+        .soko-featured-banner .soko-feat-price-chip .soko-feat-price-amount {
+          font-size: 13px !important;
+          font-weight: 800 !important;
+        }
+        .soko-featured-banner .soko-feat-banner-cta {
+          width: 100% !important;
+          margin-left: 0 !important;
+          justify-content: center !important;
+          min-height: 44px;
+          padding: 12px 16px !important;
         }
         section[aria-label="Get featured pricing"] {
           padding: 12px 14px 0 !important;
@@ -1468,6 +1498,7 @@ function FeaturedRevenueBanner({ navigate, user }) {
         }}>
           {/* Left: title */}
           <div
+            className="soko-feat-banner-title"
             style={{ display: 'flex', alignItems: 'center', gap: 10, flex: '1 1 200px', minWidth: 0, cursor: 'pointer' }}
             onClick={goFeature}
             role="button"
@@ -1493,10 +1524,11 @@ function FeaturedRevenueBanner({ navigate, user }) {
             </div>
           </div>
 
-          {/* Middle: live product + soon */}
-          <div className="soko-nav-desktop" style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+          {/* Middle: live product pricing (all breakpoints) + soon (desktop) */}
+          <div className="soko-feat-banner-pricing" style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
             <button
               type="button"
+              className="soko-feat-price-chip"
               onClick={goFeature}
               style={{
                 display: 'flex', alignItems: 'center', gap: 8,
@@ -1512,8 +1544,8 @@ function FeaturedRevenueBanner({ navigate, user }) {
               }}>
                 {needsPost ? Ico.packagePlus(14) : Ico.listing(14)}
               </span>
-              <div style={{ textAlign: 'left' }}>
-                <div style={{ fontSize: 11.5, fontWeight: 800, color: T.gray900, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <div style={{ textAlign: 'left', minWidth: 0 }}>
+                <div style={{ fontSize: 11.5, fontWeight: 800, color: T.gray900, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                   {needsPost ? 'Post a listing' : 'Featured Listings'}
                   <span style={{
                     fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: 0.4,
@@ -1524,10 +1556,14 @@ function FeaturedRevenueBanner({ navigate, user }) {
                     {needsPost ? 'Start here' : 'Live'}
                   </span>
                 </div>
-                <div style={{
-                  fontSize: 11, fontWeight: 700, marginTop: 1,
-                  color: freeInfo.hasFree && !needsPost ? T.green : T.amberD,
-                }}>
+                <div
+                  className="soko-feat-price-amount"
+                  style={{
+                    fontSize: 12, fontWeight: 800, marginTop: 2,
+                    color: freeInfo.hasFree && !needsPost ? T.green : T.amberD,
+                    letterSpacing: '-0.2px',
+                  }}
+                >
                   {freeInfo.loading && !needsPost ? '…' : priceLine}
                 </div>
               </div>
@@ -1536,6 +1572,7 @@ function FeaturedRevenueBanner({ navigate, user }) {
             {soon.map(s => (
               <div
                 key={s.label}
+                className="soko-nav-desktop"
                 style={{ display: 'flex', alignItems: 'center', gap: 6, opacity: 0.5, whiteSpace: 'nowrap' }}
                 title="Coming in the long run"
               >
@@ -1551,6 +1588,7 @@ function FeaturedRevenueBanner({ navigate, user }) {
           {/* CTA */}
           <button
             type="button"
+            className="soko-feat-banner-cta"
             onClick={goFeature}
             style={{
               flexShrink: 0, marginLeft: 'auto',
