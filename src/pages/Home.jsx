@@ -309,8 +309,8 @@ function GlobalStyles() {
           display: flex !important;
           gap: 10px !important;
           overflow-x: auto !important;
-          overflow-y: hidden !important;
-          padding: 2px 0 6px !important;
+          overflow-y: visible !important;
+          padding: 6px 2px 10px !important;
           scroll-snap-type: x mandatory;
           -webkit-overflow-scrolling: touch;
           scrollbar-width: none;
@@ -327,6 +327,17 @@ function GlobalStyles() {
         .soko-hero-mobile-card.is-active {
           transform: translateY(-2px);
           z-index: 2;
+        }
+        /* Yellow top edge lives inside the card (never clipped by rail overflow) */
+        .soko-hero-card-top-edge {
+          position: absolute !important;
+          top: 0 !important;
+          left: 0 !important;
+          right: 0 !important;
+          height: 3px !important;
+          z-index: 8 !important;
+          border-radius: 14px 14px 0 0 !important;
+          pointer-events: none !important;
         }
         .soko-hero-mobile-card .soko-hero-card-title {
           font-size: 12px !important;
@@ -465,6 +476,7 @@ function GlobalStyles() {
         .soko-featured-section .soko-featured-rail {
           padding-left: 0 !important;
           padding-right: 0 !important;
+          padding-top: 4px !important;
           scroll-padding-inline: 0;
           gap: 10px !important;
           -webkit-overflow-scrolling: touch;
@@ -1116,12 +1128,16 @@ function RevenueHero({ navigate, listings }) {
           cursor: 'pointer',
           flexShrink: mobile ? 0 : undefined,
           background: '#0b1410',
-          border: '1px solid rgba(255,255,255,0.14)',
-          boxShadow: mobile ? '0 6px 18px rgba(0,0,0,0.32)' : '0 8px 28px rgba(0,0,0,0.45)',
-          transition: 'transform 0.3s ease, box-shadow 0.3s ease, outline 0.2s ease',
+          border: isActive
+            ? `1.5px solid ${T.amber}`
+            : '1px solid rgba(255,255,255,0.14)',
+          boxShadow: isActive
+            ? `0 8px 22px rgba(249,171,0,0.28), 0 0 0 1px ${T.amber}55`
+            : mobile
+              ? '0 6px 18px rgba(0,0,0,0.32)'
+              : '0 8px 28px rgba(0,0,0,0.45)',
+          transition: 'transform 0.3s ease, box-shadow 0.3s ease, border-color 0.2s ease',
           animation: visible && !mobile ? `cardSlideUp 0.5s ease ${0.1 + idx * 0.08}s both` : 'none',
-          outline: isActive ? `2px solid ${T.amber}` : 'none',
-          outlineOffset: 1,
         }}
         onMouseEnter={e => {
           if (mobile) return
@@ -1133,11 +1149,30 @@ function RevenueHero({ navigate, listings }) {
         onMouseLeave={e => {
           if (mobile) return
           e.currentTarget.style.transform = 'none'
-          e.currentTarget.style.boxShadow = '0 8px 28px rgba(0,0,0,0.45)'
+          e.currentTarget.style.boxShadow = isActive
+            ? `0 8px 22px rgba(249,171,0,0.28), 0 0 0 1px ${T.amber}55`
+            : '0 8px 28px rgba(0,0,0,0.45)'
           const img = e.currentTarget.querySelector('img')
           if (img) img.style.transform = 'scale(1)'
         }}
       >
+        {/* Yellow top edge — inside the card so overflow never hides it */}
+        <div
+          className="soko-hero-card-top-edge"
+          aria-hidden
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            height: 3,
+            zIndex: 8,
+            borderRadius: mobile ? '14px 14px 0 0' : '18px 18px 0 0',
+            background: `linear-gradient(90deg, ${T.amber}, #ffce45, ${T.amber})`,
+            pointerEvents: 'none',
+          }}
+        />
+
         {item.images?.[0] ? (
           <img
             src={item.images[0]}
@@ -1164,7 +1199,7 @@ function RevenueHero({ navigate, listings }) {
           background: 'linear-gradient(180deg, rgba(0,0,0,0.08) 0%, transparent 38%, rgba(0,0,0,0.78) 78%, rgba(0,0,0,0.92) 100%)',
         }} />
 
-        <div style={{ position: 'absolute', top: mobile ? 7 : 9, left: mobile ? 7 : 9, zIndex: 5 }}>
+        <div style={{ position: 'absolute', top: mobile ? 10 : 12, left: mobile ? 7 : 9, zIndex: 5 }}>
           {flash ? (
             <span style={{
               display: 'inline-flex', alignItems: 'center',
@@ -1942,7 +1977,7 @@ function PremiumListingCard({ listing, onClick, delay = 0, large = false }) {
       border: isFeat && isFlash
         ? `1.5px solid ${hov ? T.red : T.red + '55'}`
         : isFeat
-        ? `2px solid ${hov ? T.amber : 'transparent'}`
+        ? `1.5px solid ${hov ? T.amber : '#f5dfa3'}`
         : isFlash
         ? `1.5px solid ${T.red}55`
         : `1px solid ${hov ? T.gray200 : T.gray100}`,
@@ -1952,13 +1987,28 @@ function PremiumListingCard({ listing, onClick, delay = 0, large = false }) {
       transform: hov ? 'translateY(-3px)' : 'none',
       transition: 'all 0.2s ease', animation: `fadeUp 0.4s ease ${delay}s both`,
       display: 'flex', flexDirection: 'column', height: 220,
+      position: 'relative',
     }}>
+      {/* Yellow top edge for featured cards — inside card so it is never clipped */}
+      {isFeat && (
+        <div
+          aria-hidden
+          style={{
+            position: 'absolute', top: 0, left: 0, right: 0, height: 3, zIndex: 6,
+            borderRadius: '12px 12px 0 0',
+            background: isFlash
+              ? `linear-gradient(90deg, ${T.red}, ${T.amber})`
+              : `linear-gradient(90deg, ${T.amber}, #ffce45, ${T.amber})`,
+            pointerEvents: 'none',
+          }}
+        />
+      )}
       <div style={{ width: '100%', height: '62%', flexShrink: 0, overflow: 'hidden', position: 'relative', background: T.gray100, borderRadius: '12px 12px 0 0' }}>
         {listing.images?.[0] && !imgErr
           ? <img src={listing.images[0]} alt={listing.title} onError={() => setImgErr(true)} style={{ width: '100%', height: '100%', objectFit: 'cover', transform: hov ? 'scale(1.07)' : 'scale(1)', transition: 'transform 0.5s cubic-bezier(0.34,1.2,0.64,1)' }} />
           : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40, color: T.gray400, background: T.gray100 }}>{catIcon(listing.category).emoji}</div>
         }
-        <div style={{ position: 'absolute', top: 10, left: 10, display: 'flex', flexDirection: 'column', gap: 5, zIndex: 2 }}>
+        <div style={{ position: 'absolute', top: 12, left: 10, display: 'flex', flexDirection: 'column', gap: 5, zIndex: 2 }}>
           {isFeat && isFlash ? (
             <div className="soko-hotdeal-pulse" style={{ background: `linear-gradient(135deg,${T.red},#c62828)`, color: '#fff', borderRadius: '50%', width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(234,67,53,0.5)' }}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff">
@@ -2124,10 +2174,11 @@ function FeaturedListingsRow({ listings, navigate, loading, stories, storiesLoad
           alignItems: 'start',
         }}>
 
-          {/* Featured listings — horizontal snap rail */}
+          {/* Featured listings — horizontal snap rail (padding keeps top yellow edge visible) */}
           <div style={{ minWidth: 0, overflow: 'hidden' }}>
             <div className="soko-scroll soko-featured-rail" style={{
               display: 'flex', gap: 12, overflowX: 'auto',
+              paddingTop: 4,
               paddingBottom: 8,
               width: '100%',
               scrollSnapType: 'x mandatory',
