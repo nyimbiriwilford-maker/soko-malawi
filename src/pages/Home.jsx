@@ -286,56 +286,40 @@ function GlobalStyles() {
           min-width: 0;
         }
         .soko-hero-mobile-carousel {
-          margin-top: 2px;
+          margin-top: 4px;
           width: 100%;
           min-width: 0;
         }
-        .soko-hero-mobile-stage {
-          position: relative;
-          width: 100%;
+        .soko-hero-mobile-rail {
+          display: flex !important;
+          gap: 12px !important;
+          overflow-x: auto !important;
+          overflow-y: hidden !important;
+          padding: 4px 0 10px !important;
+          scroll-snap-type: x mandatory;
+          -webkit-overflow-scrolling: touch;
+          scrollbar-width: none;
+          scroll-behavior: smooth;
         }
+        .soko-hero-mobile-rail::-webkit-scrollbar { display: none; }
         .soko-hero-mobile-card {
-          width: 100% !important;
-          border-radius: 20px !important;
-          overflow: hidden;
-          background: #fff;
-          border: 1px solid rgba(255,255,255,0.18) !important;
-          box-shadow:
-            0 18px 40px rgba(0,0,0,0.28),
-            0 2px 0 rgba(255,255,255,0.06) inset !important;
-        }
-        .soko-hero-mobile-card .soko-hero-m-photo {
-          height: 188px;
+          flex: 0 0 min(280px, 86vw) !important;
+          width: min(280px, 86vw) !important;
+          height: 220px !important;
+          scroll-snap-align: center;
+          border-radius: 16px !important;
         }
         .soko-hero-mobile-empty {
           width: 100%;
         }
-        .soko-hero-mobile-progress {
+        .soko-hero-mobile-dots {
           display: flex;
-          gap: 4px;
-          margin-top: 12px;
-          padding: 0 2px;
-        }
-        .soko-hero-mobile-progress button {
-          flex: 1 1 0;
-          min-width: 0;
-          height: 3px;
-          border: none;
-          border-radius: 99px;
-          padding: 0;
-          cursor: pointer;
-          transition: background 0.35s ease, transform 0.2s ease;
-        }
-        /* Tighter mobile hero marketing copy above the product stage */
-        .soko-hero-benefits { display: none !important; }
-        .soko-hero-headline {
-          font-size: 22px !important;
-          margin-bottom: 6px !important;
-        }
-        .soko-hero-section .soko-hero-grid > div:first-child p {
-          font-size: 12.5px !important;
-          margin-bottom: 12px !important;
-          max-width: none !important;
+          justify-content: center;
+          flex-wrap: wrap;
+          gap: 5px;
+          margin-top: 4px;
+          max-width: 100%;
+          padding: 0 4px;
         }
 
         /* Category tiles */
@@ -965,6 +949,7 @@ function RevenueHero({ navigate, listings }) {
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
   const [visible, setVisible] = useState(false)
   const sectionRef = useRef(null)
+  const mobileRailRef = useRef(null)
   const touchStartX = useRef(null)
   const perPage = 3
   const pageCount = Math.max(1, Math.ceil(featured.length / perPage) || 1)
@@ -990,6 +975,20 @@ function RevenueHero({ navigate, listings }) {
     const t = setInterval(() => setMobileIdx(i => (i + 1) % mobileCount), ROTATE_MS)
     return () => clearInterval(t)
   }, [paused, mobileCount])
+
+  // Smooth-scroll mobile rail to the active product
+  useEffect(() => {
+    const rail = mobileRailRef.current
+    if (!rail || mobileCount < 1) return
+    const card = rail.children[mobileIdx]
+    if (!card || typeof card.offsetLeft !== 'number') return
+    try {
+      const left = card.offsetLeft - (rail.clientWidth - card.clientWidth) / 2
+      rail.scrollTo({ left: Math.max(0, left), behavior: 'smooth' })
+    } catch {
+      /* ignore scroll errors on hidden/detached rails */
+    }
+  }, [mobileIdx, mobileCount])
 
   // Entrance animation observer
   useEffect(() => {
@@ -1038,38 +1037,39 @@ function RevenueHero({ navigate, listings }) {
   }
 
   const visibleCards = featured.slice(page * perPage, page * perPage + perPage)
-  const activeMobile = featured[mobileIdx] || featured[0] || null
 
-  /** Desktop hero card — full-bleed image with bottom gradient meta */
-  function renderHeroCard(item, idx) {
+  function renderHeroCard(item, idx, { mobile = false } = {}) {
     const price = isFlashActive(item) ? (item.flash_sale_price ?? item.price) : item.price
-    const flash = isFlashActive(item)
     return (
       <div
         key={item.id}
+        className={mobile ? 'soko-hero-mobile-card' : undefined}
         onClick={() => navigate('/listing/' + item.id)}
         role="button"
         tabIndex={0}
         onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/listing/' + item.id) } }}
         style={{
-          position: 'relative', height: 230, borderRadius: 18,
+          position: 'relative', height: mobile ? 210 : 230, borderRadius: mobile ? 16 : 18,
           overflow: 'hidden', cursor: 'pointer',
-          border: '1px solid rgba(255,255,255,0.12)',
-          boxShadow: '0 10px 32px rgba(0,0,0,0.4)',
+          border: '2px solid transparent',
+          boxShadow: '0 8px 28px rgba(0,0,0,0.45)',
           transition: 'transform 0.35s cubic-bezier(0.34,1.2,0.64,1), box-shadow 0.35s ease, border-color 0.35s ease',
           animation: visible ? `cardSlideUp 0.5s ease ${0.1 + idx * 0.08}s both` : 'none',
+          flexShrink: mobile ? 0 : undefined,
         }}
         onMouseEnter={e => {
-          e.currentTarget.style.transform = 'translateY(-6px)'
-          e.currentTarget.style.boxShadow = '0 18px 44px rgba(0,0,0,0.5), 0 0 0 1px rgba(249,171,0,0.55)'
-          e.currentTarget.style.borderColor = 'rgba(249,171,0,0.55)'
+          if (mobile) return
+          e.currentTarget.style.transform = 'translateY(-8px) scale(1.03)'
+          e.currentTarget.style.boxShadow = '0 20px 48px rgba(0,0,0,0.6), 0 0 0 2px rgba(249,171,0,0.75)'
+          e.currentTarget.style.borderColor = 'rgba(249,171,0,0.85)'
           const img = e.currentTarget.querySelector('img')
-          if (img) img.style.transform = 'scale(1.06)'
+          if (img) img.style.transform = 'scale(1.08)'
         }}
         onMouseLeave={e => {
+          if (mobile) return
           e.currentTarget.style.transform = 'none'
-          e.currentTarget.style.boxShadow = '0 10px 32px rgba(0,0,0,0.4)'
-          e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'
+          e.currentTarget.style.boxShadow = '0 8px 28px rgba(0,0,0,0.45)'
+          e.currentTarget.style.borderColor = 'transparent'
           const img = e.currentTarget.querySelector('img')
           if (img) img.style.transform = 'scale(1)'
         }}
@@ -1078,167 +1078,62 @@ function RevenueHero({ navigate, listings }) {
           <img
             src={item.images[0]}
             alt={item.title}
-            loading="eager"
+            loading={mobile ? 'lazy' : 'eager'}
             decoding="async"
-            style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.55s cubic-bezier(0.34,1.2,0.64,1)' }}
+            style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.5s cubic-bezier(0.34,1.2,0.64,1)' }}
           />
         ) : (
-          <div style={{ width: '100%', height: '100%', background: 'rgba(255,255,255,0.08)', display: 'grid', placeItems: 'center', color: 'rgba(255,255,255,0.4)' }}>
+          <div style={{ width: '100%', height: '100%', background: 'rgba(255,255,255,0.08)', display: 'grid', placeItems: 'center', color: 'rgba(255,255,255,0.4)', fontSize: 28 }}>
             {Icon.star(28)}
           </div>
         )}
-        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,0.05) 0%, transparent 40%, rgba(0,0,0,0.72) 78%, rgba(0,0,0,0.9) 100%)' }} />
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.08) 0%, transparent 35%, rgba(0,0,0,0.75) 70%, rgba(0,0,0,0.92) 100%)' }} />
 
-        <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 5 }}>
-          {flash ? (
-            <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: 4,
-              background: 'rgba(234,67,53,0.95)', color: '#fff',
-              borderRadius: 999, padding: '4px 9px', fontSize: 10, fontWeight: 800,
-              letterSpacing: 0.3,
-            }}>Hot deal</span>
-          ) : (
-            <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: 4,
-              background: 'rgba(255,255,255,0.95)', color: '#1a1a1a',
-              borderRadius: 999, padding: '4px 9px', fontSize: 10, fontWeight: 800,
-              letterSpacing: 0.2, boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+        <div style={{ position: 'absolute', top: 9, left: 9, zIndex: 5, display: 'flex', flexDirection: 'column', gap: 5 }}>
+          {isFlashActive(item) ? (
+            <div className="soko-hotdeal-pulse" style={{
+              background: `linear-gradient(135deg,${T.red},#c62828)`, color: '#fff',
+              borderRadius: '50%', width: 26, height: 26,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 2px 8px rgba(234,67,53,0.5)',
             }}>
-              <span style={{ color: T.amber, display: 'flex' }}>{Icon.star(10, T.amber)}</span>
-              Featured
-            </span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="#fff">
+                <path d="M17.66 11.2C17.43 10.9 17.15 10.64 16.89 10.38C16.22 9.78 15.46 9.35 14.82 8.72C13.33 7.26 13 4.85 13.95 3C13 3.23 12.17 3.75 11.46 4.32C8.87 6.4 7.85 10.07 9.07 13.22C9.11 13.32 9.15 13.42 9.15 13.55C9.15 13.77 9 13.97 8.8 14.05C8.57 14.15 8.33 14.09 8.14 13.93C8.08 13.88 8.04 13.83 8 13.76C6.87 12.33 6.69 10.28 7.45 8.64C5.78 10 4.87 12.3 5 14.47C5.06 14.97 5.12 15.47 5.29 15.97C5.43 16.57 5.7 17.17 6 17.7C7.08 19.43 8.95 20.67 10.96 20.92C13.1 21.19 15.39 20.8 17.03 19.32C18.86 17.66 19.5 15 18.56 12.72L18.43 12.46C18.22 12 17.66 11.2 17.66 11.2Z"/>
+              </svg>
+            </div>
+          ) : (
+            <div style={{
+              background: `linear-gradient(135deg,${T.amber},#e09800)`,
+              borderRadius: 50, padding: '3px 9px',
+              display: 'flex', alignItems: 'center', gap: 3,
+              boxShadow: '0 2px 10px rgba(249,171,0,0.5)',
+              overflow: 'hidden', position: 'relative', width: 'fit-content',
+            }}>
+              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg,transparent,rgba(255,255,255,0.25),transparent)', backgroundSize: '200% 100%', animation: 'badgeShimmer 3s ease-in-out infinite' }} />
+              <span style={{ color: '#1a0a00', display: 'flex', position: 'relative', zIndex: 1 }}>{Icon.star(9, '#1a0a00')}</span>
+              <span style={{ fontSize: 8.5, fontWeight: 900, color: '#1a0a00', letterSpacing: 0.4, position: 'relative', zIndex: 1 }}>FEATURED</span>
+            </div>
           )}
         </div>
 
-        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 5, padding: '14px 14px 15px' }}>
+        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 5, padding: mobile ? '12px 12px 14px' : '14px 14px 16px' }}>
           <div style={{
-            fontSize: 14, fontWeight: 700, color: '#fff', marginBottom: 4, lineHeight: 1.25,
+            fontSize: mobile ? 13.5 : 14.5, fontWeight: 800, color: '#fff', marginBottom: 4, lineHeight: 1.25,
+            textShadow: '0 1px 4px rgba(0,0,0,0.5)',
             overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
           }}>{item.title}</div>
-          <div style={{ fontFamily: T.fontDisplay, fontSize: 17, fontWeight: 800, color: T.amber, letterSpacing: '-0.3px', marginBottom: 4 }}>
+          <div style={{ fontFamily: T.fontDisplay, fontSize: mobile ? 16 : 17, fontWeight: 900, color: T.amber, marginBottom: 4, letterSpacing: '-0.4px' }}>
             {formatPrice(price)}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', display: 'flex', alignItems: 'center', gap: 3, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', display: 'flex', alignItems: 'center', gap: 3, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {Icon.pin(10)} {item.city || 'Malawi'}
             </span>
             {(item.seller_verified || item.shop_is_verified) && (
-              <span style={{ fontSize: 10.5, color: '#8aefb4', display: 'flex', alignItems: 'center', gap: 3, fontWeight: 700, flexShrink: 0 }}>
+              <span style={{ fontSize: 10.5, color: '#7ee0a8', display: 'flex', alignItems: 'center', gap: 3, fontWeight: 700, flexShrink: 0 }}>
                 {Icon.verify(11)} Verified
               </span>
             )}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  /** Mobile hero card — clean modern product card (photo + white body) */
-  function renderMobileHeroCard(item) {
-    if (!item) return null
-    const price = isFlashActive(item) ? (item.flash_sale_price ?? item.price) : item.price
-    const flash = isFlashActive(item)
-    const verified = !!(item.seller_verified || item.shop_is_verified)
-
-    return (
-      <div
-        key={item.id}
-        className="soko-hero-mobile-card"
-        onClick={() => navigate('/listing/' + item.id)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/listing/' + item.id) } }}
-        onTouchStart={onMobileTouchStart}
-        onTouchEnd={onMobileTouchEnd}
-        style={{
-          cursor: 'pointer',
-          animation: 'heroMobileIn 0.45s cubic-bezier(0.22,1,0.36,1) both',
-        }}
-      >
-        <div className="soko-hero-m-photo" style={{ position: 'relative', width: '100%', overflow: 'hidden', background: '#e8ebe9' }}>
-          {item.images?.[0] ? (
-            <img
-              src={item.images[0]}
-              alt={item.title}
-              loading="eager"
-              decoding="async"
-              style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-            />
-          ) : (
-            <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center', color: T.gray400 }}>
-              {Icon.star(32, T.gray300)}
-            </div>
-          )}
-          {/* Soft top shade for badge contrast */}
-          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,0.18) 0%, transparent 42%)', pointerEvents: 'none' }} />
-
-          <div style={{ position: 'absolute', top: 12, left: 12, right: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: 5,
-              background: flash ? 'rgba(234,67,53,0.96)' : 'rgba(255,255,255,0.96)',
-              color: flash ? '#fff' : T.gray900,
-              borderRadius: 999, padding: '5px 10px',
-              fontSize: 10.5, fontWeight: 800, letterSpacing: 0.2,
-              boxShadow: '0 2px 10px rgba(0,0,0,0.12)',
-              backdropFilter: 'blur(8px)',
-            }}>
-              {!flash && <span style={{ display: 'flex', color: T.amber }}>{Icon.star(11, T.amber)}</span>}
-              {flash ? 'Hot deal' : 'Featured'}
-            </span>
-            {verified && (
-              <span style={{
-                display: 'inline-flex', alignItems: 'center', gap: 4,
-                background: 'rgba(15,157,88,0.95)', color: '#fff',
-                borderRadius: 999, padding: '5px 9px',
-                fontSize: 10, fontWeight: 700,
-                boxShadow: '0 2px 10px rgba(15,157,88,0.25)',
-              }}>
-                {Icon.verify(11)} Verified
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div style={{
-          padding: '13px 14px 14px',
-          background: '#fff',
-          display: 'flex', flexDirection: 'column', gap: 6,
-        }}>
-          <div style={{
-            fontSize: 14.5, fontWeight: 700, color: T.gray900, lineHeight: 1.3, letterSpacing: '-0.2px',
-            overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-          }}>
-            {item.title}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10 }}>
-            <div style={{
-              fontFamily: T.fontDisplay, fontSize: 18, fontWeight: 800,
-              color: flash ? T.red : T.greenD, letterSpacing: '-0.4px',
-            }}>
-              {formatPrice(price)}
-            </div>
-            <div style={{
-              fontSize: 11.5, fontWeight: 600, color: T.gray600,
-              display: 'flex', alignItems: 'center', gap: 3, minWidth: 0,
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>
-              <span style={{ color: T.green, display: 'flex', flexShrink: 0 }}>{Icon.pin(11)}</span>
-              {item.city || 'Malawi'}
-            </div>
-          </div>
-          <div style={{
-            marginTop: 2, paddingTop: 8, borderTop: `1px solid ${T.gray100}`,
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
-          }}>
-            <span style={{ fontSize: 11, fontWeight: 600, color: T.gray500 }}>
-              Tap to view listing
-            </span>
-            <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: 3,
-              fontSize: 11.5, fontWeight: 700, color: T.green,
-            }}>
-              Open {Icon.chevR(13)}
-            </span>
           </div>
         </div>
       </div>
@@ -1262,7 +1157,6 @@ function RevenueHero({ navigate, listings }) {
         @keyframes badgeShimmer { 0%{background-position:-200% center} 100%{background-position:200% center} }
         @keyframes heroFadeUp { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
         @keyframes cardSlideUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
-        @keyframes heroMobileIn { from{opacity:0;transform:translateY(10px) scale(0.985)} to{opacity:1;transform:translateY(0) scale(1)} }
         @keyframes ctaPulse { 0%,100%{box-shadow:0 4px 18px rgba(249,171,0,0.4)} 50%{box-shadow:0 4px 28px rgba(249,171,0,0.72)} }
         @keyframes dotGrid { 0%,100%{opacity:0.35} 50%{opacity:0.55} }
       `}</style>
@@ -1503,79 +1397,59 @@ function RevenueHero({ navigate, listings }) {
           )}
         </div>
 
-        {/* ── Mobile: single modern product stage (auto-rotates every listing) ── */}
+        {/* ── Mobile: horizontal featured product rail (swipe) ── */}
         <div className="soko-hero-mobile-carousel" style={{ display: 'none' }}>
           {featured.length === 0 ? (
             <div className="soko-hero-mobile-empty" style={{
-              background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.12)',
-              borderRadius: 18, padding: '20px 16px', textAlign: 'center', backdropFilter: 'blur(10px)',
+              background: 'rgba(255,255,255,0.05)', border: '2px dashed rgba(255,255,255,0.14)',
+              borderRadius: 14, padding: '18px 16px', textAlign: 'center', backdropFilter: 'blur(8px)',
             }}>
-              <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center', color: T.amber }}>{Icon.star(22, T.amber)}</div>
-              <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.62)', lineHeight: 1.5, marginBottom: 14 }}>
+              <div style={{ marginBottom: 6, display: 'flex', justifyContent: 'center' }}>{Icon.star(24)}</div>
+              <p style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.55)', lineHeight: 1.5, marginBottom: 12 }}>
                 No featured listings yet — be the first sellers see.
               </p>
               <button
                 type="button"
                 onClick={() => navigate('/post')}
                 style={{
-                  background: `linear-gradient(135deg,${T.amber},#e09800)`, border: 'none', borderRadius: 12,
-                  padding: '11px 18px', fontSize: 13, fontWeight: 800, color: '#1a0a00', cursor: 'pointer', minHeight: 44,
+                  background: `linear-gradient(135deg,${T.amber},#e09800)`, border: 'none', borderRadius: 10,
+                  padding: '10px 18px', fontSize: 13, fontWeight: 800, color: '#1a0a00', cursor: 'pointer', minHeight: 44,
                 }}
               >
                 Feature My Listing
               </button>
             </div>
           ) : (
-            <div className="soko-hero-mobile-stage">
-              <div style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                marginBottom: 10, gap: 10,
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                  <span style={{
-                    width: 6, height: 6, borderRadius: '50%', background: T.amber,
-                    boxShadow: `0 0 0 3px rgba(249,171,0,0.25)`, flexShrink: 0,
-                  }} />
-                  <span style={{
-                    fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.88)',
-                    letterSpacing: 0.2,
-                  }}>
-                    Featured products
-                  </span>
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: 'rgba(255,255,255,0.78)', letterSpacing: 0.3, textTransform: 'uppercase' }}>
+                  Featured now
                   {mobileCount > 1 && (
-                    <span style={{
-                      fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.45)',
-                      fontVariantNumeric: 'tabular-nums',
-                    }}>
-                      {mobileIdx + 1} / {mobileCount}
+                    <span style={{ marginLeft: 8, fontWeight: 700, color: 'rgba(255,255,255,0.45)', textTransform: 'none', letterSpacing: 0 }}>
+                      {mobileIdx + 1}/{mobileCount}
                     </span>
                   )}
-                </div>
+                </span>
                 <button
                   type="button"
                   onClick={() => navigate('/listings')}
-                  style={{
-                    background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.14)',
-                    borderRadius: 999, color: 'rgba(255,255,255,0.9)',
-                    fontSize: 12, fontWeight: 700, cursor: 'pointer',
-                    padding: '6px 12px', minHeight: 32, whiteSpace: 'nowrap',
-                  }}
+                  style={{ background: 'none', border: 'none', color: T.amber, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', padding: '4px 0', minHeight: 36 }}
                 >
                   View all
                 </button>
               </div>
-
-              {/* Active card — remounts on index change for a clean transition */}
-              <div key={activeMobile?.id || mobileIdx}>
-                {renderMobileHeroCard(activeMobile)}
+              <div
+                ref={mobileRailRef}
+                className="soko-hero-mobile-rail"
+                onTouchStart={onMobileTouchStart}
+                onTouchEnd={onMobileTouchEnd}
+                onMouseEnter={() => setPaused(true)}
+                onMouseLeave={() => setPaused(false)}
+              >
+                {featured.map((item, idx) => renderHeroCard(item, idx, { mobile: true }))}
               </div>
-
               {mobileCount > 1 && (
-                <div
-                  className="soko-hero-mobile-progress"
-                  role="tablist"
-                  aria-label="Featured product progress"
-                >
+                <div className="soko-hero-mobile-dots" role="tablist" aria-label="Featured products">
                   {featured.map((item, i) => (
                     <button
                       key={item.id}
@@ -1585,16 +1459,24 @@ function RevenueHero({ navigate, listings }) {
                       aria-label={`Show featured ${i + 1} of ${mobileCount}`}
                       onClick={() => { goToMobile(i); setPaused(true); setTimeout(() => setPaused(false), 2800) }}
                       style={{
+                        width: i === mobileIdx ? 20 : 6,
+                        height: 6,
+                        borderRadius: 50,
+                        border: 'none',
+                        padding: 0,
+                        cursor: 'pointer',
                         background: i === mobileIdx
                           ? `linear-gradient(90deg, ${T.amber}, #ffce45)`
-                          : 'rgba(255,255,255,0.22)',
-                        boxShadow: i === mobileIdx ? '0 0 8px rgba(249,171,0,0.4)' : 'none',
+                          : 'rgba(255,255,255,0.28)',
+                        boxShadow: i === mobileIdx ? '0 0 8px rgba(249,171,0,0.5)' : 'none',
+                        transition: 'all 0.35s cubic-bezier(0.34,1.2,0.64,1)',
+                        flexShrink: 0,
                       }}
                     />
                   ))}
                 </div>
               )}
-            </div>
+            </>
           )}
         </div>
       </div>
