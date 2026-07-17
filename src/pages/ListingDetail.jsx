@@ -7,6 +7,9 @@ import TrustBadge from '../components/TrustBadge'
 import { resolveVouchChain, getTrustScore, getConfirmedDealCount } from '../utils/vouchUtils'
 import StatusBadge from '../components/StatusBadge'
 import { fetchListingStatus, fetchUserActiveStatus } from '../hooks/useStatuses'
+import { isListingFeatured } from '../utils/homeUtils'
+import { featureExistingListing } from '../lib/featureListing'
+import { featuredPriceLabel } from '../constants/featuredPricing'
 
 const CAT_META = {
   Electronics: { color: '#1a7a4a', bg: '#e6f4ec' },
@@ -134,6 +137,7 @@ export default function ListingDetail() {
   const [listingStatus, setListingStatus] = useState(null)
   const [sellerStatus, setSellerStatus]   = useState(null)
   const [isFavorited, setIsFavorited]     = useState(false)
+  const [featuring, setFeaturing]         = useState(false)
   const touchStartX = useRef(null)
   const viewNotifSent = useRef(false)
 
@@ -521,7 +525,7 @@ export default function ListingDetail() {
               {badge && (
                 <div style={{ ...S.galleryBadge, background: badge.bg }}>{badge.label}</div>
               )}
-              {listing.is_featured && (
+              {isListingFeatured(listing) && (
                 <div style={{ ...S.galleryBadge, top: badge ? 44 : 12, background: '#1a7a4a', display: 'flex', alignItems: 'center', gap: 4 }}>
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="white"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
                   Featured
@@ -1234,6 +1238,33 @@ export default function ListingDetail() {
               <div style={S.barTitle}>{listing.title}</div>
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
+              {!isListingFeatured(listing) && (
+                <button
+                  className="ld-btn-hover"
+                  style={{ ...S.barCallBtn, color: '#b45309', borderColor: '#fde68a', background: '#fffbeb' }}
+                  disabled={featuring}
+                  onClick={async () => {
+                    if (!currentUser || featuring) return
+                    setFeaturing(true)
+                    try {
+                      const result = await featureExistingListing({
+                        listing,
+                        user: currentUser,
+                        profileName: seller?.full_name || seller?.name,
+                      })
+                      if (result?.free) {
+                        await loadListing()
+                      }
+                    } catch (e) {
+                      alert(e?.message || 'Could not feature listing')
+                    } finally {
+                      setFeaturing(false)
+                    }
+                  }}
+                >
+                  {featuring ? '…' : `⭐ Feature (${featuredPriceLabel()})`}
+                </button>
+              )}
               <button className="ld-btn-hover" style={S.barCallBtn} onClick={() => navigate('/post/edit/' + listing.id)}>Edit Listing</button>
               <button className="ld-btn-hover" style={{ ...S.barCallBtn, color: '#dc2626', borderColor: '#fecaca' }} onClick={() => setShowDeleteConfirm(true)}>Delete</button>
             </div>
@@ -1255,6 +1286,30 @@ export default function ListingDetail() {
         </div>
       ) : (
         <div className="ld-mobile-bar" style={S.mobileBar}>
+          {!isListingFeatured(listing) && (
+            <button
+              style={{ ...S.mobileCallBtn, color: '#b45309', borderColor: '#fde68a' }}
+              disabled={featuring}
+              onClick={async () => {
+                if (!currentUser || featuring) return
+                setFeaturing(true)
+                try {
+                  const result = await featureExistingListing({
+                    listing,
+                    user: currentUser,
+                    profileName: seller?.full_name || seller?.name,
+                  })
+                  if (result?.free) await loadListing()
+                } catch (e) {
+                  alert(e?.message || 'Could not feature listing')
+                } finally {
+                  setFeaturing(false)
+                }
+              }}
+            >
+              {featuring ? '…' : '⭐ Feature'}
+            </button>
+          )}
           <button style={S.mobileCallBtn} onClick={() => navigate('/post/edit/' + listing.id)}>Edit</button>
           <button style={{ ...S.mobileChatBtn, background: '#dc2626' }} onClick={() => setShowDeleteConfirm(true)}>Delete</button>
         </div>

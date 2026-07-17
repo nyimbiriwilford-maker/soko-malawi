@@ -599,11 +599,27 @@ export default function ShopPage() {
           if (active) setCurrentUser(meData)
         }
 
-        const { data: shopData, error: shopErr } = await supabase
-          .from('shops')
-          .select('*')
-          .eq('slug', slug)
-          .maybeSingle()
+        // Prefer slug; fall back to id so /shop/:id still works from public profiles
+        let shopData = null
+        let shopErr = null
+        {
+          const bySlug = await supabase
+            .from('shops')
+            .select('*')
+            .eq('slug', slug)
+            .maybeSingle()
+          shopData = bySlug.data
+          shopErr = bySlug.error
+          if (!shopData && !shopErr) {
+            const byId = await supabase
+              .from('shops')
+              .select('*')
+              .eq('id', slug)
+              .maybeSingle()
+            shopData = byId.data
+            shopErr = byId.error
+          }
+        }
 
         if (shopErr) console.error('[ShopPage] shop fetch error:', shopErr)
         if (!active) return

@@ -18,6 +18,7 @@ import React, {
 } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { isListingFeatured, rotateFeaturedFairly } from '../utils/homeUtils'
 
 /* ─────────────────────────────────────────────────────────────────────────────
    DESIGN TOKENS — identical to Home.jsx T
@@ -770,7 +771,7 @@ function ResultCardGrid({ listing, delay, onClick }) {
   const [liked, setLiked] = useState(false)
   const [imgErr, setImgErr] = useState(false)
   const isVerif = listing.seller_verified || listing.shop_is_verified
-  const isFeat  = listing.featured || listing.is_featured
+  const isFeat  = isListingFeatured(listing)
   const isNew   = listing.created_at && (Date.now() - new Date(listing.created_at).getTime()) < 86400000
   const onSale  = isFlashSaleActive(listing)
   const hasVideo = listing.videos && listing.videos.length > 0
@@ -851,7 +852,7 @@ function ResultCardList({ listing, delay, onClick }) {
   const [liked, setLiked] = useState(false)
   const [imgErr, setImgErr] = useState(false)
   const isVerif = listing.seller_verified || listing.shop_is_verified
-  const isFeat  = listing.featured || listing.is_featured
+  const isFeat  = isListingFeatured(listing)
   const onSale  = isFlashSaleActive(listing)
   const hasVideo = listing.videos && listing.videos.length > 0
 
@@ -1222,7 +1223,7 @@ const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Date.now() / 3
 
   /* ── Marketplace listings (original logic, unchanged) ── */
   async function searchListings(filters, currentSort, currentPage) {
-    const baseSelect = 'id, title, price, images, videos, city, district, area, category, condition, availability_status, featured, is_featured, created_at, seller_id, shop_id, description, flash_sale_price, flash_sale_ends_at, price_tiers'
+    const baseSelect = 'id, title, price, images, videos, city, district, area, category, condition, availability_status, featured, is_featured, featured_until, created_at, seller_id, shop_id, description, flash_sale_price, flash_sale_ends_at, price_tiers'
 
     let query = supabase
       .from('listings')
@@ -1260,18 +1261,10 @@ const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Date.now() / 3
 
     let rows = allData || []
 
-    // Split into featured vs regular
-    const featured = rows.filter(l => l.featured === true || l.is_featured === true)
-    const regular  = rows.filter(l => l.featured !== true && l.is_featured !== true)
-
-    // Rotate featured order every 30s
-    const seed = Math.floor(Date.now() / 30000)
-    const hashId = (id) => {
-      let h = seed * 2654435761
-      for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 2246822519)
-      return h >>> 0
-    }
-    const sortedFeatured = [...featured].sort((a, b) => hashId(a.id) - hashId(b.id))
+    // Split into featured vs regular; fair multi-seller rotation (Phase 3.2)
+    const featured = rows.filter(l => isListingFeatured(l))
+    const regular  = rows.filter(l => !isListingFeatured(l))
+    const sortedFeatured = rotateFeaturedFairly(featured, { intervalMs: 30_000, maxPerSeller: 2 })
 
     // Sort regular by user's chosen sort
     let sortedRegular = [...regular]
@@ -1281,7 +1274,7 @@ const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Date.now() / 3
       default:           sortedRegular.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     }
 
-    // Merge: featured always first, then hard-cap the whole list to 20 max
+    // Merge: fair-rotated featured first, then hard-cap the whole list to 20 max
     const merged = [...sortedFeatured, ...sortedRegular].slice(0, 20)
 
     // Paginate client-side

@@ -1,22 +1,31 @@
-import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { isListingFeatured } from '../utils/homeUtils'
 import {
   adminTransitionVerification,
   ADMIN_ACTIONABLE_STATUSES,
   statusLabel,
-  paymentStatusLabel,
   adminConfirmPayment,
   adminRejectPayment,
   getPaymentsForRequest,
+  enrichAdminVerificationQueue,
+  buildAdminPendingActions,
+  getAdminVerificationNotifications,
 } from '../lib/verification'
+import AdminVerificationDetail from '../components/AdminVerificationDetail'
+import AdminVerificationSettings from '../components/AdminVerificationSettings'
+import AdminVerifiedSellers from '../components/AdminVerifiedSellers'
+import AdminVerificationHub from '../components/AdminVerificationHub'
 
-const TABS = ['Dashboard', 'Featured', 'Listings', 'Users', 'Verifications', 'Shop Reports', 'Broadcast']
+const TABS = ['Dashboard', 'Featured', 'Listings', 'Users', 'Verifications', 'Verify Settings', 'Shop Reports', 'Broadcast']
 
 export default function Admin() {
   const navigate = useNavigate()
-  const [tab, setTab] = useState('Dashboard')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [tab, setTab] = useState(() => searchParams.get('tab') || 'Dashboard')
   const [listings, setListings] = useState([])
+  const [featurePromos, setFeaturePromos] = useState([]) // Phase 5.1 analytics ledger
   const [users, setUsers] = useState([])
   const [loading, setLoading] = useState(true)
   const [toggling, setToggling] = useState(null)
@@ -26,21 +35,56 @@ export default function Admin() {
   const [adminName, setAdminName] = useState('')
   const [freeFeaturedEnabled, setFreeFeaturedEnabled] = useState(true)
   const [settingsLoading, setSettingsLoading] = useState(false)
-const [verifications, setVerifications] = useState([])
-const [verifyLoading, setVerifyLoading] = useState(false)
-const [paymentByRequest, setPaymentByRequest] = useState({}) // requestId -> latest payment
-const [paymentLoading, setPaymentLoading] = useState(null)
-const [shopReports, setShopReports] = useState([])
-const [reportFilter, setReportFilter] = useState('pending')
-const [reportActionLoading, setReportActionLoading] = useState(null)
-const [broadcastSubject, setBroadcastSubject] = useState('')
-const [broadcastMessage, setBroadcastMessage] = useState('')
-const [broadcasting, setBroadcasting] = useState(false)
-const [broadcastResult, setBroadcastResult] = useState(null)
-const [broadcastFilter, setBroadcastFilter] = useState({ role: 'all', city: '' })
-const [selectedUsers, setSelectedUsers] = useState([])
+  const [verifications, setVerifications] = useState([])
+  const [verifyLoading, setVerifyLoading] = useState(false)
+  const [paymentByRequest, setPaymentByRequest] = useState({}) // requestId -> latest payment
+  const [paymentLoading, setPaymentLoading] = useState(null)
+  const [selectedVerificationId, setSelectedVerificationId] = useState(() => searchParams.get('request') || null)
+  const [verificationView, setVerificationView] = useState('requests') // requests | sellers
+  const [adminUserId, setAdminUserId] = useState(null)
+  const [adminNotifCount, setAdminNotifCount] = useState(0)
+  const [shopReports, setShopReports] = useState([])
+  const [reportFilter, setReportFilter] = useState('pending')
+  const [reportActionLoading, setReportActionLoading] = useState(null)
+  const [broadcastSubject, setBroadcastSubject] = useState('')
+  const [broadcastMessage, setBroadcastMessage] = useState('')
+  const [broadcasting, setBroadcasting] = useState(false)
+  const [broadcastResult, setBroadcastResult] = useState(null)
+  const [broadcastFilter, setBroadcastFilter] = useState({ role: 'all', city: '' })
+  const [selectedUsers, setSelectedUsers] = useState([])
 
   useEffect(() => { init() }, [])
+
+  // Deep-link: /admin?tab=Verifications&request=...
+  useEffect(() => {
+    const t = searchParams.get('tab')
+    const req = searchParams.get('request')
+    if (t && TABS.includes(t)) setTab(t)
+    if (req) {
+      setTab('Verifications')
+      setVerificationView('requests')
+      setSelectedVerificationId(req)
+    }
+  }, [searchParams])
+
+  const verificationBadgeCount = useMemo(() => {
+    const enriched = enrichAdminVerificationQueue(verifications, paymentByRequest, null)
+    const pending = buildAdminPendingActions(enriched)
+    return pending.urgent.length + adminNotifCount
+  }, [verifications, paymentByRequest, adminNotifCount])
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const n = await getAdminVerificationNotifications({ unreadOnly: true, limit: 50 })
+        if (!cancelled) setAdminNotifCount((n || []).length)
+      } catch {
+        if (!cancelled) setAdminNotifCount(0)
+      }
+    })()
+    return () => { cancelled = true }
+  }, [verifications.length, tab])
 
   async function init() {
     const { data: { user } } = await supabase.auth.getUser()
@@ -55,6 +99,7 @@ const [selectedUsers, setSelectedUsers] = useState([])
     if (profile?.role !== 'admin') { navigate('/'); return }
 
     setAdminName(profile?.full_name || user.email)
+    setAdminUserId(user.id)
     await Promise.all([loadListings(), loadUsers(), loadVerifications(), loadShopReports(), loadSettings()])
     setLoading(false)
   }
@@ -82,11 +127,12 @@ const [selectedUsers, setSelectedUsers] = useState([])
  async function loadListings() {
   const { data, error } = await supabase
     .from('listings')
-    .select('id, title, price, city, category, images, status, featured, is_featured, seller_id, created_at, promoted_until')
+    .select('id, title, price, city, category, images, status, featured, is_featured, featured_until, seller_id, created_at, promoted_until')
     .order('created_at', { ascending: false })
   if (error) console.error('Listings error:', error)
 
-  const list = (data || []).map(l => ({ ...l, is_featured: l.featured || l.is_featured }))
+  // Phase 2.2: derive featured from featured_until > now()
+  const list = (data || []).map(l => ({ ...l, is_featured: isListingFeatured(l) }))
   const sellerIds = [...new Set(list.map(l => l.seller_id).filter(Boolean))]
   if (sellerIds.length > 0) {
     const { data: profiles } = await supabase
@@ -97,63 +143,97 @@ const [selectedUsers, setSelectedUsers] = useState([])
     list.forEach(l => { l.profiles = profileMap[l.seller_id] || null })
   }
 
-  // Pull each listing's most recent 'featured' promotion so we can show
-  // amount paid + duration on the Featured tab cards.
-  const listingIds = list.map(l => l.id)
-  if (listingIds.length > 0) {
-    const { data: promos } = await supabase
-      .from('listing_promotions')
-      .select('listing_id, price_mwk, started_at, expires_at, status')
-      .in('listing_id', listingIds)
-      .eq('promotion_type', 'featured')
-      .order('started_at', { ascending: false })
-    const promoMap = {}
-    ;(promos || []).forEach(p => {
-      // Keep only the most recent promotion per listing (list is already
-      // ordered by started_at desc, so first hit wins)
-      if (!promoMap[p.listing_id]) promoMap[p.listing_id] = p
-    })
-    list.forEach(l => {
-      const p = promoMap[l.id]
-      if (p) {
-        l.promo_price = p.price_mwk
-        l.promo_started_at = p.started_at
-        l.promo_expires_at = p.expires_at
-        l.promo_status = p.status
-        if (p.started_at && p.expires_at) {
-          const days = Math.round((new Date(p.expires_at) - new Date(p.started_at)) / 86400000)
-          l.promo_duration_days = days
-        }
+  // Featured promotions ledger (full) for analytics + per-card latest promo
+  const { data: allPromos } = await supabase
+    .from('listing_promotions')
+    .select('id, listing_id, price_mwk, started_at, expires_at, status, tx_ref, created_at')
+    .eq('promotion_type', 'featured')
+    .order('created_at', { ascending: false })
+    .limit(3000)
+
+  const promos = allPromos || []
+  setFeaturePromos(promos)
+
+  const promoMap = {}
+  promos.forEach(p => {
+    // Most recent per listing (list ordered created_at desc)
+    if (!promoMap[p.listing_id]) promoMap[p.listing_id] = p
+  })
+  list.forEach(l => {
+    const p = promoMap[l.id]
+    if (p) {
+      l.promo_price = p.price_mwk
+      l.promo_started_at = p.started_at
+      l.promo_expires_at = p.expires_at
+      l.promo_status = p.status
+      if (p.started_at && p.expires_at) {
+        const days = Math.round((new Date(p.expires_at) - new Date(p.started_at)) / 86400000)
+        l.promo_duration_days = days
       }
-    })
-  }
+    }
+  })
 
   setListings(list)
 }
 
 async function loadVerifications() {
   let rows = []
-  const { data, error } = await supabase
-    .from('verification_requests')
-    .select('*, profiles!seller_id(full_name, avatar_url, city)')
-    .order('created_at', { ascending: false })
-  if (error) {
-    const { data: d2 } = await supabase
+  // Progressive selects — FK embed names differ by environment; never leave admin blank
+  const attempts = [
+    { sel: '*, profiles!seller_id(full_name, avatar_url, city, phone, email, created_at)', order: 'created_at' },
+    { sel: '*, profiles!seller_id(full_name, avatar_url, city)', order: 'created_at' },
+    { sel: '*, profiles!seller_id(full_name, avatar_url, city)', order: 'updated_at' },
+    { sel: '*', order: 'created_at' },
+    { sel: '*', order: 'updated_at' },
+    { sel: 'id, seller_id, status, payment_method, payment_ref, amount_due, amount_paid, currency, admin_note, additional_info_message, rejection_reason, submitted_at, reviewed_at, under_review_at, payment_confirmed_at, created_at, updated_at, meta, notes', order: 'created_at' },
+  ]
+  for (const a of attempts) {
+    const { data, error } = await supabase
       .from('verification_requests')
-      .select('*, profiles!seller_id(full_name, avatar_url, city)')
-      .order('submitted_at', { ascending: false })
-    rows = d2 || []
-  } else {
-    rows = data || []
+      .select(a.sel)
+      .order(a.order, { ascending: false })
+      .limit(300)
+    if (!error && data) {
+      rows = data
+      break
+    }
   }
+
+  // If profiles embed missing, batch-load seller profiles
+  const needProfiles = rows.some((r) => !r.profiles && r.seller_id)
+  if (needProfiles) {
+    const ids = [...new Set(rows.map((r) => r.seller_id).filter(Boolean))]
+    if (ids.length) {
+      let profileMap = {}
+      for (const cols of [
+        'id, full_name, avatar_url, city, phone, email, created_at',
+        'id, full_name, avatar_url, city',
+        'id, full_name, avatar_url',
+      ]) {
+        const { data: ps, error } = await supabase.from('profiles').select(cols).in('id', ids)
+        if (!error && ps?.length) {
+          profileMap = Object.fromEntries(ps.map((p) => [p.id, p]))
+          break
+        }
+      }
+      rows = rows.map((r) => ({
+        ...r,
+        profiles: r.profiles || profileMap[r.seller_id] || null,
+      }))
+    }
+  }
+
   setVerifications(rows)
 
-  // Load latest payment per request (Phase 3 ledger)
+  // Load latest payment per request (prefer confirmed)
   const map = {}
   await Promise.all(
-    rows.slice(0, 40).map(async (r) => {
+    rows.slice(0, 80).map(async (r) => {
       try {
-        const pays = await getPaymentsForRequest(r.id)
+        const pays = await getPaymentsForRequest(r.id, {
+          paymentRef: r.payment_ref,
+          sellerId: r.seller_id,
+        })
         if (pays?.[0]) map[r.id] = pays[0]
       } catch { /* migration optional */ }
     })
@@ -204,37 +284,28 @@ async function handleReportAction(id, status) {
 async function handleVerify(id, status, note = '') {
   setVerifyLoading(id)
   try {
-    // Prefer RPC (syncs profiles + shops via trigger)
-    try {
-      await adminTransitionVerification(id, status, note || null)
-    } catch {
-      // Fallback: direct update + profile sync
-      await supabase.from('verification_requests').update({
-        status,
-        admin_note: note || null,
-        rejection_reason: status === 'rejected' ? (note || null) : null,
-        reviewed_at: new Date().toISOString(),
-        under_review_at: status === 'under_review' ? new Date().toISOString() : undefined,
-      }).eq('id', id)
-
-      const verification = verifications.find(v => v.id === id)
-      if (status === 'approved' && verification?.seller_id) {
-        await supabase.from('profiles').update({
-          is_verified: true,
-          verification_status: 'approved',
-          verified_at: new Date().toISOString(),
-          verification_request_id: id,
-          rejection_reason: null,
-        }).eq('id', verification.seller_id)
-        await supabase.from('shops').update({ is_verified: true }).eq('owner_id', verification.seller_id)
-      }
-      if (status === 'rejected' && verification?.seller_id) {
-        await supabase.from('profiles').update({
-          is_verified: false,
-          verification_status: 'rejected',
-          rejection_reason: note || null,
-          verification_request_id: id,
-        }).eq('id', verification.seller_id)
+    // Prefer helpers that notify seller (need-info / approve / reject)
+    if (status === 'additional_info_required') {
+      const { adminRequestMoreInfo } = await import('../lib/verification')
+      await adminRequestMoreInfo(id, note || 'Please provide the requested documents.')
+    } else if (status === 'approved') {
+      const { adminApproveVerification } = await import('../lib/verification')
+      await adminApproveVerification(id, note || null, { force: true })
+    } else if (status === 'rejected') {
+      const { adminRejectVerification } = await import('../lib/verification')
+      await adminRejectVerification(id, note || 'Request rejected')
+    } else {
+      try {
+        await adminTransitionVerification(id, status, note || null)
+      } catch {
+        await supabase.from('verification_requests').update({
+          status,
+          admin_note: note || null,
+          additional_info_message: status === 'additional_info_required' ? (note || null) : undefined,
+          rejection_reason: status === 'rejected' ? (note || null) : null,
+          reviewed_at: new Date().toISOString(),
+          under_review_at: status === 'under_review' ? new Date().toISOString() : undefined,
+        }).eq('id', id)
       }
     }
 
@@ -243,6 +314,7 @@ async function handleVerify(id, status, note = '') {
           ...v,
           status,
           admin_note: note || v.admin_note,
+          additional_info_message: status === 'additional_info_required' ? (note || v.additional_info_message) : v.additional_info_message,
           rejection_reason: status === 'rejected' ? (note || null) : v.rejection_reason,
         }
       : v
@@ -250,7 +322,7 @@ async function handleVerify(id, status, note = '') {
     showToast(
       status === 'approved' ? '✅ Seller verified!'
         : status === 'rejected' ? '❌ Request rejected'
-          : status === 'additional_info_required' ? 'ℹ️ Additional info requested'
+          : status === 'additional_info_required' ? 'ℹ️ Additional info requested — seller notified'
             : `Status → ${statusLabel(status)}`
     )
   } catch (e) {
@@ -366,56 +438,41 @@ async function loadUsers() {
     setTimeout(() => setToast(''), 2500)
   }
 
+  /**
+   * Phase 1.3 — Admin feature control via RPC only.
+   * Never writes is_featured / featured / promoted_until from the client.
+   * Sellers cannot call these RPCs (is_admin() enforced server-side).
+   */
   async function toggleFeatured(listing) {
     setToggling(listing.id)
+    try {
+      if (!listing.is_featured) {
+        const daysInput = window.prompt('Feature this listing for how many days?', '14')
+        const days = parseInt(daysInput, 10)
+        if (!daysInput || !days || days <= 0) return
 
-    if (!listing.is_featured) {
-      const daysInput = window.prompt('Feature this listing for how many days?', '14')
-      const days = parseInt(daysInput, 10)
-      if (!daysInput || !days || days <= 0) { setToggling(null); return }
+        const { error } = await supabase.rpc('admin_set_listing_featured', {
+          p_listing_id: listing.id,
+          p_duration_days: days,
+        })
+        if (error) throw error
 
-      const startedAt = new Date()
-      const expiresAt = new Date(startedAt)
-      expiresAt.setDate(expiresAt.getDate() + days)
+        showToast(`Featured for ${days} days ⭐`)
+        await loadListings()
+      } else {
+        const { error } = await supabase.rpc('admin_unset_listing_featured', {
+          p_listing_id: listing.id,
+        })
+        if (error) throw error
 
-      await supabase.from('listings')
-        .update({ featured: true, is_featured: true, promoted_until: expiresAt.toISOString() })
-        .eq('id', listing.id)
-
-      await supabase.from('listing_promotions').insert([{
-        listing_id: listing.id,
-        seller_id: listing.seller_id,
-        promotion_type: 'featured',
-        price_mwk: 0, // admin-granted, no charge
-        status: 'active',
-        started_at: startedAt.toISOString(),
-        expires_at: expiresAt.toISOString(),
-      }])
-
-      setListings(ls => ls.map(l => l.id === listing.id
-        ? { ...l, is_featured: true, promoted_until: expiresAt.toISOString(),
-            promo_price: 0, promo_started_at: startedAt.toISOString(),
-            promo_expires_at: expiresAt.toISOString(), promo_duration_days: days }
-        : l))
-      showToast(`Featured for ${days} days ⭐`)
-    } else {
-      await supabase.from('listings')
-        .update({ featured: false, is_featured: false, promoted_until: null })
-        .eq('id', listing.id)
-
-      await supabase.from('listing_promotions')
-        .update({ status: 'cancelled' })
-        .eq('listing_id', listing.id)
-        .eq('status', 'active')
-
-      setListings(ls => ls.map(l => l.id === listing.id
-        ? { ...l, is_featured: false, promoted_until: null,
-            promo_price: null, promo_started_at: null, promo_expires_at: null, promo_duration_days: null }
-        : l))
-      showToast('Removed from featured')
+        showToast('Removed from featured')
+        await loadListings()
+      }
+    } catch (e) {
+      showToast(`❌ ${e?.message || 'Feature update failed'}`)
+    } finally {
+      setToggling(null)
     }
-
-    setToggling(null)
   }
 
   async function toggleStatus(listing) {
@@ -451,24 +508,96 @@ async function loadUsers() {
     showToast(`${u.full_name || 'User'} is now ${next}`)
   }
 
+  // Home publishes as `published`; some rows use `active`. Treat both as live.
+  const isLiveStatus = (s) => s === 'published' || s === 'active'
+
   const stats = {
     total: listings.length,
-    active: listings.filter(l => l.status === 'active').length,
+    active: listings.filter(l => isLiveStatus(l.status)).length,
     featured: listings.filter(l => l.is_featured).length,
-    inactive: listings.filter(l => l.status === 'inactive').length,
+    inactive: listings.filter(l => l.status === 'inactive' || l.status === 'draft').length,
     users: users.length,
     admins: users.filter(u => u.role === 'admin').length,
   }
 
   const featuredListings = listings.filter(l => l.is_featured)
-  const unfeaturedListings = listings.filter(l => !l.is_featured && l.status === 'active')
+  const unfeaturedListings = listings.filter(l => !l.is_featured && isLiveStatus(l.status))
+
+  // Phase 5.1 — featured listing analytics (from ledger + active windows)
+  const featuredAnalytics = useMemo(() => {
+    const now = Date.now()
+    const in48h = now + 48 * 3600 * 1000
+    const in7d = now + 7 * 24 * 3600 * 1000
+
+    const paidSuccess = featurePromos.filter(
+      p => (p.status === 'active' || p.status === 'expired') && Number(p.price_mwk || 0) > 0,
+    )
+    const revenue = paidSuccess.reduce((sum, p) => sum + Number(p.price_mwk || 0), 0)
+
+    const freeAll = featurePromos.filter(
+      p => Number(p.price_mwk || 0) === 0 && (p.status === 'active' || p.status === 'expired'),
+    )
+    const freeActive = featurePromos.filter(
+      p => p.status === 'active' && Number(p.price_mwk || 0) === 0,
+    )
+    const paidActive = featurePromos.filter(
+      p => p.status === 'active' && Number(p.price_mwk || 0) > 0,
+    )
+
+    // Failed activations: paid pending that failed/cancelled/expired without activating
+    const failed = featurePromos.filter(
+      p => Number(p.price_mwk || 0) > 0 && (p.status === 'failed' || p.status === 'cancelled'),
+    )
+    // Still pending paid (stuck / abandoned checkout)
+    const pendingPaid = featurePromos.filter(
+      p => p.status === 'pending' && Number(p.price_mwk || 0) > 0,
+    )
+
+    const activeCount = featuredListings.length
+    const expiringSoon = featuredListings.filter(l => {
+      const end = l.featured_until || l.promoted_until || l.promo_expires_at
+      if (!end) return false
+      const t = new Date(end).getTime()
+      return t > now && t <= in48h
+    })
+    const expiringWeek = featuredListings.filter(l => {
+      const end = l.featured_until || l.promoted_until || l.promo_expires_at
+      if (!end) return false
+      const t = new Date(end).getTime()
+      return t > now && t <= in7d
+    })
+
+    return {
+      revenue,
+      paidActivations: paidSuccess.length,
+      activeCount,
+      expiringSoon: expiringSoon.length,
+      expiringWeek: expiringWeek.length,
+      freeActive: freeActive.length,
+      paidActive: paidActive.length,
+      freeAllTime: freeAll.length,
+      failedActivations: failed.length,
+      pendingPaid: pendingPaid.length,
+      expiringList: expiringSoon
+        .slice()
+        .sort((a, b) => {
+          const ta = new Date(a.featured_until || a.promoted_until || 0).getTime()
+          const tb = new Date(b.featured_until || b.promoted_until || 0).getTime()
+          return ta - tb
+        })
+        .slice(0, 8),
+    }
+  }, [featurePromos, featuredListings])
 
   const filteredListings = listings.filter(l => {
     const matchSearch = !search ||
       l.title?.toLowerCase().includes(search.toLowerCase()) ||
       l.city?.toLowerCase().includes(search.toLowerCase()) ||
       l.profiles?.full_name?.toLowerCase().includes(search.toLowerCase())
-    const matchStatus = statusFilter === 'all' || l.status === statusFilter
+    let matchStatus = true
+    if (statusFilter === 'active') matchStatus = isLiveStatus(l.status)
+    else if (statusFilter === 'inactive') matchStatus = l.status === 'inactive' || l.status === 'draft'
+    else if (statusFilter !== 'all') matchStatus = l.status === statusFilter
     return matchSearch && matchStatus
   })
 
@@ -479,7 +608,10 @@ async function loadUsers() {
     </div>
   )
 
-  const TAB_ICONS = { Dashboard: '📊', Featured: '⭐', Listings: '📦', Users: '👥', Verifications: '✅', 'Shop Reports': '🚩', Broadcast: '📣' }
+  const TAB_ICONS = {
+    Dashboard: '📊', Featured: '⭐', Listings: '📦', Users: '👥',
+    Verifications: '✅', 'Verify Settings': '⚙️', 'Shop Reports': '🚩', Broadcast: '📣',
+  }
 
   return (
     <div style={S.shell}>
@@ -539,9 +671,9 @@ async function loadUsers() {
                {t === 'Users' && (
   <span style={S.navPill}>{stats.users}</span>
 )}
-{t === 'Verifications' && verifications.filter(v => isVerificationActionable(v.status)).length > 0 && (
+{t === 'Verifications' && verificationBadgeCount > 0 && (
   <span style={{ ...S.navPill, background: '#dc2626' }}>
-    {verifications.filter(v => isVerificationActionable(v.status)).length}
+    {verificationBadgeCount}
   </span>
 )}
 {t === 'Shop Reports' && shopReports.filter(r => r.status === 'pending').length > 0 && (
@@ -588,6 +720,8 @@ async function loadUsers() {
               {tab === 'Featured' && 'Control homepage spotlight'}
               {tab === 'Listings' && `${filteredListings.length} listings`}
               {tab === 'Users' && `${stats.users} accounts`}
+              {tab === 'Verifications' && 'Review seller applications'}
+              {tab === 'Verify Settings' && 'Fees, docs, methods & analytics'}
             </div>
           </div>
           {(tab === 'Listings') && (
@@ -608,9 +742,10 @@ async function loadUsers() {
                 onChange={e => setStatusFilter(e.target.value)}
               >
                 <option value="all">All</option>
-                <option value="active">Active</option>
-                <option value="inactive">Inactive</option>
+                <option value="active">Active / Published</option>
+                <option value="inactive">Inactive / Draft</option>
                 <option value="sold">Sold</option>
+                <option value="published">Published only</option>
               </select>
             </div>
           )}
@@ -624,13 +759,20 @@ async function loadUsers() {
                 { label: 'Total Listings', value: stats.total, color: '#1a7a4a', bg: '#e6f4ec', icon: '📦' },
                 { label: 'Active Listings', value: stats.active, color: '#1d4ed8', bg: '#dbeafe', icon: '✅' },
                 { label: 'Featured', value: stats.featured, color: '#b45309', bg: '#fef3c7', icon: '⭐' },
+                { label: 'Feature revenue', value: `MWK ${Number(featuredAnalytics.revenue || 0).toLocaleString()}`, color: '#15803d', bg: '#dcfce7', icon: '💰' },
+                { label: 'Expiring (48h)', value: featuredAnalytics.expiringSoon, color: '#c2410c', bg: '#ffedd5', icon: '⏳' },
+                { label: 'Failed features', value: featuredAnalytics.failedActivations, color: '#dc2626', bg: '#fee2e2', icon: '❌' },
                 { label: 'Total Users', value: stats.users, color: '#7c3aed', bg: '#ede9fe', icon: '👥' },
                 { label: 'Inactive', value: stats.inactive, color: '#dc2626', bg: '#fee2e2', icon: '⛔' },
                 { label: 'Admins', value: stats.admins, color: '#0f766e', bg: '#ccfbf1', icon: '🛡️' },
               ].map(s => (
                 <div key={s.label} style={{ ...S.statCard, background: s.bg }}>
                   <div style={{ fontSize: 24, marginBottom: 8 }}>{s.icon}</div>
-                  <div style={{ ...S.statVal, color: s.color }}>{s.value}</div>
+                  <div style={{
+                    ...S.statVal,
+                    color: s.color,
+                    fontSize: typeof s.value === 'string' && String(s.value).length > 10 ? 20 : 32,
+                  }}>{s.value}</div>
                   <div style={{ ...S.statLabel, color: s.color + 'aa' }}>{s.label}</div>
                 </div>
               ))}
@@ -689,6 +831,129 @@ async function loadUsers() {
         {/* ══ TAB: FEATURED ══ */}
         {tab === 'Featured' && (
           <div style={S.content}>
+            {/* Phase 5.1 — Featured analytics (same stat card language as Dashboard) */}
+            <div style={S.statsGrid}>
+              {[
+                {
+                  label: 'Feature revenue',
+                  value: `MWK ${Number(featuredAnalytics.revenue || 0).toLocaleString()}`,
+                  color: '#1a7a4a',
+                  bg: '#e6f4ec',
+                  icon: '💰',
+                  sub: `${featuredAnalytics.paidActivations} paid activations`,
+                },
+                {
+                  label: 'Active featured',
+                  value: featuredAnalytics.activeCount,
+                  color: '#b45309',
+                  bg: '#fef3c7',
+                  icon: '⭐',
+                  sub: `${featuredAnalytics.paidActive} paid · ${featuredAnalytics.freeActive} free`,
+                },
+                {
+                  label: 'Expiring soon',
+                  value: featuredAnalytics.expiringSoon,
+                  color: '#c2410c',
+                  bg: '#ffedd5',
+                  icon: '⏳',
+                  sub: `${featuredAnalytics.expiringWeek} within 7 days`,
+                },
+                {
+                  label: 'Free vs paid (active)',
+                  value: `${featuredAnalytics.freeActive} / ${featuredAnalytics.paidActive}`,
+                  color: '#7c3aed',
+                  bg: '#ede9fe',
+                  icon: '🆓',
+                  sub: `${featuredAnalytics.freeAllTime} free all-time`,
+                },
+                {
+                  label: 'Failed activations',
+                  value: featuredAnalytics.failedActivations,
+                  color: '#dc2626',
+                  bg: '#fee2e2',
+                  icon: '❌',
+                  sub: `${featuredAnalytics.pendingPaid} paid still pending`,
+                },
+                {
+                  label: 'Available to feature',
+                  value: unfeaturedListings.length,
+                  color: '#0f766e',
+                  bg: '#ccfbf1',
+                  icon: '➕',
+                  sub: 'Live listings not featured',
+                },
+              ].map(s => (
+                <div key={s.label} style={{ ...S.statCard, background: s.bg }}>
+                  <div style={{ fontSize: 24, marginBottom: 8 }}>{s.icon}</div>
+                  <div style={{ ...S.statVal, color: s.color, fontSize: typeof s.value === 'string' && s.value.length > 8 ? 22 : 32 }}>
+                    {s.value}
+                  </div>
+                  <div style={{ ...S.statLabel, color: s.color + 'aa' }}>{s.label}</div>
+                  {s.sub && (
+                    <div style={{ fontSize: 11, fontWeight: 600, color: s.color + '99', marginTop: 6 }}>
+                      {s.sub}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {featuredAnalytics.expiringList.length > 0 && (
+              <div style={{ ...S.tableCard, marginBottom: 20 }}>
+                <div style={S.tableHeader}>
+                  <div style={S.tableTitle}>Expiring within 48 hours</div>
+                  <span style={{ fontSize: 12, color: '#9ca3af', fontWeight: 600 }}>
+                    {featuredAnalytics.expiringSoon} listing{featuredAnalytics.expiringSoon === 1 ? '' : 's'}
+                  </span>
+                </div>
+                <table style={S.table}>
+                  <thead>
+                    <tr style={S.thead}>
+                      <th style={S.th}>Listing</th>
+                      <th style={S.th}>Seller</th>
+                      <th style={S.th}>Expires</th>
+                      <th style={S.th}>Type</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {featuredAnalytics.expiringList.map(l => {
+                      const end = l.featured_until || l.promoted_until || l.promo_expires_at
+                      const isFree = !(Number(l.promo_price) > 0)
+                      return (
+                        <tr key={l.id} className="row-hover" style={S.tr}>
+                          <td style={S.td}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <div style={S.thumbBox}>
+                                {l.images?.[0]
+                                  ? <img src={l.images[0]} alt="" style={S.thumbImg} />
+                                  : <span style={{ fontSize: 16 }}>⭐</span>}
+                              </div>
+                              <div style={S.listingTitle}>{l.title}</div>
+                            </div>
+                          </td>
+                          <td style={S.td}>
+                            <span style={S.listingMeta}>{l.profiles?.full_name || '—'}</span>
+                          </td>
+                          <td style={{ ...S.td, fontWeight: 700, color: '#c2410c', fontSize: 12 }}>
+                            {end ? new Date(end).toLocaleString() : '—'}
+                          </td>
+                          <td style={S.td}>
+                            <span style={{
+                              ...S.badge,
+                              background: isFree ? '#ede9fe' : '#e6f4ec',
+                              color: isFree ? '#7c3aed' : '#1a7a4a',
+                            }}>
+                              {isFree ? 'Free' : `Paid · MWK ${Number(l.promo_price).toLocaleString()}`}
+                            </span>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
             <div style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
               background: '#fff', border: '1px solid #e8f0ec', borderRadius: 14,
@@ -732,7 +997,7 @@ async function loadUsers() {
             <div style={{ marginTop: 28 }} />
             <SectionLabel icon="➕" text={`Available to Feature (${unfeaturedListings.length})`} />
             {unfeaturedListings.length === 0
-              ? <EmptyBox text="All active listings are already featured." />
+              ? <EmptyBox text="All live (published/active) listings are already featured." />
               : <div style={S.featGrid}>
                   {unfeaturedListings.map(l => (
                     <FeatCard key={l.id} listing={l} featured={false} toggling={toggling === l.id}
@@ -836,149 +1101,118 @@ async function loadUsers() {
         {/* ══ TAB: USERS ══ */}
         {tab === 'Verifications' && (
   <div style={S.content}>
-    <div style={S.tableCard}>
-      <div style={S.tableHeader}>
-        <div style={S.tableTitle}>Verification Requests & Payments</div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {['all','pending','under_review','payment_pending','approved','rejected'].map(f => (
-            <button key={f} onClick={() => setStatusFilter(f)} style={{
-              padding: '4px 12px', borderRadius: 20, border: 'none', cursor: 'pointer',
-              fontSize: 11, fontWeight: 700,
-              background: statusFilter === f ? '#1a7a4a' : '#f0f5f2',
-              color: statusFilter === f ? '#fff' : '#555',
-            }}>{f}</button>
-          ))}
-        </div>
-      </div>
-      {verifications
-        .filter(v => {
-          if (statusFilter === 'all') return true
-          if (statusFilter === 'pending') {
-            return isVerificationActionable(v.status) || paymentByRequest[v.id]?.payment_status === 'awaiting_confirmation'
-          }
-          return v.status === statusFilter
-        })
-        .map(v => {
-        const pay = paymentByRequest[v.id]
-        const payAwaiting = pay && ['awaiting_confirmation', 'initiated', 'pending'].includes(pay.payment_status)
-        return (
-        <div key={v.id} style={{
-          display: 'flex', alignItems: 'center', gap: 14,
-          padding: '14px 20px', borderBottom: '1px solid #f0f5f2',
-          flexWrap: 'wrap',
-        }}>
-          {/* Avatar */}
-          <div style={{ ...S.userAvatar, flexShrink: 0 }}>
-            {v.profiles?.avatar_url
-              ? <img src={v.profiles.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
-              : (v.profiles?.full_name || '?')[0].toUpperCase()
-            }
-          </div>
-          {/* Info */}
-          <div style={{ flex: 1, minWidth: 180 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#111' }}>
-              {v.profiles?.full_name || 'Unknown'}
-            </div>
-            <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>
-              📍 {v.profiles?.city || '—'} · 💸 {pay?.payment_method || v.payment_method || '—'}
-              {(pay?.transaction_reference || v.payment_ref) && (
-                <> · Ref: <strong>{pay?.transaction_reference || v.payment_ref}</strong></>
-              )}
-            </div>
-            <div style={{ fontSize: 11, color: '#9ca3af' }}>
-              Submitted: {new Date(v.submitted_at || v.created_at || Date.now()).toLocaleString()}
-              {v.payment_confirmed_at ? ` · Paid: ${new Date(v.payment_confirmed_at).toLocaleString()}` : ''}
-            </div>
-            {pay && (
-              <div style={{
-                marginTop: 6, fontSize: 11, fontWeight: 700,
-                color: pay.payment_status === 'confirmed' ? '#1a7a4a'
-                  : pay.payment_status === 'awaiting_confirmation' ? '#b45309'
-                    : pay.payment_status === 'failed' ? '#dc2626' : '#555',
-              }}>
-                Payment: {paymentStatusLabel(pay.payment_status)}
-                {pay.gateway ? ` · ${pay.gateway}` : ''}
-                {pay.receipt_path ? ' · receipt attached' : ''}
-              </div>
-            )}
-            {v.admin_note && (
-              <div style={{ fontSize: 11, color: '#dc2626', marginTop: 2 }}>Note: {v.admin_note}</div>
-            )}
-            {v.rejection_reason && (
-              <div style={{ fontSize: 11, color: '#dc2626', marginTop: 2 }}>Rejection: {v.rejection_reason}</div>
-            )}
-          </div>
-          {/* Amount */}
-          <div style={{ fontSize: 13, fontWeight: 800, color: '#1a7a4a', flexShrink: 0 }}>
-            MK {Number(pay?.payment_amount || v.amount_paid || v.amount_due || 5000).toLocaleString()}
-          </div>
-          {/* Status + actions */}
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
-            <StatusBadge status={v.status === 'under_review' || v.status === 'payment_confirmed' || v.status === 'payment_pending' ? 'pending' : v.status} />
-            <div style={{ fontSize: 10, color: '#6b7280', fontWeight: 600 }}>{statusLabel(v.status)}</div>
-            {payAwaiting && (
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                <button
-                  type="button"
-                  disabled={paymentLoading === pay.id}
-                  onClick={() => handleConfirmPayment(v.id)}
-                  style={{ padding: '5px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, background: '#dbeafe', color: '#1d4ed8' }}
-                >
-                  {paymentLoading === pay.id ? '…' : '✓ Confirm payment'}
-                </button>
-                <button
-                  type="button"
-                  disabled={paymentLoading === pay.id}
-                  onClick={() => handleRejectPayment(v.id)}
-                  style={{ padding: '5px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, background: '#fee2e2', color: '#dc2626' }}
-                >
-                  Reject payment
-                </button>
-              </div>
-            )}
-            {isVerificationActionable(v.status) && (
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-                <button
-                  type="button"
-                  disabled={verifyLoading === v.id}
-                  onClick={() => handleVerify(v.id, 'approved')}
-                  style={{ padding: '5px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, background: '#e6f4ec', color: '#1a7a4a' }}
-                >
-                  {verifyLoading === v.id ? '…' : '✓ Approve seller'}
-                </button>
-                <button
-                  type="button"
-                  disabled={verifyLoading === v.id}
-                  onClick={() => {
-                    const note = window.prompt('What additional info do you need?') || ''
-                    if (!note) return
-                    handleVerify(v.id, 'additional_info_required', note)
-                  }}
-                  style={{ padding: '5px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, background: '#fef3c7', color: '#b45309' }}
-                >
-                  Need info
-                </button>
-                <button
-                  type="button"
-                  disabled={verifyLoading === v.id}
-                  onClick={() => {
-                    const note = window.prompt('Rejection reason (optional):') || ''
-                    handleVerify(v.id, 'rejected', note)
-                  }}
-                  style={{ padding: '5px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, background: '#fee2e2', color: '#dc2626' }}
-                >
-                  ✕ Reject seller
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )})}
-      {verifications.filter(v => statusFilter === 'all' || v.status === statusFilter).length === 0 && (
-        <div style={{ padding: 32, textAlign: 'center', color: '#aaa', fontSize: 13 }}>No verification requests.</div>
-      )}
+    {/* Sub-nav: requests vs verified seller management */}
+    <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+      <button
+        type="button"
+        onClick={() => setVerificationView('requests')}
+        style={{
+          padding: '8px 16px', borderRadius: 10, border: 'none', cursor: 'pointer',
+          fontSize: 13, fontWeight: 800, fontFamily: 'inherit',
+          background: verificationView === 'requests' ? '#1a7a4a' : '#fff',
+          color: verificationView === 'requests' ? '#fff' : '#555',
+          boxShadow: '0 1px 0 rgba(0,0,0,0.04)',
+          borderWidth: 1, borderStyle: 'solid', borderColor: verificationView === 'requests' ? '#1a7a4a' : '#e8f0ec',
+        }}
+      >
+        Requests & payments
+        {verificationBadgeCount > 0 && (
+          <span style={{
+            marginLeft: 8,
+            background: verificationView === 'requests' ? 'rgba(255,255,255,0.25)' : '#fee2e2',
+            color: verificationView === 'requests' ? '#fff' : '#b91c1c',
+            fontSize: 10, fontWeight: 800, padding: '2px 7px', borderRadius: 999,
+          }}>
+            {verificationBadgeCount}
+          </span>
+        )}
+      </button>
+      <button
+        type="button"
+        onClick={() => setVerificationView('sellers')}
+        style={{
+          padding: '8px 16px', borderRadius: 10, border: 'none', cursor: 'pointer',
+          fontSize: 13, fontWeight: 800, fontFamily: 'inherit',
+          background: verificationView === 'sellers' ? '#1a7a4a' : '#fff',
+          color: verificationView === 'sellers' ? '#fff' : '#555',
+          boxShadow: '0 1px 0 rgba(0,0,0,0.04)',
+          borderWidth: 1, borderStyle: 'solid', borderColor: verificationView === 'sellers' ? '#1a7a4a' : '#e8f0ec',
+        }}
+      >
+        Manage verified sellers
+      </button>
     </div>
+
+    {verificationView === 'sellers' && (
+      <AdminVerifiedSellers
+        adminName={adminName}
+        onToast={showToast}
+        onOpenRequest={(id) => {
+          setVerificationView('requests')
+          setSelectedVerificationId(id)
+        }}
+      />
+    )}
+
+    {verificationView === 'requests' && (
+    <>
+    <AdminVerificationHub
+      verifications={verifications}
+      paymentByRequest={paymentByRequest}
+      selectedId={selectedVerificationId}
+      adminName={adminName}
+      verifyLoading={verifyLoading}
+      paymentLoading={paymentLoading}
+      onSelect={(id) => setSelectedVerificationId(id)}
+      onRefresh={() => loadVerifications()}
+      onOpenSettings={() => setTab('Verify Settings')}
+      onOpenSellers={() => setVerificationView('sellers')}
+      onConfirmPayment={(id) => handleConfirmPayment(id)}
+      onRejectPayment={(id) => handleRejectPayment(id)}
+      onQuickApprove={(id) => handleVerify(id, 'approved')}
+      onQuickNeedInfo={(id) => {
+        const note = window.prompt('What additional info do you need?') || ''
+        if (!note) return
+        handleVerify(id, 'additional_info_required', note)
+      }}
+      onQuickReject={(id) => {
+        const note = window.prompt('Rejection reason:') || ''
+        if (!note.trim()) {
+          showToast('Rejection reason is required')
+          return
+        }
+        handleVerify(id, 'rejected', note)
+      }}
+    />
+
+    {selectedVerificationId && (
+      <AdminVerificationDetail
+        requestId={selectedVerificationId}
+        adminName={adminName}
+        adminId={adminUserId}
+        onClose={() => {
+          setSelectedVerificationId(null)
+          if (searchParams.get('request')) {
+            const next = new URLSearchParams(searchParams)
+            next.delete('request')
+            setSearchParams(next, { replace: true })
+          }
+        }}
+        onUpdated={() => {
+          loadVerifications()
+        }}
+      />
+    )}
+    </>
+    )}
   </div>
+)}
+
+{tab === 'Verify Settings' && (
+  <AdminVerificationSettings
+    adminName={adminName}
+    onToast={showToast}
+  />
 )}
 
 {tab === 'Shop Reports' && (

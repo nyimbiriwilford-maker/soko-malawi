@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useLocation, useSearchParams } from 'react-router-dom'
 import {
   Search, MessageCircle, Bell, Plus, UploadCloud, X, MapPin,
   RefreshCw, Rocket, Star, TrendingUp, Crown, CheckCircle2,
@@ -8,6 +8,12 @@ import {
   User, AlertCircle, Loader, Video, PlayCircle, Film,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import {
+  FEATURED_PRICE_MWK,
+  FEATURED_DURATION_DAYS,
+  formatFeaturedPrice,
+  featuredPriceLabel,
+} from '../constants/featuredPricing'
 
 /* ────────────────────────────────────────────────────────────
    Design tokens
@@ -64,25 +70,11 @@ const STEPS = [
   { id: 5, title: 'Review', subtitle: 'Review & publish' },
 ]
 
-const FEATURED_TIERS = [
-  { days: 3,  price: 1500 },
-  { days: 7,  price: 2500 },
-  { days: 30, price: 8000 },
-]
-
+// Phase 4.1 — single paid product only (constants/featuredPricing.js)
 const PROMOTIONS = [
-  { id: 'basic',      name: 'Basic Boost',       price: 1500, durationDays: 7,  icon: Rocket,
-    desc: 'Increase visibility in category and search results.',
-    iconBg: 'linear-gradient(135deg,#dbeafe,#eff6ff)', iconColor: C.blue },
-  { id: 'featured',   name: 'Featured Listing',  price: 3000, durationDays: 14, icon: Star,
+  { id: 'featured', name: 'Featured Listing', price: FEATURED_PRICE_MWK, durationDays: FEATURED_DURATION_DAYS, icon: Star,
     desc: 'Your listing appears on the homepage.',
     iconBg: 'linear-gradient(135deg,#fef3c7,#fffbeb)', iconColor: C.amberDeep },
-  { id: 'top_search', name: 'Top of Search',     price: 4500, durationDays: 14, icon: TrendingUp,
-    desc: 'Show at the top of search results.',
-    iconBg: 'linear-gradient(135deg,#fee2e2,#fef2f2)', iconColor: C.red },
-  { id: 'premium',    name: 'Premium Promotion', price: 7000, durationDays: 30, icon: Crown,
-    desc: 'All-in-one visibility boost across the platform.',
-    iconBg: GRAD.premiumIcon, iconColor: '#78350f', badge: 'Best Value', premium: true },
 ]
 
 const CONDITIONS = [
@@ -416,7 +408,7 @@ function ListingGuideModal({ onClose }) {
    ──────────────────────────────────────────────────────────── */
 function ListingPreviewModal({ form, images, videos = [], coverIndex, location, selectedPromotion, booking, onClose, onPublish, submitting }) {
   const cover = images[coverIndex]?.url ?? images[0]?.url
-  const isFeatured = selectedPromotion === 'featured' || selectedPromotion === 'premium'
+  const isFeatured = selectedPromotion === 'featured'
   const hasBooking = booking.hourly || booking.daily || booking.weekly
 
   return (
@@ -669,6 +661,8 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
    Main component
    ──────────────────────────────────────────────────────────── */export default function PostListing() {
   const navigate = useNavigate()
+  const routeLocation = useLocation()
+  const [searchParams] = useSearchParams()
   const { id: editId } = useParams()
   const isEditMode = !!editId
   const [loadingExisting, setLoadingExisting] = useState(isEditMode)
@@ -682,6 +676,7 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
   
   const locationRef    = useRef(null)
   const promotionRef   = useRef(null)
+  const preselectedFeatureRef = useRef(false)
 
   const scrollToRef = (ref) => {
     ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -722,9 +717,8 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
   const [locationConfirmed, setLocationConfirmed] = useState(false)
   const [customSubcategory, setCustomSubcategory] = useState('')
 
-  /* Promotion / booking / misc */
+  /* Promotion / booking / misc — Phase 4.1 single duration/price product */
   const [selectedPromotion, setSelectedPromotion] = useState('none')
-  const [featuredDuration, setFeaturedDuration] = useState(7) // 3 | 7 | 30
   const [freeFeatureCount, setFreeFeatureCount] = useState(5) // assume no free slots left until checked
   const [freeFeaturedEnabled, setFreeFeaturedEnabled] = useState(true)
   const FREE_FEATURE_LIMIT = 5
@@ -747,6 +741,24 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
     setToast({ message, type })
     setTimeout(() => setToast({ message: '', type: 'error' }), duration)
   }
+
+  /* ── Pre-select Feature when opened from Profile “New listing” (or ?feature=1) ── */
+  useEffect(() => {
+    if (isEditMode || preselectedFeatureRef.current) return
+    const fromState = routeLocation.state?.preselectFeature === true
+    const fromQuery = searchParams.get('feature') === '1' || searchParams.get('feature') === 'true'
+    if (!fromState && !fromQuery) return
+    preselectedFeatureRef.current = true
+    setSelectedPromotion('featured')
+    // Soft scroll to promotion after layout; clear state so refresh doesn't re-apply awkwardly
+    const t = setTimeout(() => {
+      promotionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 400)
+    if (fromState) {
+      navigate(routeLocation.pathname + routeLocation.search, { replace: true, state: {} })
+    }
+    return () => clearTimeout(t)
+  }, [isEditMode, routeLocation.state, routeLocation.pathname, routeLocation.search, searchParams, navigate])
 
   /* ── Fetch current user on mount ── */
   useEffect(() => {
@@ -1168,7 +1180,9 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
     return urls
   }
 
-  /* ── Build the DB row ── */
+  /* ── Build the DB row (Phase 0.1)
+      Never includes is_featured, featured, promoted_until, or promotion_type.
+      Spotlight is only granted after free-feature RPC validation or payment confirm. ── */
   const buildRow = (imageUrls, videoUrls, status) => ({
     seller_id:                user.id,
     title:                    form.title.trim(),
@@ -1199,8 +1213,6 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
     longitude:                location.lng || null,
     images:                   imageUrls,
     videos:                   videoUrls,
-    promotion_type:           selectedPromotion,
-    is_featured:              selectedPromotion === 'featured' || selectedPromotion === 'premium',
     booking_hourly:           booking.hourly  ? parseFloat(booking.hourly)  : null,
     booking_daily:            booking.daily   ? parseFloat(booking.daily)   : null,
     booking_weekly:           booking.weekly  ? parseFloat(booking.weekly)  : null,
@@ -1210,28 +1222,37 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
     status,
   })
 
-  /* ── Record promotion — free tier activates instantly, paid tiers go through PayChangu ── */
-  const recordPromotion = async (listingId, promotionId) => {
-    if (promotionId !== 'featured') return
+  /** Applied only on INSERT so new rows never start featured. Omitted on UPDATE so edits don't strip server-granted featured. */
+  const unfeaturedOnCreate = {
+    is_featured: false,
+    featured: false,
+    promoted_until: null,
+    promotion_type: null,
+  }
 
-    console.log('[recordPromotion] hasFreeFeatureLeft:', hasFreeFeatureLeft, 'featuredDuration:', featuredDuration)
+  /* ── Promotion after publish — free RPC validates eligibility; paid goes through existing payment flow (untouched).
+      This function never writes is_featured / featured / promoted_* client-side. ── */
+  const recordPromotion = async (listingId, promotionId) => {
+    if (promotionId !== 'featured') {
+      return { skipped: true, reason: 'unsupported_promotion' }
+    }
+
     if (hasFreeFeatureLeft) {
+      // Free-feature validation + activation live in the RPC (server-side only)
       const { data, error } = await supabase.rpc('request_feature_listing', {
         p_listing_id: listingId,
-        p_duration_days: featuredDuration,
+        p_duration_days: FEATURED_DURATION_DAYS,
       })
       if (error) { showToast(`Featuring failed: ${error.message}`); throw error }
       return data
     }
 
-    // Paid tier — create pending row, then redirect to PayChangu
-    console.log('[recordPromotion] calling request_feature_listing_payment for listing', listingId)
+    // Paid: single product (price + duration fixed server-side too)
     const { data: reqData, error: reqErr } = await supabase.rpc('request_feature_listing_payment', {
       p_listing_id: listingId,
-      p_duration_days: featuredDuration,
+      p_duration_days: FEATURED_DURATION_DAYS,
     })
     if (reqErr) { showToast(`Could not start payment: ${reqErr.message}`); throw reqErr }
-    console.log('[recordPromotion] reqData:', reqData)
 
     const baseUrl = window.location.origin
     const { data: fnData, error: fnErr } = await supabase.functions.invoke('initiate-payment', {
@@ -1243,10 +1264,10 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
         tx_ref: reqData.tx_ref,
         callback_url: `${baseUrl}/verify-payment`,
         return_url: `${baseUrl}/verify-payment`,
-        amount: reqData.price,
+        amount: reqData.price ?? FEATURED_PRICE_MWK,
         purpose: 'featured_listing',
         title: 'SokoMW Featured Listing',
-        description: `Feature listing for ${featuredDuration} days`,
+        description: `Feature listing for ${FEATURED_DURATION_DAYS} days`,
         listing_id: listingId,
       },
     })
@@ -1256,7 +1277,7 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
     return { redirecting: true }
   }
 
-   /* ── Save as draft (creates once, then updates the same row on every subsequent save) ── */
+  /* ── Save as draft (creates once, then updates the same row on every subsequent save) ── */
   const handleSaveDraft = async () => {
     if (!user) { showToast('Sign in to save a draft.'); return }
     setSavingDraft(true)
@@ -1264,19 +1285,18 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
       let draftId = draftIdRef.current
 
       if (!draftId) {
-        // First save — create the draft row
+        // First save — create the draft row (always unfeatured)
         const { data: draft, error } = await supabase
           .from('listings')
-          .insert([buildRow([], [], 'draft')])
+          .insert([{ ...buildRow([], [], 'draft'), ...unfeaturedOnCreate }])
           .select('id')
           .single()
         if (error) throw error
         draftId = draft.id
         draftIdRef.current = draftId
-        // Move the URL to the edit route for this draft so it's retrievable later
         navigate(`/post/edit/${draftId}`, { replace: true })
       } else {
-        // Already have a draft — update it in place instead of creating a duplicate
+        // Update draft content only — do not touch featured / promoted fields
         const { error } = await supabase
           .from('listings')
           .update(buildRow([], [], 'draft'))
@@ -1284,7 +1304,6 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
         if (error) throw error
       }
 
-      // Upload any new images/videos so the draft reflects the latest media
       if (images.some(i => i.file) || videos.some(v => v.file)) {
         const [imgUrls, vidUrls] = await Promise.all([uploadImages(draftId), uploadVideos(draftId)])
         const patch = {}
@@ -1299,6 +1318,7 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
       setSavingDraft(false)
     }
   }
+
   /* ── Publish ── */
   const handlePublish = async () => {
     if (!user) { showToast('Please sign in to post a listing.'); return }
@@ -1307,9 +1327,10 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
 
     setSubmitting(true)
     try {
-      // 1. Insert (new) or update (edit mode) — images/videos patched after upload
+      // 1. Persist listing content only — never featured before payment / free-feature validation
       let listing
       if (isEditMode) {
+        // UPDATE: omit feature columns so existing paid/admin featured status is preserved
         const { data, error: updateErr } = await supabase
           .from('listings')
           .update(buildRow([], [], 'published'))
@@ -1319,16 +1340,17 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
         if (updateErr) throw updateErr
         listing = data
       } else {
+        // INSERT: force unfeatured defaults regardless of UI promotion selection
         const { data, error: insertErr } = await supabase
           .from('listings')
-          .insert([buildRow([], [], 'published')])
+          .insert([{ ...buildRow([], [], 'published'), ...unfeaturedOnCreate }])
           .select('id')
           .single()
         if (insertErr) throw insertErr
         listing = data
       }
 
-      // 2. Upload images & videos → patch listing
+      // 2. Upload media → patch media columns only
       const [imageUrls, videoUrls] = await Promise.all([uploadImages(listing.id), uploadVideos(listing.id)])
       const mediaPatch = {}
       if (imageUrls.length) mediaPatch.images = imageUrls
@@ -1341,20 +1363,32 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
         if (updateErr) throw updateErr
       }
 
-      // 3. Record promotion if any (only for new listings — edits don't re-trigger charges)
+      // 3. Optional promotion AFTER successful publish (new listings only)
+      //    Free: request_feature_listing (server validates free eligibility)
+      //    Paid: existing payment initiate only — no client flag writes
       let redirectingToPayment = false
+      let featuredActivatedFree = false
       if (!isEditMode && selectedPromotion !== 'none') {
-        try {
-          const result = await recordPromotion(listing.id, selectedPromotion)
-          if (result?.redirecting) redirectingToPayment = true
-        } catch {
-          // Listing is still published — just not featured. User already saw the toast.
+        if (selectedPromotion !== 'featured') {
+          showToast('Only Featured Listing is available for now. Your listing was published without a promotion.')
+        } else {
+          try {
+            const result = await recordPromotion(listing.id, selectedPromotion)
+            if (result?.redirecting) redirectingToPayment = true
+            else featuredActivatedFree = true
+          } catch {
+            // Listing remains published and unfeatured
+          }
         }
       }
 
-      if (redirectingToPayment) return // window.location.href is taking over — don't touch the DOM further
+      if (redirectingToPayment) return
 
-      showToast(isEditMode ? 'Listing updated successfully!' : 'Listing published successfully!', 'success', 2000)
+      if (featuredActivatedFree) {
+        showToast('Listing published and featured!', 'success', 2000)
+      } else {
+        showToast(isEditMode ? 'Listing updated successfully!' : 'Listing published successfully!', 'success', 2000)
+      }
       setTimeout(() => navigate(`/listings/${listing.id}`), 2000)
     } catch (err) {
       showToast(err.message || 'Something went wrong. Please try again.')
@@ -2248,21 +2282,15 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
                     <p style={{ fontFamily: SORA, fontSize: 22, fontWeight: 800, color: C.green, letterSpacing: '-0.02em' }}>
                       FREE
                     </p>
-                  ) : selectedPromotion === 'featured' ? (
-                    <p style={{ fontFamily: SORA, fontSize: 22, fontWeight: 800, color: C.amberDeep, letterSpacing: '-0.02em' }}>
-                      MWK {FEATURED_TIERS.find(t => t.days === featuredDuration).price.toLocaleString()}
-                    </p>
                   ) : (
-                    <p style={{ fontFamily: SORA, fontSize: 20, fontWeight: 800, color: C.amberDeep, letterSpacing: '-0.02em' }}>
-                      MWK {FEATURED_TIERS[0].price.toLocaleString()}–{FEATURED_TIERS[FEATURED_TIERS.length - 1].price.toLocaleString()}
+                    <p style={{ fontFamily: SORA, fontSize: 22, fontWeight: 800, color: C.amberDeep, letterSpacing: '-0.02em' }}>
+                      {formatFeaturedPrice()}
                     </p>
                   )}
                   <p style={{ fontSize: 11.5, color: C.muted, marginTop: 3 }}>
                     {hasFreeFeatureLeft
-                      ? `Homepage placement · 7 days · ${FREE_FEATURE_LIMIT - freeFeatureCount} of ${FREE_FEATURE_LIMIT} free features left`
-                      : selectedPromotion === 'featured'
-                        ? `Homepage placement · ${featuredDuration} days`
-                        : 'Homepage placement · choose 3, 7 or 30 days'}
+                      ? `Homepage placement · ${FEATURED_DURATION_DAYS} days · ${FREE_FEATURE_LIMIT - freeFeatureCount} of ${FREE_FEATURE_LIMIT} free features left`
+                      : `Homepage placement · ${FEATURED_DURATION_DAYS} days · ${featuredPriceLabel()}`}
                   </p>
                 </div>
                 <span style={{
@@ -2274,47 +2302,6 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
                   {selectedPromotion === 'featured' && <CheckCircle2 size={15} color="#fff" />}
                 </span>
               </button>
-
-              {selectedPromotion === 'featured' && !hasFreeFeatureLeft && (
-                <div style={{ marginTop: 14 }}>
-                  <p style={{ fontSize: 12, fontWeight: 700, color: C.dark, marginBottom: 8 }}>Choose a duration</p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {FEATURED_TIERS.map(t => {
-                      const active = featuredDuration === t.days
-                      return (
-                        <button
-                          key={t.days}
-                          type="button"
-                          onClick={() => setFeaturedDuration(t.days)}
-                          style={{
-                            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                            width: '100%', textAlign: 'left', cursor: 'pointer',
-                            border: active ? '1.5px solid #d97706' : '1.5px solid #f0d28a',
-                            background: active ? 'linear-gradient(135deg,#fff8e6,#fde9b0)' : 'rgba(255,255,255,0.6)',
-                            borderRadius: 11, padding: '11px 14px',
-                            transition: 'all 0.15s ease',
-                          }}
-                        >
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            <span style={{
-                              width: 18, height: 18, borderRadius: '50%', flexShrink: 0,
-                              border: active ? 'none' : '2px solid #e0c374',
-                              background: active ? 'linear-gradient(135deg,#f59e0b,#d4920a)' : 'transparent',
-                              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            }}>
-                              {active && <CheckCircle2 size={12} color="#fff" />}
-                            </span>
-                            <span style={{ fontSize: 13.5, fontWeight: 700, color: C.dark }}>{t.days} days</span>
-                          </div>
-                          <span style={{ fontSize: 14, fontWeight: 800, color: C.amberDeep }}>
-                            MWK {t.price.toLocaleString()}
-                          </span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 9, marginTop: 16 }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, fontWeight: 600, color: '#78350f' }}>

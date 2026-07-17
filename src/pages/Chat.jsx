@@ -208,12 +208,8 @@ const [searchIdx, setSearchIdx]         = useState(0)
     // Load last_seen from profile on mount
     if (otherProf?.last_seen) setOtherLastSeen(new Date(otherProf.last_seen))
 
-   // If there's a pending call, don't redirect — let restorePendingCall handle it
-    const hasPendingCall = !!sessionStorage.getItem('__pendingCall')
-    if ((!listingId || listingId === 'undefined') && !hasPendingCall) {
-      navigate('/chats'); return
-    }
-
+    // Allow direct user chats (e.g. Message Seller from public profile) without a listing.
+    // Pending-call restore still works when listingId is absent.
     restorePendingCall(userId)
 
     let isService = false
@@ -334,12 +330,14 @@ const sameContext = !hasListing
   }
 
   async function loadMessages(myId, isService) {
-    if (!listingId || listingId === 'undefined') return
+    // Direct seller chat (no listing/service context) still loads the full thread
     let query = supabase.from('messages').select('*')
       .or(`and(from_user.eq.${myId},to_user.eq.${userId}),and(from_user.eq.${userId},to_user.eq.${myId})`)
       .order('created_at', { ascending: true })
-    if (isService) query = query.eq('service_id', listingId)
-    else query = query.eq('listing_id', listingId)
+    if (listingId && listingId !== 'undefined') {
+      if (isService) query = query.eq('service_id', listingId)
+      else query = query.eq('listing_id', listingId)
+    }
     const { data, error } = await query
     if (!error) {
       setMessages(data || [])
@@ -368,8 +366,10 @@ const sameContext = !hasListing
       read: false,
       ...extraFields,
     }
-    if (isServiceChatRef.current && listingId !== 'undefined') msgData.service_id = listingId
-    else if (!isServiceChatRef.current && listingId !== 'undefined') msgData.listing_id = listingId
+    if (listingId && listingId !== 'undefined') {
+      if (isServiceChatRef.current) msgData.service_id = listingId
+      else msgData.listing_id = listingId
+    }
 
     const { data: inserted, error } = await supabase.from('messages').insert(msgData).select('id').single()
     if (error) { alert('Failed to send: ' + error.message); return }

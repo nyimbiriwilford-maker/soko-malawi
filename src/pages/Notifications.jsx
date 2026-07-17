@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { isListingFeatured } from '../utils/homeUtils'
 import {
   ArrowLeftRight,
   Archive,
@@ -310,7 +311,11 @@ function matchCategory(notif, category) {
   if (category === 'deals')    return notif.type.startsWith('deal_')
   if (category === 'orders')   return notif.type.startsWith('order_')
   if (category === 'bookings') return notif.type.startsWith('booking_')
-  if (category === 'system')   return notif.type === 'system' || notif.type === 'warning'
+  if (category === 'system') {
+    return notif.type === 'system'
+      || notif.type === 'warning'
+      || String(notif.type || '').startsWith('verification_')
+  }
   return true
 }
 
@@ -1818,28 +1823,29 @@ function NearbyFeaturedRail() {
     let cancelled = false
     async function load() {
       setLoading(true)
-      const cols = 'id, title, price, images, city, district, category, latitude, longitude, precise_location, featured, is_featured, created_at, status, seller_id, shop_id'
+      const cols = 'id, title, price, images, city, district, category, latitude, longitude, precise_location, featured, is_featured, featured_until, created_at, status, seller_id, shop_id'
+      const nowIso = new Date().toISOString()
       let rows = []
 
-      // 1) Featured with coordinates first
+      // 1) Active featured (featured_until > now) with coordinates first
       const { data: featuredGeo } = await supabase
         .from('listings')
         .select(cols)
-        .or('featured.eq.true,is_featured.eq.true')
+        .gt('featured_until', nowIso)
         .not('latitude', 'is', null)
         .not('longitude', 'is', null)
-        .order('created_at', { ascending: false })
+        .order('featured_until', { ascending: false })
         .limit(16)
 
       if (featuredGeo?.length) rows = featuredGeo
 
-      // 2) Any featured
+      // 2) Any active featured
       if (rows.length < 8) {
         const { data: featured } = await supabase
           .from('listings')
           .select(cols)
-          .or('featured.eq.true,is_featured.eq.true')
-          .order('created_at', { ascending: false })
+          .gt('featured_until', nowIso)
+          .order('featured_until', { ascending: false })
           .limit(20)
         const seen = new Set(rows.map((r) => r.id))
         for (const r of featured || []) {
@@ -1946,7 +1952,7 @@ function NearbyFeaturedRail() {
       if (hasUser && coords) {
         _distanceKm = distanceKm(userLat, userLng, coords.lat, coords.lng)
       }
-      const isFeat = item.featured === true || item.is_featured === true
+      const isFeat = isListingFeatured(item)
       return {
         ...item,
         image: img,
@@ -2605,7 +2611,28 @@ export default function Notifications() {
         if (data.order_id) navigate(`/orders/${data.order_id}`)
         else navigate('/orders')
         break
+      case 'verification_submitted':
+      case 'verification_payment_confirmed':
+      case 'verification_payment_rejected':
+      case 'verification_under_review':
+      case 'verification_additional_info':
+      case 'verification_documents_rejected':
+      case 'verification_approved':
+      case 'verification_rejected':
+      case 'verification_removed':
+      case 'verification_expired':
+      case 'verification_resubmitted':
+      case 'verification':
+        navigate('/profile?verify=1', {
+          state: { openVerify: true, requestId: data.request_id || null },
+        })
+        break
       default:
+        if (String(notif.type || '').startsWith('verification')) {
+          navigate('/profile?verify=1', { state: { openVerify: true } })
+        } else if (notif.link) {
+          navigate(notif.link)
+        }
         break
     }
   }, [navigate])

@@ -1,15 +1,16 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { supabase } from '../lib/supabase'
 import {
   WIZARD_STEPS,
   VERIFICATION_STATUSES,
   getVerificationSettings,
   getActiveVerificationTypes,
   getLatestVerificationRequest,
+  getVerificationRequestById,
   getVerificationDocuments,
   ensureVerificationDraft,
   saveVerificationDraft,
   uploadVerificationDocument,
-  deleteVerificationDocument,
   startVerificationPayment,
   submitVerificationApplication,
   initiatePaychanguCheckout,
@@ -18,12 +19,29 @@ import {
   createVerificationPayment,
   submitPaymentProof,
   uploadPaymentReceipt,
+  assertCanStartVerificationPayment,
+  getActivePaymentForRequest,
+  getSellerProfileForVerification,
+  buildVerificationChecklist,
+  resolveRequiredDocumentTypes,
+  resolveVerificationResumeStep,
+  resubmitVerificationApplication,
+  replaceVerificationDocument,
+  softRemoveVerificationDocument,
+  filterActiveVerificationDocuments,
+  getVerificationStatusEvents,
+  getSellerVerificationStatusMeta,
+  checkPaymentRequirement,
+  getSellerDisplayStatus,
+  resolveEffectiveFee,
+  getUserFacingReviewEstimate,
+  getValidityLabel,
+  friendlyVerificationError,
   formatFee,
   statusLabel,
   paymentStatusLabel,
   docTypeLabel,
   isTrackingStatus,
-  OPEN_VERIFICATION_STATUSES,
   PAYMENT_STATUSES,
 } from '../lib/verification'
 
@@ -32,6 +50,23 @@ const STEP_IDS = WIZARD_STEPS.map((s) => s.id)
 function stepIndex(id) {
   const i = STEP_IDS.indexOf(id)
   return i < 0 ? 0 : i
+}
+
+function formatSellerTimelineLabel(ev) {
+  const to = ev?.to_status || ''
+  const note = String(ev?.note || '').toLowerCase()
+  const metaEvent = ev?.meta?.event
+  if (metaEvent === 'resubmitted' || note.includes('resubmit')) return 'Information submitted (resubmitted)'
+  if (to === 'additional_info_required') return 'Admin requested changes'
+  if (to === 'submitted') return 'Application submitted'
+  if (to === 'payment_pending') return 'Payment initiated'
+  if (to === 'payment_confirmed') return 'Payment completed'
+  if (to === 'under_review') return note.includes('resubmit') ? 'Information submitted' : 'Under review'
+  if (to === 'approved') return 'Approved'
+  if (to === 'rejected') return 'Rejected'
+  if (to === 'draft' || note === 'created') return 'Application created'
+  if (to === 'admin_note') return 'Admin note'
+  return statusLabel(to || 'Update')
 }
 
 /**
@@ -57,6 +92,11 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
   const [uploadBusy, setUploadBusy] = useState(false)
   const [saveFlash, setSaveFlash] = useState('')
   const [agreed, setAgreed] = useState(false)
+  const [profile, setProfile] = useState(null)
+  const [selectedDocType, setSelectedDocType] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [timelineEvents, setTimelineEvents] = useState([])
+  const [replaceDocId, setReplaceDocId] = useState(null)
   const fileRef = useRef(null)
   const receiptRef = useRef(null)
   const saveTimer = useRef(null)
@@ -69,11 +109,11 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
     [types, typeCode]
   )
 
-  const feeAmount = Number(
-    selectedType?.default_fee_amount ?? settings?.fee_amount ?? 5000
-  )
+  const feeAmount = resolveEffectiveFee(selectedType, settings || undefined)
   const feeLabel = formatFee(settings || undefined, feeAmount)
   const reviewHours = settings?.review_period_hours ?? 24
+  const reviewEstimate = getUserFacingReviewEstimate(settings)
+  const validityLabel = getValidityLabel(settings)
   const requireDocs = settings?.require_documents !== false
   const enabled = settings?.is_enabled !== false
 
@@ -93,27 +133,87 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
     [activePayMethods, paymentMethod]
   )
   const isGatewayPay = selectedPayMethod?.supports_auto_confirm || paymentMethod === 'pachangu'
-  const latestPayment = payments[0] || null
 
-  const requiredDocs = useMemo(() => {
-    const fromType = selectedType?.required_document_types
-    if (Array.isArray(fromType) && fromType.length) return fromType
-    return (settings?.accepted_document_types || ['national_id', 'selfie']).slice(0, 3)
-  }, [selectedType, settings])
+  // Prefer confirmed payment for display (not a newer open row)
+  const latestPayment = useMemo(() => {
+    if (!payments?.length) return null
+    return payments.find((p) => String(p.payment_status || '').toLowerCase() === 'confirmed')
+      || payments.find((p) => String(p.payment_status || '').toLowerCase() === 'awaiting_confirmation')
+      || payments[0]
+      || null
+  }, [payments])
+
+  const paymentCheck = useMemo(
+    () => checkPaymentRequirement(request, payments),
+    [request, payments]
+  )
+  const paymentConfirmed = paymentCheck.confirmed === true
+
+  const requiredDocs = useMemo(
+    () => resolveRequiredDocumentTypes(selectedType, settings),
+    [selectedType, settings]
+  )
+
+  const activeDocs = useMemo(() => filterActiveVerificationDocuments(docs), [docs])
 
   const docsByType = useMemo(() => {
     const map = {}
-    docs.forEach((d) => {
+    activeDocs.forEach((d) => {
       if (!map[d.doc_type]) map[d.doc_type] = []
       map[d.doc_type].push(d)
     })
     return map
-  }, [docs])
+  }, [activeDocs])
 
   const missingDocs = useMemo(() => {
     if (!requireDocs) return []
     return requiredDocs.filter((t) => !(docsByType[t]?.length))
   }, [requireDocs, requiredDocs, docsByType])
+
+  const rejectedDocs = useMemo(
+    () => (docs || []).filter((d) =>
+      ['rejected', 'needs_replacement', 'invalid'].includes(String(d.status || '').toLowerCase())
+    ),
+    [docs]
+  )
+
+  const checklist = useMemo(
+    () => buildVerificationChecklist({
+      profile,
+      userEmail: user?.email,
+      typeCode,
+      selectedType,
+      settings,
+      docs: activeDocs,
+      payments,
+      request,
+      agreed,
+    }),
+    [profile, user?.email, typeCode, selectedType, settings, activeDocs, payments, request, agreed]
+  )
+
+  const profileReady = checklist.profileCheck?.ok !== false
+  const paymentSatisfied = paymentConfirmed || checklist.paymentCheck?.ok === true
+
+  // Admin message or status = need info (even if status field lags)
+  const needsMoreInfo = request?.status === VERIFICATION_STATUSES.ADDITIONAL_INFO_REQUIRED
+    || (!!request?.additional_info_message
+      && ![
+        VERIFICATION_STATUSES.APPROVED,
+        VERIFICATION_STATUSES.REJECTED,
+        VERIFICATION_STATUSES.DRAFT,
+        VERIFICATION_STATUSES.CANCELLED,
+        VERIFICATION_STATUSES.EXPIRED,
+      ].includes(request?.status))
+  const isResubmitFlow = needsMoreInfo
+
+  // Display status for seller (never "payment pending" when payment is confirmed / need-info)
+  const displayStatus = useMemo(
+    () => getSellerDisplayStatus(request, payments),
+    [request, payments]
+  )
+
+  const statusMeta = getSellerVerificationStatusMeta(displayStatus)
 
   const progressPct = useMemo(() => {
     const i = stepIndex(step)
@@ -130,37 +230,48 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
     setDocs(list)
   }, [])
 
-  const refreshPayments = useCallback(async (requestId) => {
-    if (!requestId) {
+  const refreshPayments = useCallback(async (requestId, opts = {}) => {
+    if (!requestId && !opts.paymentRef) {
       setPayments([])
+      return []
+    }
+    const list = await getPaymentsForRequest(requestId, {
+      paymentRef: opts.paymentRef || null,
+      sellerId: opts.sellerId || user?.id || null,
+    })
+    setPayments(list)
+    return list
+  }, [user?.id])
+
+  const refreshTimeline = useCallback(async (requestId) => {
+    if (!requestId) {
+      setTimelineEvents([])
       return
     }
-    const list = await getPaymentsForRequest(requestId)
-    setPayments(list)
+    const events = await getVerificationStatusEvents(requestId)
+    setTimelineEvents(events || [])
   }, [])
 
   // Bootstrap
   useEffect(() => {
-    if (!user?.id) {
-      setBoot(false)
-      setError('You must be signed in to get verified.')
-      return
-    }
+    if (!user?.id) return
     let cancelled = false
     ;(async () => {
       setBoot(true)
       setError('')
       try {
-        const [s, t, methods, latest] = await Promise.all([
+        const [s, t, methods, latest, sellerProfile] = await Promise.all([
           getVerificationSettings(),
           getActiveVerificationTypes(),
           getVerificationPaymentMethods(),
           getLatestVerificationRequest(user.id),
+          getSellerProfileForVerification(user.id),
         ])
         if (cancelled) return
         setSettings(s)
         setTypes(t?.length ? t : [])
         setPayMethods(methods || [])
+        setProfile(sellerProfile)
         const defaultCode = s.default_verification_type_code || t?.[0]?.code || 'seller'
         const defaultPay = methods?.[0]?.code
           || (s.supported_payment_methods || ['pachangu'])[0]
@@ -178,17 +289,93 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
             || 'pachangu'
           )
           await refreshDocs(latest.id, user.id)
-          await refreshPayments(latest.id)
+          await refreshPayments(latest.id, {
+            paymentRef: latest.payment_ref,
+            sellerId: user.id,
+          })
+          await refreshTimeline(latest.id)
           const resume = latest.meta?.wizard_step
           setStep(resume && STEP_IDS.includes(resume) && resume !== 'status' ? resume : 'welcome')
+        } else if (
+          latest?.status === VERIFICATION_STATUSES.PAYMENT_PENDING
+          || latest?.status === VERIFICATION_STATUSES.ADDITIONAL_INFO_REQUIRED
+          || latest?.additional_info_message
+          || latest?.payment_confirmed_at
+          || Number(latest?.amount_paid) > 0
+        ) {
+          // Resume editable steps — do not restart wizard
+          // Fresh row by id (avoids stale list row after admin need-info / pay confirm)
+          const fresh = (await getVerificationRequestById(latest.id)) || latest
+          setRequest(fresh)
+          const code = fresh.meta?.type_code || defaultCode
+          setTypeCode(code)
+          setNotes(fresh.notes || fresh.meta?.notes || '')
+          setPaymentMethod(fresh.payment_method || fresh.meta?.payment_method || defaultPay)
+          await refreshDocs(fresh.id, user.id)
+          const pays = await refreshPayments(fresh.id, {
+            paymentRef: fresh.payment_ref,
+            sellerId: user.id,
+          })
+          await refreshTimeline(fresh.id)
+          // Re-pick best request (admin may have moved another open request to need-info)
+          const refreshed = await getLatestVerificationRequest(user.id)
+          const activeReq = refreshed
+            ? ((await getVerificationRequestById(refreshed.id)) || refreshed)
+            : fresh
+          if (activeReq?.id !== fresh.id) {
+            setRequest(activeReq)
+            await refreshDocs(activeReq.id, user.id)
+            await refreshPayments(activeReq.id, {
+              paymentRef: activeReq.payment_ref,
+              sellerId: user.id,
+            })
+            await refreshTimeline(activeReq.id)
+          } else {
+            setRequest(activeReq)
+          }
+          const paysForActive = activeReq?.id === fresh.id
+            ? pays
+            : await getPaymentsForRequest(activeReq.id, {
+              paymentRef: activeReq.payment_ref,
+              sellerId: user.id,
+            })
+          if (activeReq?.id !== fresh.id) setPayments(paysForActive)
+          const docsList = await getVerificationDocuments(activeReq.id, user.id)
+          const payOk = checkPaymentRequirement(activeReq, paysForActive)
+          const tSel = (t || []).find((x) => x.code === code) || null
+          const needsInfo = activeReq.status === VERIFICATION_STATUSES.ADDITIONAL_INFO_REQUIRED
+            || !!activeReq.additional_info_message
+          if (needsInfo) {
+            // Start on status so admin message is visible
+            setStep('status')
+          } else if (payOk.confirmed) {
+            // Paid — always land on status (under review / waiting for admin), not pay wall
+            setStep('status')
+          } else {
+            const resumeStep = resolveVerificationResumeStep({
+              request: activeReq,
+              profile: sellerProfile,
+              docs: docsList,
+              payments: paysForActive,
+              selectedType: tSel,
+              settings: s,
+              typeCode: code,
+            })
+            setStep(resumeStep === 'payment' && payOk.confirmed ? 'status' : resumeStep)
+          }
         } else if (latest && isTrackingStatus(latest.status)) {
-          // Paid / submitted / in review / decided → status tracking
-          setRequest(latest)
-          setTypeCode(latest.meta?.type_code || defaultCode)
-          setNotes(latest.notes || latest.meta?.notes || '')
-          setPaymentMethod(latest.payment_method || latest.meta?.payment_method || defaultPay)
-          await refreshDocs(latest.id, user.id)
-          await refreshPayments(latest.id)
+          // Submitted / under review / decided → status tracking only
+          const fresh = (await getVerificationRequestById(latest.id)) || latest
+          setRequest(fresh)
+          setTypeCode(fresh.meta?.type_code || defaultCode)
+          setNotes(fresh.notes || fresh.meta?.notes || '')
+          setPaymentMethod(fresh.payment_method || fresh.meta?.payment_method || defaultPay)
+          await refreshDocs(fresh.id, user.id)
+          await refreshPayments(fresh.id, {
+            paymentRef: fresh.payment_ref,
+            sellerId: user.id,
+          })
+          await refreshTimeline(fresh.id)
           setStep('status')
         } else {
           setTypeCode(defaultCode)
@@ -203,16 +390,17 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
           setRequest(draft)
           await refreshDocs(draft?.id, user.id)
           await refreshPayments(draft?.id)
+          await refreshTimeline(draft?.id)
           setStep('welcome')
         }
       } catch (e) {
-        if (!cancelled) setError(e.message || 'Could not load verification wizard')
+        if (!cancelled) setError(friendlyVerificationError(e) || 'Could not load verification wizard')
       } finally {
         if (!cancelled) setBoot(false)
       }
     })()
     return () => { cancelled = true }
-  }, [user?.id, refreshDocs, refreshPayments])
+  }, [user?.id, refreshDocs, refreshPayments, refreshTimeline])
 
   // Focus dialog on open
   useEffect(() => {
@@ -230,6 +418,57 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
     document.addEventListener('keydown', onKey)
     return () => document.removeEventListener('keydown', onKey)
   }, [onClose, busy, uploadBusy])
+
+  // Keep status step in sync with admin actions (pay confirm / need-info)
+  useEffect(() => {
+    if (boot || !user?.id) return
+    if (step !== 'status' && !needsMoreInfo) return
+
+    let cancelled = false
+    const sync = async () => {
+      try {
+        const latest = await getLatestVerificationRequest(user.id)
+        if (cancelled || !latest) return
+        const fresh = (await getVerificationRequestById(latest.id)) || latest
+        if (cancelled || !fresh) return
+        setRequest((prev) => {
+          if (!prev) return fresh
+          if (prev.id !== fresh.id) return fresh
+          if (
+            prev.status !== fresh.status
+            || prev.updated_at !== fresh.updated_at
+            || prev.additional_info_message !== fresh.additional_info_message
+            || prev.payment_confirmed_at !== fresh.payment_confirmed_at
+            || Number(prev.amount_paid || 0) !== Number(fresh.amount_paid || 0)
+          ) {
+            return fresh
+          }
+          return prev
+        })
+        await refreshPayments(fresh.id, {
+          paymentRef: fresh.payment_ref,
+          sellerId: user.id,
+        })
+        await refreshTimeline(fresh.id)
+      } catch { /* soft */ }
+    }
+
+    // Immediate re-sync when landing on status (catches admin updates since bootstrap)
+    void sync()
+    const interval = setInterval(sync, 8000)
+    const onFocus = () => { void sync() }
+    const onVis = () => {
+      if (document.visibilityState === 'visible') void sync()
+    }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVis)
+    }
+  }, [boot, user?.id, step, needsMoreInfo, refreshPayments, refreshTimeline])
 
   const scheduleAutosave = useCallback((patch) => {
     if (!request?.id) return
@@ -269,18 +508,58 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
 
   async function goTo(next) {
     setError('')
-    // Validate before leaving certain steps
-    if (step === 'type' && !typeCode) {
-      setError('Please choose a verification type.')
-      return
-    }
-    if (step === 'documents' && requireDocs && missingDocs.length && ['review', 'submit'].includes(next)) {
-      setError(`Upload required documents: ${missingDocs.map(docTypeLabel).join(', ')}`)
-      return
-    }
-    if (step === 'review' && next === 'submit' && !agreed) {
-      setError('Please confirm the accuracy of your information.')
-      return
+    const advancing = stepIndex(next) > stepIndex(step)
+
+    // Validate before advancing past gated steps
+    if (advancing) {
+      if (!profileReady && ['type', 'payment', 'documents', 'review', 'submit'].includes(next)) {
+        setError('Complete your profile before requesting verification.')
+        return
+      }
+      if (step === 'type' && !typeCode) {
+        setError('Please choose a verification type (Seller, Shop, or Business).')
+        return
+      }
+      if (step === 'type' && typeCode && !selectedType && !types.some((t) => t.code === typeCode)) {
+        setError('Please choose a valid verification type.')
+        return
+      }
+      if (step === 'documents' && requireDocs && missingDocs.length && ['review', 'submit'].includes(next)) {
+        setError(
+          missingDocs.length
+            ? `Missing documents: ${missingDocs.map(docTypeLabel).join(', ')}.`
+            : 'Please upload your required documents before continuing.'
+        )
+        return
+      }
+      if (step === 'payment' && ['review', 'submit'].includes(next) && !paymentSatisfied) {
+        // Allow moving forward to docs even without payment; block only final review/submit later
+        // Payment is enforced on submit — soft warn when jumping past pay into review
+      }
+      if (step === 'review' && next === 'submit') {
+        if (!agreed) {
+          setError('Please confirm the accuracy of your information.')
+          return
+        }
+        const pre = buildVerificationChecklist({
+          profile,
+          userEmail: user?.email,
+          typeCode,
+          selectedType,
+          settings,
+          docs,
+          payments,
+          request,
+          agreed: true,
+        })
+        if (!pre.ok) {
+          setError(pre.primaryMessage || 'Please complete all required items before submitting.')
+          // Jump to first incomplete section when possible
+          const firstBad = pre.sections.find((s) => !s.ok)
+          if (firstBad?.editStep) setStep(firstBad.editStep)
+          return
+        }
+      }
     }
 
     if (request?.id) {
@@ -338,19 +617,39 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
 
   /** PayChangu / auto-confirm gateways */
   async function handleGatewayPay() {
-    if (!user?.id) return
+    if (!user?.id || busy) return
     if (!enabled) {
       setError('Verification is currently disabled by administrators.')
+      return
+    }
+    if (!profileReady) {
+      setError('Complete your profile before requesting verification.')
+      return
+    }
+    if (!typeCode) {
+      setError('Please choose a verification type before payment.')
+      setStep('type')
       return
     }
     setBusy(true)
     setError('')
     try {
       const req = await ensureDraftForPayment()
+
+      // Duplicate / already-paid guard
+      const gate = await assertCanStartVerificationPayment(req.id)
+      if (gate.alreadyPaid) {
+        setError(gate.message || 'Payment already confirmed.')
+        await refreshPayments(req.id)
+        setBusy(false)
+        return
+      }
+
       const { tx_ref, checkout_url } = await initiatePaychanguCheckout({
         user,
         feeAmount,
         typeCode,
+        requestId: req.id,
       })
 
       await startVerificationPayment({
@@ -363,7 +662,7 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
         requestId: req.id,
       })
 
-      // Phase 3 ledger row (gateway initiated)
+      // Ledger row — reuses open payment; never creates second active payment
       try {
         await createVerificationPayment({
           requestId: req.id,
@@ -380,16 +679,29 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
 
       window.location.href = checkout_url
     } catch (e) {
-      setError(e.message || 'Could not start payment')
+      if (e?.code === 'ALREADY_PAID') {
+        setError(e.message)
+      } else {
+        setError(friendlyVerificationError(e) || 'Could not start payment')
+      }
       setBusy(false)
     }
   }
 
   /** Manual rails: Airtel / Mpamba / Bank / Card — admin confirms later */
   async function handleManualPaymentSubmit() {
-    if (!user?.id) return
+    if (!user?.id || busy) return
     if (!enabled) {
       setError('Verification is currently disabled by administrators.')
+      return
+    }
+    if (!profileReady) {
+      setError('Complete your profile before requesting verification.')
+      return
+    }
+    if (!typeCode) {
+      setError('Please choose a verification type before payment.')
+      setStep('type')
       return
     }
     const ref = manualTxRef.trim()
@@ -397,10 +709,23 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
       setError('Enter your transaction / reference ID (at least 3 characters).')
       return
     }
+    if (!paymentMethod) {
+      setError('Select a payment method (Airtel Money, Mpamba, or Bank).')
+      return
+    }
+
     setBusy(true)
     setError('')
     try {
       const req = await ensureDraftForPayment()
+
+      const gate = await assertCanStartVerificationPayment(req.id)
+      if (gate.alreadyPaid) {
+        setError(gate.message || 'Payment already confirmed.')
+        setBusy(false)
+        return
+      }
+
       await startVerificationPayment({
         paymentRef: ref,
         paymentMethod,
@@ -411,6 +736,7 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
         requestId: req.id,
       })
 
+      // Create or reuse open ledger row (never duplicate active payments)
       let payment = await createVerificationPayment({
         requestId: req.id,
         paymentMethod,
@@ -418,25 +744,38 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
         currency: settings?.fee_currency || 'MWK',
         transactionReference: ref,
         gateway: 'manual',
-        status: PAYMENT_STATUSES.AWAITING_CONFIRMATION,
+        status: PAYMENT_STATUSES.INITIATED,
       })
+      await refreshPayments(req.id)
+      const active = await getActivePaymentForRequest(req.id)
+      if (active) payment = active
 
-      // If create returned initiated, promote with proof
-      if (payment?.id && payment.payment_status !== PAYMENT_STATUSES.AWAITING_CONFIRMATION) {
-        payment = await submitPaymentProof({
-          paymentId: payment.id,
-          transactionReference: ref,
-        })
+      // Manual methods require transaction ref + payment proof
+      if (!payment?.receipt_path) {
+        setError(
+          'Upload payment proof (receipt image or PDF), then click “Submit payment proof” again. Transaction reference and method are required.'
+        )
+        setBusy(false)
+        return
       }
+
+      payment = await submitPaymentProof({
+        paymentId: payment.id,
+        transactionReference: ref,
+        receiptPath: payment.receipt_path,
+        receiptFileName: payment.receipt_file_name,
+        requireReceipt: true,
+      })
 
       await refreshPayments(req.id)
       const latest = await getLatestVerificationRequest(user.id)
       if (latest) setRequest(latest)
-      setSaveFlash('Payment submitted — awaiting admin confirmation')
+      setSaveFlash('Payment proof submitted — awaiting admin confirmation')
       setTimeout(() => setSaveFlash(''), 2500)
-      setStep('status')
+      // Do NOT treat as verified
+      setStep('documents')
     } catch (e) {
-      setError(e.message || 'Could not submit payment proof')
+      setError(friendlyVerificationError(e) || 'Could not submit payment proof')
     } finally {
       setBusy(false)
     }
@@ -445,31 +784,73 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
   async function handleReceiptUpload(e) {
     const file = e.target.files?.[0]
     if (e.target) e.target.value = ''
-    if (!file || !user?.id || !latestPayment?.id) {
-      setError('Create a payment entry first (enter transaction ID and submit).')
-      return
-    }
+    if (!file || !user?.id) return
+
     setUploadBusy(true)
     setError('')
     try {
+      // Ensure an open payment row exists so receipt can attach
+      let pay = latestPayment
+      if (!pay?.id || !OPEN_OR_CREATE_PAYABLE(pay)) {
+        const req = await ensureDraftForPayment()
+        pay = await createVerificationPayment({
+          requestId: req.id,
+          paymentMethod,
+          paymentAmount: feeAmount,
+          currency: settings?.fee_currency || 'MWK',
+          transactionReference: manualTxRef.trim() || null,
+          gateway: 'manual',
+          status: PAYMENT_STATUSES.INITIATED,
+        })
+        await refreshPayments(req.id)
+      }
+      if (!pay?.id) {
+        setError('Could not create payment entry for receipt. Try again.')
+        return
+      }
+
       const { path, fileName } = await uploadPaymentReceipt({
         userId: user.id,
-        paymentId: latestPayment.id,
+        paymentId: pay.id,
         file,
       })
-      const updated = await submitPaymentProof({
-        paymentId: latestPayment.id,
-        transactionReference: manualTxRef.trim() || latestPayment.transaction_reference || `RCPT-${Date.now()}`,
-        receiptPath: path,
-        receiptFileName: fileName,
-      })
-      setPayments((prev) => [updated, ...prev.filter((p) => p.id !== updated.id)])
+      // Attach path without promoting to awaiting until full submit
+      const { data: patched, error: patchErr } = await supabase
+        .from('verification_payments')
+        .update({
+          receipt_path: path,
+          receipt_file_name: fileName,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', pay.id)
+        .select('*')
+        .single()
+      if (patchErr) {
+        // Fallback: submit proof if update blocked
+        const updated = await submitPaymentProof({
+          paymentId: pay.id,
+          transactionReference: manualTxRef.trim() || pay.transaction_reference || `RCPT-${pay.id.slice(0, 8)}`,
+          receiptPath: path,
+          receiptFileName: fileName,
+        })
+        setPayments((prev) => [updated, ...prev.filter((p) => p.id !== updated.id)])
+      } else {
+        setPayments((prev) => [patched, ...prev.filter((p) => p.id !== patched.id)])
+      }
       flashSaved()
+      setSaveFlash('Receipt uploaded — enter ref and submit proof')
+      setTimeout(() => setSaveFlash(''), 2200)
     } catch (err) {
-      setError(err.message || 'Receipt upload failed')
+      setError(friendlyVerificationError(err) || 'Receipt upload failed')
     } finally {
       setUploadBusy(false)
     }
+  }
+
+  function OPEN_OR_CREATE_PAYABLE(pay) {
+    if (!pay) return false
+    return ['pending', 'initiated', 'awaiting_confirmation', 'failed', 'cancelled', 'expired']
+      .includes(String(pay.payment_status || ''))
   }
 
   async function handlePay() {
@@ -507,18 +888,33 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
         })
         setRequest(req)
       }
-      // Prefer first missing required type
-      const docType = missingDocs[0] || requiredDocs[0] || 'other'
-      await uploadVerificationDocument({
-        userId: user.id,
-        requestId: req.id,
-        file,
-        docType,
-      })
+      const docType = selectedDocType || missingDocs[0] || requiredDocs[0] || 'other'
+      const previous = replaceDocId
+        ? docs.find((d) => d.id === replaceDocId)
+        : (docsByType[docType]?.[0] || null)
+
+      if (previous && (needsMoreInfo || replaceDocId)) {
+        await replaceVerificationDocument({
+          userId: user.id,
+          requestId: req.id,
+          file,
+          docType,
+          previousDoc: previous,
+        })
+      } else {
+        await uploadVerificationDocument({
+          userId: user.id,
+          requestId: req.id,
+          file,
+          docType,
+        })
+      }
       await refreshDocs(req.id, user.id)
+      setSelectedDocType('')
+      setReplaceDocId(null)
       flashSaved()
     } catch (err) {
-      setError(err.message || 'Upload failed — check verification-docs storage bucket')
+      setError(friendlyVerificationError(err) || 'Please upload your required documents before continuing.')
     } finally {
       setUploadBusy(false)
     }
@@ -528,33 +924,141 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
     setUploadBusy(true)
     setError('')
     try {
-      await deleteVerificationDocument(doc)
+      const hard = request?.status === VERIFICATION_STATUSES.DRAFT
+      await softRemoveVerificationDocument(doc, { hard })
       await refreshDocs(request?.id, user.id)
     } catch (e) {
-      setError(e.message || 'Could not remove document')
+      setError(friendlyVerificationError(e) || 'Could not remove document')
     } finally {
       setUploadBusy(false)
     }
   }
 
+  function continueAdditionalInfo() {
+    const resumeStep = resolveVerificationResumeStep({
+      request,
+      profile,
+      docs,
+      payments,
+      selectedType,
+      settings,
+      typeCode,
+    })
+    setError('')
+    setStep(resumeStep)
+  }
+
   async function handleSubmit() {
+    if (submitting || busy) return
+
     if (!request?.id) {
       setError('No verification draft found. Go back and try again.')
       return
     }
-    if (requireDocs && missingDocs.length) {
-      setError(`Missing documents: ${missingDocs.map(docTypeLabel).join(', ')}`)
-      setStep('documents')
-      return
-    }
-    if (!agreed) {
-      setError('Please confirm your information is accurate.')
+
+    // Block duplicate submissions (except additional_info resubmit)
+    if ([
+      VERIFICATION_STATUSES.SUBMITTED,
+      VERIFICATION_STATUSES.PAYMENT_CONFIRMED,
+      VERIFICATION_STATUSES.UNDER_REVIEW,
+      VERIFICATION_STATUSES.APPROVED,
+      'pending',
+    ].includes(request.status)) {
+      setError(
+        `You already have an active verification request (${statusLabel(request.status)}). Track it on the status screen.`
+      )
+      setStep('status')
       return
     }
 
+    const pre = buildVerificationChecklist({
+      profile,
+      userEmail: user?.email,
+      typeCode,
+      selectedType,
+      settings,
+      docs: activeDocs,
+      payments,
+      request,
+      agreed,
+    })
+
+    if (!pre.ok) {
+      const firstBad = pre.sections.find((s) => !s.ok)
+      if (firstBad?.id === 'profile' || firstBad?.id === 'contact') {
+        setError(firstBad.message || 'Complete your profile before requesting verification.')
+      } else if (firstBad?.id === 'documents') {
+        setError(
+          firstBad.missingList?.length
+            ? `Missing documents: ${firstBad.missingList.join(', ')}.`
+            : 'Missing documents'
+        )
+        setStep('documents')
+      } else if (firstBad?.editStep) {
+        setError(firstBad.message || pre.primaryMessage)
+        setStep(firstBad.editStep)
+      } else {
+        setError(pre.primaryMessage || 'Please complete all required items before submitting.')
+      }
+      return
+    }
+
+    setSubmitting(true)
     setBusy(true)
     setError('')
     try {
+      const latest = await getLatestVerificationRequest(user.id)
+
+      if (
+        (latest?.status === VERIFICATION_STATUSES.ADDITIONAL_INFO_REQUIRED
+          || request.status === VERIFICATION_STATUSES.ADDITIONAL_INFO_REQUIRED)
+        && (!latest || latest.id === request.id)
+      ) {
+        await saveVerificationDraft(request.id, {
+          typeId: selectedType?.id,
+          typeCode,
+          notes,
+          wizardStep: 'status',
+          paymentMethod,
+          amountDue: feeAmount,
+          metaExtra: { resubmit_ready: true },
+        })
+        const resubmitted = await resubmitVerificationApplication(request.id, {
+          notes,
+          message: notes || 'Seller resubmitted after providing additional information',
+        })
+        setRequest(resubmitted)
+        await refreshTimeline(request.id)
+        setStep('status')
+        onSuccess?.()
+        return
+      }
+
+      if (latest && latest.id !== request.id
+        && [
+          VERIFICATION_STATUSES.SUBMITTED,
+          VERIFICATION_STATUSES.UNDER_REVIEW,
+          VERIFICATION_STATUSES.PAYMENT_CONFIRMED,
+          VERIFICATION_STATUSES.APPROVED,
+          'pending',
+        ].includes(latest.status)) {
+        setRequest(latest)
+        setError(`You already have an active verification request (${statusLabel(latest.status)}).`)
+        setStep('status')
+        return
+      }
+      if (latest && latest.id === request.id
+        && [
+          VERIFICATION_STATUSES.SUBMITTED,
+          VERIFICATION_STATUSES.UNDER_REVIEW,
+          VERIFICATION_STATUSES.PAYMENT_CONFIRMED,
+          VERIFICATION_STATUSES.APPROVED,
+        ].includes(latest.status)) {
+        setRequest(latest)
+        setStep('status')
+        return
+      }
+
       await saveVerificationDraft(request.id, {
         typeId: selectedType?.id,
         typeCode,
@@ -565,18 +1069,47 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
       })
       const submitted = await submitVerificationApplication(request.id, { notes })
       setRequest(submitted)
+      await refreshTimeline(request.id)
       setStep('status')
       onSuccess?.()
     } catch (e) {
-      setError(e.message || 'Submit failed')
+      setError(friendlyVerificationError(e) || 'Could not submit your application. Please try again.')
     } finally {
       setBusy(false)
+      setSubmitting(false)
     }
   }
 
   const idx = stepIndex(step)
   const canGoBack = idx > 0 && step !== 'status'
-  const tracking = request && isTrackingStatus(request.status) && step === 'status'
+
+  if (!user?.id) {
+    return (
+      <div className="vw-overlay" role="presentation" onClick={() => onClose?.()}>
+        <style>{vwCss}</style>
+        <div className="vw-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+          <header className="vw-header">
+            <div className="vw-brand">
+              <div className="vw-brand-mark" aria-hidden="true">✓</div>
+              <div>
+                <h2 id={titleId} className="vw-title">Get verified</h2>
+                <p className="vw-sub">Sign in required</p>
+              </div>
+            </div>
+            <button type="button" className="vw-close" onClick={() => onClose?.()} aria-label="Close">×</button>
+          </header>
+          <div className="vw-body">
+            <div className="vw-alert" role="alert">You must be signed in to get verified.</div>
+          </div>
+          <footer className="vw-footer">
+            <div className="vw-footer-right">
+              <button type="button" className="vw-btn-primary" onClick={() => onClose?.()}>Close</button>
+            </div>
+          </footer>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div
@@ -681,21 +1214,79 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
                 </div>
               )}
 
+              {needsMoreInfo && step !== 'status' && (
+                <div className="vw-alert is-action" role="status">
+                  <strong>Your verification needs more information</strong>
+                  <p style={{ margin: '6px 0 0' }}>
+                    {request.additional_info_message || 'Please update the items below and resubmit.'}
+                  </p>
+                  {request.reviewed_at && (
+                    <p className="vw-fine" style={{ marginTop: 4, color: '#9a3412' }}>
+                      Requested {new Date(request.reviewed_at || request.updated_at).toLocaleString()}
+                    </p>
+                  )}
+                </div>
+              )}
+
               {step === 'welcome' && (
                 <section className="vw-panel" aria-labelledby="vw-welcome-h">
                   <h3 id="vw-welcome-h" className="vw-h">Welcome to SokoMw verification</h3>
-                  <p className="vw-lead">
-                    Get a verified badge so buyers trust you faster. This wizard walks you through type selection,
-                    payment, documents, and tracking — it only takes a few minutes.
-                  </p>
+                  {!enabled ? (
+                    <div className="vw-alert is-warn" role="status">
+                      Verification services are temporarily unavailable.
+                    </div>
+                  ) : (
+                    <p className="vw-lead">
+                      Get a verified badge so buyers trust you faster. Review fees, time, and documents before you begin.
+                    </p>
+                  )}
                   <ul className="vw-bullets">
-                    <li>One-time fee · currently <strong>{feeLabel}</strong></li>
-                    <li>Pay securely with mobile money (PayChangu)</li>
-                    <li>Upload ID / documents for review</li>
-                    <li>Team review usually within <strong>{reviewHours} hours</strong></li>
+                    <li>Verification fee: <strong>{feeLabel}</strong>
+                      {selectedType ? ` (${selectedType.name})` : ''}
+                    </li>
+                    <li>Estimated review time: <strong>{reviewEstimate}</strong></li>
+                    <li>Verification validity: <strong>{validityLabel}</strong></li>
+                    <li>
+                      Required documents:{' '}
+                      <strong>
+                        {requiredDocs.length
+                          ? requiredDocs.map(docTypeLabel).join(', ')
+                          : 'Set by your verification type'}
+                      </strong>
+                    </li>
                     <li>Payment does <strong>not</strong> instantly verify you — admin approval grants the badge</li>
                   </ul>
-                  <div className="vw-note">
+
+                  <div className="vw-checklist-card" aria-label="Profile readiness">
+                    <h4 className="vw-checklist-title">Before you start — seller profile</h4>
+                    <ul className="vw-check-list">
+                      {(checklist.profileCheck?.items || []).map((item) => (
+                        <li key={item.key} className={item.ok ? 'is-ok' : 'is-miss'}>
+                          <span aria-hidden="true">{item.ok ? '✓' : '○'}</span>
+                          {item.label}
+                        </li>
+                      ))}
+                    </ul>
+                    {!profileReady && (
+                      <p className="vw-alert is-warn" style={{ marginBottom: 0 }}>
+                        Complete your profile before requesting verification.
+                        {' '}Add your full name, photo, phone, and city on your Profile page, then reopen this wizard.
+                      </p>
+                    )}
+                    {profileReady && (
+                      <p className="vw-fine" style={{ marginTop: 8, color: '#0a7a44' }}>
+                        Profile ready — you can continue.
+                      </p>
+                    )}
+                  </div>
+
+                  {request && isTrackingStatus(request.status) && request.status !== VERIFICATION_STATUSES.DRAFT && (
+                    <div className="vw-note" style={{ marginTop: 12 }}>
+                      Current request status: <strong>{statusLabel(request.status)}</strong>
+                    </div>
+                  )}
+
+                  <div className="vw-note" style={{ marginTop: 12 }}>
                     Your progress autosaves as a draft so you can leave and continue later.
                   </div>
                 </section>
@@ -831,19 +1422,19 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
                               type="button"
                               className="vw-btn-secondary"
                               disabled={uploadBusy}
-                              onClick={() => {
-                                if (!latestPayment?.id) {
-                                  setError('Submit transaction ID first, then upload receipt.')
-                                  return
-                                }
-                                receiptRef.current?.click()
-                              }}
+                              onClick={() => receiptRef.current?.click()}
                             >
-                              {uploadBusy ? 'Uploading…' : 'Upload receipt (optional)'}
+                              {uploadBusy ? 'Uploading…' : 'Upload payment proof (required)'}
                             </button>
                             <p className="vw-fine">
-                              Submit your reference for admin confirmation. Receipt helps faster review.
+                              Manual payments need: payment method, transaction reference, and receipt (JPEG/PNG/PDF).
+                              Admin will confirm or reject — you can retry if rejected.
                             </p>
+                            {latestPayment?.receipt_path && (
+                              <p className="vw-fine" style={{ color: '#0a7a44', marginTop: 6 }}>
+                                ✓ Proof attached — enter reference and submit
+                              </p>
+                            )}
                           </div>
                         </div>
                       )}
@@ -854,11 +1445,15 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
 
               {step === 'documents' && (
                 <section className="vw-panel" aria-labelledby="vw-docs-h">
-                  <h3 id="vw-docs-h" className="vw-h">Document upload</h3>
+                  <h3 id="vw-docs-h" className="vw-h">
+                    {needsMoreInfo ? 'Update your documents' : 'Document upload'}
+                  </h3>
                   <p className="vw-lead">
-                    {requireDocs
-                      ? 'Upload clear photos or PDFs of the required documents. Files are private to your account.'
-                      : 'Documents are optional for now — you can still upload supporting files.'}
+                    {needsMoreInfo
+                      ? 'Upload missing files or replace unclear ones. Previous files are kept in history for review.'
+                      : requireDocs
+                        ? `Required for ${selectedType?.name || typeCode || 'your type'}. Upload clear photos or PDFs. Files are private to your account.`
+                        : 'Documents are optional for now — you can still upload supporting files.'}
                   </p>
 
                   <ul className="vw-req-list" aria-label="Required documents">
@@ -873,6 +1468,58 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
                       )
                     })}
                   </ul>
+
+                  {requireDocs && missingDocs.length > 0 && (
+                    <div className="vw-alert is-warn" role="status">
+                      <strong>Missing documents</strong>
+                      <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+                        {missingDocs.map((t) => (
+                          <li key={t}>{docTypeLabel(t)}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {rejectedDocs.length > 0 && (
+                    <div className="vw-alert is-action" role="status">
+                      <strong>Documents to replace</strong>
+                      <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+                        {rejectedDocs.map((d) => (
+                          <li key={d.id}>
+                            {docTypeLabel(d.doc_type)} — {d.file_name || 'file'}
+                            <button
+                              type="button"
+                              className="vw-linkish"
+                              style={{ marginLeft: 8 }}
+                              onClick={() => {
+                                setReplaceDocId(d.id)
+                                setSelectedDocType(d.doc_type)
+                                fileRef.current?.click()
+                              }}
+                            >
+                              Replace
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  <label className="vw-notes" style={{ marginBottom: 12 }}>
+                    <span>Document type for next upload</span>
+                    <select
+                      className="vw-input"
+                      value={selectedDocType || missingDocs[0] || requiredDocs[0] || 'other'}
+                      onChange={(e) => setSelectedDocType(e.target.value)}
+                    >
+                      {requiredDocs.map((t) => (
+                        <option key={t} value={t}>
+                          {docTypeLabel(t)}{docsByType[t]?.length ? ' (uploaded)' : ' (required)'}
+                        </option>
+                      ))}
+                      <option value="other">Other</option>
+                    </select>
+                  </label>
 
                   <div className="vw-upload-zone">
                     <input
@@ -892,29 +1539,51 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
                     >
                       {uploadBusy ? 'Uploading…' : 'Choose file'}
                     </button>
-                    <p className="vw-fine">JPEG, PNG, WebP, or PDF · max 10 MB · next missing type is used</p>
+                    <p className="vw-fine">JPEG, PNG, WebP, or PDF · max 10 MB</p>
                   </div>
 
-                  {docs.length > 0 && (
+                  {activeDocs.length > 0 && (
                     <ul className="vw-doc-list" aria-label="Uploaded documents">
-                      {docs.map((d) => (
+                      {activeDocs.map((d) => (
                         <li key={d.id} className="vw-doc-item">
                           <div>
                             <strong>{docTypeLabel(d.doc_type)}</strong>
-                            <span>{d.file_name || d.storage_path}</span>
+                            <span>{d.file_name || d.storage_path}{d.status ? ` · ${statusLabel(d.status)}` : ''}</span>
                           </div>
-                          <button
-                            type="button"
-                            className="vw-doc-remove"
-                            onClick={() => handleRemoveDoc(d)}
-                            disabled={uploadBusy}
-                            aria-label={`Remove ${d.file_name || 'document'}`}
-                          >
-                            Remove
-                          </button>
+                          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                            {needsMoreInfo && (
+                              <button
+                                type="button"
+                                className="vw-btn-secondary"
+                                style={{ padding: '6px 10px', fontSize: '0.72rem' }}
+                                onClick={() => {
+                                  setReplaceDocId(d.id)
+                                  setSelectedDocType(d.doc_type)
+                                  fileRef.current?.click()
+                                }}
+                                disabled={uploadBusy}
+                              >
+                                Replace
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="vw-doc-remove"
+                              onClick={() => handleRemoveDoc(d)}
+                              disabled={uploadBusy}
+                              aria-label={`Remove ${d.file_name || 'document'}`}
+                            >
+                              Remove
+                            </button>
+                          </div>
                         </li>
                       ))}
                     </ul>
+                  )}
+                  {docs.some((d) => ['replaced', 'superseded'].includes(String(d.status || '').toLowerCase())) && (
+                    <p className="vw-fine" style={{ marginTop: 10 }}>
+                      Earlier versions are kept for admin audit and are not shown as active uploads.
+                    </p>
                   )}
                 </section>
               )}
@@ -922,14 +1591,67 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
               {step === 'review' && (
                 <section className="vw-panel" aria-labelledby="vw-review-h">
                   <h3 id="vw-review-h" className="vw-h">Review your application</h3>
-                  <p className="vw-lead">Confirm everything looks correct before submitting.</p>
+                  <p className="vw-lead">
+                    Verification summary — fix anything incomplete before you submit. Payment alone never grants the verified badge.
+                  </p>
+
+                  <ul className="vw-summary-check" aria-label="Verification summary">
+                    {checklist.sections.map((sec) => (
+                      <li key={sec.id} className={sec.ok ? 'is-ok' : 'is-miss'}>
+                        <div className="vw-summary-main">
+                          <span className="vw-summary-mark" aria-hidden="true">{sec.ok ? '✓' : '!'}</span>
+                          <div>
+                            <strong>{sec.label}</strong>
+                            <em>{sec.ok ? (sec.detail || 'Complete') : (sec.detail || 'Incomplete')}</em>
+                            {!sec.ok && sec.missingList?.length > 0 && (
+                              <span className="vw-fine" style={{ display: 'block', color: '#b45309' }}>
+                                Required: {sec.missingList.join(', ')}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        {sec.editStep ? (
+                          <button
+                            type="button"
+                            className="vw-linkish"
+                            onClick={() => goTo(sec.editStep)}
+                          >
+                            Edit
+                          </button>
+                        ) : (
+                          !sec.ok && sec.editHint && (
+                            <span className="vw-fine">{sec.editHint}</span>
+                          )
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+
                   <dl className="vw-summary">
                     <div><dt>Type</dt><dd>{selectedType?.name || typeCode}</dd></div>
                     <div><dt>Fee</dt><dd>{feeLabel}</dd></div>
                     <div><dt>Payment method</dt><dd>{docTypeLabel(paymentMethod)}</dd></div>
-                    <div><dt>Documents</dt><dd>{docs.length} file{docs.length === 1 ? '' : 's'}{missingDocs.length ? ` · missing ${missingDocs.length}` : ' · complete'}</dd></div>
+                    <div>
+                      <dt>Documents</dt>
+                      <dd>
+                        {docs.length} file{docs.length === 1 ? '' : 's'}
+                        {missingDocs.length ? ` · missing ${missingDocs.length}` : ' · complete'}
+                      </dd>
+                    </div>
                     <div><dt>Request status</dt><dd>{statusLabel(request?.status || 'draft')}</dd></div>
                   </dl>
+
+                  {checklist.blockers.length > 0 && (
+                    <div className="vw-alert is-warn" role="status">
+                      <strong>Before you can submit</strong>
+                      <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+                        {checklist.blockers.map((b) => (
+                          <li key={b}>{b}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
                   <label className="vw-check">
                     <input
                       type="checkbox"
@@ -953,18 +1675,32 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
 
               {step === 'submit' && (
                 <section className="vw-panel" aria-labelledby="vw-submit-h">
-                  <h3 id="vw-submit-h" className="vw-h">Submit for review</h3>
+                  <h3 id="vw-submit-h" className="vw-h">
+                    {isResubmitFlow ? 'Resubmit verification' : 'Submit for review'}
+                  </h3>
                   <p className="vw-lead">
-                    Ready to send your application? After submit, track progress on the next step.
-                    If you still need to pay, use the Payment step first.
+                    {isResubmitFlow
+                      ? 'You updated the requested information. Resubmit to send your application back for admin review.'
+                      : 'Ready to send your application? After submit, our team reviews it — payment does not auto-verify you.'}
                   </p>
                   <div className="vw-submit-card">
-                    <p>
-                      Status will become <strong>Submitted</strong> or stay in payment/review pipeline if you already paid.
-                    </p>
-                    {requireDocs && missingDocs.length > 0 && (
-                      <p className="vw-alert is-warn">
-                        Missing: {missingDocs.map(docTypeLabel).join(', ')}
+                    <ul className="vw-check-list" style={{ marginBottom: 12 }}>
+                      {checklist.sections.map((sec) => (
+                        <li key={sec.id} className={sec.ok ? 'is-ok' : 'is-miss'}>
+                          <span aria-hidden="true">{sec.ok ? '✓' : '○'}</span>
+                          {sec.label}: {sec.detail}
+                        </li>
+                      ))}
+                    </ul>
+                    {checklist.ok ? (
+                      <p>
+                        {isResubmitFlow
+                          ? <>All set. Resubmitting moves status to <strong>Under review</strong>.</>
+                          : <>All required items are complete. Submitting will send your application for admin review.</>}
+                      </p>
+                    ) : (
+                      <p className="vw-alert is-warn" style={{ margin: 0 }}>
+                        {checklist.primaryMessage || 'Complete all checklist items before submitting.'}
                       </p>
                     )}
                   </div>
@@ -978,31 +1714,147 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
                     <p className="vw-lead">No verification request found yet.</p>
                   ) : (
                     <>
-                      <div className={`vw-status-hero is-${request.status}`}>
-                        <strong>{statusLabel(request.status)}</strong>
+                      <div
+                        className={`vw-status-hero is-${displayStatus || request.status}`}
+                        style={needsMoreInfo ? { background: '#ffedd5', borderColor: '#fdba74' } : (
+                          paymentConfirmed ? { background: '#eff6ff', borderColor: '#93c5fd' } : undefined
+                        )}
+                      >
+                        <strong style={needsMoreInfo ? { color: '#c2410c' } : (
+                          paymentConfirmed && !needsMoreInfo ? { color: '#1d4ed8' } : undefined
+                        )}>
+                          {needsMoreInfo
+                            ? 'Additional information required'
+                            : (statusMeta.label || statusLabel(displayStatus || request.status))}
+                        </strong>
                         <span>
-                          {request.status === VERIFICATION_STATUSES.APPROVED
-                            ? 'Your profile badge is active.'
-                            : request.status === VERIFICATION_STATUSES.REJECTED
-                              ? (request.rejection_reason || 'Your request was not approved.')
-                              : request.status === VERIFICATION_STATUSES.ADDITIONAL_INFO_REQUIRED
-                                ? (request.additional_info_message || 'Please update documents and resubmit.')
-                                : `Typical review window: ~${reviewHours} hours after payment.`}
+                          {needsMoreInfo
+                            ? 'Your verification needs more information. Update the missing items and resubmit.'
+                            : displayStatus === VERIFICATION_STATUSES.DRAFT
+                              ? 'Your application is still a draft. Complete payment and documents, then submit.'
+                              : displayStatus === VERIFICATION_STATUSES.APPROVED
+                                ? 'Your profile badge is active. You do not need to submit again.'
+                                : displayStatus === VERIFICATION_STATUSES.REJECTED
+                                  ? (request.rejection_reason || 'Your request was not approved. You may start a new application later.')
+                                  : displayStatus === VERIFICATION_STATUSES.ADDITIONAL_INFO_REQUIRED
+                                    ? 'Your verification needs more information. Update the missing items and resubmit.'
+                                    : paymentConfirmed
+                                      || displayStatus === VERIFICATION_STATUSES.UNDER_REVIEW
+                                      || displayStatus === VERIFICATION_STATUSES.PAYMENT_CONFIRMED
+                                      || displayStatus === VERIFICATION_STATUSES.SUBMITTED
+                                      || displayStatus === 'pending'
+                                      ? `Payment confirmed. Your application is under review. Typical window: ~${reviewHours} hours.`
+                                      : displayStatus === VERIFICATION_STATUSES.PAYMENT_PENDING
+                                        ? (paymentCheck.awaiting
+                                          ? 'Payment proof submitted — waiting for admin confirmation. You do not need to pay again.'
+                                          : 'Payment is pending. Complete payment to continue.')
+                                        : `Typical review window: ~${reviewHours} hours after payment.`}
                         </span>
                       </div>
-                      <ol className="vw-timeline" aria-label="Verification timeline">
-                        {[
-                          { k: 'created', label: 'Draft created', at: request.created_at, on: true },
-                          { k: 'pay', label: 'Payment', at: request.payment_confirmed_at, on: !!request.payment_confirmed_at || [VERIFICATION_STATUSES.UNDER_REVIEW, VERIFICATION_STATUSES.APPROVED, VERIFICATION_STATUSES.PAYMENT_CONFIRMED].includes(request.status) },
-                          { k: 'sub', label: 'Submitted', at: request.submitted_at, on: !!request.submitted_at },
-                          { k: 'rev', label: 'Under review', at: request.under_review_at, on: [VERIFICATION_STATUSES.UNDER_REVIEW, VERIFICATION_STATUSES.APPROVED, VERIFICATION_STATUSES.REJECTED, VERIFICATION_STATUSES.ADDITIONAL_INFO_REQUIRED].includes(request.status) },
-                          { k: 'done', label: request.status === VERIFICATION_STATUSES.REJECTED ? 'Decision' : 'Approved', at: request.reviewed_at, on: [VERIFICATION_STATUSES.APPROVED, VERIFICATION_STATUSES.REJECTED].includes(request.status) },
-                        ].map((ev) => (
+
+                      {needsMoreInfo && (
+                        <div className="vw-alert is-action" role="alert" style={{ marginTop: 4 }}>
+                          <strong>Your verification needs more information</strong>
+                          <p style={{ margin: '8px 0 0', fontSize: '0.88rem', lineHeight: 1.45 }}>
+                            {request.additional_info_message
+                              || request.admin_note
+                              || 'Please upload clearer documents or complete the missing items.'}
+                          </p>
+                          <p className="vw-fine" style={{ marginTop: 8, color: '#9a3412' }}>
+                            Requested{' '}
+                            {new Date(request.reviewed_at || request.updated_at || request.created_at).toLocaleString()}
+                          </p>
+                          {(missingDocs.length > 0 || rejectedDocs.length > 0) && (
+                            <div style={{ marginTop: 10 }}>
+                              <strong style={{ fontSize: 12 }}>Missing / update items</strong>
+                              <ul style={{ margin: '6px 0 0', paddingLeft: 18, fontSize: 13 }}>
+                                {missingDocs.map((t) => (
+                                  <li key={t}>{docTypeLabel(t)} (required)</li>
+                                ))}
+                                {rejectedDocs.map((d) => (
+                                  <li key={d.id}>{docTypeLabel(d.doc_type)} — replace this file</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {paymentConfirmed && (
+                            <p style={{ margin: '8px 0 0', fontSize: 13, color: '#1a7a4a', fontWeight: 700 }}>
+                              ✓ Payment already confirmed — only documents/info still needed
+                            </p>
+                          )}
+                          {!paymentConfirmed && !paymentSatisfied && (
+                            <p style={{ margin: '8px 0 0', fontSize: 13 }}>Payment still needs to be completed or confirmed.</p>
+                          )}
+                          {!profileReady && (
+                            <p style={{ margin: '8px 0 0', fontSize: 13 }}>Complete your seller profile (name, photo, phone, city).</p>
+                          )}
+                        </div>
+                      )}
+
+                      {(latestPayment || paymentConfirmed) && (
+                        <p className="vw-fine">
+                          Payment:{' '}
+                          <strong style={{ color: paymentConfirmed ? '#1a7a4a' : undefined }}>
+                            {paymentConfirmed
+                              ? 'Confirmed'
+                              : paymentStatusLabel(latestPayment?.payment_status || 'pending')}
+                          </strong>
+                          {(latestPayment?.transaction_reference || request.payment_ref)
+                            ? ` · Ref ${latestPayment?.transaction_reference || request.payment_ref}`
+                            : ''}
+                        </p>
+                      )}
+
+                      <h4 className="vw-h" style={{ fontSize: '0.95rem', marginTop: 16 }}>Activity history</h4>
+                      <ol className="vw-timeline" aria-label="Verification activity history">
+                        {(timelineEvents.length > 0
+                          ? timelineEvents.map((ev) => ({
+                              k: ev.id,
+                              label: formatSellerTimelineLabel(ev),
+                              at: ev.created_at,
+                              on: true,
+                              note: ev.note,
+                              actor: ev.actor_id === user?.id ? 'You' : (ev.actor_id ? 'Admin / system' : 'System'),
+                            }))
+                          : [
+                              { k: 'created', label: 'Application created', at: request.created_at, on: true },
+                              {
+                                k: 'pay',
+                                label: paymentConfirmed ? 'Payment confirmed' : 'Payment',
+                                at: request.payment_confirmed_at || latestPayment?.confirmed_at || latestPayment?.payment_date,
+                                on: paymentConfirmed || !!request.payment_confirmed_at || [
+                                  VERIFICATION_STATUSES.UNDER_REVIEW,
+                                  VERIFICATION_STATUSES.APPROVED,
+                                  VERIFICATION_STATUSES.PAYMENT_CONFIRMED,
+                                  VERIFICATION_STATUSES.ADDITIONAL_INFO_REQUIRED,
+                                ].includes(request.status),
+                              },
+                              { k: 'sub', label: 'Submitted', at: request.submitted_at, on: !!request.submitted_at },
+                              {
+                                k: 'rev',
+                                label: needsMoreInfo ? 'Additional information required' : 'Under review',
+                                at: request.under_review_at || (needsMoreInfo ? request.reviewed_at : null),
+                                on: needsMoreInfo || [
+                                  VERIFICATION_STATUSES.UNDER_REVIEW,
+                                  VERIFICATION_STATUSES.APPROVED,
+                                  VERIFICATION_STATUSES.REJECTED,
+                                  VERIFICATION_STATUSES.ADDITIONAL_INFO_REQUIRED,
+                                ].includes(request.status) || (paymentConfirmed && request.status !== VERIFICATION_STATUSES.DRAFT),
+                              },
+                              { k: 'done', label: request.status === VERIFICATION_STATUSES.REJECTED ? 'Rejected' : 'Approved', at: request.reviewed_at, on: [VERIFICATION_STATUSES.APPROVED, VERIFICATION_STATUSES.REJECTED].includes(request.status) },
+                            ]
+                        ).map((ev) => (
                           <li key={ev.k} className={ev.on ? 'is-on' : ''}>
                             <span className="vw-tl-dot" aria-hidden="true" />
                             <div>
                               <strong>{ev.label}</strong>
-                              <em>{ev.at ? new Date(ev.at).toLocaleString() : '—'}</em>
+                              <em>
+                                {ev.at ? new Date(ev.at).toLocaleString() : '—'}
+                                {ev.actor ? ` · ${ev.actor}` : ''}
+                              </em>
+                              {ev.note && ev.note !== 'created' && ev.note !== 'resubmitted' && (
+                                <span className="vw-fine" style={{ display: 'block', marginTop: 2 }}>{ev.note}</span>
+                              )}
                             </div>
                           </li>
                         ))}
@@ -1030,8 +1882,13 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
             </div>
             <div className="vw-footer-right">
               {step === 'welcome' && (
-                <button type="button" className="vw-btn-primary" onClick={nextStep} disabled={!enabled}>
-                  Get started →
+                <button
+                  type="button"
+                  className="vw-btn-primary"
+                  onClick={nextStep}
+                  disabled={!enabled || !profileReady}
+                >
+                  {profileReady ? 'Get started →' : 'Complete profile first'}
                 </button>
               )}
               {step === 'type' && (
@@ -1041,15 +1898,25 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
               )}
               {step === 'payment' && !(
                 latestPayment?.payment_status === PAYMENT_STATUSES.CONFIRMED
+                || latestPayment?.payment_status === PAYMENT_STATUSES.AWAITING_CONFIRMATION
                 || request?.status === VERIFICATION_STATUSES.UNDER_REVIEW
                 || request?.status === VERIFICATION_STATUSES.PAYMENT_CONFIRMED
                 || request?.status === VERIFICATION_STATUSES.APPROVED
+                || paymentSatisfied
               ) && (
                 <>
-                  <button type="button" className="vw-btn-secondary" onClick={nextStep} disabled={busy}>
-                    Skip for now
+                  <button
+                    type="button"
+                    className="vw-btn-secondary"
+                    onClick={() => {
+                      setError('Payment is required before final submission. You can upload documents now and pay before submitting.')
+                      nextStep()
+                    }}
+                    disabled={busy}
+                  >
+                    Upload docs first
                   </button>
-                  <button type="button" className="vw-btn-primary" onClick={handlePay} disabled={busy || !enabled}>
+                  <button type="button" className="vw-btn-primary" onClick={handlePay} disabled={busy || !enabled || !profileReady}>
                     {busy
                       ? (isGatewayPay ? 'Redirecting…' : 'Submitting…')
                       : (isGatewayPay ? `Pay ${feeLabel} →` : 'Submit payment proof')}
@@ -1058,40 +1925,88 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
               )}
               {step === 'payment' && (
                 latestPayment?.payment_status === PAYMENT_STATUSES.CONFIRMED
+                || latestPayment?.payment_status === PAYMENT_STATUSES.AWAITING_CONFIRMATION
                 || request?.status === VERIFICATION_STATUSES.UNDER_REVIEW
                 || request?.status === VERIFICATION_STATUSES.PAYMENT_CONFIRMED
                 || request?.status === VERIFICATION_STATUSES.APPROVED
+                || paymentSatisfied
               ) && (
                 <button type="button" className="vw-btn-primary" onClick={nextStep}>
                   Continue →
                 </button>
               )}
               {step === 'documents' && (
-                <button type="button" className="vw-btn-primary" onClick={nextStep} disabled={uploadBusy}>
-                  Continue →
+                <button
+                  type="button"
+                  className="vw-btn-primary"
+                  onClick={nextStep}
+                  disabled={uploadBusy || (requireDocs && missingDocs.length > 0)}
+                >
+                  {requireDocs && missingDocs.length > 0
+                    ? `Upload ${missingDocs.length} more…`
+                    : 'Continue →'}
                 </button>
               )}
               {step === 'review' && (
-                <button type="button" className="vw-btn-primary" onClick={nextStep} disabled={!agreed}>
+                <button
+                  type="button"
+                  className="vw-btn-primary"
+                  onClick={nextStep}
+                  disabled={!agreed || checklist.sections.some((s) => !s.ok)}
+                >
                   Continue to submit →
                 </button>
               )}
               {step === 'submit' && (
-                <button type="button" className="vw-btn-primary" onClick={handleSubmit} disabled={busy}>
-                  {busy ? 'Submitting…' : 'Submit application'}
-                </button>
-              )}
-              {step === 'status' && (
                 <button
                   type="button"
                   className="vw-btn-primary"
-                  onClick={() => {
-                    onSuccess?.()
-                    onClose?.()
-                  }}
+                  onClick={handleSubmit}
+                  disabled={busy || submitting || !checklist.ok}
                 >
-                  Done
+                  {busy || submitting
+                    ? (isResubmitFlow ? 'Resubmitting…' : 'Submitting…')
+                    : (isResubmitFlow ? 'Resubmit verification' : 'Submit verification')}
                 </button>
+              )}
+              {step === 'status' && (
+                <>
+                  {(
+                    needsMoreInfo
+                    || [
+                      VERIFICATION_STATUSES.DRAFT,
+                      VERIFICATION_STATUSES.PAYMENT_PENDING,
+                      VERIFICATION_STATUSES.ADDITIONAL_INFO_REQUIRED,
+                    ].includes(request?.status)
+                  ) && !(paymentConfirmed && !needsMoreInfo && request?.status === VERIFICATION_STATUSES.PAYMENT_PENDING && !request?.additional_info_message) && (
+                    <button
+                      type="button"
+                      className="vw-btn-primary"
+                      onClick={continueAdditionalInfo}
+                    >
+                      {needsMoreInfo ? 'Upload documents' : (paymentConfirmed ? 'Continue application' : 'Continue application')}
+                    </button>
+                  )}
+                  {paymentConfirmed && !needsMoreInfo && (
+                    <button
+                      type="button"
+                      className="vw-btn-primary"
+                      onClick={() => setStep('documents')}
+                    >
+                      View / add documents
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="vw-btn-secondary"
+                    onClick={() => {
+                      onSuccess?.()
+                      onClose?.()
+                    }}
+                  >
+                    Done
+                  </button>
+                </>
               )}
             </div>
           </footer>
@@ -1226,6 +2141,18 @@ const vwCss = `
   .vw-alert.is-warn {
     background: #fffbeb; border-color: #fde68a; color: #b45309;
   }
+  .vw-alert.is-action {
+    background: #ffedd5; border-color: #fdba74; color: #9a3412;
+  }
+  .vw-status-hero.is-additional_info_required {
+    background: #ffedd5; border-color: #fdba74;
+  }
+  .vw-status-hero.is-additional_info_required strong { color: #c2410c; }
+  .vw-status-hero.is-draft, .vw-status-hero.is-payment_pending {
+    background: #fef3c7; border-color: #fde68a;
+  }
+  .vw-status-hero.is-rejected { background: #fef2f2; border-color: #fecaca; }
+  .vw-status-hero.is-approved { background: #e8f5ee; border-color: rgba(15,157,88,.25); }
   .vw-type-grid {
     display: grid; gap: 10px;
     grid-template-columns: 1fr;
@@ -1321,6 +2248,53 @@ const vwCss = `
   .vw-summary > div:last-child { border-bottom: none; }
   .vw-summary dt { color: #9aafa0; font-weight: 600; margin: 0; }
   .vw-summary dd { margin: 0; font-weight: 700; }
+  .vw-checklist-card {
+    border: 1px solid rgba(15, 23, 42, 0.08); border-radius: 14px;
+    padding: 12px 14px; background: #f7f9f8; margin: 0 0 4px;
+  }
+  .vw-checklist-title {
+    margin: 0 0 8px; font-size: 0.78rem; font-weight: 800;
+    text-transform: uppercase; letter-spacing: .04em; color: #637068;
+  }
+  .vw-check-list {
+    list-style: none; margin: 0; padding: 0;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .vw-check-list li {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 0.85rem; color: #637068;
+  }
+  .vw-check-list li.is-ok { color: #0a7a44; font-weight: 600; }
+  .vw-check-list li.is-miss { color: #637068; }
+  .vw-summary-check {
+    list-style: none; margin: 0 0 14px; padding: 0;
+    border: 1px solid rgba(15, 23, 42, 0.08); border-radius: 14px; overflow: hidden;
+  }
+  .vw-summary-check > li {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    padding: 12px 14px; border-bottom: 1px solid rgba(15, 23, 42, 0.05);
+    background: #fafbfa;
+  }
+  .vw-summary-check > li:last-child { border-bottom: none; }
+  .vw-summary-check > li.is-ok { background: #f4fbf6; }
+  .vw-summary-check > li.is-miss { background: #fffbeb; }
+  .vw-summary-main { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+  .vw-summary-mark {
+    width: 22px; height: 22px; border-radius: 50%;
+    display: grid; place-items: center; flex-shrink: 0;
+    font-size: 0.72rem; font-weight: 900;
+    background: #e8f5ee; color: #0a7a44;
+  }
+  .vw-summary-check > li.is-miss .vw-summary-mark {
+    background: #fef3c7; color: #b45309;
+  }
+  .vw-summary-main strong { display: block; font-size: 0.86rem; }
+  .vw-summary-main em {
+    font-style: normal; font-size: 0.78rem; color: #637068;
+  }
+  .vw-notes select.vw-input {
+    appearance: auto; background: #fff;
+  }
   .vw-check {
     display: flex; gap: 10px; align-items: flex-start;
     font-size: 0.85rem; line-height: 1.4; margin-bottom: 12px; cursor: pointer;

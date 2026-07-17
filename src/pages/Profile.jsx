@@ -1,6 +1,9 @@
 import { useEffect, useState, useRef, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { isListingFeatured } from '../utils/homeUtils'
+import { featureExistingListing } from '../lib/featureListing'
+import { featuredPriceLabel, FEATURED_DURATION_DAYS } from '../constants/featuredPricing'
 import BottomNav from '../components/BottomNav'
 import VouchSection from '../components/VouchSection'
 import TrustBadge from '../components/TrustBadge'
@@ -14,8 +17,11 @@ import useProfileDashboard, {
   bulkListingStatus,
   bulkListingDelete,
   followSeller,
+  parseDeviceFromUserAgent,
 } from '../hooks/useProfileDashboard'
 import VerificationModal from '../components/VerificationModal'
+import SellerVerificationBanner from '../components/SellerVerificationBanner'
+import PendingVerificationCard from '../components/PendingVerificationCard'
 import {
   MpIcon,
   Badge,
@@ -795,6 +801,8 @@ function OverviewSkeleton() {
 // ─── Profile hub ───────────────────────────────────────────────────────────────
 export default function Profile() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const [searchParams, setSearchParams] = useSearchParams()
   const fileRef = useRef()
   const coverRef = useRef()
 
@@ -804,6 +812,8 @@ export default function Profile() {
   const [shop, setShop] = useState(null)
   const [followerCount, setFollowerCount] = useState(0)
   const [followingCount, setFollowingCount] = useState(0)
+  /** Recent follow rows (with created_at) for real activity timeline */
+  const [recentFollowEvents, setRecentFollowEvents] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState('')
@@ -821,6 +831,8 @@ export default function Profile() {
   const [invView, setInvView] = useState('grid') // grid | list
   const [invSelected, setInvSelected] = useState([])
   const [invSelectMode, setInvSelectMode] = useState(false)
+  const [featuringId, setFeaturingId] = useState(null)
+  const [showFeatureChoice, setShowFeatureChoice] = useState(false)
   const [buyerStats, setBuyerStats] = useState({
     loading: false,
     saved: null,
@@ -840,6 +852,36 @@ export default function Profile() {
   const mobileMoreRef = useRef(null)
   const settingsProfileRef = useRef(null)
   const settingsAccountRef = useRef(null)
+
+  // Open verification wizard from Home banner / notifications (?verify=1 or state.openVerify)
+  useEffect(() => {
+    const q = searchParams.get('verify')
+    const fromState = location.state?.openVerify
+    if (q === '1' || q === 'true' || fromState) {
+      setShowVerify(true)
+      if (q) {
+        const next = new URLSearchParams(searchParams)
+        next.delete('verify')
+        setSearchParams(next, { replace: true })
+      }
+      if (fromState) {
+        navigate(location.pathname, { replace: true, state: {} })
+      }
+    }
+  }, [searchParams, location.state, location.pathname, navigate, setSearchParams])
+
+  // Home "Get Featured" / See Pricing → open Selling inventory (?tab=selling)
+  useEffect(() => {
+    const tab = searchParams.get('tab') || searchParams.get('group')
+    if (tab === 'selling' || tab === 'inventory' || tab === 'featured') {
+      openGroup('selling')
+      const next = new URLSearchParams(searchParams)
+      next.delete('tab')
+      next.delete('group')
+      setSearchParams(next, { replace: true })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- openGroup is stable enough; avoid re-open loops
+  }, [searchParams])
 
   useEffect(() => {
     if (!heroMoreOpen) return
@@ -990,6 +1032,7 @@ export default function Profile() {
     jobApps,
     serviceReqs,
     refresh: refreshDashboard,
+    revokeSession,
   } = useProfileDashboard(user?.id)
 
   useEffect(() => { init() }, [])
@@ -1066,18 +1109,25 @@ export default function Profile() {
   }
 
   async function loadNetworkCounts(uid) {
-    const [fol, fing] = await Promise.all([
+    const [fol, fing, recentFol] = await Promise.all([
       supabase.from('seller_follows').select('id', { count: 'exact', head: true }).eq('seller_id', uid),
       supabase.from('seller_follows').select('id', { count: 'exact', head: true }).eq('follower_id', uid),
+      supabase
+        .from('seller_follows')
+        .select('id, follower_id, created_at, follower:profiles!seller_follows_follower_id_fkey(full_name)')
+        .eq('seller_id', uid)
+        .order('created_at', { ascending: false })
+        .limit(8),
     ])
     setFollowerCount(fol.count || 0)
     setFollowingCount(fing.count || 0)
+    setRecentFollowEvents(recentFol.data || [])
   }
 
   async function loadShop(uid) {
     const { data } = await supabase
       .from('shops')
-      .select('id, name, slug, is_verified, logo_url, city')
+      .select('id, name, slug, is_verified, logo_url, city, created_at, updated_at')
       .eq('owner_id', uid)
       .maybeSingle()
     setShop(data || null)
@@ -1204,11 +1254,17 @@ export default function Profile() {
     setProfile(p => ({ ...p, cover_url: null }))
   }
 
-  async function toggleSold(listing) {
-    const newStatus = listing.status === 'sold' ? 'active' : 'sold'
-    await supabase.from('listings').update({ status: newStatus }).eq('id', listing.id)
-    setListings(ls => ls.map(l => l.id === listing.id ? { ...l, status: newStatus } : l))
+ async function toggleSold(listing) {
+  const newStatus = listing.status === 'sold' ? 'active' : 'sold'
+  const { error } = await supabase.from('listings').update({ status: newStatus }).eq('id', listing.id)
+  if (error) {
+    console.error('Failed to update listing status:', error)
+    setShareToast('Could not update — try again')
+    setTimeout(() => setShareToast(''), 2000)
+    return
   }
+  setListings(ls => ls.map(l => l.id === listing.id ? { ...l, status: newStatus } : l))
+}
 
   async function deleteListing(id) {
     await supabase.from('listings').delete().eq('id', id)
@@ -1303,42 +1359,56 @@ export default function Profile() {
     refreshDashboard()
   }
 
-  async function boostListing(listingId) {
-    if (!listingId || !user?.id) return
-    const ends = new Date(Date.now() + 7 * 86400000).toISOString()
+  // Phase 4.2 — feature an existing listing (free RPC or PayChangu; no free bulk)
+  async function featureListing(listing) {
+    if (!listing?.id || featuringId) return
+    if (isListingFeatured(listing)) {
+      setShareToast('This listing is already featured')
+      setTimeout(() => setShareToast(''), 3000)
+      return
+    }
+    if (listing.status === 'sold' || listing.status === 'deleted' || listing.status === 'draft') {
+      setShareToast('Only active listings can be featured')
+      setTimeout(() => setShareToast(''), 3000)
+      return
+    }
+    // Ensure seller_id is present for ownership checks
+    const listingPayload = {
+      ...listing,
+      seller_id: listing.seller_id || user?.id,
+    }
+    setFeaturingId(listing.id)
     try {
-      await supabase.from('listing_boosts').insert({
-        listing_id: listingId,
-        seller_id: user.id,
-        boost_type: 'boost',
-        ends_at: ends,
-        status: 'active',
+      const result = await featureExistingListing({
+        listing: listingPayload,
+        user,
+        profileName: profile?.full_name || profile?.name,
       })
-      await supabase.from('listings').update({
-        boost_until: ends,
-        featured: true,
-        is_featured: true,
-        updated_at: new Date().toISOString(),
-      }).eq('id', listingId)
-      setListings(ls => ls.map(l =>
-        l.id === listingId
-          ? { ...l, boost_until: ends, featured: true, is_featured: true }
-          : l
-      ))
-      setShareToast('Listing boosted for 7 days')
-      setTimeout(() => setShareToast(''), 2500)
+      if (result?.redirecting) {
+        // Navigating to PayChangu — keep button busy
+        return
+      }
+      if (result?.free) {
+        setShareToast('Listing featured on the homepage!')
+        setTimeout(() => setShareToast(''), 3500)
+        if (user?.id) await loadListings(user.id)
+        refreshDashboard?.()
+      }
     } catch (e) {
-      alert(e.message || 'Boost failed — run migrations for listing_boosts')
+      const msg = e?.message || 'Could not feature listing'
+      console.error('[Profile] featureListing failed', e)
+      setShareToast(msg)
+      setTimeout(() => setShareToast(''), 6000)
+      // Always surface failure (toast can be easy to miss)
+      window.alert(msg)
+    } finally {
+      setFeaturingId(null)
     }
   }
 
-  async function bulkBoostSelected() {
-    if (!invSelected.length) return
-    if (!window.confirm(`Boost ${invSelected.length} listing(s) for 7 days?`)) return
-    for (const id of invSelected) {
-      await boostListing(id)
-    }
-    setInvSelected([])
+  function bulkBoostSelected() {
+    setShareToast('Feature listings one at a time with the star button.')
+    setTimeout(() => setShareToast(''), 4000)
   }
 
   async function ensureSaleOrder(listing) {
@@ -1506,10 +1576,94 @@ export default function Profile() {
       })
     : null
 
+  /** Connected devices — human labels, current session flag, sort by activity */
+  const connectedDevices = useMemo(() => {
+    const uaNow = typeof navigator !== 'undefined' ? (navigator.userAgent || '') : ''
+    const uaKey = uaNow.slice(0, 80)
+    const list = (sessions || []).map((s) => {
+      const raw = s.user_agent || s.device_label || ''
+      const parsed = parseDeviceFromUserAgent(raw)
+      // Prefer stored clean label when it looks human (e.g. "Chrome · Windows")
+      const stored = (s.device_label || '').trim()
+      const looksHuman = stored && !/mozilla\//i.test(stored) && stored.length <= 60
+      const label = looksHuman ? stored : parsed.label
+      return {
+        id: s.id,
+        label,
+        browser: parsed.browser,
+        os: parsed.os,
+        kind: parsed.kind,
+        lastActive: s.last_active_at || s.created_at,
+        createdAt: s.created_at,
+        isCurrent: false,
+        _rawUa: s.user_agent || '',
+      }
+    })
+
+    // Mark a single current device (best UA match, else most recently active)
+    let currentIdx = list.findIndex((d) => d._rawUa && uaKey && d._rawUa.slice(0, 80) === uaKey)
+    if (currentIdx < 0 && list.length) {
+      // sessions already ordered by last_active_at desc from API
+      currentIdx = 0
+    }
+    if (currentIdx >= 0) list[currentIdx].isCurrent = true
+
+    return list
+      .map(({ _rawUa, ...rest }) => rest)
+      .sort((a, b) => {
+        if (a.isCurrent !== b.isCurrent) return a.isCurrent ? -1 : 1
+        return new Date(b.lastActive || 0) - new Date(a.lastActive || 0)
+      })
+  }, [sessions])
+
+  const [revokingSessionId, setRevokingSessionId] = useState(null)
+
+  async function handleRevokeSession(device) {
+    if (!device?.id) return
+    if (device.isCurrent) {
+      if (!window.confirm('Sign out of this device? You will need to log in again.')) return
+      await revokeSession(device.id)
+      await signOut()
+      return
+    }
+    if (!window.confirm(`Remove “${device.label}” from your connected devices?`)) return
+    setRevokingSessionId(device.id)
+    const ok = await revokeSession(device.id)
+    setRevokingSessionId(null)
+    if (ok) {
+      setShareToast('Device removed')
+      setTimeout(() => setShareToast(''), 2500)
+    } else {
+      setShareToast('Could not remove device')
+      setTimeout(() => setShareToast(''), 3000)
+    }
+  }
+
   const activeListing = useMemo(
     () => listings.filter(l => l.status !== 'sold' && l.status !== 'deleted'),
     [listings]
   )
+  /** Unfeatured active listings eligible for Feature another / choice modal */
+  const featureableListings = useMemo(
+    () => activeListing.filter(l => !isListingFeatured(l)),
+    [activeListing],
+  )
+
+  function openFeatureChoice() {
+    setShowFeatureChoice(true)
+  }
+
+  function chooseFeatureNewListing() {
+    setShowFeatureChoice(false)
+    navigate('/post', { state: { preselectFeature: true } })
+  }
+
+  function chooseFeatureExisting(listing) {
+    if (!listing) return
+    setShowFeatureChoice(false)
+    featureListing(listing)
+  }
+
   const soldListings = useMemo(
     () => listings.filter(l => l.status === 'sold'),
     [listings]
@@ -1567,136 +1721,223 @@ export default function Profile() {
     }
   }, [dealCount, soldListings.length, activeListing.length, followerCount, profile.is_verified, completeness.pct])
 
+  /** Sidebar strip — latest real listing lifecycle moments */
   const recentActivity = useMemo(() => {
-    const items = [...listings]
-      .sort((a, b) => {
-        const ta = new Date(a.updated_at || a.created_at || 0).getTime()
-        const tb = new Date(b.updated_at || b.created_at || 0).getTime()
-        return tb - ta
-      })
-      .slice(0, 5)
-      .map((l) => {
-        const when = l.updated_at || l.created_at
-        const isSold = l.status === 'sold'
-        const isFeatured = !!(l.featured || l.is_featured)
-        let text = isSold ? `Sold · ${l.title}` : `Listed · ${l.title}`
-        if (isFeatured && !isSold) text = `Featured · ${l.title}`
-        return {
-          id: l.id,
-          text,
-          when,
+    const items = []
+    for (const l of listings) {
+      if (!l || l.status === 'deleted') continue
+      const title = l.title || 'Untitled'
+      if (l.status === 'sold') {
+        items.push({
+          id: `sold-${l.id}`,
+          text: `Sold · ${title}`,
+          when: l.sold_at || l.updated_at || l.created_at,
+          status: 'sold',
+        })
+      } else if (isListingFeatured(l)) {
+        const until = l.featured_until ? new Date(l.featured_until).getTime() : 0
+        const start = until
+          ? new Date(until - FEATURED_DURATION_DAYS * 86400000).toISOString()
+          : (l.updated_at || l.created_at)
+        items.push({
+          id: `feat-${l.id}`,
+          text: `Featured · ${title}`,
+          when: start,
           status: l.status,
-        }
-      })
+        })
+      } else {
+        const created = new Date(l.created_at || 0).getTime()
+        const updated = new Date(l.updated_at || l.created_at || 0).getTime()
+        const wasUpdated = updated - created > 120000
+        items.push({
+          id: wasUpdated ? `upd-${l.id}` : `list-${l.id}`,
+          text: wasUpdated ? `Updated · ${title}` : `Listed · ${title}`,
+          when: wasUpdated ? l.updated_at : l.created_at,
+          status: l.status,
+        })
+      }
+    }
     return items
+      .filter(i => i.when)
+      .sort((a, b) => new Date(b.when) - new Date(a.when))
+      .slice(0, 6)
   }, [listings])
 
-  // Richer overview timeline (UI composition from already-loaded data — no new queries)
+  /**
+   * Overview timeline from real timestamps only (no snapshot “status cards”
+   * stamped with profile.updated_at that look like fresh activity).
+   */
   const dashboardTimeline = useMemo(() => {
     const events = []
+    const ms = (v) => (v ? new Date(v).getTime() : 0)
 
-    ;[...listings]
-      .sort((a, b) => {
-        const ta = new Date(a.updated_at || a.created_at || 0).getTime()
-        const tb = new Date(b.updated_at || b.created_at || 0).getTime()
-        return tb - ta
-      })
-      .slice(0, 8)
-      .forEach((l) => {
-        const when = l.updated_at || l.created_at
-        const isSold = l.status === 'sold'
-        const isFeatured = !!(l.featured || l.is_featured)
+    for (const l of listings) {
+      if (!l?.id || l.status === 'deleted' || l.status === 'draft') continue
+      const title = l.title || 'Untitled'
+      const go = () => navigate('/listing/' + l.id)
+
+      // Always record the original list event when we have created_at
+      if (l.created_at) {
         events.push({
-          id: `listing-${l.id}`,
+          id: `listed-${l.id}`,
+          listingId: l.id,
+          when: l.created_at,
+          text: `Listed · ${title}`,
+          icon: 'package',
+          tone: 'list',
+          onClick: go,
+        })
+      }
+
+      // Material edit after create (not the same second as insert)
+      if (l.updated_at && l.created_at && ms(l.updated_at) - ms(l.created_at) > 120000 && l.status !== 'sold') {
+        events.push({
+          id: `updated-${l.id}`,
+          listingId: l.id,
+          when: l.updated_at,
+          text: `Listing updated · ${title}`,
+          icon: 'pencil',
+          tone: 'list',
+          onClick: go,
+        })
+      }
+
+      if (l.status === 'sold') {
+        events.push({
+          id: `sold-${l.id}`,
+          listingId: l.id,
+          when: l.sold_at || l.updated_at || l.created_at,
+          text: `Sold · ${title}`,
+          icon: 'checkCircle',
+          tone: 'sold',
+          onClick: go,
+        })
+      }
+
+      if (isListingFeatured(l) && l.status !== 'sold') {
+        let when = l.updated_at || l.created_at
+        if (l.featured_until) {
+          const startMs = ms(l.featured_until) - FEATURED_DURATION_DAYS * 86400000
+          if (startMs > 0) when = new Date(startMs).toISOString()
+        }
+        events.push({
+          id: `featured-${l.id}`,
           listingId: l.id,
           when,
-          text: isSold
-            ? `Sale completed · ${l.title}`
-            : isFeatured
-              ? `Featured listing · ${l.title}`
-              : `Listing updated · ${l.title}`,
-          icon: isSold ? 'checkCircle' : isFeatured ? 'star' : 'package',
-          tone: isSold ? 'sold' : isFeatured ? 'feat' : 'list',
-          onClick: () => navigate('/listing/' + l.id),
+          text: `Featured · ${title}`,
+          icon: 'star',
+          tone: 'feat',
+          onClick: go,
         })
-      })
-
-    if (profile.is_verified) {
-      events.push({
-        id: 'verify-ok',
-        when: profile.updated_at || profile.created_at,
-        text: 'Identity verified — buyers can trust your profile',
-        icon: 'shieldCheck',
-        tone: 'ok',
-      })
-    } else {
-      events.push({
-        id: 'verify-pending',
-        when: profile.created_at,
-        text: 'Verification pending — complete identity check to sell faster',
-        icon: 'alertCircle',
-        tone: 'warn',
-        onClick: () => setShowVerify(true),
-      })
+      }
     }
 
-    if (profile.full_name || profile.city || profile.avatar_url) {
+    // Real follow events (timestamp = when they followed)
+    for (const f of recentFollowEvents) {
+      const name = f.follower?.full_name?.trim()
       events.push({
-        id: 'profile-update',
-        when: profile.updated_at || profile.created_at,
-        text: profile.avatar_url
-          ? 'Profile photo & details on file for buyers'
-          : 'Profile details updated — add a photo to build trust',
-        icon: 'user',
-        tone: 'profile',
-        onClick: () => openGroup('profile'),
-      })
-    }
-
-    if (followerCount > 0) {
-      events.push({
-        id: 'followers',
-        when: profile.updated_at || profile.created_at,
-        text: `${followerCount} follower${followerCount === 1 ? '' : 's'} in your network`,
+        id: `follow-${f.id}`,
+        when: f.created_at,
+        text: name ? `${name} followed you` : 'New follower joined your network',
         icon: 'users',
         tone: 'net',
         onClick: () => openGroup('network'),
       })
     }
 
-    if (shop) {
+    // Vouches with real created_at
+    for (const v of (vouchesIn || []).slice(0, 6)) {
+      const name = v.voucher?.full_name || v.profiles?.full_name
       events.push({
-        id: 'shop',
-        when: shop.updated_at || shop.created_at || profile.updated_at,
-        text: `Shop live · ${shop.name}`,
+        id: `vouch-${v.id}`,
+        when: v.created_at,
+        text: name ? `Vouch received · ${name}` : 'New vouch on your profile',
+        icon: 'heart',
+        tone: 'vouch',
+        onClick: () => openGroup('trust'),
+      })
+    }
+
+    // Trust events from DB (sales, verify, etc.)
+    for (const ev of (trustEvents || []).slice(0, 8)) {
+      const t = (ev.event_type || '').toLowerCase()
+      events.push({
+        id: `trust-${ev.id}`,
+        when: ev.created_at,
+        text: ev.title || 'Trust event',
+        icon: t.includes('sale') || t.includes('sold')
+          ? 'checkCircle'
+          : t.includes('verify')
+            ? 'shieldCheck'
+            : 'badgeCheck',
+        tone: t.includes('sale') || t.includes('sold') ? 'sold' : 'ok',
+        onClick: ev.listing_id || ev.meta?.listing_id
+          ? () => navigate('/listing/' + (ev.listing_id || ev.meta.listing_id))
+          : undefined,
+      })
+    }
+
+    // Identity verified — only with a real verified_at (not profile.updated_at)
+    if (profile.is_verified && profile.verified_at) {
+      events.push({
+        id: 'verify-ok',
+        when: profile.verified_at,
+        text: 'Identity verified — buyers can trust your profile',
+        icon: 'shieldCheck',
+        tone: 'ok',
+        onClick: () => openGroup('trust'),
+      })
+    }
+
+    // Shop created (real created_at only)
+    if (shop?.created_at) {
+      events.push({
+        id: `shop-${shop.id}`,
+        when: shop.created_at,
+        text: `Shop opened · ${shop.name || 'Your shop'}`,
         icon: 'store',
         tone: 'shop',
         onClick: () => navigate(shop.slug ? `/shop/${shop.slug}` : `/shop/${shop.id}`),
       })
     }
 
-    return events
-      .filter(e => e.when || e.text)
-      .sort((a, b) => {
-        const ta = new Date(a.when || 0).getTime()
-        const tb = new Date(b.when || 0).getTime()
-        return tb - ta
+    // Account joined
+    if (profile.created_at) {
+      events.push({
+        id: 'joined',
+        when: profile.created_at,
+        text: 'Joined SokoMw',
+        icon: 'sparkles',
+        tone: 'ok',
       })
-      .slice(0, 10)
+    }
+
+    // Dedupe: same text + same calendar day
+    const seen = new Set()
+    return events
+      .filter((e) => e.when && e.text)
+      .sort((a, b) => ms(b.when) - ms(a.when))
+      .filter((e) => {
+        const day = String(e.when).slice(0, 10)
+        const k = `${e.text}|${day}`
+        if (seen.has(k)) return false
+        seen.add(k)
+        return true
+      })
+      .slice(0, 12)
   }, [
     listings,
+    recentFollowEvents,
+    vouchesIn,
+    trustEvents,
     profile.is_verified,
-    profile.updated_at,
+    profile.verified_at,
     profile.created_at,
-    profile.full_name,
-    profile.city,
-    profile.avatar_url,
-    followerCount,
     shop,
   ])
 
   const featuredListings = useMemo(
-    () => activeListing.filter(l => l.featured || l.is_featured),
+    () => activeListing.filter(l => isListingFeatured(l)),
     [activeListing]
   )
 
@@ -1810,7 +2051,7 @@ export default function Profile() {
     if (invStatus === 'sold') base = soldListings
     else if (invStatus === 'featured') {
       base = listings.filter(
-        l => l.status !== 'sold' && l.status !== 'deleted' && (l.featured || l.is_featured)
+        l => l.status !== 'sold' && l.status !== 'deleted' && isListingFeatured(l)
       )
     } else if (invStatus === 'all') {
       base = listings.filter(l => l.status !== 'deleted')
@@ -2153,34 +2394,56 @@ export default function Profile() {
     vouchesIn,
   ])
 
-  // Enrich dashboard timeline with marketplace_activity feed when available
+  // Prefer marketplace_activity rows when present; fill with derived real events
   const liveDashboardTimeline = useMemo(() => {
-    if (!activityFeed?.length) return dashboardTimeline
-    const fromDb = activityFeed.slice(0, 10).map((a) => ({
-      id: a.id,
-      listingId: a.entity_type === 'listing' ? a.entity_id : null,
-      when: a.created_at,
-      text: a.title,
-      icon: a.activity_type?.includes('sold') ? 'checkCircle'
-        : a.activity_type?.includes('follow') ? 'users'
-          : a.activity_type?.includes('verify') ? 'shieldCheck' : 'package',
-      tone: a.activity_type?.includes('sold') ? 'sold' : 'list',
-      onClick: a.entity_type === 'listing' && a.entity_id
-        ? () => navigate('/listing/' + a.entity_id)
-        : undefined,
-    }))
-    // Merge DB first, then client composition, dedupe by text
+    const mapActivityIcon = (type = '') => {
+      const t = String(type).toLowerCase()
+      if (t.includes('sold') || t.includes('sale')) return { icon: 'checkCircle', tone: 'sold' }
+      if (t.includes('feature') || t.includes('boost')) return { icon: 'star', tone: 'feat' }
+      if (t.includes('follow')) return { icon: 'users', tone: 'net' }
+      if (t.includes('verify')) return { icon: 'shieldCheck', tone: 'ok' }
+      if (t.includes('relist')) return { icon: 'refreshCw', tone: 'list' }
+      if (t.includes('vouch')) return { icon: 'heart', tone: 'vouch' }
+      if (t.includes('created') || t.includes('list')) return { icon: 'package', tone: 'list' }
+      return { icon: 'activity', tone: 'list' }
+    }
+
+    const fromDb = (activityFeed || []).slice(0, 20).map((a) => {
+      const { icon, tone } = mapActivityIcon(a.activity_type)
+      const listingId = a.entity_type === 'listing' ? a.entity_id : null
+      return {
+        id: `db-${a.id}`,
+        listingId,
+        when: a.created_at,
+        text: a.title || a.body || 'Activity',
+        icon,
+        tone,
+        onClick: listingId
+          ? () => navigate('/listing/' + listingId)
+          : a.activity_type?.includes('follow')
+            ? () => openGroup('network')
+            : a.activity_type?.includes('verify')
+              ? () => openGroup('trust')
+              : undefined,
+      }
+    })
+
+    if (!fromDb.length) return dashboardTimeline
+
     const seen = new Set()
     const merged = []
+    // DB activity first (authoritative event log), then client-derived real events
     ;[...fromDb, ...dashboardTimeline].forEach((e) => {
-      const k = e.text
+      if (!e?.when || !e?.text) return
+      const day = String(e.when).slice(0, 10)
+      const k = `${String(e.text).toLowerCase()}|${day}`
       if (seen.has(k)) return
       seen.add(k)
       merged.push(e)
     })
     return merged
       .sort((a, b) => new Date(b.when || 0) - new Date(a.when || 0))
-      .slice(0, 10)
+      .slice(0, 12)
   }, [activityFeed, dashboardTimeline])
 
   if (loading) {
@@ -3097,7 +3360,7 @@ export default function Profile() {
           <section className="mp-od-section mp-od-activity-section" aria-label="Latest marketplace activity">
             <SectionHeader
               title="Latest marketplace activity"
-              subtitle="Listings, sales, profile, network, and verification events."
+              subtitle="Real events from your listings, sales, follows, and trust history."
               actionLabel="Selling →"
               onAction={() => openGroup('selling')}
             />
@@ -3376,7 +3639,7 @@ export default function Profile() {
                 {inventoryList.map((listing, idx) => {
                   const img = Array.isArray(listing.images) ? listing.images[0] : null
                   const isSold = listing.status === 'sold'
-                  const isFeat = !!(listing.featured || listing.is_featured)
+                  const isFeat = isListingFeatured(listing)
                   const selected = invSelected.includes(listing.id)
                   const place = listing.district || listing.city || '—'
                   const posted = listing.created_at || listing.updated_at
@@ -3491,13 +3754,27 @@ export default function Profile() {
                           <button
                             type="button"
                             className="mp-inv-icon-btn is-boost"
-                            title={listing.boost_until ? 'Boosted — extend 7 days' : 'Boost listing 7 days'}
-                            aria-label="Boost listing"
-                            onClick={() => boostListing(listing.id)}
+                            title={
+                              isFeat
+                                ? 'Already featured'
+                                : `Feature this listing (${featuredPriceLabel()} or free entitlement)`
+                            }
+                            aria-label={isFeat ? 'Already featured' : 'Feature this listing'}
+                            disabled={!!featuringId || isFeat || isSold}
+                            aria-disabled={!!featuringId || isFeat || isSold}
+                            onClick={(e) => {
+                              e.preventDefault()
+                              e.stopPropagation()
+                              featureListing(listing)
+                            }}
                           >
-                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                              <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z" />
-                            </svg>
+                            {featuringId === listing.id ? (
+                              <span style={{ fontSize: 10, fontWeight: 700 }}>…</span>
+                            ) : (
+                              <svg width="15" height="15" viewBox="0 0 24 24" fill={isFeat ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                              </svg>
+                            )}
                           </button>
                           <button
                             type="button"
@@ -3530,7 +3807,14 @@ export default function Profile() {
                 <button type="button" className="mp-inv-bulk-btn is-live" onClick={bulkRelist}>
                   Relist
                 </button>
-                <button type="button" className="mp-inv-bulk-btn is-live" onClick={bulkBoostSelected}>
+                <button
+                  type="button"
+                  className="mp-inv-bulk-btn is-live"
+                  onClick={bulkBoostSelected}
+                  disabled
+                  aria-disabled="true"
+                  title="Bulk boost disabled — feature when posting"
+                >
                   Boost
                 </button>
                 <button type="button" className="mp-inv-bulk-btn is-live is-danger" onClick={bulkDeleteSelected}>
@@ -3938,7 +4222,7 @@ export default function Profile() {
                   <button type="button" className="mp-btn-verify mp-tc-verify-btn" onClick={() => setShowVerify(true)}>
                     Get identity verified
                   </button>
-                  <p className="mp-tc-cta-hint">Same verification flow — redesigned CTA only.</p>
+                  <p className="mp-tc-cta-hint">Complete verification to earn a trusted badge.</p>
                 </>
               ) : (
                 <>
@@ -3952,6 +4236,18 @@ export default function Profile() {
             </div>
           </section>
 
+          {/* Live verification status / additional-info action */}
+          <SellerVerificationBanner
+            userId={user?.id}
+            isVerified={!!profile.is_verified}
+            onContinue={() => setShowVerify(true)}
+          />
+          <PendingVerificationCard
+            userId={user?.id}
+            isVerified={!!profile.is_verified}
+            onContinue={() => setShowVerify(true)}
+          />
+
           {/* Six metric cards */}
           <section className="mp-tc-section" aria-label="Trust metrics">
             <div className="mp-tc-section-head">
@@ -3959,12 +4255,12 @@ export default function Profile() {
               <p className="mp-tc-section-sub">Live signals buyers see on your reputation.</p>
             </div>
             <div className="mp-tc-metrics">
-              <button type="button" className={`mp-tc-metric${profile.is_verified ? ' is-ok' : ' is-warn'}`} onClick={() => !profile.is_verified && setShowVerify(true)}>
+              <button type="button" className={`mp-tc-metric${profile.is_verified ? ' is-ok' : ' is-warn'}`} onClick={() => setShowVerify(true)}>
                 <span className="mp-tc-metric-ic" aria-hidden="true"><MpIcon name="shieldCheck" size={18} /></span>
                 <span className="mp-tc-metric-label">Verification status</span>
-                <strong className="mp-tc-metric-value">{profile.is_verified ? 'Verified' : 'Pending'}</strong>
+                <strong className="mp-tc-metric-value">{profile.is_verified ? 'Verified' : 'See status'}</strong>
                 <span className="mp-tc-metric-desc">
-                  {profile.is_verified ? 'Identity confirmed for safer deals' : 'Get verified to sell faster'}
+                  {profile.is_verified ? 'Identity confirmed for safer deals' : 'Open verification for live status'}
                 </span>
                 <span className={`mp-tc-metric-bar${profile.is_verified ? ' is-full' : ''}`}>
                   <i style={{ width: profile.is_verified ? '100%' : '28%' }} />
@@ -4918,23 +5214,6 @@ export default function Profile() {
                     {!lastLoginLabel && <em className="mp-ac-soon">Unavailable</em>}
                   </li>
                   <li className="mp-ac-row">
-                    <span className="mp-ac-row-ic" aria-hidden="true"><MpIcon name="monitor" size={15} /></span>
-                    <span className="mp-ac-row-meta">
-                      <span className="mp-ac-row-k">Connected devices</span>
-                      <strong className="mp-ac-row-v">
-                        {sessions?.length
-                          ? `${sessions.length} active session${sessions.length === 1 ? '' : 's'}`
-                          : 'This browser'}
-                      </strong>
-                    </span>
-                    {sessions?.[0]?.device_label && (
-                      <em className="mp-ac-soon" title={sessions[0].device_label}>
-                        {sessions[0].device_label.slice(0, 28)}
-                        {sessions[0].device_label.length > 28 ? '…' : ''}
-                      </em>
-                    )}
-                  </li>
-                  <li className="mp-ac-row">
                     <span className="mp-ac-row-ic" aria-hidden="true"><MpIcon name="lock" size={15} /></span>
                     <span className="mp-ac-row-meta">
                       <span className="mp-ac-row-k">Password &amp; authentication</span>
@@ -4953,25 +5232,85 @@ export default function Profile() {
                       Manage
                     </button>
                   </li>
-                  <li className="mp-ac-row">
-                    <span className="mp-ac-row-ic" aria-hidden="true"><MpIcon name="smartphone" size={15} /></span>
-                    <span className="mp-ac-row-meta">
-                      <span className="mp-ac-row-k">Session management</span>
-                      <strong className="mp-ac-row-v">
-                        {securityEvents?.length
-                          ? `Last event: ${securityEvents[0].title}`
-                          : 'Active on this browser'}
-                      </strong>
-                    </span>
-                    <button
-                      type="button"
-                      className="mp-ac-link-btn"
-                      onClick={confirmSignOut}
-                    >
-                      Sign out
-                    </button>
-                  </li>
                 </ul>
+
+                <div className="mp-ac-devices" aria-label="Connected devices">
+                  <div className="mp-ac-devices-head">
+                    <span className="mp-ac-devices-title">
+                      <MpIcon name="monitor" size={15} />
+                      Connected devices
+                    </span>
+                    <span className="mp-ac-devices-count">
+                      {connectedDevices.length
+                        ? `${connectedDevices.length} active`
+                        : 'This browser'}
+                    </span>
+                  </div>
+
+                  {connectedDevices.length === 0 ? (
+                    <div className="mp-ac-device is-current">
+                      <span className="mp-ac-device-ic" aria-hidden="true">
+                        <MpIcon name="monitor" size={18} />
+                      </span>
+                      <span className="mp-ac-device-meta">
+                        <strong className="mp-ac-device-name">
+                          {parseDeviceFromUserAgent(
+                            typeof navigator !== 'undefined' ? navigator.userAgent : ''
+                          ).label}
+                        </strong>
+                        <span className="mp-ac-device-sub">
+                          <span className="mp-ac-device-pill is-now">This device</span>
+                          Active now
+                        </span>
+                      </span>
+                    </div>
+                  ) : (
+                    <ul className="mp-ac-device-list">
+                      {connectedDevices.map((d) => (
+                        <li key={d.id} className={`mp-ac-device${d.isCurrent ? ' is-current' : ''}`}>
+                          <span className="mp-ac-device-ic" aria-hidden="true">
+                            <MpIcon
+                              name={d.kind === 'mobile' || d.kind === 'tablet' ? 'smartphone' : 'monitor'}
+                              size={18}
+                            />
+                          </span>
+                          <span className="mp-ac-device-meta">
+                            <strong className="mp-ac-device-name">{d.label}</strong>
+                            <span className="mp-ac-device-sub">
+                              {d.isCurrent ? (
+                                <span className="mp-ac-device-pill is-now">This device</span>
+                              ) : null}
+                              {d.lastActive
+                                ? d.isCurrent
+                                  ? 'Active now'
+                                  : `Last active ${timeAgoShort(d.lastActive)} ago`
+                                : 'Session recorded'}
+                            </span>
+                          </span>
+                          <button
+                            type="button"
+                            className="mp-ac-device-revoke"
+                            disabled={revokingSessionId === d.id}
+                            onClick={() => handleRevokeSession(d)}
+                            title={d.isCurrent ? 'Sign out this device' : 'Remove this device'}
+                          >
+                            {revokingSessionId === d.id
+                              ? '…'
+                              : d.isCurrent
+                                ? 'Sign out'
+                                : 'Remove'}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+
+                  {securityEvents?.length > 0 && (
+                    <p className="mp-ac-devices-foot">
+                      Last security event: {securityEvents[0].title}
+                    </p>
+                  )}
+                </div>
               </section>
 
               {/* 5. Danger Zone */}
@@ -5044,11 +5383,14 @@ export default function Profile() {
       </div>
 
       {/* RIGHT — Insights panel */}
-      <aside className="mp-col mp-col-insights" aria-label="Insights">
+      <aside
+        className={`mp-col mp-col-insights${activeGroup === 'overview' ? ' is-overview' : ''}`}
+        aria-label="Insights"
+      >
         <div className="mp-insights">
           <div className="mp-insights-head">
             <h3 className="mp-insights-title">Insights</h3>
-            <p className="mp-insights-sub">Strength, trust, and growth</p>
+            <p className="mp-insights-sub">Strength · trust · growth · feature</p>
           </div>
 
           {/* 1. Profile Strength */}
@@ -5200,49 +5542,240 @@ export default function Profile() {
 
           {/* 8. Featured Promotion */}
           <div className="mp-insights-card mp-promo-card">
-            <div className="mp-insights-card-label">Featured promotion</div>
+            <div className="mp-promo-head">
+              <span className="mp-promo-head-icon" aria-hidden="true">
+                <MpIcon name="crown" size={16} />
+              </span>
+              <div className="mp-promo-head-text">
+                <div className="mp-insights-card-label mp-promo-label">Featured</div>
+                <p className="mp-promo-head-sub">Homepage boost</p>
+              </div>
+              {featuredListings.length > 0 && (
+                <span className="mp-promo-count-pill" title="Active featured listings">
+                  <MpIcon name="sparkles" size={12} />
+                  {featuredListings.length}
+                </span>
+              )}
+            </div>
+
             {featuredListings.length > 0 ? (
               <>
                 <p className="mp-promo-lead">
-                  <strong>{featuredListings.length}</strong> featured listing{featuredListings.length === 1 ? '' : 's'} boosting reach.
+                  <strong>{featuredListings.length}</strong>
+                  {' '}live · boosting reach
                 </p>
                 <ul className="mp-promo-list">
-                  {featuredListings.slice(0, 3).map(l => (
-                    <li key={l.id}>
-                      <button type="button" className="mp-promo-item" onClick={() => navigate('/listing/' + l.id)}>
-                        <span className="mp-promo-star" aria-hidden="true">⭐</span>
-                        <span className="mp-promo-title">{l.title}</span>
-                      </button>
-                    </li>
-                  ))}
+                  {featuredListings.slice(0, 3).map(l => {
+                    const img = Array.isArray(l.images) ? l.images[0] : null
+                    return (
+                      <li key={l.id}>
+                        <button
+                          type="button"
+                          className="mp-promo-item"
+                          onClick={() => navigate('/listing/' + l.id)}
+                        >
+                          <span className="mp-promo-thumb">
+                            {img ? (
+                              <img src={img} alt="" loading="lazy" decoding="async" />
+                            ) : (
+                              <span className="mp-promo-thumb-ph" aria-hidden="true">
+                                <MpIcon name="package" size={18} />
+                              </span>
+                            )}
+                            <span className="mp-promo-thumb-badge" aria-hidden="true">
+                              <MpIcon name="star" size={9} />
+                            </span>
+                          </span>
+                          <span className="mp-promo-meta">
+                            <span className="mp-promo-title">{l.title || 'Untitled'}</span>
+                            <span className="mp-promo-price">
+                              MWK {Number(l.price || 0).toLocaleString()}
+                            </span>
+                          </span>
+                          <span className="mp-promo-go" aria-hidden="true">
+                            <MpIcon name="chevronRight" size={16} />
+                          </span>
+                        </button>
+                      </li>
+                    )
+                  })}
                 </ul>
+                {featuredListings.length > 3 && (
+                  <button
+                    type="button"
+                    className="mp-promo-more"
+                    onClick={() => openGroup('selling')}
+                  >
+                    +{featuredListings.length - 3} more in inventory
+                  </button>
+                )}
                 <button
                   type="button"
-                  className="mp-btn-secondary"
-                  onClick={() => navigate(activeListing[0] ? `/post/edit/${activeListing[0].id}` : '/post')}
+                  className="mp-promo-cta-btn"
+                  onClick={openFeatureChoice}
                 >
-                  Manage featuring
+                  <MpIcon name="plusCircle" size={16} />
+                  Feature another
                 </button>
               </>
             ) : (
               <>
-                <p className="mp-promo-lead">
-                  Boost a listing to the top of local feed and sell faster.
-                </p>
+                <div className="mp-promo-empty">
+                  <span className="mp-promo-empty-icon" aria-hidden="true">
+                    <MpIcon name="trendingUp" size={22} />
+                  </span>
+                  <p className="mp-promo-lead mp-promo-lead-empty">
+                    Put a listing on the homepage for more views.
+                  </p>
+                  <p className="mp-promo-note">
+                    {featuredPriceLabel()}, or free entitlement if available.
+                  </p>
+                </div>
                 <button
                   type="button"
-                  className="mp-btn-primary mp-promo-cta"
-                  onClick={() => navigate(activeListing[0] ? `/post/edit/${activeListing[0].id}` : '/post')}
+                  className="mp-promo-cta-btn mp-promo-cta-btn-primary"
+                  onClick={openFeatureChoice}
                 >
+                  <MpIcon name={activeListing.length ? 'sparkles' : 'plusCircle'} size={16} />
                   {activeListing.length ? 'Feature a listing' : 'Post & feature'}
                 </button>
-                <p className="mp-promo-note">Choose Featured when editing or posting a listing.</p>
               </>
             )}
           </div>
         </div>
       </aside>
       </div>
+
+      {/* Feature another — choose existing listing or create new */}
+      {showFeatureChoice && (
+        <div className="mp-overlay" onClick={() => setShowFeatureChoice(false)}>
+          <div className="mp-modal mp-feature-choice-modal" onClick={e => e.stopPropagation()} role="dialog" aria-labelledby="mp-feature-choice-title">
+            <div className="mp-fc-head">
+              <div className="mp-fc-head-icon" aria-hidden="true">
+                <MpIcon name="crown" size={22} />
+              </div>
+              <div className="mp-fc-head-text">
+                <h3 id="mp-feature-choice-title">Feature a listing</h3>
+                <p>Homepage boost · gold badge · more views</p>
+              </div>
+              <button
+                type="button"
+                className="mp-fc-close"
+                onClick={() => setShowFeatureChoice(false)}
+                aria-label="Close"
+              >
+                <MpIcon name="x" size={18} />
+              </button>
+            </div>
+
+            <div className="mp-fc-options">
+              <button
+                type="button"
+                className="mp-fc-option mp-fc-option-new"
+                onClick={chooseFeatureNewListing}
+              >
+                <span className="mp-fc-option-icon mp-fc-option-icon-new" aria-hidden="true">
+                  <MpIcon name="plusCircle" size={22} />
+                </span>
+                <span className="mp-fc-option-body">
+                  <span className="mp-fc-option-title">New listing</span>
+                  <span className="mp-fc-option-desc">Create one — Feature is pre-selected</span>
+                </span>
+                <span className="mp-fc-option-chevron" aria-hidden="true">
+                  <MpIcon name="chevronRight" size={18} />
+                </span>
+              </button>
+
+              <div className={`mp-fc-option mp-fc-option-existing${featureableListings.length === 0 ? ' is-disabled' : ''}`}>
+                <span className="mp-fc-option-icon mp-fc-option-icon-exist" aria-hidden="true">
+                  <MpIcon name="package" size={22} />
+                </span>
+                <span className="mp-fc-option-body">
+                  <span className="mp-fc-option-title">Existing listing</span>
+                  <span className="mp-fc-option-desc">
+                    {featureableListings.length === 0
+                      ? 'No unfeatured active listings yet'
+                      : featureableListings.length === 1
+                        ? 'Tap the product below to feature it'
+                        : `Tap a product · ${featureableListings.length} available`}
+                  </span>
+                </span>
+                {featureableListings.length > 0 && (
+                  <span className="mp-fc-option-count" aria-hidden="true">
+                    {featureableListings.length}
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {featureableListings.length > 0 && (
+              <div className="mp-fc-picker">
+                <div className="mp-fc-picker-label">
+                  <MpIcon name="sparkles" size={14} />
+                  <span>Your products</span>
+                </div>
+                <ul className="mp-fc-product-list">
+                  {featureableListings.map(l => {
+                    const img = Array.isArray(l.images) ? l.images[0] : null
+                    const busy = featuringId === l.id
+                    return (
+                      <li key={l.id}>
+                        <button
+                          type="button"
+                          className={`mp-fc-product${busy ? ' is-busy' : ''}`}
+                          disabled={!!featuringId}
+                          onClick={() => chooseFeatureExisting(l)}
+                        >
+                          <span className="mp-fc-product-thumb">
+                            {img ? (
+                              <img src={img} alt="" loading="lazy" decoding="async" />
+                            ) : (
+                              <span className="mp-fc-product-thumb-ph" aria-hidden="true">
+                                <MpIcon name="package" size={22} />
+                              </span>
+                            )}
+                          </span>
+                          <span className="mp-fc-product-meta">
+                            <span className="mp-fc-product-title">{l.title || 'Untitled'}</span>
+                            <span className="mp-fc-product-price">
+                              MWK {Number(l.price || 0).toLocaleString()}
+                            </span>
+                            {(l.district || l.city) && (
+                              <span className="mp-fc-product-loc">
+                                <MpIcon name="mapPin" size={11} />
+                                {l.district || l.city}
+                              </span>
+                            )}
+                          </span>
+                          <span className="mp-fc-product-action" aria-hidden="true">
+                            {busy ? (
+                              <MpIcon name="loaderCircle" size={18} className="mp-fc-spin" />
+                            ) : (
+                              <span className="mp-fc-product-boost">
+                                <MpIcon name="star" size={14} />
+                                Feature
+                              </span>
+                            )}
+                          </span>
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              </div>
+            )}
+
+            {featureableListings.length === 0 && (
+              <div className="mp-fc-empty">
+                <span className="mp-fc-empty-icon" aria-hidden="true">
+                  <MpIcon name="package" size={28} />
+                </span>
+                <p>Post a listing first, then feature it for homepage placement.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Delete confirm */}
       {deleteConfirm && (
@@ -9379,42 +9912,149 @@ const css = `
   }
   .mp-tip-cta:hover { background: #dcf0e4; }
 
-  /* Featured promotion */
+  /* Featured promotion — premium product strip */
   .mp-promo-card {
-    border-color: rgba(249, 171, 0, 0.28);
+    border-color: rgba(249, 171, 0, 0.32) !important;
     background:
-      linear-gradient(165deg, #fffbeb 0%, #fff 45%, #fff 100%);
+      linear-gradient(165deg, #fffbeb 0%, #fffdf7 38%, #ffffff 100%) !important;
+    overflow: hidden;
+  }
+  .mp-promo-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  .mp-promo-head-icon {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border-radius: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    background: linear-gradient(145deg, #f59e0b, #d4920a 55%, #b45309);
+    box-shadow: 0 4px 12px -3px rgba(180, 83, 9, 0.45);
+  }
+  .mp-promo-head-text { flex: 1; min-width: 0; }
+  .mp-promo-label {
+    margin: 0 !important;
+    letter-spacing: 0.06em;
+  }
+  .mp-promo-head-sub {
+    margin: 2px 0 0;
+    font-size: 0.68rem;
+    font-weight: 600;
+    color: var(--mp-muted);
+    line-height: 1.2;
+  }
+  .mp-promo-count-pill {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 9px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: #92400e;
+    background: linear-gradient(145deg, #fef3c7, #fde68a);
+    border: 1px solid rgba(217, 119, 6, 0.28);
+    font-family: var(--mp-display, inherit);
   }
   .mp-promo-lead {
-    margin: 0 0 12px;
-    font-size: 0.8125rem;
+    margin: 0 0 10px;
+    font-size: 0.78rem;
     color: var(--mp-muted);
-    line-height: 1.45;
+    line-height: 1.4;
+    font-weight: 500;
   }
   .mp-promo-lead strong {
     color: #a16207;
     font-family: var(--mp-display);
-    font-size: 1.1rem;
+    font-size: 1.05rem;
+    font-weight: 800;
+  }
+  .mp-promo-lead-empty {
+    margin-bottom: 4px !important;
+    text-align: center;
   }
   .mp-promo-list {
     list-style: none;
-    margin: 0 0 12px;
+    margin: 0 0 10px;
     padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
   }
   .mp-promo-item {
     width: 100%;
     display: flex;
     align-items: center;
-    gap: 8px;
-    border: none;
-    background: rgba(255, 255, 255, 0.8);
-    border-radius: var(--mp-r-md);
-    padding: 8px 10px;
-    margin-bottom: 6px;
+    gap: 10px;
+    border: 1.5px solid rgba(217, 119, 6, 0.12);
+    background: rgba(255, 255, 255, 0.92);
+    border-radius: 12px;
+    padding: 6px 8px 6px 6px;
     cursor: pointer;
     text-align: left;
+    font: inherit;
+    color: inherit;
+    transition: border-color 0.15s, background 0.15s, box-shadow 0.15s, transform 0.15s;
   }
-  .mp-promo-star { font-size: 0.9rem; }
+  .mp-promo-item:hover {
+    border-color: rgba(217, 119, 6, 0.35);
+    background: #fffdf7;
+    box-shadow: 0 6px 14px -8px rgba(180, 83, 9, 0.3);
+    transform: translateY(-1px);
+  }
+  .mp-promo-thumb {
+    position: relative;
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    overflow: hidden;
+    background: var(--mp-surface, #f0f4f1);
+    border: 1px solid rgba(15, 20, 16, 0.06);
+  }
+  .mp-promo-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .mp-promo-thumb-ph {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--mp-faint, #9aafa0);
+    background: linear-gradient(145deg, #f4f8f5, #e8f0ea);
+  }
+  .mp-promo-thumb-badge {
+    position: absolute;
+    right: 2px;
+    bottom: 2px;
+    width: 16px;
+    height: 16px;
+    border-radius: 5px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    background: linear-gradient(145deg, #f59e0b, #b45309);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  }
+  .mp-promo-meta {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
   .mp-promo-title {
     font-size: 0.78rem;
     font-weight: 700;
@@ -9422,8 +10062,414 @@ const css = `
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    letter-spacing: -0.01em;
   }
-  .mp-promo-cta { width: 100%; text-align: center; }
+  .mp-promo-price {
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: #0d4a2c;
+    font-family: var(--mp-display, inherit);
+  }
+  .mp-promo-go {
+    flex-shrink: 0;
+    color: #d97706;
+    opacity: 0.65;
+    display: flex;
+  }
+  .mp-promo-item:hover .mp-promo-go { opacity: 1; }
+  .mp-promo-more {
+    display: block;
+    width: 100%;
+    margin: -2px 0 8px;
+    border: none;
+    background: none;
+    padding: 0;
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: #a16207;
+    cursor: pointer;
+    text-align: left;
+  }
+  .mp-promo-more:hover { text-decoration: underline; }
+  .mp-promo-cta,
+  .mp-promo-cta-btn {
+    width: 100%;
+    text-align: center;
+  }
+  .mp-promo-cta-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    padding: 10px 12px;
+    border-radius: 11px;
+    border: 1.5px solid rgba(26, 122, 74, 0.28);
+    background: #fff;
+    color: var(--mp-green-d, #0d4a2c);
+    font: inherit;
+    font-size: 0.8rem;
+    font-weight: 800;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s, box-shadow 0.15s, transform 0.15s;
+  }
+  .mp-promo-cta-btn:hover {
+    background: #eef8f2;
+    border-color: rgba(26, 122, 74, 0.45);
+    box-shadow: 0 4px 12px -6px rgba(13, 74, 44, 0.25);
+  }
+  .mp-promo-cta-btn-primary {
+    border: none;
+    color: #fff;
+    background: linear-gradient(145deg, #22a05e, #0d4a2c);
+    box-shadow: 0 6px 14px -6px rgba(13, 74, 44, 0.4);
+  }
+  .mp-promo-cta-btn-primary:hover {
+    background: linear-gradient(145deg, #1a8f52, #0a3d24);
+    color: #fff;
+    border: none;
+  }
+  .mp-promo-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 6px 4px 12px;
+  }
+  .mp-promo-empty-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 10px;
+    color: #b45309;
+    background: linear-gradient(145deg, #fef3c7, #fde68a);
+    border: 1px solid rgba(217, 119, 6, 0.2);
+  }
+
+  /* Feature choice modal — modern product picker */
+  .mp-feature-choice-modal {
+    max-width: 420px !important;
+    width: calc(100% - 28px);
+    padding: 0 !important;
+    text-align: left !important;
+    overflow: hidden;
+    border-radius: 18px !important;
+    box-shadow:
+      0 0 0 1px rgba(15, 20, 16, 0.06),
+      0 24px 48px -12px rgba(15, 20, 16, 0.22) !important;
+  }
+  .mp-feature-choice-modal h3 {
+    margin: 0 !important;
+    font-size: 1.05rem !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.02em;
+    color: var(--mp-ink, #0f1410) !important;
+  }
+  .mp-feature-choice-modal > p { display: none; }
+  .mp-fc-head {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 18px 16px 14px;
+    background:
+      linear-gradient(145deg, #fffbeb 0%, #fff8e6 40%, #ffffff 100%);
+    border-bottom: 1px solid rgba(217, 119, 6, 0.12);
+  }
+  .mp-fc-head-icon {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    background: linear-gradient(145deg, #f59e0b, #d4920a 55%, #b45309);
+    box-shadow: 0 6px 16px -4px rgba(180, 83, 9, 0.45);
+  }
+  .mp-fc-head-text { flex: 1; min-width: 0; }
+  .mp-fc-head-text p {
+    margin: 3px 0 0 !important;
+    font-size: 0.75rem !important;
+    color: var(--mp-muted, #637068) !important;
+    line-height: 1.35 !important;
+    font-weight: 500;
+  }
+  .mp-fc-close {
+    flex-shrink: 0;
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 10px;
+    background: rgba(15, 20, 16, 0.05);
+    color: var(--mp-muted, #637068);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .mp-fc-close:hover {
+    background: rgba(15, 20, 16, 0.1);
+    color: var(--mp-ink, #0f1410);
+  }
+  .mp-fc-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 14px 14px 6px;
+  }
+  .mp-fc-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    text-align: left;
+    padding: 12px 12px;
+    border-radius: 14px;
+    border: 1.5px solid var(--mp-border, #d8e5dc);
+    background: #fff;
+    cursor: default;
+    transition: border-color 0.15s, background 0.15s, box-shadow 0.15s, transform 0.15s;
+  }
+  button.mp-fc-option {
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+  }
+  button.mp-fc-option:hover {
+    border-color: #d97706;
+    background: linear-gradient(165deg, #fffbeb 0%, #fff 80%);
+    box-shadow: 0 8px 20px -10px rgba(180, 83, 9, 0.35);
+    transform: translateY(-1px);
+  }
+  button.mp-fc-option:active { transform: translateY(0); }
+  .mp-fc-option.is-disabled {
+    opacity: 0.58;
+  }
+  .mp-fc-option-icon {
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .mp-fc-option-icon-new {
+    color: #b45309;
+    background: linear-gradient(145deg, #fef3c7, #fde68a);
+  }
+  .mp-fc-option-icon-exist {
+    color: #0d4a2c;
+    background: linear-gradient(145deg, #e6f7ee, #c8ebd6);
+  }
+  .mp-fc-option-body {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .mp-fc-option-title {
+    font-size: 0.92rem;
+    font-weight: 800;
+    color: var(--mp-ink, #0f1410);
+    letter-spacing: -0.01em;
+  }
+  .mp-fc-option-desc {
+    font-size: 0.74rem;
+    color: var(--mp-muted, #637068);
+    line-height: 1.35;
+    font-weight: 500;
+  }
+  .mp-fc-option-chevron {
+    flex-shrink: 0;
+    color: #d97706;
+    opacity: 0.85;
+  }
+  .mp-fc-option-count {
+    flex-shrink: 0;
+    min-width: 26px;
+    height: 26px;
+    padding: 0 7px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.72rem;
+    font-weight: 800;
+    color: #0d4a2c;
+    background: #e6f7ee;
+  }
+  .mp-fc-picker {
+    padding: 4px 14px 16px;
+  }
+  .mp-fc-picker-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--mp-muted, #637068);
+    margin-bottom: 10px;
+  }
+  .mp-fc-picker-label svg { color: #d97706; }
+  .mp-fc-product-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    max-height: min(42vh, 280px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .mp-fc-product {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    text-align: left;
+    padding: 8px;
+    border-radius: 14px;
+    border: 1.5px solid var(--mp-border, #e8ede9);
+    background: #fff;
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
+    transition: border-color 0.15s, background 0.15s, box-shadow 0.15s;
+  }
+  .mp-fc-product:hover:not(:disabled) {
+    border-color: #f0d28a;
+    background: #fffdf7;
+    box-shadow: 0 6px 16px -8px rgba(180, 83, 9, 0.28);
+  }
+  .mp-fc-product:disabled {
+    opacity: 0.7;
+    cursor: wait;
+  }
+  .mp-fc-product.is-busy {
+    border-color: #f0d28a;
+    background: #fffbeb;
+  }
+  .mp-fc-product-thumb {
+    flex-shrink: 0;
+    width: 56px;
+    height: 56px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: var(--mp-surface, #f0f4f1);
+    border: 1px solid rgba(15, 20, 16, 0.06);
+  }
+  .mp-fc-product-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+  .mp-fc-product-thumb-ph {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--mp-faint, #9aafa0);
+    background: linear-gradient(145deg, #f4f8f5, #e8f0ea);
+  }
+  .mp-fc-product-meta {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .mp-fc-product-title {
+    font-size: 0.86rem;
+    font-weight: 700;
+    color: var(--mp-ink, #0f1410);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    letter-spacing: -0.01em;
+  }
+  .mp-fc-product-price {
+    font-size: 0.8rem;
+    font-weight: 800;
+    color: #0d4a2c;
+    font-family: var(--mp-display, inherit);
+  }
+  .mp-fc-product-loc {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.68rem;
+    font-weight: 500;
+    color: var(--mp-muted, #637068);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .mp-fc-product-action {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+  }
+  .mp-fc-product-boost {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 10px;
+    border-radius: 999px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    color: #92400e;
+    background: linear-gradient(145deg, #fef3c7, #fde68a);
+    border: 1px solid rgba(217, 119, 6, 0.25);
+  }
+  .mp-fc-product:hover:not(:disabled) .mp-fc-product-boost {
+    color: #fff;
+    background: linear-gradient(145deg, #f59e0b, #d4920a);
+    border-color: transparent;
+  }
+  .mp-fc-spin {
+    animation: mp-fc-spin 0.8s linear infinite;
+    color: #d97706;
+  }
+  @keyframes mp-fc-spin {
+    to { transform: rotate(360deg); }
+  }
+  .mp-fc-empty {
+    margin: 4px 14px 18px;
+    padding: 20px 16px;
+    border-radius: 14px;
+    border: 1.5px dashed var(--mp-border, #d8e5dc);
+    background: var(--mp-surface, #f4f8f5);
+    text-align: center;
+  }
+  .mp-fc-empty-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 52px;
+    height: 52px;
+    border-radius: 16px;
+    margin-bottom: 10px;
+    color: var(--mp-muted, #637068);
+    background: #fff;
+    border: 1px solid var(--mp-border, #e8ede9);
+  }
+  .mp-fc-empty p {
+    margin: 0 !important;
+    font-size: 0.8rem !important;
+    color: var(--mp-muted, #637068) !important;
+    line-height: 1.45 !important;
+    font-weight: 500;
+  }
   .mp-promo-note {
     margin: 10px 0 0;
     font-size: 0.68rem;
@@ -12791,6 +13837,155 @@ const css = `
     background: #e8f5ee;
     border-color: rgba(15, 157, 88, 0.4);
   }
+
+  /* Connected devices list */
+  .mp-ac-devices {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--ac-line);
+  }
+  .mp-ac-devices-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .mp-ac-devices-title {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    font-size: 0.78rem;
+    font-weight: 800;
+    color: var(--mp-ink);
+    letter-spacing: -0.01em;
+  }
+  .mp-ac-devices-count {
+    font-size: 0.68rem;
+    font-weight: 700;
+    color: var(--mp-muted);
+    background: var(--mp-surface, #f4f8f5);
+    border: 1px solid var(--ac-line);
+    border-radius: 999px;
+    padding: 3px 9px;
+  }
+  .mp-ac-device-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .mp-ac-device {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 10px 10px;
+    border-radius: 12px;
+    border: 1.5px solid rgba(15, 23, 42, 0.06);
+    background: #fff;
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .mp-ac-device.is-current {
+    border-color: rgba(15, 157, 88, 0.28);
+    background: linear-gradient(165deg, #f3fbf6 0%, #fff 70%);
+  }
+  .mp-ac-device-ic {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border-radius: 11px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--mp-green-d, #0d4a2c);
+    background: linear-gradient(145deg, #e6f7ee, #d4efe0);
+    border: 1px solid rgba(15, 157, 88, 0.12);
+  }
+  .mp-ac-device.is-current .mp-ac-device-ic {
+    color: #fff;
+    background: linear-gradient(145deg, #22a05e, #0d4a2c);
+    border-color: transparent;
+  }
+  .mp-ac-device-meta {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .mp-ac-device-name {
+    font-size: 0.84rem;
+    font-weight: 800;
+    color: var(--mp-ink);
+    letter-spacing: -0.01em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .mp-ac-device-sub {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: var(--mp-muted);
+  }
+  .mp-ac-device-pill {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 7px;
+    border-radius: 999px;
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+  }
+  .mp-ac-device-pill.is-now {
+    color: #0d4a2c;
+    background: rgba(15, 157, 88, 0.14);
+    border: 1px solid rgba(15, 157, 88, 0.2);
+  }
+  .mp-ac-device-revoke {
+    flex-shrink: 0;
+    border: 1.5px solid rgba(15, 23, 42, 0.08);
+    background: #fff;
+    color: var(--mp-muted);
+    border-radius: 999px;
+    padding: 6px 11px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+  }
+  .mp-ac-device-revoke:hover:not(:disabled) {
+    border-color: rgba(220, 38, 38, 0.35);
+    color: #b91c1c;
+    background: #fef2f2;
+  }
+  .mp-ac-device-revoke:disabled {
+    opacity: 0.55;
+    cursor: wait;
+  }
+  .mp-ac-device.is-current .mp-ac-device-revoke {
+    border-color: rgba(15, 157, 88, 0.25);
+    color: var(--mp-green-d);
+  }
+  .mp-ac-device.is-current .mp-ac-device-revoke:hover:not(:disabled) {
+    border-color: rgba(15, 157, 88, 0.4);
+    color: var(--mp-green-d);
+    background: #eef8f2;
+  }
+  .mp-ac-devices-foot {
+    margin: 10px 0 0;
+    font-size: 0.68rem;
+    color: var(--mp-faint);
+    font-weight: 500;
+    line-height: 1.35;
+  }
+
   .mp-ac-shortcuts {
     display: flex;
     flex-wrap: wrap;
@@ -13966,69 +15161,84 @@ const css = `
   }
 
   /* ── Responsive ── */
-  /* ═══ Phone layout stack ═══
-     Top app bar → Profile header card → Horizontal quick actions
-     → Section chips → Current section → Bottom sticky nav
-  */
+  /* ═══ Phone layout — modern stack, clear hierarchy, touch-first ═══ */
   @media (max-width: 767px) {
     .mp-page {
-      /* Profile section bar + app BottomNav — leave room to scroll content */
-      --mp-bottom-clear: calc(132px + env(safe-area-inset-bottom, 0px));
+      --mp-pad-x: max(14px, env(safe-area-inset-left, 0px));
+      --mp-pad-r: max(14px, env(safe-area-inset-right, 0px));
+      --mp-bottom-clear: calc(138px + env(safe-area-inset-bottom, 0px));
       padding-bottom: var(--mp-bottom-clear);
     }
 
-    /* 1. Top app bar — compact */
+    /* Top bar — icon-first */
     .mp-topbar-kicker { display: none; }
     .mp-title-phone { display: inline; }
     .mp-title-desk { display: none; }
-    .mp-topbar-title { font-size: 1.05rem; }
+    .mp-topbar-title { font-size: 1.02rem; letter-spacing: -0.02em; }
     .mp-topbar-divider { display: none; }
     .mp-top-btn span { display: none; }
     .mp-top-btn {
       padding: 0;
-      width: 38px;
-      height: 38px;
+      width: 40px;
+      height: 40px;
+      min-width: 40px;
+      min-height: 40px;
     }
 
-    /* 2. Hero — vertical stack, tight 8px spacing */
+    /* Hero — centered identity card */
     .mp-hero-media {
-      height: 130px;
-      max-height: 130px;
+      height: 112px;
+      max-height: 112px;
     }
     .mp-hero-panel {
-      margin-top: -6px;
-      padding: 0 12px 0;
+      margin-top: -8px;
+      padding: 0 var(--mp-pad-x) 0;
     }
     .mp-hero-panel-inner {
-      padding: 8px;
-      border-radius: 14px;
+      padding: 12px;
+      border-radius: 18px;
+      box-shadow:
+        0 1px 2px rgba(15, 23, 42, 0.04),
+        0 12px 28px rgba(15, 23, 42, 0.06);
     }
     .mp-hero-grid {
       display: flex;
       flex-direction: column;
-      gap: 8px;
+      gap: 12px;
     }
     .mp-hero-col-id {
-      margin-top: -44px; /* ~45% of ~96–100px avatar */
-      gap: 8px;
+      margin-top: -48px;
+      gap: 10px;
       align-items: center;
       height: auto;
     }
     .mp-hero-col-main,
-    .mp-hero-col-side { height: auto; }
+    .mp-hero-col-side { height: auto; width: 100%; }
     .mp-hero-id-block {
       align-items: center;
       text-align: center;
+      width: 100%;
     }
-    .mp-hero-id { align-items: center; }
+    .mp-hero-id { align-items: center; width: 100%; }
     .mp-hero-name-row,
     .mp-hero-meta-row { justify-content: center; }
     .mp-hero-avatar .mp-avatar {
-      width: 96px;
-      height: 96px;
-      font-size: 1.9rem;
+      width: 92px;
+      height: 92px;
+      font-size: 1.85rem;
+      border: 3px solid #fff;
+      box-shadow: 0 4px 14px rgba(15, 23, 42, 0.12);
     }
-    .mp-hero-premium .mp-name { font-size: 1.18rem; }
+    .mp-hero-premium .mp-name {
+      font-size: 1.2rem;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .mp-trust-card {
+      width: 100%;
+      max-width: 100%;
+    }
     .mp-hero-stats {
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 8px;
@@ -14036,41 +15246,73 @@ const css = `
     .mp-hero-stat {
       align-items: center;
       text-align: center;
-      padding: 10px 8px;
+      padding: 12px 8px;
+      min-height: 72px;
+      border-radius: 14px;
     }
     .mp-hero-stat-ic,
     .mp-hero-stat-n,
     .mp-hero-stat-l { width: 100%; text-align: center; }
-    .mp-hero-stat-n { font-size: 1.4rem; }
+    .mp-hero-stat-n { font-size: 1.35rem; }
+    .mp-hero-stat-l { font-size: 0.65rem; }
+
+    /* Primary actions — scroll row with snap */
     .mp-hero-actions {
+      display: flex;
       flex-wrap: nowrap;
       overflow-x: auto;
       -webkit-overflow-scrolling: touch;
+      scroll-snap-type: x proximity;
       scrollbar-width: none;
       gap: 8px;
       margin-top: 0;
+      padding-bottom: 2px;
     }
     .mp-hero-actions::-webkit-scrollbar { display: none; }
-    .mp-hbtn { flex: 0 0 auto; padding: 8px 12px; font-size: 0.75rem; }
+    .mp-hbtn {
+      flex: 0 0 auto;
+      scroll-snap-align: start;
+      min-height: 40px;
+      padding: 10px 14px;
+      font-size: 0.78rem;
+      border-radius: 999px;
+    }
+    .mp-hbtn-primary { padding-inline: 16px; }
     .mp-hero-chips {
       flex-wrap: nowrap;
       overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      scroll-snap-type: x proximity;
       scrollbar-width: none;
       margin-top: 0;
       gap: 8px;
+      padding-bottom: 2px;
     }
     .mp-hero-chips::-webkit-scrollbar { display: none; }
-    .mp-hchip { flex: 0 0 auto; }
-    .mp-hero-more-menu { right: auto; left: 0; }
+    .mp-hchip {
+      flex: 0 0 auto;
+      scroll-snap-align: start;
+      min-height: 36px;
+      padding: 8px 12px;
+      font-size: 0.72rem;
+    }
+    .mp-hero-more-menu { right: auto; left: 0; min-width: 180px; }
     .mp-hero-col-side {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
+      display: flex;
+      flex-direction: column;
       gap: 8px;
     }
-    .mp-hero-insight-activity { grid-column: 1 / -1; }
-    .mp-cover-btn { padding: 6px 10px; font-size: 0.65rem; }
+    .mp-hero-insight-card { width: 100%; }
+    .mp-cover-actions {
+      top: 8px;
+      right: 8px;
+    }
+    .mp-cover-btn {
+      padding: 7px 11px;
+      font-size: 0.68rem;
+      min-height: 32px;
+    }
 
-    /* 3. Section chips always visible */
     .mp-mobile-sections {
       display: flex;
       position: sticky;
@@ -14081,40 +15323,284 @@ const css = `
       padding-bottom: 10px;
     }
 
-    /* 5. Current section only — hide side rails */
+    /* Shell: detail then insights (no left nav) */
     .mp-shell,
     .mp-shell.is-nav,
     .mp-shell.is-detail {
       display: flex !important;
       flex-direction: column;
-      padding: 0 0 8px;
-      gap: 0;
+      padding: 0 0 12px;
+      gap: 12px;
       margin: 0;
     }
-    .mp-col-nav,
-    .mp-col-insights {
-      display: none !important;
-    }
+    .mp-col-nav { display: none !important; }
     .mp-col-detail {
       display: flex !important;
       flex-direction: column;
       width: 100%;
+      order: 1;
+      min-width: 0;
     }
+    /* Insights under Overview only — keeps Selling/Network uncluttered */
+    .mp-col-insights {
+      display: none !important;
+    }
+    .mp-col-insights.is-overview {
+      display: block !important;
+      width: 100%;
+      order: 2;
+      min-width: 0;
+      padding: 0 var(--mp-pad-x);
+      box-sizing: border-box;
+    }
+    .mp-insights {
+      gap: 10px;
+      padding: 0 0 8px;
+    }
+    .mp-insights-head {
+      margin-bottom: 2px;
+      padding: 0 2px;
+    }
+    .mp-insights-title {
+      font-size: 0.95rem;
+    }
+    .mp-insights-sub {
+      font-size: 0.72rem;
+    }
+    .mp-insights-card {
+      border-radius: 16px;
+      padding: 14px;
+    }
+
     .mp-detail-back { display: none !important; }
     .mp-detail-bar {
-      margin: 0 max(12px, env(safe-area-inset-left, 0px)) 10px max(12px, env(safe-area-inset-right, 0px));
-      padding: 10px 12px;
-      border-radius: 14px;
+      margin: 0 var(--mp-pad-x) 8px;
+      padding: 12px 14px;
+      border-radius: 16px;
+      align-items: center;
+      gap: 10px;
+    }
+    .mp-detail-title { font-size: 1.05rem; }
+    .mp-detail-sub {
+      font-size: 0.72rem;
+      line-height: 1.35;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
     }
     .mp-detail-cta {
-      display: none; /* use quick actions + chips on phone */
+      display: none;
     }
+    .mp-detail-body {
+      min-width: 0;
+    }
+
+    /* Overview — clear vertical rhythm */
+    .mp-odash {
+      margin: 0 var(--mp-pad-x) 8px;
+      gap: 14px;
+      min-width: 0;
+    }
+    .mp-od-welcome {
+      padding: 16px;
+      border-radius: 18px;
+      gap: 14px;
+    }
+    .mp-od-welcome-hello { font-size: 1.2rem; line-height: 1.2; }
+    .mp-od-welcome-lead { font-size: 0.78rem; }
+    .mp-od-welcome-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .mp-od-chip {
+      flex: 1 1 calc(50% - 8px);
+      min-width: 0;
+    }
+    .mp-od-welcome-cta {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .mp-od-welcome-cta .mp-btn-primary,
+    .mp-od-welcome-cta .mp-btn-secondary {
+      width: 100%;
+      min-height: 44px;
+      justify-content: center;
+    }
+    .mp-od-contact {
+      border-radius: 18px;
+      padding: 14px;
+    }
+    .mp-od-contact-grid {
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+    .mp-od-stats-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .mp-od-stat {
+      padding: 14px 12px;
+      border-radius: 16px;
+      min-height: 96px;
+    }
+    .mp-od-stat-value { font-size: 1.35rem; }
+    .mp-od-actions-grid {
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+    .mp-od-action {
+      min-height: 56px;
+      padding: 12px 14px;
+      border-radius: 14px;
+    }
+    .mp-od-insights-grid {
+      grid-template-columns: 1fr;
+      gap: 10px;
+    }
+    .mp-od-section > .mp-ds-section-head,
+    .mp-od-section .mp-section-head {
+      margin-bottom: 10px;
+    }
+    .mp-od-activity-panel,
+    .mp-od-panel {
+      border-radius: 16px;
+      overflow: hidden;
+    }
+    .mp-od-timeline { gap: 0; }
+    .mp-od-tl-btn,
+    .mp-od-tl-static {
+      padding: 12px 4px;
+      min-height: 48px;
+      gap: 10px;
+    }
+    .mp-od-tl-text {
+      font-size: 0.84rem;
+      line-height: 1.35;
+    }
+
+    /* Inventory / selling */
+    .mp-inv {
+      margin: 0 var(--mp-pad-x) 12px;
+      gap: 12px;
+    }
+    .mp-inv-hero {
+      padding: 14px;
+      border-radius: 16px;
+    }
+    .mp-inv-hero-title { font-size: 1.15rem; }
+    .mp-inv-kpi-strip {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .mp-inv-kpi {
+      min-height: 56px;
+      padding: 10px 12px;
+    }
+    .mp-inv-toolbar {
+      top: calc(var(--mp-topbar-h) + 4px);
+      padding: 10px;
+      border-radius: 16px;
+      gap: 8px;
+    }
+    .mp-inv-search { width: 100%; }
+    .mp-inv-filters {
+      display: flex;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      gap: 8px;
+      scrollbar-width: none;
+      padding-bottom: 2px;
+      align-items: flex-end;
+    }
+    .mp-inv-filters::-webkit-scrollbar { display: none; }
+    .mp-inv-filters .mp-inv-field {
+      flex: 0 0 auto;
+      min-width: 118px;
+    }
+    .mp-inv-filters .mp-inv-select {
+      min-height: 40px;
+      font-size: 0.78rem;
+    }
+    .mp-inv-view-toggle {
+      flex: 0 0 auto;
+    }
+    .mp-inv-view-txt {
+      display: none;
+    }
+    .mp-inv-grid {
+      gap: 10px;
+    }
+    .mp-inv-grid--grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+    .mp-inv-card {
+      border-radius: 14px;
+      min-width: 0;
+    }
+    .mp-inv-card-title {
+      font-size: 0.8rem;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      white-space: normal;
+    }
+    .mp-inv-card-actions {
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .mp-inv-icon-btn {
+      min-width: 40px;
+      min-height: 40px;
+    }
+
+    /* Account / trust / buying / network */
+    .mp-ac {
+      margin: 0 var(--mp-pad-x) 12px;
+      gap: 12px;
+    }
+    .mp-ac-hero {
+      padding: 16px;
+      border-radius: 16px;
+    }
+    .mp-ac-grid {
+      grid-template-columns: 1fr !important;
+      gap: 12px;
+    }
+    .mp-ac-card { border-radius: 16px; }
+    .mp-ac-row {
+      padding: 12px 4px;
+      gap: 10px;
+      min-height: 52px;
+    }
+    .mp-ac-devices { margin-top: 12px; }
+    .mp-ac-device {
+      padding: 10px;
+      gap: 10px;
+    }
+    .mp-ac-device-revoke {
+      min-height: 36px;
+      padding: 8px 12px;
+    }
+    .mp-tc-metrics,
+    .mp-buy-stats {
+      grid-template-columns: 1fr 1fr !important;
+      gap: 8px;
+    }
+    .mp-nd-stats {
+      grid-template-columns: 1fr 1fr !important;
+    }
+
     .mp-detail-body .mp-card,
     .mp-detail-body .mp-listings,
     .mp-detail-body .mp-network-wrap,
     .mp-detail-body .mp-kpi-grid {
-      margin-left: max(12px, env(safe-area-inset-left, 0px));
-      margin-right: max(12px, env(safe-area-inset-right, 0px));
+      margin-left: var(--mp-pad-x);
+      margin-right: var(--mp-pad-r);
     }
     .mp-kpi-grid {
       grid-template-columns: 1fr 1fr;
@@ -14123,6 +15609,79 @@ const css = `
     .mp-kpi-value { font-size: 1.25rem; }
     .mp-action-grid { grid-template-columns: 1fr 1fr; }
     .mp-wordmark-btn { font-size: 1.05rem; }
+
+    /* Feature choice modal → bottom sheet on phone */
+    .mp-overlay {
+      align-items: flex-end !important;
+      padding: 0 !important;
+    }
+    .mp-feature-choice-modal {
+      width: 100% !important;
+      max-width: 100% !important;
+      border-radius: 20px 20px 0 0 !important;
+      max-height: min(88dvh, 720px);
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      margin: 0;
+      padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)) !important;
+    }
+    .mp-fc-product-list {
+      max-height: min(36vh, 240px);
+    }
+    .mp-fc-product {
+      min-height: 64px;
+    }
+
+    /* Mobile section nav — clearer active state */
+    .mp-pnav-mob {
+      padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px) * 0);
+      gap: 2px;
+      border-top: 1px solid rgba(15, 23, 42, 0.08);
+      box-shadow: 0 -6px 24px rgba(15, 23, 42, 0.06);
+    }
+    .mp-pnav-mob-item {
+      min-height: 48px;
+      padding: 6px 2px 8px;
+      border-radius: 12px;
+    }
+    .mp-pnav-mob-label {
+      font-size: 0.6rem;
+      font-weight: 700;
+    }
+    .mp-pnav-mob-item.is-active {
+      background: rgba(15, 157, 88, 0.12);
+      color: var(--mp-green-d);
+    }
+    .mp-pnav-more-sheet {
+      width: min(300px, calc(100vw - 20px));
+      border-radius: 16px;
+      max-height: min(60vh, 420px);
+      overflow-y: auto;
+    }
+    .mp-pnav-more-item {
+      min-height: 52px;
+      padding: 10px 12px;
+    }
+
+    /* Touch & text safety */
+    .mp-page button,
+    .mp-page a,
+    .mp-page [role="button"] {
+      -webkit-tap-highlight-color: transparent;
+    }
+    .mp-page img {
+      max-width: 100%;
+    }
+    .mp-promo-item,
+    .mp-fc-product {
+      max-width: 100%;
+    }
+    .mp-promo-title,
+    .mp-fc-product-title {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
   }
 
   @media (max-width: 380px) {
@@ -14132,12 +15691,17 @@ const css = `
     .mp-kpi-grid { grid-template-columns: 1fr 1fr; }
     .mp-net-section-hint { display: none; }
     .mp-hero-media {
-      height: 120px;
-      max-height: 120px;
+      height: 100px;
+      max-height: 100px;
     }
-    .mp-hero-avatar .mp-avatar { width: 90px; height: 90px; }
-    .mp-hero-col-id { margin-top: -40px; }
+    .mp-hero-avatar .mp-avatar { width: 84px; height: 84px; }
+    .mp-hero-col-id { margin-top: -38px; }
     .mp-hero-col-side { display: flex; flex-direction: column; }
+    .mp-od-welcome-cta { grid-template-columns: 1fr; }
+    .mp-inv-kpi-strip { grid-template-columns: 1fr 1fr; }
+    .mp-pnav-mob-label { font-size: 0.55rem; }
+    .mp-detail-sub { display: none; }
+    .mp-od-chip em { display: none; }
   }
 
   @media (min-width: 480px) {

@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { CAT_META, BADGE_META, CONDITION_SHORT } from '../constants/homeConstants'
-import { isFlashActive, timeAgo, markAsViewed } from '../utils/homeUtils'
+import { isFlashActive, isListingFeatured, timeAgo, markAsViewed } from '../utils/homeUtils'
 
 // ── Viewport tracking hook (inline — no extra file needed) ──
 function useViewportTracking(id, threshold = 1500) {
@@ -34,7 +34,9 @@ export function ProductCard({ listing, delay, onClick }) {
 
   const meta = CAT_META[listing.category] || { color: '#6b7280', bg: '#f3f4f6' }
   const flash = isFlashActive(listing)
-  const badge = listing.promo_badge && BADGE_META[listing.promo_badge]
+  // Phase 2.4: featured badge uses featured_until via isListingFeatured (existing badge styles)
+  const badge = (listing.promo_badge && BADGE_META[listing.promo_badge])
+    || (isListingFeatured(listing) ? BADGE_META.featured : null)
   const condition = listing.condition && CONDITION_SHORT[listing.condition]
   const hasBulk = listing.bulk_pricing && listing.bulk_pricing.length > 0
   const displayPrice = flash ? listing.flash_sale_price : listing.price

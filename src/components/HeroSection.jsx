@@ -1,4 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react'
+import { isListingFeatured } from '../utils/homeUtils'
 
 const T = {
   green:  '#0F9D58',
@@ -116,7 +117,7 @@ export default function HeroSection({ listings, navigate, user }) {
 
   // ── Featured listings for carousel ─────────────────────
   const featured = useMemo(() =>
-    listings.filter(l => (l.featured || l.is_featured) && l.images?.[0]).slice(0, 8),
+    listings.filter(l => isListingFeatured(l) && l.images?.[0]).slice(0, 8),
   [listings])
 
   // ── Carousel state ─────────────────────────────────────

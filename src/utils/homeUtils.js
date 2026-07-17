@@ -9,6 +9,107 @@ export function isFlashActive(listing) {
   return new Date(listing.flash_sale_expires_at) > new Date()
 }
 
+/**
+ * Phase 2.4 — featured badges / pins: featured_until > now() only.
+ * Falls back to legacy booleans only when featured_until is not in the payload
+ * (older select lists). Prefer selecting featured_until on all listing queries.
+ */
+export function isListingFeatured(listing) {
+  if (!listing) return false
+  if (Object.prototype.hasOwnProperty.call(listing, 'featured_until')) {
+    if (listing.featured_until == null || listing.featured_until === '') return false
+    return new Date(listing.featured_until).getTime() > Date.now()
+  }
+  return !!(listing.is_featured || listing.featured)
+}
+
+/**
+ * Phase 3.2 — fair featured rotation (client-side, O(n log n), no extra network).
+ *
+ * - Rotates order on a time bucket so every active featured listing gets exposure.
+ * - Round-robins across sellers so one seller cannot dominate the top of the list.
+ * - Per-seller primary cap (default 2) surfaces more sellers first; overflow still
+ *   appears after a full fair pass.
+ *
+ * @param {Array} listings  Active featured rows
+ * @param {{ intervalMs?: number, maxPerSeller?: number, now?: number }} [opts]
+ * @returns {Array} New array, same objects reordered
+ */
+export function rotateFeaturedFairly(listings, opts = {}) {
+  const {
+    intervalMs = 30_000,
+    maxPerSeller = 2,
+    now = Date.now(),
+  } = opts
+
+  if (!listings?.length) return []
+  if (listings.length === 1) return listings.slice()
+
+  const seed = Math.floor(now / intervalMs) >>> 0
+
+  // Deterministic hash for stable order within a time bucket (no Math.random)
+  const hashKey = (key) => {
+    const s = String(key ?? '')
+    let h = seed * 2654435761
+    for (let i = 0; i < s.length; i++) {
+      h = Math.imul(h ^ s.charCodeAt(i), 2246822519)
+    }
+    return h >>> 0
+  }
+
+  // Group by seller (fallback to listing id if missing seller)
+  const bySeller = new Map()
+  for (const l of listings) {
+    const sid = l.seller_id || l.shop_id || l.id
+    let arr = bySeller.get(sid)
+    if (!arr) {
+      arr = []
+      bySeller.set(sid, arr)
+    }
+    arr.push(l)
+  }
+
+  // Within each seller, rotate which of their listings appear first
+  for (const arr of bySeller.values()) {
+    arr.sort((a, b) => hashKey(a.id) - hashKey(b.id))
+  }
+
+  // Rotate seller order each bucket
+  const sellerIds = [...bySeller.keys()].sort(
+    (a, b) => hashKey(`seller:${a}`) - hashKey(`seller:${b}`),
+  )
+
+  // Primary = up to maxPerSeller per seller (fair top slots); overflow after
+  const primaryQueues = []
+  const overflowQueues = []
+  for (const sid of sellerIds) {
+    const items = bySeller.get(sid) || []
+    const cap = Math.max(1, maxPerSeller)
+    primaryQueues.push(items.slice(0, cap))
+    if (items.length > cap) overflowQueues.push(items.slice(cap))
+  }
+
+  const roundRobin = (queues) => {
+    const out = []
+    const qs = queues.map(q => q.slice())
+    let progressed = true
+    let guard = 0
+    while (progressed && guard < listings.length + 4) {
+      progressed = false
+      for (const q of qs) {
+        if (q.length) {
+          out.push(q.shift())
+          progressed = true
+        }
+      }
+      guard++
+    }
+    return out
+  }
+
+  return [...roundRobin(primaryQueues), ...roundRobin(overflowQueues)]
+}
+
 export function flashTimeLeft(expiresAt) {
   const ms = new Date(expiresAt) - Date.now()
   if (ms <= 0) return null

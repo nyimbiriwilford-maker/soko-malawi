@@ -29,12 +29,17 @@ import { useUserLocation }       from '../hooks/useUserLocation'
 import { fetchAllActiveStories } from '../hooks/useStatuses'
 import StoryViewer                from '../components/StoryViewer'
 import StatusUploadModal          from '../components/StatusUploadModal'
+import VerificationAttentionBanner from '../components/VerificationAttentionBanner'
 import {
   ALL_CATEGORIES,
 } from '../constants/homeConstants'
 import {
-  isFlashActive, sortProductsSmart, trackSearch,
+  isFlashActive, isListingFeatured, rotateFeaturedFairly, sortProductsSmart, trackSearch,
 } from '../utils/homeUtils'
+import {
+  FEATURED_DURATION_DAYS,
+  FEATURED_PRICE_MWK,
+} from '../constants/featuredPricing'
 
 /* ─────────────────────────────────────────────────────────────────────────────
    DESIGN TOKENS
@@ -539,8 +544,9 @@ function NavIconBtn({ icon, label, onClick }) {
    ("Featured" badge visible) rather than an ad unit.
 ───────────────────────────────────────────────────────────────────────────── */
 function RevenueHero({ navigate, listings }) {
+  // Phase 3.1: `listings` is already the dedicated featured query result (not recent feed)
   const featured = useMemo(() =>
-    listings.filter(l => (l.featured || l.is_featured) && l.images?.[0]).slice(0, 9),
+    (listings || []).filter(l => isListingFeatured(l) && l.images?.[0]).slice(0, 9),
   [listings])
 
   const [page, setPage]     = useState(0)
@@ -744,7 +750,7 @@ function RevenueHero({ navigate, listings }) {
             {/* Primary CTA — pulse glow + hover elevation */}
             <button
               className="soko-btn-primary"
-              onClick={() => navigate('/my-listings')}
+              onClick={() => navigate('/profile?tab=selling')}
               style={{
                 background: `linear-gradient(135deg, ${T.amber}, #e09800)`,
                 color: '#1a0a00', fontSize: 14, padding: '11px 22px',
@@ -758,7 +764,7 @@ function RevenueHero({ navigate, listings }) {
             </button>
             {/* Secondary CTA — glass + hover */}
             <button
-              onClick={() => navigate('/my-listings')}
+              onClick={() => navigate('/profile?tab=selling')}
               className="soko-btn-outline"
               style={{ fontSize: 14, padding: '11px 22px', transition: 'all 0.25s' }}
               onMouseEnter={e => { e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.background='rgba(255,255,255,0.18)' }}
@@ -970,57 +976,286 @@ function CategoryGrid({ navigate, onCategoryChange }) {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   FEATURED REVENUE BANNER — slim cream strip matching the reference: one
-   headline + subtext on the left, four inline icon-stats (Featured
-   Listings / Shops / Requests / Story Promotion with starting prices) in
-   the middle, and a single "See Pricing" CTA on the right. This stays
-   compact and out of the way rather than competing with the hero above it
-   — clicking through to a real pricing page is where the detail belongs.
+   FEATURED REVENUE BANNER — short cream strip (compact marketing bar)
+   Listings only live; shops / requests / stories = soon; free slots if any.
+   No active listings → prompt to post & get featured.
 ───────────────────────────────────────────────────────────────────────────── */
-function FeaturedRevenueBanner({ navigate }) {
-  const stats = [
-    { icon: Icon.pin, label: 'Featured Listings', price: 'From MK 2,000' },
-    { icon: Icon.shop, label: 'Featured Shops', price: 'From MK 10,000/mo' },
-    { icon: Icon.handshake, label: 'Featured Requests', price: 'From MK 2,000' },
-    { icon: Icon.megaphone, label: 'Story Promotion', price: 'From MK 1,000/day' },
+function FeaturedRevenueBanner({ navigate, user }) {
+  const [freeInfo, setFreeInfo] = useState({ loading: !!user?.id, hasFree: false, remaining: 0 })
+  const [activeCount, setActiveCount] = useState(null) // null = loading / guest
+
+  useEffect(() => {
+    let cancelled = false
+    if (!user?.id) {
+      setFreeInfo({ loading: false, hasFree: false, remaining: 0 })
+      setActiveCount(null)
+      return undefined
+    }
+    setFreeInfo(f => ({ ...f, loading: true }))
+    setActiveCount(null)
+    ;(async () => {
+      try {
+        // Active listings count (published or active)
+        const { count: liveCount } = await supabase
+          .from('listings')
+          .select('id', { count: 'exact', head: true })
+          .eq('seller_id', user.id)
+          .in('status', ['published', 'active'])
+        if (!cancelled) setActiveCount(liveCount ?? 0)
+
+        const { data: elig } = await supabase.rpc('get_feature_eligibility', {})
+        if (cancelled) return
+        if (elig && typeof elig === 'object') {
+          setFreeInfo({
+            loading: false,
+            hasFree: elig.has_free_left === true,
+            remaining: Number(elig.free_remaining ?? 0),
+          })
+          return
+        }
+        const { data: setting } = await supabase
+          .from('app_settings').select('value').eq('key', 'free_featured_enabled').maybeSingle()
+        const freeOn = setting ? (setting.value === true || setting.value === 'true') : true
+        if (!freeOn) {
+          if (!cancelled) setFreeInfo({ loading: false, hasFree: false, remaining: 0 })
+          return
+        }
+        const { count } = await supabase
+          .from('listing_promotions')
+          .select('id', { count: 'exact', head: true })
+          .eq('seller_id', user.id)
+          .eq('promotion_type', 'featured')
+          .eq('price_mwk', 0)
+        const remaining = Math.max(0, 5 - (count || 0))
+        if (!cancelled) setFreeInfo({ loading: false, hasFree: remaining > 0, remaining })
+      } catch {
+        if (!cancelled) {
+          setFreeInfo({ loading: false, hasFree: false, remaining: 0 })
+          setActiveCount(0)
+        }
+      }
+    })()
+    return () => { cancelled = true }
+  }, [user?.id])
+
+  const hasListings = (activeCount ?? 0) > 0
+  const needsPost = !!user?.id && activeCount !== null && !hasListings
+
+  const goFeature = () => {
+    if (!user) {
+      navigate('/login')
+      return
+    }
+    if (needsPost) {
+      navigate('/post')
+      return
+    }
+    navigate('/profile?tab=selling')
+  }
+
+  const priceMk = `MK ${Number(FEATURED_PRICE_MWK).toLocaleString()}`
+
+  // Premium modern icons (stroke, refined)
+  const Ico = {
+    sparkle: (s = 18) => (
+      <svg width={s} height={s} viewBox="0 0 24 24" fill="none" aria-hidden>
+        <path d="M12 2.5l1.2 5.1c.2.9.9 1.6 1.8 1.8L20.5 11l-5.5 1.6c-.9.2-1.6.9-1.8 1.8L12 20.5l-1.2-5.1c-.2-.9-.9-1.6-1.8-1.8L3.5 11l5.5-1.6c.9-.2 1.6-.9 1.8-1.8L12 2.5z" fill="currentColor" opacity="0.95"/>
+        <path d="M19 3.5l.45 1.85c.08.35.35.62.7.7L22 6.5l-1.85.45c-.35.08-.62.35-.7.7L19 9.5l-.45-1.85a.9.9 0 0 0-.7-.7L16 6.5l1.85-.45c.35-.08.62-.35.7-.7L19 3.5z" fill="currentColor" opacity="0.75"/>
+      </svg>
+    ),
+    packagePlus: (s = 16) => (
+      <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M16.5 9.4 7.55 4.24"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+        <path d="M3.29 7 12 12l8.71-5"/><path d="M12 22V12"/><path d="M12 8v4"/><path d="M10 10h4"/>
+      </svg>
+    ),
+    listing: (s = 15) => (
+      <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/>
+        <rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M17.5 14v7"/><path d="M14 17.5h7"/>
+      </svg>
+    ),
+    shop: (s = 13) => (
+      <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+        <path d="M10 22V12h4v10"/><path d="M2 7h20"/><path d="M12 7v5"/>
+      </svg>
+    ),
+    requests: (s = 13) => (
+      <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+        <path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      </svg>
+    ),
+    stories: (s = 13) => (
+      <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+      </svg>
+    ),
+    bolt: (s = 14) => (
+      <svg width={s} height={s} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+        <path d="M13 2 4.5 13.5h6L10 22l9.5-12h-6L13 2z"/>
+      </svg>
+    ),
+  }
+
+  const soon = [
+    { icon: Ico.shop, label: 'Shops' },
+    { icon: Ico.requests, label: 'Requests' },
+    { icon: Ico.stories, label: 'Stories' },
   ]
 
+  const title = needsPost
+    ? 'Post a listing. Get Featured.'
+    : 'Get Featured. Get Results.'
+
+  const subtitle = needsPost
+    ? 'You have no active listings yet — post one, then feature it on the homepage'
+    : (
+      <>
+        Listings only for now · shops, requests & stories later
+        {user && freeInfo.hasFree && !freeInfo.loading && (
+          <span style={{ color: T.green, fontWeight: 700 }}>
+            {' · '}{freeInfo.remaining} free left
+          </span>
+        )}
+      </>
+    )
+
+  const priceLine = needsPost
+    ? `Then feature · ${priceMk} · ${FEATURED_DURATION_DAYS} days`
+    : freeInfo.hasFree
+      ? `FREE · ${freeInfo.remaining} left · ${FEATURED_DURATION_DAYS} days`
+      : `${priceMk} · ${FEATURED_DURATION_DAYS} days`
+
+  const ctaLabel = !user
+    ? 'Get started'
+    : needsPost
+      ? 'Post & get featured'
+      : freeInfo.hasFree
+        ? 'Claim free feature'
+        : 'Feature a listing'
+
+  const ctaGreen = freeInfo.hasFree && !needsPost
+
   return (
-    <section style={{ padding: '20px 20px 0' }}>
+    <section style={{ padding: '16px 20px 0' }} aria-label="Get featured pricing">
       <div style={{ maxWidth: 1400, margin: '0 auto' }}>
         <div style={{
           background: 'linear-gradient(90deg, #fdf6e3, #fdf1d6, #fdf6e3)',
-          border: `1px solid ${T.amber}33`, borderRadius: 16,
-          padding: '14px 20px', display: 'flex', alignItems: 'center',
-          gap: 24, flexWrap: 'wrap',
+          border: `1px solid ${T.amber}33`,
+          borderRadius: 16,
+          padding: '12px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 16,
+          flexWrap: 'wrap',
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: '1 1 260px', minWidth: 0 }}>
-            <div style={{ width: 38, height: 38, borderRadius: 11, background: '#fff3da', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0 }}>⭐</div>
+          {/* Left: title */}
+          <div
+            style={{ display: 'flex', alignItems: 'center', gap: 10, flex: '1 1 200px', minWidth: 0, cursor: 'pointer' }}
+            onClick={goFeature}
+            role="button"
+            tabIndex={0}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goFeature() } }}
+          >
+            <div style={{
+              width: 36, height: 36, borderRadius: 11, flexShrink: 0,
+              background: 'linear-gradient(145deg, #F9AB00 0%, #e09800 55%, #c98500 100%)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#1a0a00',
+              boxShadow: '0 2px 10px rgba(249,171,0,0.4), inset 0 1px 0 rgba(255,255,255,0.35)',
+            }}>
+              {needsPost ? Ico.packagePlus(17) : Ico.sparkle(17)}
+            </div>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 14.5, fontWeight: 800, color: T.gray900 }}>Get Featured. Get Results.</div>
-              <div style={{ fontSize: 12, color: T.gray600 }}>Join sellers getting more views and sales every day.</div>
+              <div style={{ fontSize: 14, fontWeight: 800, color: T.gray900, lineHeight: 1.2 }}>
+                {title}
+              </div>
+              <div style={{ fontSize: 11.5, color: T.gray600, marginTop: 2, lineHeight: 1.35 }}>
+                {subtitle}
+              </div>
             </div>
           </div>
 
-          <div className="soko-nav-desktop" style={{ display: 'flex', alignItems: 'center', gap: 22, flexWrap: 'wrap' }}>
-            {stats.map(s => (
-              <div key={s.label} style={{ display: 'flex', alignItems: 'center', gap: 7, whiteSpace: 'nowrap' }}>
-                <span style={{ color: T.amberD }}>{s.icon(15)}</span>
+          {/* Middle: live product + soon */}
+          <div className="soko-nav-desktop" style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={goFeature}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                background: '#fff', border: `1.5px solid ${T.amber}55`,
+                borderRadius: 12, padding: '7px 12px', cursor: 'pointer',
+                fontFamily: 'inherit', boxShadow: '0 1px 6px rgba(249,171,0,0.12)',
+              }}
+            >
+              <span style={{
+                width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+                background: 'linear-gradient(135deg, #fff8e6, #fde9b0)',
+                color: T.amberD, display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                {needsPost ? Ico.packagePlus(14) : Ico.listing(14)}
+              </span>
+              <div style={{ textAlign: 'left' }}>
+                <div style={{ fontSize: 11.5, fontWeight: 800, color: T.gray900, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {needsPost ? 'Post a listing' : 'Featured Listings'}
+                  <span style={{
+                    fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: 0.4,
+                    background: needsPost ? '#fff7ed' : '#e6f4ec',
+                    color: needsPost ? '#c2410c' : T.green,
+                    borderRadius: 999, padding: '2px 6px',
+                  }}>
+                    {needsPost ? 'Start here' : 'Live'}
+                  </span>
+                </div>
+                <div style={{
+                  fontSize: 11, fontWeight: 700, marginTop: 1,
+                  color: freeInfo.hasFree && !needsPost ? T.green : T.amberD,
+                }}>
+                  {freeInfo.loading && !needsPost ? '…' : priceLine}
+                </div>
+              </div>
+            </button>
+
+            {soon.map(s => (
+              <div
+                key={s.label}
+                style={{ display: 'flex', alignItems: 'center', gap: 6, opacity: 0.5, whiteSpace: 'nowrap' }}
+                title="Coming in the long run"
+              >
+                <span style={{ color: T.gray500, display: 'flex' }}>{s.icon(13)}</span>
                 <div>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: T.gray800 }}>{s.label}</div>
-                  <div style={{ fontSize: 10.5, color: T.gray600 }}>{s.price}</div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: T.gray600 }}>{s.label}</div>
+                  <div style={{ fontSize: 9.5, fontWeight: 800, color: T.gray400, textTransform: 'uppercase', letterSpacing: 0.3 }}>Soon</div>
                 </div>
               </div>
             ))}
           </div>
 
-          <button onClick={() => navigate('/my-listings')} style={{
-            flexShrink: 0, marginLeft: 'auto', background: T.amber, color: '#1a0a00',
-            border: 'none', borderRadius: 12, padding: '11px 22px', fontSize: 13.5,
-            fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
-            boxShadow: '0 2px 12px rgba(249,171,0,0.35)',
-          }}>
-            See Pricing ⚡
+          {/* CTA */}
+          <button
+            type="button"
+            onClick={goFeature}
+            style={{
+              flexShrink: 0, marginLeft: 'auto',
+              background: ctaGreen
+                ? `linear-gradient(135deg, ${T.green}, ${T.greenD})`
+                : `linear-gradient(135deg, ${T.amber}, #e09800)`,
+              color: ctaGreen ? '#fff' : '#1a0a00',
+              border: 'none', borderRadius: 12, padding: '10px 16px',
+              fontSize: 13, fontWeight: 800, cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 7,
+              boxShadow: ctaGreen
+                ? '0 2px 12px rgba(15,157,88,0.3)'
+                : '0 2px 12px rgba(249,171,0,0.35)',
+              fontFamily: 'inherit',
+            }}
+          >
+            <span style={{ display: 'flex', opacity: 0.95 }}>
+              {needsPost ? Ico.packagePlus(15) : Ico.bolt(14)}
+            </span>
+            {ctaLabel}
           </button>
         </div>
       </div>
@@ -1061,7 +1296,7 @@ function PremiumListingCard({ listing, onClick, delay = 0, large = false }) {
   const price   = isFlashActive(listing) ? listing.flash_sale_price : listing.price
   const isFlash = isFlashActive(listing)
   const isVerif = listing.seller_verified || listing.shop_is_verified
-  const isFeat  = listing.featured || listing.is_featured
+  const isFeat  = isListingFeatured(listing)
 
   function handleLike(e) { e.stopPropagation(); setLiked(l => !l) }
 
@@ -1221,7 +1456,11 @@ function LiveStoriesCard({ navigate, stories, loading, onOpenStory, onCreateStor
    (compact card) on the right.
 ───────────────────────────────────────────────────────────────────────────── */
 function FeaturedListingsRow({ listings, navigate, loading, stories, storiesLoading, onOpenStory, onCreateStory }) {
-  const featured = useMemo(() => listings.filter(l => l.featured || l.is_featured), [listings])
+  // Phase 3.1: dedicated featured rows only — never derived from latest posts
+  const featured = useMemo(
+    () => (listings || []).filter(l => isListingFeatured(l)),
+    [listings],
+  )
   if (!loading && featured.length === 0) return null
   return (
     <section style={{ padding: '24px 20px 4px', background: '#fff' }}>
@@ -1331,7 +1570,7 @@ function LatestListingCard({ listing, delay = 0, onClick }) {
 
   const isVerif = listing.seller_verified || listing.shop_is_verified
   const isNew   = listing.created_at && (Date.now() - new Date(listing.created_at).getTime()) < 86400000
-  const isFeat  = listing.featured || listing.is_featured
+  const isFeat  = isListingFeatured(listing)
   const isFlash = isFlashActive(listing)
   const meta    = catIcon(listing.category)
   const trustCount = listing.view_count ?? listing.inquiry_count ?? null
@@ -2780,7 +3019,20 @@ export default function Home() {
 
   // ── Auth & listings (preserved from prior version) ───────
   const [listings,   setListings]   = useState([])
+  // Phase 3.1 — dedicated active featured pool (featured_until > now), not recent posts
+  const [featuredListings, setFeaturedListings] = useState([])
   const [loading,    setLoading]    = useState(true)
+
+  // Phase 3.2 — re-rotate featured order every 30s (no network; small n ≤ 24)
+  useEffect(() => {
+    const t = setInterval(() => {
+      setFeaturedListings(prev => {
+        if (!prev?.length) return prev
+        return rotateFeaturedFairly(prev, { intervalMs: 30_000, maxPerSeller: 2 })
+      })
+    }, 30_000)
+    return () => clearInterval(t)
+  }, [])
   const [user,       setUser]       = useState(null)
   const [notifCount, setNotifCount] = useState(0)
   const [unreadChats, setUnreadChats] = useState(0)
@@ -2874,47 +3126,77 @@ export default function Home() {
 
   async function loadListings() {
     setLoading(true)
-    const { data } = await supabase.from('listings')
-      .select('id, title, price, price_type, images, city, category, condition, featured, is_featured, flash_sale_price, flash_sale_expires_at, promo_badge, bulk_pricing, stock_qty, created_at, seller_id, shop_id, latitude, longitude, status, description, tags')
-      .eq('status', 'published')
-      .order('created_at', { ascending: false })
-      .limit(60)
+    // Phase 3.1 — featured discovery is a dedicated query only (featured_until > now).
+    // Recent posts feed is separate and never used as the featured source.
+    const LISTING_SELECT =
+      'id, title, price, price_type, images, city, category, condition, featured, is_featured, featured_until, flash_sale_price, flash_sale_expires_at, promo_badge, bulk_pricing, stock_qty, created_at, seller_id, shop_id, latitude, longitude, status, description, tags'
+    const nowIso = new Date().toISOString()
 
-    let withShopRatings = data || []
-    const shopIds = [...new Set(withShopRatings.map(l => l.shop_id).filter(Boolean))]
-    const sellerIds = [...new Set(withShopRatings.map(l => l.seller_id).filter(Boolean))]
+    const [{ data: featuredRows }, { data: recentRows }] = await Promise.all([
+      supabase
+        .from('listings')
+        .select(LISTING_SELECT)
+        .eq('status', 'published')
+        .gt('featured_until', nowIso)
+        .order('featured_until', { ascending: false })
+        .limit(24),
+      supabase
+        .from('listings')
+        .select(LISTING_SELECT)
+        .eq('status', 'published')
+        .order('created_at', { ascending: false })
+        .limit(60),
+    ])
 
-    if (shopIds.length > 0) {
-      const { data: shopsData } = await supabase.from('shops').select('id, rating, review_count, is_verified').in('id', shopIds)
-      const shopMap = {}
-      shopsData?.forEach(s => { shopMap[s.id] = s })
-      withShopRatings = withShopRatings.map(l => ({
-        ...l,
-        shop_rating: l.shop_id ? shopMap[l.shop_id]?.rating : null,
-        shop_review_count: l.shop_id ? shopMap[l.shop_id]?.review_count : null,
-        shop_is_verified: l.shop_id ? shopMap[l.shop_id]?.is_verified : false,
-      }))
+    async function enrichListingRows(rows) {
+      let withShopRatings = rows || []
+      const shopIds = [...new Set(withShopRatings.map(l => l.shop_id).filter(Boolean))]
+      const sellerIds = [...new Set(withShopRatings.map(l => l.seller_id).filter(Boolean))]
+
+      if (shopIds.length > 0) {
+        const { data: shopsData } = await supabase.from('shops').select('id, rating, review_count, is_verified').in('id', shopIds)
+        const shopMap = {}
+        shopsData?.forEach(s => { shopMap[s.id] = s })
+        withShopRatings = withShopRatings.map(l => ({
+          ...l,
+          shop_rating: l.shop_id ? shopMap[l.shop_id]?.rating : null,
+          shop_review_count: l.shop_id ? shopMap[l.shop_id]?.review_count : null,
+          shop_is_verified: l.shop_id ? shopMap[l.shop_id]?.is_verified : false,
+        }))
+      }
+      if (sellerIds.length > 0) {
+        const { data: profilesData } = await supabase.from('profiles').select('id, is_verified').in('id', sellerIds)
+        const profileMap = {}
+        profilesData?.forEach(p => { profileMap[p.id] = p })
+        withShopRatings = withShopRatings.map(l => ({
+          ...l,
+          seller_verified: l.seller_id ? profileMap[l.seller_id]?.is_verified : false,
+        }))
+      }
+
+      let blocked = []
+      try { blocked = JSON.parse(localStorage.getItem('soko_blocked_shops') || '[]') } catch { /* ignore */ }
+      const blockedStr = blocked.map(id => String(id))
+      if (blockedStr.length === 0) return withShopRatings
+      return withShopRatings.filter(l => !l.shop_id || !blockedStr.includes(String(l.shop_id)))
     }
-    if (sellerIds.length > 0) {
-      const { data: profilesData } = await supabase.from('profiles').select('id, is_verified').in('id', sellerIds)
-      const profileMap = {}
-      profilesData?.forEach(p => { profileMap[p.id] = p })
-      withShopRatings = withShopRatings.map(l => ({ ...l, seller_verified: l.seller_id ? profileMap[l.seller_id]?.is_verified : false }))
-    }
 
-    let blocked = []
-    try { blocked = JSON.parse(localStorage.getItem('soko_blocked_shops') || '[]') } catch {}
-    const blockedStr = blocked.map(id => String(id))
-    const filtered = blockedStr.length > 0
-      ? withShopRatings.filter(l => !l.shop_id || !blockedStr.includes(String(l.shop_id)))
-      : withShopRatings
+    const [featuredEnriched, recentEnriched] = await Promise.all([
+      enrichListingRows(featuredRows || []),
+      enrichListingRows(recentRows || []),
+    ])
 
-    // Personalize default ordering by search history + unseen + distance.
-    // Falls back gracefully — sortProductsSmart never throws on missing
-    // location (getDistanceKm treats null lat/lng as "far").
+    // Featured section: dedicated query only + fair multi-seller rotation (Phase 3.2)
+    setFeaturedListings(
+      rotateFeaturedFairly(
+        featuredEnriched.filter(l => isListingFeatured(l)),
+        { intervalMs: 30_000, maxPerSeller: 2 },
+      ),
+    )
+
+    // Latest / general feed: recent posts only (not used for featured discovery)
     const { data: { user: authUser } } = await supabase.auth.getUser()
-    const sorted = await sortProductsSmart(filtered, userLat, userLng, authUser?.id)
-
+    const sorted = await sortProductsSmart(recentEnriched, userLat, userLng, authUser?.id)
     setListings(sorted)
     setLoading(false)
   }
@@ -3019,25 +3301,28 @@ export default function Home() {
         activeDistrict={activeDistrict} onDistrictChange={setActiveDistrict} onFocusChange={setIsFocused}
       />
 
+      {/* Persistent verification action / review banner (seller) */}
+      {user?.id && <VerificationAttentionBanner userId={user.id} />}
+
       <EarlyAccessStrip />
 
-      {/* Revenue hero: marketing message + featured carousel */}
-      <RevenueHero navigate={navigate} listings={listings} />
+      {/* Revenue hero: marketing message + featured carousel (dedicated featured query) */}
+      <RevenueHero navigate={navigate} listings={featuredListings} />
 
       {/* One-click category access */}
       <CategoryGrid navigate={navigate} onCategoryChange={handleCategoryChange} />
 
-      {/* Monetization: slim Featured pricing strip */}
-      <FeaturedRevenueBanner navigate={navigate} />
+      {/* Monetization: premium Featured marketing strip (listings only for now) */}
+      <FeaturedRevenueBanner navigate={navigate} user={user} />
 
-      {/* Featured Listings (left) + Live Stories card (right) */}
+      {/* Featured Listings (left) + Live Stories card (right) — not recent feed */}
       <FeaturedListingsRow
-        listings={listings} navigate={navigate} loading={loading}
+        listings={featuredListings} navigate={navigate} loading={loading}
         stories={stories} storiesLoading={storiesLoading}
         onOpenStory={openStoryGroup} onCreateStory={handleCreateStory}
       />
 
-      {/* Latest Listings — just-posted rail */}
+      {/* Latest Listings — just-posted rail (recent only) */}
       <LatestListingsSection listings={listings} navigate={navigate} loading={loading} />
 
       {/* People Looking For — buyer requests, "I Can Help" */}

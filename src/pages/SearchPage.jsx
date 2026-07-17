@@ -18,6 +18,7 @@ import React, {
 } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { isListingFeatured, rotateFeaturedFairly } from '../utils/homeUtils'
 
 /* ─────────────────────────────────────────────────────────────────────────────
    DESIGN TOKENS — identical to Home.jsx T
@@ -829,7 +830,7 @@ function ResultCardGrid({ listing, delay, onClick }) {
   const [liked, setLiked] = useState(false)
   const [imgErr, setImgErr] = useState(false)
   const isVerif = listing.seller_verified || listing.shop_is_verified
-  const isFeat  = listing.featured || listing.is_featured
+  const isFeat  = isListingFeatured(listing)
   const isNew   = listing.created_at && (Date.now() - new Date(listing.created_at).getTime()) < 86400000
 
   return (
@@ -884,7 +885,7 @@ function ResultCardList({ listing, delay, onClick }) {
   const [liked, setLiked] = useState(false)
   const [imgErr, setImgErr] = useState(false)
   const isVerif = listing.seller_verified || listing.shop_is_verified
-  const isFeat  = listing.featured || listing.is_featured
+  const isFeat  = isListingFeatured(listing)
 
   return (
     <div className="sp-card-list" style={{ animationDelay:`${delay}s` }} onClick={onClick}>
@@ -1596,7 +1597,7 @@ function FBListingCard({ listing, onClick }) {
   const [hov, setHov]       = useState(false)
   const [imgErr, setImgErr] = useState(false)
   const isVerif  = listing.seller_verified || listing.shop_is_verified
-  const isFeat   = listing.featured || listing.is_featured
+  const isFeat   = isListingFeatured(listing)
   const cond     = conditionLabel(listing)
   const catStyleObj = catStyle(listing.category)
   const sellerName = listing.shop_name || listing.seller_name || 'Seller'
@@ -1862,10 +1863,9 @@ export default function SearchPage() {
       ] = await Promise.all([
         safe(async () => {
           const { data, count } = await supabase.from('listings')
-            .select('id,title,price,images,city,created_at,featured,is_featured', { count: 'exact' })
+            .select('id,title,price,images,city,created_at,featured,is_featured,featured_until', { count: 'exact' })
             .eq('status','published').ilike('title',`%${q}%`)
-            .order('is_featured', { ascending: false, nullsFirst: false })
-            .order('featured',    { ascending: false, nullsFirst: false })
+            .order('featured_until', { ascending: false, nullsFirst: false })
             .order('created_at',  { ascending: false })
             .limit(LIMITS.listings)
           return { data: data || [], count: count || 0 }
@@ -1978,7 +1978,7 @@ export default function SearchPage() {
   async function searchListings(filters, currentSort, currentPage) {
     let query = supabase
       .from('listings')
-      .select('id, title, price, images, city, district, category, condition, featured, is_featured, created_at, seller_id, shop_id, description, latitude, longitude, precise_location, contact_methods, whatsapp_number, call_number', { count: 'exact' })
+      .select('id, title, price, images, city, district, category, condition, featured, is_featured, featured_until, created_at, seller_id, shop_id, description, latitude, longitude, precise_location, contact_methods, whatsapp_number, call_number', { count: 'exact' })
       .eq('status', 'published')
 
     // Only filter by title when there's an actual search term — an empty
@@ -1991,7 +1991,8 @@ export default function SearchPage() {
     if (filters.district && filters.district !== 'All Districts')
       query = query.ilike('city', `%${filters.district}%`)
     if (filters.conditions.size > 0) query = query.in('condition', [...filters.conditions])
-    if (filters.featuredOnly)  query = query.or('featured.eq.true,is_featured.eq.true')
+    // Phase 2.2: featured_until > now() is the source of truth
+    if (filters.featuredOnly)  query = query.gt('featured_until', new Date().toISOString())
 
     query = query.order('created_at', { ascending: false }).limit(200)
 
@@ -2017,10 +2018,14 @@ export default function SearchPage() {
         })
     }
 
-    // Pin featured first, regular after (skipped when Near Me sort is active —
-    // distance ordering takes priority once the person has opted into it)
-    const featured = filters.nearMe ? [] : rows.filter(l => l.featured === true || l.is_featured === true)
-    const regular  = filters.nearMe ? rows : rows.filter(l => l.featured !== true && l.is_featured !== true)
+    // Pin fair-rotated featured first (Phase 3.2); skip when Near Me (distance wins)
+    const featured = filters.nearMe
+      ? []
+      : rotateFeaturedFairly(rows.filter(l => isListingFeatured(l)), {
+          intervalMs: 30_000,
+          maxPerSeller: 2,
+        })
+    const regular  = filters.nearMe ? rows : rows.filter(l => !isListingFeatured(l))
 
     let sortedRegular = [...regular]
     if (!filters.nearMe) {

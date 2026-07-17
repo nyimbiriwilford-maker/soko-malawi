@@ -68,3 +68,28 @@ WHERE id = 1;
 - `start_verification_payment(ref, method, type_code)`  
 - `confirm_verification_payment(tx_ref)`  
 - `transition_verification_status(request_id, status, note, …)`  
+
+## Production security hardening
+
+Run after 100–103:
+
+5. `supabase/migrations/20260716_verification_foundation_hardening.sql`
+
+This ensures:
+
+- Private bucket `verification-docs` (not public)  
+- Seller folder isolation: `{userId}/...`  
+- Admin SELECT on storage for review (use **signed URLs** in app)  
+- `verification_documents` RLS: own insert/select; admin select all  
+- Sellers **cannot** self-confirm payments or self-approve requests  
+- Status events: seller read own; insert admin-only (triggers use SECURITY DEFINER)
+
+### Production checklist (dashboard / ops)
+
+- [ ] Migrations applied: **100 → 101 → 102 → 103 → 20260716 hardening**  
+- [ ] Bucket `verification-docs` exists, **public = false**  
+- [ ] Edge secrets: `PAYCHANGU_SECRET_KEY`  
+- [ ] Edge functions deployed: `initiate-payment`, `verify-transaction`  
+- [ ] At least one user with `profiles.role = 'admin'`  
+- [ ] Smoke test: upload doc → pay → `under_review` → admin can open document via signed URL  
+

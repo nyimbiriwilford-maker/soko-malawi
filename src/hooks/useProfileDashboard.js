@@ -123,7 +123,7 @@ export function useProfileDashboard(userId) {
         .eq('user_id', userId)
         .is('revoked_at', null)
         .order('last_active_at', { ascending: false })
-        .limit(10)
+        .limit(12)
       if (data) setSessions(data)
     } catch { /* ignore */ }
 
@@ -208,45 +208,86 @@ export function useProfileDashboard(userId) {
     refresh()
   }, [refresh])
 
-  /** Record this browser session (best-effort) */
+  /** Record this browser session (best-effort) and refresh list */
   const touchSession = useCallback(async () => {
-    if (!userId) return
+    if (!userId || typeof navigator === 'undefined') return
     try {
-      const label =
-        typeof navigator !== 'undefined'
-          ? `${navigator.platform || 'Web'} · ${navigator.userAgent?.slice(0, 48) || 'browser'}`
-          : 'Web session'
-      const { data: existing } = await supabase
+      const ua = navigator.userAgent || ''
+      const parsed = parseDeviceFromUserAgent(ua)
+      const label = parsed.label
+      const uaKey = ua.slice(0, 200)
+
+      // Prefer exact-ish UA match, then fall back to device_label
+      let existing = null
+      const { data: byUa } = await supabase
         .from('user_sessions')
-        .select('id')
+        .select('id, user_agent, device_label')
         .eq('user_id', userId)
         .is('revoked_at', null)
-        .ilike('user_agent', (typeof navigator !== 'undefined' ? navigator.userAgent : '').slice(0, 80) + '%')
-        .limit(1)
-        .maybeSingle()
+        .order('last_active_at', { ascending: false })
+        .limit(12)
 
+      if (Array.isArray(byUa) && byUa.length) {
+        existing =
+          byUa.find((s) => s.user_agent && uaKey && s.user_agent.slice(0, 80) === uaKey.slice(0, 80))
+          || byUa.find((s) => s.device_label === label)
+          || null
+      }
+
+      const now = new Date().toISOString()
       if (existing?.id) {
         await supabase
           .from('user_sessions')
-          .update({ last_active_at: new Date().toISOString() })
+          .update({
+            last_active_at: now,
+            device_label: label.slice(0, 120),
+            user_agent: ua.slice(0, 400),
+          })
           .eq('id', existing.id)
       } else {
         await supabase.from('user_sessions').insert({
           user_id: userId,
           device_label: label.slice(0, 120),
-          user_agent: typeof navigator !== 'undefined' ? navigator.userAgent?.slice(0, 400) : null,
-          last_active_at: new Date().toISOString(),
+          user_agent: ua.slice(0, 400),
+          last_active_at: now,
         })
       }
-      // touch last_login / last_seen on profile
+
+      // Refresh sessions for UI
+      const { data: fresh } = await supabase
+        .from('user_sessions')
+        .select('*')
+        .eq('user_id', userId)
+        .is('revoked_at', null)
+        .order('last_active_at', { ascending: false })
+        .limit(12)
+      if (fresh) setSessions(fresh)
+
       await supabase
         .from('profiles')
         .update({
-          last_seen: new Date().toISOString(),
-          last_login_at: new Date().toISOString(),
+          last_seen: now,
+          last_login_at: now,
         })
         .eq('id', userId)
     } catch { /* columns/tables may be missing */ }
+  }, [userId])
+
+  /** Revoke a session (other devices / this one) */
+  const revokeSession = useCallback(async (sessionId) => {
+    if (!userId || !sessionId) return false
+    try {
+      const { error } = await supabase
+        .from('user_sessions')
+        .update({ revoked_at: new Date().toISOString() })
+        .eq('id', sessionId)
+        .eq('user_id', userId)
+      if (error) throw error
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId))
+      return true
+    } catch {
+      return false
+    }
   }, [userId])
 
   useEffect(() => {
@@ -270,7 +311,57 @@ export function useProfileDashboard(userId) {
     ready,
     refresh,
     touchSession,
+    revokeSession,
   }
+}
+
+/**
+ * Human-readable device info from a User-Agent string.
+ * Returns { label, browser, os, kind: 'desktop'|'mobile'|'tablet' }
+ */
+export function parseDeviceFromUserAgent(ua = '') {
+  const s = String(ua || '')
+  const lower = s.toLowerCase()
+
+  let browser = 'Browser'
+  if (/edg\//i.test(s)) browser = 'Edge'
+  else if (/opr\/|opera/i.test(s)) browser = 'Opera'
+  else if (/chrome|crios/i.test(s) && !/edg\//i.test(s)) browser = 'Chrome'
+  else if (/firefox|fxios/i.test(s)) browser = 'Firefox'
+  else if (/safari/i.test(s) && !/chrome|crios|android/i.test(s)) browser = 'Safari'
+  else if (/samsungbrowser/i.test(s)) browser = 'Samsung Internet'
+
+  let os = 'Device'
+  if (/windows nt/i.test(s)) os = 'Windows'
+  else if (/android/i.test(s)) os = 'Android'
+  else if (/iphone|ipad|ipod/i.test(s)) os = /ipad/i.test(s) ? 'iPadOS' : 'iOS'
+  else if (/mac os x|macintosh/i.test(s)) os = 'macOS'
+  else if (/cros/i.test(s)) os = 'ChromeOS'
+  else if (/linux/i.test(s)) os = 'Linux'
+
+  let kind = 'desktop'
+  if (/ipad|tablet|playbook|silk/i.test(s) || ( /android/i.test(s) && !/mobile/i.test(s) )) {
+    kind = 'tablet'
+  } else if (/mobi|iphone|ipod|android.*mobile|windows phone/i.test(s)) {
+    kind = 'mobile'
+  }
+
+  // Fallback when UA is empty / sparse
+  if (!s) {
+    if (typeof navigator !== 'undefined') {
+      os = navigator.platform || os
+      browser = 'Web'
+    }
+  }
+
+  // Clean legacy labels that stored "Win32 · Mozilla/5.0..."
+  if (/mozilla\//i.test(s) === false && / · /.test(s) && s.length < 80) {
+    // already a short custom label
+    return { label: s.slice(0, 80), browser, os, kind }
+  }
+
+  const label = `${browser} · ${os}`
+  return { label, browser, os, kind, raw: lower }
 }
 
 /** Persist profile completion % when columns exist */
