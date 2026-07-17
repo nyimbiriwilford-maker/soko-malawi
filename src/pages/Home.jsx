@@ -108,10 +108,17 @@ function GlobalStyles() {
 
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-      .soko-v3 { font-family: ${T.font}; background: #f8f9fa; color: ${T.gray900}; }
+      .soko-v3 {
+        font-family: ${T.font};
+        background: #f8f9fa;
+        color: ${T.gray900};
+        min-width: 0;
+        overflow-x: clip;
+      }
       .soko-v3 button { font-family: inherit; }
       .soko-v3 input  { font-family: inherit; }
       .soko-v3 a { text-decoration: none; color: inherit; }
+      .soko-v3 img { max-width: 100%; }
 
       .soko-scroll::-webkit-scrollbar { display: none; }
       .soko-scroll { -ms-overflow-style: none; scrollbar-width: none; }
@@ -194,16 +201,152 @@ function GlobalStyles() {
         .soko-featured-stories-grid { grid-template-columns: 1fr !important; }
       }
       @media (max-width: 768px) {
-        .soko-jobs-services { grid-template-columns: 1fr !important; }
-        .soko-cat-grid { grid-template-columns: repeat(4,1fr) !important; gap:10px !important; }
-        .soko-listings-grid { grid-template-columns: repeat(2,1fr) !important; }
-        .soko-nav-desktop { display:none !important; }
-        .soko-nav-mobile  { display:flex !important; }
-        .soko-pillar-row  { display:none !important; }
-        .soko-hero-headline { font-size: clamp(24px,6.4vw,32px) !important; }
+        .soko-v3 {
+          padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+        }
+        .soko-jobs-services { grid-template-columns: 1fr !important; gap: 16px !important; }
+        .soko-cat-grid {
+          grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+          gap: 8px !important;
+        }
+        .soko-listings-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          gap: 10px !important;
+        }
+        .soko-nav-desktop { display: none !important; }
+        .soko-nav-mobile  { display: flex !important; }
+        .soko-pillar-row  { display: none !important; }
+        .soko-hero-headline {
+          font-size: clamp(22px, 6vw, 28px) !important;
+          line-height: 1.2 !important;
+          letter-spacing: -0.5px !important;
+        }
         .soko-shops-grid { grid-template-columns: 1fr !important; }
-        .soko-footer-grid { grid-template-columns: 1fr 1fr !important; }
-        body { padding-bottom: 64px; }
+        .soko-footer-grid { grid-template-columns: 1fr 1fr !important; gap: 16px !important; }
+        .soko-trust-grid { grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
+
+        /* Compact sticky header */
+        .soko-nav-glass {
+          box-shadow: 0 1px 0 rgba(0,0,0,.06);
+        }
+        .soko-nav-row1 {
+          padding: 8px 14px !important;
+          min-height: 52px !important;
+          gap: 10px !important;
+        }
+        .soko-nav-brand-mark { font-size: 18px !important; }
+        .soko-nav-mobile-search {
+          min-height: 40px !important;
+          padding: 0 12px !important;
+          border-radius: 12px !important;
+          background: #f3f4f6 !important;
+          border-color: #e5e7eb !important;
+        }
+        .soko-nav-mobile-pillars {
+          padding: 6px 12px 10px !important;
+        }
+        .soko-nav-mobile-pillars button {
+          padding: 7px 12px !important;
+          font-size: 12px !important;
+          border-radius: 999px !important;
+        }
+
+        /* Hero */
+        .soko-hero-section {
+          min-height: 0 !important;
+        }
+        .soko-hero-grid {
+          padding: 18px 14px 20px !important;
+          gap: 16px !important;
+        }
+        .soko-hero-cta-row {
+          flex-wrap: wrap !important;
+          gap: 10px !important;
+        }
+        .soko-hero-cta-row .soko-btn-primary,
+        .soko-hero-cta-row .soko-btn-outline {
+          flex: 1 1 auto;
+          justify-content: center;
+          min-height: 44px;
+          padding: 11px 16px !important;
+          font-size: 13px !important;
+        }
+        .soko-hero-benefits {
+          flex-direction: column !important;
+          align-items: flex-start !important;
+          gap: 10px !important;
+        }
+
+        /* Category tiles */
+        .soko-cat-section {
+          padding: 16px 14px 4px !important;
+        }
+        .soko-cat-tile {
+          padding: 12px 4px 10px !important;
+          border-radius: 12px !important;
+          gap: 8px !important;
+        }
+        .soko-cat-tile > div:first-child {
+          width: 40px !important;
+          height: 40px !important;
+        }
+        .soko-cat-tile .soko-cat-sub { display: none !important; }
+        .soko-cat-tile .soko-cat-label {
+          font-size: 11.5px !important;
+          line-height: 1.2 !important;
+        }
+
+        /* Horizontal rails */
+        .soko-scroll {
+          padding-left: 14px !important;
+          padding-right: 14px !important;
+          scroll-padding-inline: 14px;
+          gap: 10px !important;
+        }
+        .soko-section-pad {
+          padding-left: 14px !important;
+          padding-right: 14px !important;
+        }
+        .soko-section-title {
+          font-size: 17px !important;
+          letter-spacing: -0.02em !important;
+        }
+
+        /* Featured / banners */
+        .soko-featured-banner {
+          margin: 0 !important;
+          border-radius: 14px !important;
+          padding: 12px !important;
+          gap: 12px !important;
+        }
+        section[aria-label="Get featured pricing"] {
+          padding: 12px 14px 0 !important;
+        }
+        .soko-hero-section {
+          min-height: unset !important;
+        }
+        .soko-hero-benefits > div {
+          width: 100%;
+        }
+        .soko-hero-benefits > div div {
+          white-space: normal !important;
+        }
+
+        /* Footer compress */
+        .soko-footer {
+          padding: 28px 14px 24px !important;
+        }
+        .soko-footer-grid {
+          font-size: 13px;
+        }
+      }
+      @media (max-width: 380px) {
+        .soko-cat-grid {
+          grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+        }
+        .soko-listings-grid {
+          gap: 8px !important;
+        }
       }
       @media (min-width: 769px) {
         .soko-nav-mobile { display:none !important; }
@@ -309,13 +452,13 @@ function SokoNav({
   return (
     <nav className="soko-nav-glass">
       {/* ── Row 1: brand · district · search · actions ── */}
-      <div style={{
+      <div className="soko-nav-row1" style={{
         maxWidth: 1400, margin: '0 auto', padding: '10px 20px',
         display: 'flex', alignItems: 'center', gap: 14, minHeight: 70,
       }}>
 
-        <div onClick={() => navigate('/')} style={{ cursor: 'pointer', flexShrink: 0, userSelect: 'none' }}>
-          <div style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 800, color: T.green, letterSpacing: '-0.5px', lineHeight: 1.1 }}>
+        <div onClick={() => navigate('/')} className="soko-nav-brand" style={{ cursor: 'pointer', flexShrink: 0, userSelect: 'none' }}>
+          <div className="soko-nav-brand-mark" style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 800, color: T.green, letterSpacing: '-0.5px', lineHeight: 1.1 }}>
             Soko<span style={{ color: T.amber }}>Mw</span>
           </div>
           <div className="soko-nav-desktop" style={{ fontSize: 10.5, color: T.gray600, fontWeight: 500, whiteSpace: 'nowrap' }}>
@@ -450,42 +593,82 @@ function SokoNav({
           </div>
         </div>
 
-        {/* Mobile top bar */}
-        <div className="soko-nav-mobile" style={{ display: 'none', flex: 1, alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}>
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, background: T.gray100, borderRadius: 50, padding: '9px 14px', border: `1.5px solid ${focused ? T.green : T.gray200}`, position: 'relative', cursor: 'pointer' }}
-              onClick={() => navigate('/search?focus=1')}
-            >
-              <button type="button" onClick={e => { e.stopPropagation(); const q = search || kw; if (q.trim()) navigate(`/search?q=${encodeURIComponent(q.trim())}`) }} style={{ background: 'none', border: 'none', padding: 0, color: focused ? T.green : T.gray400, flexShrink: 0, cursor: 'pointer', display: 'flex', alignItems: 'center' }}>{Icon.search(15)}</button>
-              <div style={{ flex: 1, position: 'relative', height: 20 }}>
-                <input value={search}
-                  onChange={e => {
-                    e.stopPropagation()
-                    const val = e.target.value
-                    setSearch(val)
-                    navigate(`/search?q=${encodeURIComponent(val)}&focus=1`)
-                  }}
-                  onFocus={() => { setFocused(true); navigate('/search?focus=1') }}
-                  onBlur={() => setFocused(false)}
-                  style={{ position: 'absolute', inset: 0, width: '100%', border: 'none', background: 'transparent', fontSize: 14, color: T.gray900, outline: 'none', zIndex: search || focused ? 2 : 0 }}
-                />
-                {!search && !focused && (
-                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', pointerEvents: 'none', fontSize: 14, color: T.gray400 }}>
-                    Search&nbsp;<span key={animIdx} style={{ color: T.green, fontWeight: 600, animation: 'wordSlide 3.5s ease forwards' }}>{kw}</span>
-                  </div>
-                )}
-              </div>
-              {search && <button onClick={e => { e.stopPropagation(); setSearch('') }} style={{ background: T.gray200, border: 'none', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: T.gray600, flexShrink: 0 }}>{Icon.x(10)}</button>}
+        {/* Mobile top bar: search + alerts only (brand stays left) */}
+        <div className="soko-nav-mobile" style={{ display: 'none', flex: 1, alignItems: 'center', gap: 8, minWidth: 0 }}>
+          <div
+            className="soko-nav-mobile-search"
+            style={{
+              flex: 1, display: 'flex', alignItems: 'center', gap: 8, minWidth: 0,
+              background: T.gray100, borderRadius: 12, padding: '0 12px', minHeight: 40,
+              border: `1px solid ${focused ? T.green : T.gray200}`, position: 'relative', cursor: 'pointer',
+            }}
+            onClick={() => navigate('/search?focus=1')}
+          >
+            <span style={{ color: focused ? T.green : T.gray400, flexShrink: 0, display: 'flex' }}>{Icon.search(16)}</span>
+            <div style={{ flex: 1, position: 'relative', height: 22, minWidth: 0 }}>
+              <input
+                value={search}
+                onChange={e => {
+                  e.stopPropagation()
+                  const val = e.target.value
+                  setSearch(val)
+                  navigate(`/search?q=${encodeURIComponent(val)}&focus=1`)
+                }}
+                onFocus={() => { setFocused(true); navigate('/search?focus=1') }}
+                onBlur={() => setFocused(false)}
+                aria-label="Search marketplace"
+                style={{
+                  position: 'absolute', inset: 0, width: '100%', border: 'none',
+                  background: 'transparent', fontSize: 14, color: T.gray900, outline: 'none',
+                  zIndex: search || focused ? 2 : 0,
+                }}
+              />
+              {!search && !focused && (
+                <div style={{
+                  position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
+                  pointerEvents: 'none', fontSize: 13.5, color: T.gray400, overflow: 'hidden',
+                }}>
+                  Search&nbsp;
+                  <span key={animIdx} style={{ color: T.green, fontWeight: 600, animation: 'wordSlide 3.5s ease forwards' }}>{kw}</span>
+                </div>
+              )}
             </div>
-            <div style={{ position: 'relative' }}>
-              <button onClick={() => navigate('/notifications')} style={{ width: 38, height: 38, borderRadius: '50%', background: T.gray100, border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: T.gray800 }}>{Icon.bell(18)}</button>
-              {notifCount > 0 && <span style={{ position: 'absolute', top: 3, right: 3, background: T.red, color: '#fff', borderRadius: '50%', width: 15, height: 15, fontSize: 8, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #fff' }}>{notifCount > 9 ? '9+' : notifCount}</span>}
-            </div>
+            {search && (
+              <button
+                type="button"
+                onClick={e => { e.stopPropagation(); setSearch('') }}
+                style={{
+                  background: T.gray200, border: 'none', borderRadius: '50%',
+                  width: 22, height: 22, display: 'flex', alignItems: 'center',
+                  justifyContent: 'center', cursor: 'pointer', color: T.gray600, flexShrink: 0,
+                }}
+              >{Icon.x(10)}</button>
+            )}
           </div>
+          <button
+            type="button"
+            onClick={() => navigate('/notifications')}
+            aria-label="Notifications"
+            style={{
+              width: 40, height: 40, borderRadius: 12, background: 'transparent', border: 'none',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+              color: T.gray700, flexShrink: 0, position: 'relative',
+            }}
+          >
+            {Icon.bell(20)}
+            {notifCount > 0 && (
+              <span style={{
+                position: 'absolute', top: 4, right: 4, background: T.red, color: '#fff',
+                borderRadius: '50%', minWidth: 16, height: 16, fontSize: 9, fontWeight: 800,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #fff',
+                padding: '0 3px',
+              }}>{notifCount > 9 ? '9+' : notifCount}</span>
+            )}
+          </button>
         </div>
       </div>
 
-       {/* ── Row 2: Primary pillar navigation (desktop) ── */}
+      {/* ── Row 2: Primary pillar navigation (desktop) ── */}
       <div className="soko-pillar-row soko-nav-desktop" style={{ borderTop: `1px solid ${T.gray100}` }}>
         <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 20px', display: 'flex', alignItems: 'center', gap: 0 }}>
           {PILLARS.map(p => {
@@ -511,16 +694,24 @@ function SokoNav({
         </div>
       </div>
 
-      {/* ── Row 4 (mobile only): pillar chip strip ── */}
-      <div className="soko-nav-mobile" style={{ display: 'none', borderTop: `1px solid ${T.gray100}`, padding: '8px 14px' }}>
-        <div className="soko-scroll" style={{ display: 'flex', gap: 7, overflowX: 'auto' }}>
-          {PILLARS.map(p => (
-            <button key={p.key} onClick={() => navigate(p.path)} style={{
-              display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0,
-              background: p.key === 'marketplace' ? T.greenL : T.gray100, border: 'none',
-              borderRadius: 50, padding: '6px 12px', fontSize: 12, fontWeight: 600,
-              color: p.key === 'marketplace' ? T.green : T.gray800, cursor: 'pointer',
-            }}>{p.icon(13)} {p.label}</button>
+      {/* ── Mobile: compact discover chips (Explore covers full search via bottom nav) ── */}
+      <div className="soko-nav-mobile soko-nav-mobile-pillars" style={{ display: 'none', borderTop: `1px solid ${T.gray100}` }}>
+        <div className="soko-scroll" style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>
+          {PILLARS.filter(p => p.key !== 'marketplace').map(p => (
+            <button
+              key={p.key}
+              type="button"
+              onClick={() => navigate(p.path)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
+                background: T.gray100, border: 'none',
+                borderRadius: 999, padding: '7px 12px', fontSize: 12, fontWeight: 600,
+                color: T.gray800, cursor: 'pointer',
+              }}
+            >
+              <span style={{ display: 'flex', color: T.gray500 }}>{p.icon(13)}</span>
+              {p.label}
+            </button>
           ))}
         </div>
       </div>
@@ -589,6 +780,7 @@ function RevenueHero({ navigate, listings }) {
   return (
     <section
       ref={sectionRef}
+      className="soko-hero-section"
       onMouseMove={handleMouseMove}
       onMouseLeave={() => setMousePos({ x: 0, y: 0 })}
       style={{ position: 'relative', overflow: 'hidden', minHeight: 340 }}
@@ -730,7 +922,7 @@ function RevenueHero({ navigate, listings }) {
             Stand out, get more views and sell faster.
           </p>
 
-          <div style={{ display: 'flex', flexDirection: 'row', gap: 20, marginBottom: 20, flexWrap: 'nowrap' }}>
+          <div className="soko-hero-benefits" style={{ display: 'flex', flexDirection: 'row', gap: 20, marginBottom: 20, flexWrap: 'nowrap' }}>
             {[
               { icon: Icon.star, color: T.amber, label: 'Top placement', sub: 'Be seen by more buyers' },
               { icon: Icon.eye, color: T.green, label: 'More views', sub: 'Increase your chances' },
@@ -746,7 +938,7 @@ function RevenueHero({ navigate, listings }) {
             ))}
           </div>
 
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <div className="soko-hero-cta-row" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             {/* Primary CTA — pulse glow + hover elevation */}
             <button
               className="soko-btn-primary"
@@ -943,7 +1135,7 @@ function CategoryGrid({ navigate, onCategoryChange }) {
   }
 
   return (
-    <section style={{ padding: '28px 20px 8px', background: '#fff' }}>
+    <section className="soko-cat-section" style={{ padding: '28px 20px 8px', background: '#fff' }}>
       <div style={{ maxWidth: 1400, margin: '0 auto' }}>
         <div className="soko-cat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(9, 1fr)', gap: 12 }}>
           {QUICK_CATEGORIES.map(item => (
@@ -956,8 +1148,8 @@ function CategoryGrid({ navigate, onCategoryChange }) {
                 {item.icon(19)}
               </div>
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 13, fontWeight: 700, color: T.gray900 }}>{item.label}</div>
-                <div style={{ fontSize: 10.5, color: T.gray600, marginTop: 1 }}>{item.sub}</div>
+                <div className="soko-cat-label" style={{ fontSize: 13, fontWeight: 700, color: T.gray900 }}>{item.label}</div>
+                <div className="soko-cat-sub" style={{ fontSize: 10.5, color: T.gray600, marginTop: 1 }}>{item.sub}</div>
               </div>
             </button>
           ))}
@@ -966,8 +1158,8 @@ function CategoryGrid({ navigate, onCategoryChange }) {
             background: '#fdf6e8', border: `1.5px dashed ${T.amber}66`, cursor: 'pointer', padding: '18px 8px 16px',
             borderRadius: 16, transition: 'border-color .15s, box-shadow .15s, transform .15s',
           }}>
-            <div style={{ fontSize: 13.5, fontWeight: 700, color: T.amberD }}>More</div>
-            <div style={{ fontSize: 10.5, color: T.gray600 }}>View all</div>
+            <div className="soko-cat-label" style={{ fontSize: 13.5, fontWeight: 700, color: T.amberD }}>More</div>
+            <div className="soko-cat-sub" style={{ fontSize: 10.5, color: T.gray600 }}>View all</div>
           </button>
         </div>
       </div>
@@ -1141,7 +1333,7 @@ function FeaturedRevenueBanner({ navigate, user }) {
   return (
     <section style={{ padding: '16px 20px 0' }} aria-label="Get featured pricing">
       <div style={{ maxWidth: 1400, margin: '0 auto' }}>
-        <div style={{
+        <div className="soko-featured-banner" style={{
           background: 'linear-gradient(90deg, #fdf6e3, #fdf1d6, #fdf6e3)',
           border: `1px solid ${T.amber}33`,
           borderRadius: 16,
@@ -2925,7 +3117,7 @@ function SokoFooter({ navigate }) {
     'Legal':       [['Privacy Policy','/'],['Terms of Service','/'],['Safety Tips','/'],['Report Abuse','/']],
   }
   return (
-    <footer style={{ background: '#0d1410', color: 'rgba(255,255,255,0.7)', padding: 'clamp(32px,5vw,56px) 20px 28px' }}>
+    <footer className="soko-footer" style={{ background: '#0d1410', color: 'rgba(255,255,255,0.7)', padding: 'clamp(32px,5vw,56px) 20px 28px' }}>
       <div style={{ maxWidth: 1400, margin: '0 auto' }}>
         <div className="soko-footer-grid" style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 36, marginBottom: 40 }}>
           <div>
