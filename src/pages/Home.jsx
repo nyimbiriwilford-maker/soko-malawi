@@ -255,47 +255,62 @@ function GlobalStyles() {
           border-radius: 999px !important;
         }
 
-        /* Hero */
+        /* Hero — compact mobile fit (marketing + product rail, not a long page) */
         .soko-hero-section {
           min-height: 0 !important;
         }
+        .soko-hero-fx-heavy { display: none !important; }
         .soko-hero-grid {
-          padding: 18px 14px 20px !important;
-          gap: 14px !important;
-        }
-        .soko-hero-cta-row {
-          flex-wrap: wrap !important;
+          padding: 12px 14px 14px !important;
           gap: 10px !important;
         }
-        .soko-hero-cta-row .soko-btn-primary,
-        .soko-hero-cta-row .soko-btn-outline {
+        .soko-hero-copy {
+          display: flex !important;
+          flex-direction: column !important;
+          gap: 0 !important;
+        }
+        .soko-hero-badge {
+          margin-bottom: 8px !important;
+          padding: 3px 10px !important;
+        }
+        .soko-hero-headline {
+          font-size: 18px !important;
+          line-height: 1.25 !important;
+          letter-spacing: -0.4px !important;
+          margin-bottom: 4px !important;
+        }
+        .soko-hero-headline br { display: none; }
+        .soko-hero-sub { display: none !important; }
+        .soko-hero-benefits { display: none !important; }
+        .soko-hero-cta-row {
+          flex-wrap: nowrap !important;
+          gap: 8px !important;
+          margin-top: 10px !important;
+        }
+        .soko-hero-cta-row .soko-btn-primary {
           flex: 1 1 auto;
           justify-content: center;
-          min-height: 44px;
-          padding: 11px 16px !important;
-          font-size: 13px !important;
+          min-height: 40px !important;
+          padding: 9px 14px !important;
+          font-size: 12.5px !important;
+          border-radius: 12px !important;
+          animation: none !important;
         }
-        .soko-hero-benefits {
-          flex-direction: row !important;
-          flex-wrap: wrap !important;
-          align-items: flex-start !important;
-          gap: 8px 12px !important;
-        }
-        .soko-hero-benefits > div {
-          flex: 1 1 auto;
-          min-width: 0;
-        }
+        .soko-hero-cta-learn { display: none !important; }
         .soko-hero-mobile-carousel {
-          margin-top: 4px;
+          margin-top: 2px;
           width: 100%;
           min-width: 0;
         }
+        .soko-hero-mobile-head {
+          margin-bottom: 8px !important;
+        }
         .soko-hero-mobile-rail {
           display: flex !important;
-          gap: 12px !important;
+          gap: 10px !important;
           overflow-x: auto !important;
           overflow-y: hidden !important;
-          padding: 4px 0 10px !important;
+          padding: 2px 0 6px !important;
           scroll-snap-type: x mandatory;
           -webkit-overflow-scrolling: touch;
           scrollbar-width: none;
@@ -303,23 +318,39 @@ function GlobalStyles() {
         }
         .soko-hero-mobile-rail::-webkit-scrollbar { display: none; }
         .soko-hero-mobile-card {
-          flex: 0 0 min(280px, 86vw) !important;
-          width: min(280px, 86vw) !important;
-          height: 220px !important;
-          scroll-snap-align: center;
-          border-radius: 16px !important;
+          flex: 0 0 min(168px, 46vw) !important;
+          width: min(168px, 46vw) !important;
+          height: 168px !important;
+          scroll-snap-align: start;
+          border-radius: 14px !important;
+        }
+        .soko-hero-mobile-card .soko-hero-card-title {
+          font-size: 12px !important;
+          -webkit-line-clamp: 1 !important;
+          margin-bottom: 2px !important;
+        }
+        .soko-hero-mobile-card .soko-hero-card-price {
+          font-size: 13.5px !important;
+          margin-bottom: 2px !important;
+        }
+        .soko-hero-mobile-card .soko-hero-card-meta {
+          font-size: 10px !important;
+        }
+        .soko-hero-mobile-card .soko-hero-card-body {
+          padding: 8px 9px 10px !important;
         }
         .soko-hero-mobile-empty {
           width: 100%;
+          padding: 12px !important;
         }
         .soko-hero-mobile-dots {
           display: flex;
           justify-content: center;
           flex-wrap: wrap;
-          gap: 5px;
-          margin-top: 4px;
+          gap: 4px;
+          margin-top: 2px;
           max-width: 100%;
-          padding: 0 4px;
+          padding: 0;
         }
 
         /* Category tiles */
@@ -1040,6 +1071,7 @@ function RevenueHero({ navigate, listings }) {
 
   function renderHeroCard(item, idx, { mobile = false } = {}) {
     const price = isFlashActive(item) ? (item.flash_sale_price ?? item.price) : item.price
+    const flash = isFlashActive(item)
     return (
       <div
         key={item.id}
@@ -1049,27 +1081,27 @@ function RevenueHero({ navigate, listings }) {
         tabIndex={0}
         onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/listing/' + item.id) } }}
         style={{
-          position: 'relative', height: mobile ? 210 : 230, borderRadius: mobile ? 16 : 18,
+          position: 'relative', height: mobile ? 168 : 230, borderRadius: mobile ? 14 : 18,
           overflow: 'hidden', cursor: 'pointer',
-          border: '2px solid transparent',
-          boxShadow: '0 8px 28px rgba(0,0,0,0.45)',
+          border: '1px solid rgba(255,255,255,0.12)',
+          boxShadow: mobile ? '0 6px 18px rgba(0,0,0,0.32)' : '0 8px 28px rgba(0,0,0,0.45)',
           transition: 'transform 0.35s cubic-bezier(0.34,1.2,0.64,1), box-shadow 0.35s ease, border-color 0.35s ease',
-          animation: visible ? `cardSlideUp 0.5s ease ${0.1 + idx * 0.08}s both` : 'none',
+          animation: visible && !mobile ? `cardSlideUp 0.5s ease ${0.1 + idx * 0.08}s both` : 'none',
           flexShrink: mobile ? 0 : undefined,
         }}
         onMouseEnter={e => {
           if (mobile) return
-          e.currentTarget.style.transform = 'translateY(-8px) scale(1.03)'
-          e.currentTarget.style.boxShadow = '0 20px 48px rgba(0,0,0,0.6), 0 0 0 2px rgba(249,171,0,0.75)'
-          e.currentTarget.style.borderColor = 'rgba(249,171,0,0.85)'
+          e.currentTarget.style.transform = 'translateY(-6px)'
+          e.currentTarget.style.boxShadow = '0 18px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(249,171,0,0.55)'
+          e.currentTarget.style.borderColor = 'rgba(249,171,0,0.55)'
           const img = e.currentTarget.querySelector('img')
-          if (img) img.style.transform = 'scale(1.08)'
+          if (img) img.style.transform = 'scale(1.06)'
         }}
         onMouseLeave={e => {
           if (mobile) return
           e.currentTarget.style.transform = 'none'
           e.currentTarget.style.boxShadow = '0 8px 28px rgba(0,0,0,0.45)'
-          e.currentTarget.style.borderColor = 'transparent'
+          e.currentTarget.style.borderColor = 'rgba(255,255,255,0.12)'
           const img = e.currentTarget.querySelector('img')
           if (img) img.style.transform = 'scale(1)'
         }}
@@ -1083,53 +1115,48 @@ function RevenueHero({ navigate, listings }) {
             style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.5s cubic-bezier(0.34,1.2,0.64,1)' }}
           />
         ) : (
-          <div style={{ width: '100%', height: '100%', background: 'rgba(255,255,255,0.08)', display: 'grid', placeItems: 'center', color: 'rgba(255,255,255,0.4)', fontSize: 28 }}>
-            {Icon.star(28)}
+          <div style={{ width: '100%', height: '100%', background: 'rgba(255,255,255,0.08)', display: 'grid', placeItems: 'center', color: 'rgba(255,255,255,0.4)' }}>
+            {Icon.star(mobile ? 22 : 28)}
           </div>
         )}
-        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to bottom, rgba(0,0,0,0.08) 0%, transparent 35%, rgba(0,0,0,0.75) 70%, rgba(0,0,0,0.92) 100%)' }} />
+        <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(0,0,0,0.06) 0%, transparent 38%, rgba(0,0,0,0.78) 78%, rgba(0,0,0,0.92) 100%)' }} />
 
-        <div style={{ position: 'absolute', top: 9, left: 9, zIndex: 5, display: 'flex', flexDirection: 'column', gap: 5 }}>
-          {isFlashActive(item) ? (
-            <div className="soko-hotdeal-pulse" style={{
-              background: `linear-gradient(135deg,${T.red},#c62828)`, color: '#fff',
-              borderRadius: '50%', width: 26, height: 26,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 2px 8px rgba(234,67,53,0.5)',
-            }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="#fff">
-                <path d="M17.66 11.2C17.43 10.9 17.15 10.64 16.89 10.38C16.22 9.78 15.46 9.35 14.82 8.72C13.33 7.26 13 4.85 13.95 3C13 3.23 12.17 3.75 11.46 4.32C8.87 6.4 7.85 10.07 9.07 13.22C9.11 13.32 9.15 13.42 9.15 13.55C9.15 13.77 9 13.97 8.8 14.05C8.57 14.15 8.33 14.09 8.14 13.93C8.08 13.88 8.04 13.83 8 13.76C6.87 12.33 6.69 10.28 7.45 8.64C5.78 10 4.87 12.3 5 14.47C5.06 14.97 5.12 15.47 5.29 15.97C5.43 16.57 5.7 17.17 6 17.7C7.08 19.43 8.95 20.67 10.96 20.92C13.1 21.19 15.39 20.8 17.03 19.32C18.86 17.66 19.5 15 18.56 12.72L18.43 12.46C18.22 12 17.66 11.2 17.66 11.2Z"/>
-              </svg>
-            </div>
+        <div style={{ position: 'absolute', top: mobile ? 7 : 9, left: mobile ? 7 : 9, zIndex: 5 }}>
+          {flash ? (
+            <span style={{
+              display: 'inline-flex', alignItems: 'center',
+              background: 'rgba(234,67,53,0.95)', color: '#fff',
+              borderRadius: 999, padding: mobile ? '3px 7px' : '4px 9px',
+              fontSize: mobile ? 9 : 10, fontWeight: 800,
+            }}>Hot</span>
           ) : (
-            <div style={{
-              background: `linear-gradient(135deg,${T.amber},#e09800)`,
-              borderRadius: 50, padding: '3px 9px',
-              display: 'flex', alignItems: 'center', gap: 3,
-              boxShadow: '0 2px 10px rgba(249,171,0,0.5)',
-              overflow: 'hidden', position: 'relative', width: 'fit-content',
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 3,
+              background: 'rgba(255,255,255,0.95)', color: '#1a1a1a',
+              borderRadius: 999, padding: mobile ? '3px 7px' : '4px 9px',
+              fontSize: mobile ? 9 : 10, fontWeight: 800,
+              boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
             }}>
-              <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(90deg,transparent,rgba(255,255,255,0.25),transparent)', backgroundSize: '200% 100%', animation: 'badgeShimmer 3s ease-in-out infinite' }} />
-              <span style={{ color: '#1a0a00', display: 'flex', position: 'relative', zIndex: 1 }}>{Icon.star(9, '#1a0a00')}</span>
-              <span style={{ fontSize: 8.5, fontWeight: 900, color: '#1a0a00', letterSpacing: 0.4, position: 'relative', zIndex: 1 }}>FEATURED</span>
-            </div>
+              <span style={{ display: 'flex', color: T.amber }}>{Icon.star(mobile ? 8 : 10, T.amber)}</span>
+              {mobile ? 'Feat' : 'Featured'}
+            </span>
           )}
         </div>
 
-        <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 5, padding: mobile ? '12px 12px 14px' : '14px 14px 16px' }}>
-          <div style={{
-            fontSize: mobile ? 13.5 : 14.5, fontWeight: 800, color: '#fff', marginBottom: 4, lineHeight: 1.25,
-            textShadow: '0 1px 4px rgba(0,0,0,0.5)',
-            overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+        <div className="soko-hero-card-body" style={{ position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 5, padding: mobile ? '8px 9px 10px' : '14px 14px 16px' }}>
+          <div className="soko-hero-card-title" style={{
+            fontSize: mobile ? 12 : 14.5, fontWeight: 700, color: '#fff', marginBottom: mobile ? 2 : 4, lineHeight: 1.25,
+            textShadow: '0 1px 4px rgba(0,0,0,0.45)',
+            overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: mobile ? 1 : 2, WebkitBoxOrient: 'vertical',
           }}>{item.title}</div>
-          <div style={{ fontFamily: T.fontDisplay, fontSize: mobile ? 16 : 17, fontWeight: 900, color: T.amber, marginBottom: 4, letterSpacing: '-0.4px' }}>
+          <div className="soko-hero-card-price" style={{ fontFamily: T.fontDisplay, fontSize: mobile ? 13.5 : 17, fontWeight: 800, color: T.amber, marginBottom: mobile ? 2 : 4, letterSpacing: '-0.3px' }}>
             {formatPrice(price)}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 6 }}>
-            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', display: 'flex', alignItems: 'center', gap: 3, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {Icon.pin(10)} {item.city || 'Malawi'}
+          <div className="soko-hero-card-meta" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4 }}>
+            <span style={{ fontSize: mobile ? 10 : 11, color: 'rgba(255,255,255,0.68)', display: 'flex', alignItems: 'center', gap: 2, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {Icon.pin(mobile ? 9 : 10)} {item.city || 'Malawi'}
             </span>
-            {(item.seller_verified || item.shop_is_verified) && (
+            {!mobile && (item.seller_verified || item.shop_is_verified) && (
               <span style={{ fontSize: 10.5, color: '#7ee0a8', display: 'flex', alignItems: 'center', gap: 3, fontWeight: 700, flexShrink: 0 }}>
                 {Icon.verify(11)} Verified
               </span>
@@ -1146,7 +1173,7 @@ function RevenueHero({ navigate, listings }) {
       className="soko-hero-section"
       onMouseMove={handleMouseMove}
       onMouseLeave={() => setMousePos({ x: 0, y: 0 })}
-      style={{ position: 'relative', overflow: 'hidden', minHeight: 340 }}
+      style={{ position: 'relative', overflow: 'hidden', minHeight: 0 }}
     >
       {/* ── Injected keyframes ── */}
       <style>{`
@@ -1164,72 +1191,44 @@ function RevenueHero({ navigate, listings }) {
       {/* ── Layer 1: Deep base gradient ── */}
       <div style={{
         position: 'absolute', inset: 0,
-        background: `
-          linear-gradient(135deg, #040f07 0%, #071a0d 30%, #0a2015 55%, #060d18 100%)
-        `,
+        background: 'linear-gradient(135deg, #040f07 0%, #071a0d 35%, #0a2015 60%, #060d18 100%)',
       }} />
 
-      {/* ── Layer 2: Mesh radial gradients ── */}
+      {/* ── Layer 2: Mesh (light) ── */}
       <div style={{
         position: 'absolute', inset: 0, pointerEvents: 'none',
         background: `
-          radial-gradient(ellipse 70% 60% at 8% 90%, rgba(15,157,88,0.22) 0%, transparent 60%),
-          radial-gradient(ellipse 55% 50% at 92% 8%,  rgba(15,157,88,0.18) 0%, transparent 55%),
-          radial-gradient(ellipse 40% 40% at 50% 50%, rgba(10,122,68,0.10) 0%, transparent 65%),
-          radial-gradient(ellipse 35% 45% at 78% 85%, rgba(249,171,0,0.10) 0%, transparent 55%),
-          radial-gradient(ellipse 30% 30% at 18% 18%, rgba(249,171,0,0.07) 0%, transparent 50%)
+          radial-gradient(ellipse 70% 60% at 8% 90%, rgba(15,157,88,0.2) 0%, transparent 60%),
+          radial-gradient(ellipse 55% 50% at 92% 8%,  rgba(15,157,88,0.14) 0%, transparent 55%),
+          radial-gradient(ellipse 35% 45% at 78% 85%, rgba(249,171,0,0.08) 0%, transparent 55%)
         `,
       }} />
 
-      {/* ── Layer 3: Floating blobs (parallax-shifted) ── */}
-      <div style={{
+      {/* ── Desktop-only decorative layers ── */}
+      <div className="soko-hero-fx-heavy soko-nav-desktop" style={{
         position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden',
         transform: `translate(${mousePos.x * 0.4}px, ${mousePos.y * 0.3}px)`,
         transition: 'transform 0.8s cubic-bezier(0.25,0.46,0.45,0.94)',
       }}>
         <div style={{ position: 'absolute', top: '-10%', left: '-8%', width: 420, height: 420, borderRadius: '50%', background: 'radial-gradient(circle, rgba(15,157,88,0.18) 0%, transparent 70%)', animation: 'blobFloat1 14s ease-in-out infinite', filter: 'blur(2px)' }} />
         <div style={{ position: 'absolute', bottom: '-15%', right: '-5%', width: 380, height: 380, borderRadius: '50%', background: 'radial-gradient(circle, rgba(15,157,88,0.14) 0%, transparent 70%)', animation: 'blobFloat2 18s ease-in-out infinite', filter: 'blur(2px)' }} />
-        <div style={{ position: 'absolute', top: '30%', right: '22%', width: 260, height: 260, borderRadius: '50%', background: 'radial-gradient(circle, rgba(249,171,0,0.10) 0%, transparent 70%)', animation: 'blobFloat3 22s ease-in-out infinite', filter: 'blur(1px)' }} />
-        <div style={{ position: 'absolute', top: '60%', left: '15%', width: 200, height: 200, borderRadius: '50%', background: 'radial-gradient(circle, rgba(10,122,68,0.12) 0%, transparent 70%)', animation: 'blobFloat1 16s ease-in-out 4s infinite' }} />
       </div>
-
-      {/* ── Layer 4: Dot-grid pattern ── */}
-      <div style={{
+      <div className="soko-hero-fx-heavy soko-nav-desktop" style={{
         position: 'absolute', inset: 0, pointerEvents: 'none',
         backgroundImage: `radial-gradient(circle, rgba(255,255,255,0.08) 1px, transparent 1px)`,
         backgroundSize: '28px 28px',
         animation: 'dotGrid 6s ease-in-out infinite',
       }} />
-
-      {/* ── Layer 5: Subtle grid lines ── */}
-      <div style={{
-        position: 'absolute', inset: 0, pointerEvents: 'none',
-        backgroundImage: `linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px)`,
-        backgroundSize: '56px 56px',
-      }} />
-
-      {/* ── Layer 6: Floating particles ── */}
-      <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}>
-        {[...Array(16)].map((_, i) => (
+      <div className="soko-hero-fx-heavy soko-nav-desktop" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}>
+        {[...Array(10)].map((_, i) => (
           <div key={i} style={{
-            position: 'absolute',
-            width: i % 4 === 0 ? 3 : i % 4 === 1 ? 2 : i % 4 === 2 ? 2 : 1.5,
-            height: i % 4 === 0 ? 3 : i % 4 === 1 ? 2 : i % 4 === 2 ? 2 : 1.5,
-            borderRadius: '50%',
-            background: i % 3 === 0
-              ? `rgba(249,171,0,${0.3 + (i % 3) * 0.12})`
-              : i % 3 === 1
-              ? `rgba(15,157,88,${0.3 + (i % 3) * 0.1})`
-              : `rgba(255,255,255,${0.12 + (i % 4) * 0.06})`,
-            left: `${5 + (i * 6.1) % 90}%`,
-            top: `${10 + (i * 13.7) % 80}%`,
-            animation: `particleDrift ${6 + (i % 5) * 2.4}s linear ${i * 0.7}s infinite`,
+            position: 'absolute', width: 2, height: 2, borderRadius: '50%',
+            background: i % 2 === 0 ? 'rgba(249,171,0,0.35)' : 'rgba(15,157,88,0.35)',
+            left: `${8 + (i * 9) % 85}%`, top: `${12 + (i * 11) % 75}%`,
+            animation: `particleDrift ${7 + (i % 4) * 2}s linear ${i * 0.6}s infinite`,
           }} />
         ))}
       </div>
-
-      {/* ── Layer 7: Bottom vignette ── */}
-      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 80, background: 'linear-gradient(to top, rgba(4,15,7,0.4), transparent)', pointerEvents: 'none' }} />
 
       {/* ── CONTENT ── */}
       <div className="soko-hero-grid" style={{
@@ -1238,33 +1237,20 @@ function RevenueHero({ navigate, listings }) {
         alignItems: 'center', padding: 'clamp(16px,3vw,28px) 20px',
       }}>
 
-        {/* ── LEFT: unchanged content, entrance animation wrapper ── */}
-        <div style={{
+        {/* ── LEFT: marketing copy ── */}
+        <div className="soko-hero-copy" style={{
           animation: visible ? 'heroFadeUp 0.65s ease both' : 'none',
         }}>
 
-          {/* Badge — shimmer + glow added */}
-          <div style={{
+          <div className="soko-hero-badge" style={{
             display: 'inline-flex', alignItems: 'center', gap: 6,
-            background: 'linear-gradient(135deg, rgba(234,88,12,0.2), rgba(249,171,0,0.12), rgba(234,88,12,0.2))',
-            border: '1px solid rgba(249,171,0,0.38)',
-            borderRadius: 50, padding: '5px 14px', marginBottom: 14,
-            position: 'relative', overflow: 'hidden',
-            boxShadow: '0 0 12px rgba(249,171,0,0.15)',
-            transition: 'box-shadow 0.3s, transform 0.3s',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.boxShadow='0 0 22px rgba(249,171,0,0.38)'; e.currentTarget.style.transform='scale(1.04)' }}
-          onMouseLeave={e => { e.currentTarget.style.boxShadow='0 0 12px rgba(249,171,0,0.15)'; e.currentTarget.style.transform='scale(1)' }}
-          >
-            {/* Shimmer sweep */}
-            <div style={{
-              position: 'absolute', inset: 0, borderRadius: 50,
-              background: 'linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.18) 50%, transparent 100%)',
-              backgroundSize: '200% 100%',
-              animation: 'badgeShimmer 3s ease-in-out infinite',
-            }} />
-            <span style={{ color: T.red, display: 'flex', position: 'relative', zIndex: 1 }}>{Icon.fire(13)}</span>
-            <span style={{ fontSize: 10.5, fontWeight: 800, color: T.amber, letterSpacing: 0.7, textTransform: 'uppercase', position: 'relative', zIndex: 1 }}>
+            background: 'linear-gradient(135deg, rgba(234,88,12,0.2), rgba(249,171,0,0.12))',
+            border: '1px solid rgba(249,171,0,0.35)',
+            borderRadius: 50, padding: '5px 12px', marginBottom: 14,
+            width: 'fit-content',
+          }}>
+            <span style={{ color: T.red, display: 'flex' }}>{Icon.fire(12)}</span>
+            <span style={{ fontSize: 10.5, fontWeight: 800, color: T.amber, letterSpacing: 0.6, textTransform: 'uppercase' }}>
               Featured
             </span>
           </div>
@@ -1274,14 +1260,14 @@ function RevenueHero({ navigate, listings }) {
             fontWeight: 800, color: '#fff', lineHeight: 1.15, letterSpacing: '-0.8px',
             marginBottom: 10,
           }}>
-            Reach more buyers.<br />
+            Reach more buyers.{' '}
             <span style={{
               background: `linear-gradient(90deg, ${T.amber}, #ffce45)`,
               WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
             }}>Get Featured today!</span>
           </h1>
 
-          <p style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.55)', lineHeight: 1.5, maxWidth: 320, marginBottom: 18 }}>
+          <p className="soko-hero-sub" style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.55)', lineHeight: 1.5, maxWidth: 320, marginBottom: 18 }}>
             Stand out, get more views and sell faster.
           </p>
 
@@ -1302,8 +1288,8 @@ function RevenueHero({ navigate, listings }) {
           </div>
 
           <div className="soko-hero-cta-row" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            {/* Primary CTA — pulse glow + hover elevation */}
             <button
+              type="button"
               className="soko-btn-primary"
               onClick={() => navigate('/profile?tab=selling')}
               style={{
@@ -1312,15 +1298,15 @@ function RevenueHero({ navigate, listings }) {
                 animation: 'ctaPulse 2.8s ease-in-out infinite',
                 transition: 'transform 0.2s, box-shadow 0.2s',
               }}
-              onMouseEnter={e => { e.currentTarget.style.transform='translateY(-3px) scale(1.03)'; e.currentTarget.style.animation='none'; e.currentTarget.style.boxShadow='0 8px 28px rgba(249,171,0,0.55)' }}
+              onMouseEnter={e => { e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.animation='none'; e.currentTarget.style.boxShadow='0 8px 24px rgba(249,171,0,0.45)' }}
               onMouseLeave={e => { e.currentTarget.style.transform='none'; e.currentTarget.style.animation='ctaPulse 2.8s ease-in-out infinite'; e.currentTarget.style.boxShadow='' }}
             >
               Get Featured
             </button>
-            {/* Secondary CTA — glass + hover */}
             <button
+              type="button"
               onClick={() => navigate('/profile?tab=selling')}
-              className="soko-btn-outline"
+              className="soko-btn-outline soko-hero-cta-learn"
               style={{ fontSize: 14, padding: '11px 22px', transition: 'all 0.25s' }}
               onMouseEnter={e => { e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.background='rgba(255,255,255,0.18)' }}
               onMouseLeave={e => { e.currentTarget.style.transform='none'; e.currentTarget.style.background='rgba(255,255,255,0.1)' }}
@@ -1421,11 +1407,12 @@ function RevenueHero({ navigate, listings }) {
             </div>
           ) : (
             <>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 8 }}>
-                <span style={{ fontSize: 12, fontWeight: 800, color: 'rgba(255,255,255,0.78)', letterSpacing: 0.3, textTransform: 'uppercase' }}>
-                  Featured now
+              <div className="soko-hero-mobile-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
+                <span style={{ fontSize: 11.5, fontWeight: 700, color: 'rgba(255,255,255,0.78)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ width: 5, height: 5, borderRadius: '50%', background: T.amber, boxShadow: '0 0 0 3px rgba(249,171,0,0.2)' }} />
+                  Featured
                   {mobileCount > 1 && (
-                    <span style={{ marginLeft: 8, fontWeight: 700, color: 'rgba(255,255,255,0.45)', textTransform: 'none', letterSpacing: 0 }}>
+                    <span style={{ fontWeight: 600, color: 'rgba(255,255,255,0.4)', fontVariantNumeric: 'tabular-nums' }}>
                       {mobileIdx + 1}/{mobileCount}
                     </span>
                   )}
@@ -1433,7 +1420,12 @@ function RevenueHero({ navigate, listings }) {
                 <button
                   type="button"
                   onClick={() => navigate('/listings')}
-                  style={{ background: 'none', border: 'none', color: T.amber, fontSize: 12.5, fontWeight: 700, cursor: 'pointer', padding: '4px 0', minHeight: 36 }}
+                  style={{
+                    background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)',
+                    borderRadius: 999, color: 'rgba(255,255,255,0.88)',
+                    fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
+                    padding: '5px 10px', minHeight: 30,
+                  }}
                 >
                   View all
                 </button>
@@ -1459,17 +1451,16 @@ function RevenueHero({ navigate, listings }) {
                       aria-label={`Show featured ${i + 1} of ${mobileCount}`}
                       onClick={() => { goToMobile(i); setPaused(true); setTimeout(() => setPaused(false), 2800) }}
                       style={{
-                        width: i === mobileIdx ? 20 : 6,
-                        height: 6,
+                        width: i === mobileIdx ? 16 : 5,
+                        height: 4,
                         borderRadius: 50,
                         border: 'none',
                         padding: 0,
                         cursor: 'pointer',
                         background: i === mobileIdx
                           ? `linear-gradient(90deg, ${T.amber}, #ffce45)`
-                          : 'rgba(255,255,255,0.28)',
-                        boxShadow: i === mobileIdx ? '0 0 8px rgba(249,171,0,0.5)' : 'none',
-                        transition: 'all 0.35s cubic-bezier(0.34,1.2,0.64,1)',
+                          : 'rgba(255,255,255,0.22)',
+                        transition: 'all 0.3s ease',
                         flexShrink: 0,
                       }}
                     />
