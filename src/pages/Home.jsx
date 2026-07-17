@@ -639,10 +639,11 @@ function timeAgo(ts) {
   return `${m}m ago`
 }
 function formatPrice(n) {
-  if (!n && n !== 0) return ''
-  if (n >= 1_000_000) return `MK ${(n/1_000_000).toFixed(1)}M`
-  if (n >= 1_000)     return `MK ${(n/1_000).toFixed(0)}K`
-  return `MK ${n.toLocaleString()}`
+  if (n == null || n === '') return ''
+  const num = Number(n)
+  if (!Number.isFinite(num)) return ''
+  // Always show the full amount (e.g. MK 1,500,000) — never K/M shorthand
+  return `MK ${Math.round(num).toLocaleString('en-MW')}`
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
