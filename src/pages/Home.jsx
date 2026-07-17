@@ -295,22 +295,31 @@ function GlobalStyles() {
           gap: 12px !important;
           overflow-x: auto !important;
           overflow-y: hidden !important;
-          padding: 4px 2px 10px !important;
+          padding: 4px 0 10px !important;
           scroll-snap-type: x mandatory;
           -webkit-overflow-scrolling: touch;
           scrollbar-width: none;
-          margin: 0 -2px;
+          scroll-behavior: smooth;
         }
         .soko-hero-mobile-rail::-webkit-scrollbar { display: none; }
         .soko-hero-mobile-card {
-          flex: 0 0 min(248px, 78vw) !important;
-          width: min(248px, 78vw) !important;
-          height: 210px !important;
-          scroll-snap-align: start;
+          flex: 0 0 min(280px, 86vw) !important;
+          width: min(280px, 86vw) !important;
+          height: 220px !important;
+          scroll-snap-align: center;
           border-radius: 16px !important;
         }
         .soko-hero-mobile-empty {
           width: 100%;
+        }
+        .soko-hero-mobile-dots {
+          display: flex;
+          justify-content: center;
+          flex-wrap: wrap;
+          gap: 5px;
+          margin-top: 4px;
+          max-width: 100%;
+          padding: 0 4px;
         }
 
         /* Category tiles */
@@ -922,23 +931,53 @@ function NavIconBtn({ icon, label, onClick }) {
 ───────────────────────────────────────────────────────────────────────────── */
 function RevenueHero({ navigate, listings }) {
   // Phase 3.1: `listings` is already the dedicated featured query result (not recent feed)
+  // Include every active featured product with an image (no hard cap) so rotation covers all.
   const featured = useMemo(() =>
-    (listings || []).filter(l => isListingFeatured(l) && l.images?.[0]).slice(0, 9),
+    (listings || []).filter(l => isListingFeatured(l) && l.images?.[0]),
   [listings])
 
   const [page, setPage]     = useState(0)
+  const [mobileIdx, setMobileIdx] = useState(0)
   const [paused, setPaused] = useState(false)
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
   const [visible, setVisible] = useState(false)
   const sectionRef = useRef(null)
+  const mobileRailRef = useRef(null)
+  const touchStartX = useRef(null)
   const perPage = 3
   const pageCount = Math.max(1, Math.ceil(featured.length / perPage))
+  const mobileCount = featured.length
+  const ROTATE_MS = 4200
 
+  // Desktop: page through groups of 3 until every product has been shown
   useEffect(() => {
     if (paused || pageCount < 2) return
-    const t = setInterval(() => setPage(p => (p + 1) % pageCount), 4200)
+    const t = setInterval(() => setPage(p => (p + 1) % pageCount), ROTATE_MS)
     return () => clearInterval(t)
   }, [paused, pageCount])
+
+  // Mobile: advance one product at a time through the full featured list
+  useEffect(() => {
+    if (paused || mobileCount < 2) return
+    const t = setInterval(() => setMobileIdx(i => (i + 1) % mobileCount), ROTATE_MS)
+    return () => clearInterval(t)
+  }, [paused, mobileCount])
+
+  // Keep indices valid when the featured pool changes
+  useEffect(() => {
+    setPage(0)
+    setMobileIdx(0)
+  }, [featured.map(f => f.id).join('|')])
+
+  // Smooth-scroll mobile rail to the active product
+  useEffect(() => {
+    const rail = mobileRailRef.current
+    if (!rail || mobileCount < 1) return
+    const card = rail.children[mobileIdx]
+    if (!card) return
+    const left = card.offsetLeft - (rail.clientWidth - card.clientWidth) / 2
+    rail.scrollTo({ left: Math.max(0, left), behavior: 'smooth' })
+  }, [mobileIdx, mobileCount])
 
   // Entrance animation observer
   useEffect(() => {
@@ -960,6 +999,31 @@ function RevenueHero({ navigate, listings }) {
   function goTo(i) { setPage(((i % pageCount) + pageCount) % pageCount) }
   function next() { setPage(p => (p + 1) % pageCount) }
   function prev() { setPage(p => ((p - 1) + pageCount) % pageCount) }
+  function goToMobile(i) {
+    if (mobileCount < 1) return
+    setMobileIdx(((i % mobileCount) + mobileCount) % mobileCount)
+  }
+  function nextMobile() { setMobileIdx(i => (i + 1) % Math.max(1, mobileCount)) }
+  function prevMobile() { setMobileIdx(i => ((i - 1) + Math.max(1, mobileCount)) % Math.max(1, mobileCount)) }
+
+  function onMobileTouchStart(e) {
+    touchStartX.current = e.touches?.[0]?.clientX ?? null
+    setPaused(true)
+  }
+  function onMobileTouchEnd(e) {
+    const start = touchStartX.current
+    touchStartX.current = null
+    const end = e.changedTouches?.[0]?.clientX
+    if (start != null && end != null) {
+      const dx = end - start
+      if (Math.abs(dx) > 40) {
+        if (dx < 0) nextMobile()
+        else prevMobile()
+      }
+    }
+    // resume auto-rotate shortly after interaction
+    setTimeout(() => setPaused(false), 2800)
+  }
 
   const visibleCards = featured.slice(page * perPage, page * perPage + perPage)
 
@@ -1349,6 +1413,11 @@ function RevenueHero({ navigate, listings }) {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 8 }}>
                 <span style={{ fontSize: 12, fontWeight: 800, color: 'rgba(255,255,255,0.78)', letterSpacing: 0.3, textTransform: 'uppercase' }}>
                   Featured now
+                  {mobileCount > 1 && (
+                    <span style={{ marginLeft: 8, fontWeight: 700, color: 'rgba(255,255,255,0.45)', textTransform: 'none', letterSpacing: 0 }}>
+                      {mobileIdx + 1}/{mobileCount}
+                    </span>
+                  )}
                 </span>
                 <button
                   type="button"
@@ -1358,9 +1427,44 @@ function RevenueHero({ navigate, listings }) {
                   View all
                 </button>
               </div>
-              <div className="soko-hero-mobile-rail">
+              <div
+                ref={mobileRailRef}
+                className="soko-hero-mobile-rail"
+                onTouchStart={onMobileTouchStart}
+                onTouchEnd={onMobileTouchEnd}
+                onMouseEnter={() => setPaused(true)}
+                onMouseLeave={() => setPaused(false)}
+              >
                 {featured.map((item, idx) => renderHeroCard(item, idx, { mobile: true }))}
               </div>
+              {mobileCount > 1 && (
+                <div className="soko-hero-mobile-dots" role="tablist" aria-label="Featured products">
+                  {featured.map((item, i) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={i === mobileIdx}
+                      aria-label={`Show featured ${i + 1} of ${mobileCount}`}
+                      onClick={() => { goToMobile(i); setPaused(true); setTimeout(() => setPaused(false), 2800) }}
+                      style={{
+                        width: i === mobileIdx ? 20 : 6,
+                        height: 6,
+                        borderRadius: 50,
+                        border: 'none',
+                        padding: 0,
+                        cursor: 'pointer',
+                        background: i === mobileIdx
+                          ? `linear-gradient(90deg, ${T.amber}, #ffce45)`
+                          : 'rgba(255,255,255,0.28)',
+                        boxShadow: i === mobileIdx ? '0 0 8px rgba(249,171,0,0.5)' : 'none',
+                        transition: 'all 0.35s cubic-bezier(0.34,1.2,0.64,1)',
+                        flexShrink: 0,
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
             </>
           )}
         </div>
