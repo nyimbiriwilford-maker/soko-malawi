@@ -2633,6 +2633,78 @@ export default function Profile() {
         </div>
       </header>
 
+      {/* Mobile: profile section chips under top bar (not stacked on app BottomNav) */}
+      <nav className="mp-pnav-mob" aria-label="Profile sections">
+        <div className="mp-pnav-mob-scroll">
+          {MOBILE_PRIMARY.map(g => {
+            const active = isNavActive(g.id)
+            const short =
+              g.id === 'overview' ? 'Overview'
+                : g.id === 'selling' ? 'Selling'
+                : g.id === 'network' ? 'Network'
+                : g.id === 'buying' ? 'Buying'
+                : g.id === 'trust' ? 'Trust'
+                : g.id === 'account' ? 'Account'
+                : g.label
+            return (
+              <button
+                key={g.id}
+                type="button"
+                className={`mp-pnav-mob-item${active ? ' is-active' : ''}`}
+                onClick={() => openGroup(g.id)}
+                aria-current={active ? 'page' : undefined}
+              >
+                <span className="mp-pnav-mob-ic" aria-hidden="true">
+                  <MpIcon name={g.icon || g.id} size={16} />
+                </span>
+                <span className="mp-pnav-mob-label">{short}</span>
+                {typeof g.count === 'number' && g.count > 0 && (
+                  <em className="mp-pnav-mob-badge">{g.count > 99 ? '99+' : g.count}</em>
+                )}
+              </button>
+            )
+          })}
+          <div className="mp-pnav-mob-more-wrap" ref={mobileMoreRef}>
+            <button
+              type="button"
+              className={`mp-pnav-mob-item mp-pnav-mob-more-btn${mobileMoreOpen || MOBILE_MORE.some(g => isNavActive(g.id)) ? ' is-active' : ''}`}
+              onClick={() => setMobileMoreOpen(v => !v)}
+              aria-expanded={mobileMoreOpen}
+              aria-haspopup="menu"
+            >
+              <span className="mp-pnav-mob-ic" aria-hidden="true"><MpIcon name="moreHorizontal" size={16} /></span>
+              <span className="mp-pnav-mob-label">More</span>
+            </button>
+            {mobileMoreOpen && (
+              <div className="mp-pnav-more-sheet" role="menu" aria-label="More sections">
+                <div className="mp-pnav-more-head">More sections</div>
+                {MOBILE_MORE.map(g => {
+                  const active = isNavActive(g.id)
+                  return (
+                    <button
+                      key={g.id}
+                      type="button"
+                      role="menuitem"
+                      className={`mp-pnav-more-item${active ? ' is-active' : ''}`}
+                      onClick={() => openGroup(g.id)}
+                    >
+                      <span className="mp-pnav-more-ic" aria-hidden="true">
+                        <MpIcon name={g.icon || g.id} size={18} />
+                      </span>
+                      <span className="mp-pnav-more-copy">
+                        <strong>{g.label}</strong>
+                        <span>{g.hint}</span>
+                      </span>
+                      {typeof g.count === 'number' && <em>{g.count}</em>}
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </nav>
+
       {/* ═══ STEP 4 — Premium marketplace hero (UI only) ═══ */}
       <section className="mp-hero-premium" aria-label="Profile identity">
         {/* Media stage: cover + overlays only (no empty content zone) */}
@@ -5814,76 +5886,6 @@ export default function Profile() {
         />
       )}
 
-      {/* Mobile: sticky profile section bottom nav (above app BottomNav) */}
-      <nav className="mp-pnav-mob" aria-label="Profile sections">
-        {MOBILE_PRIMARY.map(g => {
-          const active = isNavActive(g.id)
-          const short =
-            g.id === 'overview' ? 'Home'
-              : g.id === 'selling' ? 'Selling'
-              : g.id === 'network' ? 'Network'
-              : g.id === 'buying' ? 'Buying'
-              : g.id === 'trust' ? 'Trust'
-              : g.id === 'account' ? 'Account'
-              : g.label
-          return (
-            <button
-              key={g.id}
-              type="button"
-              className={`mp-pnav-mob-item${active ? ' is-active' : ''}`}
-              onClick={() => openGroup(g.id)}
-              aria-current={active ? 'page' : undefined}
-            >
-              <span className="mp-pnav-mob-ic" aria-hidden="true">
-                <MpIcon name={g.icon || g.id} size={18} />
-              </span>
-              <span className="mp-pnav-mob-label">{short}</span>
-              {typeof g.count === 'number' && g.count > 0 && (
-                <em className="mp-pnav-mob-badge">{g.count > 99 ? '99+' : g.count}</em>
-              )}
-            </button>
-          )
-        })}
-        <div className="mp-pnav-mob-more-wrap" ref={mobileMoreRef}>
-          <button
-            type="button"
-            className={`mp-pnav-mob-item mp-pnav-mob-more-btn${mobileMoreOpen || MOBILE_MORE.some(g => isNavActive(g.id)) ? ' is-active' : ''}`}
-            onClick={() => setMobileMoreOpen(v => !v)}
-            aria-expanded={mobileMoreOpen}
-            aria-haspopup="menu"
-          >
-            <span className="mp-pnav-mob-ic" aria-hidden="true"><MpIcon name="moreHorizontal" size={18} /></span>
-            <span className="mp-pnav-mob-label">More</span>
-          </button>
-          {mobileMoreOpen && (
-            <div className="mp-pnav-more-sheet" role="menu" aria-label="More sections">
-              <div className="mp-pnav-more-head">More sections</div>
-              {MOBILE_MORE.map(g => {
-                const active = isNavActive(g.id)
-                return (
-                  <button
-                    key={g.id}
-                    type="button"
-                    role="menuitem"
-                    className={`mp-pnav-more-item${active ? ' is-active' : ''}`}
-                    onClick={() => openGroup(g.id)}
-                  >
-                    <span className="mp-pnav-more-ic" aria-hidden="true">
-                      <MpIcon name={g.icon || g.id} size={18} />
-                    </span>
-                    <span className="mp-pnav-more-copy">
-                      <strong>{g.label}</strong>
-                      <span>{g.hint}</span>
-                    </span>
-                    {typeof g.count === 'number' && <em>{g.count}</em>}
-                  </button>
-                )
-              })}
-            </div>
-          )}
-        </div>
-      </nav>
-
       <BottomNav />
     </div>
   )
@@ -5952,10 +5954,10 @@ const css = `
     --mp-pad-r: max(12px, env(safe-area-inset-right, 0px));
     --mp-nav-w: 280px;
     --mp-topbar-h: 60px;
-    --mp-pnav-mob-h: 56px;
+    --mp-pnav-mob-h: 48px;
     --mp-app-nav-h: 62px;
-    /* App BottomNav + profile section nav + safe area (phone) */
-    --mp-bottom-clear: calc(132px + env(safe-area-inset-bottom, 0px));
+    /* App BottomNav only at bottom (+ safe area) — section chips live under top bar */
+    --mp-bottom-clear: calc(72px + env(safe-area-inset-bottom, 0px));
 
     width: 100%;
     min-width: 0;
@@ -8089,7 +8091,7 @@ const css = `
   .mp-inv-toast {
     position: fixed;
     left: 50%;
-    bottom: calc(var(--mp-pnav-mob-h, 56px) + var(--mp-app-nav-h, 62px) + 24px);
+    bottom: calc(var(--mp-app-nav-h, 62px) + env(safe-area-inset-bottom, 0px) + 20px);
     transform: translateX(-50%);
     z-index: 50;
   }
@@ -10737,96 +10739,104 @@ const css = `
     color: #fff;
   }
 
-  /* ── PHASE 5 — Mobile sticky section bottom nav ── */
+  /* ── PHASE 5 — Mobile profile section chips (under top bar, not above BottomNav) ── */
   .mp-pnav-mob {
-    position: fixed;
-    left: 0;
-    right: 0;
-    bottom: calc(var(--mp-app-nav-h) + env(safe-area-inset-bottom, 0px));
-    z-index: 90;
-    display: flex;
-    align-items: stretch;
-    justify-content: space-around;
-    gap: 0;
+    display: none; /* phone only */
+    position: sticky;
+    top: var(--mp-topbar-h);
+    z-index: 45;
+    width: 100%;
     min-height: var(--mp-pnav-mob-h);
-    padding: 4px 4px 6px;
-    background: rgba(255, 255, 255, 0.94);
-    backdrop-filter: blur(16px) saturate(1.15);
-    -webkit-backdrop-filter: blur(16px) saturate(1.15);
-    border-top: 1px solid rgba(15, 23, 42, 0.07);
-    box-shadow: 0 -4px 20px rgba(15, 23, 42, 0.05);
+    padding: 0;
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(14px) saturate(1.12);
+    -webkit-backdrop-filter: blur(14px) saturate(1.12);
+    border-bottom: 1px solid rgba(15, 23, 42, 0.07);
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
   }
+  .mp-pnav-mob-scroll {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 8px max(12px, env(safe-area-inset-left, 0px)) 10px max(12px, env(safe-area-inset-right, 0px));
+  }
+  .mp-pnav-mob-scroll::-webkit-scrollbar { display: none; }
   .mp-pnav-mob-item {
     position: relative;
-    flex: 1 1 0;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
+    flex: 0 0 auto;
+    display: inline-flex;
+    flex-direction: row;
     align-items: center;
     justify-content: center;
-    gap: 2px;
-    border: none;
-    background: transparent;
-    border-radius: 10px;
-    padding: 6px 2px;
+    gap: 6px;
+    border: 1px solid rgba(15, 23, 42, 0.08);
+    background: #f7faf8;
+    border-radius: 999px;
+    padding: 8px 12px;
+    min-height: 36px;
     cursor: pointer;
     color: var(--mp-muted);
     transition:
       background 140ms var(--mp-ease),
       color 140ms var(--mp-ease),
+      border-color 140ms var(--mp-ease),
+      box-shadow 140ms var(--mp-ease),
       transform 100ms var(--mp-ease);
   }
-  .mp-pnav-mob-item:hover { background: rgba(15, 157, 88, 0.06); }
-  .mp-pnav-mob-item:active { transform: scale(0.94); }
+  .mp-pnav-mob-item:hover { background: rgba(15, 157, 88, 0.08); }
+  .mp-pnav-mob-item:active { transform: scale(0.97); }
   .mp-pnav-mob-item:focus-visible {
     outline: 2px solid var(--mp-green);
     outline-offset: 1px;
   }
   .mp-pnav-mob-item.is-active {
     color: var(--mp-green-d);
-    background: rgba(15, 157, 88, 0.1);
+    background: rgba(15, 157, 88, 0.14);
+    border-color: rgba(15, 157, 88, 0.28);
+    box-shadow: 0 2px 8px rgba(15, 157, 88, 0.12);
+    font-weight: 700;
   }
   .mp-pnav-mob-ic {
-    font-size: 1.05rem;
+    display: flex;
     line-height: 1;
+    opacity: 0.9;
   }
   .mp-pnav-mob-label {
-    font-size: 0.58rem;
+    font-size: 0.72rem;
     font-weight: 700;
     letter-spacing: 0.01em;
     white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 100%;
   }
   .mp-pnav-mob-badge {
-    position: absolute;
-    top: 2px;
-    right: calc(50% - 18px);
+    position: static;
     font-style: normal;
-    font-size: 0.55rem;
+    font-size: 0.6rem;
     font-weight: 800;
-    min-width: 14px;
-    height: 14px;
-    padding: 0 3px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
     border-radius: 999px;
     background: var(--mp-green);
     color: #fff;
-    display: grid;
-    place-items: center;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     line-height: 1;
   }
   .mp-pnav-mob-more-wrap {
     position: relative;
-    flex: 1 1 0;
-    min-width: 0;
+    flex: 0 0 auto;
     display: flex;
   }
-  .mp-pnav-mob-more-btn { width: 100%; }
+  .mp-pnav-mob-more-btn { width: auto; }
   .mp-pnav-more-sheet {
     position: absolute;
-    bottom: calc(100% + 8px);
-    right: 4px;
+    top: calc(100% + 8px);
+    right: 0;
+    bottom: auto;
     width: min(280px, calc(100vw - 24px));
     background: #fff;
     border: 1px solid rgba(15, 23, 42, 0.08);
@@ -10940,7 +10950,7 @@ const css = `
   .mp-topbar {
     position: sticky;
     top: 0;
-    z-index: 40;
+    z-index: 50;
     width: 100%;
     background: rgba(255, 255, 255, 0.88);
     backdrop-filter: blur(18px) saturate(1.2);
@@ -15166,8 +15176,14 @@ const css = `
     .mp-page {
       --mp-pad-x: max(14px, env(safe-area-inset-left, 0px));
       --mp-pad-r: max(14px, env(safe-area-inset-right, 0px));
-      --mp-bottom-clear: calc(138px + env(safe-area-inset-bottom, 0px));
+      /* Only app BottomNav — section chips stick under top bar */
+      --mp-bottom-clear: calc(76px + env(safe-area-inset-bottom, 0px));
       padding-bottom: var(--mp-bottom-clear);
+    }
+
+    /* Profile section chips under top bar */
+    .mp-pnav-mob {
+      display: block;
     }
 
     /* Top bar — icon-first */
@@ -15499,13 +15515,25 @@ const css = `
       min-height: 56px;
       padding: 10px 12px;
     }
-    .mp-inv-toolbar {
-      top: calc(var(--mp-topbar-h) + 4px);
+    /* Do not sticky the full filter stack — it covered listing cards */
+    .mp-inv-toolbar,
+    .mp-inv-toolbar.mp-sold-toolbar {
+      position: relative;
+      top: auto;
+      z-index: 1;
       padding: 10px;
       border-radius: 16px;
       gap: 8px;
+      margin-bottom: 4px;
+      box-shadow:
+        0 1px 2px rgba(15, 23, 42, 0.04),
+        0 6px 16px rgba(15, 23, 42, 0.05);
     }
     .mp-inv-search { width: 100%; }
+    .mp-inv-meta {
+      margin-top: 4px;
+      margin-bottom: 8px;
+    }
     .mp-inv-filters {
       display: flex;
       flex-wrap: nowrap;
@@ -15532,14 +15560,26 @@ const css = `
       display: none;
     }
     .mp-inv-grid {
+      position: relative;
+      z-index: 0;
       gap: 10px;
+      padding-top: 4px;
+      scroll-margin-top: calc(var(--mp-topbar-h) + var(--mp-pnav-mob-h) + 12px);
     }
     .mp-inv-grid--grid {
       grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
     }
     .mp-inv-card {
+      position: relative;
+      z-index: 0;
       border-radius: 14px;
       min-width: 0;
+    }
+    /* Bulk bar above app BottomNav only */
+    .mp-inv-bulk {
+      position: sticky;
+      bottom: calc(var(--mp-app-nav-h) + env(safe-area-inset-bottom, 0px) + 8px);
+      z-index: 15;
     }
     .mp-inv-card-title {
       font-size: 0.8rem;
@@ -15632,34 +15672,15 @@ const css = `
       min-height: 64px;
     }
 
-    /* Mobile section nav — clearer active state */
-    .mp-pnav-mob {
-      padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px) * 0);
-      gap: 2px;
-      border-top: 1px solid rgba(15, 23, 42, 0.08);
-      box-shadow: 0 -6px 24px rgba(15, 23, 42, 0.06);
-    }
-    .mp-pnav-mob-item {
-      min-height: 48px;
-      padding: 6px 2px 8px;
-      border-radius: 12px;
-    }
-    .mp-pnav-mob-label {
-      font-size: 0.6rem;
-      font-weight: 700;
-    }
-    .mp-pnav-mob-item.is-active {
-      background: rgba(15, 157, 88, 0.12);
-      color: var(--mp-green-d);
-    }
     .mp-pnav-more-sheet {
       width: min(300px, calc(100vw - 20px));
       border-radius: 16px;
       max-height: min(60vh, 420px);
       overflow-y: auto;
+      z-index: 50;
     }
     .mp-pnav-more-item {
-      min-height: 52px;
+      min-height: 48px;
       padding: 10px 12px;
     }
 
