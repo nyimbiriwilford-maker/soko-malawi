@@ -26,10 +26,12 @@ export function isListingFeatured(listing) {
 /**
  * Phase 3.2 — fair featured rotation (client-side, O(n log n), no extra network).
  *
- * - Rotates order on a time bucket so every active featured listing gets exposure.
- * - Round-robins across sellers so one seller cannot dominate the top of the list.
- * - Per-seller primary cap (default 2) surfaces more sellers first; overflow still
- *   appears after a full fair pass.
+ * Equal product exposure:
+ * - Every active featured listing appears exactly once per cycle.
+ * - Round-robins across sellers so one seller cannot monopolize consecutive slots.
+ * - Within each seller, listing order rotates on a time bucket.
+ * - Optional maxPerSeller only reorders priority; default Infinity includes all
+ *   products in one fair pass (no product left out of the rotation).
  *
  * @param {Array} listings  Active featured rows
  * @param {{ intervalMs?: number, maxPerSeller?: number, now?: number }} [opts]
@@ -38,7 +40,8 @@ export function isListingFeatured(listing) {
 export function rotateFeaturedFairly(listings, opts = {}) {
   const {
     intervalMs = 30_000,
-    maxPerSeller = 2,
+    // Default: include every product — fair for all featured listings
+    maxPerSeller = Number.POSITIVE_INFINITY,
     now = Date.now(),
   } = opts
 
@@ -79,19 +82,24 @@ export function rotateFeaturedFairly(listings, opts = {}) {
     (a, b) => hashKey(`seller:${a}`) - hashKey(`seller:${b}`),
   )
 
-  // Primary = up to maxPerSeller per seller (fair top slots); overflow after
+  // Primary = up to maxPerSeller per seller; remainder after a full fair pass.
+  // Infinity max → every listing in primary (true equal product inclusion).
   const primaryQueues = []
   const overflowQueues = []
+  const cap = Number.isFinite(maxPerSeller) ? Math.max(1, Math.floor(maxPerSeller)) : Infinity
   for (const sid of sellerIds) {
     const items = bySeller.get(sid) || []
-    const cap = Math.max(1, maxPerSeller)
-    primaryQueues.push(items.slice(0, cap))
-    if (items.length > cap) overflowQueues.push(items.slice(cap))
+    if (!Number.isFinite(cap) || items.length <= cap) {
+      primaryQueues.push(items.slice())
+    } else {
+      primaryQueues.push(items.slice(0, cap))
+      overflowQueues.push(items.slice(cap))
+    }
   }
 
   const roundRobin = (queues) => {
     const out = []
-    const qs = queues.map(q => q.slice())
+    const qs = queues.map(q => q.slice()).filter(q => q.length)
     let progressed = true
     let guard = 0
     while (progressed && guard < listings.length + 4) {
@@ -107,7 +115,16 @@ export function rotateFeaturedFairly(listings, opts = {}) {
     return out
   }
 
-  return [...roundRobin(primaryQueues), ...roundRobin(overflowQueues)]
+  const ordered = [...roundRobin(primaryQueues), ...roundRobin(overflowQueues)]
+
+  // Safety: append any listing missing from rotation (should never happen)
+  if (ordered.length < listings.length) {
+    const seen = new Set(ordered.map(l => l.id))
+    for (const l of listings) {
+      if (l?.id != null && !seen.has(l.id)) ordered.push(l)
+    }
+  }
+  return ordered
 }
 
 export function flashTimeLeft(expiresAt) {

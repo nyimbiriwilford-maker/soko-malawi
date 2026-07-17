@@ -999,8 +999,9 @@ function RevenueHero({ navigate, listings }) {
     [featured],
   )
 
-  const [page, setPage]     = useState(0)
-  const [mobileIdx, setMobileIdx] = useState(0)
+  // Cursor indexes into the full featured list — every product gets equal turns.
+  // Desktop uses a sliding window of up to 3 starting at `cursor`; mobile highlights `cursor`.
+  const [cursor, setCursor] = useState(0)
   const [paused, setPaused] = useState(false)
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
   const [visible, setVisible] = useState(false)
@@ -1008,35 +1009,33 @@ function RevenueHero({ navigate, listings }) {
   const mobileRailRef = useRef(null)
   const touchStartX = useRef(null)
   const perPage = 3
-  const pageCount = Math.max(1, Math.ceil(featured.length / perPage) || 1)
-  const mobileCount = featured.length
+  const n = featured.length
+  const mobileCount = n
+  // One step per product so a full cycle shows every listing equally often
+  const stepCount = Math.max(1, n)
   const ROTATE_MS = 4200
 
-  // Clamp indices when the pool shrinks (avoids empty slots / crashes)
+  // Clamp cursor when the pool changes; restart so nobody is stuck off-screen
   useEffect(() => {
-    setPage(p => (pageCount < 1 ? 0 : Math.min(p, pageCount - 1)))
-    setMobileIdx(i => (mobileCount < 1 ? 0 : Math.min(i, mobileCount - 1)))
-  }, [pageCount, mobileCount, featuredSetKey])
+    setCursor(0)
+  }, [featuredSetKey])
 
-  // Desktop: page through groups of 3 until every product has been shown
   useEffect(() => {
-    if (paused || pageCount < 2) return undefined
-    const t = setInterval(() => setPage(p => (p + 1) % pageCount), ROTATE_MS)
-    return () => clearInterval(t)
-  }, [paused, pageCount])
+    setCursor(c => (n < 1 ? 0 : ((c % n) + n) % n))
+  }, [n])
 
-  // Mobile: advance one product at a time through the full featured list
+  // Fair auto-rotate: advance one product index at a time (desktop + mobile)
   useEffect(() => {
-    if (paused || mobileCount < 2) return undefined
-    const t = setInterval(() => setMobileIdx(i => (i + 1) % mobileCount), ROTATE_MS)
+    if (paused || n < 2) return undefined
+    const t = setInterval(() => setCursor(c => (c + 1) % n), ROTATE_MS)
     return () => clearInterval(t)
-  }, [paused, mobileCount])
+  }, [paused, n])
 
   // Smooth-scroll mobile rail to the active product
   useEffect(() => {
     const rail = mobileRailRef.current
-    if (!rail || mobileCount < 1) return
-    const card = rail.children[mobileIdx]
+    if (!rail || n < 1) return
+    const card = rail.children[cursor]
     if (!card || typeof card.offsetLeft !== 'number') return
     try {
       const left = card.offsetLeft - (rail.clientWidth - card.clientWidth) / 2
@@ -1044,7 +1043,7 @@ function RevenueHero({ navigate, listings }) {
     } catch {
       /* ignore scroll errors on hidden/detached rails */
     }
-  }, [mobileIdx, mobileCount])
+  }, [cursor, n])
 
   // Entrance animation observer
   useEffect(() => {
@@ -1063,15 +1062,15 @@ function RevenueHero({ navigate, listings }) {
     })
   }
 
-  function goTo(i) { setPage(((i % pageCount) + pageCount) % pageCount) }
-  function next() { setPage(p => (p + 1) % pageCount) }
-  function prev() { setPage(p => ((p - 1) + pageCount) % pageCount) }
-  function goToMobile(i) {
-    if (mobileCount < 1) return
-    setMobileIdx(((i % mobileCount) + mobileCount) % mobileCount)
+  function goTo(i) {
+    if (n < 1) return
+    setCursor(((i % n) + n) % n)
   }
-  function nextMobile() { setMobileIdx(i => (i + 1) % Math.max(1, mobileCount)) }
-  function prevMobile() { setMobileIdx(i => ((i - 1) + Math.max(1, mobileCount)) % Math.max(1, mobileCount)) }
+  function next() { if (n > 0) setCursor(c => (c + 1) % n) }
+  function prev() { if (n > 0) setCursor(c => ((c - 1) + n) % n) }
+  function goToMobile(i) { goTo(i) }
+  function nextMobile() { next() }
+  function prevMobile() { prev() }
 
   function onMobileTouchStart(e) {
     touchStartX.current = e.touches?.[0]?.clientX ?? null
@@ -1092,7 +1091,14 @@ function RevenueHero({ navigate, listings }) {
     setTimeout(() => setPaused(false), 2800)
   }
 
-  const visibleCards = featured.slice(page * perPage, page * perPage + perPage)
+  // Desktop: sliding window of up to 3 products, advanced by 1 each tick
+  // so every listing appears the same number of times per full cycle.
+  const windowSize = Math.min(perPage, Math.max(1, n))
+  const visibleCards = n < 1
+    ? []
+    : Array.from({ length: windowSize }, (_, i) => featured[(cursor + i) % n])
+  const mobileIdx = n < 1 ? 0 : cursor
+  const pageCount = stepCount
 
   /** One standard card design for all featured products (mobile + desktop). */
   function renderHeroCard(item, idx, { mobile = false } = {}) {
@@ -1432,30 +1438,45 @@ function RevenueHero({ navigate, listings }) {
                 >›</button>
               )}
 
-              <div style={{ display: 'grid', gridTemplateColumns: `repeat(${perPage}, 1fr)`, gap: 16 }}>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: `repeat(${windowSize}, 1fr)`,
+                gap: 16,
+              }}>
                 {visibleCards.map((item, idx) => renderHeroCard(item, idx))}
-                {visibleCards.length < perPage && Array.from({ length: perPage - visibleCards.length }).map((_, i) => <div key={`pad-${i}`} />)}
               </div>
 
-              {pageCount > 1 && (
-                <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginTop: 14 }}>
-                  {Array.from({ length: pageCount }).map((_, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => goTo(i)}
-                      aria-label={`Featured page ${i + 1}`}
-                      style={{
-                        width: i === page ? 22 : 6, height: 6, borderRadius: 50, border: 'none', padding: 0,
-                        background: i === page
-                          ? `linear-gradient(90deg, ${T.amber}, #ffce45)`
-                          : 'rgba(255,255,255,0.22)',
-                        cursor: 'pointer',
-                        transition: 'all 0.35s cubic-bezier(0.34,1.2,0.64,1)',
-                        boxShadow: i === page ? '0 0 8px rgba(249,171,0,0.5)' : 'none',
-                      }}
-                    />
-                  ))}
+              {n > 1 && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  gap: 10, marginTop: 14, flexWrap: 'wrap',
+                }}>
+                  <span style={{
+                    fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.55)',
+                    fontVariantNumeric: 'tabular-nums',
+                  }}>
+                    {cursor + 1} / {n} · equal rotation
+                  </span>
+                  {n <= 12 && (
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: 5 }}>
+                      {featured.map((item, i) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => goTo(i)}
+                          aria-label={`Featured product ${i + 1} of ${n}`}
+                          style={{
+                            width: i === cursor ? 18 : 6, height: 6, borderRadius: 50,
+                            border: 'none', padding: 0, cursor: 'pointer',
+                            background: i === cursor
+                              ? `linear-gradient(90deg, ${T.amber}, #ffce45)`
+                              : 'rgba(255,255,255,0.22)',
+                            transition: 'all 0.3s ease',
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </>
@@ -2156,11 +2177,11 @@ function FeaturedListingsRow({ listings, navigate, loading, stories, storiesLoad
                     <SkeletonListingCard />
                   </div>
                 ))
-                : featured.slice(0, 10).map((l, i) => (
+                : featured.map((l, i) => (
                   <div key={l.id} className="soko-featured-card-wrap" style={{ flexShrink: 0, width: 175, scrollSnapAlign: 'start' }}>
                     <PremiumListingCard
                       listing={l}
-                      delay={i * 0.04}
+                      delay={Math.min(i, 12) * 0.03}
                       onClick={() => navigate('/listing/' + l.id)}
                     />
                   </div>
@@ -3747,12 +3768,15 @@ export default function Home() {
   const [featuredListings, setFeaturedListings] = useState([])
   const [loading,    setLoading]    = useState(true)
 
-  // Phase 3.2 — re-rotate featured order every 30s (no network; small n ≤ 24)
+  // Phase 3.2 — re-rotate featured order every 30s (equal product inclusion)
   useEffect(() => {
     const t = setInterval(() => {
       setFeaturedListings(prev => {
         if (!prev?.length) return prev
-        return rotateFeaturedFairly(prev, { intervalMs: 30_000, maxPerSeller: 2 })
+        return rotateFeaturedFairly(prev, {
+          intervalMs: 30_000,
+          maxPerSeller: Number.POSITIVE_INFINITY,
+        })
       })
     }, 30_000)
     return () => clearInterval(t)
@@ -3910,11 +3934,11 @@ export default function Home() {
       enrichListingRows(recentRows || []),
     ])
 
-    // Featured section: dedicated query only + fair multi-seller rotation (Phase 3.2)
+    // Featured section: dedicated query + equal product rotation (Phase 3.2)
     setFeaturedListings(
       rotateFeaturedFairly(
         featuredEnriched.filter(l => isListingFeatured(l)),
-        { intervalMs: 30_000, maxPerSeller: 2 },
+        { intervalMs: 30_000, maxPerSeller: Number.POSITIVE_INFINITY },
       ),
     )
 
