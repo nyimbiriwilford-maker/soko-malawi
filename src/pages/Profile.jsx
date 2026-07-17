@@ -2612,7 +2612,8 @@ export default function Profile() {
       {/* Branded top bar — full width on all devices */}
       <header className={`mp-topbar${mobileSearchOpen ? ' is-search-open' : ''}${mobileSectionMenuOpen ? ' is-menu-open' : ''}`}>
         <div className="mp-topbar-inner">
-          <div className="mp-brand-block">
+          {/* Desktop brand */}
+          <div className="mp-brand-block mp-brand-desk">
             <button
               type="button"
               className="mp-wordmark-btn"
@@ -2630,31 +2631,38 @@ export default function Profile() {
               </h1>
               <p className="mp-topbar-kicker">Marketplace control center</p>
             </div>
+          </div>
 
-            {/* Mobile only: section dropdown in header */}
-            <div className="mp-mob-section-dd" ref={mobileSectionMenuRef}>
-              <button
-                type="button"
-                className={`mp-mob-section-btn${mobileSectionMenuOpen ? ' is-open' : ''}`}
-                onClick={() => {
-                  setMobileSectionMenuOpen(v => !v)
-                  setMobileSearchOpen(false)
-                }}
-                aria-expanded={mobileSectionMenuOpen}
-                aria-haspopup="menu"
-                aria-label="Dashboard section"
-              >
-                <span className="mp-mob-section-ic" aria-hidden="true">
-                  <MpIcon name={activeNav.icon || activeNav.id || 'home'} size={15} />
-                </span>
-                <span className="mp-mob-section-label">{activeNav.label}</span>
-                <span className="mp-mob-section-chev" aria-hidden="true">
-                  <MpIcon name="chevronRight" size={14} />
-                </span>
-              </button>
-              {mobileSectionMenuOpen && (
+          {/* Mobile: clean section switcher (no wordmark) */}
+          <div className="mp-mob-section-dd" ref={mobileSectionMenuRef}>
+            <button
+              type="button"
+              className={`mp-mob-section-btn${mobileSectionMenuOpen ? ' is-open' : ''}`}
+              onClick={() => {
+                setMobileSectionMenuOpen(v => !v)
+                setMobileSearchOpen(false)
+              }}
+              aria-expanded={mobileSectionMenuOpen}
+              aria-haspopup="menu"
+              aria-label="Dashboard section"
+            >
+              <MpIcon name={activeNav.icon || activeNav.id || 'home'} size={18} />
+              <span className="mp-mob-section-label">{activeNav.label}</span>
+              <span className={`mp-mob-section-chev${mobileSectionMenuOpen ? ' is-open' : ''}`} aria-hidden="true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </span>
+            </button>
+            {mobileSectionMenuOpen && (
+              <>
+                <button
+                  type="button"
+                  className="mp-mob-section-scrim"
+                  aria-label="Close menu"
+                  onClick={() => setMobileSectionMenuOpen(false)}
+                />
                 <div className="mp-mob-section-menu" role="menu" aria-label="Profile sections">
-                  <div className="mp-mob-section-menu-head">Dashboard</div>
                   {NAV_GROUPS.map(g => {
                     const active = isNavActive(g.id)
                     return (
@@ -2666,7 +2674,7 @@ export default function Profile() {
                         onClick={() => openGroup(g.id)}
                       >
                         <span className="mp-mob-section-item-ic" aria-hidden="true">
-                          <MpIcon name={g.icon || g.id} size={17} />
+                          <MpIcon name={g.icon || g.id} size={18} />
                         </span>
                         <span className="mp-mob-section-item-copy">
                           <strong>{g.label}</strong>
@@ -2677,18 +2685,18 @@ export default function Profile() {
                         )}
                         {active && (
                           <span className="mp-mob-section-check" aria-hidden="true">
-                            <MpIcon name="check" size={14} />
+                            <MpIcon name="check" size={16} />
                           </span>
                         )}
                       </button>
                     )
                   })}
                 </div>
-              )}
-            </div>
+              </>
+            )}
           </div>
+
           <div className="mp-topbar-actions">
-            {/* Mobile only: search icon — expands inventory search when selling */}
             <button
               type="button"
               className={`mp-top-btn mp-top-btn-search${mobileSearchOpen ? ' is-active' : ''}`}
@@ -2718,7 +2726,7 @@ export default function Profile() {
               onClick={() => navigate('/profile/' + user.id)}
               title="Public profile"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
                 <circle cx="12" cy="12" r="3" />
               </svg>
@@ -2730,7 +2738,7 @@ export default function Profile() {
               onClick={confirmSignOut}
               title="Sign out"
             >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
                 <polyline points="16 17 21 12 16 7" />
                 <line x1="21" y1="12" x2="9" y2="12" />
@@ -2740,7 +2748,7 @@ export default function Profile() {
           </div>
         </div>
 
-        {/* Mobile only: search panel revealed by header search icon */}
+        {/* Mobile only: search panel */}
         {mobileSearchOpen && (
           <div className="mp-mob-search-panel" role="search" aria-label="Search listings">
             <label className="mp-inv-search mp-mob-search-field">
@@ -6070,7 +6078,7 @@ const css = `
     --mp-pad-x: max(12px, env(safe-area-inset-left, 0px));
     --mp-pad-r: max(12px, env(safe-area-inset-right, 0px));
     --mp-nav-w: 280px;
-    --mp-topbar-h: 60px;
+    --mp-topbar-h: 52px;
     --mp-pnav-mob-h: 48px;
     --mp-app-nav-h: 62px;
     /* App BottomNav only at bottom (+ safe area) — section chips live under top bar */
@@ -10856,55 +10864,35 @@ const css = `
     color: #fff;
   }
 
-  /* ── PHASE 5 — Mobile header section dropdown + search (phone only) ── */
+  /* ── PHASE 5 — Mobile header section dropdown + search ── */
+  .mp-brand-desk { display: flex; }
   .mp-mob-section-dd {
     display: none;
     position: relative;
     min-width: 0;
     flex: 1 1 auto;
+    z-index: 60;
   }
   .mp-mob-section-btn {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    width: 100%;
     max-width: 100%;
     min-height: 40px;
-    padding: 6px 10px 6px 6px;
-    border-radius: 12px;
-    border: 1px solid rgba(15, 23, 42, 0.08);
-    background: #f4f7f5;
+    padding: 8px 10px 8px 4px;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
     color: var(--mp-ink);
     font: inherit;
-    font-size: 0.88rem;
-    font-weight: 800;
-    letter-spacing: -0.02em;
+    font-size: 1.05rem;
+    font-weight: 700;
+    letter-spacing: -0.03em;
     cursor: pointer;
-    transition:
-      background 140ms var(--mp-ease),
-      border-color 140ms var(--mp-ease),
-      box-shadow 140ms var(--mp-ease);
   }
-  .mp-mob-section-btn:active { transform: scale(0.99); }
-  .mp-mob-section-btn.is-open {
-    border-color: rgba(15, 157, 88, 0.35);
-    background: #fff;
-    box-shadow: 0 0 0 3px rgba(15, 157, 88, 0.1);
-  }
-  .mp-mob-section-ic {
-    width: 28px;
-    height: 28px;
-    border-radius: 9px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    color: #fff;
-    background: linear-gradient(145deg, #22a05e, #0d4a2c);
-    box-shadow: 0 2px 6px rgba(13, 74, 44, 0.25);
-  }
+  .mp-mob-section-btn:active { opacity: 0.75; }
+  .mp-mob-section-btn.is-open { color: var(--mp-green); }
   .mp-mob-section-label {
-    flex: 1;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -10913,77 +10901,72 @@ const css = `
   }
   .mp-mob-section-chev {
     display: inline-flex;
-    transform: rotate(90deg);
-    opacity: 0.55;
-    transition: transform 180ms var(--mp-ease);
     flex-shrink: 0;
-    color: var(--mp-muted);
+    color: #9ca3af;
+    transition: transform 0.18s ease, color 0.15s ease;
   }
+  .mp-mob-section-chev.is-open,
   .mp-mob-section-btn.is-open .mp-mob-section-chev {
-    transform: rotate(-90deg);
-    opacity: 0.9;
-    color: var(--mp-green-d);
+    transform: rotate(180deg);
+    color: var(--mp-green);
+  }
+  .mp-mob-section-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 55;
+    border: none;
+    margin: 0;
+    padding: 0;
+    background: rgba(15, 23, 42, 0.2);
+    cursor: pointer;
   }
   .mp-mob-section-menu {
     position: absolute;
-    top: calc(100% + 10px);
+    top: calc(100% + 8px);
     left: 0;
-    right: 0;
-    width: min(320px, calc(100vw - 28px));
-    max-height: min(72vh, 460px);
+    width: min(300px, calc(100vw - 24px));
+    max-height: min(70vh, 420px);
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     background: #fff;
     border: 1px solid rgba(15, 23, 42, 0.08);
-    border-radius: 18px;
-    box-shadow:
-      0 16px 40px -12px rgba(15, 23, 42, 0.22),
-      0 4px 12px rgba(15, 23, 42, 0.06);
-    padding: 8px;
+    border-radius: 14px;
+    box-shadow: 0 12px 36px rgba(15, 23, 42, 0.12);
+    padding: 6px;
     z-index: 70;
-    animation: mp-fade-in 150ms var(--mp-ease) both;
-  }
-  .mp-mob-section-menu-head {
-    padding: 10px 12px 8px;
-    font-size: 0.68rem;
-    font-weight: 800;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--mp-muted);
   }
   .mp-mob-section-item {
     width: 100%;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 12px;
     text-align: left;
     border: none;
     background: transparent;
-    border-radius: 12px;
-    padding: 10px 10px;
+    border-radius: 10px;
+    padding: 11px 10px;
     cursor: pointer;
     font: inherit;
     color: inherit;
-    transition: background 140ms var(--mp-ease);
   }
-  .mp-mob-section-item:hover { background: rgba(15, 157, 88, 0.07); }
+  .mp-mob-section-item:hover { background: #f4f5f4; }
   .mp-mob-section-item.is-active {
-    background: rgba(15, 157, 88, 0.11);
+    background: #f3f4f6;
   }
   .mp-mob-section-item-ic {
     width: 36px;
     height: 36px;
-    border-radius: 11px;
+    border-radius: 10px;
     display: flex;
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
-    background: #f0f5f2;
-    color: var(--mp-green-d);
+    background: #f3f4f6;
+    color: #374151;
   }
   .mp-mob-section-item.is-active .mp-mob-section-item-ic {
-    background: linear-gradient(145deg, #22a05e, #0d4a2c);
-    color: #fff;
+    background: #e8f5ee;
+    color: var(--mp-green);
   }
   .mp-mob-section-item-copy {
     flex: 1;
@@ -10993,14 +10976,13 @@ const css = `
     gap: 1px;
   }
   .mp-mob-section-item-copy strong {
-    font-size: 0.88rem;
-    font-weight: 800;
+    font-size: 0.9rem;
+    font-weight: 700;
     color: var(--mp-ink);
-    letter-spacing: -0.01em;
   }
   .mp-mob-section-item-copy span {
     font-size: 0.7rem;
-    color: var(--mp-muted);
+    color: #9ca3af;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -11008,15 +10990,15 @@ const css = `
   .mp-mob-section-item-count {
     font-style: normal;
     font-size: 0.7rem;
-    font-weight: 800;
-    color: var(--mp-green-d);
-    background: #e6f7ee;
+    font-weight: 700;
+    color: #6b7280;
+    background: #f3f4f6;
     border-radius: 999px;
-    padding: 3px 8px;
+    padding: 2px 8px;
   }
   .mp-mob-section-check {
     display: inline-flex;
-    color: var(--mp-green-d);
+    color: var(--mp-green);
     flex-shrink: 0;
   }
   .mp-top-btn-search {
@@ -11147,22 +11129,12 @@ const css = `
     top: 0;
     z-index: 50;
     width: 100%;
-    background: rgba(255, 255, 255, 0.92);
-    backdrop-filter: blur(20px) saturate(1.25);
-    -webkit-backdrop-filter: blur(20px) saturate(1.25);
-    border-bottom: 1px solid rgba(15, 23, 42, 0.06);
-    box-shadow:
-      0 1px 0 rgba(249, 171, 0, 0.18),
-      0 6px 20px rgba(6, 61, 35, 0.04);
+    background: #fff;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+    box-shadow: 0 1px 0 rgba(15, 23, 42, 0.02);
+    overflow: visible;
   }
-  .mp-topbar::before {
-    content: '';
-    position: absolute;
-    left: 0; right: 0; top: 0;
-    height: 2px;
-    background: linear-gradient(90deg, var(--mp-amber), var(--mp-green) 48%, var(--mp-green-d));
-    pointer-events: none;
-  }
+  .mp-topbar::before { display: none; }
   .mp-topbar-inner {
     position: relative;
     width: 100%;
@@ -11172,6 +11144,7 @@ const css = `
     gap: 12px;
     padding: 10px var(--mp-pad-r) 11px var(--mp-pad-x);
     min-height: var(--mp-topbar-h);
+    overflow: visible;
   }
   .mp-brand-block {
     display: flex;
@@ -15386,32 +15359,36 @@ const css = `
       padding-bottom: var(--mp-bottom-clear);
     }
 
-    /* Top bar — smart compact header (mobile) */
+    /* Top bar — clean mobile header (no wordmark) */
     .mp-topbar {
-      background: rgba(255, 255, 255, 0.97);
+      background: #fff;
+      overflow: visible;
     }
-    .mp-topbar-kicker { display: none; }
-    .mp-topbar-titles { display: none; }
-    .mp-topbar-divider { display: none; }
+    .mp-brand-desk { display: none !important; }
+    .mp-topbar-kicker,
+    .mp-topbar-titles,
+    .mp-topbar-divider,
+    .mp-wordmark-btn,
     .mp-back-home { display: none !important; }
-    .mp-wordmark-btn {
-      display: inline-flex;
-      flex-shrink: 0;
-      font-size: 0.95rem;
-      letter-spacing: -0.03em;
-      padding: 0;
-      gap: 0;
+
+    .mp-mob-section-dd {
+      display: block;
+      flex: 1 1 auto;
+      min-width: 0;
+      max-width: calc(100% - 132px);
     }
-    .mp-mob-section-dd { display: block; }
+    .mp-mob-section-btn {
+      max-width: 100%;
+    }
+
     .mp-top-btn-search {
       display: inline-flex !important;
       align-items: center;
       justify-content: center;
     }
     .mp-top-btn-search.is-active {
-      background: rgba(15, 157, 88, 0.12);
-      color: var(--mp-green-d);
-      border-color: rgba(15, 157, 88, 0.28);
+      color: var(--mp-green);
+      background: #f3f4f6;
     }
     .mp-top-btn span { display: none; }
     .mp-top-btn {
@@ -15420,59 +15397,58 @@ const css = `
       height: 40px;
       min-width: 40px;
       min-height: 40px;
-      border-radius: 12px;
-      border: 1px solid rgba(15, 23, 42, 0.06);
-      background: #f6f8f7;
-      color: var(--mp-ink);
+      border-radius: 10px;
+      border: none;
+      background: transparent;
+      color: #6b7280;
     }
-    .mp-top-btn:hover {
-      background: #eef3f0;
-    }
+    .mp-top-btn:hover { background: #f3f4f6; color: #111827; }
     .mp-top-btn-out {
+      color: #6b7280;
+      background: transparent;
+    }
+    .mp-top-btn-out:hover {
       color: #b91c1c;
       background: #fef2f2;
-      border-color: rgba(185, 28, 28, 0.12);
     }
+
     .mp-topbar-inner {
-      gap: 10px;
-      padding-top: 10px;
-      padding-bottom: 10px;
-      min-height: 56px;
-      align-items: center;
-    }
-    .mp-brand-block {
-      flex: 1 1 auto;
-      min-width: 0;
-      gap: 10px;
+      gap: 8px;
+      padding: 8px var(--mp-pad-r) 8px var(--mp-pad-x);
+      min-height: 52px;
       align-items: center;
     }
     .mp-topbar-actions {
       flex-shrink: 0;
       display: flex;
       align-items: center;
-      gap: 6px;
-    }
-    .mp-topbar.is-search-open {
-      box-shadow:
-        0 1px 0 rgba(249, 171, 0, 0.15),
-        0 10px 28px rgba(6, 61, 35, 0.07);
+      gap: 2px;
     }
 
-    /* Search panel under header */
+    /* Dropdown: full-width under header edge, not clipped */
+    .mp-mob-section-menu {
+      position: fixed;
+      top: calc(var(--mp-topbar-h) + 4px);
+      left: max(12px, env(safe-area-inset-left, 0px));
+      right: auto;
+      width: min(300px, calc(100vw - 24px));
+      z-index: 80;
+    }
+
+    /* Search panel */
     .mp-mob-search-panel {
       display: flex;
       flex-direction: column;
       gap: 10px;
-      padding: 10px var(--mp-pad-r) 14px var(--mp-pad-x);
+      padding: 10px var(--mp-pad-r) 12px var(--mp-pad-x);
       border-top: 1px solid rgba(15, 23, 42, 0.06);
-      background: linear-gradient(180deg, #fafcfb 0%, #f3f7f5 100%);
-      animation: mp-fade-in 160ms var(--mp-ease) both;
+      background: #fff;
     }
     .mp-mob-search-panel .mp-inv-search-input {
-      min-height: 44px;
-      border-radius: 12px;
-      background: #fff;
-      border: 1.5px solid rgba(15, 23, 42, 0.08);
+      min-height: 42px;
+      border-radius: 10px;
+      background: #f9fafb;
+      border: 1px solid rgba(15, 23, 42, 0.08);
       font-size: 0.9rem;
     }
     .mp-mob-search-field { width: 100%; }
