@@ -1,4 +1,4 @@
-/**
+﻿/**
  * App-level WebRTC host for chat-originated calls.
  * Stays mounted while a call is active so media survives route changes.
  */
@@ -67,16 +67,15 @@ export default function PersistentCallShell() {
   })
 
   // Expose startCall to chat header buttons
+  const chatCallActionsRefLocal = useRef({ startCall, callState, hangUp, formatTime })
+  chatCallActionsRefLocal.current = { startCall, callState, hangUp, formatTime }
   useEffect(() => {
-    setChatCallActions?.({ startCall, callState, hangUp, formatTime })
+    setChatCallActions?.(chatCallActionsRefLocal.current)
     if (chat) {
       stickyRef.current = chat
       if (boundChatRef) boundChatRef.current = chat
     }
-    return () => {
-      // keep actions while sticky mid-call
-    }
-  }, [chat, startCall, callState, hangUp, setChatCallActions, boundChatRef])
+  }, [chat, callState, setChatCallActions, boundChatRef])
 
   // Media + session publish
   useEffect(() => {
@@ -171,7 +170,7 @@ export default function PersistentCallShell() {
       minimizeCall?.()
     }
     if (onChat && callState === 'in-call' && callUiMode === 'mini') {
-      // stay mini until user expands — do not force full
+      // stay mini until user expands â€” do not force full
     }
   }, [location.pathname, callState]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -187,7 +186,7 @@ export default function PersistentCallShell() {
     return () => window.removeEventListener('sokomw-minimize-call', onMin)
   }, [minimizeCall])
 
-  // Background tab → mini
+  // Background tab â†’ mini
   useEffect(() => {
     if (callState === 'idle') return undefined
     const onVis = () => {
@@ -247,4 +246,5 @@ export default function PersistentCallShell() {
     </>
   )
 }
+
 
