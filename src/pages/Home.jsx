@@ -936,6 +936,13 @@ function RevenueHero({ navigate, listings }) {
     (listings || []).filter(l => isListingFeatured(l) && l.images?.[0]),
   [listings])
 
+  // Stable identity of the featured set (sorted) — ignore display order so
+  // fair rotation reorders do not thrash carousel state every bucket.
+  const featuredSetKey = useMemo(
+    () => featured.map(f => f.id).filter(Boolean).slice().sort().join('|'),
+    [featured],
+  )
+
   const [page, setPage]     = useState(0)
   const [mobileIdx, setMobileIdx] = useState(0)
   const [paused, setPaused] = useState(false)
@@ -945,38 +952,42 @@ function RevenueHero({ navigate, listings }) {
   const mobileRailRef = useRef(null)
   const touchStartX = useRef(null)
   const perPage = 3
-  const pageCount = Math.max(1, Math.ceil(featured.length / perPage))
+  const pageCount = Math.max(1, Math.ceil(featured.length / perPage) || 1)
   const mobileCount = featured.length
   const ROTATE_MS = 4200
 
+  // Clamp indices when the pool shrinks (avoids empty slots / crashes)
+  useEffect(() => {
+    setPage(p => (pageCount < 1 ? 0 : Math.min(p, pageCount - 1)))
+    setMobileIdx(i => (mobileCount < 1 ? 0 : Math.min(i, mobileCount - 1)))
+  }, [pageCount, mobileCount, featuredSetKey])
+
   // Desktop: page through groups of 3 until every product has been shown
   useEffect(() => {
-    if (paused || pageCount < 2) return
+    if (paused || pageCount < 2) return undefined
     const t = setInterval(() => setPage(p => (p + 1) % pageCount), ROTATE_MS)
     return () => clearInterval(t)
   }, [paused, pageCount])
 
   // Mobile: advance one product at a time through the full featured list
   useEffect(() => {
-    if (paused || mobileCount < 2) return
+    if (paused || mobileCount < 2) return undefined
     const t = setInterval(() => setMobileIdx(i => (i + 1) % mobileCount), ROTATE_MS)
     return () => clearInterval(t)
   }, [paused, mobileCount])
-
-  // Keep indices valid when the featured pool changes
-  useEffect(() => {
-    setPage(0)
-    setMobileIdx(0)
-  }, [featured.map(f => f.id).join('|')])
 
   // Smooth-scroll mobile rail to the active product
   useEffect(() => {
     const rail = mobileRailRef.current
     if (!rail || mobileCount < 1) return
     const card = rail.children[mobileIdx]
-    if (!card) return
-    const left = card.offsetLeft - (rail.clientWidth - card.clientWidth) / 2
-    rail.scrollTo({ left: Math.max(0, left), behavior: 'smooth' })
+    if (!card || typeof card.offsetLeft !== 'number') return
+    try {
+      const left = card.offsetLeft - (rail.clientWidth - card.clientWidth) / 2
+      rail.scrollTo({ left: Math.max(0, left), behavior: 'smooth' })
+    } catch {
+      /* ignore scroll errors on hidden/detached rails */
+    }
   }, [mobileIdx, mobileCount])
 
   // Entrance animation observer
