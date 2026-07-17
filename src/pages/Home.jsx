@@ -296,7 +296,7 @@ function GlobalStyles() {
           line-height: 1.2 !important;
         }
 
-        /* Horizontal rails */
+        /* Horizontal rails — edge padding only on full-bleed rails */
         .soko-scroll {
           padding-left: 14px !important;
           padding-right: 14px !important;
@@ -332,6 +332,119 @@ function GlobalStyles() {
           white-space: normal !important;
         }
 
+        /* Featured rail: no double padding inside section-pad */
+        .soko-featured-section {
+          padding-top: 16px !important;
+          padding-bottom: 8px !important;
+        }
+        .soko-featured-section .soko-featured-rail {
+          padding-left: 0 !important;
+          padding-right: 0 !important;
+          scroll-padding-inline: 0;
+          gap: 10px !important;
+          -webkit-overflow-scrolling: touch;
+        }
+        .soko-featured-card-wrap {
+          width: 148px !important;
+        }
+        .soko-featured-card-wrap .soko-card-bg {
+          height: 200px !important;
+        }
+
+        /* Live stories mobile strip */
+        .soko-stories-mobile {
+          display: block !important;
+          margin-top: 14px !important;
+        }
+        .soko-stories-mobile .soko-scroll {
+          padding-left: 0 !important;
+          padding-right: 0 !important;
+          scroll-padding-inline: 0;
+          gap: 10px !important;
+        }
+
+        /* Latest listings 2-col marketplace grid */
+        .soko-latest-section {
+          padding-left: 14px !important;
+          padding-right: 14px !important;
+          padding-bottom: 24px !important;
+        }
+        .soko-latest-card-wrap {
+          width: 100% !important;
+          min-width: 0 !important;
+          flex-shrink: 1 !important;
+        }
+        .soko-latest-card .soko-latest-photo {
+          height: 132px !important;
+        }
+        .soko-latest-card .soko-latest-body {
+          padding: 10px 10px 12px !important;
+          gap: 5px !important;
+        }
+        .soko-latest-card .soko-latest-title {
+          font-size: 12.5px !important;
+        }
+        .soko-latest-card .soko-latest-price {
+          font-size: 14.5px !important;
+        }
+        .soko-latest-card .soko-latest-meta {
+          font-size: 10px !important;
+        }
+        .soko-latest-card .soko-latest-badge-stack {
+          top: 8px !important;
+          left: 8px !important;
+          gap: 4px !important;
+        }
+        .soko-latest-card .soko-latest-wish {
+          top: 7px !important;
+          right: 7px !important;
+          width: 28px !important;
+          height: 28px !important;
+        }
+
+        /* Looking-for header: stack CTAs on small screens */
+        .soko-lf-head {
+          flex-direction: column !important;
+          align-items: stretch !important;
+          gap: 12px !important;
+          margin-bottom: 14px !important;
+        }
+        .soko-lf-head-actions {
+          width: 100% !important;
+          align-items: stretch !important;
+        }
+        .soko-lf-head-actions > div {
+          display: flex !important;
+          flex-direction: column !important;
+          gap: 8px !important;
+          width: 100% !important;
+        }
+        .soko-lf-head-actions button {
+          width: 100% !important;
+          justify-content: center !important;
+          min-height: 44px;
+        }
+        .lf3-scroll {
+          margin: 0 -14px;
+          padding-left: 14px !important;
+          padding-right: 14px !important;
+          scroll-padding-inline: 14px;
+          -webkit-overflow-scrolling: touch;
+        }
+        .lf3-chips {
+          margin: 0 -14px;
+          padding-left: 14px !important;
+          padding-right: 14px !important;
+        }
+
+        /* Shops / jobs / sell CTA sections */
+        .soko-shops-section,
+        .soko-trust-section,
+        .soko-sell-cta {
+          padding-left: 14px !important;
+          padding-right: 14px !important;
+        }
+
         /* Footer compress */
         .soko-footer {
           padding: 28px 14px 24px !important;
@@ -347,10 +460,20 @@ function GlobalStyles() {
         .soko-listings-grid {
           gap: 8px !important;
         }
+        .soko-featured-card-wrap {
+          width: 136px !important;
+        }
+        .soko-latest-card .soko-latest-photo {
+          height: 118px !important;
+        }
+      }
+      @media (hover: none) {
+        .soko-card-hover:hover { transform: none; box-shadow: inherit !important; }
       }
       @media (min-width: 769px) {
         .soko-nav-mobile { display:none !important; }
         .soko-bottom-nav-mobile { display:none !important; }
+        .soko-stories-mobile { display:none !important; }
       }
     `}</style>
   )
@@ -1567,12 +1690,12 @@ function PremiumListingCard({ listing, onClick, delay = 0, large = false }) {
 
 function SkeletonListingCard({ large = false }) {
   return (
-    <div style={{ background: T.white, borderRadius: 20, overflow: 'hidden', border: `1px solid ${T.gray100}`, height: large ? 360 : 320, display: 'flex', flexDirection: 'column' }}>
-      <div className="skeleton" style={{ width: '100%', height: '75%' }} />
-      <div style={{ padding: '8px 12px', height: '25%', display: 'flex', flexDirection: 'column', gap: 6, background: '#fff' }}>
-        <div className="skeleton" style={{ height: 22, width: '50%' }} />
-        <div className="skeleton" style={{ height: 14, width: '90%' }} />
-        <div className="skeleton" style={{ height: 12, width: '60%' }} />
+    <div className="soko-card-bg" style={{ background: T.white, borderRadius: 12, overflow: 'hidden', border: `1px solid ${T.gray100}`, height: large ? 360 : 220, display: 'flex', flexDirection: 'column' }}>
+      <div className="skeleton" style={{ width: '100%', height: '62%' }} />
+      <div style={{ padding: '8px 10px', height: '38%', display: 'flex', flexDirection: 'column', gap: 6, background: '#fff', justifyContent: 'center' }}>
+        <div className="skeleton" style={{ height: 12, width: '90%', borderRadius: 4 }} />
+        <div className="skeleton" style={{ height: 14, width: '50%', borderRadius: 4 }} />
+        <div className="skeleton" style={{ height: 10, width: '40%', borderRadius: 4 }} />
       </div>
     </div>
   )
@@ -1655,23 +1778,22 @@ function FeaturedListingsRow({ listings, navigate, loading, stories, storiesLoad
   )
   if (!loading && featured.length === 0) return null
   return (
-    <section style={{ padding: '24px 20px 4px', background: '#fff' }}>
+    <section className="soko-section-pad soko-featured-section" style={{ padding: '24px 20px 4px', background: '#fff' }}>
       <div style={{ maxWidth: 1400, margin: '0 auto' }}>
-       {/* Shared header row — same grid as content so columns align */}
-        <div className="soko-featured-stories-grid" style={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(0, 1fr) 260px',
-          gap: 16,
-          marginBottom: 16,
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          marginBottom: 14, gap: 12,
         }}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-            <span style={{ fontFamily:T.fontDisplay, fontSize:18, fontWeight:800, color:T.gray900 }}>Featured Listings</span>
-            <button onClick={() => navigate('/listings')} style={{ background:'none', border:'none', fontSize:13, fontWeight:600, color:T.green, cursor:'pointer' }}>View all</button>
-          </div>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-            <span style={{ fontFamily:T.fontDisplay, fontSize:18, fontWeight:800, color:T.gray900 }}>Live Stories</span>
-            <button onClick={() => navigate('/status')} style={{ background:'none', border:'none', fontSize:13, fontWeight:600, color:T.green, cursor:'pointer' }}>View all</button>
-          </div>
+          <span className="soko-section-title" style={{ fontFamily: T.fontDisplay, fontSize: 18, fontWeight: 800, color: T.gray900 }}>
+            Featured Listings
+          </span>
+          <button
+            type="button"
+            onClick={() => navigate('/listings')}
+            style={{ background: 'none', border: 'none', fontSize: 13, fontWeight: 600, color: T.green, cursor: 'pointer', flexShrink: 0 }}
+          >
+            View all
+          </button>
         </div>
 
         <div className="soko-featured-stories-grid" style={{
@@ -1681,41 +1803,108 @@ function FeaturedListingsRow({ listings, navigate, loading, stories, storiesLoad
           alignItems: 'start',
         }}>
 
-          {/* Featured listings — constrained, never overflows */}
+          {/* Featured listings — horizontal snap rail */}
           <div style={{ minWidth: 0, overflow: 'hidden' }}>
-            <div className="soko-scroll" style={{
-              display: 'flex', gap: 14, overflowX: 'auto',
+            <div className="soko-scroll soko-featured-rail" style={{
+              display: 'flex', gap: 12, overflowX: 'auto',
               paddingBottom: 8,
-              /* Constrain scroll area so it never pushes the stories column */
               width: '100%',
+              scrollSnapType: 'x mandatory',
+              WebkitOverflowScrolling: 'touch',
             }}>
               {loading
-                ? [1,2,3,4].map(i => (
-                   <div key={i} style={{ flexShrink: 0, width: 175 }}>
-  <SkeletonListingCard />
-</div>
-                  ))
+                ? [1, 2, 3, 4].map(i => (
+                  <div key={i} className="soko-featured-card-wrap" style={{ flexShrink: 0, width: 175, scrollSnapAlign: 'start' }}>
+                    <SkeletonListingCard />
+                  </div>
+                ))
                 : featured.slice(0, 10).map((l, i) => (
-                  <div key={l.id} style={{ flexShrink: 0, width: 175 }}>
-  <PremiumListingCard
-    listing={l} delay={i * 0.04}
-    onClick={() => navigate('/listing/' + l.id)}
-  />
-</div>
-                  ))
-              }
+                  <div key={l.id} className="soko-featured-card-wrap" style={{ flexShrink: 0, width: 175, scrollSnapAlign: 'start' }}>
+                    <PremiumListingCard
+                      listing={l}
+                      delay={i * 0.04}
+                      onClick={() => navigate('/listing/' + l.id)}
+                    />
+                  </div>
+                ))}
             </div>
           </div>
 
-          {/* Live Stories — fixed 260px, always visible on desktop */}
+          {/* Live Stories — desktop only in this column */}
           <div className="soko-nav-desktop" style={{ width: 260, flexShrink: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <span style={{ fontFamily: T.fontDisplay, fontSize: 16, fontWeight: 800, color: T.gray900 }}>Live Stories</span>
+              <button type="button" onClick={() => navigate('/status')} style={{ background: 'none', border: 'none', fontSize: 13, fontWeight: 600, color: T.green, cursor: 'pointer' }}>View all</button>
+            </div>
             <LiveStoriesCard
               navigate={navigate} stories={stories}
               loading={storiesLoading} onOpenStory={onOpenStory}
               onCreateStory={onCreateStory}
             />
           </div>
+        </div>
 
+        {/* Mobile: compact stories strip (desktop uses right column) */}
+        <div className="soko-stories-mobile" style={{ display: 'none', marginTop: 18 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <span className="soko-section-title" style={{ fontFamily: T.fontDisplay, fontSize: 16, fontWeight: 800, color: T.gray900 }}>Live Stories</span>
+            <button type="button" onClick={() => navigate('/status')} style={{ background: 'none', border: 'none', fontSize: 13, fontWeight: 600, color: T.green, cursor: 'pointer', minHeight: 44, minWidth: 44 }}>View all</button>
+          </div>
+          <div className="soko-scroll" style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 4, WebkitOverflowScrolling: 'touch' }}>
+            <button
+              type="button"
+              onClick={onCreateStory}
+              style={{
+                flexShrink: 0, width: 64, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+              }}
+            >
+              <div style={{
+                width: 56, height: 56, borderRadius: '50%', border: `2px dashed ${T.gray300}`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.green, background: T.gray50,
+              }}>
+                {Icon.plus(18)}
+              </div>
+              <span style={{ fontSize: 10, fontWeight: 600, color: T.gray700 }}>Yours</span>
+            </button>
+            {storiesLoading
+              ? [1, 2, 3, 4].map(i => (
+                <div key={i} className="skeleton" style={{ flexShrink: 0, width: 56, height: 56, borderRadius: '50%' }} />
+              ))
+              : (stories || []).slice(0, 12).map((s, i) => (
+                <button
+                  key={s.id || i}
+                  type="button"
+                  onClick={() => onOpenStory?.(s, i)}
+                  style={{
+                    flexShrink: 0, width: 64, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+                    background: 'none', border: 'none', cursor: 'pointer', padding: 0,
+                  }}
+                >
+                  <div style={{
+                    width: 56, height: 56, borderRadius: '50%', padding: 2,
+                    background: `linear-gradient(135deg, ${T.amber}, ${T.green})`,
+                  }}>
+                    <div style={{
+                      width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden',
+                      border: '2px solid #fff', background: T.gray100,
+                    }}>
+                      {s.profiles?.avatar_url || s.media_url
+                        ? <img src={s.profiles?.avatar_url || s.media_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center', fontSize: 16, fontWeight: 700, color: T.gray500 }}>
+                            {(s.profiles?.full_name || 'S')[0]}
+                          </div>}
+                    </div>
+                  </div>
+                  <span style={{
+                    fontSize: 10, fontWeight: 600, color: T.gray800, maxWidth: 60,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  }}>
+                    {s.profiles?.full_name?.split(' ')[0] || 'Seller'}
+                  </span>
+                </button>
+              ))}
+          </div>
         </div>
       </div>
     </section>
@@ -1774,6 +1963,7 @@ function LatestListingCard({ listing, delay = 0, onClick }) {
 
   return (
     <div
+      className="soko-latest-card"
       onClick={onClick}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
@@ -1794,12 +1984,14 @@ function LatestListingCard({ listing, delay = 0, onClick }) {
         transition: 'transform 0.32s cubic-bezier(0.22,1,0.36,1), box-shadow 0.32s ease, border-color 0.32s ease',
         animation: `fadeUp 0.5s cubic-bezier(0.22,1,0.36,1) ${delay}s both`,
         display: 'flex', flexDirection: 'column',
+        height: '100%',
+        minWidth: 0,
       }}
     >
       {/* Photo stage — ~65% of card height via a fixed-height band rather than
           aspect-ratio, so the body (title/price/meta) keeps a consistent height
           across cards regardless of image shape. */}
-      <div style={{ position: 'relative', width: '100%', height: 168, flexShrink: 0, overflow: 'hidden', background: T.gray100 }}>
+      <div className="soko-latest-photo" style={{ position: 'relative', width: '100%', height: 168, flexShrink: 0, overflow: 'hidden', background: T.gray100 }}>
         {listing.images?.[0] && !imgErr ? (
           <img
             src={listing.images[0]}
@@ -1822,7 +2014,7 @@ function LatestListingCard({ listing, delay = 0, onClick }) {
         {/* Badge stack: Featured / Hot Deal take priority over NEW, since they
             carry monetization signal — but both can co-occur (stacked), and
             NEW still shows if there's room and nothing else present. */}
-        <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 3, display: 'flex', flexDirection: 'column', gap: 5 }}>
+        <div className="soko-latest-badge-stack" style={{ position: 'absolute', top: 10, left: 10, zIndex: 3, display: 'flex', flexDirection: 'column', gap: 5 }}>
          {isFeat && isFlash ? (
             <span className="soko-hotdeal-pulse" style={{
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -1875,6 +2067,7 @@ function LatestListingCard({ listing, delay = 0, onClick }) {
 
         {/* Wishlist — floating circular, fills on like */}
         <button
+          className="soko-latest-wish"
           onClick={handleLike}
           aria-label={liked ? 'Remove from wishlist' : 'Add to wishlist'}
           style={{
@@ -1895,9 +2088,9 @@ function LatestListingCard({ listing, delay = 0, onClick }) {
 
       {/* Body — title first, then price, then location/time. Verified now lives
           here as a small inline mark next to the title, not a loud image badge. */}
-      <div style={{ padding: '13px 14px 14px', display: 'flex', flexDirection: 'column', gap: 7, flex: 1 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-          <span style={{
+      <div className="soko-latest-body" style={{ padding: '13px 14px 14px', display: 'flex', flexDirection: 'column', gap: 7, flex: 1, minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
+          <span className="soko-latest-title" style={{
             fontSize: 13.5, fontWeight: 700, color: T.gray900, lineHeight: 1.3,
             overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical',
             minWidth: 0,
@@ -1911,12 +2104,12 @@ function LatestListingCard({ listing, delay = 0, onClick }) {
           )}
         </div>
 
-        <div style={{ fontFamily: T.fontDisplay, fontSize: 16.5, fontWeight: 800, color: T.greenD, letterSpacing: '-0.3px' }}>
+        <div className="soko-latest-price" style={{ fontFamily: T.fontDisplay, fontSize: 16.5, fontWeight: 800, color: T.greenD, letterSpacing: '-0.3px' }}>
           {formatPrice(listing.price)}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, color: T.gray600 }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div className="soko-latest-meta" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, color: T.gray600, gap: 4, minWidth: 0 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
             <span style={{ color: T.green, flexShrink: 0, display: 'flex' }}>{Icon.pin(11)}</span>
             {listing.city || 'Malawi'}
           </span>
@@ -1938,9 +2131,9 @@ function LatestListingCard({ listing, delay = 0, onClick }) {
 
 function SkeletonLatestCard() {
   return (
-    <div style={{ background: T.white, borderRadius: T.radius, overflow: 'hidden', border: `1px solid ${T.gray100}` }}>
-      <div className="skeleton" style={{ width: '100%', height: 168 }} />
-      <div style={{ padding: '13px 14px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div className="soko-latest-card" style={{ background: T.white, borderRadius: T.radius, overflow: 'hidden', border: `1px solid ${T.gray100}`, height: '100%' }}>
+      <div className="skeleton soko-latest-photo" style={{ width: '100%', height: 168 }} />
+      <div className="soko-latest-body" style={{ padding: '13px 14px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div className="skeleton" style={{ height: 14, width: '80%', borderRadius: 6 }} />
         <div className="skeleton" style={{ height: 17, width: '45%', borderRadius: 6 }} />
         <div className="skeleton" style={{ height: 11, width: '60%', borderRadius: 6 }} />
@@ -1963,27 +2156,40 @@ function LatestListingsSection({ listings, navigate, loading }) {
   if (!loading && sorted.length === 0) return null
 
   return (
-    <section style={{ padding: '0 20px clamp(28px,4.5vw,48px) 20px', background: T.gray50 }}>
+    <section className="soko-latest-section" style={{ padding: '0 20px clamp(28px,4.5vw,48px) 20px', background: T.gray50 }}>
       <style>{`
         .soko-latest-grid {
           display: grid;
-          grid-template-columns: repeat(4, 1fr);
+          grid-template-columns: repeat(4, minmax(0, 1fr));
           gap: 24px;
         }
+        .soko-latest-card-wrap {
+          min-width: 0;
+          width: 100%;
+        }
         @media (max-width: 980px) {
-          .soko-latest-grid { grid-template-columns: repeat(2, 1fr); gap: 18px; }
+          .soko-latest-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
         }
         @media (max-width: 560px) {
-          .soko-latest-grid { grid-template-columns: 1fr; gap: 16px; }
+          .soko-latest-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+          .soko-latest-head { margin-bottom: 14px !important; align-items: stretch !important; }
+          .soko-latest-head h2 { font-size: 18px !important; margin-bottom: 2px !important; }
+          .soko-latest-head p { font-size: 12.5px !important; }
+          .soko-latest-viewall {
+            width: 100%;
+            justify-content: center !important;
+            min-height: 44px;
+            margin-top: 4px;
+          }
         }
       `}</style>
 
       <div style={{ maxWidth: 1400, margin: '0 auto' }}>
-        <div style={{
+        <div className="soko-latest-head" style={{
           display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
           marginBottom: 24, flexWrap: 'wrap', gap: 12,
         }}>
-          <div>
+          <div style={{ minWidth: 0, flex: '1 1 180px' }}>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
               <span style={{ width: 7, height: 7, borderRadius: '50%', background: T.green, boxShadow: `0 0 0 4px ${T.greenL}` }} />
               <span style={{ fontSize: 11.5, fontWeight: 800, color: T.green, letterSpacing: 0.8, textTransform: 'uppercase' }}>Updated daily</span>
@@ -1995,8 +2201,9 @@ function LatestListingsSection({ listings, navigate, loading }) {
           </div>
 
           <button
+            type="button"
             onClick={() => navigate('/listings')}
-            className="soko-btn-primary"
+            className="soko-btn-primary soko-latest-viewall"
             style={{ background: T.green, fontSize: 13.5, padding: '11px 22px', flexShrink: 0 }}
             onMouseEnter={e => e.currentTarget.style.background = T.greenD}
             onMouseLeave={e => e.currentTarget.style.background = T.green}
@@ -2005,22 +2212,40 @@ function LatestListingsSection({ listings, navigate, loading }) {
           </button>
         </div>
 
-        <div className="soko-scroll" style={{ display: 'flex', gap: 16, overflowX: 'auto', paddingBottom: 8 }}>
+        <div className="soko-latest-grid">
           {loading
             ? Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} style={{ flexShrink: 0, width: 200 }}><SkeletonLatestCard /></div>
+                <div key={i} className="soko-latest-card-wrap"><SkeletonLatestCard /></div>
               ))
-            : sorted.map((l, i) => (
-                <div key={l.id} style={{ flexShrink: 0, width: 200 }}>
+            : latest.map((l, i) => (
+                <div key={l.id} className="soko-latest-card-wrap">
                   <LatestListingCard
                     listing={l}
-                    delay={i * 0.04}
+                    delay={Math.min(i, 8) * 0.03}
                     onClick={() => navigate('/listing/' + l.id)}
                   />
                 </div>
               ))
           }
         </div>
+
+        {!loading && hasMore && (
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 20 }}>
+            <button
+              type="button"
+              onClick={() => setVisibleCount(c => c + PAGE_SIZE)}
+              className="soko-btn-outline"
+              style={{
+                background: '#fff', color: T.gray800, border: `1.5px solid ${T.gray200}`,
+                minHeight: 44, padding: '11px 28px', fontSize: 13.5, fontWeight: 700,
+              }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = T.green; e.currentTarget.style.color = T.green }}
+              onMouseLeave={e => { e.currentTarget.style.borderColor = T.gray200; e.currentTarget.style.color = T.gray800 }}
+            >
+              Show more listings
+            </button>
+          </div>
+        )}
       </div>
     </section>
   )
@@ -2239,6 +2464,7 @@ function RequestCard({ request: r, delay = 0, navigate }) {
       style={{
         flexShrink: 0,
         width: 238,
+        maxWidth: 'min(238px, 78vw)',
         background: '#fff',
         borderRadius: 16,
         border: `1px solid ${hov ? '#d1d5db' : '#e5e7eb'}`,
@@ -2427,7 +2653,7 @@ function LookingForSection({ navigate, requests, loading }) {
   const ArrowR = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
 
   return (
-    <section style={{ padding: '0 20px 0 20px', background: '#fff' }}>
+    <section className="soko-section-pad" style={{ padding: '0 20px 0 20px', background: '#fff' }}>
       <style>{`
         .lf3-arrow {
           position:absolute; top:50%; transform:translateY(-50%); z-index:10;
@@ -2453,19 +2679,23 @@ function LookingForSection({ navigate, requests, loading }) {
         .lf3-chip:not(.active):hover .lf3-chip-icon { color:#0F9D58 !important; }
         .lf3-count { background:#f3f4f6; color:#6b7280; border-radius:50px; padding:1px 8px; font-size:11px; font-weight:700; }
         .lf3-chip.active .lf3-count { background:rgba(255,255,255,0.22); color:#fff; }
-        .lf3-scroll { display:flex; gap:16px; overflow-x:auto; padding-bottom:8px; padding-top:6px; padding-left:2px; padding-right:2px; scrollbar-width:none; -ms-overflow-style:none; }
+        .lf3-scroll { display:flex; gap:16px; overflow-x:auto; padding-bottom:8px; padding-top:6px; padding-left:2px; padding-right:2px; scrollbar-width:none; -ms-overflow-style:none; -webkit-overflow-scrolling:touch; }
         .lf3-scroll::-webkit-scrollbar { display:none; }
-        .lf3-chips { display:flex; gap:8px; overflow-x:auto; padding-bottom:2px; scrollbar-width:none; -ms-overflow-style:none; }
+        .lf3-chips { display:flex; gap:8px; overflow-x:auto; padding-bottom:2px; scrollbar-width:none; -ms-overflow-style:none; -webkit-overflow-scrolling:touch; }
         .lf3-chips::-webkit-scrollbar { display:none; }
-        @media(max-width:768px){ .lf3-arrow{display:none!important;} }
+        @media(max-width:768px){
+          .lf3-arrow{display:none!important;}
+          .lf3-chip { padding:8px 12px; font-size:12px; min-height:40px; }
+          .lf3-scroll { gap:12px; }
+        }
       `}</style>
 
       <div style={{ maxWidth: 1400, margin: '0 auto' }}>
 
         {/* ── Header ── */}
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 14 }}>
-          <div>
-            <h2 style={{ fontFamily: "'Sora','Inter',system-ui,sans-serif", fontSize: 'clamp(22px,2.6vw,28px)', fontWeight: 800, color: '#111827', letterSpacing: '-0.6px', marginBottom: 6, lineHeight: 1.15 }}>
+        <div className="soko-lf-head" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 14 }}>
+          <div style={{ minWidth: 0, flex: '1 1 200px' }}>
+            <h2 style={{ fontFamily: "'Sora','Inter',system-ui,sans-serif", fontSize: 'clamp(20px,2.6vw,28px)', fontWeight: 800, color: '#111827', letterSpacing: '-0.6px', marginBottom: 6, lineHeight: 1.15 }}>
               People Looking For
             </h2>
             <p style={{ fontSize: 14, color: '#6b7280', margin: 0 }}>
@@ -2473,10 +2703,11 @@ function LookingForSection({ navigate, requests, loading }) {
             </p>
           </div>
 
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, flexShrink: 0 }}>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+          <div className="soko-lf-head-actions" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, flexShrink: 0 }}>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
               {/* View All */}
               <button
+                type="button"
                 onClick={() => navigate('/looking-for')}
                 style={{ background: '#fff', border: '1.5px solid #e5e7eb', borderRadius: 10, padding: '10px 18px', fontSize: 13.5, fontWeight: 600, color: '#374151', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap', transition: 'all 0.15s' }}
                 onMouseEnter={e => { e.currentTarget.style.borderColor='#0F9D58'; e.currentTarget.style.color='#0F9D58' }}
@@ -2489,6 +2720,7 @@ function LookingForSection({ navigate, requests, loading }) {
               {/* Post Request + FREE badge */}
               <div style={{ position: 'relative' }}>
                 <button
+                  type="button"
                   onClick={() => navigate('/looking-for')}
                   style={{ background: '#0F9D58', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 20px', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', transition: 'background 0.15s', boxShadow: '0 2px 10px rgba(15,157,88,0.3)' }}
                   onMouseEnter={e => e.currentTarget.style.background='#0a7a44'}
