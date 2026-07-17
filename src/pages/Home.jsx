@@ -2687,20 +2687,6 @@ const CatSVG = {
 
 function getCatSVG(cat) { return CatSVG[cat] || CatSVG.Other }
 
-/* Fallback emoji for card image placeholder only */
-const CAT_FALLBACK_EMOJI = {
-  Vehicles:'🚘', Electronics:'📱', Property:'🏡', Clothing:'👔',
-  Agriculture:'🌿', Furniture:'🛋️', Food:'🍜', Services:'⚡', Jobs:'💼',
-}
-function catFallbackEmoji(cat) { return CAT_FALLBACK_EMOJI[cat] || '📦' }
-
-/* ── Priority badge config ───────────────────────────────────────────────── */
-const PRIORITY = {
-  urgent:     { label: 'Urgent',      badgeBg: '#ef4444', badgeFg: '#fff' },
-  highbudget: { label: 'High Budget', badgeBg: '#7c3aed', badgeFg: '#fff' },
-  new:        { label: 'New',         badgeBg: '#3b82f6', badgeFg: '#fff' },
-}
-
 function getPriority(r) {
   if (r.urgency === 'urgent') return 'urgent'
   if (r.budget && Number(r.budget) >= 300_000) return 'highbudget'
@@ -2709,12 +2695,12 @@ function getPriority(r) {
 
 function expiryInfo(r) {
   const exp = r.expires_at || r.deadline
-  if (!exp) return { label: 'Open', color: '#16a34a', bg: '#f0fdf4', dotColor: '#16a34a' }
+  if (!exp) return { label: 'Open', muted: true }
   const days = Math.ceil((new Date(exp) - Date.now()) / 86400000)
-  if (days <= 0)  return { label: 'Closing today',    color: '#ef4444', bg: '#fef2f2', dotColor: '#ef4444' }
-  if (days === 1) return { label: 'Closing in 1 day', color: '#ef4444', bg: '#fef2f2', dotColor: '#ef4444' }
-  if (days <= 3)  return { label: 'Closing Soon',     color: '#f59e0b', bg: '#fffbeb', dotColor: '#f59e0b' }
-  return { label: `Expires in ${days} days`, color: '#7c3aed', bg: '#faf5ff', dotColor: '#7c3aed' }
+  if (days <= 0)  return { label: 'Closes today', urgent: true }
+  if (days === 1) return { label: 'Closes in 1 day', urgent: true }
+  if (days <= 3)  return { label: 'Closing soon', warn: true }
+  return { label: `${days}d left`, muted: true }
 }
 
 /* Category colors for chips & card badges */
@@ -2798,184 +2784,187 @@ const ShieldCheckSVG = () => (
     <polyline points="9 12 11 14 15 10"/>
   </svg>
 )
-/* ── Urgent flame SVG ── */
-const FlameSVG = () => (
-  <svg width="11" height="11" viewBox="0 0 24 24" fill="#fff">
-    <path d="M17.66 11.2C17.43 10.9 17.15 10.64 16.89 10.38C16.22 9.78 15.46 9.35 14.82 8.72C13.33 7.26 13 4.85 13.95 3C13 3.23 12.17 3.75 11.46 4.32C8.87 6.4 7.85 10.07 9.07 13.22C9.11 13.32 9.15 13.42 9.15 13.55C9.15 13.77 9 13.97 8.8 14.05C8.57 14.15 8.33 14.09 8.14 13.93C8.08 13.88 8.04 13.83 8 13.76C6.87 12.33 6.69 10.28 7.45 8.64C5.78 10 4.87 12.3 5 14.47C5.06 14.97 5.12 15.47 5.29 15.97C5.43 16.57 5.7 17.17 6 17.7C7.08 19.43 8.95 20.67 10.96 20.92C13.1 21.19 15.39 20.8 17.03 19.32C18.86 17.66 19.5 15 18.56 12.72L18.43 12.46C18.22 12 17.66 11.2 17.66 11.2Z"/>
-  </svg>
-)
-
 /* ─────────────────────────────────────────────────────────────────────────── */
 
 function RequestCard({ request: r, delay = 0, navigate }) {
   const [hov, setHov] = React.useState(false)
   const priority = getPriority(r)
-  const pCfg     = PRIORITY[priority]
   const expiry   = expiryInfo(r)
   const isVerified = r.buyer_verified || r.requester_verified
   const cc = catColors(r.category)
+  const city = (r.cities?.[0] || r.city) || 'Malawi'
+  const budgetLabel = r.budget
+    ? `MK ${Number(r.budget).toLocaleString('en-US')}`
+    : 'Negotiable'
+
+  const priorityLabel =
+    priority === 'urgent' ? 'Urgent'
+    : priority === 'highbudget' ? 'High budget'
+    : 'New'
 
   return (
-    <div
+    <article
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       onClick={() => navigate('/looking-for')}
       style={{
         flexShrink: 0,
-        width: 238,
-        maxWidth: 'min(238px, 78vw)',
+        width: 260,
+        maxWidth: 'min(260px, 82vw)',
         background: '#fff',
-        borderRadius: 16,
-        border: `1px solid ${hov ? '#d1d5db' : '#e5e7eb'}`,
+        borderRadius: 14,
+        border: `1px solid ${hov ? '#d1d5db' : '#e8eaed'}`,
         boxShadow: hov
-          ? '0 20px 48px rgba(15,23,42,0.16), 0 4px 16px rgba(0,0,0,0.06)'
-          : '0 1px 4px rgba(0,0,0,0.07), 0 4px 16px rgba(0,0,0,0.04)',
-        transform: hov ? 'translateY(-6px) scale(1.012)' : 'translateY(0) scale(1)',
-        transition: 'transform 0.28s cubic-bezier(0.22,1,0.36,1), box-shadow 0.28s ease, border-color 0.2s',
-        animation: `fadeUp 0.45s cubic-bezier(0.22,1,0.36,1) ${delay}s both`,
+          ? '0 12px 28px rgba(15,23,42,0.10)'
+          : '0 1px 2px rgba(15,23,42,0.04), 0 4px 12px rgba(15,23,42,0.04)',
+        transform: hov ? 'translateY(-3px)' : 'none',
+        transition: 'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease',
+        animation: `fadeUp 0.4s ease ${Math.min(delay, 0.35)}s both`,
         display: 'flex',
         flexDirection: 'column',
         overflow: 'hidden',
         cursor: 'pointer',
       }}
     >
-      {/* ── Image + overlay badges ── */}
-      <div style={{ position: 'relative', width: '100%', height: 162, background: '#f3f4f6', flexShrink: 0, overflow: 'hidden' }}>
-        {r.image_url
-          ? <img src={r.image_url} alt={r.title} loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', transform: hov ? 'scale(1.06)' : 'scale(1)', transition: 'transform 0.5s cubic-bezier(0.22,1,0.36,1)' }} />
-          : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 46, color: '#9ca3af' }}>
-              {catFallbackEmoji(r.category)}
+      {/* Media */}
+      <div style={{
+        position: 'relative', width: '100%', height: 128,
+        background: cc.bg, flexShrink: 0, overflow: 'hidden',
+      }}>
+        {r.image_url ? (
+          <img
+            src={r.image_url}
+            alt=""
+            loading="lazy"
+            style={{
+              width: '100%', height: '100%', objectFit: 'cover',
+              transform: hov ? 'scale(1.03)' : 'scale(1)',
+              transition: 'transform 0.4s ease',
+            }}
+          />
+        ) : (
+          <div style={{
+            width: '100%', height: '100%',
+            display: 'flex', flexDirection: 'column',
+            alignItems: 'center', justifyContent: 'center', gap: 8,
+            color: cc.fg,
+          }}>
+            <div style={{
+              width: 44, height: 44, borderRadius: 12,
+              background: 'rgba(255,255,255,0.7)',
+              display: 'grid', placeItems: 'center',
+              border: '1px solid rgba(0,0,0,0.04)',
+            }}>
+              {React.cloneElement(getCatSVG(r.category), { width: 20, height: 20 })}
             </div>
-        }
+            <span style={{ fontSize: 11, fontWeight: 600, opacity: 0.75 }}>{catLabel(r.category)}</span>
+          </div>
+        )}
 
-        {/* Priority badge — top left */}
-        <div style={{ position: 'absolute', top: 10, left: 10, display: 'flex', alignItems: 'center', gap: 5 }}>
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: r.image_url
+            ? 'linear-gradient(180deg, rgba(0,0,0,0.18) 0%, transparent 45%)'
+            : 'none',
+          pointerEvents: 'none',
+        }} />
+
+        <div style={{
+          position: 'absolute', top: 10, left: 10, right: 10,
+          display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 6,
+        }}>
           <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: 4,
-            background: pCfg.badgeBg, color: pCfg.badgeFg,
-            borderRadius: 7, padding: '4px 9px',
-            fontSize: 11, fontWeight: 700, lineHeight: 1,
-            boxShadow: '0 2px 6px rgba(0,0,0,0.18)',
+            fontSize: 10, fontWeight: 700, letterSpacing: 0.2,
+            padding: '4px 8px', borderRadius: 999,
+            background: priority === 'urgent'
+              ? 'rgba(17,24,39,0.88)'
+              : 'rgba(255,255,255,0.94)',
+            color: priority === 'urgent' ? '#fff' : '#374151',
+            border: priority === 'urgent' ? 'none' : '1px solid rgba(0,0,0,0.06)',
+            backdropFilter: 'blur(6px)',
           }}>
-            {priority === 'urgent' && <FlameSVG />}
-            {pCfg.label}
+            {priorityLabel}
           </span>
-        </div>
-
-        {/* Verified Buyer — top right */}
-        <div style={{ position: 'absolute', top: 10, right: 10 }}>
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: 4,
-            background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(4px)',
-            borderRadius: 7, padding: '4px 8px',
-            fontSize: 10.5, fontWeight: 700, color: '#15803d',
-            boxShadow: '0 1px 6px rgba(0,0,0,0.12)',
-          }}>
-            <VerifiedSVG />
-            Verified Buyer
-          </span>
-        </div>
-
-        {/* Category chip — bottom left of image */}
-        <div style={{ position: 'absolute', bottom: 10, left: 10 }}>
-          <span style={{
-            display: 'inline-flex', alignItems: 'center', gap: 5,
-            background: 'rgba(255,255,255,0.96)', backdropFilter: 'blur(4px)',
-            borderRadius: 7, padding: '4px 9px',
-            fontSize: 11, fontWeight: 700, color: cc.fg,
-            boxShadow: '0 1px 6px rgba(0,0,0,0.10)',
-          }}>
-            <span style={{ color: cc.fg, display: 'flex', alignItems: 'center' }}>
-              {React.cloneElement(getCatSVG(r.category), { width: 13, height: 13 })}
+          {isVerified && (
+            <span title="Verified buyer" style={{
+              width: 26, height: 26, borderRadius: '50%',
+              background: 'rgba(255,255,255,0.95)',
+              display: 'grid', placeItems: 'center',
+              border: '1px solid rgba(0,0,0,0.05)',
+              boxShadow: '0 1px 4px rgba(0,0,0,0.08)',
+            }}>
+              <VerifiedSVG />
             </span>
-            {catLabel(r.category)}
-          </span>
+          )}
         </div>
       </div>
 
-      {/* ── Card body ── */}
-      <div style={{ padding: '12px 13px 0 13px', display: 'flex', flexDirection: 'column', flex: 1 }}>
-
-        {/* "LOOKING FOR" eyebrow */}
-        <div style={{ fontSize: 9.5, fontWeight: 700, color: '#9ca3af', letterSpacing: 0.9, textTransform: 'uppercase', marginBottom: 4 }}>
-          Looking For
+      {/* Body */}
+      <div style={{
+        padding: '14px 14px 12px',
+        display: 'flex', flexDirection: 'column', flex: 1, gap: 8,
+      }}>
+        <div style={{
+          fontSize: 11, fontWeight: 600, color: '#6b7280',
+          display: 'flex', alignItems: 'center', gap: 6,
+        }}>
+          <span style={{ color: cc.fg, display: 'flex' }}>
+            {React.cloneElement(getCatSVG(r.category), { width: 12, height: 12 })}
+          </span>
+          {catLabel(r.category)}
+          <span style={{ color: '#d1d5db' }}>·</span>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{city}</span>
         </div>
 
-        {/* Title */}
-        <div style={{ fontSize: 15, fontWeight: 700, color: '#111827', lineHeight: 1.3, marginBottom: 9, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical' }}>
+        <h3 style={{
+          margin: 0, fontSize: 15, fontWeight: 700, color: '#111827',
+          lineHeight: 1.3, letterSpacing: '-0.2px',
+          overflow: 'hidden', display: '-webkit-box',
+          WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+          minHeight: 39,
+        }}>
           {r.title}
-        </div>
+        </h3>
 
-        {/* Budget — HERO number */}
-        <div style={{ marginBottom: 8 }}>
-          <div style={{ fontFamily: "'Sora','Inter',system-ui,sans-serif", fontSize: 20, fontWeight: 800, color: '#0F9D58', letterSpacing: '-0.4px', lineHeight: 1.1 }}>
-            {r.budget ? `MK ${Number(r.budget).toLocaleString()}` : 'Negotiable'}
+        <div>
+          <div style={{
+            fontFamily: T.fontDisplay, fontSize: 17, fontWeight: 800,
+            color: '#0a7a44', letterSpacing: '-0.3px', lineHeight: 1.15,
+          }}>
+            {budgetLabel}
           </div>
-          <div style={{ fontSize: 11, color: '#9ca3af', fontWeight: 500, marginTop: 2 }}>
-            {r.is_monthly ? 'Monthly Budget' : 'Budget'}
+          <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2, fontWeight: 500 }}>
+            {r.is_monthly ? 'Monthly budget' : 'Budget'}
+            {expiry.label ? ` · ${expiry.label}` : ''}
           </div>
         </div>
 
-        {/* Location + time */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, color: '#9ca3af', marginBottom: 9 }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-            <PinSVG />
-            {(r.cities?.[0] || r.city) || 'Malawi'}
+        <div style={{
+          marginTop: 'auto', paddingTop: 10,
+          borderTop: '1px solid #f3f4f6',
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+        }}>
+          <span style={{ fontSize: 11.5, color: '#6b7280', fontWeight: 500 }}>
+            {timeSincePosted(r.created_at) || 'Recently'}
+            {r.offer_count != null ? ` · ${r.offer_count} offers` : ''}
           </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-            <ClockSVG color="#9ca3af" />
-            {timeSincePosted(r.created_at)}
-          </span>
-        </div>
-
-        {/* Expiry pill */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, fontWeight: 600, color: expiry.color, background: expiry.bg, borderRadius: 7, padding: '5px 9px', marginBottom: 9 }}>
-          {expiry.label === 'Open'
-            ? <span style={{ width: 8, height: 8, borderRadius: '50%', background: expiry.dotColor, flexShrink: 0, display: 'inline-block' }} />
-            : <ClockSVG color={expiry.color} />
-          }
-          {expiry.label}
-        </div>
-
-        {/* Activity stats */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 11.5, color: '#6b7280', marginBottom: 12 }}>
-          {r.offer_count != null && (
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <OfferSVG />
-              <strong style={{ color: '#374151', fontWeight: 700 }}>{r.offer_count}</strong> Offers
-            </span>
-          )}
-          {r.interested_count != null && (
-            <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-              <HeartSVG />
-              <strong style={{ color: '#374151', fontWeight: 700 }}>{r.interested_count}</strong> Interested
-            </span>
-          )}
-          {/* fallback if neither field exists on DB row */}
-          {r.offer_count == null && r.interested_count == null && (
-            <span style={{ fontSize: 11, color: '#d1d5db' }}>No activity yet</span>
-          )}
+          <button
+            type="button"
+            onClick={e => { e.stopPropagation(); navigate('/looking-for') }}
+            style={{
+              background: hov ? '#0a7a44' : '#0F9D58',
+              color: '#fff', border: 'none', borderRadius: 8,
+              padding: '7px 12px', fontSize: 12, fontWeight: 700,
+              cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5,
+              transition: 'background 0.15s', whiteSpace: 'nowrap',
+            }}
+          >
+            <ChatSVG size={12} />
+            Respond
+          </button>
         </div>
       </div>
-
-      {/* Contact Buyer CTA — full width, flush bottom */}
-      <div style={{ padding: '0 13px 13px' }}>
-        <button
-          onClick={e => { e.stopPropagation(); navigate('/looking-for') }}
-          style={{
-            width: '100%', background: '#0F9D58', color: '#fff', border: 'none', borderRadius: 10,
-            padding: '11px 0', fontSize: 13.5, fontWeight: 700, cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-            transition: 'background 0.15s, transform 0.15s',
-          }}
-          onMouseEnter={e => { e.currentTarget.style.background = '#0a7a44'; e.currentTarget.style.transform = 'translateY(-1px)' }}
-          onMouseLeave={e => { e.currentTarget.style.background = '#0F9D58'; e.currentTarget.style.transform = 'none' }}
-        >
-          <ChatSVG />
-          Contact Buyer
-        </button>
-      </div>
-    </div>
+    </article>
   )
 }
 
@@ -3012,39 +3001,38 @@ function LookingForSection({ navigate, requests, loading }) {
   const ArrowR = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
 
   return (
-    <section className="soko-section-pad" style={{ padding: '0 20px 0 20px', background: '#fff' }}>
+    <section className="soko-section-pad" style={{ padding: '28px 20px 8px', background: '#fafbfa' }}>
       <style>{`
         .lf3-arrow {
           position:absolute; top:50%; transform:translateY(-50%); z-index:10;
-          width:38px; height:38px; border-radius:50%;
-          background:#fff; border:1.5px solid #e5e7eb;
+          width:36px; height:36px; border-radius:50%;
+          background:#fff; border:1px solid #e5e7eb;
           display:flex; align-items:center; justify-content:center;
-          cursor:pointer; box-shadow:0 2px 10px rgba(0,0,0,0.12);
-          color:#374151; transition:all 0.2s; flex-shrink:0;
+          cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.08);
+          color:#374151; transition:all 0.15s; flex-shrink:0;
         }
-        .lf3-arrow:hover { background:#0F9D58; border-color:#0F9D58; color:#fff; box-shadow:0 4px 16px rgba(15,157,88,0.35); transform:translateY(-50%) scale(1.08); }
+        .lf3-arrow:hover { background:#111827; border-color:#111827; color:#fff; }
         .lf3-arrow.hide  { opacity:0; pointer-events:none; }
         .lf3-chip {
-          display:inline-flex; align-items:center; gap:7px;
-          padding:7px 14px; border-radius:50px;
-          border:1.5px solid #e5e7eb; background:#fff;
-          font-size:13px; font-weight:600; color:#374151;
+          display:inline-flex; align-items:center; gap:6px;
+          padding:7px 12px; border-radius:999px;
+          border:1px solid #e5e7eb; background:#fff;
+          font-size:12.5px; font-weight:600; color:#4b5563;
           cursor:pointer; white-space:nowrap; transition:all 0.15s;
           flex-shrink:0;
         }
-        .lf3-chip.active { background:#0F9D58; border-color:#0F9D58; color:#fff; }
+        .lf3-chip.active { background:#111827; border-color:#111827; color:#fff; }
         .lf3-chip.active .lf3-chip-icon { color:#fff !important; }
-        .lf3-chip:not(.active):hover { border-color:#0F9D58; color:#0F9D58; }
-        .lf3-chip:not(.active):hover .lf3-chip-icon { color:#0F9D58 !important; }
-        .lf3-count { background:#f3f4f6; color:#6b7280; border-radius:50px; padding:1px 8px; font-size:11px; font-weight:700; }
-        .lf3-chip.active .lf3-count { background:rgba(255,255,255,0.22); color:#fff; }
-        .lf3-scroll { display:flex; gap:16px; overflow-x:auto; padding-bottom:8px; padding-top:6px; padding-left:2px; padding-right:2px; scrollbar-width:none; -ms-overflow-style:none; -webkit-overflow-scrolling:touch; }
+        .lf3-chip:not(.active):hover { border-color:#d1d5db; background:#f9fafb; color:#111827; }
+        .lf3-count { background:#f3f4f6; color:#6b7280; border-radius:999px; padding:1px 7px; font-size:10.5px; font-weight:700; }
+        .lf3-chip.active .lf3-count { background:rgba(255,255,255,0.16); color:#fff; }
+        .lf3-scroll { display:flex; gap:14px; overflow-x:auto; padding:4px 2px 12px; scrollbar-width:none; -ms-overflow-style:none; -webkit-overflow-scrolling:touch; }
         .lf3-scroll::-webkit-scrollbar { display:none; }
         .lf3-chips { display:flex; gap:8px; overflow-x:auto; padding-bottom:2px; scrollbar-width:none; -ms-overflow-style:none; -webkit-overflow-scrolling:touch; }
         .lf3-chips::-webkit-scrollbar { display:none; }
         @media(max-width:768px){
           .lf3-arrow{display:none!important;}
-          .lf3-chip { padding:8px 12px; font-size:12px; min-height:40px; }
+          .lf3-chip { padding:8px 12px; font-size:12px; min-height:38px; }
           .lf3-scroll { gap:12px; }
         }
       `}</style>
@@ -3052,64 +3040,76 @@ function LookingForSection({ navigate, requests, loading }) {
       <div style={{ maxWidth: 1400, margin: '0 auto' }}>
 
         {/* ── Header ── */}
-        <div className="soko-lf-head" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 14 }}>
+        <div className="soko-lf-head" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 14 }}>
           <div style={{ minWidth: 0, flex: '1 1 200px' }}>
-            <h2 style={{ fontFamily: "'Sora','Inter',system-ui,sans-serif", fontSize: 'clamp(20px,2.6vw,28px)', fontWeight: 800, color: '#111827', letterSpacing: '-0.6px', marginBottom: 6, lineHeight: 1.15 }}>
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              fontSize: 11, fontWeight: 700, color: '#0F9D58',
+              letterSpacing: 0.4, textTransform: 'uppercase', marginBottom: 8,
+            }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#0F9D58' }} />
+              Buyer demand
+            </div>
+            <h2 style={{
+              fontFamily: T.fontDisplay, fontSize: 'clamp(20px,2.6vw,26px)',
+              fontWeight: 800, color: '#111827', letterSpacing: '-0.5px',
+              margin: '0 0 6px', lineHeight: 1.15,
+            }}>
               People Looking For
             </h2>
-            <p style={{ fontSize: 14, color: '#6b7280', margin: 0 }}>
-              Connect with buyers actively searching for products and services.
+            <p style={{ fontSize: 13.5, color: '#6b7280', margin: 0, lineHeight: 1.45 }}>
+              Real buyer requests across Malawi — respond and close deals faster.
             </p>
           </div>
 
           <div className="soko-lf-head-actions" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, flexShrink: 0 }}>
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-              {/* View All */}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
               <button
                 type="button"
                 onClick={() => navigate('/looking-for')}
-                style={{ background: '#fff', border: '1.5px solid #e5e7eb', borderRadius: 10, padding: '10px 18px', fontSize: 13.5, fontWeight: 600, color: '#374151', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap', transition: 'all 0.15s' }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor='#0F9D58'; e.currentTarget.style.color='#0F9D58' }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor='#e5e7eb'; e.currentTarget.style.color='#374151' }}
+                style={{
+                  background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10,
+                  padding: '9px 14px', fontSize: 13, fontWeight: 600, color: '#374151',
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
+                  whiteSpace: 'nowrap', transition: 'all 0.15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = '#111827'; e.currentTarget.style.color = '#111827' }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = '#e5e7eb'; e.currentTarget.style.color = '#374151' }}
               >
-                View All Requests
+                View all
                 <ArrowR />
               </button>
-
-              {/* Post Request + FREE badge */}
-              <div style={{ position: 'relative' }}>
-                <button
-                  type="button"
-                  onClick={() => navigate('/looking-for')}
-                  style={{ background: '#0F9D58', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 20px', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', transition: 'background 0.15s', boxShadow: '0 2px 10px rgba(15,157,88,0.3)' }}
-                  onMouseEnter={e => e.currentTarget.style.background='#0a7a44'}
-                  onMouseLeave={e => e.currentTarget.style.background='#0F9D58'}
-                >
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                  Post Request
-                </button>
-                <span style={{ position: 'absolute', top: -10, right: -10, background: '#F9AB00', color: '#1a0a00', fontSize: 9.5, fontWeight: 900, borderRadius: 50, padding: '2px 7px', letterSpacing: 0.4, border: '2px solid #fff', whiteSpace: 'nowrap', zIndex: 2 }}>
-                  FREE
-                </span>
-              </div>
+              <button
+                type="button"
+                onClick={() => navigate('/looking-for')}
+                style={{
+                  background: '#0F9D58', color: '#fff', border: 'none', borderRadius: 10,
+                  padding: '9px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap',
+                  transition: 'background 0.15s',
+                }}
+                onMouseEnter={e => { e.currentTarget.style.background = '#0a7a44' }}
+                onMouseLeave={e => { e.currentTarget.style.background = '#0F9D58' }}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                Post a request
+              </button>
             </div>
-
-            {/* Trust nudge */}
-            <span style={{ fontSize: 11.5, color: '#9ca3af', display: 'flex', alignItems: 'center', gap: 4 }}>
-              <CheckSVG color="#0F9D58" size={12} />
-              Free to post · Get responses fast
+            <span style={{ fontSize: 11.5, color: '#9ca3af', fontWeight: 500 }}>
+              Free to post · Fast responses
             </span>
           </div>
         </div>
 
-        {/* ── Category filter chips with SVG icons ── */}
-        <div className="lf3-chips" style={{ marginBottom: 22 }}>
+        {/* ── Category filter chips ── */}
+        <div className="lf3-chips" style={{ marginBottom: 16 }}>
           {CAT_FILTERS.map(f => {
             const cc = catColors(f.key)
             const isActive = activeFilter === f.key
             return (
               <button
                 key={f.key}
+                type="button"
                 className={`lf3-chip${isActive ? ' active' : ''}`}
                 onClick={() => setActiveFilter(f.key)}
               >
@@ -3123,7 +3123,7 @@ function LookingForSection({ navigate, requests, loading }) {
                 >
                   {React.cloneElement(
                     f.key === 'all' ? CatSVG.all : (CatSVG[f.key] || CatSVG.Other),
-                    { width: 15, height: 15 }
+                    { width: 14, height: 14 }
                   )}
                 </span>
                 {f.label}
@@ -3131,39 +3131,57 @@ function LookingForSection({ navigate, requests, loading }) {
               </button>
             )
           })}
-          {/* Right arrow hint */}
-          <button style={{ flexShrink: 0, background: '#fff', border: '1.5px solid #e5e7eb', borderRadius: '50%', width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', alignSelf: 'center', color: '#374151', transition: 'all 0.15s' }}
-            onMouseEnter={e => { e.currentTarget.style.borderColor='#0F9D58'; e.currentTarget.style.color='#0F9D58' }}
-            onMouseLeave={e => { e.currentTarget.style.borderColor='#e5e7eb'; e.currentTarget.style.color='#374151' }}
-          ><ArrowR /></button>
         </div>
 
         {/* ── Carousel ── */}
         {loading ? (
-          <div style={{ display: 'flex', gap: 16 }}>
-            {[1,2,3,4,5].map(i => (
-              <div key={i} style={{ flexShrink: 0, width: 238, height: 430, borderRadius: 16, background: 'linear-gradient(90deg,#f0f0f0 25%,#e8e8e8 50%,#f0f0f0 75%)', backgroundSize: '600px 100%', animation: 'shimmer 1.4s infinite' }} />
+          <div style={{ display: 'flex', gap: 14 }}>
+            {[1, 2, 3, 4].map(i => (
+              <div key={i} style={{
+                flexShrink: 0, width: 260, height: 280, borderRadius: 14,
+                background: 'linear-gradient(90deg,#f0f0f0 25%,#e8e8e8 50%,#f0f0f0 75%)',
+                backgroundSize: '600px 100%', animation: 'shimmer 1.4s infinite',
+                border: '1px solid #eee',
+              }} />
             ))}
           </div>
         ) : filtered.length > 0 ? (
           <div style={{ position: 'relative' }}>
-            <button className={`lf3-arrow${canLeft ? '' : ' hide'}`} style={{ left: -20 }} onClick={() => scrollBy(-1)} aria-label="Scroll left"><ArrowL /></button>
-            <button className={`lf3-arrow${canRight ? '' : ' hide'}`} style={{ right: -20 }} onClick={() => scrollBy(1)} aria-label="Scroll right"><ArrowR /></button>
+            <button type="button" className={`lf3-arrow${canLeft ? '' : ' hide'}`} style={{ left: -18 }} onClick={() => scrollBy(-1)} aria-label="Scroll left"><ArrowL /></button>
+            <button type="button" className={`lf3-arrow${canRight ? '' : ' hide'}`} style={{ right: -18 }} onClick={() => scrollBy(1)} aria-label="Scroll right"><ArrowR /></button>
             <div ref={scrollRef} className="lf3-scroll">
               {filtered.map((r, i) => (
-                <RequestCard key={r.id} request={r} delay={i * 0.04} navigate={navigate} />
+                <RequestCard key={r.id} request={r} delay={i * 0.03} navigate={navigate} />
               ))}
             </div>
           </div>
         ) : (
-          <div style={{ textAlign: 'center', padding: '52px 24px', border: '1.5px dashed #e5e7eb', borderRadius: 16, background: '#fafafa' }}>
-            <div style={{ fontSize: 42, marginBottom: 12 }}>🛍️</div>
-            <p style={{ fontSize: 14.5, fontWeight: 600, color: '#374151', marginBottom: 6 }}>No requests in this category yet.</p>
-            <p style={{ fontSize: 13, color: '#9ca3af', marginBottom: 18 }}>Be the first to post what you need!</p>
-            <button onClick={() => navigate('/looking-for')} style={{ background: '#0F9D58', color: '#fff', border: 'none', borderRadius: 10, padding: '11px 24px', fontSize: 13.5, fontWeight: 700, cursor: 'pointer' }}>
-              Post a Request
+          <div style={{
+            textAlign: 'center', padding: '40px 24px',
+            border: '1px solid #e8eaed', borderRadius: 14, background: '#fff',
+          }}>
+            <div style={{
+              width: 48, height: 48, borderRadius: 12, margin: '0 auto 12px',
+              background: '#f3f4f6', display: 'grid', placeItems: 'center', color: '#6b7280',
+            }}>
+              {CatSVG.all}
+            </div>
+            <p style={{ fontSize: 14.5, fontWeight: 700, color: '#111827', margin: '0 0 6px' }}>
+              No requests in this category yet
+            </p>
+            <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 16px' }}>
+              Be the first to post what you need.
+            </p>
+            <button
+              type="button"
+              onClick={() => navigate('/looking-for')}
+              style={{
+                background: '#0F9D58', color: '#fff', border: 'none', borderRadius: 10,
+                padding: '10px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+              }}
+            >
+              Post a request
             </button>
-            <p style={{ fontSize: 11.5, color: '#9ca3af', marginTop: 9 }}>Free · Responses within minutes</p>
           </div>
         )}
       </div>
