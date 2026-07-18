@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 
 const CallContext = createContext(null)
@@ -50,10 +50,15 @@ export function CallProvider({ children }) {
   const chatCallActionsRef = useRef(null)
   const [chatCallActionsVersion, setChatCallActionsVersion] = useState(0)
 
-  function setChatCallActions(actions) {
+  // Stable setter — only bump version when callState changes so consumers re-read.
+  // Always incrementing caused "Maximum update depth exceeded" via PersistentCallShell.
+  const setChatCallActions = useCallback((actions) => {
+    const prev = chatCallActionsRef.current
     chatCallActionsRef.current = actions
-    setChatCallActionsVersion((v) => v + 1)
-  }
+    if (prev?.callState !== actions?.callState || !prev) {
+      setChatCallActionsVersion((v) => v + 1)
+    }
+  }, [])
 
   const channelRef          = useRef(null)
   const listenersRef        = useRef([])
@@ -148,13 +153,33 @@ export function CallProvider({ children }) {
     setMiniCallVisible(false)
   }
 
-  function bindChatCall(payload) {
+  const bindChatCall = useCallback((payload) => {
     if (!payload?.userId) return
-    setBoundChat(payload)
     boundChatRef.current = payload
-  }
+    setBoundChat((prev) => {
+      // Avoid re-render loops when parent re-binds with a new object of the same peer
+      if (
+        prev &&
+        prev.userId === payload.userId &&
+        prev.listingId === payload.listingId &&
+        prev.otherName === payload.otherName &&
+        prev.otherAvatar === payload.otherAvatar &&
+        prev.otherInitial === payload.otherInitial &&
+        prev.currentUser?.id === payload.currentUser?.id &&
+        prev.onCallMessage === payload.onCallMessage &&
+        prev.isServiceChatRef === payload.isServiceChatRef
+      ) {
+        // Keep latest refs even when identity is "same"
+        prev.currentUser = payload.currentUser
+        prev.onCallMessage = payload.onCallMessage
+        prev.isServiceChatRef = payload.isServiceChatRef
+        return prev
+      }
+      return payload
+    })
+  }, [])
 
-  function unbindChatCall({ keepIfInCall = true } = {}) {
+  const unbindChatCall = useCallback(({ keepIfInCall = true } = {}) => {
     // Leaving the chat page mid-call — keep peer binding + show mini bar
     if (keepIfInCall && (callStackOwnerRef.current === 'chat' || callIdRef.current)) {
       setCallUiMode('mini')
@@ -163,7 +188,7 @@ export function CallProvider({ children }) {
     }
     setBoundChat(null)
     boundChatRef.current = null
-  }
+  }, [])
 
   function teardownChannel() {
     if (channelRef.current) {

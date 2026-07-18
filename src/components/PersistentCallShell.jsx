@@ -66,16 +66,19 @@ export default function PersistentCallShell() {
     onCallMessage,
   })
 
-  // Expose startCall to chat header buttons
+  // Expose startCall to chat header buttons (ref always fresh; version only on callState)
   const chatCallActionsRefLocal = useRef({ startCall, callState, hangUp, formatTime })
   chatCallActionsRefLocal.current = { startCall, callState, hangUp, formatTime }
   useEffect(() => {
     setChatCallActions?.(chatCallActionsRefLocal.current)
+  }, [callState, setChatCallActions])
+
+  useEffect(() => {
     if (chat) {
       stickyRef.current = chat
       if (boundChatRef) boundChatRef.current = chat
     }
-  }, [chat, callState, setChatCallActions, boundChatRef])
+  }, [chat, boundChatRef])
 
   // Media + session publish
   useEffect(() => {
