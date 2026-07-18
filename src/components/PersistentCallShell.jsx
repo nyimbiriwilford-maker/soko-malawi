@@ -3,7 +3,7 @@
  * Stays mounted while a call is active so media survives route changes.
  */
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useCall } from '../context/CallContext'
 import { useWebRTC, formatTime } from '../hooks/useWebRTC'
@@ -80,7 +80,7 @@ export default function PersistentCallShell() {
     }
   }, [chat, boundChatRef])
 
-  // Media + session publish
+  // Media attach — only sets srcObject when the stream actually changes (no blink)
   useEffect(() => {
     assignRemoteStream()
     if (remoteStream) remoteMediaStreamRef.current = remoteStream
@@ -92,6 +92,13 @@ export default function PersistentCallShell() {
       assignLocalStream()
     }
   }, [callState]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // After paint (when <video> mounts), re-bind only if missing — safe during duration ticks
+  useLayoutEffect(() => {
+    if (callState !== 'in-call') return
+    assignRemoteStream()
+    assignLocalStream()
+  })
 
   useEffect(() => {
     if (!userId) return undefined
@@ -132,11 +139,18 @@ export default function PersistentCallShell() {
       chatPath,
       listingId: listingId || null,
     })
+  }, [
+    callState, callType, callDuration, isMuted, isCamOff,
+    userId, listingId, chat?.otherName, chat?.otherAvatar, chat?.otherInitial,
+    location.pathname,
+  ]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // UI mode + media controls — do not re-register every duration second
+  useEffect(() => {
+    if (callState === 'idle') return
     if (callState === 'calling' || callState === 'ringing' || callState === 'in-call' || callState === 'receiving') {
       if (callUiMode === 'hidden') setCallUiMode('full')
     }
-
     registerMediaControls({
       hangUp,
       toggleMute,
@@ -145,11 +159,7 @@ export default function PersistentCallShell() {
       expand: expandCall,
       minimize: minimizeCall,
     })
-  }, [
-    callState, callType, callDuration, isMuted, isCamOff,
-    userId, listingId, chat?.otherName, chat?.otherAvatar, chat?.otherInitial,
-    location.pathname,
-  ]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [callState, callType, isMuted, isCamOff]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Clear session when call ends
   useEffect(() => {
@@ -222,16 +232,7 @@ export default function PersistentCallShell() {
           otherInitial={chat?.otherInitial || '?'}
           isMuted={isMuted}
           isCamOff={isCamOff}
-          remoteVideoRef={(el) => {
-            remoteVideoRef.current = el
-            if (el) {
-              el.classList.add('call-remote-pip-source')
-              if (remoteStream) {
-                el.srcObject = remoteStream
-                el.play().catch(() => {})
-              }
-            }
-          }}
+          remoteVideoRef={remoteVideoRef}
           localVideoRef={localVideoRef}
           hangUp={async () => {
             await hangUp()

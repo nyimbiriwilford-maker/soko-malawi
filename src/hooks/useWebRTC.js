@@ -117,15 +117,27 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
   }
 
   function assignRemoteStream() {
-    if (!remoteStream || !remoteVideoRef.current) return
-    remoteVideoRef.current.srcObject = remoteStream
-    remoteVideoRef.current.play().catch(() => {})
+    const el = remoteVideoRef.current
+    if (!remoteStream || !el) return
+    // Re-assigning srcObject every render flashes the video black — only attach when needed
+    if (el.srcObject !== remoteStream) {
+      el.srcObject = remoteStream
+    }
+    if (el.paused) {
+      el.play().catch(() => {})
+    }
   }
 
   function assignLocalStream() {
-    if (!localStreamRef.current || !localVideoRef.current) return
-    localVideoRef.current.srcObject = localStreamRef.current
-    localVideoRef.current.play().catch(() => {})
+    const el = localVideoRef.current
+    const stream = localStreamRef.current
+    if (!stream || !el) return
+    if (el.srcObject !== stream) {
+      el.srcObject = stream
+    }
+    if (el.paused) {
+      el.play().catch(() => {})
+    }
   }
 
   function buildPeerConnection(role) {

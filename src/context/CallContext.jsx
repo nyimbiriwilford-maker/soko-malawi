@@ -129,7 +129,32 @@ export function CallProvider({ children }) {
 
   function publishActiveCall(partial) {
     setActiveCall((prev) => {
-      const next = { ...(prev || {}), ...partial, updatedAt: Date.now() }
+      const next = { ...(prev || {}), ...partial }
+      // Skip no-op updates (e.g. same duration) to cut re-render thrash during calls
+      if (
+        prev &&
+        prev.status === next.status &&
+        prev.callType === next.callType &&
+        prev.peerId === next.peerId &&
+        prev.peerName === next.peerName &&
+        prev.duration === next.duration &&
+        prev.isMuted === next.isMuted &&
+        prev.isCamOff === next.isCamOff &&
+        prev.source === next.source &&
+        prev.chatPath === next.chatPath
+      ) {
+        return prev
+      }
+      // Only bump updatedAt for non-timer field changes (media attach hooks key on this)
+      const mediaRelevant =
+        !prev ||
+        prev.status !== next.status ||
+        prev.callType !== next.callType ||
+        prev.peerId !== next.peerId ||
+        prev.isMuted !== next.isMuted ||
+        prev.isCamOff !== next.isCamOff ||
+        prev.source !== next.source
+      next.updatedAt = mediaRelevant ? Date.now() : (prev.updatedAt || Date.now())
       return next
     })
   }

@@ -28,9 +28,10 @@ export default function MiniCallBar() {
     const el = audioRef.current
     const stream = remoteMediaStreamRef?.current
     if (!el || !stream) return
-    el.srcObject = stream
-    el.play().catch(() => {})
-  }, [activeCall?.status, activeCall?.updatedAt, remoteMediaStreamRef])
+    // Avoid re-attaching every duration tick (causes audio/video glitches)
+    if (el.srcObject !== stream) el.srcObject = stream
+    if (el.paused) el.play().catch(() => {})
+  }, [activeCall?.status, remoteMediaStreamRef])
 
   // Background / home screen: Media Session + keep tracks live + optional PiP
   useEffect(() => {

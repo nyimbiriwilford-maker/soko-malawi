@@ -3,6 +3,7 @@
  * Used by CallOverlay, GlobalCallListener, ChatCallHost.
  */
 
+import { useCallback, useRef } from 'react'
 import {
   Phone,
   PhoneOff,
@@ -357,6 +358,17 @@ export function InCallControls({
   )
 }
 
+/** Keep object/callback refs stable across parent re-renders (duration ticks). */
+function useStableMediaRef(videoRef) {
+  const holder = useRef(videoRef)
+  holder.current = videoRef
+  return useCallback((el) => {
+    const r = holder.current
+    if (typeof r === 'function') r(el)
+    else if (r && typeof r === 'object') r.current = el
+  }, [])
+}
+
 /** Fullscreen in-call chrome (shared layout) */
 export function InCallStage({
   isVideo,
@@ -370,6 +382,10 @@ export function InCallStage({
   controls,
   zIndex = 3000,
 }) {
+  // Stable callback refs — inline parent callbacks remount media every second
+  const setRemoteVideo = useStableMediaRef(remoteVideoRef)
+  const setLocalVideo = useStableMediaRef(localVideoRef)
+
   return (
     <div
       style={{
@@ -382,7 +398,7 @@ export function InCallStage({
       }}
     >
       <video
-        ref={remoteVideoRef}
+        ref={setRemoteVideo}
         autoPlay
         playsInline
         className="call-remote-pip-source"
@@ -425,7 +441,7 @@ export function InCallStage({
           zIndex: 2,
         }}>
           <video
-            ref={localVideoRef}
+            ref={setLocalVideo}
             autoPlay
             playsInline
             muted
@@ -433,7 +449,7 @@ export function InCallStage({
           />
         </div>
       ) : (
-        <video ref={localVideoRef} autoPlay playsInline muted style={{ display: 'none' }} />
+        <video ref={setLocalVideo} autoPlay playsInline muted style={{ display: 'none' }} />
       )}
 
       {warning ? (

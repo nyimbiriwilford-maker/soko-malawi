@@ -225,19 +225,20 @@ export default function GlobalCallListener() {
 
   useEffect(() => {
     if (!remoteStream) return
-    if (remoteVideoRef.current) {
-      remoteVideoRef.current.srcObject = remoteStream
-      remoteVideoRef.current.play().catch(() => {})
-    }
+    const el = remoteVideoRef.current
+    if (!el) return
+    if (el.srcObject !== remoteStream) el.srcObject = remoteStream
+    if (el.paused) el.play().catch(() => {})
   }, [remoteStream])
 
   useEffect(() => {
     if (callState !== 'in-call' || !isVideo) return
     requestAnimationFrame(() => {
-      if (localVideoRef.current && localStreamRef.current) {
-        localVideoRef.current.srcObject = localStreamRef.current
-        localVideoRef.current.play().catch(() => {})
-      }
+      const el = localVideoRef.current
+      const stream = localStreamRef.current
+      if (!el || !stream) return
+      if (el.srcObject !== stream) el.srcObject = stream
+      if (el.paused) el.play().catch(() => {})
     })
   }, [callState, isVideo])
 
@@ -421,11 +422,12 @@ export default function GlobalCallListener() {
     })
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        if (remoteVideoRef.current && remoteStreamRef.current) {
-          remoteVideoRef.current.srcObject = remoteStreamRef.current
-          remoteVideoRef.current.classList?.add?.('call-remote-pip-source')
-          remoteVideoRef.current.play().catch(() => {})
-        }
+        const el = remoteVideoRef.current
+        const stream = remoteStreamRef.current
+        if (!el || !stream) return
+        el.classList?.add?.('call-remote-pip-source')
+        if (el.srcObject !== stream) el.srcObject = stream
+        if (el.paused) el.play().catch(() => {})
       })
     })
   }
@@ -566,16 +568,7 @@ async function handleSwitchCamera() {
         name={displayName}
         avatarInitial={initial}
         durationLabel={fmt(duration)}
-        remoteVideoRef={(el) => {
-          remoteVideoRef.current = el
-          if (el) {
-            el.classList.add('call-remote-pip-source')
-            if (remoteStreamRef.current) {
-              el.srcObject = remoteStreamRef.current
-              el.play().catch(() => {})
-            }
-          }
-        }}
+        remoteVideoRef={remoteVideoRef}
         localVideoRef={localVideoRef}
         warning="You can browse the app — tap the green bar to return"
         controls={(
