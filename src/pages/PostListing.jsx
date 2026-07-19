@@ -789,8 +789,14 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
         if (cancelled) return
         const shops = data || []
         setMyShops(shops)
-        // Default: first shop if any exist, otherwise personal info
-        setSelectedShopId(shops.length > 0 ? shops[0].id : 'personal')
+        // Prefer shop from navigation (e.g. Add Product from shop page)
+        const fromNav = routeLocation.state?.shopId
+        if (fromNav && shops.some(s => s.id === fromNav)) {
+          setSelectedShopId(fromNav)
+        } else if (!isEditMode) {
+          // Default: first shop if any exist, otherwise personal — don't override edit load
+          setSelectedShopId(shops.length > 0 ? shops[0].id : 'personal')
+        }
       })
 
     return () => { cancelled = true }
@@ -976,6 +982,8 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
       setLocationConfirmed(true)
 
       setSelectedPromotion(data.promotion_type || 'none')
+      // Restore which shop this product belongs to
+      setSelectedShopId(data.shop_id || 'personal')
       setBooking({
         hourly: data.booking_hourly != null ? String(data.booking_hourly) : '',
         daily:  data.booking_daily  != null ? String(data.booking_daily)  : '',
@@ -1185,6 +1193,8 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
       Spotlight is only granted after free-feature RPC validation or payment confirm. ── */
   const buildRow = (imageUrls, videoUrls, status) => ({
     seller_id:                user.id,
+    // Attach to selected shop so products appear on the shop page
+    shop_id:                  selectedShopId && selectedShopId !== 'personal' ? selectedShopId : null,
     title:                    form.title.trim(),
     category:                 form.category,
     subcategory:              form.subcategory || null,

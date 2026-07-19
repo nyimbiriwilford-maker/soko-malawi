@@ -18,7 +18,7 @@ import AdminVerificationSettings from '../components/AdminVerificationSettings'
 import AdminVerifiedSellers from '../components/AdminVerifiedSellers'
 import AdminVerificationHub from '../components/AdminVerificationHub'
 
-const TABS = ['Dashboard', 'Featured', 'Listings', 'Users', 'Verifications', 'Verify Settings', 'Shop Reports', 'Broadcast']
+const TABS = ['Dashboard', 'Featured', 'Listings', 'Users', 'Verifications', 'Verify Settings', 'Shop Reports', 'Safety', 'Broadcast']
 
 export default function Admin() {
   const navigate = useNavigate()
@@ -46,6 +46,11 @@ export default function Admin() {
   const [shopReports, setShopReports] = useState([])
   const [reportFilter, setReportFilter] = useState('pending')
   const [reportActionLoading, setReportActionLoading] = useState(null)
+  const [userReports, setUserReports] = useState([])
+  const [userBlocks, setUserBlocks] = useState([])
+  const [safetySubTab, setSafetySubTab] = useState('reports') // reports | blocks
+  const [userReportFilter, setUserReportFilter] = useState('open')
+  const [safetyActionLoading, setSafetyActionLoading] = useState(null)
   const [broadcastSubject, setBroadcastSubject] = useState('')
   const [broadcastMessage, setBroadcastMessage] = useState('')
   const [broadcasting, setBroadcasting] = useState(false)
@@ -100,7 +105,14 @@ export default function Admin() {
 
     setAdminName(profile?.full_name || user.email)
     setAdminUserId(user.id)
-    await Promise.all([loadListings(), loadUsers(), loadVerifications(), loadShopReports(), loadSettings()])
+    await Promise.all([
+      loadListings(),
+      loadUsers(),
+      loadVerifications(),
+      loadShopReports(),
+      loadUserSafety(),
+      loadSettings(),
+    ])
     setLoading(false)
   }
 
@@ -266,6 +278,112 @@ async function loadShopReports() {
     .order('created_at', { ascending: false })
   if (error) console.error('Shop reports error:', error)
   setShopReports(data || [])
+}
+
+async function loadUserSafety() {
+  // User abuse reports
+  try {
+    const { data: reports, error } = await supabase
+      .from('user_reports')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(200)
+    if (error) throw error
+
+    const ids = new Set()
+    ;(reports || []).forEach(r => {
+      if (r.reporter_id) ids.add(r.reporter_id)
+      if (r.reported_user_id) ids.add(r.reported_user_id)
+    })
+    let profileMap = {}
+    if (ids.size > 0) {
+      const { data: profs } = await supabase
+        .from('profiles')
+        .select('id, full_name, avatar_url, city, role, is_disabled')
+        .in('id', [...ids])
+      profileMap = Object.fromEntries((profs || []).map(p => [p.id, p]))
+    }
+    setUserReports((reports || []).map(r => ({
+      ...r,
+      reporter: profileMap[r.reporter_id] || null,
+      reported: profileMap[r.reported_user_id] || null,
+    })))
+  } catch (e) {
+    console.error('User reports error:', e)
+    setUserReports([])
+  }
+
+  // User blocks
+  try {
+    const { data: blocks, error } = await supabase
+      .from('user_blocks')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(200)
+    if (error) throw error
+
+    const ids = new Set()
+    ;(blocks || []).forEach(b => {
+      if (b.blocker_id) ids.add(b.blocker_id)
+      if (b.blocked_id) ids.add(b.blocked_id)
+    })
+    let profileMap = {}
+    if (ids.size > 0) {
+      const { data: profs } = await supabase
+        .from('profiles')
+        .select('id, full_name, avatar_url, city, role')
+        .in('id', [...ids])
+      profileMap = Object.fromEntries((profs || []).map(p => [p.id, p]))
+    }
+    setUserBlocks((blocks || []).map(b => ({
+      ...b,
+      blocker: profileMap[b.blocker_id] || null,
+      blocked: profileMap[b.blocked_id] || null,
+    })))
+  } catch (e) {
+    console.error('User blocks error:', e)
+    setUserBlocks([])
+  }
+}
+
+async function handleUserReportAction(id, status) {
+  setSafetyActionLoading(id)
+  try {
+    const note = status === 'dismissed' ? (window.prompt('Admin note (optional):') || null) : null
+    const patch = {
+      status,
+      resolved_at: new Date().toISOString(),
+    }
+    // admin_note may not exist on all schemas
+    if (note) patch.admin_note = note
+    let { error } = await supabase.from('user_reports').update(patch).eq('id', id)
+    if (error && /admin_note/i.test(error.message || '')) {
+      delete patch.admin_note
+      ;({ error } = await supabase.from('user_reports').update(patch).eq('id', id))
+    }
+    if (error) throw error
+    setUserReports(rs => rs.map(r => r.id === id ? { ...r, ...patch } : r))
+    showToast(status === 'resolved' || status === 'reviewed' ? '✅ Report resolved' : '✕ Report dismissed')
+  } catch (e) {
+    showToast(`❌ ${e.message || 'Update failed'}`)
+  } finally {
+    setSafetyActionLoading(null)
+  }
+}
+
+async function adminUnblockUser(blockId, blockedId) {
+  setSafetyActionLoading(blockId)
+  try {
+    // Prefer RPC if available for the blocker side; admin can delete the row
+    const { error } = await supabase.from('user_blocks').delete().eq('id', blockId)
+    if (error) throw error
+    setUserBlocks(bs => bs.filter(b => b.id !== blockId))
+    showToast('✅ Block removed')
+  } catch (e) {
+    showToast(`❌ ${e.message || 'Could not remove block'}`)
+  } finally {
+    setSafetyActionLoading(null)
+  }
 }
 
 async function handleReportAction(id, status) {
@@ -608,9 +726,13 @@ async function loadUsers() {
     </div>
   )
 
+  const openUserReportCount = userReports.filter(r =>
+    !r.status || r.status === 'open' || r.status === 'pending'
+  ).length
   const TAB_ICONS = {
     Dashboard: '📊', Featured: '⭐', Listings: '📦', Users: '👥',
-    Verifications: '✅', 'Verify Settings': '⚙️', 'Shop Reports': '🚩', Broadcast: '📣',
+    Verifications: '✅', 'Verify Settings': '⚙️', 'Shop Reports': '🚩',
+    Safety: '🛡️', Broadcast: '📣',
   }
 
   return (
@@ -679,6 +801,11 @@ async function loadUsers() {
 {t === 'Shop Reports' && shopReports.filter(r => r.status === 'pending').length > 0 && (
   <span style={{ ...S.navPill, background: '#dc2626' }}>
     {shopReports.filter(r => r.status === 'pending').length}
+  </span>
+)}
+{t === 'Safety' && (openUserReportCount + userBlocks.length) > 0 && (
+  <span style={{ ...S.navPill, background: '#dc2626' }}>
+    {openUserReportCount + userBlocks.length}
   </span>
 )}
               </button>
@@ -1213,6 +1340,239 @@ async function loadUsers() {
     adminName={adminName}
     onToast={showToast}
   />
+)}
+
+{tab === 'Safety' && (
+  <div style={S.content}>
+    <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+      {[
+        { key: 'reports', label: `User reports (${userReports.length})` },
+        { key: 'blocks', label: `Blocks (${userBlocks.length})` },
+      ].map(s => (
+        <button
+          key={s.key}
+          type="button"
+          onClick={() => setSafetySubTab(s.key)}
+          style={{
+            padding: '8px 16px',
+            borderRadius: 20,
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: 12,
+            fontWeight: 700,
+            background: safetySubTab === s.key ? '#1a7a4a' : '#f0f5f2',
+            color: safetySubTab === s.key ? '#fff' : '#555',
+          }}
+        >
+          {s.label}
+        </button>
+      ))}
+      <button
+        type="button"
+        onClick={() => loadUserSafety()}
+        style={{
+          marginLeft: 'auto',
+          padding: '8px 14px',
+          borderRadius: 10,
+          border: '1px solid #d0dbd4',
+          background: '#fff',
+          fontSize: 12,
+          fontWeight: 700,
+          cursor: 'pointer',
+          color: '#1a7a4a',
+        }}
+      >
+        Refresh
+      </button>
+    </div>
+
+    {safetySubTab === 'reports' && (
+      <div style={S.tableCard}>
+        <div style={S.tableHeader}>
+          <div style={S.tableTitle}>User reports</div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {['all', 'open', 'resolved', 'dismissed'].map(f => (
+              <button
+                key={f}
+                type="button"
+                onClick={() => setUserReportFilter(f)}
+                style={{
+                  padding: '4px 12px',
+                  borderRadius: 20,
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontSize: 11,
+                  fontWeight: 700,
+                  background: userReportFilter === f ? '#1a7a4a' : '#f0f5f2',
+                  color: userReportFilter === f ? '#fff' : '#555',
+                }}
+              >
+                {f}
+              </button>
+            ))}
+          </div>
+        </div>
+        {userReports
+          .filter(r => {
+            const st = r.status || 'open'
+            if (userReportFilter === 'all') return true
+            if (userReportFilter === 'open') return st === 'open' || st === 'pending'
+            return st === userReportFilter
+          })
+          .map(r => (
+            <div
+              key={r.id}
+              style={{
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: 14,
+                padding: '14px 20px',
+                borderBottom: '1px solid #f0f5f2',
+              }}
+            >
+              <div style={{ ...S.userAvatar, flexShrink: 0 }}>
+                {r.reported?.avatar_url
+                  ? <img src={r.reported.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.currentTarget.style.display = 'none' }} />
+                  : (r.reported?.full_name || '?')[0].toUpperCase()}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#111' }}>
+                  {r.reported?.full_name || 'Unknown user'}
+                  {r.reported_user_id && (
+                    <span style={{ fontSize: 11, color: '#9ca3af', fontWeight: 500, marginLeft: 8 }}>
+                      {String(r.reported_user_id).slice(0, 8)}…
+                    </span>
+                  )}
+                </div>
+                <div style={{ fontSize: 11, color: '#dc2626', marginTop: 2, fontWeight: 700, textTransform: 'capitalize' }}>
+                  🚩 {(r.reason || 'report').replace(/_/g, ' ')}
+                </div>
+                {r.details && (
+                  <div style={{ fontSize: 11.5, color: '#555', marginTop: 3, maxWidth: 520 }}>{r.details}</div>
+                )}
+                <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>
+                  By {r.reporter?.full_name || 'someone'} · {new Date(r.created_at).toLocaleString()}
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
+                <StatusBadge
+                  status={
+                    !r.status || r.status === 'open' || r.status === 'pending'
+                      ? 'inactive'
+                      : r.status === 'resolved' || r.status === 'reviewed'
+                        ? 'active'
+                        : 'sold'
+                  }
+                />
+                {r.reported_user_id && (
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/profile/${r.reported_user_id}`)}
+                    style={{ fontSize: 11, fontWeight: 700, color: '#1a7a4a', background: 'none', border: 'none', cursor: 'pointer' }}
+                  >
+                    View profile →
+                  </button>
+                )}
+                {(!r.status || r.status === 'open' || r.status === 'pending') && (
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      type="button"
+                      disabled={safetyActionLoading === r.id}
+                      onClick={() => handleUserReportAction(r.id, 'resolved')}
+                      style={{ padding: '5px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, background: '#e6f4ec', color: '#1a7a4a' }}
+                    >
+                      {safetyActionLoading === r.id ? '…' : '✓ Resolve'}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={safetyActionLoading === r.id}
+                      onClick={() => handleUserReportAction(r.id, 'dismissed')}
+                      style={{ padding: '5px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, background: '#fee2e2', color: '#dc2626' }}
+                    >
+                      ✕ Dismiss
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        {userReports.filter(r => {
+          const st = r.status || 'open'
+          if (userReportFilter === 'all') return true
+          if (userReportFilter === 'open') return st === 'open' || st === 'pending'
+          return st === userReportFilter
+        }).length === 0 && (
+          <div style={{ padding: 32, textAlign: 'center', color: '#aaa', fontSize: 13 }}>
+            No user reports yet.
+          </div>
+        )}
+      </div>
+    )}
+
+    {safetySubTab === 'blocks' && (
+      <div style={S.tableCard}>
+        <div style={S.tableHeader}>
+          <div style={S.tableTitle}>User blocks</div>
+        </div>
+        {userBlocks.map(b => (
+          <div
+            key={b.id}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 14,
+              padding: '14px 20px',
+              borderBottom: '1px solid #f0f5f2',
+            }}
+          >
+            <div style={{ ...S.userAvatar, flexShrink: 0 }}>
+              {b.blocked?.avatar_url
+                ? <img src={b.blocked.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} onError={e => { e.currentTarget.style.display = 'none' }} />
+                : (b.blocked?.full_name || '?')[0].toUpperCase()}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: '#111' }}>
+                {b.blocked?.full_name || 'Blocked user'}
+              </div>
+              <div style={{ fontSize: 12, color: '#555', marginTop: 2 }}>
+                Blocked by <strong>{b.blocker?.full_name || 'someone'}</strong>
+              </div>
+              {b.reason && (
+                <div style={{ fontSize: 11.5, color: '#888', marginTop: 3 }}>{b.reason}</div>
+              )}
+              <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 3 }}>
+                {b.created_at ? new Date(b.created_at).toLocaleString() : ''}
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+              {b.blocked_id && (
+                <button
+                  type="button"
+                  onClick={() => navigate(`/profile/${b.blocked_id}`)}
+                  style={{ fontSize: 11, fontWeight: 700, color: '#1a7a4a', background: 'none', border: 'none', cursor: 'pointer' }}
+                >
+                  View profile →
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={safetyActionLoading === b.id}
+                onClick={() => adminUnblockUser(b.id, b.blocked_id)}
+                style={{ padding: '5px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, background: '#e6f4ec', color: '#1a7a4a' }}
+              >
+                {safetyActionLoading === b.id ? '…' : 'Remove block'}
+              </button>
+            </div>
+          </div>
+        ))}
+        {userBlocks.length === 0 && (
+          <div style={{ padding: 32, textAlign: 'center', color: '#aaa', fontSize: 13 }}>
+            No blocks recorded.
+          </div>
+        )}
+      </div>
+    )}
+  </div>
 )}
 
 {tab === 'Shop Reports' && (

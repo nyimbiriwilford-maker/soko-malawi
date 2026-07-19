@@ -1,6 +1,8 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { TYPE_COLORS } from './jobsConstants'
 import { timeAgo, formatDeadline, daysLeft, gradientFromName, getInitials, isEmail, isPhone, isUrl, parseLines } from './jobsUtils'
+import { buildChatPath } from '../../utils/chatSources'
 
 function BulletList({ text }) {
   const lines = parseLines(text)
@@ -18,6 +20,7 @@ function BulletList({ text }) {
 }
 
 export default function JobModal({ job, savedIds, onToggleSave, onClose }) {
+  const navigate = useNavigate()
   const [showApply, setShowApply] = useState(false)
   const [copied, setCopied] = useState(false)
   const [coverExpanded, setCoverExpanded] = useState(false)
@@ -28,11 +31,23 @@ export default function JobModal({ job, savedIds, onToggleSave, onClose }) {
   const dl = daysLeft(job.deadline)
   const isSaved = savedIds?.includes(job.id)
   const contact = job.contact
+  const posterId = job.poster_id
 
   function copyContact() {
     navigator.clipboard.writeText(contact).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2500)
+    })
+  }
+
+  function messagePoster() {
+    if (!posterId) return
+    onClose?.()
+    navigate(buildChatPath(posterId, { source: 'job', contextId: job.id }), {
+      state: {
+        source: 'job',
+        prefillMessage: `Hi, I'm interested in the "${job.title}" role at ${job.company || 'your company'}.`,
+      },
     })
   }
 
@@ -212,6 +227,16 @@ export default function JobModal({ job, savedIds, onToggleSave, onClose }) {
             <button className={`modal-save-btn ${isSaved ? 'saved' : ''}`} onClick={() => onToggleSave?.(job.id)}>
               {isSaved ? '🔖 Saved' : '🏷️ Save'}
             </button>
+            {posterId && (
+              <button
+                className="modal-save-btn"
+                type="button"
+                onClick={messagePoster}
+                title="Message the poster on SokoMw"
+              >
+                💬 Message
+              </button>
+            )}
             {(contact || job.contact_name || job.contact_address) && (
               <button className="modal-apply-btn" onClick={() => setShowApply(v => !v)}>
                 {showApply ? 'Hide' : 'Apply Now →'}

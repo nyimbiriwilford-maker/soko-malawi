@@ -1,19 +1,19 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { JOB_TYPES, CITIES, CATEGORIES } from './jobsConstants'
-import { daysLeft } from './jobsUtils'
 import JobCard from './JobCard'
 import JobModal from './JobModal'
 import PostJobForm from './PostJobForm'
 import MyJobs from './MyJobs'
+import SokoNav from '../../components/SokoNav'
 import './Jobs.css'
 
 const TABS = [
-  { id: 'browse', label: 'Browse', icon: '🔍' },
-  { id: 'post',   label: 'Post Job', icon: '📢' },
-  { id: 'saved',  label: 'Saved', icon: '🔖' },
-  { id: 'mine',   label: 'My Listings', icon: '📋' },
+  { id: 'browse', label: 'Browse' },
+  { id: 'post',   label: 'Post Job' },
+  { id: 'saved',  label: 'Saved' },
+  { id: 'mine',   label: 'My Listings' },
 ]
 
 export default function Jobs() {
@@ -22,7 +22,9 @@ export default function Jobs() {
   const [jobs, setJobs] = useState([])
   const [loading, setLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState(null)
-  const [unreadCount, setUnreadCount] = useState(0)
+  const [navUser, setNavUser] = useState(null)
+  const [notifCount, setNotifCount] = useState(0)
+  const [navSearch, setNavSearch] = useState('')
   const [selectedJob, setSelectedJob] = useState(null)
 
   // Filters
@@ -46,9 +48,25 @@ export default function Jobs() {
     setCurrentUser(user)
     await loadJobs()
     if (user) {
-      loadUnread(user.id)
+      loadNavProfile(user)
       loadSavedFromDB(user.id)
     }
+  }
+
+  async function loadNavProfile(user) {
+    const [{ data: profile }, { data: shop }, { count }] = await Promise.all([
+      supabase.from('profiles').select('full_name, avatar_url, account_type').eq('id', user.id).maybeSingle(),
+      supabase.from('shops').select('slug').eq('owner_id', user.id).maybeSingle(),
+      supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('read', false),
+    ])
+    setNavUser({
+      ...user,
+      full_name: profile?.full_name || null,
+      avatar_url: profile?.avatar_url || null,
+      account_type: profile?.account_type,
+      shop_slug: shop?.slug || null,
+    })
+    setNotifCount(count || 0)
   }
 
   async function loadJobs() {
@@ -62,15 +80,6 @@ export default function Jobs() {
       .order('created_at', { ascending: false })
     setJobs(data || [])
     setLoading(false)
-  }
-
-  async function loadUnread(uid) {
-    const { count } = await supabase
-      .from('messages')
-      .select('*', { count: 'exact', head: true })
-      .eq('to_user', uid)
-      .eq('read', false)
-    setUnreadCount(count || 0)
   }
 
   async function loadSavedFromDB(uid) {
@@ -132,60 +141,76 @@ export default function Jobs() {
   // ─────────────────────────────────────────────────────────
   return (
     <div className="jobs-page">
+      <SokoNav
+        user={navUser}
+        notifCount={notifCount}
+        search={navSearch}
+        setSearch={setNavSearch}
+        navigate={navigate}
+        activePillar="jobs"
+        ctaLabel="Post Job"
+        onCta={() => setTab('post')}
+      />
 
-      {/* ── Header ── */}
+      {/* ── Sub-header + tabs ── */}
       <div className="jobs-header">
-        <div className="jobs-header-top">
-          <div>
-            <div className="jobs-header-title">💼 Jobs</div>
-            <div className="jobs-header-sub">
-              {loading ? 'Loading…' : `${jobs.length} open position${jobs.length !== 1 ? 's' : ''} in Malawi`}
+        <div className="jobs-header-inner">
+          <div className="jobs-header-top">
+            <div style={{ minWidth: 0 }}>
+              <h1 className="jobs-header-title">Jobs</h1>
+              <div className="jobs-header-sub">
+                {loading ? 'Loading…' : `${jobs.length} open position${jobs.length !== 1 ? 's' : ''} across Malawi`}
+              </div>
             </div>
-          </div>
-          <button
-            className="jobs-post-btn"
-            onClick={() => setTab(tab === 'post' ? 'browse' : 'post')}
-          >
-            {tab === 'post' ? '← Back' : '+ Post Job'}
-          </button>
-        </div>
-
-        {/* Tabs */}
-        <div className="jobs-tabs">
-          {TABS.map(t => (
             <button
-              key={t.id}
-              className={`jobs-tab ${tab === t.id ? 'active' : ''}`}
-              onClick={() => setTab(t.id)}
+              type="button"
+              className="jobs-post-btn"
+              onClick={() => setTab(tab === 'post' ? 'browse' : 'post')}
             >
-              {t.icon} {t.label}
-              {t.id === 'saved' && savedIds.length > 0 && (
-                <span className="jobs-tab-badge">{savedIds.length}</span>
-              )}
+              {tab === 'post' ? '← Back' : '+ Post Job'}
             </button>
-          ))}
+          </div>
+
+          <div className="jobs-tabs">
+            {TABS.map(t => (
+              <button
+                key={t.id}
+                type="button"
+                className={`jobs-tab ${tab === t.id ? 'active' : ''}`}
+                onClick={() => setTab(t.id)}
+              >
+                {t.label}
+                {t.id === 'saved' && savedIds.length > 0 && (
+                  <span className="jobs-tab-badge">{savedIds.length}</span>
+                )}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* ── BROWSE TAB ── */}
       {tab === 'browse' && (
-        <>
-          {/* Search */}
+        <div className="jobs-browse-body">
           <div className="jobs-search-wrap">
             <div className="jobs-search-box">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8fa99a" strokeWidth="2.5" strokeLinecap="round">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9aa0a6" strokeWidth="2.5" strokeLinecap="round">
                 <circle cx="11" cy="11" r="8" />
                 <line x1="21" y1="21" x2="16.65" y2="16.65" />
               </svg>
               <input
-                placeholder="Search job title, company, city..."
+                placeholder="Search job title, company, city…"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
+                enterKeyHint="search"
+                autoComplete="off"
               />
               {search && (
                 <button
+                  type="button"
                   onClick={() => setSearch('')}
                   style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 14, padding: '0 2px' }}
+                  aria-label="Clear search"
                 >
                   ✕
                 </button>
@@ -193,7 +218,6 @@ export default function Jobs() {
             </div>
           </div>
 
-          {/* Filters */}
           <div className="jobs-filter-row">
             <select
               className={`jobs-filter-select ${filterType ? 'active' : ''}`}
@@ -221,6 +245,7 @@ export default function Jobs() {
             </select>
             {hasActiveFilters && (
               <button
+                type="button"
                 className="jobs-filter-select"
                 onClick={clearFilters}
                 style={{ color: 'var(--red)', borderColor: '#fad0ca', background: 'var(--red-bg)', paddingRight: 12 }}
@@ -230,7 +255,6 @@ export default function Jobs() {
             )}
           </div>
 
-          {/* Results count */}
           {!loading && (
             <div className="jobs-results-count">
               {filtered.length === jobs.length
@@ -239,7 +263,6 @@ export default function Jobs() {
             </div>
           )}
 
-          {/* List */}
           <div className="jobs-list">
             {loading && [1, 2, 3].map(i => <div key={i} className="job-skeleton" />)}
 
@@ -253,8 +276,8 @@ export default function Jobs() {
                     : 'No active listings yet. Be the first to post!'}
                 </p>
                 {hasActiveFilters
-                  ? <button className="jobs-empty-btn" onClick={clearFilters}>Clear Filters</button>
-                  : <button className="jobs-empty-btn" onClick={() => setTab('post')}>Post a Job</button>
+                  ? <button type="button" className="jobs-empty-btn" onClick={clearFilters}>Clear Filters</button>
+                  : <button type="button" className="jobs-empty-btn" onClick={() => setTab('post')}>Post a Job</button>
                 }
               </div>
             )}
@@ -270,7 +293,7 @@ export default function Jobs() {
               />
             ))}
           </div>
-        </>
+        </div>
       )}
 
       {/* ── POST TAB ── */}

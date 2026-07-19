@@ -26,7 +26,9 @@ export default function ProviderModal({ provider, currentUser, onClose }) {
 
   function goChat() {
     if (!currentUser) return
-    navigate(`/chat/${provider.provider_id}/${provider.id}`)
+    navigate(`/chat/${provider.provider_id}/${provider.id}?src=service`, {
+      state: { source: 'service' },
+    })
   }
 
   function doCall() {

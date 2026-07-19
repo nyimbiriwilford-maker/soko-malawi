@@ -5,29 +5,33 @@
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
 
 :root {
-  --green: #1a7a4a;
-  --green-dark: #155f39;
+  /* Soko marketplace tokens — match Home / Search / Shops */
+  --green: #0F9D58;
+  --green-dark: #0a7a44;
   --green-light: #22a05e;
   --green-bg: #e8f5ee;
   --green-bg-soft: #f2f9f5;
   --surface: #ffffff;
-  --bg: #f0f5f2;
-  --border: #e2ece6;
-  --text-primary: #0d1f16;
-  --text-secondary: #4a6355;
-  --text-muted: #8fa99a;
-  --red: #c0392b;
-  --red-bg: #fff0ee;
-  --orange: #d4700a;
-  --orange-bg: #fff4e5;
-  --radius-sm: 8px;
+  --bg: #f8f9fa;
+  --border: #e8eaed;
+  --text-primary: #202124;
+  --text-secondary: #5f6368;
+  --text-muted: #9aa0a6;
+  --gray-100: #f1f3f4;
+  --gray-900: #202124;
+  --red: #ea4335;
+  --red-bg: #fef2f2;
+  --orange: #F9AB00;
+  --orange-bg: #fff8e1;
+  --radius-sm: 10px;
   --radius-md: 14px;
-  --radius-lg: 20px;
-  --radius-xl: 28px;
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
-  --shadow-md: 0 4px 12px rgba(0,0,0,0.08), 0 2px 4px rgba(0,0,0,0.04);
-  --shadow-lg: 0 12px 32px rgba(0,0,0,0.12), 0 4px 8px rgba(0,0,0,0.06);
-  --font: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.04);
+  --shadow-md: 0 4px 12px rgba(0,0,0,.08), 0 2px 4px rgba(0,0,0,.04);
+  --shadow-lg: 0 12px 32px rgba(0,0,0,.12), 0 4px 8px rgba(0,0,0,.06);
+  --font: 'Inter', 'DM Sans', system-ui, sans-serif;
+  --font-display: 'Sora', Inter, system-ui, sans-serif;
 }
 
 /* ─── Animations ─────────────────────────────────────────── */
@@ -58,92 +62,117 @@
 /* ─── Base ───────────────────────────────────────────────── */
 .jobs-page {
   min-height: 100vh;
+  min-height: 100dvh;
   background: var(--bg);
-  padding-bottom: 90px;
+  padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
   font-family: var(--font);
   -webkit-font-smoothing: antialiased;
+  color: var(--text-primary);
+  -webkit-tap-highlight-color: transparent;
 }
 
-/* ─── Header ─────────────────────────────────────────────── */
+/* ─── Sub-header under SokoNav ───────────────────────────── */
 .jobs-header {
   background: var(--surface);
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
-  z-index: 50;
+  z-index: 40;
+  box-shadow: 0 1px 0 rgba(0,0,0,.04);
+}
+
+.jobs-header-inner {
+  max-width: 1180px;
+  margin: 0 auto;
 }
 
 .jobs-header-top {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 14px 16px 0;
+  padding: 16px 20px 0;
+  gap: 12px;
 }
 
 .jobs-header-title {
-  font-size: 22px;
+  font-family: var(--font-display);
+  font-size: clamp(20px, 3vw, 26px);
   font-weight: 800;
   color: var(--text-primary);
   letter-spacing: -0.5px;
+  margin: 0;
 }
 
 .jobs-header-sub {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-top: 1px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-top: 3px;
   font-weight: 500;
 }
 
 .jobs-post-btn {
-  background: var(--green);
+  background: var(--gray-900);
   color: #fff;
   border: none;
-  border-radius: var(--radius-sm);
-  padding: 9px 16px;
-  font-size: 13px;
+  border-radius: 12px;
+  padding: 11px 16px;
+  font-size: 13.5px;
   font-weight: 700;
   cursor: pointer;
-  transition: background 0.2s, transform 0.15s;
+  transition: background 0.15s, transform 0.15s;
   font-family: var(--font);
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
+  min-height: 44px;
+  flex-shrink: 0;
+  touch-action: manipulation;
 }
-.jobs-post-btn:hover { background: var(--green-dark); transform: translateY(-1px); }
-.jobs-post-btn:active { transform: translateY(0); }
+.jobs-post-btn:hover { background: #000; }
+.jobs-post-btn:active { transform: scale(0.98); }
 
 /* ─── Tabs ───────────────────────────────────────────────── */
 .jobs-tabs {
   display: flex;
-  padding: 0 16px;
-  margin-top: 10px;
-  gap: 0;
+  max-width: 1180px;
+  margin: 12px auto 0;
+  padding: 0 12px;
+  gap: 4px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
 }
+.jobs-tabs::-webkit-scrollbar { display: none; }
 
 .jobs-tab {
   flex: 1;
+  min-width: max-content;
   background: none;
   border: none;
   border-bottom: 2.5px solid transparent;
-  padding: 10px 4px;
-  font-size: 13px;
+  padding: 12px 14px;
+  font-size: 13.5px;
   font-weight: 600;
   color: var(--text-muted);
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s;
   font-family: var(--font);
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 6px;
+  white-space: nowrap;
+  touch-action: manipulation;
+  min-height: 44px;
 }
-.jobs-tab:hover { color: var(--text-secondary); }
+.jobs-tab:hover { color: var(--text-secondary); background: var(--gray-100); border-radius: 10px 10px 0 0; }
 .jobs-tab.active {
-  border-bottom-color: var(--green);
-  color: var(--green);
+  border-bottom-color: var(--gray-900);
+  color: var(--gray-900);
+  font-weight: 800;
 }
 .jobs-tab-badge {
-  background: var(--green);
+  background: var(--gray-900);
   color: #fff;
   font-size: 10px;
   font-weight: 800;
@@ -154,7 +183,12 @@
 }
 
 /* ─── Search & Filter ────────────────────────────────────── */
-.jobs-search-wrap { padding: 14px 14px 8px; }
+.jobs-browse-body {
+  max-width: 1180px;
+  margin: 0 auto;
+  width: 100%;
+}
+.jobs-search-wrap { padding: 16px 20px 8px; }
 
 .jobs-search-box {
   display: flex;
@@ -162,29 +196,32 @@
   gap: 10px;
   background: var(--surface);
   border: 1.5px solid var(--border);
-  border-radius: var(--radius-md);
-  padding: 11px 14px;
+  border-radius: 12px;
+  padding: 0 14px;
+  min-height: 48px;
   transition: border-color 0.2s, box-shadow 0.2s;
+  box-shadow: var(--shadow-sm);
 }
 .jobs-search-box:focus-within {
   border-color: var(--green);
-  box-shadow: 0 0 0 3px rgba(26,122,74,0.08);
+  box-shadow: 0 0 0 3px rgba(15,157,88,0.12);
 }
 .jobs-search-box input {
   flex: 1;
   border: none;
   outline: none;
-  font-size: 14px;
+  font-size: 16px;
   background: transparent;
   color: var(--text-primary);
   font-family: var(--font);
+  min-height: 44px;
 }
 .jobs-search-box input::placeholder { color: var(--text-muted); }
 
 .jobs-filter-row {
   display: flex;
   gap: 8px;
-  padding: 0 14px 12px;
+  padding: 0 20px 12px;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
@@ -193,9 +230,9 @@
 
 .jobs-filter-select {
   border: 1.5px solid var(--border);
-  border-radius: 10px;
-  padding: 7px 12px;
-  font-size: 12px;
+  border-radius: 11px;
+  padding: 9px 12px;
+  font-size: 12.5px;
   font-weight: 600;
   background: var(--surface);
   color: var(--text-secondary);
@@ -205,24 +242,30 @@
   transition: border-color 0.2s;
   appearance: none;
   -webkit-appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238fa99a' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  min-height: 40px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%239aa0a6' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
   padding-right: 28px;
+  box-shadow: var(--shadow-sm);
 }
 .jobs-filter-select:focus { outline: none; border-color: var(--green); }
-.jobs-filter-select.active { border-color: var(--green); color: var(--green); background-color: var(--green-bg); }
+.jobs-filter-select.active {
+  border-color: var(--gray-900);
+  color: var(--gray-900);
+  background-color: var(--gray-100);
+}
 
 .jobs-results-count {
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--text-muted);
   font-weight: 600;
-  padding: 0 14px 10px;
+  padding: 0 20px 10px;
 }
 
 /* ─── Job List ───────────────────────────────────────────── */
 .jobs-list {
-  padding: 0 14px;
+  padding: 0 20px 24px;
   display: flex;
   flex-direction: column;
   gap: 10px;

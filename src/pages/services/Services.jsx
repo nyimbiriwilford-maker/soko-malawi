@@ -253,7 +253,9 @@ function ProviderCard({ svc, delay, currentUser, onClick, navigate }) {
   function goChat(e) {
     e.stopPropagation()
     if (!currentUser) return
-    navigate(`/chat/${svc.provider_id}/${svc.id}`)
+    navigate(`/chat/${svc.provider_id}/${svc.id}?src=service`, {
+      state: { source: 'service' },
+    })
   }
 
   function doCall(e) {

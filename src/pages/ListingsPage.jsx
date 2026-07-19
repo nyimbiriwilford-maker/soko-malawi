@@ -19,6 +19,8 @@ import React, {
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { isListingFeatured, rotateFeaturedFairly } from '../utils/homeUtils'
+import { buildChatPath } from '../utils/chatSources'
+import SokoNav from '../components/SokoNav'
 
 /* ─────────────────────────────────────────────────────────────────────────────
    DESIGN TOKENS — identical to Home.jsx T
@@ -82,6 +84,75 @@ const Icon = {
   wrench:   (s=16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>,
   handshake:(s=14) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 17l-4-4 5-5 4 4z"/><path d="M2 13l4 4 1-1"/><path d="M21 13l-4 4-1-1"/></svg>,
   star:     (s=13,fill='#F9AB00') => <svg width={s} height={s} viewBox="0 0 24 24" fill={fill}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
+  phoneCall:(s=14) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>,
+}
+
+function listingAllowsCall(listing) {
+  if (!listing?.call_number) return false
+  const methods = listing.contact_methods
+  if (Array.isArray(methods)) {
+    if (methods.length === 0) return false
+    return methods.map(String).map(m => m.toLowerCase()).includes('call')
+  }
+  if (typeof methods === 'string') return methods.toLowerCase().includes('call')
+  return true
+}
+
+/** Chat + Call row on product cards (same pattern as Home) */
+function ListingCardActions({ listing, user, navigate }) {
+  const canCall = listingAllowsCall(listing)
+  const isOwner = !!(user?.id && listing?.seller_id && user.id === listing.seller_id)
+
+  function goLogin() {
+    try {
+      sessionStorage.setItem('soko_post_login', JSON.stringify({
+        type: 'chat',
+        sellerId: listing.seller_id,
+        listingId: listing.id,
+      }))
+    } catch { /* ignore */ }
+    navigate('/login')
+  }
+
+  function handleChat(e) {
+    e.stopPropagation()
+    if (!listing?.seller_id) {
+      navigate('/listing/' + listing.id)
+      return
+    }
+    if (isOwner) {
+      navigate('/listing/' + listing.id)
+      return
+    }
+    if (!user?.id) {
+      goLogin()
+      return
+    }
+    navigate(buildChatPath(listing.seller_id, { source: 'listing', contextId: listing.id }), {
+      state: { source: 'listing' },
+    })
+  }
+
+  function handleCall(e) {
+    e.stopPropagation()
+    if (!canCall) return
+    const num = String(listing.call_number).replace(/\s+/g, '')
+    window.open(`tel:${num}`, '_self')
+  }
+
+  return (
+    <div className="sp-card-actions" onClick={e => e.stopPropagation()}>
+      <button type="button" className="sp-qa-chat" onClick={handleChat}>
+        {Icon.chat(13)}
+        <span>{isOwner ? 'View' : 'Chat'}</span>
+      </button>
+      {canCall && !isOwner && (
+        <button type="button" className="sp-qa-call" onClick={handleCall} aria-label="Call seller">
+          {Icon.phoneCall(14)}
+        </button>
+      )}
+    </div>
+  )
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -261,11 +332,40 @@ function GlobalStyles() {
       @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
       body { background: #f8f9fa; }
-      .sp-root { font-family: ${T.font}; background: #f8f9fa; color: ${T.gray900}; min-height: 100vh; }
+      .sp-root {
+        font-family: ${T.font}; background: #f8f9fa; color: ${T.gray900};
+        min-height: 100vh; padding-bottom: 24px;
+      }
       .sp-root button { font-family: inherit; }
       .sp-root input  { font-family: inherit; }
       .sp-scroll::-webkit-scrollbar { display: none; }
       .sp-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+      .sp-page { max-width: 1400px; margin: 0 auto; padding: 0 20px; }
+      .sp-summary {
+        display: flex; align-items: flex-start; justify-content: space-between;
+        padding: 18px 0 0; flex-wrap: wrap; gap: 8px;
+      }
+      .sp-summary-title { font-size: 17px; font-weight: 700; color: ${T.gray900}; line-height: 1.3; }
+      .sp-summary-count { font-size: 14px; color: ${T.gray600}; font-weight: 500; }
+      .sp-body {
+        display: flex; gap: 24px; align-items: flex-start;
+        padding-top: 18px; padding-bottom: 40px;
+      }
+      .sp-main { flex: 1; min-width: 0; }
+      .sp-toolbar {
+        display: flex; align-items: center; justify-content: space-between;
+        margin-bottom: 16px; flex-wrap: wrap; gap: 10px;
+        position: sticky; top: 108px; z-index: 40;
+        background: rgba(248,249,250,0.92); backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        padding: 8px 0; margin-left: -2px; margin-right: -2px;
+      }
+      .sp-results-grid.grid-4 {
+        display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px;
+      }
+      .sp-results-grid.list-mode {
+        display: flex; flex-direction: column; gap: 12px;
+      }
 
       @keyframes fadeUp   { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
       @keyframes shimmer  { 0% { background-position:-600px 0; } 100% { background-position:600px 0; } }
@@ -347,6 +447,72 @@ function GlobalStyles() {
       .sp-card:hover .sp-card-img { transform:scale(1.06); }
       .sp-card-img { transition:transform .5s cubic-bezier(.22,1,.36,1); }
 
+      /* Quick actions — Chat + Call (Home product cards) */
+      .sp-card-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-shrink: 0;
+        min-height: 38px;
+        padding: 0 10px 10px;
+        margin-top: auto;
+        box-sizing: border-box;
+      }
+      .sp-qa-chat {
+        flex: 1 1 auto;
+        min-width: 0;
+        height: 32px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        border: none;
+        border-radius: 10px;
+        background: ${T.greenL};
+        color: ${T.greenD};
+        font-size: 12px;
+        font-weight: 700;
+        font-family: inherit;
+        cursor: pointer;
+        transition: background 0.15s, transform 0.1s;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .sp-qa-chat:hover { background: #d4eddf; }
+      .sp-qa-chat:active { transform: scale(0.98); }
+      .sp-qa-call {
+        flex: 0 0 32px;
+        width: 32px;
+        height: 32px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid ${T.gray200};
+        border-radius: 10px;
+        background: #fff;
+        color: ${T.gray800};
+        cursor: pointer;
+        transition: border-color 0.15s, background 0.15s, transform 0.1s;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .sp-qa-call:hover { border-color: ${T.green}; color: ${T.greenD}; background: ${T.greenL}; }
+      .sp-qa-call:active { transform: scale(0.96); }
+      .sp-card-list-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-shrink: 0;
+        padding: 0 12px 0 0;
+        align-self: center;
+      }
+      @media (max-width: 540px) {
+        .sp-card-list-actions {
+          width: 100%;
+          padding: 0 12px 12px;
+          align-self: stretch;
+        }
+        .sp-card-list-actions .sp-qa-chat { flex: 1; }
+      }
+
       /* list-mode card */
       .sp-card-list {
         background:#fff; border-radius:14px; overflow:hidden;
@@ -367,16 +533,11 @@ function GlobalStyles() {
       }
       .sp-row-card:hover { transform:translateY(-3px); box-shadow:${T.shadowMd}; border-color:${T.gray200}; }
 
-      /* pagination */
-      .sp-page-btn {
-        width:36px; height:36px; border-radius:8px; border:1.5px solid ${T.gray200};
-        background:#fff; display:flex; align-items:center; justify-content:center;
-        font-size:13.5px; font-weight:600; color:${T.gray700}; cursor:pointer;
-        transition:all .15s;
+      .sp-see-more:hover:not(:disabled) {
+        background: ${T.greenL} !important;
+        transform: translateY(-1px);
       }
-      .sp-page-btn:hover { border-color:${T.green}; color:${T.green}; background:${T.greenL}; }
-      .sp-page-btn.active { background:${T.green}; border-color:${T.green}; color:#fff; }
-      .sp-page-btn:disabled { opacity:.4; cursor:not-allowed; }
+      .sp-see-more:active:not(:disabled) { transform: scale(0.98); }
 
       /* sort/view bar */
       .sp-sort-select {
@@ -471,15 +632,93 @@ function GlobalStyles() {
         100% { opacity:1; transform:translateY(0) scaleY(1); max-height:600px; }
       }
 
-      @media(max-width:900px) {
-        .sp-sidebar { display:none !important; }
-        .sp-mobile-filter-btn { display:flex !important; }
-        .sp-results-grid.grid-4 { grid-template-columns:repeat(2,1fr) !important; }
+      @media (max-width: 1100px) {
+        .sp-results-grid.grid-4 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 12px !important; }
       }
-      @media(max-width:540px) {
-        .sp-results-grid.grid-4 { grid-template-columns:1fr !important; }
-        .sp-results-grid.list-mode { grid-template-columns:1fr !important; }
-        .sp-tabs-scroll { padding-right: 20px; }
+      @media (max-width: 900px) {
+        .sp-root { padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
+        .sp-page { padding: 0 14px !important; }
+        .sp-sidebar { display: none !important; }
+        .sp-mobile-filter-btn { display: inline-flex !important; }
+        .sp-body { gap: 0 !important; padding-top: 12px !important; padding-bottom: 24px !important; }
+        .sp-summary { padding-top: 12px !important; gap: 4px !important; }
+        .sp-summary-title { font-size: 15.5px !important; }
+        .sp-summary-count { font-size: 12.5px !important; width: 100%; }
+        .sp-toolbar {
+          top: 96px !important;
+          gap: 8px !important;
+          margin-bottom: 12px !important;
+          padding: 6px 0 !important;
+        }
+        .sp-search-tab {
+          padding: 9px 12px !important;
+          font-size: 12.5px !important;
+        }
+        .sp-results-grid.grid-4 {
+          grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          gap: 10px !important;
+        }
+        .sp-card {
+          border-radius: 14px !important;
+        }
+        .sp-card:hover { transform: none !important; }
+        .sp-card-list {
+          border-radius: 14px !important;
+        }
+        .sp-card-list:hover { transform: none !important; }
+        .sp-row-card {
+          padding: 12px !important;
+          gap: 12px !important;
+          border-radius: 14px !important;
+        }
+        .sp-row-card:hover { transform: none !important; }
+        .sp-sort-select {
+          font-size: 12.5px !important;
+          padding: 8px 28px 8px 10px !important;
+          min-height: 40px;
+        }
+        .sp-view-btn { width: 40px !important; height: 40px !important; }
+        .sp-see-more { width: 100%; max-width: 280px; }
+        .sp-filter-drawer-panel {
+          width: min(320px, 88vw) !important;
+          padding: 16px 14px calc(24px + env(safe-area-inset-bottom)) !important;
+        }
+        .sp-tabs-scroll {
+          margin-left: -14px;
+          margin-right: -14px;
+          padding-left: 14px !important;
+          padding-right: 14px !important;
+          scroll-padding-inline: 14px;
+        }
+      }
+      @media (max-width: 540px) {
+        /* Keep 2-col marketplace density on phones */
+        .sp-results-grid.grid-4 {
+          grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          gap: 8px !important;
+        }
+        .sp-card .sp-card-body-pad {
+          padding: 8px 9px 10px !important;
+          min-height: 0 !important;
+        }
+        .sp-card-list {
+          flex-direction: column !important;
+        }
+        .sp-card-list .sp-list-thumb {
+          width: 100% !important;
+          height: 160px !important;
+        }
+        .sp-card-list .sp-list-heart {
+          position: absolute !important;
+          top: 10px !important;
+          right: 10px !important;
+          margin: 0 !important;
+          align-self: auto !important;
+        }
+        .sp-summary-title { font-size: 14.5px !important; }
+      }
+      @media (max-width: 380px) {
+        .sp-results-grid.grid-4 { gap: 7px !important; }
       }
     `}</style>
   )
@@ -766,16 +1005,23 @@ function FilterPanel({
 /* ─────────────────────────────────────────────────────────────────────────────
    RESULT CARD — GRID mode (Marketplace / listings tab)
 ───────────────────────────────────────────────────────────────────────────── */
-function ResultCardGrid({ listing, delay, onClick }) {
+function ResultCardGrid({ listing, delay, onClick, user, navigate, saved, onToggleSave }) {
   const [hov, setHov]     = useState(false)
-  const [liked, setLiked] = useState(false)
   const [imgErr, setImgErr] = useState(false)
+  const [saveBusy, setSaveBusy] = useState(false)
   const isVerif = listing.seller_verified || listing.shop_is_verified
   const isFeat  = isListingFeatured(listing)
   const isNew   = listing.created_at && (Date.now() - new Date(listing.created_at).getTime()) < 86400000
   const onSale  = isFlashSaleActive(listing)
   const hasVideo = listing.videos && listing.videos.length > 0
   const hasBulk  = listing.price_tiers && listing.price_tiers.length > 0
+
+  async function handleSave(e) {
+    e.stopPropagation()
+    if (saveBusy) return
+    setSaveBusy(true)
+    try { await onToggleSave?.(listing.id) } finally { setSaveBusy(false) }
+  }
 
   return (
     <div className="sp-card" style={{ animationDelay:`${delay}s`, ...(onSale ? { border:`1.5px solid ${T.red}`, boxShadow:`0 0 0 1px rgba(234,67,53,0.15), ${T.shadow}` } : {}) }} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} onClick={onClick}>
@@ -799,16 +1045,23 @@ function ResultCardGrid({ listing, delay, onClick }) {
             🎬 {listing.videos.length}
           </div>
         )}
-        {/* Wishlist */}
-        <button onClick={e => { e.stopPropagation(); setLiked(l => !l) }} style={{ position:'absolute', top:9, right:9, width:30, height:30, borderRadius:'50%', border:'none', cursor:'pointer', background:'rgba(255,255,255,0.92)', backdropFilter:'blur(6px)', display:'flex', alignItems:'center', justifyContent:'center', color:liked ? T.red : T.gray700, boxShadow:'0 2px 8px rgba(0,0,0,.12)', transition:'transform .2s' }}>
-          {Icon.heart(14, liked ? 'currentColor' : 'none')}
+        {/* Save */}
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saveBusy}
+          aria-label={saved ? 'Remove from saved' : 'Save listing'}
+          aria-pressed={!!saved}
+          style={{ position:'absolute', top:9, right:9, width:30, height:30, borderRadius:'50%', border:'none', cursor: saveBusy ? 'default' : 'pointer', background:'rgba(255,255,255,0.92)', backdropFilter:'blur(6px)', display:'flex', alignItems:'center', justifyContent:'center', color:saved ? T.red : T.gray700, boxShadow:'0 2px 8px rgba(0,0,0,.12)', transition:'transform .2s', zIndex:3 }}
+        >
+          {Icon.heart(14, saved ? 'currentColor' : 'none')}
         </button>
       </div>
 
       {/* Body */}
-      <div style={{ padding:'10px 12px 12px', display:'flex', flexDirection:'column', gap:5, flex:1, minHeight:100, justifyContent:'flex-start' }}>
+      <div className="sp-card-body-pad" style={{ padding:'10px 12px 8px', display:'flex', flexDirection:'column', gap:5, flex:1, minHeight:0, justifyContent:'flex-start' }}>
         <div style={{ display:'flex', alignItems:'center', gap:4 }}>
-          <span style={{ fontSize:13, fontWeight:700, color:T.gray900, overflow:'hidden', display:'-webkit-box', WebkitLineClamp:1, WebkitBoxOrient:'vertical', minWidth:0 }}>{listing.title}</span>
+          <span style={{ fontSize:13, fontWeight:700, color:T.gray900, overflow:'hidden', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', minWidth:0, lineHeight:1.25 }}>{listing.title}</span>
           {isVerif && <span style={{ flexShrink:0 }}>{Icon.verify(13)}</span>}
         </div>
         {onSale ? (
@@ -830,17 +1083,15 @@ function ResultCardGrid({ listing, delay, onClick }) {
             <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
               {dedupeLocation(listing.city, listing.area) || 'Malawi'}
             </span>
-            {listing.district && (
-              <span style={{ flexShrink:0, fontSize:9.5, fontWeight:700, color:T.green, background:T.greenL, borderRadius:5, padding:'1.5px 6px', letterSpacing:'0.2px' }}>
-                {listing.district}
-              </span>
-            )}
           </span>
           <span style={{ display:'flex', alignItems:'center', gap:3, flexShrink:0 }}>
             {Icon.clock(11)} {timeAgo(listing.created_at)}
           </span>
         </div>
-        </div>
+      </div>
+
+      {/* Quick actions */}
+      <ListingCardActions listing={listing} user={user} navigate={navigate} />
     </div>
   )
 }
@@ -848,17 +1099,24 @@ function ResultCardGrid({ listing, delay, onClick }) {
 /* ─────────────────────────────────────────────────────────────────────────────
    RESULT CARD — LIST mode (Marketplace / listings tab)
 ───────────────────────────────────────────────────────────────────────────── */
-function ResultCardList({ listing, delay, onClick }) {
-  const [liked, setLiked] = useState(false)
+function ResultCardList({ listing, delay, onClick, user, navigate, saved, onToggleSave }) {
   const [imgErr, setImgErr] = useState(false)
+  const [saveBusy, setSaveBusy] = useState(false)
   const isVerif = listing.seller_verified || listing.shop_is_verified
   const isFeat  = isListingFeatured(listing)
   const onSale  = isFlashSaleActive(listing)
   const hasVideo = listing.videos && listing.videos.length > 0
 
+  async function handleSave(e) {
+    e.stopPropagation()
+    if (saveBusy) return
+    setSaveBusy(true)
+    try { await onToggleSave?.(listing.id) } finally { setSaveBusy(false) }
+  }
+
   return (
-    <div className="sp-card-list" style={{ animationDelay:`${delay}s` }} onClick={onClick}>
-      <div style={{ position:'relative', width:140, height:110, flexShrink:0, overflow:'hidden', background:T.gray100 }}>
+    <div className="sp-card-list" style={{ animationDelay:`${delay}s`, position:'relative' }} onClick={onClick}>
+      <div className="sp-list-thumb" style={{ position:'relative', width:140, height:110, flexShrink:0, overflow:'hidden', background:T.gray100 }}>
         {listing.images?.[0] && !imgErr
           ? <img src={listing.images[0]} alt={listing.title} onError={() => setImgErr(true)} className="sp-card-img" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
           : <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:34, color:T.gray400 }}>📦</div>
@@ -868,18 +1126,28 @@ function ResultCardList({ listing, delay, onClick }) {
         {hasVideo && (
           <div style={{ position:'absolute', bottom:6, left:6, background:'rgba(0,0,0,0.6)', color:'#fff', borderRadius:50, padding:'2px 6px', fontSize:9, fontWeight:700 }}>🎬 {listing.videos.length}</div>
         )}
+        <button
+          type="button"
+          className="sp-list-heart"
+          onClick={handleSave}
+          disabled={saveBusy}
+          aria-label={saved ? 'Remove from saved' : 'Save listing'}
+          style={{ position:'absolute', top:8, right:8, width:30, height:30, borderRadius:'50%', border:'none', background:'rgba(255,255,255,0.92)', display:'flex', alignItems:'center', justifyContent:'center', color:saved ? T.red : T.gray600, cursor: saveBusy ? 'default' : 'pointer', boxShadow:'0 2px 8px rgba(0,0,0,.1)', zIndex:2 }}
+        >
+          {Icon.heart(14, saved ? 'currentColor' : 'none')}
+        </button>
       </div>
       <div style={{ flex:1, padding:'12px 14px', display:'flex', flexDirection:'column', justifyContent:'space-between', minWidth:0 }}>
         <div>
-          <div style={{ display:'flex', alignItems:'center', gap:4, marginBottom:4 }}>
-            <span style={{ fontSize:14, fontWeight:700, color:T.gray900 }}>{listing.title}</span>
-            {isVerif && <span>{Icon.verify(13)}</span>}
+          <div style={{ display:'flex', alignItems:'center', gap:4, marginBottom:4, minWidth:0 }}>
+            <span style={{ fontSize:14, fontWeight:700, color:T.gray900, overflow:'hidden', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', lineHeight:1.25 }}>{listing.title}</span>
+            {isVerif && <span style={{ flexShrink:0 }}>{Icon.verify(13)}</span>}
           </div>
           {listing.description && (
             <div style={{ fontSize:12, color:T.gray600, lineHeight:1.4, overflow:'hidden', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical' }}>{listing.description}</div>
           )}
         </div>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:8 }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginTop:8, gap:8, flexWrap:'wrap' }}>
           {onSale ? (
             <div style={{ display:'flex', alignItems:'baseline', gap:6 }}>
               <span style={{ fontSize:12, color:T.gray500, textDecoration:'line-through' }}>{formatPrice(listing.price)}</span>
@@ -888,23 +1156,17 @@ function ResultCardList({ listing, delay, onClick }) {
           ) : (
             <div style={{ fontFamily:T.fontDisplay, fontSize:17, fontWeight:800, color:T.green }}>{formatPrice(listing.price)}</div>
           )}
-          <div style={{ display:'flex', alignItems:'center', gap:12, fontSize:11.5, color:T.gray600 }}>
-            <span style={{ display:'flex', alignItems:'center', gap:3 }}>
-              {Icon.pin(11)} {dedupeLocation(listing.city, listing.area) || 'Malawi'}
-              {listing.district && (
-                <span style={{ marginLeft:4, fontSize:10, fontWeight:700, color:T.green, background:T.greenL, borderRadius:6, padding:'1.5px 7px' }}>
-                  {listing.district}
-                </span>
-              )}
+          <div style={{ display:'flex', alignItems:'center', gap:10, fontSize:11.5, color:T.gray600, flexWrap:'wrap' }}>
+            <span style={{ display:'flex', alignItems:'center', gap:3, minWidth:0 }}>
+              {Icon.pin(11)} <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', maxWidth:140 }}>{dedupeLocation(listing.city, listing.area) || 'Malawi'}</span>
             </span>
-            <span style={{ display:'flex', alignItems:'center', gap:3 }}>{Icon.clock(11)} {timeAgo(listing.created_at)}</span>
-            {isVerif && <span style={{ display:'flex', alignItems:'center', gap:3, color:'#15803d', fontWeight:600 }}>{Icon.verify(11)} Verified</span>}
+            <span style={{ display:'flex', alignItems:'center', gap:3, flexShrink:0 }}>{Icon.clock(11)} {timeAgo(listing.created_at)}</span>
           </div>
         </div>
       </div>
-      <button onClick={e => { e.stopPropagation(); setLiked(l => !l) }} style={{ alignSelf:'center', marginRight:14, width:34, height:34, borderRadius:'50%', border:`1.5px solid ${T.gray200}`, background:'#fff', display:'flex', alignItems:'center', justifyContent:'center', color:liked ? T.red : T.gray600, cursor:'pointer' }}>
-        {Icon.heart(14, liked ? 'currentColor' : 'none')}
-      </button>
+      <div className="sp-card-list-actions">
+        <ListingCardActions listing={listing} user={user} navigate={navigate} />
+      </div>
     </div>
   )
 }
@@ -1045,36 +1307,40 @@ function EmptyState({ query, onClearFilters, label = 'results' }) {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   PAGINATION
+   SEE MORE — load next batch (no numbered pages)
 ───────────────────────────────────────────────────────────────────────────── */
-function Pagination({ page, totalPages, onChange }) {
-  function pages() {
-    const arr = []
-    if (totalPages <= 7) {
-      for (let i = 1; i <= totalPages; i++) arr.push(i)
-      return arr
-    }
-    arr.push(1)
-    if (page > 3) arr.push('...')
-    for (let i = Math.max(2, page - 1); i <= Math.min(totalPages - 1, page + 1); i++) arr.push(i)
-    if (page < totalPages - 2) arr.push('...')
-    arr.push(totalPages)
-    return arr
-  }
-
+function SeeMoreButton({ visible, loading, remaining, onClick }) {
+  if (!visible) return null
   return (
-    <div style={{ display:'flex', alignItems:'center', gap:6, justifyContent:'center', padding:'32px 0 8px' }}>
-      <button className="sp-page-btn" disabled={page === 1} onClick={() => onChange(page - 1)}>
-        {Icon.chevL(14)}
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, padding: '28px 0 12px' }}>
+      <button
+        type="button"
+        className="sp-see-more"
+        disabled={loading}
+        onClick={onClick}
+        style={{
+          minWidth: 200,
+          minHeight: 46,
+          padding: '12px 28px',
+          borderRadius: 14,
+          border: `1.5px solid ${T.green}`,
+          background: loading ? T.greenL : '#fff',
+          color: T.green,
+          fontSize: 14,
+          fontWeight: 800,
+          cursor: loading ? 'default' : 'pointer',
+          fontFamily: 'inherit',
+          boxShadow: T.shadow,
+          transition: 'background .15s, transform .15s',
+        }}
+      >
+        {loading ? 'Loading…' : 'See more'}
       </button>
-      {pages().map((p, i) => (
-        typeof p === 'number'
-          ? <button key={i} className={`sp-page-btn${p === page ? ' active' : ''}`} onClick={() => onChange(p)}>{p}</button>
-          : <span key={i} style={{ padding:'0 4px', color:T.gray500, fontSize:14 }}>…</span>
-      ))}
-      <button className="sp-page-btn" disabled={page === totalPages} onClick={() => onChange(page + 1)}>
-        {Icon.chevR(14)}
-      </button>
+      {remaining > 0 && !loading && (
+        <span style={{ fontSize: 12.5, color: T.gray600, fontWeight: 600 }}>
+          {remaining.toLocaleString()} more
+        </span>
+      )}
     </div>
   )
 }
@@ -1101,6 +1367,7 @@ export default function SearchPage() {
   // ── Results state ──
   const [allResults, setAllResults] = useState([])
   const [loading, setLoading]       = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [totalCount, setTotalCount] = useState(0)
   const [page, setPage]             = useState(1)
 
@@ -1115,8 +1382,9 @@ export default function SearchPage() {
   const [sortBy, setSortBy]             = useState('relevance')
   const [viewMode, setViewMode]         = useState('grid') // 'grid' | 'list'
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false)
-const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Date.now() / 30000))
+  const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Date.now() / 30000))
   const [sidebarStuck, setSidebarStuck] = useState(false)
+  const [savedIds, setSavedIds] = useState(() => new Set())
 
   // Sidebar gets a subtle elevation lift once the page has scrolled past
   // its sticky offset — a quiet cue that it's now "floating" over content,
@@ -1143,16 +1411,61 @@ const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Date.now() / 3
     if (catParam) setCheckedCats(new Set([catParam]))
   }, [catParam])
 
-  /* Auth */
+  /* Auth + saved listings */
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        setUser(user)
-        supabase.from('notifications').select('*', { count:'exact', head:true }).eq('user_id', user.id).eq('read', false)
-          .then(({ count }) => setNotifCount(count || 0))
-      }
+    let cancelled = false
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user || cancelled) return
+      setUser(user)
+      supabase.from('notifications').select('*', { count:'exact', head:true }).eq('user_id', user.id).eq('read', false)
+        .then(({ count }) => { if (!cancelled) setNotifCount(count || 0) })
+      try {
+        const { data, error } = await supabase
+          .from('listing_saves')
+          .select('listing_id')
+          .eq('user_id', user.id)
+        if (!cancelled && !error) {
+          setSavedIds(new Set((data || []).map(r => r.listing_id).filter(Boolean)))
+        }
+      } catch { /* table may be missing */ }
     })
+    return () => { cancelled = true }
   }, [])
+
+  async function toggleListingSave(listingId) {
+    if (!listingId) return
+    if (!user?.id) {
+      try {
+        sessionStorage.setItem('soko_post_login', JSON.stringify({ type: 'save', listingId }))
+      } catch { /* ignore */ }
+      navigate('/login')
+      return
+    }
+    const wasSaved = savedIds.has(listingId)
+    setSavedIds(prev => {
+      const next = new Set(prev)
+      if (wasSaved) next.delete(listingId)
+      else next.add(listingId)
+      return next
+    })
+    try {
+      const { data, error } = await supabase.rpc('toggle_listing_save', { p_listing_id: listingId })
+      if (error) throw error
+      setSavedIds(prev => {
+        const next = new Set(prev)
+        if (data === true) next.add(listingId)
+        else if (data === false) next.delete(listingId)
+        return next
+      })
+    } catch {
+      setSavedIds(prev => {
+        const next = new Set(prev)
+        if (wasSaved) next.add(listingId)
+        else next.delete(listingId)
+        return next
+      })
+    }
+  }
 
   /* Reset to page 1 whenever the query, tab, or any filter changes */
   useEffect(() => { setPage(1) }, [queryParam, activeTab, liveFilters])
@@ -1206,7 +1519,8 @@ const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Date.now() / 3
 
   /* ── doSearch: dispatches to the right table for the active tab ── */
   async function doSearch(tab, filters, currentSort, currentPage) {
-    setLoading(true)
+    if (currentPage === 1) setLoading(true)
+    else setLoadingMore(true)
     try {
       if (tab === 'listings')        await searchListings(filters, currentSort, currentPage)
       else if (tab === 'shops')      await searchShops(currentSort, currentPage)
@@ -1215,15 +1529,18 @@ const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Date.now() / 3
       else if (tab === 'services')   await searchServices(currentSort, currentPage)
     } catch (err) {
       console.error('Search error:', err)
-      setAllResults([])
-      setTotalCount(0)
+      if (currentPage === 1) {
+        setAllResults([])
+        setTotalCount(0)
+      }
     }
     setLoading(false)
+    setLoadingMore(false)
   }
 
   /* ── Marketplace listings (original logic, unchanged) ── */
   async function searchListings(filters, currentSort, currentPage) {
-    const baseSelect = 'id, title, price, images, videos, city, district, area, category, condition, availability_status, featured, is_featured, featured_until, created_at, seller_id, shop_id, description, flash_sale_price, flash_sale_ends_at, price_tiers'
+    const baseSelect = 'id, title, price, images, videos, city, district, area, category, condition, availability_status, featured, is_featured, featured_until, created_at, seller_id, shop_id, description, flash_sale_price, flash_sale_ends_at, price_tiers, contact_methods, call_number'
 
     let query = supabase
       .from('listings')
@@ -1274,16 +1591,12 @@ const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Date.now() / 3
       default:           sortedRegular.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     }
 
-    // Merge: fair-rotated featured first, then hard-cap the whole list to 20 max
-    const merged = [...sortedFeatured, ...sortedRegular].slice(0, 20)
+    // Merge: fair-rotated featured first, then regular
+    let merged = [...sortedFeatured, ...sortedRegular]
 
-    // Paginate client-side
-    const from = (currentPage - 1) * PAGE_SIZE
-    let results = merged.slice(from, from + PAGE_SIZE)
-
-    // Enrich with verified flags
-    const shopIds   = [...new Set(results.map(l => l.shop_id).filter(Boolean))]
-    const sellerIds = [...new Set(results.map(l => l.seller_id).filter(Boolean))]
+    // Enrich with verified flags (all candidates so filters + totals stay correct)
+    const shopIds   = [...new Set(merged.map(l => l.shop_id).filter(Boolean))]
+    const sellerIds = [...new Set(merged.map(l => l.seller_id).filter(Boolean))]
 
     const [shopsRes, profilesRes] = await Promise.all([
       shopIds.length > 0
@@ -1297,17 +1610,19 @@ const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Date.now() / 3
     const shopMap    = Object.fromEntries((shopsRes.data || []).map(s => [s.id, s]))
     const profileMap = Object.fromEntries((profilesRes.data || []).map(p => [p.id, p]))
 
-    results = results.map(l => ({
+    merged = merged.map(l => ({
       ...l,
       shop_is_verified: l.shop_id   ? (shopMap[l.shop_id]?.is_verified    ?? false) : false,
       seller_verified:  l.seller_id ? (profileMap[l.seller_id]?.is_verified ?? false) : false,
     }))
 
     if (filters.verifiedOnly) {
-      results = results.filter(l => l.seller_verified || l.shop_is_verified)
+      merged = merged.filter(l => l.seller_verified || l.shop_is_verified)
     }
 
-    setAllResults(results)
+    // Show first page * PAGE_SIZE (See more loads more by raising page)
+    const visible = merged.slice(0, currentPage * PAGE_SIZE)
+    setAllResults(visible)
     setTotalCount(merged.length)
   }
 
@@ -1326,8 +1641,8 @@ const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Date.now() / 3
       default:       query = query.order('follower_count', { ascending: false, nullsFirst: false })
     }
 
-    const from = (currentPage - 1) * PAGE_SIZE
-    query = query.range(from, from + PAGE_SIZE - 1)
+    // Cumulative fetch: first page*PAGE_SIZE rows (See more raises page)
+    query = query.range(0, currentPage * PAGE_SIZE - 1)
 
     const { data, count, error } = await query
     if (error) throw error
@@ -1350,8 +1665,7 @@ const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Date.now() / 3
       default:            query = query.order('created_at', { ascending: false })
     }
 
-    const from = (currentPage - 1) * PAGE_SIZE
-    query = query.range(from, from + PAGE_SIZE - 1)
+    query = query.range(0, currentPage * PAGE_SIZE - 1)
 
     const { data, count, error } = await query
     if (error) throw error
@@ -1371,8 +1685,7 @@ const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Date.now() / 3
       .ilike('title', `%${queryParam}%`)
       .order('created_at', { ascending: false })
 
-    const from = (currentPage - 1) * PAGE_SIZE
-    query = query.range(from, from + PAGE_SIZE - 1)
+    query = query.range(0, currentPage * PAGE_SIZE - 1)
 
     const { data, count, error } = await query
     if (error) throw error
@@ -1390,8 +1703,7 @@ const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Date.now() / 3
       .ilike('name', `%${queryParam}%`)
       .order('created_at', { ascending: false })
 
-    const from = (currentPage - 1) * PAGE_SIZE
-    query = query.range(from, from + PAGE_SIZE - 1)
+    query = query.range(0, currentPage * PAGE_SIZE - 1)
 
     const { data, count, error } = await query
     if (error) throw error
@@ -1492,7 +1804,8 @@ const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Date.now() / 3
     }
   }
 
-  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE))
+  const hasMore = allResults.length < totalCount
+  const remaining = Math.max(0, totalCount - allResults.length)
   const showFilterSidebar = activeTab === 'listings'
 
   const filterProps = {
@@ -1512,31 +1825,43 @@ const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Date.now() / 3
     <div className="sp-root">
       <GlobalStyles />
 
-      <SearchNav user={user} notifCount={notifCount} search={search} setSearch={setSearch} navigate={navigate} />
+      <SokoNav
+        user={user}
+        notifCount={notifCount}
+        search={search}
+        setSearch={setSearch}
+        navigate={navigate}
+        activeDistrict={district}
+        onDistrictChange={(d) => { setDistrict(d); setPage(1) }}
+        activePillar="marketplace"
+        ctaLabel="Sell Now"
+        onCta={() => navigate('/post')}
+      />
 
-      <div style={{ maxWidth:1400, margin:'0 auto', padding:'0 20px' }}>
+      <div className="sp-page">
 
         {/* ── Search summary bar ── */}
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'18px 0 0', flexWrap:'wrap', gap:8 }}>
-          <div style={{ fontSize:17, fontWeight:700, color:T.gray900 }}>
+        <div className="sp-summary">
+          <div className="sp-summary-title">
             {queryParam
-              ? <>Search results for <span style={{ color:T.green }}>"{queryParam}"</span></>
+              ? <>Results for <span style={{ color:T.green }}>&ldquo;{queryParam}&rdquo;</span></>
               : catParam
                 ? <>Browsing <span style={{ color:T.green }}>{catParam}</span></>
                 : 'Browse listings'}
           </div>
-          <div style={{ fontSize:14, color:T.gray600, fontWeight:500 }}>
+          <div className="sp-summary-count">
             {loading ? 'Searching…' : `${totalCount.toLocaleString()} ${resultsLabel} found`}
           </div>
         </div>
 
         {/* ── Search tabs — one per pillar ── */}
-        <div className="sp-scroll sp-tabs-scroll" style={{ display:'flex', gap:4, overflowX:'auto', marginTop:16, borderBottom:`1px solid ${T.gray200}` }}>
+        <div className="sp-scroll sp-tabs-scroll" style={{ display:'flex', gap:4, overflowX:'auto', marginTop:12, borderBottom:`1px solid ${T.gray200}` }}>
           {SEARCH_TABS.map(t => {
             const count = tabCounts[t.key]
             return (
               <button
                 key={t.key}
+                type="button"
                 className={`sp-search-tab${activeTab === t.key ? ' active' : ''}`}
                 onClick={() => handleTabChange(t.key)}
               >
@@ -1548,12 +1873,9 @@ const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Date.now() / 3
           })}
         </div>
 
-        <div style={{ display:'flex', gap:24, alignItems:'flex-start', paddingTop:18, paddingBottom:40 }}>
+        <div className="sp-body">
 
-          {/* ── FILTER SIDEBAR (desktop) — Marketplace tab only ──
-              Outer wrapper: pure position:sticky, no transform on it —
-              transforms on a sticky element can break its stickiness.
-              Inner wrapper: gets all the animation/transform treatment. */}
+          {/* ── FILTER SIDEBAR (desktop) — Marketplace tab only ── */}
           {showFilterSidebar && (
             <div className="sp-sidebar" style={{ position:'sticky', top:140, maxHeight:'calc(100vh - 160px)', overflowY:'auto' }}>
               <div
@@ -1566,16 +1888,16 @@ const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Date.now() / 3
           )}
 
           {/* ── RIGHT COLUMN ── */}
-          <div style={{ flex:1, minWidth:0 }}>
+          <div className="sp-main">
 
             {/* Sort + view bar */}
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:18, flexWrap:'wrap', gap:10 }}>
-              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                {/* Mobile filter button — Marketplace tab only */}
+            <div className="sp-toolbar">
+              <div style={{ display:'flex', alignItems:'center', gap:8, flexWrap:'wrap', minWidth:0, flex:1 }}>
                 {showFilterSidebar && (
                   <button
+                    type="button"
                     className="sp-mobile-filter-btn"
-                    style={{ display:'none', alignItems:'center', gap:6, background:'#fff', border:`1.5px solid ${T.gray200}`, borderRadius:10, padding:'8px 14px', fontSize:13, fontWeight:600, color:T.gray800, cursor:'pointer' }}
+                    style={{ display:'none', alignItems:'center', gap:6, background:'#fff', border:`1.5px solid ${T.gray200}`, borderRadius:12, padding:'9px 12px', fontSize:13, fontWeight:700, color:T.gray800, cursor:'pointer', minHeight:40 }}
                     onClick={() => setMobileFilterOpen(true)}
                   >
                     {Icon.filter(15)} Filters
@@ -1587,8 +1909,8 @@ const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Date.now() / 3
                   </button>
                 )}
 
-                <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                  <span style={{ fontSize:13, color:T.gray600, whiteSpace:'nowrap' }}>Sort by:</span>
+                <div style={{ display:'flex', alignItems:'center', gap:6, minWidth:0 }}>
+                  <span style={{ fontSize:12.5, color:T.gray600, whiteSpace:'nowrap' }}>Sort</span>
                   <select className="sp-sort-select" value={sortBy} onChange={e => { setSortBy(e.target.value); setPage(1) }}>
                     <option value="relevance">Relevance</option>
                     <option value="newest">Newest first</option>
@@ -1600,13 +1922,12 @@ const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Date.now() / 3
                 </div>
               </div>
 
-              {/* View toggle — Marketplace tab only (other tabs are row-list only) */}
               {activeTab === 'listings' && (
-                <div style={{ display:'flex', gap:6 }}>
-                  <button className={`sp-view-btn${viewMode === 'grid' ? ' active' : ''}`} onClick={() => setViewMode('grid')} title="Grid view">
+                <div style={{ display:'flex', gap:6, flexShrink:0 }}>
+                  <button type="button" className={`sp-view-btn${viewMode === 'grid' ? ' active' : ''}`} onClick={() => setViewMode('grid')} title="Grid view" aria-label="Grid view">
                     {Icon.grid(15)}
                   </button>
-                  <button className={`sp-view-btn${viewMode === 'list' ? ' active' : ''}`} onClick={() => setViewMode('list')} title="List view">
+                  <button type="button" className={`sp-view-btn${viewMode === 'list' ? ' active' : ''}`} onClick={() => setViewMode('list')} title="List view" aria-label="List view">
                     {Icon.list(15)}
                   </button>
                 </div>
@@ -1616,7 +1937,7 @@ const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Date.now() / 3
             {/* ── Results ── */}
             {loading ? (
               activeTab === 'listings' ? (
-                <div className="sp-results-grid grid-4" style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16 }}>
+                <div className="sp-results-grid grid-4">
                   {Array.from({ length: PAGE_SIZE }).map((_, i) => <SkeletonCard key={i} />)}
                 </div>
               ) : (
@@ -1628,47 +1949,70 @@ const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Date.now() / 3
               <EmptyState query={queryParam} onClearFilters={clearFiltersAndSearch} label={resultsLabel} />
             ) : activeTab === 'listings' ? (
               viewMode === 'grid' ? (
-                <div className="sp-results-grid grid-4" style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:16 }}>
+                <div className="sp-results-grid grid-4">
                   {allResults.map((l, i) => (
-                    <ResultCardGrid key={l.id} listing={l} delay={i * 0.04} onClick={() => navigate(resultHref('listings', l))} />
+                    <ResultCardGrid
+                      key={l.id}
+                      listing={l}
+                      delay={Math.min(i, 12) * 0.03}
+                      onClick={() => navigate(resultHref('listings', l))}
+                      user={user}
+                      navigate={navigate}
+                      saved={savedIds.has(l.id)}
+                      onToggleSave={toggleListingSave}
+                    />
                   ))}
                 </div>
               ) : (
-                <div className="sp-results-grid list-mode" style={{ display:'flex', flexDirection:'column', gap:12 }}>
+                <div className="sp-results-grid list-mode">
                   {allResults.map((l, i) => (
-                    <ResultCardList key={l.id} listing={l} delay={i * 0.04} onClick={() => navigate(resultHref('listings', l))} />
+                    <ResultCardList
+                      key={l.id}
+                      listing={l}
+                      delay={Math.min(i, 12) * 0.03}
+                      onClick={() => navigate(resultHref('listings', l))}
+                      user={user}
+                      navigate={navigate}
+                      saved={savedIds.has(l.id)}
+                      onToggleSave={toggleListingSave}
+                    />
                   ))}
                 </div>
               )
             ) : activeTab === 'shops' ? (
               <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
                 {allResults.map((s, i) => (
-                  <ShopResultCard key={s.id} shop={s} delay={i * 0.04} onClick={() => navigate(resultHref('shops', s))} />
+                  <ShopResultCard key={s.id} shop={s} delay={Math.min(i, 12) * 0.03} onClick={() => navigate(resultHref('shops', s))} />
                 ))}
               </div>
             ) : activeTab === 'lookingfor' ? (
               <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
                 {allResults.map((r, i) => (
-                  <RequestResultCard key={r.id} request={r} delay={i * 0.04} onClick={() => navigate(resultHref('lookingfor', r))} />
+                  <RequestResultCard key={r.id} request={r} delay={Math.min(i, 12) * 0.03} onClick={() => navigate(resultHref('lookingfor', r))} />
                 ))}
               </div>
             ) : activeTab === 'jobs' ? (
               <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
                 {allResults.map((j, i) => (
-                  <JobResultCard key={j.id} job={j} delay={i * 0.04} onClick={() => navigate(resultHref('jobs', j))} />
+                  <JobResultCard key={j.id} job={j} delay={Math.min(i, 12) * 0.03} onClick={() => navigate(resultHref('jobs', j))} />
                 ))}
               </div>
             ) : (
               <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
                 {allResults.map((s, i) => (
-                  <ServiceResultCard key={s.id} service={s} delay={i * 0.04} onClick={() => navigate(resultHref('services', s))} />
+                  <ServiceResultCard key={s.id} service={s} delay={Math.min(i, 12) * 0.03} onClick={() => navigate(resultHref('services', s))} />
                 ))}
               </div>
             )}
 
-            {/* ── Pagination ── */}
+            {/* ── See more (20 at a time) ── */}
             {!loading && allResults.length > 0 && (
-              <Pagination page={page} totalPages={totalPages} onChange={p => { setPage(p); window.scrollTo({ top:0, behavior:'smooth' }) }} />
+              <SeeMoreButton
+                visible={hasMore}
+                loading={loadingMore}
+                remaining={remaining}
+                onClick={() => setPage(p => p + 1)}
+              />
             )}
           </div>
         </div>

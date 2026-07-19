@@ -10,6 +10,7 @@ import {
   Image as ImageIcon,
   Wrench,
   Briefcase,
+  Search,
   ChevronRight,
 } from 'lucide-react'
 
@@ -17,7 +18,7 @@ const ICON = { size: 22, strokeWidth: 1.75 }
 
 /**
  * App-wide mobile bottom nav — professional glass bar + Lucide icons:
- * Home · Explore · Sell · Chats · Profile
+ * Home · Explore · Post · Chats · Profile
  */
 export default function BottomNav() {
   const navigate = useNavigate()
@@ -117,6 +118,25 @@ export default function BottomNav() {
               className="sbn-post-item"
               onClick={() => {
                 setShowPostMenu(false)
+                navigate('/looking-for', { state: { openComposer: true } })
+              }}
+            >
+              <span className="sbn-post-ic sbn-post-ic-looking" aria-hidden="true">
+                <Search size={20} strokeWidth={1.85} />
+              </span>
+              <span className="sbn-post-copy">
+                <strong>Looking For</strong>
+                <span>Post what you need · get offers</span>
+              </span>
+              <ChevronRight size={16} strokeWidth={2.2} className="sbn-post-chev" aria-hidden />
+            </button>
+
+            <button
+              type="button"
+              role="menuitem"
+              className="sbn-post-item"
+              onClick={() => {
+                setShowPostMenu(false)
                 navigate('/services?tab=post')
               }}
             >
@@ -172,7 +192,7 @@ export default function BottomNav() {
               type="button"
               className={`sbn-fab${showPostMenu ? ' is-open' : ''}`}
               onClick={() => setShowPostMenu((m) => !m)}
-              aria-label="Sell or post"
+              aria-label="Post"
               aria-expanded={showPostMenu}
             >
               <span className="sbn-fab-ring" aria-hidden="true" />
@@ -180,7 +200,7 @@ export default function BottomNav() {
                 <Plus size={24} strokeWidth={2.4} className="sbn-fab-plus" color="#fff" />
               </span>
             </button>
-            <span className="sbn-fab-label">Sell</span>
+            <span className="sbn-fab-label">Post</span>
           </div>
 
           <NavItem
@@ -493,6 +513,7 @@ const premiumCss = `
   }
 
   .sbn-post-ic-listing,
+  .sbn-post-ic-looking,
   .sbn-post-ic-service,
   .sbn-post-ic-job {
     background: #f3f4f6;

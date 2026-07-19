@@ -1,6 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import {
+  sourceFromMessage,
+  contextIdFromMessage,
+  conversationKey,
+  sourceMeta,
+  buildChatPath,
+  CHAT_SOURCES,
+  loadDeletedChatKeys,
+  markChatDeleted,
+} from '../utils/chatSources'
+import SafeAvatar from '../components/SafeAvatar'
+import { watchUserOnline, activityTargetsChat } from '../hooks/usePresence'
 
 // Some reply-to-image sends appear to save the body as a bare message id
 // with no `\x02[preview|||id]\x03body` wrapper at all — this matches that
@@ -56,6 +68,7 @@ const PILL_COLORS = {
   jobs: { bg: '#eff6ff', color: '#2563eb' },
   requests: { bg: '#fef3e0', color: '#c9820a' },
   shops: { bg: '#e0f7fa', color: '#0891b2' },
+  unread: { bg: '#e6f7ee', color: '#1a7a4a' },
 }
 
 const CHIP_COLORS = {
@@ -72,14 +85,10 @@ const PILLS = [
   { key: 'jobs', label: 'Jobs' },
   { key: 'requests', label: 'Requests' },
   { key: 'shops', label: 'Shops' },
+  { key: 'unread', label: 'Unread' },
 ]
 
-const CHIPS = [
-  { key: 'starred', label: 'Starred', Icon: StarFilledIcon },
-  { key: 'unread', label: 'Unread', Icon: BellIcon },
-  { key: 'offers', label: 'Offers', Icon: TagIcon },
-  { key: 'archived', label: 'Archived', Icon: ArchiveBoxIcon },
-]
+const CHIPS = []
 
 function VerifiedBadge() {
   return (
@@ -216,12 +225,27 @@ function PhoneIcon({ size = 13, color = 'currentColor' }) {
     </svg>
   )
 }
+function KebabIcon({ size = 18, color = '#3a443d' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
+      <circle cx="12" cy="5" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="12" cy="19" r="2" />
+    </svg>
+  )
+}
+function NewChatIcon({ size = 15, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+    </svg>
+  )
+}
 
 export default function ChatListPanel() {
   const navigate = useNavigate()
   // Params of the thread currently open in the right pane (if any) — used to
   // highlight the matching row on desktop's split view.
   const { userId: openUserId, listingId: openContextId } = useParams()
+  const location = useLocation()
 
   const [chats, setChats] = useState([])
   const [loading, setLoading] = useState(true)
@@ -229,14 +253,166 @@ export default function ChatListPanel() {
   // 'all' | 'marketplace' | 'services' | 'jobs' | 'requests' | 'shops' | 'starred' | 'unread' | 'offers' | 'archived'
   const [activeFilter, setActiveFilter] = useState('all')
   const [search, setSearch] = useState('')
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [newChatOpen, setNewChatOpen] = useState(false)
+  const [newChatQuery, setNewChatQuery] = useState('')
+  const [newChatResults, setNewChatResults] = useState([])
+  const [newChatLoading, setNewChatLoading] = useState(false)
   const [starred, setStarred] = useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem(STARRED_KEY) || '[]')) } catch { return new Set() }
   })
   const [archived, setArchived] = useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem(ARCHIVED_KEY) || '[]')) } catch { return new Set() }
   })
+  const [deletedKeys, setDeletedKeys] = useState(() => new Set())
+  const [rowMenuChat, setRowMenuChat] = useState(null)
+  const [rowBusy, setRowBusy] = useState(false)
+  // Live presence: otherUserId -> { online, typing, recording, activityMeta }
+  // activityMeta scopes typing/recording to peer + context so only the right row lights up
+  const [presenceMap, setPresenceMap] = useState({})
 
   useEffect(() => { loadChats() }, [])
+
+  // Track online / typing / recording for every peer in the list
+  useEffect(() => {
+    const ids = [...new Set(chats.map(c => c.otherId).filter(Boolean))]
+    if (!ids.length || !currentUser?.id) return undefined
+
+    const unsubs = ids.map((uid) => {
+      const patch = (partial) => {
+        setPresenceMap(prev => {
+          const cur = prev[uid] || {
+            online: false,
+            typing: false,
+            recording: false,
+            activityMeta: null,
+          }
+          const next = { ...cur, ...partial }
+          if (
+            next.online === cur.online
+            && next.typing === cur.typing
+            && next.recording === cur.recording
+            && next.activityMeta === cur.activityMeta
+          ) return prev
+          return { ...prev, [uid]: next }
+        })
+      }
+
+      return watchUserOnline(
+        uid,
+        (online) => {
+          patch({
+            online: !!online,
+            ...(online ? {} : { typing: false, recording: false, activityMeta: null }),
+          })
+        },
+        (typing, meta) => {
+          // Must be addressed to me (peerId === my id)
+          const forMe = !!typing && !!meta?.peerId && String(meta.peerId) === String(currentUser.id)
+          if (typing && forMe) {
+            patch({
+              online: true, // never mark them offline when we receive typing
+              typing: true,
+              recording: false,
+              activityMeta: meta,
+            })
+          } else if (!typing) {
+            patch({ typing: false, activityMeta: null })
+          }
+          // typing for someone else → ignore (don't touch online)
+        },
+        (recording, meta) => {
+          const forMe = !!recording && !!meta?.peerId && String(meta.peerId) === String(currentUser.id)
+          if (recording && forMe) {
+            patch({
+              online: true,
+              recording: true,
+              typing: false,
+              activityMeta: meta,
+            })
+          } else if (!recording) {
+            patch({ recording: false, activityMeta: null })
+          }
+        },
+      )
+    })
+
+    return () => { unsubs.forEach(u => { try { u() } catch { /* ignore */ } }) }
+  }, [chats, currentUser?.id])
+
+  // Refetch every time the route changes (e.g. navigating into/out of a chat).
+  // This is layout-agnostic — works whether ChatListPanel stays mounted in a
+  // split view or not, and doesn't depend on Realtime or window focus events.
+  useEffect(() => { loadChats() }, [location.pathname])
+
+  // Sync deleted chats + listen for deletes from the thread view
+  useEffect(() => {
+    if (!currentUser?.id) return
+    setDeletedKeys(loadDeletedChatKeys(currentUser.id))
+    function onDeleted() {
+      setDeletedKeys(loadDeletedChatKeys(currentUser.id))
+      loadChats()
+    }
+    window.addEventListener('soko:chats-deleted', onDeleted)
+    window.addEventListener('soko:messages-updated', onDeleted)
+    return () => {
+      window.removeEventListener('soko:chats-deleted', onDeleted)
+      window.removeEventListener('soko:messages-updated', onDeleted)
+    }
+  }, [currentUser?.id])
+
+  // Keep the list in sync with brand-new conversations (e.g. started via
+  // "New Message") and any other message activity — ChatListPanel usually
+  // stays mounted in the split-view layout, so it won't otherwise notice
+  // a chat that didn't exist yet when loadChats() first ran.
+  useEffect(() => {
+    if (!currentUser?.id) return
+    const channel = supabase
+      .channel(`chatlist_${currentUser.id}_${Date.now()}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
+        const msg = payload.new
+        if (msg.from_user === currentUser.id || msg.to_user === currentUser.id) {
+          loadChats()
+        }
+      })
+      .subscribe()
+    return () => { supabase.removeChannel(channel) }
+  }, [currentUser?.id])
+
+  useEffect(() => {
+    if (!newChatOpen) return
+    const q = newChatQuery.trim()
+    let cancelled = false
+    setNewChatLoading(true)
+    const t = setTimeout(async () => {
+      let query = supabase
+        .from('profiles')
+        .select('id,full_name,avatar_url,city')
+        .neq('id', currentUser?.id || '')
+        .limit(20)
+      if (q) query = query.ilike('full_name', `%${q}%`)
+      const { data } = await query
+      if (!cancelled) {
+        setNewChatResults(data || [])
+        setNewChatLoading(false)
+      }
+    }, 300)
+    return () => { cancelled = true; clearTimeout(t) }
+  }, [newChatOpen, newChatQuery, currentUser])
+
+  async function startNewChat(person) {
+    setNewChatOpen(false)
+    // Optional legacy users-table upsert — ignore RLS 403s
+    try {
+      await supabase.from('users').upsert(
+        { id: person.id, name: person.full_name || 'User' },
+        { onConflict: 'id' }
+      )
+    } catch { /* ignore */ }
+    navigate(`/chat/${person.id}?src=direct`, {
+      state: { source: 'direct' },
+    })
+  }
 
   function toggleStar(key, e) {
     e.stopPropagation()
@@ -281,77 +457,76 @@ export default function ChatListPanel() {
 
     for (const msg of messages) {
       const otherId = msg.from_user === user.id ? msg.to_user : msg.from_user
-      const serviceId = msg.service_id || null
-      const listingId = msg.listing_id || null
-      const requestId = msg.request_id || null
+      const source = sourceFromMessage(msg)
+      const contextId = contextIdFromMessage(msg)
       const isCallLog = !!msg.call_type
-
-      let key
-      if (serviceId) key = `svc:${otherId}:${serviceId}`
-      else if (listingId) key = `lst:${otherId}:${listingId}`
-      else if (requestId) key = `req:${otherId}:${requestId}`
-      else key = `dir:${otherId}`
+      const key = conversationKey(otherId, source, contextId)
 
       if (!convos.has(key)) {
         convos.set(key, {
           key,
           otherId,
-          contextId: serviceId || listingId || requestId || null,
-          isService: !!serviceId,
-          isRequestCtx: !!requestId,
-          isDirect: !serviceId && !listingId && !requestId,
+          source,
+          contextId,
+          isService: source === 'service',
+          isRequestCtx: source === 'request',
+          isJob: source === 'job',
+          isShop: source === 'shop',
+          isDirect: source === 'direct',
           lastMsg: msg,
-          lastRealMsg: isCallLog ? null : msg,
+          lastPreviewMsg: isCallLog ? null : msg,
         })
       } else {
         const c = convos.get(key)
-        if (!c.lastRealMsg && !isCallLog) {
-          c.lastRealMsg = msg
-          c.lastMsg = msg
-        }
-      }
-    }
-
-    const allKeys = [...convos.keys()]
-    for (const k of allKeys) {
-      if (!k.startsWith('dir:')) continue
-      const c = convos.get(k)
-      const contextKey = allKeys.find(
-        ok => !ok.startsWith('dir:') && ok.includes(`:${c.otherId}:`)
-      )
-      if (contextKey) {
-        const ctx = convos.get(contextKey)
-        const dirTime = new Date(c.lastMsg.created_at)
-        const ctxTime = new Date(ctx.lastMsg.created_at)
-        if (dirTime > ctxTime && !c.lastMsg.call_type) {
-          ctx.lastMsg = c.lastMsg
-        }
-        convos.delete(k)
+        if (!c.lastPreviewMsg && !isCallLog) c.lastPreviewMsg = msg
       }
     }
 
     const conversations = [...convos.values()].map(c => ({
       ...c,
-      lastMsg: c.lastRealMsg || c.lastMsg,
+      lastMsg: c.lastPreviewMsg || c.lastMsg,
+      lastActivityAt: c.lastMsg?.created_at,
     }))
 
     const otherIds = [...new Set(conversations.map(c => c.otherId))]
-    const serviceIds = conversations.filter(c => c.isService && c.contextId).map(c => c.contextId)
-    const listingIds = conversations.filter(c => !c.isService && !c.isRequestCtx && c.contextId).map(c => c.contextId)
+    const serviceIds = conversations.filter(c => c.source === 'service' && c.contextId).map(c => c.contextId)
+    const listingIds = conversations.filter(c => c.source === 'listing' && c.contextId).map(c => c.contextId)
+    const shopIds = conversations.filter(c => c.source === 'shop' && c.contextId).map(c => c.contextId)
+    const jobIds = conversations.filter(c => c.source === 'job' && c.contextId).map(c => c.contextId)
+    const requestIds = conversations.filter(c => c.source === 'request' && c.contextId).map(c => c.contextId)
 
-    const [{ data: profiles }, { data: services }, { data: listings }] = await Promise.all([
-      supabase.from('profiles').select('id,full_name,avatar_url,city').in('id', otherIds),
+    const [
+      { data: profiles },
+      { data: services },
+      { data: listings },
+      shopsRes,
+      jobsRes,
+      requestsRes,
+    ] = await Promise.all([
+      supabase.from('profiles').select('id,full_name,avatar_url,city,is_verified').in('id', otherIds),
       serviceIds.length > 0
         ? supabase.from('services').select('id,name,category,rate,city,media_urls').in('id', serviceIds)
-        : { data: [] },
+        : Promise.resolve({ data: [] }),
       listingIds.length > 0
         ? supabase.from('listings').select('id,title,images,price').in('id', listingIds)
-        : { data: [] },
+        : Promise.resolve({ data: [] }),
+      shopIds.length > 0
+        ? supabase.from('shops').select('id,name,slug,logo_url,category,city,district').in('id', shopIds)
+        : Promise.resolve({ data: [] }),
+      jobIds.length > 0
+        ? supabase.from('jobs').select('id,title,company,city,type,logo_url,cover_image_url,poster_id').in('id', jobIds)
+        : Promise.resolve({ data: [] }),
+      requestIds.length > 0
+        ? supabase.from('buyer_requests').select('id,title,budget,city,status').in('id', requestIds)
+        : Promise.resolve({ data: [] }),
     ])
 
     const profilesMap = Object.fromEntries((profiles || []).map(p => [p.id, p]))
     const servicesMap = Object.fromEntries((services || []).map(s => [s.id, s]))
     const listingsMap = Object.fromEntries((listings || []).map(l => [l.id, l]))
+    const shopsMap = Object.fromEntries((shopsRes?.data || []).map(s => [s.id, s]))
+    const jobsMap = Object.fromEntries((jobsRes?.data || []).map(j => [j.id, j]))
+    const requestsMap = Object.fromEntries((requestsRes?.data || []).map(r => [r.id, r]))
 
     const enriched = await Promise.all(conversations.map(async c => {
       let unreadQ = supabase
@@ -360,20 +535,26 @@ export default function ChatListPanel() {
         .eq('from_user', c.otherId)
         .eq('to_user', user.id)
         .eq('read', false)
-      if (c.isService && c.contextId) unreadQ = unreadQ.eq('service_id', c.contextId)
-      else if (c.isRequestCtx && c.contextId) unreadQ = unreadQ.eq('request_id', c.contextId)
-      else if (!c.isService && !c.isRequestCtx && c.contextId) unreadQ = unreadQ.eq('listing_id', c.contextId)
+      if (c.source === 'service' && c.contextId) unreadQ = unreadQ.eq('service_id', c.contextId)
+      else if (c.source === 'listing' && c.contextId) unreadQ = unreadQ.eq('listing_id', c.contextId)
+      else if (c.source === 'request' && c.contextId) unreadQ = unreadQ.eq('request_id', c.contextId)
+      else if (c.source === 'job' && c.contextId) unreadQ = unreadQ.eq('job_id', c.contextId)
+      else if (c.source === 'shop' && c.contextId) unreadQ = unreadQ.eq('shop_id', c.contextId)
       const { count } = await unreadQ
 
       const profile = profilesMap[c.otherId] || {}
       const displayName = profile.full_name || 'User'
       const avatarUrl = profile.avatar_url || null
-      const isVerified = profile.is_verified ?? profile.verified ?? false
+      const isVerified = !!profile.is_verified
 
-      const decoded = decodeReply(c.lastMsg.body || '')
-      const isRequest = c.isRequestCtx || (!c.isService && REQUEST_TEXT_RE.test(decoded.body || ''))
-      const requestTitle = isRequest ? extractRequestTitle(decoded.body) : null
+      const decoded = decodeReply(c.lastMsg?.body || '')
+      const isRequest = c.source === 'request'
+        || (!c.isService && REQUEST_TEXT_RE.test(decoded.body || ''))
+      const requestEntity = c.source === 'request' ? requestsMap[c.contextId] : null
+      const requestTitle = requestEntity?.title
+        || (isRequest ? extractRequestTitle(decoded.body) : null)
       const offerText = parseOffer(decoded.body)
+      const meta = sourceMeta(c.source)
 
       return {
         ...c,
@@ -384,53 +565,82 @@ export default function ChatListPanel() {
         requestTitle,
         hasOffer: !!offerText,
         offerText,
-        service: c.isService ? servicesMap[c.contextId] : null,
-        listing: !c.isService && !c.isRequestCtx && c.contextId ? listingsMap[c.contextId] : null,
+        sourceLabel: meta.label,
+        sourceColor: meta.color,
+        sourceBg: meta.bg,
+        service: c.source === 'service' ? servicesMap[c.contextId] : null,
+        listing: c.source === 'listing' ? listingsMap[c.contextId] : null,
+        shop: c.source === 'shop' ? shopsMap[c.contextId] : null,
+        job: c.source === 'job' ? jobsMap[c.contextId] : null,
+        request: requestEntity,
         unread: count || 0,
       }
     }))
 
-    enriched.sort((a, b) => new Date(b.lastMsg.created_at) - new Date(a.lastMsg.created_at))
+    enriched.sort((a, b) => {
+      const ta = new Date(a.lastActivityAt || a.lastMsg?.created_at || 0)
+      const tb = new Date(b.lastActivityAt || b.lastMsg?.created_at || 0)
+      return tb - ta
+    })
     setChats(enriched)
     setLoading(false)
   }
 
   // ── Counts for pills/chips ───────────────────────────────────────────────
   const counts = useMemo(() => {
-    const visible = chats.filter(c => !c.isDirect && !archived.has(c.key))
+    // Include direct person-to-person chats; exclude user-deleted chats
+    const visible = chats.filter(c => !archived.has(c.key) && !deletedKeys.has(c.key))
     return {
       all: visible.length,
       marketplace: visible.filter(c => !c.isService && !c.isRequest && c.listing).length,
       services: visible.filter(c => c.isService).length,
-      jobs: 0, // No job_id column on `messages` yet.
-      requests: visible.filter(c => c.isRequest).length,
-      shops: 0, // No shop_id column on `messages` yet.
+      jobs: visible.filter(c => c.isJob || c.source === 'job').length,
+      requests: visible.filter(c => c.isRequest || c.source === 'request').length,
+      shops: visible.filter(c => c.isShop || c.source === 'shop').length,
       offers: visible.filter(c => c.hasOffer).length,
-      archived: [...archived].filter(k => chats.some(c => c.key === k)).length,
-      starred: [...starred].filter(k => chats.some(c => c.key === k) && !archived.has(k)).length,
+      archived: [...archived].filter(k => chats.some(c => c.key === k) && !deletedKeys.has(k)).length,
+      starred: [...starred].filter(k => chats.some(c => c.key === k) && !archived.has(k) && !deletedKeys.has(k)).length,
       unread: visible.filter(c => c.unread > 0).length,
     }
-  }, [chats, starred, archived])
+  }, [chats, starred, archived, deletedKeys])
+
+  // ── Unread MESSAGE counts per category — drives the badges on the pill row ──
+  const unreadCounts = useMemo(() => {
+    const visible = chats.filter(c => !archived.has(c.key) && !deletedKeys.has(c.key))
+    const sum = list => list.reduce((n, c) => n + (c.unread || 0), 0)
+    return {
+      all: sum(visible),
+      marketplace: sum(visible.filter(c => c.source === 'listing' || (!c.isService && !c.isRequest && c.listing))),
+      services: sum(visible.filter(c => c.source === 'service' || c.isService)),
+      jobs: sum(visible.filter(c => c.source === 'job' || c.isJob)),
+      requests: sum(visible.filter(c => c.source === 'request' || c.isRequest)),
+      shops: sum(visible.filter(c => c.source === 'shop' || c.isShop)),
+      unread: sum(visible),
+    }
+  }, [chats, archived, deletedKeys])
 
   // ── Filtering + search ──────────────────────────────────────────────────────
   const filtered = useMemo(() => {
     const pool = activeFilter === 'archived'
-      ? chats.filter(c => archived.has(c.key))
-      : chats.filter(c => !archived.has(c.key) && !c.isDirect)
+      ? chats.filter(c => archived.has(c.key) && !deletedKeys.has(c.key))
+      : chats.filter(c => !archived.has(c.key) && !deletedKeys.has(c.key))
 
     let list = pool
     switch (activeFilter) {
-      case 'marketplace': list = pool.filter(c => !c.isService && !c.isRequest && c.listing); break
-      case 'services': list = pool.filter(c => c.isService); break
-      case 'requests': list = pool.filter(c => c.isRequest); break
-      case 'jobs': list = pool.filter(c => c.isJob); break
-      case 'shops': list = pool.filter(c => c.isShop); break
+      case 'marketplace': list = pool.filter(c => c.source === 'listing' || (!!c.listing && c.source !== 'service')); break
+      case 'services': list = pool.filter(c => c.source === 'service' || c.isService); break
+      case 'requests': list = pool.filter(c => c.source === 'request' || c.isRequest); break
+      case 'jobs': list = pool.filter(c => c.source === 'job' || c.isJob); break
+      case 'shops': list = pool.filter(c => c.source === 'shop' || c.isShop); break
       case 'starred': list = pool.filter(c => starred.has(c.key)); break
       case 'unread': list = pool.filter(c => c.unread > 0); break
       case 'offers': list = pool.filter(c => c.hasOffer); break
       case 'archived': list = pool; break
       default: list = pool
     }
+
+    // Always hide deleted chats
+    list = list.filter(c => !deletedKeys.has(c.key))
 
     if (search.trim()) {
       const q = search.toLowerCase()
@@ -447,42 +657,69 @@ export default function ChatListPanel() {
       })
     }
     return list
-  }, [chats, activeFilter, search, starred, archived])
+  }, [chats, activeFilter, search, starred, archived, deletedKeys])
 
   function renderLastMsg(chat) {
     const msg = chat.lastMsg
+    if (!msg) return <span style={{ color: '#aaa' }}>No messages yet</span>
+
     const isMine = msg.from_user === currentUser?.id
     const prefix = isMine ? 'You: ' : ''
+    const decoded = decodeReply(msg.body || '')
+    const caption = (decoded.body || '').trim()
 
     const iconRow = (Icon, label) => (
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', verticalAlign: 'middle' }}>
-        <Icon size={12} color="currentColor" /> {label}
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, maxWidth: '100%' }}>
+        <Icon size={13} color="currentColor" style={{ flexShrink: 0 }} />
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {label}
+        </span>
       </span>
     )
+
+    if (msg.media_type === 'deal_request') {
+      return iconRow(TagIcon, prefix + 'Deal request')
+    }
 
     if (msg.call_type) {
       const isVideo = msg.call_type === 'video'
       const CallIcon = isVideo ? VideoMiniIcon : PhoneIcon
-      if (msg.call_status === 'missed') return iconRow(CallIcon, 'Missed ' + (isVideo ? 'Video call' : 'Voice call'))
-      if (msg.call_status === 'ended') {
+      if (msg.call_status === 'missed') return iconRow(CallIcon, 'Missed ' + (isVideo ? 'video call' : 'voice call'))
+      if (msg.call_status === 'declined') return iconRow(CallIcon, 'Declined ' + (isVideo ? 'video call' : 'voice call'))
+      if (msg.call_status === 'ended' || msg.call_status === 'answered') {
         const dur = msg.call_duration
-        const durStr = dur ? (dur >= 60 ? Math.floor(dur / 60) + 'm ' + (dur % 60) + 's' : dur + 's') : ''
-        return iconRow(CallIcon, (isVideo ? 'Video call' : 'Voice call') + (durStr ? ' · ' + durStr : ''))
+        const durStr = dur
+          ? (dur >= 60 ? `${Math.floor(dur / 60)}m ${dur % 60}s` : `${dur}s`)
+          : ''
+        return iconRow(CallIcon, (isVideo ? 'Video call' : 'Voice call') + (durStr ? ` · ${durStr}` : ''))
       }
       return iconRow(CallIcon, isVideo ? 'Video call' : 'Voice call')
     }
 
-    if (msg.media_type === 'image') return iconRow(CameraIcon, prefix + 'Photo')
-    if (msg.media_type === 'video') return iconRow(VideoMiniIcon, prefix + 'Video')
-    if (msg.media_type === 'audio') return iconRow(MicIcon, prefix + 'Voice note')
-    if (!msg.body) return iconRow(PaperclipIcon, prefix + 'Attachment')
+    if (msg.media_type === 'image' || (msg.media_url && msg.media_type === 'image')) {
+      return iconRow(CameraIcon, prefix + (caption || 'Photo'))
+    }
+    if (msg.media_type === 'video') {
+      return iconRow(VideoMiniIcon, prefix + (caption || 'Video'))
+    }
+    if (msg.media_type === 'audio') {
+      return iconRow(MicIcon, prefix + 'Voice note')
+    }
+    if (msg.media_url && msg.media_type && msg.media_type !== 'text') {
+      return iconRow(PaperclipIcon, prefix + (caption || 'Attachment'))
+    }
 
-    const decoded = decodeReply(msg.body)
-    let body = (decoded.body || '').trim()
-    if (!body && decoded.replyToId) body = '📷 Photo'
+    let body = caption
+    if (!body && decoded.replyToId) body = 'Photo'
     if (!body) body = 'Message'
-    const text = body.length > 38 ? body.slice(0, 38) + '…' : body
-    return prefix + text
+    // Strip leftover control chars / reply artifacts
+    body = body.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '').trim() || 'Message'
+    const text = body.length > 42 ? body.slice(0, 42) + '…' : body
+    return (
+      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {prefix}{text}
+      </span>
+    )
   }
 
   function timeLabel(date) {
@@ -512,62 +749,120 @@ export default function ChatListPanel() {
   }
 
   function renderChatRow(chat, i) {
-    const category = chat.isService ? 'services' : chat.isRequest ? 'requests' : chat.listing ? 'marketplace' : null
-    const catMeta = category ? CATEGORY_META[category] : null
+    const src = chat.source || (chat.isService ? 'service' : chat.isRequest ? 'request' : chat.listing ? 'listing' : 'direct')
+    const meta = sourceMeta(src)
 
-    const contextLabel = category === 'services' ? (chat.service?.name || 'Service')
-      : category === 'requests' ? (chat.requestTitle ? `Looking for ${chat.requestTitle}` : 'Buyer Request')
-      : category === 'marketplace' ? (chat.listing?.title || null)
+    const contextLabel =
+      src === 'service' ? (chat.service?.name || 'Service')
+      : src === 'request' ? (chat.requestTitle ? `Looking for ${chat.requestTitle}` : 'Buyer Request')
+      : src === 'listing' ? (chat.listing?.title || null)
+      : src === 'shop' ? (chat.shop?.name || 'Shop')
+      : src === 'job' ? (chat.job?.title || 'Job')
       : null
-    const contextSub = category === 'services' ? [chat.service?.rate, chat.service?.city].filter(Boolean).join(' · ')
-      : category === 'marketplace' && chat.listing?.price ? 'MWK ' + Number(chat.listing.price).toLocaleString()
+
+    const contextSub =
+      src === 'service' ? [chat.service?.rate, chat.service?.city].filter(Boolean).join(' · ')
+      : src === 'listing' && chat.listing?.price ? 'MWK ' + Number(chat.listing.price).toLocaleString()
+      : src === 'shop' ? [chat.shop?.category, chat.shop?.city || chat.shop?.district].filter(Boolean).join(' · ')
+      : src === 'job' ? [chat.job?.company, chat.job?.city].filter(Boolean).join(' · ')
+      : src === 'request' && chat.request?.budget ? String(chat.request.budget)
       : ''
 
-    const itemImg = chat.isService ? chat.service?.media_urls?.[0] : chat.listing?.images?.[0]
-    const finalAvatar = itemImg || chat.avatarUrl
+    // Context image (product / service / shop logo / job logo) — right thumb
+    const productImg =
+      src === 'service' ? chat.service?.media_urls?.[0]
+      : src === 'listing' ? chat.listing?.images?.[0]
+      : src === 'shop' ? chat.shop?.logo_url
+      : src === 'job' ? (chat.job?.logo_url || chat.job?.cover_image_url)
+      : null
+
+    const profileAvatar = chat.avatarUrl || null
     const initial = (chat.displayName || 'U')[0].toUpperCase()
     const isStarred = starred.has(chat.key)
     const isArchived = archived.has(chat.key)
     const hasUnread = chat.unread > 0
     const isOpen = openUserId === chat.otherId && String(openContextId || '') === String(chat.contextId || '')
+    const presence = presenceMap[chat.otherId] || {}
+    const isOnline = !!presence.online
+    // Typing/recording only on the row that matches who they're messaging + context
+    const activityForThisRow = activityTargetsChat(presence.activityMeta, {
+      myId: currentUser?.id,
+      otherId: chat.otherId,
+      contextId: chat.contextId,
+      source: src,
+    })
+    // Require peer scoping: if no meta/peerId, do NOT show on list (avoids lighting every row)
+    const isTyping = !!presence.typing && !!presence.activityMeta?.peerId && activityForThisRow
+    const isRecording = !!presence.recording && !!presence.activityMeta?.peerId && activityForThisRow
 
-    const chatPath = chat.contextId ? `/chat/${chat.otherId}/${chat.contextId}` : `/chat/${chat.otherId}`
-    const chatState = chat._matchedMsgId ? { state: { scrollToMessageId: chat._matchedMsgId } } : {}
+    const chatPath = buildChatPath(chat.otherId, { source: src, contextId: chat.contextId })
+    const chatState = {
+      source: src,
+      ...(chat._matchedMsgId ? { scrollToMessageId: chat._matchedMsgId } : {}),
+    }
+
+    const activityAt = chat.lastActivityAt || chat.lastMsg?.created_at
+    const firstName = (chat.displayName || 'User').split(' ')[0]
 
     return (
       <div
         key={chat.key}
+        className="chat-row"
         style={{
           ...S.chatRow,
           animationDelay: i * 0.03 + 's',
           background: isOpen ? '#e6f7ee' : hasUnread ? '#fafffd' : '#fff',
         }}
-        onClick={() => navigate(chatPath, chatState)}
+        onClick={() => navigate(chatPath, { state: chatState })}
       >
         <div style={S.avatarWrap}>
-          <div style={{ ...S.avatar, background: finalAvatar ? '#eef2ef' : 'linear-gradient(135deg,#1a7a4a,#22a05e)' }}>
-            {finalAvatar
-              ? <img src={finalAvatar} alt="" style={S.avatarImg} />
-              : <span style={S.avatarInitial}>{initial}</span>}
-          </div>
-          {/* Online dot removed — there's no real presence data behind it yet.
-              Re-add here once online status is wired to Supabase Presence. */}
+          <SafeAvatar
+            url={profileAvatar}
+            name={chat.displayName || initial}
+            size={54}
+            radius="50%"
+            style={{ border: '2px solid #fff' }}
+          />
+          <span
+            style={{
+              ...S.onlineDot,
+              background: isOnline ? '#22c55e' : '#c5d0c8',
+              boxShadow: isOnline
+                ? '0 0 0 2px #fff, 0 0 0 4px rgba(34,197,94,0.25)'
+                : '0 0 0 2px #fff',
+            }}
+            title={isOnline ? 'Online' : 'Offline'}
+          />
         </div>
 
         <div style={S.chatInfo}>
           <div style={S.chatTop}>
             <div style={S.nameRow}>
-              <span style={S.chatName}>{chat.displayName}</span>
+              <span style={{
+                ...S.chatName,
+                fontWeight: hasUnread ? 800 : 700,
+                color: isOnline ? '#0f1410' : undefined,
+              }}>
+                {chat.displayName}
+              </span>
               {chat.isVerified && <VerifiedBadge />}
             </div>
-            <span style={{ ...S.chatTime, color: hasUnread ? '#1a7a4a' : '#bbb', fontWeight: hasUnread ? '700' : '400' }}>
-              {timeLabel(chat.lastMsg.created_at)}
+            <span
+              style={{
+                ...S.chatTime,
+                color: hasUnread || isTyping || isRecording ? '#1a7a4a' : '#a0ada6',
+                fontWeight: hasUnread ? 700 : 500,
+              }}
+            >
+              {isOnline && !isTyping && !isRecording ? 'Online' : timeLabel(activityAt)}
             </span>
           </div>
 
           {contextLabel && (
             <div style={S.contextPill}>
-              <span style={{ ...S.contextBadge, background: catMeta.bg, color: catMeta.color }}>{catMeta.label}</span>
+              <span style={{ ...S.contextBadge, background: meta.bg, color: meta.color }}>
+                {meta.label}
+              </span>
               <span style={S.contextName}>{contextLabel}</span>
               {contextSub ? <span style={S.contextSub}> · {contextSub}</span> : null}
             </div>
@@ -575,33 +870,151 @@ export default function ChatListPanel() {
 
           <div style={S.chatBottom}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              {chat.hasOffer ? (
-                <div style={S.offerLine}><TagIcon size={13} color="#1a7a4a" /> {chat.offerText}</div>
+              {isRecording ? (
+                <div style={S.presenceLineRecording}>
+                  <span style={S.recDot} />
+                  {firstName} is recording audio…
+                </div>
+              ) : isTyping ? (
+                <div style={S.presenceLineTyping}>
+                  {firstName} is typing
+                  <span style={S.typingDotsInline}>
+                    <span style={{ ...S.typingDotSm, animationDelay: '0s' }} />
+                    <span style={{ ...S.typingDotSm, animationDelay: '0.2s' }} />
+                    <span style={{ ...S.typingDotSm, animationDelay: '0.4s' }} />
+                  </span>
+                </div>
+              ) : chat.hasOffer ? (
+                <div style={S.offerLine}>
+                  <TagIcon size={13} color="#1a7a4a" /> {chat.offerText}
+                </div>
               ) : (
-                <div style={{
-                  ...S.lastMsg,
-                  fontWeight: hasUnread || search ? '600' : '400',
-                  color: hasUnread ? '#0f1410' : (search && chat._matchedMsgId ? '#1a7a4a' : '#888'),
-                }}>
+                <div
+                  style={{
+                    ...S.lastMsg,
+                    fontWeight: hasUnread || search ? 600 : 400,
+                    color: hasUnread
+                      ? '#0f1410'
+                      : (search && chat._matchedMsgId ? '#1a7a4a' : '#6b7a70'),
+                  }}
+                >
                   {renderLastMsg(chat)}
                 </div>
               )}
             </div>
             <div style={S.rowActions}>
-              {hasUnread && <span style={S.unreadBadge}>{chat.unread > 9 ? '9+' : chat.unread}</span>}
+              {hasUnread && (
+                <span style={S.unreadBadge}>
+                  {chat.unread > 9 ? '9+' : chat.unread}
+                </span>
+              )}
               <div style={S.actionIcons}>
-                <button style={S.starBtn} onClick={(e) => toggleStar(chat.key, e)} aria-label="Star conversation" title={isStarred ? 'Unstar' : 'Star'}>
+                <button
+                  style={S.starBtn}
+                  onClick={(e) => { e.stopPropagation(); setRowMenuChat(chat) }}
+                  aria-label="Chat options"
+                  title="Options"
+                >
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="#9ca3af">
+                    <circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" />
+                  </svg>
+                </button>
+                <button
+                  style={S.starBtn}
+                  onClick={(e) => toggleStar(chat.key, e)}
+                  aria-label="Star conversation"
+                  title={isStarred ? 'Unstar' : 'Star'}
+                >
                   <StarIcon filled={isStarred} />
                 </button>
-                <button style={S.starBtn} onClick={(e) => toggleArchive(chat.key, e)} aria-label="Archive conversation" title={isArchived ? 'Unarchive' : 'Archive'}>
+                <button
+                  style={S.starBtn}
+                  onClick={(e) => toggleArchive(chat.key, e)}
+                  aria-label="Archive conversation"
+                  title={isArchived ? 'Unarchive' : 'Archive'}
+                >
                   <ArchiveIcon active={isArchived} />
                 </button>
               </div>
             </div>
           </div>
         </div>
+
+        {productImg && (
+          <div style={S.productThumb} title={contextLabel || meta.label}>
+            <img
+              src={productImg}
+              alt=""
+              style={S.productThumbImg}
+              onError={e => { e.currentTarget.style.display = 'none' }}
+            />
+          </div>
+        )}
       </div>
     )
+  }
+
+  async function rowBlock(chat) {
+    if (!chat?.otherId || rowBusy) return
+    setRowBusy(true)
+    try {
+      const { error } = await supabase.rpc('block_user', {
+        p_blocked_id: chat.otherId,
+        p_reason: 'Blocked from chat list',
+      })
+      if (error) throw error
+      if (currentUser?.id) {
+        markChatDeleted(currentUser.id, chat.key)
+        setDeletedKeys(loadDeletedChatKeys(currentUser.id))
+      }
+      setRowMenuChat(null)
+    } catch (e) {
+      alert(e?.message || 'Could not block user')
+    } finally {
+      setRowBusy(false)
+    }
+  }
+
+  async function rowReport(chat) {
+    if (!chat?.otherId || rowBusy) return
+    const reason = window.prompt('Why are you reporting this user?', 'spam')
+    if (!reason || reason.trim().length < 3) return
+    setRowBusy(true)
+    try {
+      const { error } = await supabase.rpc('report_user', {
+        p_reported_user_id: chat.otherId,
+        p_reason: reason.trim(),
+        p_details: 'Reported from chat list',
+        p_listing_id: chat.source === 'listing' ? chat.contextId : null,
+      })
+      if (error) throw error
+      alert('Report submitted. Thank you.')
+      setRowMenuChat(null)
+    } catch (e) {
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+        await supabase.from('user_reports').insert({
+          reporter_id: user.id,
+          reported_user_id: chat.otherId,
+          reason: reason.trim(),
+          details: 'Reported from chat list',
+        })
+        alert('Report submitted. Thank you.')
+        setRowMenuChat(null)
+      } catch (e2) {
+        alert(e?.message || 'Could not submit report')
+      }
+    } finally {
+      setRowBusy(false)
+    }
+  }
+
+  function rowDelete(chat) {
+    if (!chat?.key || !currentUser?.id) return
+    if (!window.confirm(`Delete chat with ${chat.displayName}?`)) return
+    markChatDeleted(currentUser.id, chat.key)
+    setDeletedKeys(loadDeletedChatKeys(currentUser.id))
+    setRowMenuChat(null)
   }
 
   const empty = emptyStateCopy()
@@ -611,8 +1024,19 @@ export default function ChatListPanel() {
       <style>{`
         @keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+        @keyframes typingDot { 0%,80%,100%{transform:scale(0.6);opacity:0.4} 40%{transform:scale(1);opacity:1} }
+
+        .chat-row {
+          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .chat-row:hover {
+          background: #f8fffa !important;
+          transform: translateY(-1px);
+          box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        }
+
         .soko-pillrow::-webkit-scrollbar { display: none; }
-        /* Desktop: NavRail handles nav — hide bottom bar so list uses full height */
+
         @media (min-width: 900px) {
           .soko-mobile-bottomnav { display: none !important; }
         }
@@ -626,7 +1050,98 @@ export default function ChatListPanel() {
           </div>
           <div style={S.tagline}>Buy. Sell. Find. Anywhere in Malawi.</div>
         </div>
+
+        <div style={S.menuWrap}>
+          <button type="button" style={S.menuBtn} onClick={() => setMenuOpen(v => !v)} aria-label="More filters">
+            <KebabIcon />
+          </button>
+          {menuOpen && (
+            <>
+              <div style={S.menuOverlay} onClick={() => setMenuOpen(false)} />
+              <div style={S.menuDropdown}>
+                <button
+                  type="button"
+                  style={S.menuItem}
+                  onClick={() => { setMenuOpen(false); setNewChatQuery(''); setNewChatOpen(true) }}
+                >
+                  <NewChatIcon size={15} color="#3a443d" />
+                  New Message
+                </button>
+                <div style={S.menuDivider} />
+                <button
+                  type="button"
+                  style={{ ...S.menuItem, ...(activeFilter === 'starred' ? S.menuItemActive : {}) }}
+                  onClick={() => { setActiveFilter('starred'); setMenuOpen(false) }}
+                >
+                  <StarFilledIcon size={15} color={activeFilter === 'starred' ? '#1a7a4a' : '#f5a623'} />
+                  Starred
+                  {counts.starred > 0 && <span style={S.menuCount}>{counts.starred}</span>}
+                </button>
+                <button
+                  type="button"
+                  style={{ ...S.menuItem, ...(activeFilter === 'archived' ? S.menuItemActive : {}) }}
+                  onClick={() => { setActiveFilter('archived'); setMenuOpen(false) }}
+                >
+                  <ArchiveBoxIcon size={15} color={activeFilter === 'archived' ? '#1a7a4a' : '#5c6b78'} />
+                  Archived
+                  {counts.archived > 0 && <span style={S.menuCount}>{counts.archived}</span>}
+                </button>
+              </div>
+            </>
+          )}
+        </div>
       </div>
+
+      {newChatOpen && (
+        <div style={S.newChatOverlay} onClick={() => setNewChatOpen(false)}>
+          <div style={S.newChatPanel} onClick={e => e.stopPropagation()}>
+            <div style={S.newChatHeader}>
+              <span style={S.newChatTitle}>New Message</span>
+              <button type="button" style={S.newChatClose} onClick={() => setNewChatOpen(false)} aria-label="Close">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2.5" strokeLinecap="round">
+                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <div style={S.newChatSearchWrap}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#aaa" strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0 }}>
+                <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+              </svg>
+              <input
+                autoFocus
+                style={S.newChatInput}
+                placeholder="Search people on SokoMw"
+                value={newChatQuery}
+                onChange={e => setNewChatQuery(e.target.value)}
+              />
+            </div>
+            <div style={S.newChatList}>
+              {newChatLoading && <div style={S.newChatEmpty}>Searching…</div>}
+              {!newChatLoading && newChatResults.length === 0 && (
+                <div style={S.newChatEmpty}>{newChatQuery.trim() ? 'No one found' : 'Start typing a name'}</div>
+              )}
+              {!newChatLoading && newChatResults.map(p => (
+                <div
+                  key={p.id}
+                  style={S.newChatRow}
+                  onClick={() => startNewChat(p)}
+                >
+                  <SafeAvatar
+                    url={p.avatar_url}
+                    name={p.full_name || 'U'}
+                    size={42}
+                    radius={12}
+                  />
+                  <div style={{ minWidth: 0 }}>
+                    <div style={S.newChatName}>{p.full_name || 'User'}</div>
+                    {p.city && <div style={S.newChatCity}>{p.city}</div>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Search */}
       <div style={S.searchWrap}>
@@ -665,8 +1180,8 @@ export default function ChatListPanel() {
               {p.label}
               {/* Counts reflect totals, not the active search — hide them while
                   searching so they don't look like they contradict the visible list. */}
-              {!search.trim() && counts[p.key] > 0 && (
-                <span style={{ ...S.pillCount, ...(activeFilter === p.key ? S.pillCountActive : {}) }}>{counts[p.key]}</span>
+              {!search.trim() && unreadCounts[p.key] > 0 && (
+                <span style={{ ...S.pillCount, ...(activeFilter === p.key ? S.pillCountActive : {}) }}>{unreadCounts[p.key]}</span>
               )}
             </button>
           ))}
@@ -674,29 +1189,7 @@ export default function ChatListPanel() {
         <div style={S.rowFade} />
       </div>
 
-      {/* Secondary chips — Starred / Unread / Offers / Archived */}
-      <div style={S.rowWrap}>
-        <div className="soko-pillrow" style={S.chipRow}>
-          {CHIPS.map(c => (
-            <button
-              key={c.key}
-              style={{
-                ...S.chip,
-                background: CHIP_COLORS[c.key].bg,
-                color: CHIP_COLORS[c.key].color,
-                ...(activeFilter === c.key ? S.chipActive : {}),
-              }}
-              onClick={() => setActiveFilter(c.key)}
-            >
-              <c.Icon size={13} color={activeFilter === c.key ? '#fff' : CHIP_COLORS[c.key].color} /> {c.label}
-              {!search.trim() && counts[c.key] > 0 && (
-                <span style={{ ...S.pillCount, ...(activeFilter === c.key ? S.pillCountActive : {}) }}>{counts[c.key]}</span>
-              )}
-            </button>
-          ))}
-        </div>
-        <div style={{ ...S.rowFade, bottom: '12px' }} />
-      </div>
+      
 
       {/* Loading skeletons */}
       {loading && (
@@ -729,56 +1222,478 @@ export default function ChatListPanel() {
         )}
         {filtered.map((chat, i) => renderChatRow(chat, i))}
       </div>
+
+      {/* Per-row options: block / report / delete */}
+      {rowMenuChat && (
+        <div
+          style={S.rowMenuOverlay}
+          onClick={() => !rowBusy && setRowMenuChat(null)}
+          role="presentation"
+        >
+          <div style={S.rowMenuSheet} onClick={e => e.stopPropagation()}>
+            <div style={S.rowMenuHandle} />
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#0f1410', marginBottom: 4 }}>
+              {rowMenuChat.displayName}
+            </div>
+            <div style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>
+              Chat options
+            </div>
+            <button
+              type="button"
+              style={S.rowMenuItem}
+              disabled={rowBusy}
+              onClick={() => {
+                setRowMenuChat(null)
+                navigate(buildChatPath(rowMenuChat.otherId, {
+                  source: rowMenuChat.source || 'direct',
+                  contextId: rowMenuChat.contextId,
+                }), { state: { source: rowMenuChat.source || 'direct' } })
+              }}
+            >
+              Open chat
+            </button>
+            <button
+              type="button"
+              style={S.rowMenuItem}
+              disabled={rowBusy}
+              onClick={() => rowReport(rowMenuChat)}
+            >
+              🚩 Report
+            </button>
+            <button
+              type="button"
+              style={{ ...S.rowMenuItem, color: '#b91c1c' }}
+              disabled={rowBusy}
+              onClick={() => rowBlock(rowMenuChat)}
+            >
+              🚫 Block
+            </button>
+            <button
+              type="button"
+              style={{ ...S.rowMenuItem, color: '#b91c1c' }}
+              disabled={rowBusy}
+              onClick={() => rowDelete(rowMenuChat)}
+            >
+              🗑 Delete chat
+            </button>
+            <button
+              type="button"
+              style={S.rowMenuCancel}
+              disabled={rowBusy}
+              onClick={() => setRowMenuChat(null)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
 const S = {
-  panel: { display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: '#fff', fontFamily: 'system-ui, sans-serif', overflow: 'hidden', position: 'relative' },
-  brandRow: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px 10px', flexShrink: 0 },
-  logo: { fontSize: '20px', fontWeight: '900', letterSpacing: '-0.4px' },
-  tagline: { fontSize: '11px', color: '#9aa39d', marginTop: '2px' },
-  newChatBtn: { width: '34px', height: '34px', borderRadius: '50%', border: 'none', background: 'linear-gradient(135deg,#1a7a4a,#22a05e)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0, boxShadow: '0 3px 8px rgba(26,122,74,0.35)' },
-  searchWrap: { display: 'flex', alignItems: 'center', gap: 8, background: '#f4f8f5', borderRadius: 50, padding: '10px 16px', border: '1.5px solid #e0ebe3', margin: '0 16px 10px', flexShrink: 0 },
-  searchInput: { flex: 1, border: 'none', background: 'transparent', fontSize: 14, color: '#111', outline: 'none', fontFamily: 'inherit', minWidth: 0 },
-  pillRow: { display: 'flex', gap: '7px', padding: '0 16px 10px 16px', overflowX: 'auto', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch' },
-  pill: { display: 'flex', alignItems: 'center', gap: '5px', padding: '7px 13px', borderRadius: '999px', border: 'none', fontSize: '12.5px', fontWeight: '700', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', flexShrink: 0, boxShadow: '0 1px 2px rgba(0,0,0,0.04)' },
-  pillActive: { background: '#1a7a4a', color: '#fff', boxShadow: '0 3px 10px rgba(26,122,74,0.35)' },
-  pillCount: { background: 'rgba(0,0,0,0.08)', color: 'inherit', borderRadius: '10px', padding: '0px 6px', fontSize: '10px', fontWeight: '800' },
+  panel: {
+    display: 'flex',
+    flexDirection: 'column',
+    height: '100%',
+    minHeight: 0,
+    background: '#fff',
+    fontFamily: 'system-ui, -apple-system, sans-serif',
+    overflow: 'hidden',
+  },
+
+  brandRow: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '16px 20px 12px', flexShrink: 0 },
+  logo: { fontSize: '22px', fontWeight: '900', letterSpacing: '-0.5px' },
+  tagline: { fontSize: '11.5px', color: '#9aa39d', marginTop: '3px' },
+
+  menuWrap: { position: 'relative' },
+  menuBtn: {
+    background: 'rgba(0,0,0,0.04)',
+    border: 'none',
+    borderRadius: '10px',
+    width: '34px',
+    height: '34px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+  },
+  menuOverlay: { position: 'fixed', inset: 0, zIndex: 20 },
+  menuDropdown: {
+    position: 'absolute',
+    top: '40px',
+    right: 0,
+    background: '#fff',
+    borderRadius: '14px',
+    boxShadow: '0 8px 24px rgba(0,0,0,0.14)',
+    border: '1px solid #eef2ef',
+    padding: '6px',
+    minWidth: '160px',
+    zIndex: 21,
+  },
+  menuItem: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '10px',
+    width: '100%',
+    padding: '10px 12px',
+    borderRadius: '10px',
+    border: 'none',
+    background: 'none',
+    fontSize: '13.5px',
+    fontWeight: '600',
+    color: '#3a443d',
+    cursor: 'pointer',
+    textAlign: 'left',
+  },
+  menuItemActive: { background: '#e6f7ee', color: '#1a7a4a' },
+  menuCount: { marginLeft: 'auto', fontSize: '11px', fontWeight: '800', color: '#9aa39d' },
+  menuDivider: { height: '1px', background: '#eef2ef', margin: '4px 6px' },
+
+  newChatOverlay: {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(0,0,0,0.35)',
+    display: 'flex',
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    zIndex: 50,
+    padding: '10vh 16px 0',
+  },
+  newChatPanel: {
+    background: '#fff',
+    borderRadius: '18px',
+    width: '100%',
+    maxWidth: '380px',
+    maxHeight: '70vh',
+    display: 'flex',
+    flexDirection: 'column',
+    overflow: 'hidden',
+    boxShadow: '0 12px 40px rgba(0,0,0,0.25)',
+  },
+  newChatHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 18px 10px' },
+  newChatTitle: { fontSize: '15px', fontWeight: '800', color: '#0f1410' },
+  newChatClose: { background: 'rgba(0,0,0,0.04)', border: 'none', borderRadius: '8px', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' },
+  newChatSearchWrap: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    background: '#f4f8f5',
+    borderRadius: 999,
+    padding: '10px 16px',
+    border: '1.5px solid #e0ebe3',
+    margin: '0 16px 10px',
+  },
+  newChatInput: { flex: 1, border: 'none', background: 'transparent', fontSize: '14px', color: '#111', outline: 'none' },
+  newChatList: { flex: 1, overflowY: 'auto', padding: '4px 8px 12px' },
+  newChatEmpty: { padding: '24px 12px', textAlign: 'center', fontSize: '13px', color: '#9aa39d' },
+  newChatRow: { display: 'flex', alignItems: 'center', gap: '12px', padding: '9px 10px', borderRadius: '12px', cursor: 'pointer' },
+  newChatName: { fontSize: '14px', fontWeight: '700', color: '#0f1410', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  newChatCity: { fontSize: '12px', color: '#888' },
+
+  searchWrap: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    background: '#f4f8f5',
+    borderRadius: 999,
+    padding: '11px 18px',
+    border: '1.5px solid #e0ebe3',
+    margin: '0 16px 12px',
+  },
+  searchInput: {
+    flex: 1,
+    border: 'none',
+    background: 'transparent',
+    fontSize: '15px',
+    color: '#111',
+    outline: 'none',
+  },
+
+  pillRow: { display: 'flex', gap: '8px', padding: '0 16px 12px', overflowX: 'auto' },
+  pill: {
+    padding: '8px 16px',
+    borderRadius: '999px',
+    border: 'none',
+    fontSize: '13px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+    transition: 'all 0.2s ease',
+    background: 'rgba(0,0,0,0.04)',
+    color: '#3a443d',
+    boxShadow: 'none',
+  },
+  pillActive: {
+    background: '#1a7a4a',
+    color: '#fff',
+    boxShadow: '0 4px 14px rgba(26,122,74,0.28)',
+    transform: 'translateY(-1px)',
+  },
+  pillCount: { background: 'rgba(0,0,0,0.08)', color: 'inherit', borderRadius: '10px', padding: '0 6px', fontSize: '10px', fontWeight: '800' },
   pillCountActive: { background: 'rgba(255,255,255,0.28)', color: '#fff' },
+
   rowWrap: { position: 'relative', flexShrink: 0 },
   rowFade: { position: 'absolute', top: 0, bottom: '10px', right: 0, width: '36px', background: 'linear-gradient(to right, rgba(255,255,255,0), #fff 70%)', pointerEvents: 'none' },
-  chipRow: { display: 'flex', gap: '7px', padding: '0 16px 12px 16px', overflowX: 'auto', scrollbarWidth: 'none', borderBottom: '1px solid #eef2ef', WebkitOverflowScrolling: 'touch' },
-  chip: { display: 'flex', alignItems: 'center', gap: '4px', padding: '6px 11px', borderRadius: '999px', border: 'none', fontSize: '11.5px', fontWeight: '700', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', flexShrink: 0, boxShadow: '0 1px 2px rgba(0,0,0,0.04)' },
-  chipActive: { background: '#1a7a4a', color: '#fff', boxShadow: '0 3px 10px rgba(26,122,74,0.3)' },
+
+  chipRow: { display: 'flex', gap: '8px', padding: '0 16px 14px', overflowX: 'auto', borderBottom: '1px solid #eef2ef' },
+  chip: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    padding: '7px 14px',
+    borderRadius: '999px',
+    border: 'none',
+    fontSize: '12.5px',
+    fontWeight: '600',
+    cursor: 'pointer',
+    whiteSpace: 'nowrap',
+    transition: 'all 0.2s ease',
+    background: 'rgba(0,0,0,0.04)',
+    color: '#3a443d',
+  },
+  chipActive: {
+    background: '#1a7a4a',
+    color: '#fff',
+    boxShadow: '0 4px 14px rgba(26,122,74,0.28)',
+  },
+
   skeletonRow: { display: 'flex', alignItems: 'center', gap: '12px', padding: '13px 16px', background: '#fff', borderBottom: '1px solid #f4f8f5' },
   skeletonAvatar: { width: '52px', height: '52px', borderRadius: '15px', background: 'linear-gradient(90deg,#e8f0eb 25%,#f4f8f5 50%,#e8f0eb 75%)', flexShrink: 0, animation: 'pulse 1.5s infinite' },
   skeletonLine: { height: '11px', borderRadius: '6px', background: 'linear-gradient(90deg,#e8f0eb 25%,#f4f8f5 50%,#e8f0eb 75%)', animation: 'pulse 1.5s infinite' },
-  empty: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '48px 20px', textAlign: 'center', minHeight: '100%' },
-  emptyIconCircle: { width: '76px', height: '76px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '16px' },
-  emptyTitle: { fontSize: '15.5px', fontWeight: '800', color: '#0f1410', marginBottom: '6px' },
-  emptySub: { fontSize: '12.5px', color: '#888', marginBottom: '20px', lineHeight: '1.6' },
-  browseBtn: { background: 'linear-gradient(135deg,#1a7a4a,#22a05e)', color: '#fff', border: 'none', borderRadius: '12px', padding: '11px 22px', fontSize: '13.5px', fontWeight: '700', cursor: 'pointer', boxShadow: '0 4px 12px rgba(26,122,74,0.35)' },
+
+  empty: { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 24px', textAlign: 'center' },
+  emptyIconCircle: { width: '82px', height: '82px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '20px' },
+  emptyTitle: { fontSize: '16px', fontWeight: '800', color: '#0f1410', marginBottom: '8px' },
+  emptySub: { fontSize: '13.5px', color: '#777', lineHeight: '1.6', maxWidth: '260px', margin: '0 auto' },
+  browseBtn: {
+    background: 'linear-gradient(135deg,#1a7a4a,#22a05e)',
+    color: '#fff',
+    border: 'none',
+    borderRadius: '14px',
+    padding: '12px 26px',
+    fontSize: '14px',
+    fontWeight: '700',
+    cursor: 'pointer',
+    boxShadow: '0 4px 14px rgba(26,122,74,0.35)',
+  },
+
   list: { flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch' },
-  chatRow: { display: 'flex', alignItems: 'center', gap: '12px', padding: '13px 16px', borderBottom: '1px solid #f0f4f1', cursor: 'pointer', animation: 'fadeUp 0.3s ease both', transition: 'background 0.15s' },
-  avatarWrap: { position: 'relative', flexShrink: 0 },
-  avatar: { width: '52px', height: '52px', borderRadius: '15px', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' },
+
+  // === MODERN CHAT ROW ===
+  chatRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '14px',
+    padding: '14px 20px',
+    borderBottom: '1px solid #f0f4f1',
+    cursor: 'pointer',
+    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+    animation: 'fadeUp 0.3s ease both',
+  },
+  avatarWrap: { position: 'relative', flexShrink: 0, width: 54, height: 54 },
+  onlineDot: {
+    position: 'absolute',
+    right: 1,
+    bottom: 1,
+    width: 12,
+    height: 12,
+    borderRadius: '50%',
+    zIndex: 2,
+    transition: 'background 0.2s',
+  },
+  avatar: {
+    width: 54,
+    height: 54,
+    borderRadius: '50%',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+    border: '2px solid #fff',
+  },
   avatarImg: { width: '100%', height: '100%', objectFit: 'cover' },
-  avatarInitial: { fontSize: '18px', fontWeight: '800', color: '#fff' },
+  avatarInitial: { fontSize: 20, fontWeight: 800, color: '#fff' },
+  presenceLineTyping: {
+    fontSize: 13.5,
+    fontWeight: 700,
+    color: '#1a7a4a',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  presenceLineRecording: {
+    fontSize: 13.5,
+    fontWeight: 700,
+    color: '#dc2626',
+    display: 'flex',
+    alignItems: 'center',
+    gap: 6,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+  recDot: {
+    width: 8,
+    height: 8,
+    borderRadius: '50%',
+    background: '#ef4444',
+    flexShrink: 0,
+    animation: 'pulse 1s infinite',
+  },
+  typingDotsInline: {
+    display: 'inline-flex',
+    gap: 3,
+    alignItems: 'center',
+  },
+  typingDotSm: {
+    width: 4,
+    height: 4,
+    borderRadius: '50%',
+    background: '#1a7a4a',
+    display: 'inline-block',
+    animation: 'typingDot 1.2s infinite',
+  },
+  // Small product image badge on the profile avatar (bottom-right)
+  productBadge: {
+    position: 'absolute',
+    right: -3,
+    bottom: -3,
+    width: 22,
+    height: 22,
+    borderRadius: 7,
+    overflow: 'hidden',
+    border: '2px solid #fff',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.18)',
+    background: '#eef2ef',
+    zIndex: 2,
+  },
+  productBadgeImg: { width: '100%', height: '100%', objectFit: 'cover', display: 'block' },
+  // Larger product thumbnail on the right edge of the row
+  productThumb: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    overflow: 'hidden',
+    flexShrink: 0,
+    background: '#eef2ef',
+    border: '1px solid #e4ece6',
+    boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
+  },
+  productThumbImg: { width: '100%', height: '100%', objectFit: 'cover', display: 'block' },
+
   chatInfo: { flex: 1, minWidth: 0 },
-  chatTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px', gap: '6px' },
-  nameRow: { display: 'flex', alignItems: 'center', gap: '4px', minWidth: 0 },
-  chatName: { fontSize: '14px', fontWeight: '700', color: '#0f1410', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
-  chatTime: { fontSize: '10.5px', flexShrink: 0 },
-  contextPill: { display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '3px', flexWrap: 'nowrap', overflow: 'hidden' },
-  contextBadge: { fontSize: '9px', fontWeight: '700', borderRadius: '6px', padding: '1px 5px', flexShrink: 0, whiteSpace: 'nowrap' },
-  contextName: { fontSize: '10.5px', fontWeight: '700', color: '#333', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '120px' },
-  contextSub: { fontSize: '10.5px', color: '#888', whiteSpace: 'nowrap', flexShrink: 0 },
-  chatBottom: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' },
-  lastMsg: { fontSize: '12.5px', color: '#888', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
-  offerLine: { fontSize: '12.5px', fontWeight: '800', color: '#1a7a4a', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
-  rowActions: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '5px', marginLeft: '8px', flexShrink: 0 },
-  actionIcons: { display: 'flex', alignItems: 'center', gap: '6px' },
-  unreadBadge: { background: '#1a7a4a', color: '#fff', borderRadius: '10px', minWidth: '18px', height: '18px', fontSize: '9.5px', fontWeight: '800', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' },
-  starBtn: { background: 'none', border: 'none', cursor: 'pointer', padding: '2px', display: 'flex' },
+  chatTop: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3, gap: 8 },
+  nameRow: { display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 },
+  chatName: { fontSize: 15, fontWeight: 700, color: '#0f1410', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  chatTime: { fontSize: 11, flexShrink: 0, fontWeight: 500 },
+
+  contextPill: { display: 'flex', alignItems: 'center', gap: 6, marginBottom: 3, minWidth: 0 },
+  contextBadge: { fontSize: 9.5, fontWeight: 700, borderRadius: 6, padding: '2px 7px', flexShrink: 0 },
+  contextName: { fontSize: 12.5, fontWeight: 600, color: '#333', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  contextSub: { fontSize: 12, color: '#888', flexShrink: 0 },
+
+  chatBottom: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 8 },
+  lastMsg: {
+    fontSize: 13.5,
+    color: '#6b7a70',
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    display: 'flex',
+    alignItems: 'center',
+    minWidth: 0,
+  },
+  offerLine: {
+    fontSize: 13.5,
+    fontWeight: 700,
+    color: '#1a7a4a',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 4,
+    whiteSpace: 'nowrap',
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+  },
+
+  rowActions: { display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px', marginLeft: '10px' },
+  actionIcons: { display: 'flex', alignItems: 'center', gap: '4px' },
+  unreadBadge: {
+    background: '#1a7a4a',
+    color: '#fff',
+    borderRadius: '999px',
+    minWidth: '19px',
+    height: '19px',
+    fontSize: '10px',
+    fontWeight: '800',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '0 6px',
+  },
+  starBtn: {
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    padding: '4px',
+    display: 'flex',
+    borderRadius: '6px',
+    transition: 'background 0.2s',
+  },
+  rowMenuOverlay: {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(8,12,10,0.45)',
+    zIndex: 80,
+    display: 'flex',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  rowMenuSheet: {
+    width: '100%',
+    maxWidth: 420,
+    background: '#f7faf8',
+    borderRadius: '20px 20px 0 0',
+    padding: '12px 14px calc(16px + env(safe-area-inset-bottom, 0px))',
+    boxShadow: '0 -8px 40px rgba(0,0,0,0.18)',
+  },
+  rowMenuHandle: {
+    width: 36,
+    height: 4,
+    borderRadius: 4,
+    background: '#cfd9d2',
+    margin: '2px auto 14px',
+  },
+  rowMenuItem: {
+    width: '100%',
+    display: 'block',
+    textAlign: 'left',
+    border: 'none',
+    background: '#fff',
+    borderRadius: 12,
+    padding: '14px 16px',
+    fontSize: 14,
+    fontWeight: 700,
+    color: '#0f1410',
+    cursor: 'pointer',
+    marginBottom: 8,
+    fontFamily: 'inherit',
+  },
+  rowMenuCancel: {
+    width: '100%',
+    border: '1px solid #e0ebe3',
+    background: '#fff',
+    borderRadius: 12,
+    padding: '14px',
+    fontSize: 14,
+    fontWeight: 750,
+    color: '#1a7a4a',
+    cursor: 'pointer',
+    fontFamily: 'inherit',
+    marginTop: 4,
+  },
 }

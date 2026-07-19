@@ -1,18 +1,24 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import SokoNav from '../components/SokoNav'
 
+/* Soko marketplace tokens — match Home / Search */
 const T = {
-  green: '#2e7d32',
-  greenDark: '#1b5e20',
-  greenLight: '#e8f5e9',
-  gold: '#f9a825',
+  green: '#0F9D58',
+  greenDark: '#0a7a44',
+  greenLight: '#e8f5ee',
+  gold: '#F9AB00',
   white: '#ffffff',
-  offwhite: '#f9fafb',
-  text: '#0d1b0e',
-  textMuted: '#4a5e4d',
-  textLight: '#7a917c',
-  border: '#e3ece5',
+  offwhite: '#f8f9fa',
+  text: '#202124',
+  textMuted: '#5f6368',
+  textLight: '#9aa0a6',
+  border: '#e8eaed',
+  gray100: '#f1f3f4',
+  gray200: '#e8eaed',
+  gray900: '#202124',
+  shadow: '0 1px 3px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.04)',
 }
 
 const CAT_ICONS = {
@@ -57,114 +63,250 @@ const SHOP_TYPES = [
   { id: 'new', label: 'New Shops' },
 ]
 
-const PAGE_SIZE = 9
+const PAGE_SIZE = 12
 
 const css = `
-  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700;800&display=swap');
   *, *::before, *::after { box-sizing: border-box; }
   body { margin: 0; }
 
-  .sps-root { font-family: 'Inter', system-ui, sans-serif; background: ${T.offwhite}; min-height: 100vh; }
-
-  /* HEADER */
-  .sps-header {
-    background: ${T.white}; border-bottom: 1px solid ${T.border};
-    padding: 14px 28px; display: flex; align-items: center; gap: 24px;
-    position: sticky; top: 0; z-index: 100;
+  .sps-root {
+    font-family: 'Inter', system-ui, sans-serif;
+    background: ${T.offwhite};
+    min-height: 100vh; min-height: 100dvh;
+    color: ${T.text};
+    overflow-x: clip;
+    -webkit-tap-highlight-color: transparent;
   }
-  .sps-brand { font-size: 21px; font-weight: 900; color: ${T.text}; letter-spacing: -0.5px; cursor: pointer; flex-shrink: 0; }
-  .sps-brand span { color: ${T.green}; }
-  .sps-search-wrap { flex: 1; max-width: 420px; position: relative; }
-  .sps-search-wrap input {
-    width: 100%; height: 38px; border-radius: 19px;
-    border: 1.5px solid ${T.border}; background: ${T.offwhite};
-    padding: 0 40px 0 16px; font-size: 13.5px; font-family: inherit; outline: none;
+  @media (max-width: 900px) {
+    .sps-root { padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
   }
-  .sps-search-wrap input:focus { border-color: ${T.green}; }
-  .sps-search-icon { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: ${T.textLight}; pointer-events: none; }
-  .sps-nav-actions { display: flex; align-items: center; gap: 22px; margin-left: auto; flex-shrink: 0; }
-  .sps-nav-item {
-    display: flex; flex-direction: column; align-items: center; gap: 2px;
-    font-size: 11px; font-weight: 600; color: ${T.textMuted}; cursor: pointer; position: relative;
+  @media (hover: none) {
+    .sps-shop-card:hover { transform: none; box-shadow: ${T.shadow}; }
+    .sps-list-card:hover { box-shadow: ${T.shadow}; }
   }
-  .sps-nav-item.active { color: ${T.green}; }
-  .sps-nav-item.active::after { content: ''; position: absolute; bottom: -18px; left: 0; right: 0; height: 2px; background: ${T.green}; }
-  .sps-nav-badge {
-    position: absolute; top: -4px; right: -8px;
-    background: #e53e3e; color: #fff; font-size: 9px; font-weight: 800;
-    border-radius: 10px; padding: 1px 5px; min-width: 16px; text-align: center;
-  }
-  .sps-nav-user { display: flex; align-items: center; gap: 8px; cursor: pointer; }
-  .sps-nav-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; background: ${T.greenLight}; }
-  .sps-nav-user span { font-size: 13px; font-weight: 600; color: ${T.text}; }
-  .sps-nav-chevron { color: ${T.textMuted}; }
 
   /* PAGE TITLE ROW */
   .sps-title-row {
-    max-width: 1280px; margin: 0 auto; padding: 28px 24px 16px;
-    display: flex; align-items: flex-start; justify-content: space-between;
+    max-width: 1400px; margin: 0 auto; padding: 22px 20px 14px;
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
   }
-  .sps-title-row h1 { font-size: 28px; font-weight: 800; color: ${T.text}; margin: 0 0 4px; }
+  .sps-title-row h1 {
+    font-family: 'Sora', Inter, sans-serif;
+    font-size: clamp(20px, 3vw, 28px); font-weight: 800; color: ${T.text};
+    margin: 0 0 4px; letter-spacing: -0.5px;
+  }
   .sps-title-row p { font-size: 13.5px; color: ${T.textMuted}; margin: 0; }
   .sps-open-shop-btn {
-    display: flex; align-items: center; gap: 7px;
-    background: ${T.white}; border: 1.5px solid ${T.green}; color: ${T.green};
-    border-radius: 10px; padding: 10px 18px; font-size: 13.5px; font-weight: 700;
+    display: inline-flex; align-items: center; gap: 7px;
+    background: ${T.gray900}; border: none; color: #fff;
+    border-radius: 12px; padding: 11px 18px; font-size: 13.5px; font-weight: 700;
     font-family: inherit; cursor: pointer; white-space: nowrap; transition: all 0.15s;
+    min-height: 44px; flex-shrink: 0;
   }
-  .sps-open-shop-btn:hover { background: ${T.greenLight}; }
+  .sps-open-shop-btn:hover { background: #000; }
+  .sps-open-shop-label { display: inline; }
 
   /* FILTER BAR */
   .sps-filter-bar {
-    max-width: 1280px; margin: 0 auto; padding: 0 24px 20px;
-    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    max-width: 1400px; margin: 0 auto; padding: 0 20px 16px;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   }
-  .sps-filter-search-wrap { flex: 1; min-width: 220px; max-width: 340px; position: relative; }
+  .sps-filter-search-wrap { flex: 1; min-width: 200px; max-width: 360px; position: relative; }
   .sps-filter-search-wrap input {
-    width: 100%; height: 40px; border-radius: 10px;
+    width: 100%; height: 44px; border-radius: 12px;
     border: 1.5px solid ${T.border}; background: ${T.white};
-    padding: 0 40px 0 14px; font-size: 13px; font-family: inherit; outline: none;
+    padding: 0 40px 0 14px; font-size: 16px; font-family: inherit; outline: none;
+    box-shadow: 0 1px 2px rgba(0,0,0,.03);
   }
-  .sps-filter-search-wrap input:focus { border-color: ${T.green}; }
+  .sps-filter-search-wrap input:focus { border-color: ${T.green}; box-shadow: 0 0 0 3px rgba(15,157,88,.1); }
   .sps-filter-search-icon { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); color: ${T.textLight}; pointer-events: none; }
   .sps-filter-select {
-    height: 40px; border: 1.5px solid ${T.border}; border-radius: 10px;
+    height: 44px; border: 1.5px solid ${T.border}; border-radius: 12px;
     padding: 0 32px 0 12px; font-size: 13px; font-weight: 600; font-family: inherit;
     background: ${T.white}; color: ${T.text}; cursor: pointer; outline: none;
-    appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%234a5e4d' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    appearance: none; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%235f6368' stroke-width='2.5'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
     background-repeat: no-repeat; background-position: right 10px center;
+    box-shadow: 0 1px 2px rgba(0,0,0,.03);
   }
   .sps-filter-select:focus { border-color: ${T.green}; }
+  .sps-desktop-selects { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .sps-mobile-filter-btn {
+    display: none; align-items: center; justify-content: center; gap: 6px;
+    height: 44px; padding: 0 14px; border-radius: 12px;
+    border: 1.5px solid ${T.border}; background: ${T.white};
+    font-size: 13px; font-weight: 700; font-family: inherit; color: ${T.text};
+    cursor: pointer; flex-shrink: 0; min-width: 44px;
+    box-shadow: 0 1px 2px rgba(0,0,0,.03);
+    touch-action: manipulation;
+  }
+  .sps-mobile-filter-btn .sps-filter-badge {
+    background: ${T.gray900}; color: #fff; border-radius: 999px;
+    font-size: 10px; font-weight: 800; min-width: 18px; height: 18px;
+    display: inline-flex; align-items: center; justify-content: center; padding: 0 5px;
+  }
+
+  /* Mobile horizontal chips (categories) */
+  .sps-chips {
+    display: none;
+    max-width: 1400px; margin: 0 auto;
+    padding: 0 0 12px;
+  }
+  .sps-chips-scroll {
+    display: flex; gap: 8px; overflow-x: auto;
+    padding: 0 14px 2px;
+    scrollbar-width: none; -ms-overflow-style: none;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+  .sps-chips-scroll::-webkit-scrollbar { display: none; }
+  .sps-chip {
+    flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px;
+    height: 40px; padding: 0 14px; border-radius: 999px;
+    border: 1.5px solid ${T.border}; background: ${T.white};
+    font-size: 12.5px; font-weight: 700; font-family: inherit; color: ${T.textMuted};
+    cursor: pointer; white-space: nowrap;
+    touch-action: manipulation;
+  }
+  .sps-chip.active {
+    background: ${T.gray900}; border-color: ${T.gray900}; color: #fff;
+  }
+  .sps-chip svg { width: 14px; height: 14px; flex-shrink: 0; }
 
   /* BODY LAYOUT */
   .sps-body {
-    max-width: 1280px; margin: 0 auto; padding: 0 24px 60px;
-    display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 28px;
+    max-width: 1400px; margin: 0 auto; padding: 0 20px 48px;
+    display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 24px;
     align-items: start;
   }
-  @media (max-width: 900px) { .sps-body { grid-template-columns: 1fr; } }
+
+  /* Mobile filter drawer */
+  .sps-drawer {
+    display: none; position: fixed; inset: 0; z-index: 300;
+  }
+  .sps-drawer.open { display: flex; flex-direction: column; justify-content: flex-end; }
+  .sps-drawer-overlay {
+    position: absolute; inset: 0; background: rgba(10,15,20,.5); backdrop-filter: blur(3px);
+  }
+  .sps-drawer-panel {
+    position: relative; z-index: 1;
+    background: ${T.white};
+    border-radius: 20px 20px 0 0;
+    max-height: min(88dvh, 100%);
+    overflow-y: auto;
+    padding: 12px 16px calc(20px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -8px 32px rgba(0,0,0,.18);
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    animation: spsSlideUp .28s cubic-bezier(.22,1,.36,1);
+  }
+  @keyframes spsSlideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+  .sps-drawer-handle {
+    width: 40px; height: 4px; border-radius: 99px; background: ${T.border};
+    margin: 4px auto 14px;
+  }
+  .sps-drawer-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 14px;
+    position: sticky; top: 0; z-index: 2;
+    background: ${T.white}; padding-bottom: 4px;
+  }
+  .sps-drawer-head h3 {
+    font-family: 'Sora', Inter, sans-serif;
+    font-size: 17px; font-weight: 800; margin: 0;
+  }
+  .sps-drawer-close {
+    width: 44px; height: 44px; border-radius: 12px; border: 1px solid ${T.border};
+    background: ${T.gray100}; display: flex; align-items: center; justify-content: center;
+    cursor: pointer; color: ${T.text}; touch-action: manipulation;
+  }
+  .sps-drawer .sps-filter-item {
+    min-height: 44px; padding: 10px 12px; font-size: 14px;
+    touch-action: manipulation;
+  }
+  .sps-drawer .sps-section-title {
+    margin: 18px 0 8px; font-size: 12px; text-transform: uppercase;
+    letter-spacing: 0.04em; color: ${T.textMuted};
+  }
+  .sps-drawer-actions {
+    display: flex; gap: 10px; margin-top: 18px; position: sticky; bottom: 0;
+    padding: 12px 0 4px; background: linear-gradient(to top, #fff 75%, rgba(255,255,255,0));
+    z-index: 2;
+  }
+  .sps-drawer-actions button {
+    flex: 1; min-height: 48px; border-radius: 12px; font-size: 14px; font-weight: 800;
+    font-family: inherit; cursor: pointer; border: none; touch-action: manipulation;
+  }
+  .sps-drawer-clear {
+    background: ${T.white}; border: 1.5px solid ${T.border} !important; color: ${T.text};
+  }
+  .sps-drawer-apply {
+    background: ${T.gray900}; color: #fff;
+  }
+
+  @media (max-width: 900px) {
+    .sps-body { grid-template-columns: 1fr; padding: 0 12px 40px; gap: 10px; }
+    .sps-sidebar { display: none !important; }
+    .sps-filter-bar {
+      padding: 0 12px 10px;
+      flex-wrap: nowrap;
+      gap: 8px;
+    }
+    .sps-filter-search-wrap {
+      flex: 1; min-width: 0; max-width: none;
+    }
+    .sps-filter-search-wrap input {
+      font-size: 16px; /* prevents iOS zoom on focus */
+    }
+    .sps-desktop-selects { display: none !important; }
+    .sps-mobile-filter-btn { display: inline-flex !important; }
+    .sps-chips { display: block; }
+    .sps-title-row {
+      padding: 12px 12px 8px;
+      align-items: center;
+      gap: 10px;
+    }
+    .sps-title-row h1 { font-size: 20px; margin: 0; line-height: 1.2; }
+    .sps-title-row p { display: none; }
+    .sps-open-shop-btn {
+      width: auto; padding: 0 14px; min-height: 40px; height: 40px;
+      border-radius: 11px; font-size: 12.5px;
+      touch-action: manipulation;
+    }
+    .sps-open-shop-label { display: none; }
+    .sps-open-shop-short { display: inline !important; }
+    .sps-view-btn {
+      width: 40px; height: 40px; min-width: 40px; border-radius: 10px;
+      touch-action: manipulation;
+    }
+    .sps-follow-btn { touch-action: manipulation; }
+  }
+  .sps-open-shop-short { display: none; }
 
   /* SIDEBAR */
   .sps-sidebar {
     flex-shrink: 0;
     position: sticky;
-    top: 76px;
-    max-height: calc(100vh - 92px);
+    top: 90px;
+    max-height: calc(100vh - 110px);
     overflow-y: auto;
     scrollbar-width: thin;
     scrollbar-color: ${T.border} transparent;
     scroll-behavior: smooth;
     align-self: start;
-    margin-top: -56px;
   }
   .sps-sidebar::-webkit-scrollbar { width: 3px; }
   .sps-sidebar::-webkit-scrollbar-track { background: transparent; }
   .sps-sidebar::-webkit-scrollbar-thumb { background: ${T.border}; border-radius: 10px; }
   .sps-sidebar::-webkit-scrollbar-thumb:hover { background: ${T.textLight}; }
   .sps-sidebar-card {
-    background: ${T.white}; border: 1px solid ${T.border}; border-top: none;
-    border-radius: 0 0 14px 14px;
-    padding: 14px 18px 18px; margin-bottom: 16px;
+    background: ${T.white}; border: 1px solid ${T.border};
+    border-radius: 0 0 16px 16px;
+    padding: 10px 14px 16px; margin-bottom: 14px;
+    box-shadow: ${T.shadow};
   }
   .sps-sidebar-head {
     display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;
@@ -172,12 +314,17 @@ const css = `
   .sps-sidebar-head-sticky {
     position: sticky; top: 0; z-index: 5;
     background: ${T.white}; border: 1px solid ${T.border}; border-bottom: none;
-    border-radius: 14px 14px 0 0;
-    padding: 18px 18px 12px;
+    border-radius: 16px 16px 0 0;
+    padding: 16px 14px 12px;
     margin-bottom: 0;
+    box-shadow: ${T.shadow};
   }
-  .sps-sidebar-head h3 { font-size: 13.5px; font-weight: 800; color: ${T.text}; margin: 0; }
-  .sps-clear-btn { font-size: 12px; font-weight: 700; color: ${T.green}; background: none; border: none; cursor: pointer; }
+  .sps-sidebar-head h3 {
+    font-family: 'Sora', Inter, sans-serif;
+    font-size: 14px; font-weight: 800; color: ${T.text}; margin: 0;
+  }
+  .sps-clear-btn { font-size: 12px; font-weight: 700; color: ${T.textMuted}; background: none; border: none; cursor: pointer; font-family: inherit; }
+  .sps-clear-btn:hover { color: ${T.green}; }
   .sps-section-title {
     font-size: 12.5px; font-weight: 800; color: ${T.text}; margin: 16px 0 10px;
     display: flex; align-items: center; justify-content: space-between;
@@ -190,23 +337,25 @@ const css = `
     transition: all 0.12s;
   }
   .sps-filter-item:hover { background: ${T.offwhite}; }
-  .sps-filter-item.active { background: ${T.greenLight}; color: ${T.green}; font-weight: 700; }
+  .sps-filter-item.active { background: ${T.gray100}; color: ${T.gray900}; font-weight: 700; }
   .sps-filter-item .fi-icon { font-size: 15px; width: 20px; text-align: center; }
   .sps-filter-item .fi-dot { width: 8px; height: 8px; border-radius: 50%; background: ${T.green}; margin-left: auto; flex-shrink: 0; }
   .sps-show-more { font-size: 12px; font-weight: 700; color: ${T.green}; background: none; border: none; cursor: pointer; margin-top: 4px; display: flex; align-items: center; gap: 4px; }
 
   .sps-promo-card {
-    background: ${T.greenLight}; border: 1px solid ${T.border}; border-radius: 14px;
-    padding: 20px 16px; text-align: center; margin-top: 16px;
+    background: linear-gradient(165deg, #0f172a 0%, #1e293b 100%);
+    border: 1px solid rgba(255,255,255,.08); border-radius: 16px;
+    padding: 20px 16px; text-align: center; margin-top: 12px;
+    color: #fff;
   }
-  .sps-promo-icon { font-size: 36px; margin-bottom: 10px; }
-  .sps-promo-card h4 { font-size: 14px; font-weight: 800; color: ${T.text}; margin: 0 0 6px; }
-  .sps-promo-card p { font-size: 12px; color: ${T.textMuted}; margin: 0 0 14px; line-height: 1.5; }
+  .sps-promo-icon { margin-bottom: 10px; color: ${T.gold}; display: flex; justify-content: center; }
+  .sps-promo-card h4 { font-size: 14px; font-weight: 800; color: #fff; margin: 0 0 6px; }
+  .sps-promo-card p { font-size: 12px; color: rgba(255,255,255,.65); margin: 0 0 14px; line-height: 1.5; }
   .sps-promo-btn {
-    width: 100%; background: ${T.green}; color: ${T.white}; border: none; border-radius: 10px;
-    padding: 11px; font-size: 13px; font-weight: 700; font-family: inherit; cursor: pointer;
+    width: 100%; background: ${T.gold}; color: ${T.gray900}; border: none; border-radius: 11px;
+    padding: 11px; font-size: 13px; font-weight: 800; font-family: inherit; cursor: pointer;
   }
-  .sps-promo-btn:hover { background: ${T.greenDark}; }
+  .sps-promo-btn:hover { filter: brightness(1.05); }
 
   /* MAIN CONTENT */
   .sps-main { min-width: 0; }
@@ -222,48 +371,61 @@ const css = `
     background: ${T.white}; display: flex; align-items: center; justify-content: center;
     cursor: pointer; color: ${T.textMuted};
   }
-  .sps-view-btn.active { background: ${T.greenLight}; border-color: ${T.green}; color: ${T.green}; }
+  .sps-view-btn.active { background: ${T.gray900}; border-color: ${T.gray900}; color: #fff; }
 
   /* SHOP GRID */
-  .sps-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
-  @media (max-width: 1100px) { .sps-grid { grid-template-columns: repeat(2, 1fr); } }
-  @media (max-width: 600px) { .sps-grid { grid-template-columns: 1fr; } }
+  .sps-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  @media (max-width: 1100px) { .sps-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; } }
+  @media (max-width: 900px) {
+    .sps-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  }
 
   /* SHOP LIST VIEW */
-  .sps-list { display: flex; flex-direction: column; gap: 14px; }
+  .sps-list { display: flex; flex-direction: column; gap: 12px; }
   .sps-list-card {
     background: ${T.white}; border: 1px solid ${T.border}; border-radius: 14px;
     overflow: visible; cursor: pointer; transition: transform 0.15s, box-shadow 0.15s;
-    display: flex; align-items: center; gap: 18px; padding: 14px 18px;
+    display: flex; align-items: center; gap: 14px; padding: 12px 14px;
+    box-shadow: ${T.shadow};
   }
-  .sps-list-card:hover { box-shadow: 0 8px 24px rgba(13,31,15,0.08); }
+  .sps-list-card:hover { box-shadow: 0 8px 24px rgba(0,0,0,0.08); }
   .sps-list-logo {
-    width: 64px; height: 64px; border-radius: 50%; flex-shrink: 0;
+    width: 56px; height: 56px; border-radius: 50%; flex-shrink: 0;
     background: #111; display: flex; align-items: center; justify-content: center;
-    overflow: hidden; color: ${T.white}; font-size: 17px; font-weight: 900;
+    overflow: hidden; color: ${T.white}; font-size: 15px; font-weight: 900;
   }
   .sps-list-logo img { width: 100%; height: 100%; object-fit: cover; }
   .sps-list-info { flex: 1; min-width: 0; }
   .sps-list-name-row { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
-  .sps-list-name { font-size: 15px; font-weight: 800; color: ${T.text}; }
-  .sps-list-meta { font-size: 12.5px; color: ${T.textMuted}; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .sps-list-name {
+    font-size: 14.5px; font-weight: 800; color: ${T.text};
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .sps-list-meta {
+    font-size: 12px; color: ${T.textMuted}; display: flex; align-items: center; gap: 5px; flex-wrap: wrap;
+  }
   .sps-list-actions { flex-shrink: 0; }
-  .sps-list-actions .sps-follow-btn { width: 130px; }
+  .sps-list-actions .sps-follow-btn { width: 120px; min-height: 40px; }
   @media (max-width: 600px) {
-    .sps-list-card { flex-wrap: wrap; }
-    .sps-list-actions { width: 100%; }
-    .sps-list-actions .sps-follow-btn { width: 100%; }
+    .sps-list-card { gap: 10px; padding: 10px 12px; }
+    .sps-list-logo { width: 48px; height: 48px; }
+    .sps-list-actions { width: auto; }
+    .sps-list-actions .sps-follow-btn {
+      width: auto; min-width: 88px; padding: 8px 12px; font-size: 12px;
+    }
+    .sps-list-meta .sps-meta-extra { display: none; }
   }
 
   .sps-shop-card {
     background: ${T.white}; border: 1px solid ${T.border}; border-radius: 16px;
-    overflow: visible; cursor: pointer; transition: transform 0.15s, box-shadow 0.15s;
+    overflow: visible; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;
+    box-shadow: ${T.shadow};
   }
-  .sps-shop-card:hover { transform: translateY(-3px); box-shadow: 0 12px 32px rgba(13,31,15,0.09); }
+  .sps-shop-card:hover { transform: translateY(-3px); box-shadow: 0 12px 28px rgba(0,0,0,0.1); }
 
   .sps-card-cover {
-    position: relative; height: 160px; background: linear-gradient(135deg, ${T.greenLight}, ${T.border});
-    overflow: visible;
+    position: relative; height: 140px; background: linear-gradient(135deg, #1e293b 0%, #334155 55%, ${T.gold}44 100%);
+    overflow: visible; border-radius: 16px 16px 0 0;
   }
   .sps-card-cover img {
     width: 100%; height: 100%; object-fit: cover;
@@ -283,24 +445,44 @@ const css = `
   }
   .sps-card-logo img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
 
-  .sps-card-body { padding: 32px 16px 16px; }
-  .sps-card-name-row { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; }
-  .sps-card-name { font-size: 15px; font-weight: 800; color: ${T.text}; }
+  .sps-card-body { padding: 32px 14px 14px; }
+  .sps-card-name-row { display: flex; align-items: center; gap: 6px; margin-bottom: 3px; min-width: 0; }
+  .sps-card-name {
+    font-size: 14.5px; font-weight: 800; color: ${T.text};
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+  }
   .sps-card-category { font-size: 12px; color: ${T.textMuted}; font-weight: 500; margin-bottom: 6px; }
   .sps-card-location { font-size: 12px; color: ${T.textMuted}; display: flex; align-items: center; gap: 4px; margin-bottom: 8px; }
-  .sps-card-stats { font-size: 12px; color: ${T.textMuted}; display: flex; align-items: center; gap: 6px; margin-bottom: 12px; }
+  .sps-card-stats { font-size: 12px; color: ${T.textMuted}; display: flex; align-items: center; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
   .sps-card-stats .star { color: ${T.gold}; }
   .sps-card-stats .dot { color: ${T.border}; }
+  @media (max-width: 600px) {
+    .sps-grid { gap: 8px; }
+    .sps-shop-card { border-radius: 14px; }
+    .sps-card-cover { height: 92px; border-radius: 14px 14px 0 0; }
+    .sps-card-logo { width: 42px; height: 42px; bottom: -16px; left: 10px; border-width: 2.5px; }
+    .sps-card-body { padding: 22px 10px 10px; }
+    .sps-card-name { font-size: 12.5px; }
+    .sps-card-category { font-size: 11px; margin-bottom: 4px; }
+    .sps-card-location { font-size: 11px; margin-bottom: 6px; }
+    .sps-card-stats { font-size: 11px; margin-bottom: 8px; gap: 4px; }
+    .sps-follow-btn { padding: 8px; font-size: 12px; min-height: 38px; border-radius: 10px; }
+  }
+  @media (max-width: 380px) {
+    .sps-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .sps-card-cover { height: 84px; }
+    .sps-card-name { font-size: 12px; }
+  }
 
   .sps-follow-btn {
-    width: 100%; border: 1.5px solid ${T.green}; color: ${T.green};
-    background: ${T.white}; border-radius: 50px; padding: 9px;
+    width: 100%; border: 1.5px solid ${T.border}; color: ${T.gray900};
+    background: ${T.white}; border-radius: 12px; padding: 10px;
     font-size: 13px; font-weight: 700; font-family: inherit; cursor: pointer;
-    transition: all 0.15s;
+    transition: all 0.15s; min-height: 40px;
   }
-  .sps-follow-btn:hover { background: ${T.greenLight}; }
-  .sps-follow-btn.following { background: ${T.green}; color: ${T.white}; }
-  .sps-follow-btn.following:hover { background: ${T.greenDark}; }
+  .sps-follow-btn:hover { border-color: ${T.gray900}; background: ${T.gray100}; }
+  .sps-follow-btn.following { background: ${T.gray900}; color: ${T.white}; border-color: ${T.gray900}; }
+  .sps-follow-btn.following:hover { background: #000; }
 
   /* PAGINATION */
   .sps-pagination {
@@ -319,8 +501,18 @@ const css = `
   .sps-page-ellipsis { font-size: 13px; color: ${T.textMuted}; padding: 0 4px; }
 
   .sps-loading { display: flex; align-items: center; justify-content: center; height: 40vh; color: ${T.textMuted}; }
-  .sps-empty { text-align: center; padding: 60px 20px; color: ${T.textMuted}; }
+  .sps-empty {
+    text-align: center; padding: 48px 20px; color: ${T.textMuted};
+    background: ${T.white}; border: 1px solid ${T.border}; border-radius: 16px;
+  }
   .sps-empty h3 { font-size: 16px; font-weight: 700; color: ${T.text}; margin: 0 0 8px; }
+  .sps-results-row {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px;
+  }
+  @media (max-width: 900px) {
+    .sps-results-row { margin-bottom: 10px; }
+    .sps-results-count { font-size: 12.5px !important; }
+  }
 `
 
 const Icon = {
@@ -337,6 +529,8 @@ const Icon = {
   ChevronLeft: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>,
   ChevronRight: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>,
   ChevronDown: () => <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>,
+  Filter: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 3H2l8 9.5V19l4 2v-8.5L22 3z"/></svg>,
+  X: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>,
   Check: () => <svg width="18" height="18" viewBox="0 0 24 24"><path fill="#16a34a" d="M12 0a4 4 0 0 1 3.2 1.6 4 4 0 0 1 3.6 1 4 4 0 0 1 1 3.6A4 4 0 0 1 21.4 9.4a4 4 0 0 1 0 5.2A4 4 0 0 1 19.8 17.8a4 4 0 0 1-1 3.6 4 4 0 0 1-3.6 1A4 4 0 0 1 12 24a4 4 0 0 1-3.2-1.6 4 4 0 0 1-3.6-1 4 4 0 0 1-1-3.6A4 4 0 0 1 2.6 14.6a4 4 0 0 1 0-5.2A4 4 0 0 1 4.2 6.2a4 4 0 0 1 1-3.6 4 4 0 0 1 3.6-1A4 4 0 0 1 12 0Z"/><path d="m7.5 12.5 3 3 6-7" stroke="#fff" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>,
 }
 
@@ -355,11 +549,10 @@ export default function ShopsPage() {
   const [districtCounts, setDistrictCounts] = useState({})
   const [totalCount, setTotalCount] = useState(0)
   const [loading, setLoading] = useState(true)
-  const [currentUser, setCurrentUser] = useState(null)
+  const [user, setUser] = useState(null)
   const [currentUserId, setCurrentUserId] = useState(null)
   const [followingMap, setFollowingMap] = useState({})
   const [notifCount, setNotifCount] = useState(0)
-  const [chatCount, setChatCount] = useState(0)
   const [viewMode, setViewMode] = useState('grid')
   const [page, setPage] = useState(1)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -369,6 +562,8 @@ export default function ShopsPage() {
   const [blockedShops, setBlockedShops] = useState([])
   const [blockedShopDetails, setBlockedShopDetails] = useState([])
   const [showBlocked, setShowBlocked] = useState(false)
+  const [navSearch, setNavSearch] = useState('')
+  const [mobileFilterOpen, setMobileFilterOpen] = useState(false)
 
   // Filters
   const [searchQ, setSearchQ] = useState('')
@@ -377,7 +572,25 @@ export default function ShopsPage() {
   const [sortBy, setSortBy] = useState('followers')
   const [shopType, setShopType] = useState('all')
 
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE)
+  const activeFilterCount = [
+    filterCat !== 'all',
+    filterDistrict !== 'All Districts',
+    shopType !== 'all',
+    sortBy !== 'followers',
+  ].filter(Boolean).length
+
+  // Lock body scroll + Escape to close mobile filter drawer
+  useEffect(() => {
+    if (!mobileFilterOpen) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const onKey = (e) => { if (e.key === 'Escape') setMobileFilterOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = prev
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [mobileFilterOpen])
 
   const categoriesWithShops = CATEGORIES.filter(
     c => c.id === 'all' || categoryCounts[c.id] > 0
@@ -428,19 +641,27 @@ export default function ShopsPage() {
 
   useEffect(() => {
     async function init() {
-      const { data: { user } } = await supabase.auth.getUser()
-      if (user) {
-        setCurrentUserId(user.id)
-        const { data: profile } = await supabase.from('profiles').select('full_name, avatar_url').eq('id', user.id).maybeSingle()
-        setCurrentUser(profile)
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (authUser) {
+        setCurrentUserId(authUser.id)
+        const [{ data: profile }, { data: shop }] = await Promise.all([
+          supabase.from('profiles').select('full_name, avatar_url, account_type').eq('id', authUser.id).maybeSingle(),
+          supabase.from('shops').select('slug').eq('owner_id', authUser.id).maybeSingle(),
+        ])
+        setUser({
+          ...authUser,
+          avatar_url: profile?.avatar_url || null,
+          full_name: profile?.full_name || null,
+          shop_slug: shop?.slug || null,
+          account_type: profile?.account_type,
+        })
 
-        const { data: follows } = await supabase.from('shop_followers').select('shop_id').eq('user_id', user.id)
+        const { data: follows } = await supabase.from('shop_followers').select('shop_id').eq('user_id', authUser.id)
         const map = {}
         follows?.forEach(f => { map[f.shop_id] = true })
         setFollowingMap(map)
 
-        loadNotifCount(user.id)
-        loadChatCount(user.id)
+        loadNotifCount(authUser.id)
       }
     }
     init()
@@ -451,13 +672,6 @@ export default function ShopsPage() {
       .select('*', { count: 'exact', head: true })
       .eq('user_id', uid).eq('read', false)
     setNotifCount(count || 0)
-  }
-
-  async function loadChatCount(uid) {
-    const { count } = await supabase.from('messages')
-      .select('*', { count: 'exact', head: true })
-      .eq('recipient_id', uid).eq('read', false)
-    setChatCount(count || 0)
   }
 
   useEffect(() => {
@@ -581,71 +795,36 @@ export default function ShopsPage() {
     setPage(1)
   }
 
-  // Pagination pages to show
-  function getPaginationPages() {
-    if (totalPages <= 7) return Array.from({ length: totalPages }, (_, i) => i + 1)
-    const pages = [1, 2]
-    if (page > 4) pages.push('...')
-    for (let i = Math.max(3, page - 1); i <= Math.min(totalPages - 2, page + 1); i++) pages.push(i)
-    if (page < totalPages - 3) pages.push('...')
-    pages.push(totalPages - 1, totalPages)
-    return [...new Set(pages)]
-  }
-
   return (
     <div className="sps-root">
       <style>{css}</style>
 
-      {/* HEADER */}
-      <div className="sps-header">
-        <div className="sps-brand" onClick={() => navigate('/')}>Soko<span>MW</span></div>
-        <div className="sps-search-wrap">
-          <input
-            placeholder="Search shops, categories or products..."
-            value={searchQ}
-            onChange={e => handleSearch(e.target.value)}
-          />
-          <span className="sps-search-icon"><Icon.Search /></span>
-        </div>
-        <div className="sps-nav-actions">
-          <div className="sps-nav-item" onClick={() => navigate('/')}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-            Home
-          </div>
-          <div className="sps-nav-item active">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
-            Shops
-          </div>
-          <div className="sps-nav-item" onClick={() => navigate('/chats')} style={{ position: 'relative' }}>
-            <Icon.Msg />Messages
-            {chatCount > 0 && <span className="sps-nav-badge">{chatCount > 9 ? '9+' : chatCount}</span>}
-          </div>
-          <div className="sps-nav-item" onClick={() => navigate('/notifications')} style={{ position: 'relative' }}>
-            <Icon.Bell />Notifications
-            {notifCount > 0 && <span className="sps-nav-badge">{notifCount > 9 ? '9+' : notifCount}</span>}
-          </div>
-          <div className="sps-nav-user" onClick={() => navigate(currentUserId ? '/profile' : '/login')}>
-            {currentUser?.avatar_url ? (
-              <img className="sps-nav-avatar" src={currentUser.avatar_url} alt="" />
-            ) : (
-              <div className="sps-nav-avatar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: T.green }}>
-                {currentUserId ? initials(currentUser?.full_name) : '?'}
-              </div>
-            )}
-            <span>{currentUser?.full_name?.split(' ')[0] || 'Account'}</span>
-            <span className="sps-nav-chevron"><Icon.ChevronDown /></span>
-          </div>
-        </div>
-      </div>
+      <SokoNav
+        user={user}
+        notifCount={notifCount}
+        search={navSearch}
+        setSearch={setNavSearch}
+        navigate={navigate}
+        activeDistrict={filterDistrict}
+        onDistrictChange={(d) => {
+          setFilterDistrict(d)
+          setPage(1)
+        }}
+        activePillar="shops"
+        ctaLabel="Open Shop"
+        onCta={() => navigate('/shop-setup')}
+      />
 
       {/* PAGE TITLE */}
       <div className="sps-title-row">
-        <div>
+        <div style={{ minWidth: 0 }}>
           <h1>Shops</h1>
-          <p>Discover trusted shops and verified businesses near you.</p>
+          <p>Discover trusted shops and verified businesses across Malawi.</p>
         </div>
-        <button className="sps-open-shop-btn" onClick={() => navigate('/shop-setup')}>
-          <Icon.Plus /> Open Your Shop
+        <button type="button" className="sps-open-shop-btn" onClick={() => navigate('/shop-setup')}>
+          <Icon.Plus />
+          <span className="sps-open-shop-label">Open Your Shop</span>
+          <span className="sps-open-shop-short">Open</span>
         </button>
       </div>
 
@@ -653,21 +832,54 @@ export default function ShopsPage() {
       <div className="sps-filter-bar">
         <div className="sps-filter-search-wrap">
           <input
-            placeholder="Search shops by name, category or keyword..."
+            placeholder="Search shops…"
             value={searchQ}
             onChange={e => handleSearch(e.target.value)}
+            enterKeyHint="search"
+            autoComplete="off"
           />
           <span className="sps-filter-search-icon"><Icon.Search /></span>
         </div>
-        <select className="sps-filter-select" value={filterCat} onChange={e => { setFilterCat(e.target.value); setPage(1) }}>
-          {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.id === 'all' ? 'All Categories' : c.label}</option>)}
-        </select>
-        <select className="sps-filter-select" value={filterDistrict} onChange={e => { setFilterDistrict(e.target.value); setPage(1) }}>
-          {DISTRICTS.map(d => <option key={d} value={d}>{d}</option>)}
-        </select>
-        <select className="sps-filter-select" value={sortBy} onChange={e => { setSortBy(e.target.value); setPage(1) }}>
-          {SORT_OPTIONS.map(s => <option key={s.id} value={s.id}>Sort by: {s.label}</option>)}
-        </select>
+        <div className="sps-desktop-selects">
+          <select className="sps-filter-select" value={filterCat} onChange={e => { setFilterCat(e.target.value); setPage(1) }}>
+            {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.id === 'all' ? 'All Categories' : c.label}</option>)}
+          </select>
+          <select className="sps-filter-select" value={filterDistrict} onChange={e => { setFilterDistrict(e.target.value); setPage(1) }}>
+            {DISTRICTS.map(d => <option key={d} value={d}>{d}</option>)}
+          </select>
+          <select className="sps-filter-select" value={sortBy} onChange={e => { setSortBy(e.target.value); setPage(1) }}>
+            {SORT_OPTIONS.map(s => <option key={s.id} value={s.id}>Sort by: {s.label}</option>)}
+          </select>
+        </div>
+        <button
+          type="button"
+          className="sps-mobile-filter-btn"
+          onClick={() => setMobileFilterOpen(true)}
+          aria-label="Open filters"
+        >
+          <Icon.Filter />
+          Filters
+          {activeFilterCount > 0 && (
+            <span className="sps-filter-badge">{activeFilterCount}</span>
+          )}
+        </button>
+      </div>
+
+      {/* Mobile category chips */}
+      <div className="sps-chips">
+        <div className="sps-chips-scroll">
+          {categoriesWithShops.slice(0, 10).map(cat => (
+            <button
+              key={cat.id}
+              type="button"
+              className={`sps-chip${filterCat === cat.id ? ' active' : ''}`}
+              onClick={() => handleFilterCat(cat.id)}
+            >
+              <span style={{ display: 'flex' }}>{CAT_ICONS[cat.id]}</span>
+              {cat.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* BODY */}
@@ -839,15 +1051,13 @@ export default function ShopsPage() {
           {/* PROMO CARD */}
           <div className="sps-promo-card">
             <div className="sps-promo-icon">
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke={T.green} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/>
-                <line x1="3" y1="6" x2="21" y2="6"/>
-                <path d="M16 10a4 4 0 0 1-8 0"/>
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" strokeLinejoin="round">
+                <path d="m2 7 4-4h12l4 4"/><path d="M3 7v13a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V7"/><path d="M16 11a4 4 0 0 1-8 0"/>
               </svg>
             </div>
             <h4>Open your own shop</h4>
-            <p>Get your own shop page, connect with more buyers and grow your business.</p>
-            <button className="sps-promo-btn" onClick={() => navigate('/shop-setup')}>Open Shop Now</button>
+            <p>Get a public shop page, reach more buyers, and grow on SokoMW.</p>
+            <button type="button" className="sps-promo-btn" onClick={() => navigate('/shop-setup')}>Open shop now</button>
           </div>
 
           {/* Scroll hint at bottom */}
@@ -928,7 +1138,7 @@ export default function ShopsPage() {
               {shops.map(shop => (
                 <div key={shop.id} className="sps-list-card" onClick={() => navigate(`/shop/${shop.slug}`)}>
                   <div className="sps-list-logo" style={{
-                    background: shop.logo_url ? '#111' : `linear-gradient(135deg, #1b5e20, #2e7d32)`,
+                    background: shop.logo_url ? '#111' : `linear-gradient(135deg, #334155, #1e293b)`,
                   }}>
                     {shop.logo_url
                       ? <img src={shop.logo_url} alt={shop.name} />
@@ -946,27 +1156,29 @@ export default function ShopsPage() {
                       <Icon.Pin />
                       <span>{shop.city ? `${shop.city}, ` : ''}{shop.district || 'Malawi'}</span>
                       <span style={{ color: T.border }}>•</span>
-                      <span>{shop.follower_count >= 1000 ? `${(shop.follower_count / 1000).toFixed(1)}K` : shop.follower_count || 0} followers</span>
+                      <span className="sps-meta-extra">{shop.follower_count >= 1000 ? `${(shop.follower_count / 1000).toFixed(1)}K` : shop.follower_count || 0} followers</span>
                       {shop.rating && (
-                        <>
+                        <span className="sps-meta-extra" style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
                           <span style={{ color: T.border }}>•</span>
                           <span className="star" style={{ color: T.gold }}><Icon.Star /></span>
                           <span>{shop.rating} ({shop.review_count || 0})</span>
-                        </>
+                        </span>
                       )}
                     </div>
                   </div>
                   <div className="sps-list-actions">
                     {shop.owner_id === currentUserId ? (
                       <button
+                        type="button"
                         className="sps-follow-btn"
                         onClick={e => { e.stopPropagation(); navigate(`/shop/${shop.slug}`) }}
-                        style={{ background: T.greenLight, color: T.green, border: `1.5px solid ${T.green}` }}
+                        style={{ background: T.gray100, color: T.gray900, border: `1.5px solid ${T.border}` }}
                       >
-                        Manage Shop
+                        Manage
                       </button>
                     ) : (
                       <button
+                        type="button"
                         className={`sps-follow-btn ${followingMap[shop.id] ? 'following' : ''}`}
                         onClick={e => handleFollow(e, shop)}
                       >
@@ -983,22 +1195,20 @@ export default function ShopsPage() {
                 <div key={shop.id} className="sps-shop-card" onClick={() => navigate(`/shop/${shop.slug}`)}>
                   {/* Cover */}
                   <div className="sps-card-cover">
-                    {/* Image clipped separately */}
                     <div style={{
-                      position: 'absolute', inset: 0, overflow: 'hidden',
-                      background: `linear-gradient(135deg, ${T.greenLight}, ${T.border})`,
+                      position: 'absolute', inset: 0, overflow: 'hidden', borderRadius: '16px 16px 0 0',
+                      background: `linear-gradient(135deg, #1e293b 0%, #334155 55%, ${T.gold}44 100%)`,
                     }}>
                       {shop.cover_url && (
                         <img src={shop.cover_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                       )}
                     </div>
-                    {/* Logo overhangs below cover */}
                     <div className="sps-card-logo" style={{
-                      background: shop.logo_url ? '#111' : `linear-gradient(135deg, #1b5e20, #2e7d32)`,
+                      background: shop.logo_url ? '#111' : `linear-gradient(135deg, #334155, #1e293b)`,
                     }}>
                       {shop.logo_url
                         ? <img src={shop.logo_url} alt={shop.name} />
-                        : <span style={{ fontSize: 22, fontWeight: 900, color: '#fff', letterSpacing: '-0.5px' }}>{initials(shop.name)}</span>
+                        : <span style={{ fontSize: 20, fontWeight: 900, color: '#fff', letterSpacing: '-0.5px' }}>{initials(shop.name)}</span>
                       }
                     </div>
                   </div>
@@ -1029,14 +1239,16 @@ export default function ShopsPage() {
                     </div>
                     {shop.owner_id === currentUserId ? (
                       <button
+                        type="button"
                         className="sps-follow-btn"
                         onClick={e => { e.stopPropagation(); navigate(`/shop/${shop.slug}`) }}
-                        style={{ background: T.greenLight, color: T.green, border: `1.5px solid ${T.green}` }}
+                        style={{ background: T.gray100, color: T.gray900, border: `1.5px solid ${T.border}` }}
                       >
                         Manage Shop
                       </button>
                     ) : (
                       <button
+                        type="button"
                         className={`sps-follow-btn ${followingMap[shop.id] ? 'following' : ''}`}
                         onClick={e => handleFollow(e, shop)}
                       >
@@ -1060,6 +1272,87 @@ export default function ShopsPage() {
               You've reached the end — that's all {totalCount} shops.
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Mobile filter drawer */}
+      <div className={`sps-drawer${mobileFilterOpen ? ' open' : ''}`} aria-hidden={!mobileFilterOpen}>
+        <div className="sps-drawer-overlay" onClick={() => setMobileFilterOpen(false)} />
+        <div className="sps-drawer-panel" role="dialog" aria-label="Filter shops">
+          <div className="sps-drawer-handle" />
+          <div className="sps-drawer-head">
+            <h3>Filters</h3>
+            <button type="button" className="sps-drawer-close" onClick={() => setMobileFilterOpen(false)} aria-label="Close">
+              <Icon.X />
+            </button>
+          </div>
+
+          <div className="sps-section-title" style={{ marginTop: 0 }}>
+            <span>Category</span>
+          </div>
+          {categoriesWithShops.map(cat => (
+            <div
+              key={cat.id}
+              className={`sps-filter-item ${filterCat === cat.id ? 'active' : ''}`}
+              onClick={() => handleFilterCat(cat.id)}
+            >
+              <span className="fi-icon">{CAT_ICONS[cat.id]}</span>
+              <span>{cat.label}</span>
+              {filterCat === cat.id && <span className="fi-dot" />}
+            </div>
+          ))}
+
+          <div className="sps-section-title">
+            <span>District</span>
+          </div>
+          {districtsWithShops.map(d => (
+            <div
+              key={d}
+              className={`sps-filter-item ${filterDistrict === d ? 'active' : ''}`}
+              onClick={() => handleFilterDistrict(d)}
+            >
+              <span className="fi-icon"><Icon.Pin /></span>
+              <span>{d}</span>
+              {filterDistrict === d && <span className="fi-dot" />}
+            </div>
+          ))}
+
+          <div className="sps-section-title">
+            <span>Shop type</span>
+          </div>
+          {SHOP_TYPES.map(t => (
+            <div
+              key={t.id}
+              className={`sps-filter-item ${shopType === t.id ? 'active' : ''}`}
+              onClick={() => handleShopType(t.id)}
+            >
+              <span>{t.label}</span>
+              {shopType === t.id && <span className="fi-dot" />}
+            </div>
+          ))}
+
+          <div className="sps-section-title">
+            <span>Sort by</span>
+          </div>
+          {SORT_OPTIONS.map(s => (
+            <div
+              key={s.id}
+              className={`sps-filter-item ${sortBy === s.id ? 'active' : ''}`}
+              onClick={() => { setSortBy(s.id); setPage(1) }}
+            >
+              <span>{s.label}</span>
+              {sortBy === s.id && <span className="fi-dot" />}
+            </div>
+          ))}
+
+          <div className="sps-drawer-actions">
+            <button type="button" className="sps-drawer-clear" onClick={() => { clearFilters(); setMobileFilterOpen(false) }}>
+              Clear all
+            </button>
+            <button type="button" className="sps-drawer-apply" onClick={() => setMobileFilterOpen(false)}>
+              Show results
+            </button>
+          </div>
         </div>
       </div>
     </div>

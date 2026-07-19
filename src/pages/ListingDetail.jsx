@@ -122,6 +122,7 @@ export default function ListingDetail() {
   const navigate = useNavigate()
   const [listing, setListing]       = useState(null)
   const [seller, setSeller]         = useState(null)
+  const [ownerShop, setOwnerShop]   = useState(null) // shop for this product owner (if any)
   const [currentUser, setCurrentUser] = useState(null)
   const [mediaIndex, setMediaIndex] = useState(0)
   const [loading, setLoading]       = useState(true)
@@ -177,6 +178,7 @@ export default function ListingDetail() {
     setCurrentUser(user)
     const { data } = await supabase.from('listings').select('*').eq('id', id).single()
     setListing(data)
+    setOwnerShop(null)
     if (data?.id) recordView(data.id)
     if (data?.seller_id) {
       const { data: profile } = await supabase.from('profiles').select('*').eq('id', data.seller_id).single()
@@ -187,6 +189,47 @@ export default function ListingDetail() {
         setSeller(usr)
       }
     }
+
+    // Resolve shop as product owner when listing belongs to a shop
+    // or when the seller owns an active shop
+    try {
+      let shop = null
+      if (data?.shop_id) {
+        const { data: byId } = await supabase
+          .from('shops')
+          .select('id, name, slug, logo_url, cover_url, city, is_verified, rating, review_count, listing_count, owner_id, is_active')
+          .eq('id', data.shop_id)
+          .maybeSingle()
+        if (byId && byId.is_active !== false) shop = byId
+      }
+      if (!shop && data?.seller_id) {
+        const { data: byOwner } = await supabase
+          .from('shops')
+          .select('id, name, slug, logo_url, cover_url, city, is_verified, rating, review_count, listing_count, owner_id, is_active')
+          .eq('owner_id', data.seller_id)
+          .eq('is_active', true)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (byOwner) shop = byOwner
+        // Fallback if is_active filter fails or shops lack the column
+        if (!shop) {
+          const { data: anyShop } = await supabase
+            .from('shops')
+            .select('id, name, slug, logo_url, cover_url, city, is_verified, rating, review_count, listing_count, owner_id')
+            .eq('owner_id', data.seller_id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle()
+          if (anyShop) shop = anyShop
+        }
+      }
+      setOwnerShop(shop)
+    } catch (e) {
+      console.warn('Shop owner lookup failed:', e)
+      setOwnerShop(null)
+    }
+
     const [ls, ss] = await Promise.all([
       fetchListingStatus(data.id),
       fetchUserActiveStatus(data?.seller_id),
@@ -260,7 +303,9 @@ export default function ListingDetail() {
         })
       } catch (e) { console.warn('Offer notification error:', e) }
     }
-    navigate(`/chat/${listing.seller_id}/${listing.id}`)
+    navigate(`/chat/${listing.seller_id}/${listing.id}?src=listing`, {
+      state: { source: 'listing' },
+    })
   }
 
   function handleShare() {
@@ -345,11 +390,27 @@ export default function ListingDetail() {
     listing.battery_health && { label: 'Battery Health', icon: 'battery', value: listing.battery_health },
   ].filter(Boolean)
 
-  const sellerRating      = seller?.rating || 0
-  const sellerReviewCount = seller?.review_count || 0
+  const sellerRating      = ownerShop?.rating || seller?.rating || 0
+  const sellerReviewCount = ownerShop?.review_count || seller?.review_count || 0
   const memberSince       = seller?.created_at
     ? new Date(seller.created_at).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
     : null
+  const ownerDisplayName  = ownerShop?.name
+    || listing.seller_name
+    || seller?.name
+    || seller?.full_name
+    || 'Anonymous'
+  const ownerAvatarUrl    = ownerShop?.logo_url || seller?.avatar_url || null
+  const ownerIsVerified   = !!(ownerShop?.is_verified || seller?.is_verified)
+  const ownerIsShop       = !!ownerShop?.slug
+
+  function openOwner() {
+    if (ownerIsShop) {
+      navigate('/shop/' + ownerShop.slug)
+      return
+    }
+    if (listing?.seller_id) navigate('/profile/' + listing.seller_id)
+  }
 
   // Icons for spec fields
   const SPEC_ICONS = {
@@ -1036,37 +1097,57 @@ export default function ListingDetail() {
 
               <div style={S.divider} />
 
-              {/* ── SELLER ── */}
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 14 }}>
+              {/* ── SELLER / SHOP OWNER ── */}
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={openOwner}
+                onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && openOwner()}
+                style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 12, marginBottom: 14,
+                  cursor: 'pointer', borderRadius: 12, padding: 4, marginLeft: -4, marginRight: -4,
+                }}
+                className="ld-owner-card"
+              >
                 <div style={S.sellerAvatar}>
-                  {seller?.avatar_url
-                    ? <img src={seller.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
-                    : <span style={{ fontSize: 18, fontWeight: 800 }}>{(seller?.name || seller?.full_name || 'U')[0].toUpperCase()}</span>
+                  {ownerAvatarUrl
+                    ? <img src={ownerAvatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: '50%' }} />
+                    : <span style={{ fontSize: 18, fontWeight: 800 }}>{(ownerDisplayName || 'U')[0].toUpperCase()}</span>
                   }
                 </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={S.sellerName}>{listing.seller_name || seller?.name || seller?.full_name || 'Anonymous'}</span>
-                    {seller?.is_verified && (
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <span style={S.sellerName}>{ownerDisplayName}</span>
+                    {ownerIsVerified && (
                       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1a7a4a" strokeWidth="2.5" strokeLinecap="round">
                         <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
                       </svg>
                     )}
                   </div>
-                  {seller?.is_verified && (
+                  {ownerIsShop ? (
+                    <div style={{ ...S.verifiedText, color: '#0F9D58' }}>
+                      Shop storefront · Tap to open
+                    </div>
+                  ) : ownerIsVerified ? (
                     <div style={S.verifiedText}>Verified Seller</div>
-                  )}
+                  ) : null}
                   {sellerRating > 0 && (
                     <div style={{ marginTop: 3 }}>
                       <StarRow rating={sellerRating} count={sellerReviewCount} />
                     </div>
                   )}
+                  {ownerIsShop && ownerShop.listing_count != null && (
+                    <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4, fontWeight: 600 }}>
+                      {ownerShop.listing_count} product{ownerShop.listing_count === 1 ? '' : 's'}
+                    </div>
+                  )}
                 </div>
+                <span style={{ color: '#9ca3af', fontSize: 18, fontWeight: 600, lineHeight: 1, marginTop: 10 }} aria-hidden>›</span>
               </div>
 
-              {/* Seller meta rows */}
+              {/* Seller / shop meta rows */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
-                {!isOwner && seller?.last_seen && (
+                {!isOwner && !ownerIsShop && seller?.last_seen && (
                   <div style={S.sellerMetaRow}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
                     <span style={{ color: getOnlineStatus(seller.last_seen).color, fontWeight: 500 }}>
@@ -1075,26 +1156,40 @@ export default function ListingDetail() {
                     <span style={{ color: '#9ca3af' }}>· Typically replies in minutes</span>
                   </div>
                 )}
-                {memberSince && (
+                {!ownerIsShop && memberSince && (
                   <div style={S.sellerMetaRow}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
                     <span>Member since {memberSince}</span>
                   </div>
                 )}
-                {seller?.city && (
+                {(ownerShop?.city || seller?.city) && (
                   <div style={S.sellerMetaRow}>
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="#9ca3af"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
-                    <span>{seller.city}</span>
+                    <span>{ownerShop?.city || seller?.city}</span>
                   </div>
                 )}
               </div>
 
-              {sellerStatus && <div style={{ marginBottom: 10 }}><StatusBadge status={sellerStatus} /></div>}
+              {sellerStatus && !ownerIsShop && <div style={{ marginBottom: 10 }}><StatusBadge status={sellerStatus} /></div>}
 
               {!isOwner && (
-                <button className="ld-btn-hover" style={S.viewProfileBtn}
-                  onClick={() => navigate('/profile/' + listing.seller_id)}>
-                  View Seller Profile
+                <button
+                  type="button"
+                  className="ld-btn-hover"
+                  style={S.viewProfileBtn}
+                  onClick={openOwner}
+                >
+                  {ownerIsShop ? 'Visit Shop' : 'View Seller Profile'}
+                </button>
+              )}
+              {isOwner && ownerIsShop && (
+                <button
+                  type="button"
+                  className="ld-btn-hover"
+                  style={S.viewProfileBtn}
+                  onClick={() => navigate('/shop/' + ownerShop.slug)}
+                >
+                  Open My Shop
                 </button>
               )}
             </div>

@@ -1,32 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import FollowButton from './FollowButton'
 
-const REACTIONS = [
-  { key: 'love',       emoji: '❤️', label: 'Love'      },
-  { key: 'hot',        emoji: '🔥', label: 'Fire'      },
-  { key: 'interested', emoji: '👍', label: 'Like'      },
-]
+/**
+ * Status / story viewer — product-first layout (reference design).
+ * Progress bars · seller header · media · product card · engage · CTAs · reply
+ */
 
-const TYPE_META = {
-  listing_update: { label: '📦 Update',    grad: 'linear-gradient(135deg,#3b82f6,#1d4ed8)' },
-  price_drop:     { label: '💸 Price Drop',grad: 'linear-gradient(135deg,#10b981,#065f46)' },
-  promotion:      { label: '🎯 Promo',     grad: 'linear-gradient(135deg,#f59e0b,#b45309)' },
-  new_product:    { label: '✨ New',        grad: 'linear-gradient(135deg,#8b5cf6,#4c1d95)' },
-  job_post:       { label: '💼 Job',        grad: 'linear-gradient(135deg,#06b6d4,#0e7490)' },
-  service_update: { label: '⚡ Service',    grad: 'linear-gradient(135deg,#ec4899,#9d174d)' },
-  event:          { label: '🎉 Event',      grad: 'linear-gradient(135deg,#f97316,#c2410c)' },
-  availability:   { label: '🟢 Available',  grad: 'linear-gradient(135deg,#22c55e,#15803d)' },
-}
-
-function fmtK(n) { return n >= 1000 ? `${(n/1000).toFixed(1)}K` : String(n||0) }
-
-function timeAgoFn(ts) {
-  const diff = Date.now() - new Date(ts).getTime()
-  const d=Math.floor(diff/86400000),h=Math.floor(diff/3600000),m=Math.floor(diff/60000)
-  return d>0?`${d}d ago`:h>0?`${h}h ago`:m>0?`${m}m ago`:'Just now'
-}
+const GREEN = '#1a7a4a'
+const GREEN_MID = '#166534'
+const GOLD = '#f5c518'
+const GOLD_BTN = '#f0c000'
 
 const GRADIENTS = [
   'linear-gradient(160deg,#0a2e1a 0%,#1a7a4a 100%)',
@@ -34,58 +18,717 @@ const GRADIENTS = [
   'linear-gradient(160deg,#1a0a2e 0%,#4a1a7a 100%)',
   'linear-gradient(160deg,#1a0a0a 0%,#7a2020 100%)',
   'linear-gradient(160deg,#0a1a2e 0%,#1a5a6a 100%)',
-  'linear-gradient(160deg,#1a1a0a 0%,#5a6a1a 100%)',
 ]
 
-export default function StoryViewer({ stories, startIndex, currentUserId, onClose }) {
-  const [idx, setIdx]                   = useState(startIndex)
-  const [progress, setProgress]         = useState(0)
-  const [paused, setPaused]             = useState(false)
-  const [saved, setSaved]               = useState(false)
-  const [saveLoading, setSaveLoading]   = useState(false)
-  const [shareUrl, setShareUrl]         = useState(null)
-  const [replyText, setReplyText]       = useState('')
+// ─── Icons ───────────────────────────────────────────────────────────────────
+function IconClose({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
+      <path d="M18 6L6 18M6 6l12 12" />
+    </svg>
+  )
+}
+function IconMore({ size = 20 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <circle cx="12" cy="5" r="1.6" />
+      <circle cx="12" cy="12" r="1.6" />
+      <circle cx="12" cy="19" r="1.6" />
+    </svg>
+  )
+}
+function IconVerified({ size = 15 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden>
+      <circle cx="12" cy="12" r="10" fill="#22c55e" />
+      <path d="M8 12.2l2.4 2.4L16.2 9" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+function IconStar({ size = 11 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <path d="M12 2.5l2.9 6.1 6.6.9-4.8 4.6 1.2 6.5L12 17.3 6.1 20.6l1.2-6.5L2.5 9.5l6.6-.9L12 2.5z" />
+    </svg>
+  )
+}
+function IconHeart({ size = 20, filled = false }) {
+  return filled ? (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="#ef4444" aria-hidden>
+      <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z" />
+    </svg>
+  ) : (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z" />
+    </svg>
+  )
+}
+function IconComment({ size = 19 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  )
+}
+function IconShare({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <circle cx="18" cy="5" r="3" />
+      <circle cx="6" cy="12" r="3" />
+      <circle cx="18" cy="19" r="3" />
+      <path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" />
+    </svg>
+  )
+}
+function IconMessage({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
+    </svg>
+  )
+}
+function IconSend({ size = 18 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M22 2L11 13" />
+      <path d="M22 2l-7 20-4-9-9-4 20-7z" />
+    </svg>
+  )
+}
+function IconMapPin({ size = 11 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z" />
+      <circle cx="12" cy="10" r="2.2" />
+    </svg>
+  )
+}
+function IconCheck({ size = 11 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M5 12l5 5L20 7" />
+    </svg>
+  )
+}
+function IconEye({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  )
+}
+function IconSearch({ size = 14 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
+      <circle cx="11" cy="11" r="7" />
+      <path d="M20 20l-3.5-3.5" />
+    </svg>
+  )
+}
+function IconCopy({ size = 14 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="9" y="9" width="13" height="13" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  )
+}
+function IconPackage({ size = 22 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M21 8l-9-5-9 5v8l9 5 9-5V8z" />
+      <path d="M3.3 7.5L12 12l8.7-4.5" />
+      <path d="M12 22V12" />
+    </svg>
+  )
+}
+function IconChevronRight({ size = 14, color = 'currentColor' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M9 18l6-6-6-6" />
+    </svg>
+  )
+}
+
+function fmtK(n) {
+  const v = Number(n) || 0
+  if (v >= 1000) return `${(v / 1000).toFixed(1)}K`
+  return String(v)
+}
+
+function timeAgoFn(ts) {
+  const diff = Date.now() - new Date(ts).getTime()
+  const d = Math.floor(diff / 86400000)
+  const h = Math.floor(diff / 3600000)
+  const m = Math.floor(diff / 60000)
+  if (d > 0) return `${d}d ago`
+  if (h > 0) return `${h}h ago`
+  if (m > 0) return `${m} min ago`
+  return 'Just now'
+}
+
+function isColorUrl(url) {
+  return typeof url === 'string' && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(url.trim())
+}
+
+function formatPrice(price) {
+  const n = Number(price)
+  if (!Number.isFinite(n)) return null
+  return `MK${n.toLocaleString()}`
+}
+
+// ─── Media download cache (blob URLs) ─────────────────────────────────────────
+// Only show media after a full download completes.
+const mediaBlobCache = new Map() // remoteUrl -> { blobUrl, kind: 'image'|'video' }
+const mediaInflight = new Map()  // remoteUrl -> Promise
+
+function isRemoteMediaUrl(url) {
+  if (!url || typeof url !== 'string') return false
+  if (isColorUrl(url)) return false
+  if (url.startsWith('blob:') || url.startsWith('data:')) return true
+  return /^https?:\/\//i.test(url) || url.startsWith('/')
+}
+
+function isVideoUrl(url) {
+  return !!url?.match(/\.(mp4|mov|webm|m4v)(\?|$)/i)
+}
+
+/**
+ * Fully download remote media. Reports progress 0–100.
+ * Returns a blob: URL suitable for <img>/<video>.
+ */
+async function downloadMediaFully(url, onProgress) {
+  if (!url) throw new Error('No media url')
+  if (url.startsWith('blob:') || url.startsWith('data:')) {
+    onProgress?.(100)
+    return { blobUrl: url, kind: isVideoUrl(url) ? 'video' : 'image' }
+  }
+  if (mediaBlobCache.has(url)) {
+    onProgress?.(100)
+    return mediaBlobCache.get(url)
+  }
+  if (mediaInflight.has(url)) {
+    const cached = await mediaInflight.get(url)
+    onProgress?.(100)
+    return cached
+  }
+
+  const task = (async () => {
+    onProgress?.(2)
+    const kindGuess = isVideoUrl(url) ? 'video' : 'image'
+
+    // Prefer full fetch with byte progress (CORS required)
+    try {
+      const res = await fetch(url, { mode: 'cors', credentials: 'omit', cache: 'force-cache' })
+      if (!res.ok) throw new Error(`Download failed (${res.status})`)
+
+      const total = Number(res.headers.get('content-length')) || 0
+      const reader = res.body?.getReader?.()
+      let blob
+
+      if (reader) {
+        const chunks = []
+        let received = 0
+        // eslint-disable-next-line no-constant-condition
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          chunks.push(value)
+          received += value.byteLength
+          if (total > 0) {
+            onProgress?.(Math.min(99, Math.round((received / total) * 100)))
+          } else {
+            onProgress?.(Math.min(90, 5 + Math.floor(received / (256 * 1024)) * 5))
+          }
+        }
+        blob = new Blob(chunks, {
+          type: res.headers.get('content-type') || (kindGuess === 'video' ? 'video/mp4' : 'image/jpeg'),
+        })
+      } else {
+        blob = await res.blob()
+      }
+
+      if (!blob || blob.size === 0) throw new Error('Empty media file')
+
+      const kind = (blob.type.startsWith('video/') || kindGuess === 'video') ? 'video' : 'image'
+      const blobUrl = URL.createObjectURL(blob)
+
+      if (kind === 'image') {
+        await new Promise((resolve, reject) => {
+          const img = new Image()
+          img.onload = () => resolve()
+          img.onerror = () => reject(new Error('Image decode failed'))
+          img.src = blobUrl
+        })
+      } else {
+        // Confirm video can open
+        await new Promise((resolve, reject) => {
+          const v = document.createElement('video')
+          v.preload = 'auto'
+          v.muted = true
+          v.onloadeddata = () => resolve()
+          v.onerror = () => reject(new Error('Video decode failed'))
+          v.src = blobUrl
+        })
+      }
+
+      onProgress?.(100)
+      const entry = { blobUrl, kind, size: blob.size }
+      mediaBlobCache.set(url, entry)
+      return entry
+    } catch {
+      // CORS / network fallback: wait until element fully loads, no progressive paint
+      onProgress?.(15)
+      if (kindGuess === 'video') {
+        await new Promise((resolve, reject) => {
+          const v = document.createElement('video')
+          v.preload = 'auto'
+          v.muted = true
+          v.crossOrigin = 'anonymous'
+          let last = 15
+          const tick = setInterval(() => {
+            try {
+              if (v.buffered?.length) {
+                const end = v.buffered.end(v.buffered.length - 1)
+                const dur = v.duration || 0
+                if (dur > 0) {
+                  last = Math.min(95, Math.round((end / dur) * 100))
+                  onProgress?.(last)
+                } else {
+                  last = Math.min(90, last + 3)
+                  onProgress?.(last)
+                }
+              } else {
+                last = Math.min(90, last + 2)
+                onProgress?.(last)
+              }
+            } catch { /* ignore */ }
+          }, 200)
+          v.oncanplaythrough = () => {
+            clearInterval(tick)
+            onProgress?.(100)
+            resolve()
+          }
+          v.onerror = () => {
+            clearInterval(tick)
+            reject(new Error('Video download failed'))
+          }
+          // Some browsers fire loadeddata without canplaythrough
+          v.onloadeddata = () => {
+            setTimeout(() => {
+              if (v.readyState >= 3) {
+                clearInterval(tick)
+                onProgress?.(100)
+                resolve()
+              }
+            }, 400)
+          }
+          v.src = url
+          v.load()
+        })
+        onProgress?.(100)
+        const entry = { blobUrl: url, kind: 'video', size: 0 }
+        mediaBlobCache.set(url, entry)
+        return entry
+      }
+
+      await new Promise((resolve, reject) => {
+        const img = new Image()
+        img.crossOrigin = 'anonymous'
+        onProgress?.(40)
+        img.onload = () => {
+          onProgress?.(100)
+          resolve()
+        }
+        img.onerror = () => reject(new Error('Image download failed'))
+        img.src = url
+      })
+      const entry = { blobUrl: url, kind: 'image', size: 0 }
+      mediaBlobCache.set(url, entry)
+      return entry
+    }
+  })()
+
+  mediaInflight.set(url, task)
+  try {
+    return await task
+  } finally {
+    mediaInflight.delete(url)
+  }
+}
+
+// ─── Main ────────────────────────────────────────────────────────────────────
+export default function StoryViewer({ stories, startIndex = 0, currentUserId, onClose }) {
+  const navigate = useNavigate()
+  const [idx, setIdx] = useState(startIndex || 0)
+  const [mediaIdx, setMediaIdx] = useState(0)
+  const [progress, setProgress] = useState(0)
+  const [paused, setPaused] = useState(false)
+  const [localStories, setLocalStories] = useState(stories || [])
+  const [replyText, setReplyText] = useState('')
   const [replySending, setReplySending] = useState(false)
-  const [imgLoaded, setImgLoaded]       = useState(false)
-  const [reactionBurst, setReactionBurst] = useState(null)
-
-  const [myReaction, setMyReaction]         = useState(null)
+  const [myReaction, setMyReaction] = useState(null)
   const [reactionCounts, setReactionCounts] = useState({})
-  const [reacting, setReacting]             = useState(false)
-
-  const [viewCount, setViewCount]         = useState(0)
-  const [viewers, setViewers]             = useState([])
-  const [showViewers, setShowViewers]     = useState(false)
+  const [reacting, setReacting] = useState(false)
+  const [viewCount, setViewCount] = useState(0)
+  const [viewers, setViewers] = useState([])
+  const [showViewers, setShowViewers] = useState(false)
   const [viewersLoading, setViewersLoading] = useState(false)
-  const [viewerSearch, setViewerSearch]   = useState('')
+  const [viewerSearch, setViewerSearch] = useState('')
+  const [shareUrl, setShareUrl] = useState(null)
+  const [copyOk, setCopyOk] = useState(false)
+  const [showMenu, setShowMenu] = useState(false)
+  const [myAvatar, setMyAvatar] = useState(null)
+  // Stream media immediately (no “downloading…” gate)
+  const [mediaReady, setMediaReady] = useState(false)
+  const [mediaSrc, setMediaSrc] = useState(null)
+  const [mediaKind, setMediaKind] = useState('image')  // image | video | none | text
+  const [mediaError, setMediaError] = useState(null)
+  const [replies, setReplies] = useState([])
+  const [replyCount, setReplyCount] = useState(0)
+  const [showReplies, setShowReplies] = useState(false)
+  const [repliesLoading, setRepliesLoading] = useState(false)
+  const [toast, setToast] = useState('')
+
+  const timerRef = useRef()
+  const holdRef = useRef()
+  const toastRef = useRef()
+  const mediaGenRef = useRef(0)
+  const videoRef = useRef(null)
   const loggedViewsRef = useRef(new Set())
+  /** Image / text status display time */
+  const IMAGE_DURATION_MS = 7000
+  /** Video: play full length (capped to status max — matches upload trim) */
+  const VIDEO_MIN_MS = 8000
+  const VIDEO_MAX_MS = 30_000
+  const VIDEO_FALLBACK_MS = 30_000
 
-  const timerRef   = useRef()
-  const holdRef    = useRef()
-  const navigate   = useNavigate()
-  const DURATION   = 6000
-
-  const [localStories, setLocalStories] = useState(stories)
   const story = localStories[idx]
 
-  // ── view tracking ──────────────────────────────────────────────────────────
+  function showToast(msg) {
+    setToast(msg)
+    clearTimeout(toastRef.current)
+    toastRef.current = setTimeout(() => setToast(''), 2200)
+  }
+
+  useEffect(() => {
+    setLocalStories(stories || [])
+    setIdx(startIndex || 0)
+    setMediaIdx(0)
+  }, [stories, startIndex])
+
+  // Current user avatar for reply bar
+  useEffect(() => {
+    if (!currentUserId) return
+    supabase.from('profiles').select('avatar_url').eq('id', currentUserId).maybeSingle()
+      .then(({ data }) => setMyAvatar(data?.avatar_url || null))
+  }, [currentUserId])
+
+  // Reset UI when story changes
+  useEffect(() => {
+    setMediaIdx(0)
+    setReplyText('')
+    setShowMenu(false)
+    setShowReplies(false)
+    setReplies([])
+    setReplyCount(0)
+  }, [story?.id])
+
+  // ── Stream media right away (no download % UI) ─────────────────────────────
+  useEffect(() => {
+    if (!story) return undefined
+
+    // Primary media only (skip annotation overlay: video + following image)
+    let urls = (story.media_urls || []).filter(u => u && !isColorUrl(u) && isRemoteMediaUrl(u))
+    if (urls.length >= 2 && isVideoUrl(urls[0]) && !isVideoUrl(urls[1])) {
+      urls = [urls[0]]
+    }
+    const remote = urls[mediaIdx] || urls[0] || null
+    const colorBg = (story.media_urls || []).find(isColorUrl) || null
+    const gen = ++mediaGenRef.current
+
+    // Text-only / gradient status — ready immediately
+    if (!remote) {
+      setMediaReady(true)
+      setMediaSrc(null)
+      setMediaKind(colorBg ? 'text' : 'none')
+      setMediaError(null)
+      setProgress(0)
+      return undefined
+    }
+
+    const kind = isVideoUrl(remote) ? 'video' : 'image'
+    setMediaKind(kind)
+    setMediaError(null)
+    setProgress(0)
+
+    // Prefer cached blob if we already have it; otherwise stream remote URL
+    const cached = mediaBlobCache.get(remote)
+    const src = cached?.blobUrl || remote
+    setMediaSrc(src)
+    // Images can show as soon as src is set; videos wait for canplay (handled by element)
+    if (kind === 'image') {
+      setMediaReady(true)
+    } else {
+      setMediaReady(false)
+    }
+
+    // Soft prefetch next story media (silent, no UI)
+    const nextRemote = urls[mediaIdx + 1]
+      || (() => {
+        const next = localStories[idx + 1]
+        const list = (next?.media_urls || []).filter(u => u && !isColorUrl(u) && isRemoteMediaUrl(u))
+        if (list.length >= 2 && isVideoUrl(list[0]) && !isVideoUrl(list[1])) return list[0]
+        return list[0] || null
+      })()
+    if (nextRemote && nextRemote !== remote && !mediaBlobCache.has(nextRemote)) {
+      downloadMediaFully(nextRemote, () => {}).catch(() => {})
+    }
+
+    return () => { mediaGenRef.current = gen }
+  }, [story?.id, mediaIdx, idx, localStories])
+
+  // View tracking
   useEffect(() => {
     if (!story?.id) return
-    setImgLoaded(false)
     if (currentUserId && story.user_id !== currentUserId && !loggedViewsRef.current.has(story.id)) {
       loggedViewsRef.current.add(story.id)
-      supabase.from('status_views')
-        .upsert({ status_id: story.id, viewer_id: currentUserId }, { onConflict: 'status_id,viewer_id', ignoreDuplicates: true })
+      supabase.from('status_views').upsert(
+        { status_id: story.id, viewer_id: currentUserId },
+        { onConflict: 'status_id,viewer_id', ignoreDuplicates: true },
+      )
     }
     if (story.user_id === currentUserId) {
       supabase.from('status_views')
         .select('id', { count: 'exact', head: true })
         .eq('status_id', story.id)
         .then(({ count }) => setViewCount(count || 0))
+    } else {
+      setViewCount(0)
     }
+  }, [story?.id, currentUserId])
+
+  // Reply count for this status
+  useEffect(() => {
+    if (!story?.id) return
+    loadReplyCount(story.id)
   }, [story?.id])
 
-  // ── viewers list ───────────────────────────────────────────────────────────
+  // Reactions
+  useEffect(() => {
+    if (!story?.id) return
+    setMyReaction(null)
+    setReactionCounts({})
+    supabase.from('status_reactions').select('reaction, user_id').eq('status_id', story.id)
+      .then(({ data }) => {
+        if (!data) return
+        const counts = { love: 0, hot: 0, interested: 0 }
+        data.forEach(r => { if (counts[r.reaction] !== undefined) counts[r.reaction]++ })
+        setReactionCounts(counts)
+        if (currentUserId) {
+          const mine = data.find(r => r.user_id === currentUserId)
+          setMyReaction(mine?.reaction || null)
+        }
+      })
+  }, [story?.id, currentUserId])
+
+  // Auto-advance: images fixed duration; videos follow clip length (longer watch time)
+  useEffect(() => {
+    setProgress(0)
+    if (!mediaReady || mediaError) return undefined
+    if (paused || showViewers || shareUrl || showMenu || showReplies) return undefined
+
+    // Video progress tracks the actual playback position
+    if (mediaKind === 'video' && videoRef.current) {
+      const v = videoRef.current
+      const onTime = () => {
+        const dur = Number.isFinite(v.duration) && v.duration > 0
+          ? Math.min(VIDEO_MAX_MS / 1000, Math.max(VIDEO_MIN_MS / 1000, v.duration))
+          : VIDEO_FALLBACK_MS / 1000
+        // If real duration is shorter than min, still play full clip once
+        const real = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : dur
+        const p = Math.min(100, (v.currentTime / real) * 100)
+        setProgress(p)
+      }
+      const onEnded = () => {
+        setProgress(100)
+        advance()
+      }
+      // Cap very long videos: jump advance after VIDEO_MAX_MS
+      const start = Date.now()
+      timerRef.current = setInterval(() => {
+        if (Date.now() - start >= VIDEO_MAX_MS) {
+          clearInterval(timerRef.current)
+          setProgress(100)
+          advance()
+        }
+      }, 250)
+      v.addEventListener('timeupdate', onTime)
+      v.addEventListener('ended', onEnded)
+      return () => {
+        clearInterval(timerRef.current)
+        v.removeEventListener('timeupdate', onTime)
+        v.removeEventListener('ended', onEnded)
+      }
+    }
+
+    // Image / text status
+    const start = Date.now()
+    timerRef.current = setInterval(() => {
+      const p = Math.min(((Date.now() - start) / IMAGE_DURATION_MS) * 100, 100)
+      setProgress(p)
+      if (p >= 100) {
+        clearInterval(timerRef.current)
+        advance()
+      }
+    }, 40)
+    return () => clearInterval(timerRef.current)
+  }, [idx, mediaIdx, paused, showViewers, shareUrl, showMenu, showReplies, localStories, mediaReady, mediaError, mediaKind, mediaSrc])
+
+  // Play video when ready; pause when UI overlays pause
+  useEffect(() => {
+    if (mediaKind !== 'video' || !videoRef.current || !mediaSrc) return
+    const v = videoRef.current
+    if (paused || showViewers || shareUrl || showMenu || showReplies) {
+      v.pause()
+      return
+    }
+    if (mediaReady) {
+      const p = v.play()
+      if (p?.catch) p.catch(() => {})
+    }
+  }, [mediaReady, mediaSrc, mediaKind, paused, showViewers, shareUrl, showMenu, showReplies])
+
+  function advance() {
+    // Next media in same story first
+    const media = getMediaList(localStories[idx])
+    if (mediaIdx < media.length - 1) {
+      setMediaIdx(m => m + 1)
+      return
+    }
+    const nextIdx = idx + 1
+    if (nextIdx < localStories.length) {
+      goNextUserStories(nextIdx)
+    } else {
+      onClose?.()
+    }
+  }
+
+  function goBack() {
+    if (mediaIdx > 0) {
+      setMediaIdx(m => m - 1)
+      return
+    }
+    if (idx > 0) {
+      setIdx(i => i - 1)
+      setMediaIdx(0)
+    } else {
+      onClose?.()
+    }
+  }
+
+  async function goNextUserStories(nextIdx) {
+    const nextStory = localStories[nextIdx]
+    const prevStory = localStories[idx]
+    if (nextStory && prevStory && nextStory.user_id !== prevStory.user_id) {
+      let { data } = await supabase
+        .from('user_statuses')
+        .select(`id, content, status_type, expires_at, created_at, media_urls, tagged_listing_id, tagged_kind, tagged_ref_id, user_id, location_hint,
+          profiles:user_id ( id, full_name, avatar_url, city ),
+          tagged:tagged_listing_id ( id, title, price, images, category, description, city, district )`)
+        .eq('user_id', nextStory.user_id)
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false })
+      if (data && data.length > 1) {
+        try {
+          const { hydrateStatusTags } = await import('../hooks/useStatuses')
+          data = await hydrateStatusTags(data)
+        } catch { /* ignore */ }
+        setLocalStories([...localStories.slice(0, nextIdx), ...data, ...localStories.slice(nextIdx + 1)])
+      }
+    }
+    setIdx(nextIdx)
+    setMediaIdx(0)
+  }
+
+  function getMediaList(s) {
+    if (!s) return []
+    const urls = (s.media_urls || []).filter(u => u && !isColorUrl(u))
+    // Convention: [video, overlayPng] — second image is annotation overlay, not a separate slide
+    if (urls.length >= 2 && isVideoUrl(urls[0]) && !isVideoUrl(urls[1])) {
+      return [urls[0]]
+    }
+    return urls
+  }
+
+  function getAnnotationOverlay(s) {
+    if (!s) return null
+    const urls = (s.media_urls || []).filter(u => u && !isColorUrl(u))
+    if (urls.length >= 2 && isVideoUrl(urls[0]) && !isVideoUrl(urls[1])) return urls[1]
+    return null
+  }
+
+  async function handleLove() {
+    if (reacting || !currentUserId || !story?.id) return
+    setReacting(true)
+    const key = 'love'
+    if (myReaction === key) {
+      await supabase.from('status_reactions').delete().eq('status_id', story.id).eq('user_id', currentUserId)
+      setMyReaction(null)
+      setReactionCounts(c => ({ ...c, love: Math.max(0, (c.love || 1) - 1) }))
+    } else {
+      if (myReaction) {
+        await supabase.from('status_reactions').delete().eq('status_id', story.id).eq('user_id', currentUserId)
+        setReactionCounts(c => ({ ...c, [myReaction]: Math.max(0, (c[myReaction] || 1) - 1) }))
+      }
+      const { error } = await supabase.from('status_reactions')
+        .insert({ status_id: story.id, user_id: currentUserId, reaction: key })
+      if (!error) {
+        setMyReaction(key)
+        setReactionCounts(c => ({ ...c, love: (c.love || 0) + 1 }))
+      }
+    }
+    setReacting(false)
+  }
+
+  function openShare() {
+    const url = story?.tagged_listing_id
+      ? `${window.location.origin}/listing/${story.tagged_listing_id}`
+      : `${window.location.origin}/profile/${story?.user_id}`
+    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) && navigator.share) {
+      navigator.share({
+        title: `${name} on SokoMw`,
+        text: story?.content || '',
+        url,
+      }).catch(() => {})
+    } else {
+      setPaused(true)
+      setShareUrl(url)
+    }
+  }
+
+  function copyShare() {
+    if (!shareUrl) return
+    const done = () => {
+      setCopyOk(true)
+      setTimeout(() => {
+        setCopyOk(false)
+        setShareUrl(null)
+        setPaused(false)
+      }, 900)
+    }
+    navigator.clipboard?.writeText(shareUrl).then(done).catch(() => {
+      const el = document.createElement('textarea')
+      el.value = shareUrl
+      document.body.appendChild(el)
+      el.select()
+      document.execCommand('copy')
+      document.body.removeChild(el)
+      done()
+    })
+  }
+
   async function loadViewers() {
     if (!story?.id) return
     setViewersLoading(true)
@@ -97,633 +740,1357 @@ export default function StoryViewer({ stories, startIndex, currentUserId, onClos
     setViewers(data || [])
     setViewersLoading(false)
   }
-  function openViewers()  { setPaused(true); setShowViewers(true); loadViewers() }
-  function closeViewers() { setShowViewers(false); setPaused(false) }
 
-  // ── saved ──────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!story?.id || !currentUserId) return
-    supabase.from('saved_statuses')
-      .select('id').eq('user_id', currentUserId).eq('status_id', story.id).maybeSingle()
-      .then(({ data }) => setSaved(!!data))
-  }, [story?.id])
-
-  // ── reactions ──────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!story?.id) return
-    setMyReaction(null); setReactionCounts({})
-    supabase.from('status_reactions').select('reaction, user_id').eq('status_id', story.id)
-      .then(({ data }) => {
-        if (!data) return
-        const counts = { interested: 0, love: 0, hot: 0 }
-        data.forEach(r => { if (counts[r.reaction] !== undefined) counts[r.reaction]++ })
-        setReactionCounts(counts)
-        if (currentUserId) {
-          const mine = data.find(r => r.user_id === currentUserId)
-          setMyReaction(mine?.reaction || null)
-        }
-      })
-  }, [story?.id])
-
-  async function handleReact(key) {
-    if (reacting || !currentUserId) return
-    setReacting(true)
-    // burst animation
-    setReactionBurst(key)
-    setTimeout(() => setReactionBurst(null), 700)
-
-    if (myReaction === key) {
-      await supabase.from('status_reactions').delete().eq('status_id', story.id).eq('user_id', currentUserId)
-      setMyReaction(null)
-      setReactionCounts(c => ({ ...c, [key]: Math.max(0,(c[key]||1)-1) }))
-    } else {
-      if (myReaction) {
-        await supabase.from('status_reactions').delete().eq('status_id', story.id).eq('user_id', currentUserId)
-        setReactionCounts(c => ({ ...c, [myReaction]: Math.max(0,(c[myReaction]||1)-1) }))
-      }
-      const { error } = await supabase.from('status_reactions')
-        .insert({ status_id: story.id, user_id: currentUserId, reaction: key })
-      if (!error) {
-        setMyReaction(key)
-        setReactionCounts(c => ({ ...c, [key]: (c[key]||0)+1 }))
-      }
-    }
-    setReacting(false)
+  function openViewers() {
+    setPaused(true)
+    setShowViewers(true)
+    loadViewers()
   }
 
-  // ── progress timer ─────────────────────────────────────────────────────────
-  useEffect(() => {
-    setProgress(0)
-    if (paused) return
-    const start = Date.now()
-    timerRef.current = setInterval(async () => {
-      const p = Math.min(((Date.now()-start)/DURATION)*100, 100)
-      setProgress(p)
-      if (p >= 100) {
-        clearInterval(timerRef.current)
-        const nextIdx = idx + 1
-        if (nextIdx < localStories.length) {
-          const nextStory = localStories[nextIdx]
-          const prevStory = localStories[idx]
-          if (nextStory.user_id !== prevStory.user_id) {
-            const { data } = await supabase
-              .from('user_statuses')
-              .select(`id, content, status_type, expires_at, created_at, media_urls, tagged_listing_id, user_id, location_hint,
-                profiles:user_id ( id, full_name, avatar_url ),
-                tagged:tagged_listing_id ( id, title, price, images )`)
-              .eq('user_id', nextStory.user_id)
-              .gt('expires_at', new Date().toISOString())
-              .order('created_at', { ascending: false })
-            if (data && data.length > 1) {
-              setLocalStories([...localStories.slice(0,nextIdx), ...data, ...localStories.slice(nextIdx+1)])
-            }
-          }
-          setIdx(nextIdx)
-        } else onClose()
+  function closeViewers() {
+    setShowViewers(false)
+    setViewerSearch('')
+    setPaused(false)
+  }
+
+  function goChat() {
+    onClose?.()
+    navigate('/chat/' + story.user_id)
+  }
+
+  function openTaggedEntity() {
+    const kind = story?.tagged_kind
+      || (story?.tagged_listing_id || story?.tagged ? 'listing' : null)
+      || story?._taggedKind
+    const id = story?.tagged_ref_id || story?.tagged_listing_id || story?.tagged?.id
+    if (!kind || !id) return
+    onClose?.()
+    if (kind === 'listing') navigate('/listing/' + id)
+    else if (kind === 'job') navigate('/jobs') // jobs use modal; list is fine fallback
+    else if (kind === 'service') navigate('/services')
+    else if (kind === 'shop') navigate('/shop/' + id)
+    else if (kind === 'request') navigate('/looking-for')
+  }
+
+  async function loadReplyCount(statusId) {
+    if (!statusId) return
+    // Prefer status_replies table
+    const { count, error } = await supabase
+      .from('status_replies')
+      .select('id', { count: 'exact', head: true })
+      .eq('status_id', statusId)
+    if (!error && count != null) {
+      setReplyCount(count)
+      return
+    }
+    // Fallback: messages tagged with status marker
+    const { data } = await supabase
+      .from('messages')
+      .select('id')
+      .ilike('body', `%[[status_reply:${statusId}]]%`)
+      .limit(200)
+    setReplyCount((data || []).length)
+  }
+
+  async function attachAuthors(rows) {
+    const ids = [...new Set((rows || []).map(r => r.from_user).filter(Boolean))]
+    if (!ids.length) return rows || []
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, full_name, avatar_url')
+      .in('id', ids)
+    const map = {}
+    for (const p of profiles || []) map[p.id] = p
+    return (rows || []).map(r => ({
+      ...r,
+      author: r.author || map[r.from_user] || null,
+    }))
+  }
+
+  async function loadReplies() {
+    if (!story?.id) return
+    setRepliesLoading(true)
+
+    // Preferred: status_replies table
+    const { data, error } = await supabase
+      .from('status_replies')
+      .select('id, body, created_at, from_user, listing_id')
+      .eq('status_id', story.id)
+      .order('created_at', { ascending: false })
+      .limit(80)
+
+    if (!error && data) {
+      const withAuthors = await attachAuthors(data)
+      setReplies(withAuthors)
+      setReplyCount(data.length)
+      setRepliesLoading(false)
+      return
+    }
+
+    // Fallback: messages carrying status marker
+    const marker = `[[status_reply:${story.id}]]`
+    const { data: msgs } = await supabase
+      .from('messages')
+      .select('id, body, created_at, from_user, listing_id')
+      .ilike('body', `%${marker}%`)
+      .order('created_at', { ascending: false })
+      .limit(80)
+
+    const parsed = (msgs || []).map(m => ({
+      id: m.id,
+      body: String(m.body || '')
+        .replace(marker, '')
+        .replace(/\n*— replied on your status[\s\S]*$/i, '')
+        .replace(/^\n+/, '')
+        .trim(),
+      created_at: m.created_at,
+      from_user: m.from_user,
+      listing_id: m.listing_id,
+    }))
+    const withAuthors = await attachAuthors(parsed)
+    setReplies(withAuthors)
+    setReplyCount(parsed.length)
+    setRepliesLoading(false)
+  }
+
+  function openReplies() {
+    setPaused(true)
+    setShowReplies(true)
+    loadReplies()
+  }
+
+  function closeReplies() {
+    setShowReplies(false)
+    setPaused(false)
+  }
+
+  /**
+   * Auto-send reply to seller with status identity.
+   * Does NOT open chat — stays on the status viewer.
+   */
+  async function handleReply() {
+    if (!replyText.trim() || replySending || !currentUserId || !story) return
+    if (currentUserId === story.user_id) {
+      showToast('You can’t reply to your own status')
+      return
+    }
+
+    const text = replyText.trim()
+    setReplySending(true)
+
+    const statusSnippet = (story.content || '').replace(/\s+/g, ' ').trim().slice(0, 80)
+    const productLine = story.tagged?.title
+      ? `\nProduct: ${story.tagged.title}`
+      : (story.tagged_listing_id ? `\nListing: ${story.tagged_listing_id}` : '')
+
+    // Marker lets us find replies later; body is readable in chat for the seller
+    const marker = `[[status_reply:${story.id}]]`
+    const chatBody = [
+      marker,
+      text,
+      '',
+      '— replied on your status',
+      statusSnippet ? `Status: “${statusSnippet}${statusSnippet.length >= 80 ? '…' : ''}”` : null,
+      productLine.trim() || null,
+    ].filter(Boolean).join('\n')
+
+    let messageId = null
+    let sendError = null
+
+    // 1) Deliver into seller chat with listing/status identity
+    const msgPayload = {
+      from_user: currentUserId,
+      to_user: story.user_id,
+      body: chatBody,
+      read: false,
+      chat_source: story.tagged_listing_id ? 'listing' : 'direct',
+    }
+    if (story.tagged_listing_id) msgPayload.listing_id = story.tagged_listing_id
+
+    {
+      const res = await supabase.from('messages').insert(msgPayload).select('id').single()
+      if (res.error && /chat_source|listing_id|column/i.test(res.error.message || '')) {
+        // Retry minimal columns
+        const legacy = {
+          from_user: currentUserId,
+          to_user: story.user_id,
+          body: chatBody,
+          read: false,
+        }
+        if (story.tagged_listing_id) legacy.listing_id = story.tagged_listing_id
+        const res2 = await supabase.from('messages').insert(legacy).select('id').single()
+        messageId = res2.data?.id || null
+        sendError = res2.error
+      } else {
+        messageId = res.data?.id || null
+        sendError = res.error
       }
-    }, 50)
-    return () => clearInterval(timerRef.current)
-  }, [idx, paused, localStories])
+    }
+
+    // 2) Store structured reply for the replies sheet
+    if (!sendError) {
+      const replyRow = {
+        status_id: story.id,
+        from_user: currentUserId,
+        to_user: story.user_id,
+        body: text,
+        listing_id: story.tagged_listing_id || null,
+        message_id: messageId,
+      }
+      const { data: saved } = await supabase
+        .from('status_replies')
+        .insert(replyRow)
+        .select(`
+          id, body, created_at, from_user, listing_id,
+          author:profiles!from_user ( id, full_name, avatar_url )
+        `)
+        .maybeSingle()
+
+      // Optimistic local list update
+      const optimistic = saved || {
+        id: messageId || `local_${Date.now()}`,
+        body: text,
+        created_at: new Date().toISOString(),
+        from_user: currentUserId,
+        listing_id: story.tagged_listing_id || null,
+        author: {
+          id: currentUserId,
+          full_name: 'You',
+          avatar_url: myAvatar,
+        },
+      }
+      setReplies(prev => [optimistic, ...prev])
+      setReplyCount(c => c + 1)
+
+      // Notify chats UI without leaving
+      try { window.dispatchEvent(new Event('soko:messages-updated')) } catch { /* ignore */ }
+
+      setReplyText('')
+      showToast('Reply sent to seller')
+    } else {
+      console.error('Status reply failed:', sendError)
+      showToast('Could not send reply — try again')
+    }
+
+    setReplySending(false)
+  }
+
+  function onPointerDown() {
+    holdRef.current = setTimeout(() => setPaused(true), 140)
+  }
+  function onPointerUp() {
+    clearTimeout(holdRef.current)
+    if (!showViewers && !shareUrl && !showMenu && !showReplies) setPaused(false)
+  }
 
   if (!story) return null
 
-  const name    = story.profiles?.full_name || 'Seller'
-  const avatar  = story.profiles?.avatar_url
-  const initial = name[0].toUpperCase()
-  const media   = story.media_urls || []
-  const isVideo = media[0]?.match(/\.(mp4|mov|webm)$/i)
-  const isOwn   = story.user_id === currentUserId
-
-  const msLeft   = new Date(story.expires_at) - Date.now()
-  const h        = Math.floor(msLeft/3600000)
-  const m        = Math.floor((msLeft%3600000)/60000)
-  const timeLeft = h >= 1 ? `${h}h left` : `${m}m left`
+  const name = story.profiles?.full_name || 'Seller'
+  const avatar = story.profiles?.avatar_url
+  const initial = (name[0] || 'S').toUpperCase()
+  const isOwn = story.user_id === currentUserId
   const createdAgo = timeAgoFn(story.created_at)
 
-  const typeMeta = TYPE_META[story.status_type?.toLowerCase()] || null
-  const isRecent = Date.now() - new Date(story.created_at).getTime() < 1800000
+  const mediaList = getMediaList(story)
+  const media0 = mediaList[mediaIdx] || mediaList[0]
+  const annotationOverlay = getAnnotationOverlay(story)
+  const textBoard = (story.media_urls || []).find(isColorUrl)
+  const mediaCount = Math.max(mediaList.length, 1)
+  const mediaLabel = `${mediaIdx + 1} / ${mediaCount}`
+  // Text-only statuses: content is the main stage
+  const isTextOnlyStage = !media0 && !textBoard
+  // Stream media immediately — no download progress UI
+  const showMedia = !!mediaSrc && !mediaError
+  const showLoadError = !!mediaError && !!media0
 
-  // per-user progress bars
-  const uid          = story.user_id
-  const userStories  = localStories.filter(s => s.user_id === uid)
+  const tagged = story.tagged || story._taggedEntity || null
+  const taggedKind = story.tagged_kind
+    || (story.tagged_listing_id || story.tagged ? 'listing' : null)
+    || story._taggedKind
+    || null
+  const productTitle = tagged?.title || tagged?.name || null
+  const productPrice = tagged?.price != null
+    ? (typeof tagged.price === 'number' || /^\d/.test(String(tagged.price))
+      ? formatPrice(tagged.price)
+      : tagged.price)
+    : (tagged?.rate || tagged?.salary || null)
+  // Prefer logos for shops & jobs (company branding)
+  const entityLogo = taggedKind === 'shop'
+    ? (tagged?.logo_url || tagged?.images?.[0] || tagged?.cover_url || null)
+    : taggedKind === 'job'
+      ? (tagged?.logo_url || tagged?.images?.[0] || tagged?.cover_image_url || null)
+      : null
+  const productImage = entityLogo
+    || tagged?.images?.[mediaIdx]
+    || tagged?.images?.[0]
+    || tagged?.media_urls?.[0]
+    || tagged?.logo_url
+    || tagged?.cover_image_url
+    || tagged?.cover_url
+    || null
+  const productCity = tagged?.city || tagged?.district || story.location_hint || story.profiles?.city || null
+  const productDesc = tagged?.description || tagged?.overview || null
+  const shortDesc = productDesc
+    ? String(productDesc).replace(/\s+/g, ' ').trim().slice(0, 90)
+    : (!isTextOnlyStage && story.content
+      ? String(story.content).replace(/\s+/g, ' ').trim().slice(0, 90)
+      : null)
+  const kindLabel = ({
+    listing: 'Product',
+    job: 'Job',
+    service: 'Service',
+    shop: 'Shop',
+    request: 'Looking for',
+  })[taggedKind] || 'Tagged'
+
+  // Progress bars: one per media item in this user's current story group,
+  // or fall back to per-story-in-user-group
+  const uid = story.user_id
+  const userStories = localStories.filter(s => s.user_id === uid)
   const userStartIdx = localStories.findIndex(s => s.user_id === uid)
-  const localIdx     = idx - userStartIdx
-  const fallbackBg   = GRADIENTS[idx % GRADIENTS.length]
+  const storyLocalIdx = idx - userStartIdx
+  // Prefer media segments when multi-image on one status
+  const useMediaBars = mediaList.length > 1
+  const barCount = useMediaBars ? mediaList.length : Math.max(userStories.length, 1)
+  const barActive = useMediaBars ? mediaIdx : storyLocalIdx
 
-  function goChat()     { onClose(); navigate('/chat/' + story.user_id) }
-  function handleCall() { onClose(); navigate(`/chat/${story.user_id}`, { state: { autoCall: 'voice' } }) }
-
-  async function handleSave() {
-    if (saveLoading) return
-    setSaveLoading(true)
-    if (saved) {
-      await supabase.from('saved_statuses').delete().eq('user_id', currentUserId).eq('status_id', story.id)
-      setSaved(false)
-    } else {
-      const { error } = await supabase.from('saved_statuses')
-        .upsert({ user_id: currentUserId, status_id: story.id }, { onConflict: 'user_id,status_id', ignoreDuplicates: true })
-      if (!error) setSaved(true)
-    }
-    setSaveLoading(false)
-  }
-
-  async function handleReply() {
-    if (!replyText.trim() || replySending || !currentUserId) return
-    setReplySending(true)
-    const { data: existing } = await supabase.from('chats')
-      .select('id').or(`and(buyer_id.eq.${currentUserId},seller_id.eq.${story.user_id}),and(buyer_id.eq.${story.user_id},seller_id.eq.${currentUserId})`).maybeSingle()
-    let chatId = existing?.id
-    if (!chatId) {
-      const { data: newChat } = await supabase.from('chats')
-        .insert({ buyer_id: currentUserId, seller_id: story.user_id }).select('id').single()
-      chatId = newChat?.id
-    }
-    if (chatId) {
-      await supabase.from('messages').insert({ chat_id: chatId, sender_id: currentUserId, content: `💬 Re: your status — "${replyText.trim()}"` })
-    }
-    setReplyText(''); setReplySending(false)
-    onClose(); navigate('/chat/' + story.user_id)
-  }
-
-  const shareRef   = useRef(null)
-  const storyRef   = useRef(story)
-  const nameRef    = useRef(name)
-  storyRef.current = story
-  nameRef.current  = name
-
-  useEffect(() => {
-    const btn = shareRef.current
-    if (!btn) return
-    async function nativeShare() {
-      await new Promise(r => setTimeout(r, 100))
-      const s   = storyRef.current
-      const n   = nameRef.current
-      const url = s?.tagged_listing_id
-        ? `${window.location.origin}/listing/${s.tagged_listing_id}`
-        : `${window.location.origin}/profile/${s?.user_id}`
-      if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) && navigator.share) {
-        try { await navigator.share({ title: `${n} on SokoMw`, text: s?.content||'', url }) } catch(e) {}
-      } else { setShareUrl(url) }
-    }
-    btn.addEventListener('click', nativeShare)
-    return () => btn.removeEventListener('click', nativeShare)
-  }, [])
-
-  function onPointerDown() { holdRef.current = setTimeout(() => setPaused(true), 120) }
-  function onPointerUp()   { clearTimeout(holdRef.current); if (!showViewers) setPaused(false) }
-  function tapLeft(e)  { e.stopPropagation(); if (idx > 0) setIdx(i => i-1); else onClose() }
-  function tapRight(e) { e.stopPropagation(); if (idx < localStories.length-1) setIdx(i => i+1); else onClose() }
+  const loveCount = reactionCounts.love || 0
+  const isFeatured = String(story.status_type || '').toLowerCase().includes('promo')
+    || String(story.content || '').toLowerCase().includes('featured')
+    || !!tagged
 
   const filteredViewers = viewers.filter(v =>
-    !viewerSearch || v.viewer?.full_name?.toLowerCase().includes(viewerSearch.toLowerCase())
+    !viewerSearch || v.viewer?.full_name?.toLowerCase().includes(viewerSearch.toLowerCase()),
   )
+
+  const myInitial = 'Y'
 
   return (
     <>
       <style>{`
-        @keyframes burstPop {
-          0%   { transform: scale(1) }
-          30%  { transform: scale(1.7) }
-          60%  { transform: scale(0.9) }
-          100% { transform: scale(1) }
+        @keyframes svShimmer {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
         }
-        @keyframes floatIn {
-          from { opacity:0; transform: translateY(12px) }
-          to   { opacity:1; transform: translateY(0) }
+        @keyframes svSheet {
+          from { transform: translateY(18%); opacity: 0.6; }
+          to { transform: translateY(0); opacity: 1; }
         }
-        @keyframes shimmer {
-          0%   { background-position: -200% 0 }
-          100% { background-position:  200% 0 }
+        @keyframes svShimmer {
+          0% { background-position: -200% 0; }
+          100% { background-position: 200% 0; }
         }
-        @keyframes liveDot {
-          0%,100% { opacity:1; transform:scale(1) }
-          50%     { opacity:.4; transform:scale(.6) }
-        }
-        .sv-action-btn:active { transform: scale(0.94) !important; }
-        .sv-react-btn:active  { transform: scale(1.25) !important; }
+        .sv-tap:active { opacity: 0.85; }
+        .sv-hide-scroll::-webkit-scrollbar { display: none; }
       `}</style>
 
       <div
         style={{
           position: 'fixed', inset: 0, zIndex: 998,
-          background: '#0B0F14',
+          background: '#000',
           fontFamily: "'DM Sans', system-ui, sans-serif",
           userSelect: 'none',
-          display: 'flex', alignItems: 'stretch', justifyContent: 'center',
+          display: 'flex',
+          justifyContent: 'center',
         }}
         onPointerDown={onPointerDown}
         onPointerUp={onPointerUp}
       >
-        {/* ambient glows */}
-        <div style={{ position:'absolute', inset:0, pointerEvents:'none', overflow:'hidden' }}>
-          <div style={{ position:'absolute', top:-120, left:'20%', width:400, height:400, borderRadius:'50%', background:'radial-gradient(circle,rgba(34,160,94,0.09) 0%,transparent 70%)' }} />
-          <div style={{ position:'absolute', bottom:-80, right:'15%', width:320, height:320, borderRadius:'50%', background:'radial-gradient(circle,rgba(139,92,246,0.07) 0%,transparent 70%)' }} />
-        </div>
-
-        {/* ── card ── */}
         <div style={{
-          position:'relative', width:'100%', maxWidth:480,
-          display:'flex', flexDirection:'column',
-          background:'#111827', overflow:'hidden',
+          position: 'relative',
+          width: '100%',
+          maxWidth: 430,
+          height: '100%',
+          background: '#000',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
         }}>
-
-          {/* ══ MEDIA (fills 72vh) ══ */}
-          <div style={{ position:'relative', height:'72vh', flexShrink:0, background:'#000', overflow:'hidden' }}>
-
-            {/* skeleton */}
-            {!imgLoaded && media[0] && (
+          {/* ════════ MEDIA STAGE ════════ */}
+          <div style={{ position: 'relative', flex: 1, minHeight: 0, background: '#0a0a0a' }}>
+            {/* Only show error state (no downloading % UI) */}
+            {showLoadError && (
               <div style={{
-                position:'absolute', inset:0, zIndex:2,
-                background:'linear-gradient(90deg,#1a1f2e 25%,#242938 50%,#1a1f2e 75%)',
-                backgroundSize:'200% 100%',
-                animation:'shimmer 1.4s infinite',
-              }} />
+                position: 'absolute', inset: 0, zIndex: 4,
+                display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center',
+                gap: 12, padding: 24,
+                background: 'linear-gradient(160deg,#0a0f12 0%,#111827 100%)',
+              }}>
+                <div style={{ fontSize: 14, fontWeight: 800, color: '#f1f5f9' }}>Couldn’t load media</div>
+                <button
+                  type="button"
+                  className="sv-tap"
+                  onPointerDown={e => e.stopPropagation()}
+                  onPointerUp={e => {
+                    e.stopPropagation()
+                    setMediaError(null)
+                    setMediaReady(false)
+                    if (media0) {
+                      setMediaSrc(media0)
+                      setMediaKind(isVideoUrl(media0) ? 'video' : 'image')
+                    }
+                    setMediaIdx(m => m)
+                  }}
+                  style={{
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    background: 'rgba(255,255,255,0.08)', color: '#fff',
+                    borderRadius: 999, padding: '10px 18px',
+                    fontSize: 13, fontWeight: 800, cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >
+                  Retry
+                </button>
+              </div>
             )}
 
-            {/* media */}
-            {media.length > 0
-              ? isVideo
-                ? <video src={media[0]} autoPlay muted playsInline loop
-                    style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} />
-                : <img src={media[0]} alt="" loading="lazy"
-                    onLoad={() => setImgLoaded(true)}
-                    style={{ width:'100%', height:'100%', objectFit:'cover', display:'block',
-                      transform: paused ? 'scale(1.04)' : 'scale(1)',
-                      transition: 'transform 0.6s ease',
-                    }} />
-              : <div style={{ width:'100%', height:'100%', background: fallbackBg }} />
-            }
+            {/* Stream media immediately */}
+            {showMedia && mediaKind === 'video' && (
+              <video
+                ref={videoRef}
+                key={mediaSrc}
+                src={mediaSrc}
+                autoPlay
+                muted
+                playsInline
+                preload="auto"
+                onLoadedData={() => setMediaReady(true)}
+                onCanPlay={() => setMediaReady(true)}
+                onError={() => {
+                  setMediaError('Video failed to load')
+                  setMediaReady(false)
+                }}
+                style={{
+                  width: '100%', height: '100%', objectFit: 'cover', display: 'block',
+                  background: '#000',
+                }}
+              />
+            )}
+            {showMedia && mediaKind === 'image' && (
+              <img
+                key={mediaSrc}
+                src={mediaSrc}
+                alt=""
+                draggable={false}
+                onLoad={() => setMediaReady(true)}
+                onError={() => {
+                  setMediaError('Image failed to load')
+                  setMediaReady(false)
+                }}
+                style={{
+                  width: '100%', height: '100%', objectFit: 'cover', display: 'block',
+                  transform: paused ? 'scale(1.02)' : 'scale(1)',
+                  transition: 'transform 0.5s ease',
+                }}
+              />
+            )}
 
-            {/* top scrim */}
-            <div style={{ position:'absolute', inset:0, background:'linear-gradient(to bottom, rgba(0,0,0,0.6) 0%, transparent 28%, transparent 55%, rgba(0,0,0,0.82) 100%)', zIndex:3 }} />
+            {/* User annotations (blur / pens / arrows) — video overlay PNG */}
+            {showMedia && annotationOverlay && (
+              <img
+                src={annotationOverlay}
+                alt=""
+                draggable={false}
+                style={{
+                  position: 'absolute', inset: 0, zIndex: 1,
+                  width: '100%', height: '100%', objectFit: 'cover',
+                  pointerEvents: 'none',
+                }}
+              />
+            )}
 
-            {/* ── progress bars ── */}
-            <div style={{ position:'absolute', top:0, left:0, right:0, display:'flex', gap:3, padding:'10px 12px 0', zIndex:10 }}>
-              {userStories.map((_,i) => (
-                <div key={i} style={{ flex:1, height:2.5, borderRadius:2, background:'rgba(255,255,255,0.22)', overflow:'hidden' }}>
-                  <div style={{ height:'100%', background:'#fff', borderRadius:2,
-                    width: i<localIdx?'100%': i===localIdx?`${progress}%`:'0%',
-                    transition:'none',
+            {/* Text board / gradient — only when no remote media needed */}
+            {mediaReady && !media0 && textBoard && (
+              <div style={{
+                width: '100%', height: '100%', background: textBoard,
+                display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 28,
+              }}>
+                <p style={{
+                  margin: 0, fontSize: 22, fontWeight: 800, color: '#fff',
+                  textAlign: 'center', lineHeight: 1.4, textShadow: '0 2px 14px rgba(0,0,0,0.25)',
+                }}>
+                  {story.content}
+                </p>
+              </div>
+            )}
+            {mediaReady && !media0 && !textBoard && (
+              <div style={{
+                width: '100%', height: '100%',
+                background: GRADIENTS[idx % GRADIENTS.length],
+                display: 'flex', flexDirection: 'column',
+                alignItems: 'center', justifyContent: 'center', padding: 28, gap: 14,
+              }}>
+                {productImage && (
+                  <img src={productImage} alt="" style={{
+                    width: '72%', maxHeight: '48%', objectFit: 'contain',
+                    borderRadius: 12, boxShadow: '0 12px 40px rgba(0,0,0,0.35)',
+                  }} />
+                )}
+                <p style={{
+                  margin: 0, fontSize: productImage ? 18 : 22, fontWeight: 800, color: '#fff',
+                  textAlign: 'center', lineHeight: 1.4, textShadow: '0 2px 12px rgba(0,0,0,0.3)',
+                  maxWidth: 320,
+                }}>
+                  {story.content || productTitle || 'Status update'}
+                </p>
+              </div>
+            )}
+
+            {/* Scrims — top for header, bottom so product card sits on the image clearly */}
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 2, pointerEvents: 'none',
+              background: tagged
+                ? 'linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, transparent 18%, transparent 50%, rgba(0,0,0,0.55) 100%)'
+                : 'linear-gradient(to bottom, rgba(0,0,0,0.55) 0%, transparent 20%, transparent 55%, rgba(0,0,0,0.35) 78%, transparent 100%)',
+            }} />
+
+            {/* ── Progress bars ── */}
+            <div style={{
+              position: 'absolute', top: 0, left: 0, right: 0, zIndex: 30,
+              display: 'flex', gap: 3,
+              padding: '10px 12px 0',
+              paddingTop: 'max(10px, env(safe-area-inset-top, 10px))',
+            }}>
+              {Array.from({ length: barCount }).map((_, i) => (
+                <div key={i} style={{
+                  flex: 1, height: 2.5, borderRadius: 99,
+                  background: 'rgba(255,255,255,0.28)', overflow: 'hidden',
+                }}>
+                  <div style={{
+                    height: '100%', borderRadius: 99, background: '#fff',
+                    width: i < barActive ? '100%' : i === barActive ? `${progress}%` : '0%',
                   }} />
                 </div>
               ))}
             </div>
 
-            {/* ── seller header (glass) ── */}
+            {/* ── Header ── */}
             <div style={{
-              position:'absolute', top:20, left:0, right:0,
-              display:'flex', alignItems:'center', gap:10,
-              padding:'10px 12px', zIndex:10,
+              position: 'absolute', top: 0, left: 0, right: 0, zIndex: 30,
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '18px 12px 0',
+              paddingTop: 'max(22px, calc(env(safe-area-inset-top, 8px) + 14px))',
             }}>
-              {/* avatar */}
-              <div style={{ position:'relative', flexShrink:0 }}>
-                <div style={{
-                  width:44, height:44, borderRadius:'50%',
-                  border:'2px solid rgba(255,255,255,0.9)',
-                  overflow:'hidden',
-                  background:'linear-gradient(135deg,#1a7a4a,#22a05e)',
-                  display:'flex', alignItems:'center', justifyContent:'center',
-                  fontSize:16, fontWeight:800, color:'#fff',
-                }}>
-                  {avatar ? <img src={avatar} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} /> : initial}
-                </div>
-                {/* online dot */}
-                <div style={{ position:'absolute', bottom:1, right:1, width:10, height:10, borderRadius:'50%', background:'#22c55e', border:'2px solid #111827' }} />
-              </div>
-
-              {/* name + meta */}
-              <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
-                  <span style={{ fontSize:14, fontWeight:800, color:'#fff', textShadow:'0 1px 6px rgba(0,0,0,0.6)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                    {name}
-                  </span>
-                  {/* verified */}
-                  <span style={{ fontSize:10, fontWeight:700, color:'#60a5fa', background:'rgba(96,165,250,0.15)', border:'1px solid rgba(96,165,250,0.3)', borderRadius:6, padding:'1px 6px', flexShrink:0 }}>
-                    ✓ Verified
-                  </span>
-                  {!isOwn && (
-                    <div onPointerDown={e => e.stopPropagation()} onPointerUp={e => e.stopPropagation()}>
-                      <FollowButton currentUserId={currentUserId} sellerId={story.user_id} size="sm" />
-                    </div>
-                  )}
-                </div>
-                <div style={{ display:'flex', alignItems:'center', gap:5, marginTop:2, flexWrap:'wrap' }}>
-                  <span style={{ fontSize:11, color:'rgba(255,255,255,0.55)' }}>{createdAgo}</span>
-                  {story.location_hint && (
-                    <span style={{ fontSize:10, fontWeight:700, color:'rgba(255,255,255,0.7)', background:'rgba(255,255,255,0.12)', backdropFilter:'blur(8px)', border:'1px solid rgba(255,255,255,0.18)', borderRadius:20, padding:'1px 7px', display:'inline-flex', alignItems:'center', gap:3 }}>
-                      📍 {story.location_hint.toUpperCase()}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* close */}
               <button
+                type="button"
+                className="sv-tap"
                 onPointerDown={e => e.stopPropagation()}
-                onPointerUp={e => { e.stopPropagation(); onClose() }}
-                style={{ background:'rgba(0,0,0,0.4)', backdropFilter:'blur(12px)', border:'1px solid rgba(255,255,255,0.15)', color:'#fff', width:34, height:34, borderRadius:'50%', fontSize:15, cursor:'pointer', flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', transition:'all 0.18s' }}
-              >✕</button>
-            </div>
-
-            {/* ── top-left type badge ── */}
-            {typeMeta && (
-              <div style={{ position:'absolute', bottom:80, left:12, zIndex:8 }}>
-                <span style={{ fontSize:10, fontWeight:800, letterSpacing:0.4, color:'#fff', background:typeMeta.grad, borderRadius:8, padding:'4px 10px', display:'inline-flex', alignItems:'center', gap:4, boxShadow:'0 2px 12px rgba(0,0,0,0.4)' }}>
-                  {typeMeta.label}
-                </span>
-              </div>
-            )}
-            {isRecent && (
-              <div style={{ position:'absolute', bottom: typeMeta ? 110 : 80, left:12, zIndex:8 }}>
-                <span style={{ fontSize:10, fontWeight:800, color:'#fff', background:'linear-gradient(135deg,#3b82f6,#1d4ed8)', borderRadius:8, padding:'4px 10px', display:'inline-flex', alignItems:'center', gap:4 }}>
-                  <span style={{ width:5, height:5, borderRadius:'50%', background:'#fff', animation:'liveDot 1.2s infinite', display:'inline-block' }} />
-                  NEW
-                </span>
-              </div>
-            )}
-
-            {/* ── floating product card ── */}
-            {story.tagged && (
-              <div
-                onPointerDown={e => e.stopPropagation()}
-                onPointerUp={e => { e.stopPropagation(); onClose(); navigate('/listing/'+story.tagged_listing_id) }}
+                onPointerUp={e => {
+                  e.stopPropagation()
+                  onClose?.()
+                  navigate(`/profile/${story.user_id}`)
+                }}
                 style={{
-                  position:'absolute', bottom:16, left:12, right:60, zIndex:8,
-                  background:'rgba(17,24,39,0.82)', backdropFilter:'blur(20px)',
-                  border:'1px solid rgba(255,255,255,0.14)',
-                  borderRadius:16, padding:'10px 12px',
-                  display:'flex', alignItems:'center', gap:10,
-                  cursor:'pointer', animation:'floatIn 0.35s ease',
-                  boxShadow:'0 8px 32px rgba(0,0,0,0.5)',
+                  display: 'flex', alignItems: 'center', gap: 9,
+                  background: 'none', border: 'none', padding: 0,
+                  cursor: 'pointer', flex: 1, minWidth: 0, textAlign: 'left',
                 }}
               >
-                {story.tagged.images?.[0] && (
-                  <img src={story.tagged.images[0]} alt="" style={{ width:46, height:46, borderRadius:10, objectFit:'cover', flexShrink:0 }} />
-                )}
-                <div style={{ flex:1, minWidth:0 }}>
-                  <div style={{ fontSize:11, fontWeight:600, color:'rgba(255,255,255,0.75)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{story.tagged.title}</div>
-                  <div style={{ fontSize:15, fontWeight:800, color:'#4ade80', marginTop:2 }}>MK {Number(story.tagged.price).toLocaleString()}</div>
+                <div style={{
+                  width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
+                  border: '2px solid rgba(255,255,255,0.95)',
+                  overflow: 'hidden',
+                  background: `linear-gradient(135deg,${GREEN},#22c55e)`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 14, fontWeight: 800, color: '#fff',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.35)',
+                }}>
+                  {avatar
+                    ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : initial}
                 </div>
-                <div style={{ fontSize:10, fontWeight:700, color:'#4ade80', background:'rgba(74,222,128,0.12)', border:'1px solid rgba(74,222,128,0.25)', borderRadius:8, padding:'4px 8px', flexShrink:0 }}>View ↗</div>
-              </div>
-            )}
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    <span style={{
+                      fontSize: 14, fontWeight: 800, color: '#fff',
+                      textShadow: '0 1px 4px rgba(0,0,0,0.5)',
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                      maxWidth: 160,
+                    }}>
+                      {isOwn ? 'Your status' : name}
+                    </span>
+                    <IconVerified size={14} />
+                  </div>
+                  <div style={{
+                    fontSize: 11, color: 'rgba(255,255,255,0.7)', fontWeight: 600,
+                    marginTop: 1, textShadow: '0 1px 3px rgba(0,0,0,0.45)',
+                  }}>
+                    {createdAgo}
+                  </div>
+                </div>
+              </button>
 
-            {/* ── right-side reaction stack (viewers only) ── */}
-            {!isOwn && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                <button
+                  type="button"
+                  className="sv-tap"
+                  onPointerDown={e => e.stopPropagation()}
+                  onPointerUp={e => {
+                    e.stopPropagation()
+                    setShowMenu(v => !v)
+                    setPaused(true)
+                  }}
+                  aria-label="More"
+                  style={iconBtnStyle}
+                >
+                  <IconMore />
+                </button>
+                <button
+                  type="button"
+                  className="sv-tap"
+                  onPointerDown={e => e.stopPropagation()}
+                  onPointerUp={e => { e.stopPropagation(); onClose?.() }}
+                  aria-label="Close"
+                  style={iconBtnStyle}
+                >
+                  <IconClose />
+                </button>
+              </div>
+            </div>
+
+            {/* more menu */}
+            {showMenu && (
               <div
                 onPointerDown={e => e.stopPropagation()}
                 onPointerUp={e => e.stopPropagation()}
-                style={{ position:'absolute', right:12, bottom: story.tagged ? 90 : 16, zIndex:8, display:'flex', flexDirection:'column', gap:6, alignItems:'center' }}
+                style={{
+                  position: 'absolute', top: 62, right: 12, zIndex: 40,
+                  background: 'rgba(17,24,39,0.96)', backdropFilter: 'blur(12px)',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: 14, overflow: 'hidden', minWidth: 160,
+                  boxShadow: '0 12px 32px rgba(0,0,0,0.45)',
+                  animation: 'svSheet 0.18s ease',
+                }}
               >
-                {REACTIONS.map(({ key, emoji, label }) => {
-                  const active = myReaction === key
-                  const count  = reactionCounts[key] || 0
-                  const burst  = reactionBurst === key
-                  return (
-                    <div key={key} style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2 }}>
-                      <button
-                        className="sv-react-btn"
-                        onClick={e => { e.stopPropagation(); handleReact(key) }}
-                        disabled={reacting}
+                {isOwn && (
+                  <MenuItem label="View analytics" onClick={() => { setShowMenu(false); openViewers() }} />
+                )}
+                <MenuItem label="Share status" onClick={() => { setShowMenu(false); openShare() }} />
+                <MenuItem label="View profile" onClick={() => { setShowMenu(false); onClose?.(); navigate(`/profile/${story.user_id}`) }} />
+                <MenuItem label="Close" onClick={() => { setShowMenu(false); setPaused(false) }} />
+              </div>
+            )}
+
+            {/* FEATURED badge */}
+            {isFeatured && (
+              <div style={{
+                position: 'absolute', left: 14, top: 78, zIndex: 20,
+                background: GOLD_BTN, color: '#1a1a1a',
+                borderRadius: 999, padding: '6px 11px',
+                fontSize: 10, fontWeight: 900, letterSpacing: 0.6,
+                display: 'inline-flex', alignItems: 'center', gap: 5,
+                boxShadow: '0 4px 14px rgba(240,192,0,0.4)',
+              }}>
+                <IconStar size={11} />
+                FEATURED
+              </div>
+            )}
+
+            {/* media counter */}
+            {mediaCount > 1 && (
+              <div style={{
+                position: 'absolute', right: 14, top: 78, zIndex: 20,
+                background: 'rgba(0,0,0,0.55)', color: '#fff',
+                borderRadius: 999, padding: '5px 10px',
+                fontSize: 11, fontWeight: 800,
+                backdropFilter: 'blur(8px)',
+                border: '1px solid rgba(255,255,255,0.12)',
+              }}>
+                {mediaLabel}
+              </div>
+            )}
+
+            {/* Product / entity card — overlaid on the image (only after media ready) */}
+            {tagged && mediaReady && !mediaError && (
+              <div
+                onPointerDown={e => e.stopPropagation()}
+                onPointerUp={e => e.stopPropagation()}
+                style={{
+                  position: 'absolute', left: 12, right: 12, bottom: 12, zIndex: 22,
+                }}
+              >
+                <button
+                  type="button"
+                  className="sv-tap"
+                  onClick={openTaggedEntity}
+                  style={{
+                    width: '100%',
+                    background: 'linear-gradient(145deg, rgba(15,45,28,0.94) 0%, rgba(10,36,22,0.96) 100%)',
+                    backdropFilter: 'blur(16px)',
+                    border: '1px solid rgba(34,197,94,0.28)',
+                    borderRadius: 16,
+                    padding: '11px 12px',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    boxShadow: '0 10px 32px rgba(0,0,0,0.45)',
+                    fontFamily: 'inherit',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                  }}
+                >
+                  <div style={{
+                    width: 54, height: 54, borderRadius: 13, flexShrink: 0,
+                    overflow: 'hidden',
+                    background: 'rgba(255,255,255,0.1)',
+                    border: '1px solid rgba(255,255,255,0.14)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {entityLogo || productImage ? (
+                      <img
+                        src={entityLogo || productImage}
+                        alt=""
                         style={{
-                          width:44, height:44, borderRadius:'50%',
-                          background: active ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.45)',
-                          backdropFilter:'blur(16px)',
-                          border: active ? '1.5px solid rgba(255,255,255,0.5)' : '1px solid rgba(255,255,255,0.15)',
-                          cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center',
-                          fontSize:20, lineHeight:1,
-                          transform: burst ? 'scale(1.5)' : active ? 'scale(1.08)' : 'scale(1)',
-                          transition:'transform 0.18s cubic-bezier(.34,1.56,.64,1), background 0.18s, border 0.18s',
-                          animation: burst ? 'burstPop 0.5s ease' : 'none',
+                          width: '100%', height: '100%',
+                          objectFit: (taggedKind === 'shop' || taggedKind === 'job') ? 'contain' : 'cover',
+                          background: (taggedKind === 'shop' || taggedKind === 'job') ? '#fff' : 'transparent',
+                          padding: (taggedKind === 'shop' || taggedKind === 'job') ? 4 : 0,
+                          boxSizing: 'border-box',
                         }}
-                      >{emoji}</button>
-                      {count > 0 && (
-                        <span style={{ fontSize:10, fontWeight:800, color:'#fff', textShadow:'0 1px 4px rgba(0,0,0,0.8)' }}>{fmtK(count)}</span>
+                      />
+                    ) : (
+                      <IconPackage size={22} />
+                    )}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      fontSize: 10, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase',
+                      color: 'rgba(255,255,255,0.45)', marginBottom: 2,
+                    }}>
+                      {kindLabel}
+                    </div>
+                    <div style={{
+                      fontSize: 15, fontWeight: 800, color: '#f8fafc',
+                      lineHeight: 1.25, marginBottom: 2,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    }}>
+                      {productTitle}
+                    </div>
+                    {productPrice && (
+                      <div style={{
+                        fontSize: 16, fontWeight: 900, color: GOLD,
+                        letterSpacing: -0.2, lineHeight: 1.15, marginBottom: 3,
+                      }}>
+                        {typeof productPrice === 'string' && !/^(MK|mk)/.test(productPrice) && Number.isFinite(Number(productPrice))
+                          ? formatPrice(productPrice)
+                          : productPrice}
+                      </div>
+                    )}
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap',
+                      fontSize: 11, color: 'rgba(255,255,255,0.65)', fontWeight: 600,
+                    }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#4ade80' }}>
+                        <IconCheck size={10} />
+                        Verified
+                      </span>
+                      {productCity && (
+                        <>
+                          <span style={{ opacity: 0.4 }}>·</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                            <IconMapPin size={10} />
+                            {productCity}
+                          </span>
+                        </>
                       )}
                     </div>
-                  )
-                })}
-                {/* save on right stack too */}
-                <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2, marginTop:2 }}>
-                  <button
-                    className="sv-react-btn"
-                    onClick={e => { e.stopPropagation(); handleSave() }}
-                    style={{ width:44, height:44, borderRadius:'50%', background: saved ? 'rgba(239,68,68,0.3)' : 'rgba(0,0,0,0.45)', backdropFilter:'blur(16px)', border: saved ? '1.5px solid rgba(239,68,68,0.5)' : '1px solid rgba(255,255,255,0.15)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, transition:'all 0.18s' }}
-                  >{saved ? '🔖' : '🔖'}</button>
-                </div>
-                <div style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:2 }}>
-                  <button
-                    ref={shareRef}
-                    className="sv-react-btn"
-                    onPointerDown={e => e.stopPropagation()}
-                    onPointerUp={e => e.stopPropagation()}
-                    style={{ width:44, height:44, borderRadius:'50%', background:'rgba(0,0,0,0.45)', backdropFilter:'blur(16px)', border:'1px solid rgba(255,255,255,0.15)', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', fontSize:18, transition:'all 0.18s' }}
-                  >↗</button>
-                </div>
+                  </div>
+                  <div style={{
+                    width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+                    background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.3)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: GREEN,
+                  }}>
+                    <IconChevronRight size={14} color={GREEN} />
+                  </div>
+                </button>
               </div>
             )}
 
-            {/* tap zones */}
-            <div onPointerUp={tapLeft}  style={{ position:'absolute', left:0,  top:80, bottom:0, width:'33%', zIndex:5 }} />
-            <div onPointerUp={tapRight} style={{ position:'absolute', right:60, top:80, bottom:0, width:'33%', zIndex:5 }} />
+            {/* Caption on media only when no product card (avoid double text) */}
+            {!tagged && mediaReady && story.content && media0 && !isTextOnlyStage && (
+              <div style={{
+                position: 'absolute', left: 14, right: 14, bottom: 12, zIndex: 20,
+                background: 'rgba(10,20,14,0.82)',
+                backdropFilter: 'blur(14px)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: 16, padding: '12px 14px',
+              }}>
+                <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#f1f5f9', lineHeight: 1.45 }}>
+                  {story.content}
+                </p>
+              </div>
+            )}
+
+            {/* Tap zones — stop above product card */}
+            <div
+              onPointerUp={e => { e.stopPropagation(); goBack() }}
+              style={{ position: 'absolute', left: 0, top: 70, bottom: tagged ? 100 : 0, width: '32%', zIndex: 12 }}
+            />
+            <div
+              onPointerUp={e => { e.stopPropagation(); advance() }}
+              style={{ position: 'absolute', right: 0, top: 70, bottom: tagged ? 100 : 0, width: '32%', zIndex: 12 }}
+            />
           </div>
 
-          {/* ══ BOTTOM PANEL ══ */}
-          <div style={{ flex:1, background:'#111827', display:'flex', flexDirection:'column', overflowY:'auto', minHeight:0 }}>
-
-            {/* ── story content card ── */}
-            <div style={{ margin:'12px 12px 0', background:'rgba(255,255,255,0.04)', border:'1px solid rgba(255,255,255,0.07)', borderRadius:16, padding:'12px 14px' }}>
-              <p style={{ margin:'0 0 6px', fontSize:14, fontWeight:500, color:'#e2e8f0', lineHeight:1.55 }}>
-                {story.content}
-              </p>
-              <div style={{ display:'flex', alignItems:'center', gap:6, flexWrap:'wrap' }}>
-                <span style={{ fontSize:11, color:'rgba(255,255,255,0.35)', display:'flex', alignItems:'center', gap:4 }}>
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4l2 2"/></svg>
-                  {timeLeft}
+          {/* ════════ BOTTOM CHROME — likes / replies always free ════════ */}
+          <div
+            onPointerDown={e => e.stopPropagation()}
+            onPointerUp={e => e.stopPropagation()}
+            style={{
+              flexShrink: 0,
+              background: '#f4f6f8',
+              padding: '12px 14px calc(12px + env(safe-area-inset-bottom, 0px))',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 12,
+              borderTop: '1px solid #e8ecf0',
+            }}
+          >
+            {/* Engagement */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 18, padding: '0 2px' }}>
+              <button
+                type="button"
+                className="sv-tap"
+                onClick={handleLove}
+                disabled={reacting || isOwn}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  background: 'none', border: 'none', padding: 0,
+                  cursor: isOwn ? 'default' : 'pointer', fontFamily: 'inherit',
+                }}
+              >
+                <IconHeart size={20} filled={myReaction === 'love'} />
+                <span style={{ fontSize: 14, fontWeight: 800, color: '#1e293b' }}>
+                  {fmtK(loveCount)}
                 </span>
-                {story.location_hint && (
-                  <span style={{ fontSize:11, color:'rgba(255,255,255,0.3)' }}>📍 {story.location_hint}</span>
-                )}
-              </div>
+              </button>
+
+              {/* Message icon → read replies (not open chat) */}
+              <button
+                type="button"
+                className="sv-tap"
+                onClick={openReplies}
+                aria-label="View replies"
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  background: 'none', border: 'none', padding: 0,
+                  cursor: 'pointer', fontFamily: 'inherit',
+                }}
+              >
+                <IconComment size={19} />
+                <span style={{ fontSize: 14, fontWeight: 800, color: '#1e293b' }}>
+                  {fmtK(replyCount)}
+                </span>
+              </button>
+
+              <button
+                type="button"
+                className="sv-tap"
+                onClick={openShare}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  background: 'none', border: 'none', padding: 0,
+                  cursor: 'pointer', fontFamily: 'inherit', marginLeft: 'auto',
+                }}
+              >
+                <IconShare size={18} />
+                <span style={{ fontSize: 13, fontWeight: 700, color: '#64748b' }}>Share</span>
+              </button>
             </div>
 
-            {/* ── own story analytics ── */}
-            {isOwn && (
-              <div onPointerDown={e => e.stopPropagation()} onPointerUp={e => e.stopPropagation()}
-                style={{ margin:'10px 12px 0' }}>
-                {/* stat cards row */}
-                <div style={{ display:'grid', gridTemplateColumns:'repeat(4,1fr)', gap:6, marginBottom:10 }}>
-                  {[
-                    { icon:'👁', val: fmtK(viewCount), label:'Views', onClick: openViewers },
-                    { icon:'🔥', val: fmtK(reactionCounts.hot||0), label:'Fire', onClick: null },
-                    { icon:'❤️', val: fmtK(reactionCounts.love||0), label:'Love', onClick: null },
-                    { icon:'👍', val: fmtK(reactionCounts.interested||0), label:'Like', onClick: null },
-                  ].map(({ icon, val, label, onClick }) => (
-                    <button key={label}
-                      onClick={e => { e.stopPropagation(); onClick?.() }}
-                      style={{ background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.08)', borderRadius:12, padding:'10px 4px', display:'flex', flexDirection:'column', alignItems:'center', gap:3, cursor: onClick ? 'pointer' : 'default' }}>
-                      <span style={{ fontSize:16 }}>{icon}</span>
-                      <span style={{ fontSize:13, fontWeight:800, color:'#f1f5f9' }}>{val}</span>
-                      <span style={{ fontSize:9, color:'rgba(255,255,255,0.35)', fontWeight:600 }}>{label}</span>
-                    </button>
-                  ))}
-                </div>
-                <div style={{ textAlign:'center', color:'rgba(255,255,255,0.25)', fontSize:11, paddingBottom:16 }}>
-                  Your status · {timeLeft}
-                </div>
+            {/* CTAs */}
+            {!isOwn ? (
+              <div style={{ display: 'flex', gap: 10 }}>
+                {tagged && (
+                  <button
+                    type="button"
+                    className="sv-tap"
+                    onClick={openTaggedEntity}
+                    style={{
+                      flex: 1,
+                      background: GOLD_BTN,
+                      border: 'none',
+                      borderRadius: 999,
+                      padding: '13px 12px',
+                      fontSize: 14, fontWeight: 800, color: '#1a1a1a',
+                      cursor: 'pointer',
+                      boxShadow: '0 3px 12px rgba(240,192,0,0.35)',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    {taggedKind === 'job' ? 'View Job'
+                      : taggedKind === 'service' ? 'View Service'
+                      : taggedKind === 'shop' ? 'View Shop'
+                      : taggedKind === 'request' ? 'View Request'
+                      : 'View Product'}
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="sv-tap"
+                  onClick={goChat}
+                  style={{
+                    flex: 1,
+                    background: GREEN,
+                    border: 'none',
+                    borderRadius: 999,
+                    padding: '13px 12px',
+                    fontSize: 14, fontWeight: 800, color: '#fff',
+                    cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                    boxShadow: '0 3px 12px rgba(26,122,74,0.3)',
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  <IconMessage size={15} />
+                  Message Seller
+                </button>
               </div>
+            ) : (
+              <button
+                type="button"
+                className="sv-tap"
+                onClick={openViewers}
+                style={{
+                  width: '100%',
+                  background: '#fff',
+                  border: '1.5px solid #e2e8f0',
+                  borderRadius: 999,
+                  padding: '12px',
+                  fontSize: 13, fontWeight: 800, color: GREEN,
+                  cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  fontFamily: 'inherit',
+                }}
+              >
+                <IconEye size={15} />
+                {fmtK(viewCount)} {viewCount === 1 ? 'view' : 'views'} · See who viewed
+              </button>
             )}
 
-            {/* ── viewer bottom actions ── */}
+            {/* Reply bar */}
             {!isOwn && (
-              <div onPointerDown={e => e.stopPropagation()} onPointerUp={e => e.stopPropagation()}
-                style={{ padding:'10px 12px 20px', display:'flex', flexDirection:'column', gap:8 }}>
-
-                {/* reply input */}
-                <div style={{ display:'flex', alignItems:'center', gap:8, background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:50, padding:'9px 14px' }}>
-                  <input
-                    value={replyText}
-                    onChange={e => setReplyText(e.target.value)}
-                    onFocus={() => setPaused(true)}
-                    onBlur={() => setPaused(false)}
-                    onKeyDown={e => e.key === 'Enter' && handleReply()}
-                    placeholder={`Reply to ${name.split(' ')[0]}…`}
-                    style={{ flex:1, background:'none', border:'none', outline:'none', fontSize:13, color:'#fff' }}
-                  />
-                  <button
-                    onClick={e => { e.stopPropagation(); handleReply() }}
-                    disabled={!replyText.trim() || replySending}
-                    style={{ background:'none', border:'none', cursor: replyText.trim() ? 'pointer' : 'default', padding:0, display:'flex', opacity: replyText.trim() ? 1 : 0.3, transition:'opacity 0.18s' }}
-                  >
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22a05e" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                      <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
-                    </svg>
-                  </button>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                background: '#fff',
+                borderRadius: 999,
+                padding: '6px 8px 6px 6px',
+                border: '1.5px solid #e2e8f0',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
+              }}>
+                <div style={{
+                  width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
+                  overflow: 'hidden',
+                  background: `linear-gradient(135deg,${GREEN},#22c55e)`,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 12, fontWeight: 800, color: '#fff',
+                }}>
+                  {myAvatar
+                    ? <img src={myAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : myInitial}
                 </div>
-
-                {/* primary CTA */}
+                <input
+                  id="sv-reply-input"
+                  value={replyText}
+                  onChange={e => setReplyText(e.target.value)}
+                  onFocus={() => setPaused(true)}
+                  onBlur={() => { if (!shareUrl && !showViewers && !showMenu && !showReplies) setPaused(false) }}
+                  onKeyDown={e => e.key === 'Enter' && handleReply()}
+                  placeholder="Reply to status…"
+                  maxLength={400}
+                  style={{
+                    flex: 1, border: 'none', outline: 'none', background: 'transparent',
+                    fontSize: 14, color: '#0f172a', fontFamily: 'inherit', minWidth: 0,
+                  }}
+                />
                 <button
-                  className="sv-action-btn"
-                  onClick={e => { e.stopPropagation(); goChat() }}
-                  style={{ width:'100%', background:'linear-gradient(135deg,#1a7a4a,#22a05e)', border:'none', borderRadius:50, padding:'13px 20px', fontSize:14, fontWeight:800, color:'#fff', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:8, boxShadow:'0 4px 20px rgba(26,122,74,0.35)', transition:'transform 0.18s, box-shadow 0.18s' }}
+                  type="button"
+                  className="sv-tap"
+                  onClick={handleReply}
+                  disabled={!replyText.trim() || replySending}
+                  aria-label="Send reply"
+                  style={{
+                    width: 38, height: 38, borderRadius: '50%', border: 'none',
+                    background: replyText.trim() ? GREEN : 'transparent',
+                    color: replyText.trim() ? '#fff' : '#94a3b8',
+                    cursor: replyText.trim() && !replySending ? 'pointer' : 'default',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'all 0.15s',
+                    opacity: replySending ? 0.7 : 1,
+                  }}
                 >
-                  💬 Message Seller
+                  <IconSend size={17} />
                 </button>
-
-                {/* secondary row */}
-                <div style={{ display:'flex', gap:8 }}>
-                  <button
-                    className="sv-action-btn"
-                    onClick={e => { e.stopPropagation(); handleCall() }}
-                    style={{ flex:1, background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.12)', borderRadius:50, padding:'11px 8px', fontSize:12, fontWeight:700, color:'#fff', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:5, transition:'all 0.18s' }}
-                  >📞 Call</button>
-                  {story.tagged && (
-                    <button
-                      className="sv-action-btn"
-                      onClick={e => { e.stopPropagation(); onClose(); navigate('/listing/'+story.tagged_listing_id) }}
-                      style={{ flex:1, background:'rgba(255,255,255,0.06)', border:'1px solid rgba(255,255,255,0.12)', borderRadius:50, padding:'11px 8px', fontSize:12, fontWeight:700, color:'#fff', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:5, transition:'all 0.18s' }}
-                    >🛒 Listing</button>
-                  )}
-                  <button
-                    className="sv-action-btn"
-                    onClick={e => { e.stopPropagation(); handleSave() }}
-                    style={{ flex:1, background: saved ? 'rgba(239,68,68,0.15)' : 'rgba(255,255,255,0.06)', border:`1px solid ${saved ? 'rgba(239,68,68,0.4)' : 'rgba(255,255,255,0.12)'}`, borderRadius:50, padding:'11px 8px', fontSize:12, fontWeight:700, color:'#fff', cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center', gap:5, transition:'all 0.2s' }}
-                  >{saved?'❤️':'🤍'} {saveLoading?'…':'Save'}</button>
-                </div>
               </div>
             )}
           </div>
+
+          {/* Toast — reply sent confirmation */}
+          {toast && (
+            <div style={{
+              position: 'absolute', left: '50%', bottom: 110, zIndex: 50,
+              transform: 'translateX(-50%)',
+              background: '#0f172a', color: '#fff',
+              borderRadius: 999, padding: '10px 18px',
+              fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap',
+              boxShadow: '0 8px 28px rgba(0,0,0,0.35)',
+              pointerEvents: 'none',
+            }}>
+              {toast}
+            </div>
+          )}
         </div>
 
-        {/* ── share popup ── */}
-        {shareUrl && (
-          <div style={{ position:'fixed', inset:0, zIndex:9999, display:'flex', alignItems:'flex-end', justifyContent:'center', background:'rgba(0,0,0,0.55)', backdropFilter:'blur(6px)' }} onClick={() => setShareUrl(null)}>
-            <div onClick={e => e.stopPropagation()} style={{ width:'100%', maxWidth:480, background:'#1a1f2e', borderRadius:'24px 24px 0 0', padding:'20px 16px 40px', border:'1px solid rgba(255,255,255,0.08)', borderBottom:'none' }}>
-              <div style={{ width:36, height:4, borderRadius:2, background:'rgba(255,255,255,0.15)', margin:'0 auto 18px' }} />
-              <div style={{ fontSize:13, fontWeight:700, color:'rgba(255,255,255,0.5)', marginBottom:10 }}>🔗 Share this status</div>
-              <div style={{ display:'flex', alignItems:'center', gap:8, background:'rgba(255,255,255,0.06)', borderRadius:12, padding:'10px 14px', border:'1px solid rgba(255,255,255,0.1)' }}>
-                <div style={{ flex:1, fontSize:12, color:'#fff', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{shareUrl}</div>
-                <button onClick={() => {
-                  navigator.clipboard?.writeText(shareUrl)
-                    .then(() => { setShareUrl(null); alert('✅ Link copied!') })
-                    .catch(() => {
-                      const el=document.createElement('textarea'); el.value=shareUrl
-                      document.body.appendChild(el); el.select(); document.execCommand('copy')
-                      document.body.removeChild(el); setShareUrl(null); alert('✅ Link copied!')
-                    })
-                }} style={{ background:'linear-gradient(135deg,#1a7a4a,#22a05e)', border:'none', borderRadius:8, padding:'6px 16px', fontSize:12, fontWeight:700, color:'#fff', cursor:'pointer', flexShrink:0 }}>Copy</button>
+        {/* ── Replies sheet (message icon) ── */}
+        {showReplies && (
+          <Sheet onClose={closeReplies} maxHeight="78vh">
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              marginBottom: 12,
+            }}>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <IconComment size={16} />
+                  {replyCount} {replyCount === 1 ? 'reply' : 'replies'}
+                </div>
+                <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, marginTop: 2 }}>
+                  {isOwn ? 'People who replied to your status' : 'Replies on this status'}
+                </div>
               </div>
+              <button
+                type="button"
+                onClick={closeReplies}
+                style={{
+                  width: 34, height: 34, borderRadius: '50%', border: 'none',
+                  background: '#f1f5f9', color: '#64748b', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <IconClose size={15} />
+              </button>
             </div>
-          </div>
+
+            <div className="sv-hide-scroll" style={{ overflowY: 'auto', maxHeight: '48vh', marginBottom: 10 }}>
+              {repliesLoading ? (
+                <div style={{ padding: 28, textAlign: 'center', color: '#94a3b8', fontSize: 13, fontWeight: 600 }}>
+                  Loading replies…
+                </div>
+              ) : replies.length === 0 ? (
+                <div style={{ padding: 32, textAlign: 'center' }}>
+                  <div style={{
+                    width: 52, height: 52, borderRadius: 16, margin: '0 auto 12px',
+                    background: '#f1f5f9',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <IconComment size={22} />
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: '#64748b' }}>No replies yet</div>
+                  <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4, fontWeight: 600 }}>
+                    {isOwn ? 'When people reply, they’ll show up here' : 'Be the first to reply below'}
+                  </div>
+                </div>
+              ) : replies.map(r => {
+                const rname = r.author?.full_name || (r.from_user === currentUserId ? 'You' : 'User')
+                const ravatar = r.author?.avatar_url
+                const rinitial = (rname[0] || 'U').toUpperCase()
+                return (
+                  <div key={r.id} style={{
+                    display: 'flex', gap: 10, padding: '10px 2px',
+                    borderBottom: '1px solid #f1f5f9',
+                  }}>
+                    <div style={{
+                      width: 38, height: 38, borderRadius: '50%', overflow: 'hidden', flexShrink: 0,
+                      background: `linear-gradient(135deg,${GREEN},#22c55e)`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 13, fontWeight: 700, color: '#fff',
+                    }}>
+                      {ravatar
+                        ? <img src={ravatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : rinitial}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 3 }}>
+                        <span style={{ fontSize: 13, fontWeight: 800, color: '#0f172a' }}>{rname}</span>
+                        <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>
+                          {timeAgoFn(r.created_at)}
+                        </span>
+                      </div>
+                      <div style={{
+                        fontSize: 13, color: '#334155', lineHeight: 1.45, fontWeight: 500,
+                        wordBreak: 'break-word',
+                      }}>
+                        {r.body}
+                      </div>
+                      {/* Seller can open chat with this person if they want */}
+                      {isOwn && r.from_user && r.from_user !== currentUserId && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            closeReplies()
+                            onClose?.()
+                            navigate('/chat/' + r.from_user)
+                          }}
+                          style={{
+                            marginTop: 6, background: 'none', border: 'none', padding: 0,
+                            fontSize: 11, fontWeight: 800, color: GREEN, cursor: 'pointer',
+                            fontFamily: 'inherit',
+                          }}
+                        >
+                          Open chat →
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Reply from sheet (viewers) */}
+            {!isOwn && (
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                background: '#f8fafc', border: '1.5px solid #e2e8f0',
+                borderRadius: 999, padding: '6px 8px 6px 12px',
+              }}>
+                <input
+                  value={replyText}
+                  onChange={e => setReplyText(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleReply()}
+                  placeholder="Write a reply…"
+                  maxLength={400}
+                  style={{
+                    flex: 1, border: 'none', outline: 'none', background: 'transparent',
+                    fontSize: 13, color: '#0f172a', fontFamily: 'inherit',
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={handleReply}
+                  disabled={!replyText.trim() || replySending}
+                  style={{
+                    width: 36, height: 36, borderRadius: '50%', border: 'none',
+                    background: replyText.trim() ? GREEN : '#e2e8f0',
+                    color: replyText.trim() ? '#fff' : '#94a3b8',
+                    cursor: replyText.trim() ? 'pointer' : 'default',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}
+                >
+                  <IconSend size={15} />
+                </button>
+              </div>
+            )}
+          </Sheet>
         )}
 
-        {/* ── viewers sheet ── */}
-        {showViewers && (
-          <div style={{ position:'fixed', inset:0, zIndex:9999, display:'flex', alignItems:'flex-end', justifyContent:'center', background:'rgba(0,0,0,0.65)', backdropFilter:'blur(6px)' }} onClick={closeViewers}>
-            <div onClick={e => e.stopPropagation()} style={{ width:'100%', maxWidth:480, background:'#111827', borderRadius:'24px 24px 0 0', padding:'0 0 40px', maxHeight:'75vh', display:'flex', flexDirection:'column', border:'1px solid rgba(255,255,255,0.08)', borderBottom:'none' }}>
-              {/* drag handle */}
-              <div style={{ width:36, height:4, borderRadius:2, background:'rgba(255,255,255,0.15)', margin:'12px auto 0' }} />
-
-              {/* header */}
-              <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'14px 16px 10px', borderBottom:'1px solid rgba(255,255,255,0.07)' }}>
-                <div>
-                  <div style={{ fontSize:16, fontWeight:800, color:'#fff', display:'flex', alignItems:'center', gap:8 }}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22a05e" strokeWidth="2.2" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-                    {viewCount} {viewCount===1?'View':'Views'}
-                  </div>
-                  <div style={{ fontSize:11, color:'rgba(255,255,255,0.35)', marginTop:2 }}>People who viewed this status</div>
-                </div>
-                <button onClick={closeViewers} style={{ background:'rgba(255,255,255,0.08)', border:'none', color:'#fff', width:32, height:32, borderRadius:'50%', fontSize:15, cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center' }}>✕</button>
+        {/* ── Share sheet ── */}
+        {shareUrl && (
+          <Sheet onClose={() => { setShareUrl(null); setPaused(false) }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+              <div style={{
+                width: 36, height: 36, borderRadius: 10,
+                background: 'rgba(26,122,74,0.12)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <IconShare size={16} />
               </div>
-
-              {/* search */}
-              <div style={{ padding:'10px 16px 0' }}>
-                <div style={{ display:'flex', alignItems:'center', gap:8, background:'rgba(255,255,255,0.05)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:50, padding:'8px 14px' }}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.4)" strokeWidth="2.2" strokeLinecap="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-                  <input
-                    value={viewerSearch}
-                    onChange={e => setViewerSearch(e.target.value)}
-                    placeholder="Search viewers…"
-                    style={{ flex:1, background:'none', border:'none', outline:'none', fontSize:13, color:'#fff' }}
-                  />
-                </div>
-              </div>
-
-              {/* list */}
-              <div style={{ overflowY:'auto', flex:1, marginTop:8 }}>
-                {viewersLoading ? (
-                  <div style={{ padding:32, textAlign:'center', color:'rgba(255,255,255,0.4)', fontSize:13 }}>Loading…</div>
-                ) : filteredViewers.length === 0 ? (
-                  <div style={{ padding:40, textAlign:'center' }}>
-                    <div style={{ fontSize:32, marginBottom:8 }}>👁</div>
-                    <div style={{ fontSize:14, fontWeight:700, color:'rgba(255,255,255,0.5)' }}>{viewerSearch ? 'No match' : 'No views yet'}</div>
-                    <div style={{ fontSize:12, color:'rgba(255,255,255,0.25)', marginTop:4 }}>Share your status to get more reach</div>
-                  </div>
-                ) : filteredViewers.map((v,i) => {
-                  const vname    = v.viewer?.full_name || 'Unknown'
-                  const vavatar  = v.viewer?.avatar_url
-                  const vinitials= vname.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase()
-                  return (
-                    <div key={i} style={{ display:'flex', alignItems:'center', gap:12, padding:'11px 16px', borderBottom:'1px solid rgba(255,255,255,0.04)' }}>
-                      <div style={{ width:42, height:42, borderRadius:'50%', flexShrink:0, overflow:'hidden', background:'linear-gradient(135deg,#1a7a4a,#22a05e)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, fontWeight:700, color:'#fff' }}>
-                        {vavatar ? <img src={vavatar} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} /> : vinitials}
-                      </div>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontSize:14, fontWeight:700, color:'#fff', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{vname}</div>
-                        <div style={{ fontSize:11, color:'rgba(255,255,255,0.35)', marginTop:1 }}>👁 {timeAgoFn(v.viewed_at)}</div>
-                      </div>
-                      <button
-                        onClick={() => { closeViewers(); onClose(); navigate('/chat/'+v.viewer?.id) }}
-                        style={{ background:'rgba(34,160,94,0.12)', border:'1px solid rgba(34,160,94,0.3)', borderRadius:20, padding:'5px 14px', fontSize:11, fontWeight:700, color:'#22a05e', cursor:'pointer', whiteSpace:'nowrap', flexShrink:0 }}
-                      >Chat</button>
-                    </div>
-                  )
-                })}
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>Share status</div>
+                <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>Copy link to send</div>
               </div>
             </div>
-          </div>
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              background: '#f8fafc', border: '1.5px solid #e2e8f0',
+              borderRadius: 14, padding: '10px 12px',
+            }}>
+              <div style={{
+                flex: 1, fontSize: 12, color: '#475569',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>
+                {shareUrl}
+              </div>
+              <button
+                type="button"
+                onClick={copyShare}
+                style={{
+                  background: GREEN, border: 'none', borderRadius: 10,
+                  padding: '8px 14px', fontSize: 12, fontWeight: 800, color: '#fff',
+                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                  fontFamily: 'inherit', flexShrink: 0,
+                }}
+              >
+                <IconCopy size={13} />
+                {copyOk ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+          </Sheet>
+        )}
+
+        {/* ── Viewers sheet ── */}
+        {showViewers && (
+          <Sheet onClose={closeViewers} maxHeight="78vh">
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              marginBottom: 12,
+            }}>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <IconEye size={16} />
+                  {viewCount} {viewCount === 1 ? 'view' : 'views'}
+                </div>
+                <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, marginTop: 2 }}>
+                  People who viewed this status
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeViewers}
+                style={{
+                  width: 34, height: 34, borderRadius: '50%', border: 'none',
+                  background: '#f1f5f9', color: '#64748b', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <IconClose size={15} />
+              </button>
+            </div>
+
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              background: '#f8fafc', border: '1.5px solid #e2e8f0',
+              borderRadius: 999, padding: '9px 14px', marginBottom: 10,
+            }}>
+              <span style={{ color: '#94a3b8', display: 'flex' }}><IconSearch size={14} /></span>
+              <input
+                value={viewerSearch}
+                onChange={e => setViewerSearch(e.target.value)}
+                placeholder="Search viewers…"
+                style={{
+                  flex: 1, border: 'none', outline: 'none', background: 'transparent',
+                  fontSize: 13, color: '#0f172a', fontFamily: 'inherit',
+                }}
+              />
+            </div>
+
+            <div className="sv-hide-scroll" style={{ overflowY: 'auto', maxHeight: '52vh' }}>
+              {viewersLoading ? (
+                <div style={{ padding: 28, textAlign: 'center', color: '#94a3b8', fontSize: 13, fontWeight: 600 }}>
+                  Loading…
+                </div>
+              ) : filteredViewers.length === 0 ? (
+                <div style={{ padding: 32, textAlign: 'center' }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: '#64748b' }}>
+                    {viewerSearch ? 'No match' : 'No views yet'}
+                  </div>
+                </div>
+              ) : filteredViewers.map((v, i) => {
+                const vname = v.viewer?.full_name || 'Unknown'
+                const vavatar = v.viewer?.avatar_url
+                const vinitials = vname.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
+                return (
+                  <div key={v.viewer?.id || i} style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '10px 2px',
+                    borderBottom: '1px solid #f1f5f9',
+                  }}>
+                    <div style={{
+                      width: 42, height: 42, borderRadius: '50%', overflow: 'hidden', flexShrink: 0,
+                      background: `linear-gradient(135deg,${GREEN},#22c55e)`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 13, fontWeight: 700, color: '#fff',
+                    }}>
+                      {vavatar
+                        ? <img src={vavatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : vinitials}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: '#0f172a' }}>{vname}</div>
+                      <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600, marginTop: 1 }}>
+                        {timeAgoFn(v.viewed_at)}
+                      </div>
+                    </div>
+                    {v.viewer?.id && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          closeViewers()
+                          onClose?.()
+                          navigate('/chat/' + v.viewer.id)
+                        }}
+                        style={{
+                          background: 'rgba(26,122,74,0.1)', border: '1px solid rgba(26,122,74,0.25)',
+                          borderRadius: 999, padding: '6px 12px',
+                          fontSize: 11, fontWeight: 800, color: GREEN, cursor: 'pointer',
+                          fontFamily: 'inherit',
+                        }}
+                      >
+                        Chat
+                      </button>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </Sheet>
         )}
       </div>
     </>
   )
+}
+
+function MenuItem({ label, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        display: 'block', width: '100%', textAlign: 'left',
+        background: 'none', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.06)',
+        padding: '12px 14px', fontSize: 13, fontWeight: 700, color: '#f1f5f9',
+        cursor: 'pointer', fontFamily: 'inherit',
+      }}
+    >
+      {label}
+    </button>
+  )
+}
+
+function Sheet({ children, onClose, maxHeight = 'auto' }) {
+  return (
+    <div
+      style={{
+        position: 'fixed', inset: 0, zIndex: 9999,
+        display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+        background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(6px)',
+      }}
+      onClick={onClose}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        style={{
+          width: '100%', maxWidth: 430, maxHeight,
+          background: '#fff',
+          borderRadius: '22px 22px 0 0',
+          padding: '14px 16px calc(22px + env(safe-area-inset-bottom, 0px))',
+          boxShadow: '0 -12px 40px rgba(0,0,0,0.2)',
+          animation: 'svSheet 0.28s cubic-bezier(0.32,0.72,0,1)',
+        }}
+      >
+        <div style={{
+          width: 36, height: 4, borderRadius: 2, background: '#e2e8f0',
+          margin: '0 auto 14px',
+        }} />
+        {children}
+      </div>
+    </div>
+  )
+}
+
+const iconBtnStyle = {
+  width: 36, height: 36, borderRadius: '50%',
+  background: 'transparent', border: 'none',
+  color: '#fff', cursor: 'pointer',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  textShadow: '0 1px 4px rgba(0,0,0,0.5)',
+  filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.45))',
 }

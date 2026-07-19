@@ -30,22 +30,31 @@ import { fetchAllActiveStories } from '../hooks/useStatuses'
 import StoryViewer                from '../components/StoryViewer'
 import StatusUploadModal          from '../components/StatusUploadModal'
 import VerificationAttentionBanner from '../components/VerificationAttentionBanner'
+import SokoNav from '../components/SokoNav'
+import LookingForRequestCard, { LOOKING_FOR_CARD_CSS } from '../components/LookingFor/LookingForRequestCard'
+import {
+  getGPSLocation,
+  sortRequestsByViewerLocation,
+  withDistanceToBuyer,
+} from '../utils/lookingFor'
 import {
   ALL_CATEGORIES,
 } from '../constants/homeConstants'
 import {
   isFlashActive, isListingFeatured, rotateFeaturedFairly, sortProductsSmart, trackSearch,
 } from '../utils/homeUtils'
+import { buildChatPath } from '../utils/chatSources'
 import {
   FEATURED_DURATION_DAYS,
   FEATURED_PRICE_MWK,
 } from '../constants/featuredPricing'
+import lookingForHeroImg from '../assets/looking-for-hero.jpg'
 
 /* ─────────────────────────────────────────────────────────────────────────────
    DESIGN TOKENS
-   Kept the established SokoMW identity (deep green + gold — already brand
-   equity from the broadcast emails / verification badges) rather than
-   introducing a new palette. Sora/Inter pairing kept for the same reason.
+   Brand green is reserved for true brand moments (logo, primary sell CTA,
+   verification). Marketplace UI leans neutral + amber/blue accents so Home
+   doesn't read as a wall of green.
 ───────────────────────────────────────────────────────────────────────────── */
 const T = {
   green:   '#0F9D58',
@@ -54,11 +63,14 @@ const T = {
   greenL:  '#e8f5ee',
   amber:   '#F9AB00',
   amberD:  '#c88a00',
+  amberL:  '#fff8e6',
   blue:    '#1A73E8',
+  blueD:   '#1557b0',
   blueL:   '#e8f0fe',
   red:     '#ea4335',
   violet:  '#7c5cff',
   violetL: '#efeaff',
+  ink:     '#1a1d21',    // primary price / emphasis (not green)
   gray50:  '#f8f9fa',
   gray100: '#f1f3f4',
   gray200: '#e8eaed',
@@ -66,7 +78,6 @@ const T = {
   gray400: '#bdc1c6',
   gray500: '#9aa0a6',
   gray600: '#80868b',
-  gray500: '#9aa0a6',
   gray700: '#5f6368',
   gray800: '#3c4043',
   gray900: '#202124',
@@ -87,12 +98,12 @@ const T = {
 const CAT_ICON = {
   Electronics: { emoji: '📱', bg: '#f0f4ff', fg: '#4f46e5' },
   Vehicles:    { emoji: '🚘', bg: '#f0f9ff', fg: '#0284c7' },
-  Property:    { emoji: '🏡', bg: '#f0fdf4', fg: '#16a34a' },
+  Property:    { emoji: '🏡', bg: '#fff7ed', fg: '#c2410c' },
   Clothing:    { emoji: '👔', bg: '#fdf4ff', fg: '#9333ea' },
-  Agriculture: { emoji: '🌿', bg: '#f0fdf4', fg: '#15803d' },
+  Agriculture: { emoji: '🌿', bg: '#ecfdf5', fg: '#0f766e' },
   Furniture:   { emoji: '🛋️', bg: '#fffbeb', fg: '#d97706' },
   Food:        { emoji: '🍜', bg: '#fff1f2', fg: '#e11d48' },
-  Services:    { emoji: '⚡', bg: '#f0fdf4', fg: '#0a7a44' },
+  Services:    { emoji: '⚡', bg: '#f8fafc', fg: '#475569' },
   Other:       { emoji: '📦', bg: '#f8fafc', fg: '#64748b' },
   Jobs:        { emoji: '💼', bg: '#eff6ff', fg: '#2563eb' },
 }
@@ -114,6 +125,8 @@ function GlobalStyles() {
         color: ${T.gray900};
         min-width: 0;
         overflow-x: clip;
+        min-height: 100vh;
+        min-height: 100dvh;
       }
       .soko-v3 button { font-family: inherit; }
       .soko-v3 input  { font-family: inherit; }
@@ -127,6 +140,71 @@ function GlobalStyles() {
       @keyframes fadeIn   { from { opacity:0; } to { opacity:1; } }
       @keyframes pulse    { 0%,100% { opacity:1; } 50% { opacity:.5; } }
       @keyframes shimmer  { 0% { background-position:-600px 0; } 100% { background-position:600px 0; } }
+      /* Professional progressive home load */
+      @keyframes premiumShimmer {
+        0% { background-position: 100% 0; }
+        100% { background-position: -100% 0; }
+      }
+      @keyframes sokoSettle {
+        from { opacity: 0; transform: translateY(8px); }
+        to   { opacity: 1; transform: translateY(0); }
+      }
+      @keyframes sokoProgressGlow {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.75; }
+      }
+      /* Slim top progress — YouTube/Linear style */
+      .soko-loadbar {
+        position: fixed; top: 0; left: 0; right: 0; z-index: 10000;
+        height: 2.5px; pointer-events: none;
+        background: transparent;
+        opacity: 1;
+        transition: opacity 0.35s ease 0.1s;
+      }
+      .soko-loadbar.is-done {
+        opacity: 0;
+      }
+      .soko-loadbar-track {
+        height: 100%;
+        width: 100%;
+        background: rgba(0,0,0,0.05);
+      }
+      .soko-loadbar-fill {
+        height: 100%;
+        border-radius: 0 2px 2px 0;
+        background: linear-gradient(90deg, ${T.gray800} 0%, ${T.amber} 100%);
+        box-shadow: 0 0 6px rgba(0,0,0,0.12);
+        transform-origin: left center;
+        transition: width 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+        animation: sokoProgressGlow 1.4s ease-in-out infinite;
+      }
+      .soko-loadbar.is-done .soko-loadbar-fill {
+        animation: none;
+      }
+      /* Soft progressive section appearance — no blocking splash */
+      .soko-settle {
+        animation: sokoSettle 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
+      .soko-settle-d1 { animation-delay: 0.02s; }
+      .soko-settle-d2 { animation-delay: 0.05s; }
+      .soko-settle-d3 { animation-delay: 0.08s; }
+      .soko-settle-d4 { animation-delay: 0.11s; }
+      .soko-settle-d5 { animation-delay: 0.14s; }
+      .soko-settle-d6 { animation-delay: 0.17s; }
+      .soko-settle-d7 { animation-delay: 0.2s; }
+      .soko-settle-d8 { animation-delay: 0.23s; }
+      /* Content swap: skeleton → real data */
+      .soko-swap-in {
+        animation: sokoSettle 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .soko-settle, .soko-swap-in, .soko-loadbar-fill {
+          animation: none !important;
+          transition: none !important;
+        }
+        .soko-settle, .soko-swap-in { opacity: 1; transform: none; }
+        .soko-loadbar { transition: opacity 0.15s ease; }
+      }
       @keyframes liveRing { 0%,100% { box-shadow:0 0 0 3px rgba(234,67,53,.25);} 50% { box-shadow:0 0 0 7px rgba(234,67,53,.06);} }
       @keyframes badgePop { 0% { transform:scale(.7); opacity:0;} 70% { transform:scale(1.1);} 100% { transform:scale(1); opacity:1;} }
       @keyframes hotDealGlow {
@@ -148,6 +226,217 @@ function GlobalStyles() {
       .soko-card-hover { transition: transform .22s cubic-bezier(.34,1.2,.64,1), box-shadow .22s ease; cursor:pointer; }
       .soko-card-hover:hover { transform: translateY(-4px) scale(1.01); box-shadow:${T.shadowLg} !important; }
 
+      /* ── Product cards — uniform size system (marketplace best practice) ──
+         Square media, reserved body height, 2-line title clamp so every card
+         in a row/rail matches regardless of title length, price digits, or badges. */
+      .soko-product-card {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+        min-width: 0;
+        background: #fff;
+        border-radius: 14px;
+        overflow: hidden;
+        cursor: pointer;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .soko-product-card-media {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        flex-shrink: 0;
+        overflow: hidden;
+        background: ${T.gray100};
+      }
+      .soko-product-card-media img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+      }
+      .soko-product-card-body {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        padding: 10px 12px 8px;
+        flex: 1 1 auto;
+        min-height: 78px;
+        box-sizing: border-box;
+      }
+      /* Fixed-height quick actions — same on every card (Chat always, Call optional) */
+      .soko-product-card-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-shrink: 0;
+        min-height: 40px;
+        height: 40px;
+        padding: 0 10px 10px;
+        box-sizing: content-box;
+      }
+      .soko-pca-chat {
+        flex: 1 1 auto;
+        min-width: 0;
+        height: 32px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+        border: none;
+        border-radius: 10px;
+        background: ${T.gray100};
+        color: ${T.gray800};
+        font-size: 12px;
+        font-weight: 700;
+        font-family: inherit;
+        cursor: pointer;
+        transition: background 0.15s, transform 0.1s, color 0.15s;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .soko-pca-chat:hover { background: ${T.blueL}; color: ${T.blueD}; }
+      .soko-pca-chat:active { transform: scale(0.98); }
+      .soko-pca-call {
+        flex: 0 0 32px;
+        width: 32px;
+        height: 32px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid ${T.gray200};
+        border-radius: 10px;
+        background: #fff;
+        color: ${T.gray800};
+        cursor: pointer;
+        transition: border-color 0.15s, background 0.15s, transform 0.1s, color 0.15s;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .soko-pca-call:hover { border-color: ${T.gray400}; color: ${T.gray900}; background: ${T.gray50}; }
+      .soko-pca-call:active { transform: scale(0.96); }
+      .soko-product-card-save {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        z-index: 4;
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        border: none;
+        cursor: pointer;
+        background: rgba(255,255,255,0.94);
+        backdrop-filter: blur(6px);
+        -webkit-backdrop-filter: blur(6px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: ${T.gray700};
+        box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+        transition: transform 0.15s, color 0.15s, background 0.15s;
+        -webkit-tap-highlight-color: transparent;
+      }
+      .soko-product-card-save.is-saved { color: ${T.red}; }
+      .soko-product-card-save:active { transform: scale(0.92); }
+      .soko-product-card-title {
+        font-size: 13px;
+        font-weight: 700;
+        color: ${T.gray900};
+        line-height: 1.3;
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        min-height: calc(1.3em * 2);
+        word-break: break-word;
+      }
+      .soko-product-card-price {
+        font-family: ${T.fontDisplay};
+        font-size: 15px;
+        font-weight: 800;
+        color: ${T.greenD};
+        letter-spacing: -0.3px;
+        line-height: 1.25;
+        min-height: 1.25em;
+        max-height: 2.5em;
+        overflow: hidden;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        word-break: break-word;
+      }
+      .soko-product-card-meta {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 6px;
+        font-size: 11px;
+        color: ${T.gray600};
+        min-height: 16px;
+        margin-top: auto;
+      }
+      .soko-product-card-meta > span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        min-width: 0;
+      }
+      /* Featured rail: fixed card width, never wrap into vertical stack */
+      .soko-featured-rail {
+        display: flex !important;
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        -webkit-overflow-scrolling: touch;
+        scroll-snap-type: x mandatory;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+      }
+      .soko-featured-card-wrap {
+        flex: 0 0 168px;
+        flex-shrink: 0;
+        width: 168px;
+        max-width: 168px;
+        scroll-snap-align: start;
+        min-width: 0;
+      }
+      .soko-featured-card-wrap .soko-product-card {
+        height: auto;
+        width: 100%;
+        max-width: 100%;
+      }
+      /* Latest grid — fixed columns so cards never stack single-file */
+      .soko-latest-grid {
+        display: grid !important;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 16px;
+        align-items: stretch;
+        width: 100%;
+        min-width: 0;
+      }
+      .soko-latest-card-wrap {
+        min-width: 0;
+        width: 100%;
+        max-width: 100%;
+        height: 100%;
+        display: flex;
+      }
+      .soko-latest-card-wrap > .soko-product-card {
+        width: 100%;
+        max-width: 100%;
+        flex: 1;
+        min-width: 0;
+      }
+      @media (max-width: 1100px) {
+        .soko-latest-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 14px; }
+      }
+      @media (max-width: 768px) {
+        .soko-latest-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px; }
+        .soko-featured-card-wrap {
+          flex: 0 0 150px !important;
+          width: 150px !important;
+          max-width: 150px !important;
+        }
+      }
+
       .soko-btn-primary {
         background:${T.green}; color:#fff; border:none; border-radius:14px;
         padding:12px 24px; font-size:14px; font-weight:700; cursor:pointer;
@@ -166,8 +455,16 @@ function GlobalStyles() {
       .soko-btn-outline:hover { background:rgba(255,255,255,.2); transform:translateY(-1px); }
 
       .skeleton {
-        background: linear-gradient(90deg,#f0f0f0 25%,#e8e8e8 50%,#f0f0f0 75%);
-        background-size: 600px 100%; animation: shimmer 1.4s infinite; border-radius:10px;
+        background: linear-gradient(110deg, #e8ecf0 8%, #f6f7f9 18%, #e8ecf0 33%);
+        background-size: 200% 100%;
+        animation: premiumShimmer 1.55s ease-in-out infinite;
+        border-radius: 12px;
+      }
+      .skeleton-soft {
+        background: linear-gradient(110deg, #eef2f0 8%, #f8faf9 18%, #eef2f0 33%);
+        background-size: 200% 100%;
+        animation: premiumShimmer 1.7s ease-in-out infinite;
+        border-radius: 14px;
       }
 
       .soko-tab {
@@ -175,8 +472,8 @@ function GlobalStyles() {
         background:#fff; font-size:13px; font-weight:600; color:${T.gray600};
         cursor:pointer; transition: all .15s; white-space:nowrap;
       }
-      .soko-tab.active { background:${T.green} !important; border-color:${T.green} !important; color:#fff !important; box-shadow:0 2px 10px rgba(15,157,88,.3); }
-      .soko-tab:hover { border-color:${T.green}; color:${T.green}; background:${T.greenL}; }
+      .soko-tab.active { background:${T.gray900} !important; border-color:${T.gray900} !important; color:#fff !important; box-shadow:0 2px 10px rgba(0,0,0,.12); }
+      .soko-tab:hover { border-color:${T.gray400}; color:${T.gray900}; background:${T.gray50}; }
 
       .soko-nav-glass {
         position: sticky; top:0; z-index:100;
@@ -186,33 +483,113 @@ function GlobalStyles() {
       }
 
       .soko-pillar-link { transition: background .15s, color .15s, transform .15s; }
-      .soko-pillar-link:hover { background:${T.greenL}; transform: translateY(-1px); }
+      .soko-pillar-link:hover { background:${T.gray100}; transform: translateY(-1px); }
+      /* Quiet text links — green only on hover */
+      .soko-link-quiet {
+        background: none; border: none; font-size: 13px; font-weight: 600;
+        color: ${T.gray700}; cursor: pointer; font-family: inherit;
+        transition: color 0.15s;
+      }
+      .soko-link-quiet:hover { color: ${T.greenD}; }
+      .soko-btn-dark {
+        background: ${T.gray900}; color: #fff; border: none; border-radius: 14px;
+        padding: 12px 24px; font-size: 14px; font-weight: 700; cursor: pointer;
+        transition: background .15s, transform .1s, box-shadow .15s;
+        display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+        font-family: inherit;
+      }
+      .soko-btn-dark:hover { background: #000; box-shadow: 0 4px 16px rgba(0,0,0,.18); transform: translateY(-1px); }
+      .soko-btn-dark:active { transform: scale(.98); }
 
       .soko-cat-tile:hover { border-color:${T.gray200} !important; box-shadow:${T.shadow}; transform: translateY(-3px); }
       .soko-cat-tile:active { transform: translateY(-1px); }
 
       @media (max-width: 980px) {
-        .soko-hero-grid { grid-template-columns: 1fr !important; }
-        .soko-hero-desktop-carousel { display: none !important; }
-        .soko-hero-mobile-carousel { display: block !important; }
         .soko-trust-grid { grid-template-columns: repeat(2,1fr) !important; }
         .soko-jobs-services { grid-template-columns: 1fr 1fr !important; }
         .soko-footer-grid { grid-template-columns: 1fr 1fr !important; }
-        .soko-cat-grid { grid-template-columns: repeat(5,1fr) !important; }
         .soko-featured-stories-grid { grid-template-columns: 1fr !important; }
       }
-      @media (min-width: 981px) {
-        .soko-hero-mobile-carousel { display: none !important; }
+      /* Categories: always one horizontal line on phone/tablet (scroll, never wrap) */
+      @media (max-width: 980px) {
+        .soko-cat-section {
+          padding: 12px 0 6px !important;
+        }
+        .soko-cat-section > div {
+          max-width: none !important;
+          width: 100% !important;
+        }
+        .soko-cat-grid {
+          display: flex !important;
+          flex-direction: row !important;
+          flex-wrap: nowrap !important;
+          align-items: stretch !important;
+          grid-template-columns: none !important;
+          grid-auto-flow: column !important;
+          gap: 8px !important;
+          overflow-x: auto !important;
+          overflow-y: hidden !important;
+          -webkit-overflow-scrolling: touch;
+          scroll-snap-type: x mandatory;
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+          padding: 0 14px 4px !important;
+          margin: 0 !important;
+          width: 100% !important;
+          max-width: 100% !important;
+        }
+        .soko-cat-grid::-webkit-scrollbar { display: none !important; }
+        .soko-cat-grid .soko-cat-tile {
+          flex: 0 0 auto !important;
+          flex-shrink: 0 !important;
+          width: 72px !important;
+          min-width: 72px !important;
+          max-width: 72px !important;
+          scroll-snap-align: start;
+          padding: 10px 6px 8px !important;
+          border-radius: 14px !important;
+          gap: 6px !important;
+        }
+        .soko-cat-grid .soko-cat-tile > div:first-child {
+          width: 36px !important;
+          height: 36px !important;
+        }
+        .soko-cat-grid .soko-cat-tile .soko-cat-sub { display: none !important; }
+        .soko-cat-grid .soko-cat-tile .soko-cat-label {
+          font-size: 10.5px !important;
+          line-height: 1.15 !important;
+          white-space: nowrap !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          max-width: 68px !important;
+        }
       }
       @media (max-width: 768px) {
+        /* ── App shell (not a website) ── */
         .soko-v3 {
-          padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+          /* Bottom clearance comes from body (bottom nav) — keep shell light */
+          padding-bottom: 8px;
+          min-height: 100dvh;
+          overscroll-behavior-y: contain;
+          -webkit-tap-highlight-color: transparent;
+          background: #f3f4f6;
+          -webkit-overflow-scrolling: touch;
         }
-        .soko-jobs-services { grid-template-columns: 1fr !important; gap: 16px !important; }
-        .soko-cat-grid {
-          grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-          gap: 8px !important;
+
+        /* Hide website bottom banners/footer on mobile — app shell only */
+        .soko-footer,
+        .soko-early-access,
+        .soko-trust-section,
+        .soko-sell-cta {
+          display: none !important;
         }
+
+        /* Marketing subcopy — desktop-only copy (section CSS handles LF) */
+        .soko-web-only {
+          display: none !important;
+        }
+
+        .soko-jobs-services { grid-template-columns: 1fr !important; gap: 12px !important; }
         .soko-listings-grid {
           grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
           gap: 10px !important;
@@ -220,11 +597,6 @@ function GlobalStyles() {
         .soko-nav-desktop { display: none !important; }
         .soko-nav-mobile  { display: flex !important; }
         .soko-pillar-row  { display: none !important; }
-        .soko-hero-headline {
-          font-size: clamp(22px, 6vw, 28px) !important;
-          line-height: 1.2 !important;
-          letter-spacing: -0.5px !important;
-        }
         .soko-shops-grid { grid-template-columns: 1fr !important; }
         .soko-footer-grid { grid-template-columns: 1fr 1fr !important; gap: 16px !important; }
         .soko-trust-grid { grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
@@ -255,144 +627,44 @@ function GlobalStyles() {
           border-radius: 999px !important;
         }
 
-        /* Hero — compact mobile fit (marketing + product rail, not a long page) */
-        .soko-hero-section {
+        /* Ad banner — compact full-width promo strip */
+        .soko-hero-section.soko-ad-banner {
           min-height: 0 !important;
         }
-        .soko-hero-fx-heavy { display: none !important; }
-        .soko-hero-grid {
-          padding: 12px 14px 14px !important;
-          gap: 10px !important;
-        }
-        .soko-hero-copy {
-          display: flex !important;
-          flex-direction: column !important;
-          gap: 0 !important;
-        }
-        .soko-hero-badge {
-          margin-bottom: 8px !important;
-          padding: 3px 10px !important;
-        }
-        .soko-hero-headline {
-          font-size: 18px !important;
-          line-height: 1.25 !important;
-          letter-spacing: -0.4px !important;
-          margin-bottom: 4px !important;
-        }
-        .soko-hero-headline br { display: none; }
-        .soko-hero-sub { display: none !important; }
-        .soko-hero-benefits { display: none !important; }
-        .soko-hero-cta-row {
-          flex-wrap: nowrap !important;
-          gap: 8px !important;
-          margin-top: 10px !important;
-        }
-        .soko-hero-cta-row .soko-btn-primary {
-          flex: 1 1 auto;
-          justify-content: center;
-          min-height: 40px !important;
-          padding: 9px 14px !important;
-          font-size: 12.5px !important;
-          border-radius: 12px !important;
-          animation: none !important;
-        }
-        .soko-hero-cta-learn { display: none !important; }
-        .soko-hero-mobile-carousel {
-          margin-top: 2px;
-          width: 100%;
-          min-width: 0;
-        }
-        .soko-hero-mobile-head {
-          margin-bottom: 8px !important;
-        }
-        .soko-hero-mobile-rail {
-          display: flex !important;
-          gap: 10px !important;
-          overflow-x: auto !important;
-          overflow-y: visible !important;
-          padding: 6px 2px 10px !important;
-          scroll-snap-type: x mandatory;
-          -webkit-overflow-scrolling: touch;
-          scrollbar-width: none;
-          scroll-behavior: smooth;
-        }
-        .soko-hero-mobile-rail::-webkit-scrollbar { display: none; }
-        .soko-hero-mobile-card {
-          flex: 0 0 min(196px, 58vw) !important;
-          width: min(196px, 58vw) !important;
-          height: 186px !important;
-          scroll-snap-align: start;
-          border-radius: 14px !important;
-        }
-        .soko-hero-mobile-card.is-active {
-          transform: translateY(-2px);
-          z-index: 2;
-          box-shadow: 0 10px 28px rgba(0,0,0,0.42) !important;
-        }
-        .soko-hero-mobile-card .soko-hero-card-title {
-          font-size: 12px !important;
-          -webkit-line-clamp: 1 !important;
-          margin-bottom: 3px !important;
-        }
-        /* Full prices on mobile — allow wrap, never clip with ellipsis */
-        .soko-hero-mobile-card .soko-hero-card-price {
-          font-size: 12.5px !important;
-          line-height: 1.2 !important;
-          margin-bottom: 2px !important;
-          white-space: normal !important;
-          overflow: visible !important;
-          text-overflow: unset !important;
-          word-break: break-word !important;
-          letter-spacing: -0.35px !important;
-        }
-        .soko-hero-mobile-card .soko-hero-card-meta {
-          font-size: 10px !important;
-        }
-        .soko-hero-mobile-card .soko-hero-card-body {
-          padding: 8px 9px 10px !important;
-        }
-        /* Latest grid + featured rail: full price visible on phone */
-        .soko-latest-card .soko-latest-price,
-        .soko-featured-card-wrap .soko-card-bg {
-          overflow: visible;
-        }
-        .soko-latest-card .soko-latest-price {
-          font-size: 13px !important;
-          line-height: 1.2 !important;
-          white-space: normal !important;
-          word-break: break-word !important;
-        }
-        .soko-hero-mobile-empty {
-          width: 100%;
-          padding: 12px !important;
-        }
-        .soko-hero-mobile-dots {
-          display: flex;
-          justify-content: center;
-          flex-wrap: wrap;
+        /* Product cards — mobile denser but still equal-sized */
+        .soko-product-card-body {
+          min-height: 72px;
+          padding: 8px 10px 6px;
           gap: 4px;
-          margin-top: 2px;
-          max-width: 100%;
-          padding: 0;
         }
-
-        /* Category tiles */
-        .soko-cat-section {
-          padding: 16px 14px 4px !important;
+        .soko-product-card-title {
+          font-size: 12.5px;
         }
-        .soko-cat-tile {
-          padding: 12px 4px 10px !important;
-          border-radius: 12px !important;
-          gap: 8px !important;
+        .soko-product-card-price {
+          font-size: 14px;
         }
-        .soko-cat-tile > div:first-child {
-          width: 40px !important;
-          height: 40px !important;
+        .soko-product-card-meta {
+          font-size: 10.5px;
         }
-        .soko-cat-tile .soko-cat-sub { display: none !important; }
-        .soko-cat-tile .soko-cat-label {
-          font-size: 11.5px !important;
-          line-height: 1.2 !important;
+        .soko-product-card-actions {
+          min-height: 38px;
+          height: 38px;
+          padding: 0 8px 8px;
+          gap: 5px;
+        }
+        .soko-pca-chat {
+          height: 30px;
+          font-size: 11.5px;
+          border-radius: 9px;
+        }
+        .soko-pca-call {
+          width: 30px;
+          height: 30px;
+          flex-basis: 30px;
+          border-radius: 9px;
+        }
+        .soko-featured-card-wrap {
+          width: 150px !important;
         }
 
         /* Horizontal rails — edge padding only on full-bleed rails */
@@ -451,12 +723,6 @@ function GlobalStyles() {
         section[aria-label="Get featured pricing"] {
           padding: 12px 14px 0 !important;
         }
-        .soko-hero-section {
-          min-height: unset !important;
-        }
-        .soko-hero-benefits > div div {
-          white-space: normal !important;
-        }
 
         /* Featured rail: no double padding inside section-pad */
         .soko-featured-section {
@@ -471,23 +737,11 @@ function GlobalStyles() {
           gap: 10px !important;
           -webkit-overflow-scrolling: touch;
         }
-        .soko-featured-card-wrap {
-          width: 148px !important;
-        }
-        .soko-featured-card-wrap .soko-card-bg {
-          height: 200px !important;
-        }
 
-        /* Live stories mobile strip */
-        .soko-stories-mobile {
-          display: block !important;
-          margin-top: 14px !important;
-        }
-        .soko-stories-mobile .soko-scroll {
-          padding-left: 0 !important;
-          padding-right: 0 !important;
-          scroll-padding-inline: 0;
-          gap: 10px !important;
+        /* Stories strip between featured + latest */
+        .soko-stories-strip {
+          padding-left: 14px !important;
+          padding-right: 14px !important;
         }
 
         /* Latest listings 2-col marketplace grid */
@@ -496,103 +750,96 @@ function GlobalStyles() {
           padding-right: 14px !important;
           padding-bottom: 24px !important;
         }
-        .soko-latest-card-wrap {
-          width: 100% !important;
-          min-width: 0 !important;
-          flex-shrink: 1 !important;
-        }
-        .soko-latest-card .soko-latest-photo {
-          height: 132px !important;
-        }
-        .soko-latest-card .soko-latest-body {
-          padding: 10px 10px 12px !important;
-          gap: 5px !important;
-        }
-        .soko-latest-card .soko-latest-title {
-          font-size: 12.5px !important;
-        }
-        .soko-latest-card .soko-latest-price {
-          font-size: 14.5px !important;
-        }
-        .soko-latest-card .soko-latest-meta {
-          font-size: 10px !important;
-        }
-        .soko-latest-card .soko-latest-badge-stack {
+        .soko-product-card .soko-latest-badge-stack,
+        .soko-product-card-media .soko-latest-badge-stack {
           top: 8px !important;
           left: 8px !important;
           gap: 4px !important;
         }
-        .soko-latest-card .soko-latest-wish {
+        .soko-product-card .soko-latest-wish {
           top: 7px !important;
           right: 7px !important;
           width: 28px !important;
           height: 28px !important;
         }
 
-        /* Looking-for header: stack CTAs on small screens */
-        .soko-lf-head {
-          flex-direction: column !important;
-          align-items: stretch !important;
-          gap: 12px !important;
-          margin-bottom: 14px !important;
+        /* Looking For section mobile handled in component styles */
+
+        /* Content sections — denser app spacing */
+        .soko-shops-jobs-section {
+          padding: 16px 14px 8px !important;
         }
-        .soko-lf-head-actions {
-          width: 100% !important;
-          align-items: stretch !important;
+        .soko-shops-jobs-section .soko-section-title,
+        .soko-shops-jobs-section h3 {
+          font-size: 16px !important;
         }
-        .soko-lf-head-actions > div {
-          display: flex !important;
-          flex-direction: column !important;
-          gap: 8px !important;
-          width: 100% !important;
+        .soko-section-pad {
+          padding-top: 16px !important;
+          padding-bottom: 8px !important;
         }
-        .soko-lf-head-actions button {
-          width: 100% !important;
-          justify-content: center !important;
-          min-height: 44px;
-        }
-        .lf3-scroll {
-          margin: 0 -14px;
-          padding-left: 14px !important;
-          padding-right: 14px !important;
-          scroll-padding-inline: 14px;
-          -webkit-overflow-scrolling: touch;
-        }
-        .lf3-chips {
-          margin: 0 -14px;
-          padding-left: 14px !important;
-          padding-right: 14px !important;
+        .soko-latest-section {
+          padding-bottom: 16px !important;
         }
 
-        /* Shops / jobs / sell CTA sections */
-        .soko-shops-section,
-        .soko-trust-section,
-        .soko-sell-cta {
-          padding-left: 14px !important;
-          padding-right: 14px !important;
+        /* Featured revenue banner — compact app strip */
+        section[aria-label="Get featured pricing"] {
+          padding: 8px 14px 0 !important;
+        }
+        .soko-featured-banner {
+          border-radius: 12px !important;
+          padding: 10px 12px !important;
         }
 
-        /* Footer compress */
-        .soko-footer {
-          padding: 28px 14px 24px !important;
+        /* App-like cards: consistent radius + touch feedback */
+        .soko-product-card,
+        .soko-latest-card,
+        .soko-card-bg {
+          border-radius: 14px !important;
         }
-        .soko-footer-grid {
-          font-size: 13px;
+        .soko-product-card:active,
+        .soko-card-hover:active {
+          transform: scale(0.98);
+          opacity: 0.96;
+        }
+
+        /* Sticky nav feels native */
+        .soko-nav-glass {
+          position: sticky;
+          top: 0;
+          z-index: 100;
+          padding-top: env(safe-area-inset-top, 0px);
+        }
+
+        /* Section headers — app density */
+        .soko-section-header {
+          margin-bottom: 12px !important;
+          align-items: center !important;
+        }
+        .soko-section-action {
+          padding: 6px 12px !important;
+          font-size: 12px !important;
+          min-height: 36px;
+        }
+
+        /* Ad banner edge-to-edge on mobile app shell */
+        .soko-hero-section.soko-ad-banner {
+          border-radius: 0 !important;
+          margin: 0 !important;
         }
       }
       @media (max-width: 380px) {
-        .soko-cat-grid {
-          grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-        }
         .soko-listings-grid {
           gap: 8px !important;
         }
         .soko-featured-card-wrap {
-          width: 136px !important;
+          width: 140px !important;
         }
-        .soko-latest-card .soko-latest-photo {
-          height: 118px !important;
+        .soko-product-card-body {
+          min-height: 80px;
+          padding: 7px 8px 9px;
         }
+        .soko-product-card-title { font-size: 12px; }
+        .soko-product-card-price { font-size: 13px; }
       }
       @media (hover: none) {
         .soko-card-hover:hover { transform: none; box-shadow: inherit !important; }
@@ -600,7 +847,6 @@ function GlobalStyles() {
       @media (min-width: 769px) {
         .soko-nav-mobile { display:none !important; }
         .soko-bottom-nav-mobile { display:none !important; }
-        .soko-stories-mobile { display:none !important; }
       }
     `}</style>
   )
@@ -636,6 +882,7 @@ const Icon = {
   megaphone: (s=15) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 11l18-5v12L3 13v-2z"/><path d="M11.6 16.8a3 3 0 0 1-5.8-1.6"/></svg>,
   handshake: (s=14) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 17l-4-4 5-5 4 4z"/><path d="M2 13l4 4 1-1"/><path d="M21 13l-4 4-1-1"/></svg>,
   lightning: (s=14) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>,
+  phoneCall: (s=14) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>,
   grid:   (s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>,
   car:    (s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><path d="M5 17h14l1.5-5.5a2 2 0 0 0-1-2.3L17 8H7l-2.5 1.2a2 2 0 0 0-1 2.3z"/><path d="M5 17v2a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-2"/><path d="M16 17v2a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-2"/><circle cx="7.5" cy="14.5" r="0.5"/><circle cx="16.5" cy="14.5" r="0.5"/></svg>,
   phone:  (s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><rect x="7" y="2" width="10" height="20" rx="2.2"/><line x1="11" y1="18" x2="13" y2="18"/></svg>,
@@ -672,903 +919,724 @@ function formatPrice(n) {
    Shops / Looking For / Jobs / Services / Stories / Verification are first-
    class destinations, not buried in a hamburger menu.
 ───────────────────────────────────────────────────────────────────────────── */
-const PILLARS = [
-{ key: 'marketplace', label: 'Marketplace',  path: '/',            icon: (s) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12l9-9 9 9"/><path d="M5 10v10a1 1 0 0 0 1 1h3v-6h6v6h3a1 1 0 0 0 1-1V10"/></svg> },  { key: 'shops',       label: 'Shops',        path: '/shops',       icon: Icon.shop },
-  { key: 'lookingfor',  label: 'People Looking For', path: '/looking-for', icon: (s) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0 1 16 0v1"/></svg> },
-  { key: 'jobs',        label: 'Jobs',         path: '/jobs',        icon: (s) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg> },
-  { key: 'services',    label: 'Services',     path: '/services',   icon: (s) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg> },
-  { key: 'stories',     label: 'Statuses (Stories)', path: '/status', icon: (s) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> },
-  { key: 'verify',      label: 'Verification', path: '/profile',    icon: (s) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg> },
-]
-
-function SokoNav({
-  user, notifCount, search, setSearch,
-  navigate, onImageFile, animKeywords, animIdx,
-  listings, activeCategory, onCategoryChange,
-  activeDistrict, onDistrictChange, onFocusChange,
-}) {
-  const [focused, setFocusedRaw]    = useState(false)
-  function setFocused(v) { setFocusedRaw(v); onFocusChange?.(v) }
-  const [distOpen, setDistOpen]     = useState(false)
-  const [avatarOpen, setAvatarOpen] = useState(false)
-  const district = activeDistrict || 'All Districts'
-  const fileRef  = useRef(null)
-  const inputRef = useRef(null)
-
-  const districts = ['All Districts','Lilongwe','Blantyre','Mzuzu','Zomba','Kasungu','Mangochi','Salima','Dedza','Ntchisi','Dowa']
-  const kw = animKeywords?.length > 0 ? animKeywords[animIdx % animKeywords.length] : 'Samsung Galaxy A57'
-
-  function handleKey(e) { if (e.key === 'Enter' && search.trim()) navigate(`/search?q=${encodeURIComponent(search.trim())}`) }
-
-  return (
-    <nav className="soko-nav-glass">
-      {/* ── Row 1: brand · district · search · actions ── */}
-      <div className="soko-nav-row1" style={{
-        maxWidth: 1400, margin: '0 auto', padding: '10px 20px',
-        display: 'flex', alignItems: 'center', gap: 14, minHeight: 70,
-      }}>
-
-        <div onClick={() => navigate('/')} className="soko-nav-brand" style={{ cursor: 'pointer', flexShrink: 0, userSelect: 'none' }}>
-          <div className="soko-nav-brand-mark" style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 800, color: T.green, letterSpacing: '-0.5px', lineHeight: 1.1 }}>
-            Soko<span style={{ color: T.amber }}>Mw</span>
-          </div>
-          <div className="soko-nav-desktop" style={{ fontSize: 10.5, color: T.gray600, fontWeight: 500, whiteSpace: 'nowrap' }}>
-            Buy. Sell. Find. Anywhere in Malawi.
-          </div>
-        </div>
-
-        {/* Desktop: district selector */}
-        <div className="soko-nav-desktop" style={{ position: 'relative', flexShrink: 0 }}>
-          <button onClick={() => setDistOpen(d => !d)} style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '7px 12px', borderRadius: 50,
-            background: '#fff', border: `1.5px solid ${T.gray200}`,
-            fontSize: 13, fontWeight: 600, color: T.gray800,
-            cursor: 'pointer', whiteSpace: 'nowrap',
-          }}>
-            {Icon.pin(13)}
-            <span style={{ color: district !== 'All Districts' ? T.amber : T.green, fontWeight: district !== 'All Districts' ? 800 : 600 }}>{district}</span>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="6 9 12 15 18 9"/></svg>
-            {district !== 'All Districts' && (
-              <span onClick={e => { e.stopPropagation(); onDistrictChange('All Districts') }} style={{ marginLeft: 2, color: T.gray400, fontSize: 11, lineHeight: 1 }}>✕</span>
-            )}
-          </button>
-          {distOpen && (
-            <div style={{
-              position: 'absolute', top: 'calc(100% + 8px)', left: 0,
-              background: T.white, borderRadius: 16, padding: '8px 0',
-              boxShadow: T.shadowLg, minWidth: 200,
-              border: `1px solid ${T.gray200}`, zIndex: 200, animation: 'fadeUp 0.18s ease',
-            }}>
-              {districts.map(d => (
-                <button key={d} onClick={() => { onDistrictChange(d); setDistOpen(false) }} style={{
-                  display: 'block', width: '100%', padding: '9px 16px', textAlign: 'left',
-                  background: d === district ? T.greenL : 'transparent', border: 'none',
-                  fontSize: 13.5, fontWeight: d === district ? 700 : 500,
-                  color: d === district ? T.green : T.gray800, cursor: 'pointer',
-                }}>{d}</button>
-              ))}
-            </div>
-          )}
-        </div>
-
-       {/* Search bar (desktop) */}
-        <div className="soko-nav-desktop" style={{
-          flex: 1, display: 'flex', alignItems: 'center',
-          background: focused ? '#fff' : T.gray100,
-          border: `1.5px solid ${focused ? T.green : 'transparent'}`,
-          borderRadius: 50, padding: '4px 4px 4px 14px', gap: 0,
-          transition: 'border-color 0.2s, background 0.2s',
-          boxShadow: focused ? `0 0 0 3px rgba(15,157,88,0.10)` : 'none',
-          minHeight: 42,
-        }}>
-          <span style={{ color: T.gray500, flexShrink: 0, display: 'flex', alignItems: 'center', marginRight: 8 }}>{Icon.search(15)}</span>
-          <input
-            ref={inputRef} value={search}
-            onChange={e => {
-              const val = e.target.value
-              setSearch(val)
-              navigate(`/search?q=${encodeURIComponent(val)}&focus=1`)
-            }}
-            onFocus={() => { setFocused(true); navigate('/search?focus=1') }}
-            onBlur={() => setFocused(false)}
-            onKeyDown={handleKey}
-            placeholder="Search for anything (e.g. iPhone, Toyota, jobs, services...)"
-            style={{ flex: 1, border: 'none', background: 'transparent', fontSize: 13.5, color: T.gray900, outline: 'none', padding: '0', minWidth: 0, cursor: 'text' }}
-          />
-          {search && (
-            <button onClick={() => setSearch('')} style={{ background: T.gray300, border: 'none', borderRadius: '50%', width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: T.gray600, flexShrink: 0, marginRight: 6 }}>{Icon.x(9)}</button>
-          )}
-          <button onClick={() => { if (search.trim()) navigate(`/search?q=${encodeURIComponent(search.trim())}`) }} style={{
-            flexShrink: 0, background: T.green, color: '#fff', border: 'none',
-            borderRadius: 50, height: 34, padding: '0 20px',
-            fontSize: 13.5, fontWeight: 700, cursor: 'pointer',
-            transition: 'background 0.15s',
-          }}
-            onMouseEnter={e => e.currentTarget.style.background = T.greenD}
-            onMouseLeave={e => e.currentTarget.style.background = T.green}
-          >
-            Search
-          </button>
-          <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onImageFile} />
-        </div>
-
-        {/* Desktop actions */}
-        <div className="soko-nav-desktop" style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          <NavIconBtn icon={Icon.chat(18)} label="Chats" onClick={() => navigate('/chats')} />
-          <div style={{ position: 'relative' }}>
-            <NavIconBtn icon={Icon.bell(18)} label="Alerts" onClick={() => navigate('/notifications')} />
-            {notifCount > 0 && (
-              <span style={{ position: 'absolute', top: 4, right: 6, background: T.red, color: '#fff', borderRadius: '50%', width: 17, height: 17, fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'badgePop 0.3s ease', border: '2px solid #fff' }}>{notifCount > 9 ? '9+' : notifCount}</span>
-            )}
-          </div>
-           <button onClick={() => navigate('/post')} style={{
-            height: 38, padding: '0 18px', fontSize: 13.5, fontWeight: 700,
-            background: T.green, color: '#fff', border: 'none', borderRadius: 50,
-            cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
-            whiteSpace: 'nowrap', transition: 'background 0.15s',
-          }}
-            onMouseEnter={e => e.currentTarget.style.background = T.greenD}
-            onMouseLeave={e => e.currentTarget.style.background = T.green}
-          >
-            {Icon.plus(14)} Sell Now
-          </button>
-          <div style={{ position: 'relative' }}>
-            <button onClick={() => setAvatarOpen(o => !o)} style={{
-              width: 38, height: 38, borderRadius: '50%',
-              background: user?.avatar_url ? 'transparent' : `linear-gradient(135deg, ${T.green}, ${T.greenD})`,
-              border: `2px solid ${T.green}`, cursor: 'pointer', overflow: 'hidden',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 14, fontWeight: 700, flexShrink: 0,
-            }}>
-              {user?.avatar_url ? <img src={user.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (user?.email?.[0] || 'S').toUpperCase()}
-            </button>
-            {avatarOpen && (
-              <div style={{ position: 'absolute', top: 'calc(100% + 10px)', right: 0, background: T.white, borderRadius: 16, padding: '8px 0', boxShadow: T.shadowLg, minWidth: 190, border: `1px solid ${T.gray200}`, zIndex: 200, animation: 'fadeUp 0.18s ease' }}>
-                {[
-                  { label: 'My Profile', path: '/profile' },
-                  ...(user?.shop_slug ? [{ label: 'My Shop', path: `/shop/${user.shop_slug}`, green: true, isShop: true }] : [{ label: 'Create My Shop', path: '/shop-setup', green: true, isShop: true }]),
-                  { label: 'My Listings', path: '/my-listings' },
-                  { label: 'My Chats', path: '/chats' },
-                  { label: 'Settings', path: '/settings' },
-                  { divider: true },
-                  { label: 'Sign Out', path: '/logout', red: true },
-                ].map((item, i) => item.divider
-                  ? <div key={i} style={{ height: 1, background: T.gray200, margin: '4px 0' }} />
-                  : <button key={i} onClick={() => { navigate(item.path); setAvatarOpen(false) }} style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 16px', textAlign: 'left', background: 'transparent', border: 'none', fontSize: 13.5, fontWeight: item.green ? 700 : 500, color: item.red ? T.red : item.green ? T.green : T.gray800, cursor: 'pointer' }}>
-                      {item.isShop && Icon.shop(13)}
-                      {item.label}
-                    </button>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Mobile top bar: search + alerts only (brand stays left) */}
-        <div className="soko-nav-mobile" style={{ display: 'none', flex: 1, alignItems: 'center', gap: 8, minWidth: 0 }}>
-          <div
-            className="soko-nav-mobile-search"
-            style={{
-              flex: 1, display: 'flex', alignItems: 'center', gap: 8, minWidth: 0,
-              background: T.gray100, borderRadius: 12, padding: '0 12px', minHeight: 40,
-              border: `1px solid ${focused ? T.green : T.gray200}`, position: 'relative', cursor: 'pointer',
-            }}
-            onClick={() => navigate('/search?focus=1')}
-          >
-            <span style={{ color: focused ? T.green : T.gray400, flexShrink: 0, display: 'flex' }}>{Icon.search(16)}</span>
-            <div style={{ flex: 1, position: 'relative', height: 22, minWidth: 0 }}>
-              <input
-                value={search}
-                onChange={e => {
-                  e.stopPropagation()
-                  const val = e.target.value
-                  setSearch(val)
-                  navigate(`/search?q=${encodeURIComponent(val)}&focus=1`)
-                }}
-                onFocus={() => { setFocused(true); navigate('/search?focus=1') }}
-                onBlur={() => setFocused(false)}
-                aria-label="Search marketplace"
-                style={{
-                  position: 'absolute', inset: 0, width: '100%', border: 'none',
-                  background: 'transparent', fontSize: 14, color: T.gray900, outline: 'none',
-                  zIndex: search || focused ? 2 : 0,
-                }}
-              />
-              {!search && !focused && (
-                <div style={{
-                  position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
-                  pointerEvents: 'none', fontSize: 13.5, color: T.gray400, overflow: 'hidden',
-                }}>
-                  Search&nbsp;
-                  <span key={animIdx} style={{ color: T.green, fontWeight: 600, animation: 'wordSlide 3.5s ease forwards' }}>{kw}</span>
-                </div>
-              )}
-            </div>
-            {search && (
-              <button
-                type="button"
-                onClick={e => { e.stopPropagation(); setSearch('') }}
-                style={{
-                  background: T.gray200, border: 'none', borderRadius: '50%',
-                  width: 22, height: 22, display: 'flex', alignItems: 'center',
-                  justifyContent: 'center', cursor: 'pointer', color: T.gray600, flexShrink: 0,
-                }}
-              >{Icon.x(10)}</button>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={() => navigate('/notifications')}
-            aria-label="Notifications"
-            style={{
-              width: 40, height: 40, borderRadius: 12, background: 'transparent', border: 'none',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-              color: T.gray700, flexShrink: 0, position: 'relative',
-            }}
-          >
-            {Icon.bell(20)}
-            {notifCount > 0 && (
-              <span style={{
-                position: 'absolute', top: 4, right: 4, background: T.red, color: '#fff',
-                borderRadius: '50%', minWidth: 16, height: 16, fontSize: 9, fontWeight: 800,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #fff',
-                padding: '0 3px',
-              }}>{notifCount > 9 ? '9+' : notifCount}</span>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {/* ── Row 2: Primary pillar navigation (desktop) ── */}
-      <div className="soko-pillar-row soko-nav-desktop" style={{ borderTop: `1px solid ${T.gray100}` }}>
-        <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 20px', display: 'flex', alignItems: 'center', gap: 0 }}>
-          {PILLARS.map(p => {
-            const isActive = p.key === 'marketplace'
-            return (
-              <button key={p.key} onClick={() => navigate(p.path)} style={{
-                position: 'relative', display: 'flex', alignItems: 'center', gap: 6,
-                padding: '10px 16px',
-                background: 'none', border: 'none', borderBottom: isActive ? `2.5px solid ${T.green}` : '2.5px solid transparent',
-                cursor: 'pointer', fontSize: 13.5, fontWeight: isActive ? 700 : 500,
-                color: isActive ? T.green : T.gray700,
-                transition: 'color 0.15s',
-                whiteSpace: 'nowrap',
-              }}
-              onMouseEnter={e => { if (!isActive) { e.currentTarget.style.color = T.green } }}
-              onMouseLeave={e => { if (!isActive) { e.currentTarget.style.color = T.gray700 } }}
-              >
-                <span style={{ color: isActive ? T.green : T.gray500, display: 'flex', alignItems: 'center' }}>{p.icon(15)}</span>
-                {p.label}
-              </button>
-            )
-          })}
-        </div>
-      </div>
-
-      {/* ── Mobile: compact discover chips (Explore covers full search via bottom nav) ── */}
-      <div className="soko-nav-mobile soko-nav-mobile-pillars" style={{ display: 'none', borderTop: `1px solid ${T.gray100}` }}>
-        <div className="soko-scroll" style={{ display: 'flex', gap: 8, overflowX: 'auto' }}>
-          {PILLARS.filter(p => p.key !== 'marketplace').map(p => (
-            <button
-              key={p.key}
-              type="button"
-              onClick={() => navigate(p.path)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
-                background: T.gray100, border: 'none',
-                borderRadius: 999, padding: '7px 12px', fontSize: 12, fontWeight: 600,
-                color: T.gray800, cursor: 'pointer',
-              }}
-            >
-              <span style={{ display: 'flex', color: T.gray500 }}>{p.icon(13)}</span>
-              {p.label}
-            </button>
-          ))}
-        </div>
-      </div>
-    </nav>
-  )
-}
-
-function NavIconBtn({ icon, label, onClick }) {
-  return (
-    <button onClick={onClick} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, background: 'none', border: 'none', cursor: 'pointer', padding: '6px 10px', borderRadius: 12, color: T.gray800, fontSize: 10, fontWeight: 600, transition: 'background 0.15s' }}
-      onMouseEnter={e => e.currentTarget.style.background = T.gray100} onMouseLeave={e => e.currentTarget.style.background = 'none'}
-    >{icon}<span>{label}</span></button>
-  )
-}
+/* SokoNav is shared — see src/components/SokoNav.jsx */
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   REVENUE HERO
-   Left: marketing message + two CTAs (Browse Listings / Post Request).
-   Right: 3-card perspective carousel of FEATURED listings — this is the
-   first monetization surface a visitor sees, framed as social proof
-   ("Featured" badge visible) rather than an ad unit.
+   HOME AD BANNER
+   Full-bleed photo ads (image + left scrim for copy). Not product listings.
+   HOME_ADS catalog is local for now — swap for CMS/ads table later.
 ───────────────────────────────────────────────────────────────────────────── */
-function RevenueHero({ navigate, listings }) {
-  // Phase 3.1: `listings` is already the dedicated featured query result (not recent feed)
-  // Include every active featured product with an image (no hard cap) so rotation covers all.
-  const featured = useMemo(() =>
-    (listings || []).filter(l => isListingFeatured(l) && l.images?.[0]),
-  [listings])
+const HOME_ADS = [
+  {
+    id: 'ad-shop',
+    label: 'Sponsored',
+    eyebrow: 'Advertise on SokoMW',
+    title: 'Put your brand in front of buyers nationwide',
+    sub: 'Promote shops, launches, and campaigns across Malawi.',
+    cta: 'Advertise with us',
+    path: '/shop-setup',
+    accent: T.amber,
+    glow: 'rgba(249,171,0,0.35)',
+    image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1800&q=80',
+    imagePos: 'center 40%',
+    points: ['Nationwide reach', 'Shop storefronts', 'Campaign ready'],
+  },
+  {
+    id: 'ad-verify',
+    label: 'Ad',
+    eyebrow: 'Trusted sellers',
+    title: 'Get Verified — sell with more confidence',
+    sub: 'Buyers prefer verified sellers. Build trust and close deals faster.',
+    cta: 'Get Verified',
+    path: '/profile',
+    accent: T.green,
+    glow: 'rgba(15,157,88,0.4)',
+    image: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=1800&q=80',
+    imagePos: 'center 35%',
+    points: ['Trust badge', 'More inquiries', 'Safer deals'],
+  },
+  {
+    id: 'ad-post',
+    label: 'Sponsored',
+    eyebrow: 'Sell faster',
+    title: 'List free. Reach buyers across every district',
+    sub: 'Post in minutes. Chat in-app. No commission on SokoMW.',
+    cta: 'Sell Now',
+    path: '/post',
+    accent: '#5b8def',
+    glow: 'rgba(26,115,232,0.35)',
+    image: 'https://images.unsplash.com/photo-1556742111-a301076d9d18?auto=format&fit=crop&w=1800&q=80',
+    imagePos: 'center 45%',
+    points: ['Free to list', 'In-app chat', '0% commission'],
+  },
+  {
+    id: 'ad-looking',
+    label: 'Ad',
+    eyebrow: 'Buyer demand',
+    title: 'Respond to Looking For requests near you',
+    sub: 'Real buyers with budgets. Be the first seller to reply.',
+    cta: 'Browse requests',
+    path: '/looking-for',
+    accent: '#c9820a',
+    glow: 'rgba(201,130,10,0.35)',
+    image: lookingForHeroImg,
+    imagePos: 'center 50%',
+    points: ['Live demand', 'Nearby buyers', 'Fast replies'],
+  },
+]
 
-  // Stable identity of the featured set (sorted) — ignore display order so
-  // fair rotation reorders do not thrash carousel state every bucket.
-  const featuredSetKey = useMemo(
-    () => featured.map(f => f.id).filter(Boolean).slice().sort().join('|'),
-    [featured],
-  )
-
-  // Cursor indexes into the full featured list — every product gets equal turns.
-  // Desktop uses a sliding window of up to 3 starting at `cursor`; mobile highlights `cursor`.
-  const [cursor, setCursor] = useState(0)
+function AdHeroBanner({ navigate }) {
+  const ads = HOME_ADS
+  const n = ads.length
+  const [idx, setIdx] = useState(0)
   const [paused, setPaused] = useState(false)
-  const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
-  const [visible, setVisible] = useState(false)
-  const sectionRef = useRef(null)
-  const mobileRailRef = useRef(null)
+  const [imgReady, setImgReady] = useState(false)
+  const [progressKey, setProgressKey] = useState(0)
   const touchStartX = useRef(null)
-  const perPage = 3
-  const n = featured.length
-  const mobileCount = n
-  // One step per product so a full cycle shows every listing equally often
-  const stepCount = Math.max(1, n)
-  const ROTATE_MS = 4200
+  const ROTATE_MS = 6000
 
-  // Clamp cursor when the pool changes; restart so nobody is stuck off-screen
-  useEffect(() => {
-    setCursor(0)
-  }, [featuredSetKey])
-
-  useEffect(() => {
-    setCursor(c => (n < 1 ? 0 : ((c % n) + n) % n))
-  }, [n])
-
-  // Fair auto-rotate: advance one product index at a time (desktop + mobile)
+  // Auto-rotate; restarts on slide change so swipe + progress stay in sync
   useEffect(() => {
     if (paused || n < 2) return undefined
-    const t = setInterval(() => setCursor(c => (c + 1) % n), ROTATE_MS)
+    const t = setInterval(() => setIdx(i => (i + 1) % n), ROTATE_MS)
     return () => clearInterval(t)
-  }, [paused, n])
+  }, [paused, n, idx])
 
-  // Smooth-scroll mobile rail to the active product
+  // Preload next slide image + restart story progress bar
   useEffect(() => {
-    const rail = mobileRailRef.current
-    if (!rail || n < 1) return
-    const card = rail.children[cursor]
-    if (!card || typeof card.offsetLeft !== 'number') return
-    try {
-      const left = card.offsetLeft - (rail.clientWidth - card.clientWidth) / 2
-      rail.scrollTo({ left: Math.max(0, left), behavior: 'smooth' })
-    } catch {
-      /* ignore scroll errors on hidden/detached rails */
+    setImgReady(false)
+    setProgressKey(k => k + 1)
+    const nextAd = ads[(idx + 1) % n]
+    if (nextAd?.image) {
+      const img = new Image()
+      img.src = nextAd.image
     }
-  }, [cursor, n])
+  }, [idx, n, ads])
 
-  // Entrance animation observer
-  useEffect(() => {
-    const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) setVisible(true) }, { threshold: 0.1 })
-    if (sectionRef.current) obs.observe(sectionRef.current)
-    return () => obs.disconnect()
-  }, [])
-
-  // Parallax on mouse move
-  function handleMouseMove(e) {
-    const rect = sectionRef.current?.getBoundingClientRect()
-    if (!rect) return
-    setMousePos({
-      x: ((e.clientX - rect.left) / rect.width - 0.5) * 20,
-      y: ((e.clientY - rect.top)  / rect.height - 0.5) * 12,
-    })
-  }
+  const ad = ads[idx] || ads[0]
 
   function goTo(i) {
-    if (n < 1) return
-    setCursor(((i % n) + n) % n)
+    setIdx(((i % n) + n) % n)
   }
-  function next() { if (n > 0) setCursor(c => (c + 1) % n) }
-  function prev() { if (n > 0) setCursor(c => ((c - 1) + n) % n) }
-  function goToMobile(i) { goTo(i) }
-  function nextMobile() { next() }
-  function prevMobile() { prev() }
+  function next() { setIdx(i => (i + 1) % n) }
+  function prev() { setIdx(i => ((i - 1) + n) % n) }
 
-  function onMobileTouchStart(e) {
+  function onTouchStart(e) {
     touchStartX.current = e.touches?.[0]?.clientX ?? null
     setPaused(true)
   }
-  function onMobileTouchEnd(e) {
+  function onTouchEnd(e) {
     const start = touchStartX.current
     touchStartX.current = null
     const end = e.changedTouches?.[0]?.clientX
-    if (start != null && end != null) {
-      const dx = end - start
-      if (Math.abs(dx) > 40) {
-        if (dx < 0) nextMobile()
-        else prevMobile()
-      }
+    if (start != null && end != null && Math.abs(end - start) > 40) {
+      if (end < start) next()
+      else prev()
     }
-    // resume auto-rotate shortly after interaction
-    setTimeout(() => setPaused(false), 2800)
+    setTimeout(() => setPaused(false), 3200)
   }
 
-  // Desktop: sliding window of up to 3 products, advanced by 1 each tick
-  // so every listing appears the same number of times per full cycle.
-  const windowSize = Math.min(perPage, Math.max(1, n))
-  const visibleCards = n < 1
-    ? []
-    : Array.from({ length: windowSize }, (_, i) => featured[(cursor + i) % n])
-  const mobileIdx = n < 1 ? 0 : cursor
-  const pageCount = stepCount
+  if (!ad) return null
 
-  /** One standard card design for all featured products (mobile + desktop). */
-  function renderHeroCard(item, idx, { mobile = false } = {}) {
-    const price = isFlashActive(item) ? (item.flash_sale_price ?? item.price) : item.price
-    const flash = isFlashActive(item)
-    const isActive = mobile && idx === mobileIdx
-    const verified = !!(item.seller_verified || item.shop_is_verified)
-    const pad = mobile ? '8px 9px 10px' : '14px 14px 16px'
+  const ctaDark = ad.accent === T.amber || ad.accent === '#c9820a'
 
-    return (
+  return (
+    <section
+      className="soko-hero-section soko-ad-banner"
+      aria-label="Advertisements"
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+      style={{ position: 'relative', overflow: 'hidden' }}
+    >
+      <style>{`
+        @keyframes adFadeIn {
+          from { opacity: 0; transform: translateY(8px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes adKenBurns {
+          from { transform: scale(1.04); }
+          to   { transform: scale(1.1); }
+        }
+        @keyframes adProgress {
+          from { transform: scaleX(0); }
+          to   { transform: scaleX(1); }
+        }
+        .soko-ad-banner {
+          margin: 0;
+          min-height: clamp(220px, 28vw, 320px);
+        }
+        .soko-ad-bg-img {
+          position: absolute;
+          inset: 0;
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          object-position: center center;
+          display: block;
+          z-index: 0;
+          animation: adKenBurns ${ROTATE_MS + 1500}ms ease-out both;
+          will-change: transform;
+        }
+        .soko-ad-scrim {
+          position: absolute;
+          inset: 0;
+          z-index: 1;
+          pointer-events: none;
+        }
+        .soko-ad-progress {
+          display: none;
+        }
+        .soko-ad-inner {
+          position: relative;
+          z-index: 2;
+          max-width: 1400px;
+          margin: 0 auto;
+          padding: clamp(28px, 4vw, 48px) 24px;
+          min-height: clamp(220px, 28vw, 320px);
+          display: grid;
+          grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+          align-items: center;
+          gap: clamp(20px, 4vw, 48px);
+          box-sizing: border-box;
+        }
+        .soko-ad-copy {
+          animation: adFadeIn 0.4s ease both;
+          max-width: 560px;
+        }
+        .soko-ad-visual {
+          animation: adFadeIn 0.45s ease 0.06s both;
+          display: flex;
+          flex-direction: column;
+          gap: 12px;
+          min-width: 0;
+        }
+        .soko-ad-panel {
+          background: rgba(8, 16, 12, 0.52);
+          border: 1px solid rgba(255,255,255,0.14);
+          border-radius: 18px;
+          padding: 18px 18px 16px;
+          backdrop-filter: blur(14px) saturate(1.2);
+          -webkit-backdrop-filter: blur(14px) saturate(1.2);
+          box-shadow: 0 16px 40px rgba(0,0,0,0.28);
+        }
+        .soko-ad-points {
+          display: grid;
+          grid-template-columns: 1fr;
+          gap: 10px;
+        }
+        .soko-ad-point {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          font-size: 13.5px;
+          font-weight: 600;
+          color: rgba(255,255,255,0.92);
+        }
+        .soko-ad-point-dot {
+          width: 28px;
+          height: 28px;
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          flex-shrink: 0;
+          background: rgba(255,255,255,0.12);
+          border: 1px solid rgba(255,255,255,0.14);
+        }
+        .soko-ad-mobile-chips {
+          display: none;
+        }
+        .soko-ad-cta {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          border: none;
+          border-radius: 12px;
+          padding: 12px 20px;
+          font-size: 14px;
+          font-weight: 800;
+          cursor: pointer;
+          font-family: inherit;
+          min-height: 44px;
+          transition: transform 0.15s, box-shadow 0.15s;
+        }
+        .soko-ad-cta:hover { transform: translateY(-1px); }
+        .soko-ad-cta:active { transform: scale(0.98); }
+        .soko-ad-nav {
+          position: absolute;
+          top: 50%;
+          transform: translateY(-50%);
+          z-index: 5;
+          width: 40px;
+          height: 40px;
+          border-radius: 50%;
+          border: 1px solid rgba(255,255,255,0.22);
+          background: rgba(0,0,0,0.4);
+          color: #fff;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          font-size: 20px;
+          line-height: 1;
+        }
+        .soko-ad-nav:hover { background: rgba(15,157,88,0.75); border-color: rgba(255,255,255,0.35); }
+        .soko-ad-nav.prev { left: 14px; }
+        .soko-ad-nav.next { right: 14px; }
+        .soko-ad-dots {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+        }
+        .soko-ad-meta-row {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          margin-bottom: 12px;
+          flex-wrap: wrap;
+        }
+        /* ── Mobile / tablet: compact cinematic ad card ── */
+        @media (max-width: 900px) {
+          .soko-ad-banner {
+            min-height: 0 !important;
+            /* Fit phone: fixed app-ad height (not a tall website hero) */
+            height: clamp(168px, 46vw, 210px) !important;
+            max-height: 210px;
+            border-radius: 0;
+          }
+          .soko-ad-progress {
+            display: flex !important;
+            position: absolute;
+            top: 10px;
+            left: 12px;
+            right: 12px;
+            z-index: 6;
+            gap: 4px;
+            pointer-events: none;
+          }
+          .soko-ad-progress-seg {
+            flex: 1;
+            height: 3px;
+            border-radius: 99px;
+            background: rgba(255,255,255,0.28);
+            overflow: hidden;
+          }
+          .soko-ad-progress-fill {
+            display: block;
+            height: 100%;
+            width: 100%;
+            border-radius: inherit;
+            transform-origin: left center;
+            transform: scaleX(0);
+            background: #fff;
+            box-shadow: 0 0 8px rgba(255,255,255,0.45);
+          }
+          .soko-ad-progress-fill.is-done {
+            transform: scaleX(1);
+            animation: none;
+          }
+          .soko-ad-progress-fill.is-active {
+            animation: adProgress ${ROTATE_MS}ms linear forwards;
+          }
+          .soko-ad-progress-fill.is-paused {
+            animation-play-state: paused;
+          }
+          .soko-ad-scrim {
+            background:
+              linear-gradient(180deg,
+                rgba(0,0,0,0.45) 0%,
+                rgba(0,0,0,0.08) 32%,
+                rgba(0,0,0,0.15) 48%,
+                rgba(3,10,7,0.72) 78%,
+                rgba(3,10,7,0.92) 100%
+              ) !important;
+          }
+          .soko-ad-inner {
+            display: flex !important;
+            flex-direction: column !important;
+            justify-content: flex-end !important;
+            align-items: stretch !important;
+            grid-template-columns: 1fr !important;
+            height: 100% !important;
+            min-height: 0 !important;
+            padding: 36px 14px 12px !important;
+            gap: 0 !important;
+            box-sizing: border-box;
+          }
+          .soko-ad-visual { display: none !important; }
+          .soko-ad-copy {
+            max-width: 100% !important;
+            animation: adFadeIn 0.32s ease both;
+          }
+          .soko-ad-meta-row {
+            margin-bottom: 6px !important;
+            gap: 6px !important;
+          }
+          .soko-ad-badge {
+            font-size: 9px !important;
+            padding: 3px 8px !important;
+            letter-spacing: 0.6px !important;
+          }
+          .soko-ad-eyebrow {
+            font-size: 10px !important;
+            letter-spacing: 0.4px !important;
+          }
+          .soko-ad-title {
+            font-size: clamp(15px, 4.2vw, 18px) !important;
+            line-height: 1.2 !important;
+            letter-spacing: -0.3px !important;
+            margin: 0 0 4px !important;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+          }
+          .soko-ad-sub {
+            display: none !important;
+          }
+          .soko-ad-mobile-chips {
+            display: flex !important;
+            flex-wrap: nowrap;
+            gap: 6px;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            scrollbar-width: none;
+            margin: 0 0 10px;
+            padding-bottom: 1px;
+          }
+          .soko-ad-mobile-chips::-webkit-scrollbar { display: none; }
+          .soko-ad-chip {
+            flex: 0 0 auto;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            font-size: 10.5px;
+            font-weight: 700;
+            color: rgba(255,255,255,0.95);
+            background: rgba(255,255,255,0.12);
+            border: 1px solid rgba(255,255,255,0.16);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 999px;
+            padding: 4px 9px 4px 6px;
+            white-space: nowrap;
+          }
+          .soko-ad-chip-dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255,255,255,0.14);
+            flex-shrink: 0;
+          }
+          .soko-ad-footer-row {
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            justify-content: space-between !important;
+            gap: 10px !important;
+            flex-wrap: nowrap !important;
+          }
+          .soko-ad-cta {
+            width: auto !important;
+            flex: 1 1 auto;
+            max-width: 220px;
+            justify-content: center;
+            min-height: 36px !important;
+            height: 36px;
+            padding: 0 14px !important;
+            font-size: 12.5px !important;
+            border-radius: 10px !important;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.28) !important;
+          }
+          .soko-ad-dots {
+            display: none !important;
+          }
+          .soko-ad-slide-count {
+            display: inline-flex !important;
+            align-items: center;
+            justify-content: center;
+            min-width: 42px;
+            height: 28px;
+            padding: 0 10px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 800;
+            color: #fff;
+            background: rgba(0,0,0,0.4);
+            border: 1px solid rgba(255,255,255,0.18);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            letter-spacing: 0.2px;
+            flex-shrink: 0;
+          }
+          .soko-ad-nav { display: none !important; }
+          .soko-ad-bg-img {
+            animation: adKenBurns ${ROTATE_MS + 800}ms ease-out both;
+          }
+        }
+        @media (max-width: 380px) {
+          .soko-ad-banner {
+            height: 158px !important;
+            max-height: 158px;
+          }
+          .soko-ad-inner {
+            padding: 30px 12px 10px !important;
+          }
+          .soko-ad-title {
+            font-size: 14.5px !important;
+          }
+          .soko-ad-mobile-chips { display: none !important; }
+          .soko-ad-cta {
+            min-height: 34px !important;
+            height: 34px;
+            font-size: 12px !important;
+          }
+        }
+      `}</style>
+
+      {/* Fallback tint under photo */}
       <div
-        key={item.id}
-        className={`${mobile ? 'soko-hero-mobile-card' : 'soko-hero-desk-card'}${isActive ? ' is-active' : ''}`}
-        onClick={() => navigate('/listing/' + item.id)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/listing/' + item.id) } }}
+        aria-hidden="true"
         style={{
-          position: 'relative',
-          height: mobile ? 186 : 230,
-          borderRadius: mobile ? 14 : 18,
-          overflow: 'hidden',
-          cursor: 'pointer',
-          flexShrink: mobile ? 0 : undefined,
-          background: '#0b1410',
-          border: isActive
-            ? '1.5px solid rgba(255,255,255,0.55)'
-            : '1px solid rgba(255,255,255,0.22)',
-          boxShadow: isActive
-            ? '0 12px 32px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.12)'
-            : mobile
-              ? '0 8px 24px rgba(0,0,0,0.4)'
-              : '0 10px 32px rgba(0,0,0,0.48)',
-          transition: 'transform 0.3s ease, box-shadow 0.3s ease, border-color 0.2s ease',
-          animation: visible && !mobile ? `cardSlideUp 0.5s ease ${0.1 + idx * 0.08}s both` : 'none',
+          position: 'absolute', inset: 0, zIndex: 0,
+          background: 'linear-gradient(135deg, #061510 0%, #0a2a1c 50%, #0c1a12 100%)',
         }}
-        onMouseEnter={e => {
-          if (mobile) return
-          e.currentTarget.style.transform = 'translateY(-6px)'
-          e.currentTarget.style.boxShadow = '0 18px 40px rgba(0,0,0,0.55)'
-          e.currentTarget.style.borderColor = 'rgba(255,255,255,0.4)'
-          const img = e.currentTarget.querySelector('img')
-          if (img) img.style.transform = 'scale(1.05)'
+      />
+      {/* Full-bleed photo — fills entire banner */}
+      <img
+        key={ad.id + '-img'}
+        className="soko-ad-bg-img"
+        src={ad.image}
+        alt=""
+        aria-hidden="true"
+        loading={idx === 0 ? 'eager' : 'lazy'}
+        decoding="async"
+        onLoad={() => setImgReady(true)}
+        style={{
+          zIndex: 0,
+          objectPosition: ad.imagePos || 'center center',
+          opacity: imgReady || idx > 0 ? 1 : 0.9,
         }}
-        onMouseLeave={e => {
-          if (mobile) return
-          e.currentTarget.style.transform = 'none'
-          e.currentTarget.style.boxShadow = '0 10px 32px rgba(0,0,0,0.48)'
-          e.currentTarget.style.borderColor = 'rgba(255,255,255,0.22)'
-          const img = e.currentTarget.querySelector('img')
-          if (img) img.style.transform = 'scale(1)'
+      />
+      {/* Scrim: desktop left-readability; mobile uses bottom gradient via CSS */}
+      <div
+        className="soko-ad-scrim"
+        aria-hidden="true"
+        style={{
+          background: `
+            linear-gradient(100deg,
+              rgba(3,10,7,0.90) 0%,
+              rgba(3,10,7,0.78) 32%,
+              rgba(3,10,7,0.38) 58%,
+              rgba(3,10,7,0.12) 82%,
+              rgba(3,10,7,0.22) 100%
+            ),
+            linear-gradient(180deg,
+              rgba(0,0,0,0.12) 0%,
+              transparent 40%,
+              rgba(0,0,0,0.32) 100%
+            ),
+            radial-gradient(ellipse 48% 65% at 88% 42%, ${ad.glow} 0%, transparent 62%)
+          `,
         }}
-      >
-        {item.images?.[0] ? (
-          <img
-            src={item.images[0]}
-            alt={item.title}
-            loading={mobile ? 'lazy' : 'eager'}
-            decoding="async"
-            style={{
-              position: 'absolute', inset: 0, width: '100%', height: '100%',
-              objectFit: 'cover', display: 'block',
-              transition: 'transform 0.5s cubic-bezier(0.34,1.2,0.64,1)',
-            }}
-          />
-        ) : (
-          <div style={{
-            position: 'absolute', inset: 0, background: 'rgba(255,255,255,0.08)',
-            display: 'grid', placeItems: 'center', color: 'rgba(255,255,255,0.4)',
-          }}>
-            {Icon.star(mobile ? 22 : 28)}
-          </div>
-        )}
+      />
 
-        {/* Stronger bottom scrim so title + full price stay readable */}
-        <div style={{
-          position: 'absolute', inset: 0,
-          background: 'linear-gradient(180deg, rgba(0,0,0,0.12) 0%, transparent 32%, rgba(0,0,0,0.55) 62%, rgba(0,0,0,0.88) 100%)',
-        }} />
-
-        <div style={{ position: 'absolute', top: mobile ? 8 : 10, left: mobile ? 8 : 10, zIndex: 5 }}>
-          {flash ? (
-            <span style={{
-              display: 'inline-flex', alignItems: 'center',
-              background: 'rgba(234,67,53,0.96)', color: '#fff',
-              borderRadius: 999, padding: mobile ? '4px 8px' : '5px 10px',
-              fontSize: mobile ? 9.5 : 10.5, fontWeight: 800,
-              boxShadow: '0 2px 10px rgba(0,0,0,0.25)',
-            }}>Hot</span>
-          ) : (
-            <span style={{
-              display: 'inline-flex', alignItems: 'center', gap: 4,
-              background: 'rgba(255,255,255,0.96)', color: '#1a1a1a',
-              borderRadius: 999, padding: mobile ? '4px 8px' : '5px 10px',
-              fontSize: mobile ? 9.5 : 10.5, fontWeight: 800,
-              boxShadow: '0 2px 10px rgba(0,0,0,0.22)',
-            }}>
-              <span style={{ display: 'flex', color: T.amber }}>{Icon.star(mobile ? 9 : 11, T.amber)}</span>
-              Featured
-            </span>
-          )}
+      {/* Story-style progress segments (mobile) */}
+      {n > 1 && (
+        <div className="soko-ad-progress" aria-hidden="true">
+          {ads.map((a, i) => (
+            <div key={a.id} className="soko-ad-progress-seg">
+              <span
+                key={i === idx ? `fill-${idx}-${progressKey}` : `fill-${i}`}
+                className={
+                  'soko-ad-progress-fill'
+                  + (i < idx ? ' is-done' : '')
+                  + (i === idx ? ' is-active' : '')
+                  + (i === idx && paused ? ' is-paused' : '')
+                }
+                style={{ background: i <= idx ? (i === idx ? '#fff' : ad.accent) : undefined }}
+              />
+            </div>
+          ))}
         </div>
+      )}
 
-        <div className="soko-hero-card-body" style={{
-          position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 5, padding: pad,
-        }}>
-          <div className="soko-hero-card-title" style={{
-            fontSize: mobile ? 12.5 : 15, fontWeight: 700, color: '#fff',
-            marginBottom: mobile ? 3 : 5, lineHeight: 1.25,
-            textShadow: '0 1px 6px rgba(0,0,0,0.55)',
-            overflow: 'hidden', display: '-webkit-box',
-            WebkitLineClamp: mobile ? 1 : 2, WebkitBoxOrient: 'vertical',
-          }}>
-            {item.title}
-          </div>
-          <div className="soko-hero-card-price" style={{
-            fontFamily: T.fontDisplay,
-            fontSize: mobile ? 13 : 17,
-            fontWeight: 800,
-            color: flash ? '#ffb4ab' : '#ffd666',
-            marginBottom: mobile ? 3 : 5,
-            letterSpacing: '-0.3px',
-            whiteSpace: 'normal',
-            wordBreak: 'break-word',
-            lineHeight: 1.2,
-            textShadow: '0 1px 4px rgba(0,0,0,0.45)',
-          }}>
-            {formatPrice(price)}
-          </div>
-          <div className="soko-hero-card-meta" style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 4,
-          }}>
-            <span style={{
-              fontSize: mobile ? 10.5 : 11.5, color: 'rgba(255,255,255,0.82)',
-              display: 'flex', alignItems: 'center', gap: 3, minWidth: 0,
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>
-              {Icon.pin(mobile ? 10 : 11)} {item.city || 'Malawi'}
+      {n > 1 && (
+        <>
+          <button type="button" className="soko-ad-nav prev soko-nav-desktop" onClick={prev} aria-label="Previous ad">‹</button>
+          <button type="button" className="soko-ad-nav next soko-nav-desktop" onClick={next} aria-label="Next ad">›</button>
+        </>
+      )}
+
+      <div className="soko-ad-inner">
+        {/* Left: ad copy */}
+        <div key={ad.id + '-copy'} className="soko-ad-copy">
+          <div className="soko-ad-meta-row">
+            <span
+              className="soko-ad-badge"
+              style={{
+                fontSize: 10, fontWeight: 800, letterSpacing: 0.7, textTransform: 'uppercase',
+                color: 'rgba(255,255,255,0.7)',
+                background: 'rgba(0,0,0,0.35)',
+                border: '1px solid rgba(255,255,255,0.16)',
+                borderRadius: 999, padding: '4px 10px',
+                backdropFilter: 'blur(6px)',
+              }}
+            >
+              {ad.label}
             </span>
-            {!mobile && verified && (
-              <span style={{
-                fontSize: 10.5, color: '#8aefb4', display: 'flex',
-                alignItems: 'center', gap: 3, fontWeight: 700, flexShrink: 0,
-              }}>
-                {Icon.verify(11)} Verified
+            <span
+              className="soko-ad-eyebrow"
+              style={{
+                fontSize: 11.5, fontWeight: 800, color: ad.accent,
+                letterSpacing: 0.5, textTransform: 'uppercase',
+                textShadow: '0 1px 8px rgba(0,0,0,0.45)',
+              }}
+            >
+              {ad.eyebrow}
+            </span>
+          </div>
+
+          <h1
+            className="soko-ad-title"
+            style={{
+              fontFamily: T.fontDisplay,
+              fontSize: 'clamp(24px, 3.2vw, 38px)',
+              fontWeight: 800,
+              color: '#fff',
+              lineHeight: 1.15,
+              letterSpacing: '-0.7px',
+              margin: '0 0 10px',
+              textShadow: '0 2px 18px rgba(0,0,0,0.45)',
+            }}
+          >
+            {ad.title}
+          </h1>
+
+          <p
+            className="soko-ad-sub"
+            style={{
+              fontSize: 15,
+              color: 'rgba(255,255,255,0.78)',
+              lineHeight: 1.5,
+              margin: '0 0 18px',
+              maxWidth: 480,
+              fontWeight: 500,
+              textShadow: '0 1px 10px rgba(0,0,0,0.4)',
+            }}
+          >
+            {ad.sub}
+          </p>
+
+          {/* Mobile: compact benefit chips */}
+          {(ad.points || []).length > 0 && (
+            <div className="soko-ad-mobile-chips" aria-hidden="true">
+              {(ad.points || []).slice(0, 3).map((p, i) => (
+                <span key={p} className="soko-ad-chip">
+                  <span className="soko-ad-chip-dot" style={{ color: ad.accent }}>
+                    {i === 0 ? Icon.check(10) : i === 1 ? Icon.star(9, ad.accent) : Icon.lightning(10)}
+                  </span>
+                  {p}
+                </span>
+              ))}
+            </div>
+          )}
+
+          <div className="soko-ad-footer-row" style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              className="soko-ad-cta"
+              onClick={() => navigate(ad.path)}
+              style={{
+                background: ad.accent,
+                color: ctaDark ? '#1a0a00' : '#fff',
+                boxShadow: `0 8px 28px ${ad.glow}`,
+              }}
+            >
+              {ad.cta} {Icon.chevR(15)}
+            </button>
+
+            {n > 1 && (
+              <div
+                className="soko-ad-dots"
+                role="tablist"
+                aria-label="Advertisement slides"
+              >
+                {ads.map((a, i) => (
+                  <button
+                    key={a.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={i === idx}
+                    aria-label={`Ad ${i + 1} of ${n}`}
+                    onClick={() => { goTo(i); setPaused(true); setTimeout(() => setPaused(false), 3200) }}
+                    style={{
+                      width: i === idx ? 20 : 7,
+                      height: 7,
+                      borderRadius: 50,
+                      border: 'none',
+                      padding: 0,
+                      cursor: 'pointer',
+                      background: i === idx ? ad.accent : 'rgba(255,255,255,0.4)',
+                      boxShadow: i === idx ? `0 0 0 3px ${ad.glow}` : 'none',
+                      transition: 'all 0.25s ease',
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+
+            {n > 1 && (
+              <span className="soko-ad-slide-count" style={{ display: 'none' }}>
+                {idx + 1}/{n}
               </span>
             )}
           </div>
         </div>
-      </div>
-    )
-  }
 
-  return (
-    <section
-      ref={sectionRef}
-      className="soko-hero-section"
-      onMouseMove={handleMouseMove}
-      onMouseLeave={() => setMousePos({ x: 0, y: 0 })}
-      style={{ position: 'relative', overflow: 'hidden', minHeight: 0 }}
-    >
-      {/* ── Injected keyframes ── */}
-      <style>{`
-        @keyframes blobFloat1 { 0%,100%{transform:translate(0,0) scale(1)} 33%{transform:translate(30px,-20px) scale(1.05)} 66%{transform:translate(-20px,15px) scale(0.97)} }
-        @keyframes blobFloat2 { 0%,100%{transform:translate(0,0) scale(1)} 40%{transform:translate(-25px,18px) scale(1.04)} 70%{transform:translate(20px,-12px) scale(0.98)} }
-        @keyframes blobFloat3 { 0%,100%{transform:translate(0,0) scale(1)} 30%{transform:translate(15px,22px) scale(1.06)} 60%{transform:translate(-18px,-10px) scale(0.96)} }
-        @keyframes particleDrift { 0%{transform:translateY(0) translateX(0);opacity:0} 10%{opacity:1} 90%{opacity:1} 100%{transform:translateY(-120px) translateX(30px);opacity:0} }
-        @keyframes badgeShimmer { 0%{background-position:-200% center} 100%{background-position:200% center} }
-        @keyframes heroFadeUp { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
-        @keyframes cardSlideUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
-        @keyframes ctaPulse { 0%,100%{box-shadow:0 4px 18px rgba(249,171,0,0.4)} 50%{box-shadow:0 4px 28px rgba(249,171,0,0.72)} }
-        @keyframes dotGrid { 0%,100%{opacity:0.35} 50%{opacity:0.55} }
-      `}</style>
-
-      {/* ── Layer 1: Deep base gradient ── */}
-      <div style={{
-        position: 'absolute', inset: 0,
-        background: 'linear-gradient(135deg, #040f07 0%, #071a0d 35%, #0a2015 60%, #060d18 100%)',
-      }} />
-
-      {/* ── Layer 2: Mesh (light) ── */}
-      <div style={{
-        position: 'absolute', inset: 0, pointerEvents: 'none',
-        background: `
-          radial-gradient(ellipse 70% 60% at 8% 90%, rgba(15,157,88,0.2) 0%, transparent 60%),
-          radial-gradient(ellipse 55% 50% at 92% 8%,  rgba(15,157,88,0.14) 0%, transparent 55%),
-          radial-gradient(ellipse 35% 45% at 78% 85%, rgba(249,171,0,0.08) 0%, transparent 55%)
-        `,
-      }} />
-
-      {/* ── Desktop-only decorative layers ── */}
-      <div className="soko-hero-fx-heavy soko-nav-desktop" style={{
-        position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden',
-        transform: `translate(${mousePos.x * 0.4}px, ${mousePos.y * 0.3}px)`,
-        transition: 'transform 0.8s cubic-bezier(0.25,0.46,0.45,0.94)',
-      }}>
-        <div style={{ position: 'absolute', top: '-10%', left: '-8%', width: 420, height: 420, borderRadius: '50%', background: 'radial-gradient(circle, rgba(15,157,88,0.18) 0%, transparent 70%)', animation: 'blobFloat1 14s ease-in-out infinite', filter: 'blur(2px)' }} />
-        <div style={{ position: 'absolute', bottom: '-15%', right: '-5%', width: 380, height: 380, borderRadius: '50%', background: 'radial-gradient(circle, rgba(15,157,88,0.14) 0%, transparent 70%)', animation: 'blobFloat2 18s ease-in-out infinite', filter: 'blur(2px)' }} />
-      </div>
-      <div className="soko-hero-fx-heavy soko-nav-desktop" style={{
-        position: 'absolute', inset: 0, pointerEvents: 'none',
-        backgroundImage: `radial-gradient(circle, rgba(255,255,255,0.08) 1px, transparent 1px)`,
-        backgroundSize: '28px 28px',
-        animation: 'dotGrid 6s ease-in-out infinite',
-      }} />
-      <div className="soko-hero-fx-heavy soko-nav-desktop" style={{ position: 'absolute', inset: 0, pointerEvents: 'none', overflow: 'hidden' }}>
-        {[...Array(10)].map((_, i) => (
-          <div key={i} style={{
-            position: 'absolute', width: 2, height: 2, borderRadius: '50%',
-            background: i % 2 === 0 ? 'rgba(249,171,0,0.35)' : 'rgba(15,157,88,0.35)',
-            left: `${8 + (i * 9) % 85}%`, top: `${12 + (i * 11) % 75}%`,
-            animation: `particleDrift ${7 + (i % 4) * 2}s linear ${i * 0.6}s infinite`,
-          }} />
-        ))}
-      </div>
-
-      {/* ── CONTENT ── */}
-      <div className="soko-hero-grid" style={{
-        position: 'relative', zIndex: 1, maxWidth: 1400, margin: '0 auto',
-        display: 'grid', gridTemplateColumns: '34% 1fr', gap: 28,
-        alignItems: 'center', padding: 'clamp(16px,3vw,28px) 20px',
-      }}>
-
-        {/* ── LEFT: marketing copy ── */}
-        <div className="soko-hero-copy" style={{
-          animation: visible ? 'heroFadeUp 0.65s ease both' : 'none',
-        }}>
-
-          <div className="soko-hero-badge" style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6,
-            background: 'linear-gradient(135deg, rgba(234,88,12,0.2), rgba(249,171,0,0.12))',
-            border: '1px solid rgba(249,171,0,0.35)',
-            borderRadius: 50, padding: '5px 12px', marginBottom: 14,
-            width: 'fit-content',
-          }}>
-            <span style={{ color: T.red, display: 'flex' }}>{Icon.fire(12)}</span>
-            <span style={{ fontSize: 10.5, fontWeight: 800, color: T.amber, letterSpacing: 0.6, textTransform: 'uppercase' }}>
-              Featured
-            </span>
-          </div>
-
-          <h1 className="soko-hero-headline" style={{
-            fontFamily: T.fontDisplay, fontSize: 'clamp(24px, 2.6vw, 32px)',
-            fontWeight: 800, color: '#fff', lineHeight: 1.15, letterSpacing: '-0.8px',
-            marginBottom: 10,
-          }}>
-            Reach more buyers.{' '}
-            <span style={{
-              background: `linear-gradient(90deg, ${T.amber}, #ffce45)`,
-              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
-            }}>Get Featured today!</span>
-          </h1>
-
-          <p className="soko-hero-sub" style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.55)', lineHeight: 1.5, maxWidth: 320, marginBottom: 18 }}>
-            Stand out, get more views and sell faster.
-          </p>
-
-          <div className="soko-hero-benefits" style={{ display: 'flex', flexDirection: 'row', gap: 20, marginBottom: 20, flexWrap: 'nowrap' }}>
-            {[
-              { icon: Icon.star, color: T.amber, label: 'Top placement', sub: 'Be seen by more buyers' },
-              { icon: Icon.eye, color: T.green, label: 'More views', sub: 'Increase your chances' },
-              { icon: Icon.lightning, color: T.amber, label: 'Sell faster', sub: 'Get results quickly' },
-            ].map(({ icon, color, label, sub }) => (
-              <div key={label} style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                <span style={{ color, display: 'flex', flexShrink: 0 }}>{icon(15)}</span>
-                <div>
-                  <div style={{ fontSize: 11.5, fontWeight: 700, color: 'rgba(255,255,255,0.85)', whiteSpace: 'nowrap' }}>{label}</div>
-                  <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)', whiteSpace: 'nowrap' }}>{sub}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="soko-hero-cta-row" style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              className="soko-btn-primary"
-              onClick={() => navigate('/profile?tab=selling')}
-              style={{
-                background: `linear-gradient(135deg, ${T.amber}, #e09800)`,
-                color: '#1a0a00', fontSize: 14, padding: '11px 22px',
-                animation: 'ctaPulse 2.8s ease-in-out infinite',
-                transition: 'transform 0.2s, box-shadow 0.2s',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.animation='none'; e.currentTarget.style.boxShadow='0 8px 24px rgba(249,171,0,0.45)' }}
-              onMouseLeave={e => { e.currentTarget.style.transform='none'; e.currentTarget.style.animation='ctaPulse 2.8s ease-in-out infinite'; e.currentTarget.style.boxShadow='' }}
-            >
-              Get Featured
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate('/profile?tab=selling')}
-              className="soko-btn-outline soko-hero-cta-learn"
-              style={{ fontSize: 14, padding: '11px 22px', transition: 'all 0.25s' }}
-              onMouseEnter={e => { e.currentTarget.style.transform='translateY(-2px)'; e.currentTarget.style.background='rgba(255,255,255,0.18)' }}
-              onMouseLeave={e => { e.currentTarget.style.transform='none'; e.currentTarget.style.background='rgba(255,255,255,0.1)' }}
-            >
-              Learn More
-            </button>
-          </div>
-        </div>
-
-        {/* ── RIGHT: desktop 3-card carousel ── */}
-        <div
-          className="soko-hero-right soko-hero-desktop-carousel"
-          onMouseEnter={() => setPaused(true)}
-          onMouseLeave={() => setPaused(false)}
-          style={{
-            position: 'relative',
-            animation: visible ? 'heroFadeUp 0.75s ease 0.15s both' : 'none',
-            transform: `translate(${mousePos.x * 0.15}px, ${mousePos.y * 0.1}px)`,
-            transition: 'transform 1s cubic-bezier(0.25,0.46,0.45,0.94)',
-          }}
-        >
-          {featured.length === 0 ? (
-            <div style={{ background: 'rgba(255,255,255,0.05)', border: '2px dashed rgba(255,255,255,0.12)', borderRadius: 16, padding: 28, textAlign: 'center', width: '100%', backdropFilter: 'blur(8px)' }}>
-              <div style={{ marginBottom: 8, display: 'flex', justifyContent: 'center' }}>{Icon.star(32)}</div>
-              <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.55)', lineHeight: 1.6, marginBottom: 16 }}>
-                No featured listings yet — be the first sellers see.
-              </p>
-              <button type="button" onClick={() => navigate('/post')} style={{ background: `linear-gradient(135deg,${T.amber},#e09800)`, border: 'none', borderRadius: 10, padding: '9px 20px', fontSize: 13, fontWeight: 800, color: '#1a0a00', cursor: 'pointer' }}>
-                Feature My Listing
-              </button>
-            </div>
-          ) : (
-            <>
-              {pageCount > 1 && (
-                <button type="button" onClick={prev} aria-label="Previous featured" style={{ position: 'absolute', left: -16, top: '40%', transform: 'translateY(-50%)', zIndex: 20, width: 32, height: 32, borderRadius: '50%', background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff', fontSize: 17, backdropFilter: 'blur(8px)', transition: 'background 0.2s, transform 0.2s' }}
-                  onMouseEnter={e => { e.currentTarget.style.background='rgba(15,157,88,0.7)'; e.currentTarget.style.transform='translateY(-50%) scale(1.1)' }}
-                  onMouseLeave={e => { e.currentTarget.style.background='rgba(0,0,0,0.6)'; e.currentTarget.style.transform='translateY(-50%) scale(1)' }}
-                >‹</button>
-              )}
-              {pageCount > 1 && (
-                <button type="button" onClick={next} aria-label="Next featured" style={{ position: 'absolute', right: -16, top: '40%', transform: 'translateY(-50%)', zIndex: 20, width: 32, height: 32, borderRadius: '50%', background: 'rgba(0,0,0,0.6)', border: '1px solid rgba(255,255,255,0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff', fontSize: 17, backdropFilter: 'blur(8px)', transition: 'background 0.2s, transform 0.2s' }}
-                  onMouseEnter={e => { e.currentTarget.style.background='rgba(15,157,88,0.7)'; e.currentTarget.style.transform='translateY(-50%) scale(1.1)' }}
-                  onMouseLeave={e => { e.currentTarget.style.background='rgba(0,0,0,0.6)'; e.currentTarget.style.transform='translateY(-50%) scale(1)' }}
-                >›</button>
-              )}
-
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: `repeat(${windowSize}, 1fr)`,
-                gap: 16,
-              }}>
-                {visibleCards.map((item, idx) => renderHeroCard(item, idx))}
-              </div>
-
-              {n > 1 && (
-                <div style={{
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  gap: 10, marginTop: 14, flexWrap: 'wrap',
-                }}>
-                  <span style={{
-                    fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.55)',
-                    fontVariantNumeric: 'tabular-nums',
-                  }}>
-                    {cursor + 1} / {n} · equal rotation
-                  </span>
-                  {n <= 12 && (
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: 5 }}>
-                      {featured.map((item, i) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => goTo(i)}
-                          aria-label={`Featured product ${i + 1} of ${n}`}
-                          style={{
-                            width: i === cursor ? 18 : 6, height: 6, borderRadius: 50,
-                            border: 'none', padding: 0, cursor: 'pointer',
-                            background: i === cursor
-                              ? `linear-gradient(90deg, ${T.amber}, #ffce45)`
-                              : 'rgba(255,255,255,0.22)',
-                            transition: 'all 0.3s ease',
-                          }}
-                        />
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </>
-          )}
-        </div>
-
-        {/* ── Mobile: horizontal featured product rail (swipe) ── */}
-        <div className="soko-hero-mobile-carousel" style={{ display: 'none' }}>
-          {featured.length === 0 ? (
-            <div className="soko-hero-mobile-empty" style={{
-              background: 'rgba(255,255,255,0.05)', border: '2px dashed rgba(255,255,255,0.14)',
-              borderRadius: 14, padding: '18px 16px', textAlign: 'center', backdropFilter: 'blur(8px)',
+        {/* Right: glass panel — desktop only */}
+        <div key={ad.id + '-vis'} className="soko-ad-visual soko-nav-desktop">
+          <div className="soko-ad-panel">
+            <div style={{
+              fontSize: 11, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase',
+              color: 'rgba(255,255,255,0.55)', marginBottom: 12,
             }}>
-              <div style={{ marginBottom: 6, display: 'flex', justifyContent: 'center' }}>{Icon.star(24)}</div>
-              <p style={{ fontSize: 12.5, color: 'rgba(255,255,255,0.55)', lineHeight: 1.5, marginBottom: 12 }}>
-                No featured listings yet — be the first sellers see.
-              </p>
-              <button
-                type="button"
-                onClick={() => navigate('/post')}
-                style={{
-                  background: `linear-gradient(135deg,${T.amber},#e09800)`, border: 'none', borderRadius: 10,
-                  padding: '10px 18px', fontSize: 13, fontWeight: 800, color: '#1a0a00', cursor: 'pointer', minHeight: 44,
-                }}
-              >
-                Feature My Listing
-              </button>
+              Why this matters
             </div>
-          ) : (
-            <>
-              <div className="soko-hero-mobile-head" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, gap: 8 }}>
-                <span style={{ fontSize: 11.5, fontWeight: 700, color: 'rgba(255,255,255,0.78)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ width: 5, height: 5, borderRadius: '50%', background: T.amber, boxShadow: '0 0 0 3px rgba(249,171,0,0.2)' }} />
-                  Featured
-                  {mobileCount > 1 && (
-                    <span style={{ fontWeight: 600, color: 'rgba(255,255,255,0.4)', fontVariantNumeric: 'tabular-nums' }}>
-                      {mobileIdx + 1}/{mobileCount}
-                    </span>
-                  )}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => navigate('/listings')}
-                  style={{
-                    background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.12)',
-                    borderRadius: 999, color: 'rgba(255,255,255,0.88)',
-                    fontSize: 11.5, fontWeight: 700, cursor: 'pointer',
-                    padding: '5px 10px', minHeight: 30,
-                  }}
-                >
-                  View all
-                </button>
-              </div>
-              <div
-                ref={mobileRailRef}
-                className="soko-hero-mobile-rail"
-                onTouchStart={onMobileTouchStart}
-                onTouchEnd={onMobileTouchEnd}
-                onMouseEnter={() => setPaused(true)}
-                onMouseLeave={() => setPaused(false)}
-              >
-                {featured.map((item, idx) => renderHeroCard(item, idx, { mobile: true }))}
-              </div>
-              {mobileCount > 1 && (
-                <div className="soko-hero-mobile-dots" role="tablist" aria-label="Featured products">
-                  {featured.map((item, i) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      role="tab"
-                      aria-selected={i === mobileIdx}
-                      aria-label={`Show featured ${i + 1} of ${mobileCount}`}
-                      onClick={() => { goToMobile(i); setPaused(true); setTimeout(() => setPaused(false), 2800) }}
-                      style={{
-                        width: i === mobileIdx ? 16 : 5,
-                        height: 4,
-                        borderRadius: 50,
-                        border: 'none',
-                        padding: 0,
-                        cursor: 'pointer',
-                        background: i === mobileIdx
-                          ? `linear-gradient(90deg, ${T.amber}, #ffce45)`
-                          : 'rgba(255,255,255,0.22)',
-                        transition: 'all 0.3s ease',
-                        flexShrink: 0,
-                      }}
-                    />
-                  ))}
+            <div className="soko-ad-points">
+              {(ad.points || []).map((p, i) => (
+                <div key={p} className="soko-ad-point">
+                  <span className="soko-ad-point-dot" style={{ color: ad.accent }}>
+                    {i === 0 ? Icon.check(13) : i === 1 ? Icon.star(12, ad.accent) : Icon.lightning(13)}
+                  </span>
+                  {p}
                 </div>
-              )}
-            </>
-          )}
+              ))}
+            </div>
+            <div style={{
+              marginTop: 14, paddingTop: 12,
+              borderTop: '1px solid rgba(255,255,255,0.1)',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
+            }}>
+              <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', fontWeight: 500 }}>
+                SokoMW marketplace
+              </span>
+              <span style={{
+                fontSize: 11, fontWeight: 800, color: ad.accent,
+                background: 'rgba(255,255,255,0.08)',
+                borderRadius: 999, padding: '4px 10px',
+              }}>
+                {idx + 1} / {n}
+              </span>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -1584,12 +1652,12 @@ function RevenueHero({ navigate, listings }) {
    no overflow tile).
 ───────────────────────────────────────────────────────────────────────────── */
 const QUICK_CATEGORIES = [
-  { key: 'all',         label: 'All Categories', sub: 'Browse all',        icon: Icon.grid,        fg: '#16a34a', bg: '#e8f7ee', isAll: true },
-  { key: 'Vehicles',    label: 'Vehicles',       sub: 'Cars, bikes, more', icon: Icon.car,         fg: '#16a34a', bg: '#e9f7ec' },
+  { key: 'all',         label: 'All Categories', sub: 'Browse all',        icon: Icon.grid,        fg: '#3c4043', bg: '#f1f3f4', isAll: true },
+  { key: 'Vehicles',    label: 'Vehicles',       sub: 'Cars, bikes, more', icon: Icon.car,         fg: '#0284c7', bg: '#e0f2fe' },
   { key: 'Electronics', label: 'Electronics',    sub: 'Phones, laptops',   icon: Icon.phone,       fg: '#7c3aed', bg: '#f1ebfd' },
   { key: 'Clothing',    label: 'Fashion',        sub: 'Clothing, shoes',   icon: Icon.shirt,       fg: '#e0245e', bg: '#fdeaf0' },
   { key: 'Property',    label: 'Property',       sub: 'Houses, land',      icon: Icon.houseFilled, fg: '#ea580c', bg: '#fef0e6' },
-  { key: 'Agriculture', label: 'Agriculture',    sub: 'Machinery, crops',  icon: Icon.leaf,        fg: '#16a34a', bg: '#e8f7ee' },
+  { key: 'Agriculture', label: 'Agriculture',    sub: 'Machinery, crops',  icon: Icon.leaf,        fg: '#0f766e', bg: '#ecfdf5' },
   { key: 'Jobs',        label: 'Jobs',           sub: 'Find a job',        icon: Icon.briefcase,   fg: '#2563eb', bg: '#e9f1fd', isJobs: true },
   { key: 'Services',    label: 'Services',       sub: 'Hire experts',      icon: Icon.tools,       fg: '#5f6368', bg: '#eef0f1', isServices: true },
 ]
@@ -1605,17 +1673,26 @@ function CategoryGrid({ navigate, onCategoryChange }) {
   return (
     <section className="soko-cat-section" style={{ padding: '28px 20px 8px', background: '#fff' }}>
       <div style={{ maxWidth: 1400, margin: '0 auto' }}>
-        <div className="soko-cat-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(9, 1fr)', gap: 12 }}>
+        {/* Desktop: 9-col grid. Mobile/tablet (≤980): forced single-line horizontal scroll via CSS. */}
+        <div
+          className="soko-cat-grid"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(9, 1fr)',
+            gap: 12,
+          }}
+        >
           {QUICK_CATEGORIES.map(item => (
             <button key={item.key} onClick={() => handleClick(item)} className="soko-cat-tile" style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
               background: '#fff', border: `1px solid ${T.gray100}`, cursor: 'pointer', padding: '18px 8px 16px',
               borderRadius: 16, transition: 'border-color .15s, box-shadow .15s, transform .15s',
+              boxSizing: 'border-box',
             }}>
-              <div style={{ width: 44, height: 44, borderRadius: '50%', background: item.bg, color: item.fg, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{ width: 44, height: 44, borderRadius: '50%', background: item.bg, color: item.fg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 {item.icon(19)}
               </div>
-              <div style={{ textAlign: 'center' }}>
+              <div style={{ textAlign: 'center', minWidth: 0, width: '100%' }}>
                 <div className="soko-cat-label" style={{ fontSize: 13, fontWeight: 700, color: T.gray900 }}>{item.label}</div>
                 <div className="soko-cat-sub" style={{ fontSize: 10.5, color: T.gray600, marginTop: 1 }}>{item.sub}</div>
               </div>
@@ -1625,6 +1702,7 @@ function CategoryGrid({ navigate, onCategoryChange }) {
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
             background: '#fdf6e8', border: `1.5px dashed ${T.amber}66`, cursor: 'pointer', padding: '18px 8px 16px',
             borderRadius: 16, transition: 'border-color .15s, box-shadow .15s, transform .15s',
+            boxSizing: 'border-box',
           }}>
             <div className="soko-cat-label" style={{ fontSize: 13.5, fontWeight: 700, color: T.amberD }}>More</div>
             <div className="soko-cat-sub" style={{ fontSize: 10.5, color: T.gray600 }}>View all</div>
@@ -1775,7 +1853,7 @@ function FeaturedRevenueBanner({ navigate, user }) {
       <>
         Listings only for now · shops, requests & stories later
         {user && freeInfo.hasFree && !freeInfo.loading && (
-          <span style={{ color: T.green, fontWeight: 700 }}>
+          <span style={{ color: T.amberD, fontWeight: 700 }}>
             {' · '}{freeInfo.remaining} free left
           </span>
         )}
@@ -1796,7 +1874,8 @@ function FeaturedRevenueBanner({ navigate, user }) {
         ? 'Claim free feature'
         : 'Feature a listing'
 
-  const ctaGreen = freeInfo.hasFree && !needsPost
+  // Featured CTA stays amber/gold (premium), not green — green reserved for brand/sell
+  const ctaGold = true
 
   return (
     <section style={{ padding: '16px 20px 0' }} aria-label="Get featured pricing">
@@ -1864,8 +1943,8 @@ function FeaturedRevenueBanner({ navigate, user }) {
                   {needsPost ? 'Post a listing' : 'Featured Listings'}
                   <span style={{
                     fontSize: 9, fontWeight: 900, textTransform: 'uppercase', letterSpacing: 0.4,
-                    background: needsPost ? '#fff7ed' : '#e6f4ec',
-                    color: needsPost ? '#c2410c' : T.green,
+                    background: needsPost ? '#fff7ed' : T.amberL,
+                    color: needsPost ? '#c2410c' : T.amberD,
                     borderRadius: 999, padding: '2px 6px',
                   }}>
                     {needsPost ? 'Start here' : 'Live'}
@@ -1875,7 +1954,7 @@ function FeaturedRevenueBanner({ navigate, user }) {
                   className="soko-feat-price-amount"
                   style={{
                     fontSize: 12, fontWeight: 800, marginTop: 2,
-                    color: freeInfo.hasFree && !needsPost ? T.green : T.amberD,
+                    color: freeInfo.hasFree && !needsPost ? T.amberD : T.gray800,
                     letterSpacing: '-0.2px',
                   }}
                 >
@@ -1907,16 +1986,16 @@ function FeaturedRevenueBanner({ navigate, user }) {
             onClick={goFeature}
             style={{
               flexShrink: 0, marginLeft: 'auto',
-              background: ctaGreen
-                ? `linear-gradient(135deg, ${T.green}, ${T.greenD})`
-                : `linear-gradient(135deg, ${T.amber}, #e09800)`,
-              color: ctaGreen ? '#fff' : '#1a0a00',
+              background: ctaGold
+                ? `linear-gradient(135deg, ${T.amber}, #e09800)`
+                : `linear-gradient(135deg, ${T.gray900}, #000)`,
+              color: ctaGold ? '#1a0a00' : '#fff',
               border: 'none', borderRadius: 12, padding: '10px 16px',
               fontSize: 13, fontWeight: 800, cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: 7,
-              boxShadow: ctaGreen
-                ? '0 2px 12px rgba(15,157,88,0.3)'
-                : '0 2px 12px rgba(249,171,0,0.35)',
+              boxShadow: ctaGold
+                ? '0 2px 12px rgba(249,171,0,0.35)'
+                : '0 2px 12px rgba(0,0,0,0.2)',
               fontFamily: 'inherit',
             }}
           >
@@ -1936,16 +2015,103 @@ function FeaturedRevenueBanner({ navigate, user }) {
 ───────────────────────────────────────────────────────────────────────────── */
 function SectionHeader({ title, subtitle, action }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 8 }}>
+    <div className="soko-section-header" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 20, flexWrap: 'wrap', gap: 8 }}>
       <div>
-        <h2 style={{ fontFamily: T.fontDisplay, fontSize: 'clamp(19px, 2.4vw, 25px)', fontWeight: 800, color: T.gray900, letterSpacing: '-0.6px', marginBottom: 4 }}>{title}</h2>
-        {subtitle && <p style={{ fontSize: 13.5, color: T.gray600 }}>{subtitle}</p>}
+        <h2 className="soko-section-title" style={{ fontFamily: T.fontDisplay, fontSize: 'clamp(19px, 2.4vw, 25px)', fontWeight: 800, color: T.gray900, letterSpacing: '-0.6px', marginBottom: 4 }}>{title}</h2>
+        {subtitle && <p className="soko-web-only" style={{ fontSize: 13.5, color: T.gray600 }}>{subtitle}</p>}
       </div>
       {action && (
-        <button onClick={action.onClick} style={{ background: 'none', border: `1.5px solid ${T.gray200}`, borderRadius: 50, padding: '7px 16px', fontSize: 13, fontWeight: 600, color: T.gray800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
-          onMouseEnter={e => { e.currentTarget.style.borderColor = T.green; e.currentTarget.style.color = T.green }}
+        <button onClick={action.onClick} className="soko-section-action" style={{ background: 'none', border: `1.5px solid ${T.gray200}`, borderRadius: 50, padding: '7px 16px', fontSize: 13, fontWeight: 600, color: T.gray800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}
+          onMouseEnter={e => { e.currentTarget.style.borderColor = T.gray800; e.currentTarget.style.color = T.gray900 }}
           onMouseLeave={e => { e.currentTarget.style.borderColor = T.gray200; e.currentTarget.style.color = T.gray800 }}
         >{action.label} {Icon.chevR(14)}</button>
+      )}
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   PRODUCT CARD QUICK ACTIONS — Save (heart) + Chat + optional Call
+   Fixed action-row height keeps Featured / Latest cards equal-sized.
+───────────────────────────────────────────────────────────────────────────── */
+function listingAllowsCall(listing) {
+  if (!listing?.call_number) return false
+  const methods = listing.contact_methods
+  if (Array.isArray(methods)) {
+    if (methods.length === 0) return false
+    return methods.map(String).map(m => m.toLowerCase()).includes('call')
+  }
+  if (typeof methods === 'string') return methods.toLowerCase().includes('call')
+  // Legacy rows with a number but no methods array — treat as call-enabled
+  return true
+}
+
+function ProductCardSaveBtn({ saved, busy, onToggle }) {
+  return (
+    <button
+      type="button"
+      className={`soko-product-card-save${saved ? ' is-saved' : ''}`}
+      onClick={e => { e.stopPropagation(); onToggle?.(e) }}
+      disabled={busy}
+      aria-label={saved ? 'Remove from saved' : 'Save listing'}
+      aria-pressed={!!saved}
+    >
+      {Icon.heart(14, saved ? 'currentColor' : 'none')}
+    </button>
+  )
+}
+
+function ProductCardActions({ listing, user, navigate }) {
+  const canCall = listingAllowsCall(listing)
+  const isOwner = !!(user?.id && listing?.seller_id && user.id === listing.seller_id)
+
+  function goLogin() {
+    try {
+      sessionStorage.setItem('soko_post_login', JSON.stringify({
+        type: 'chat',
+        sellerId: listing.seller_id,
+        listingId: listing.id,
+      }))
+    } catch { /* ignore */ }
+    navigate('/login')
+  }
+
+  function handleChat(e) {
+    e.stopPropagation()
+    if (!listing?.seller_id) {
+      navigate('/listing/' + listing.id)
+      return
+    }
+    if (isOwner) {
+      navigate('/listing/' + listing.id)
+      return
+    }
+    if (!user?.id) {
+      goLogin()
+      return
+    }
+    navigate(buildChatPath(listing.seller_id, { source: 'listing', contextId: listing.id }), {
+      state: { source: 'listing' },
+    })
+  }
+
+  function handleCall(e) {
+    e.stopPropagation()
+    if (!canCall) return
+    const num = String(listing.call_number).replace(/\s+/g, '')
+    window.open(`tel:${num}`, '_self')
+  }
+
+  return (
+    <div className="soko-product-card-actions" onClick={e => e.stopPropagation()}>
+      <button type="button" className="soko-pca-chat" onClick={handleChat}>
+        {Icon.chat(13)}
+        <span>{isOwner ? 'View' : 'Chat'}</span>
+      </button>
+      {canCall && !isOwner && (
+        <button type="button" className="soko-pca-call" onClick={handleCall} aria-label="Call seller">
+          {Icon.phoneCall(14)}
+        </button>
       )}
     </div>
   )
@@ -1956,62 +2122,78 @@ function SectionHeader({ title, subtitle, action }) {
    per the brief ("Featured Listings: Large premium cards. Bigger than
    normal listings. Gold featured badge.")
 ───────────────────────────────────────────────────────────────────────────── */
-function PremiumListingCard({ listing, onClick, delay = 0, large = false }) {
-  const [hov, setHov]     = useState(false)
-  const [liked, setLiked] = useState(false)
+function PremiumListingCard({ listing, onClick, delay = 0, user, navigate, saved, onToggleSave }) {
+  const [hov, setHov] = useState(false)
   const [imgErr, setImgErr] = useState(false)
+  const [imgReady, setImgReady] = useState(false)
+  const [saveBusy, setSaveBusy] = useState(false)
 
   const price   = isFlashActive(listing) ? listing.flash_sale_price : listing.price
   const isFlash = isFlashActive(listing)
   const isVerif = listing.seller_verified || listing.shop_is_verified
   const isFeat  = isListingFeatured(listing)
 
-  function handleLike(e) { e.stopPropagation(); setLiked(l => !l) }
+  async function handleSave(e) {
+    e.stopPropagation()
+    if (saveBusy) return
+    setSaveBusy(true)
+    try { await onToggleSave?.(listing.id) } finally { setSaveBusy(false) }
+  }
 
   return (
-    <div onClick={onClick} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} className={`soko-card-bg${isFeat && isFlash ? ' soko-dual-badge-card' : ''}`} style={{
-      background: T.white, borderRadius: 12, overflow: 'hidden', cursor: 'pointer',
-      border: isFeat && isFlash
-        ? `1.5px solid ${hov ? T.red : '#f0a8a0'}`
-        : isFeat
-        ? `1.5px solid ${hov ? T.amber : '#e8d9a8'}`
-        : isFlash
-        ? `1.5px solid ${T.red}55`
-        : `1px solid ${hov ? T.gray200 : T.gray100}`,
-      boxShadow: isFeat && isFlash
-        ? (hov ? '0 10px 28px rgba(234,67,53,0.28)' : '0 4px 16px rgba(0,0,0,0.1)')
-        : hov
-          ? (isFeat ? '0 10px 26px rgba(0,0,0,0.12)' : T.shadowMd)
+    <div
+      onClick={onClick}
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      className={`soko-product-card soko-card-bg${isFeat && isFlash ? ' soko-dual-badge-card' : ''}`}
+      style={{
+        border: isFeat && isFlash
+          ? `1.5px solid ${hov ? T.red : '#f0a8a0'}`
           : isFeat
-            ? '0 4px 16px rgba(0,0,0,0.1)'
-            : T.shadow,
-      transform: hov ? 'translateY(-3px)' : 'none',
-      transition: 'all 0.2s ease', animation: `fadeUp 0.4s ease ${delay}s both`,
-      display: 'flex', flexDirection: 'column', height: 220,
-      position: 'relative',
-    }}>
-      <div style={{ width: '100%', height: '62%', flexShrink: 0, overflow: 'hidden', position: 'relative', background: T.gray100, borderRadius: '12px 12px 0 0' }}>
+            ? `1.5px solid ${hov ? T.amber : '#e8d9a8'}`
+            : isFlash
+              ? `1.5px solid ${T.red}55`
+              : `1px solid ${hov ? T.gray200 : T.gray100}`,
+        boxShadow: hov ? T.shadowMd : T.shadow,
+        transform: hov ? 'translateY(-3px)' : 'none',
+        transition: 'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease',
+        animation: `fadeUp 0.4s ease ${delay}s both`,
+      }}
+    >
+      <div className="soko-product-card-media" style={{ background: '#eef1f3' }}>
         {listing.images?.[0] && !imgErr
-          ? <img src={listing.images[0]} alt={listing.title} onError={() => setImgErr(true)} style={{ width: '100%', height: '100%', objectFit: 'cover', transform: hov ? 'scale(1.07)' : 'scale(1)', transition: 'transform 0.5s cubic-bezier(0.34,1.2,0.64,1)' }} />
-          : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40, color: T.gray400, background: T.gray100 }}>{catIcon(listing.category).emoji}</div>
+          ? <img
+              src={listing.images[0]}
+              alt={listing.title}
+              loading="lazy"
+              decoding="async"
+              onLoad={() => setImgReady(true)}
+              onError={() => setImgErr(true)}
+              style={{
+                opacity: imgReady ? 1 : 0,
+                transform: hov ? 'scale(1.05)' : 'scale(1)',
+                transition: 'opacity 0.35s ease, transform 0.45s cubic-bezier(0.34,1.2,0.64,1)',
+              }}
+            />
+          : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36, color: T.gray400 }}>{catIcon(listing.category).emoji}</div>
         }
-        <div style={{ position: 'absolute', top: 10, left: 10, display: 'flex', flexDirection: 'column', gap: 5, zIndex: 2 }}>
+        <div style={{ position: 'absolute', top: 8, left: 8, display: 'flex', flexDirection: 'column', gap: 4, zIndex: 2 }}>
           {isFeat && isFlash ? (
-            <div className="soko-hotdeal-pulse" style={{ background: `linear-gradient(135deg,${T.red},#c62828)`, color: '#fff', borderRadius: '50%', width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(234,67,53,0.5)' }}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff">
+            <div className="soko-hotdeal-pulse" style={{ background: `linear-gradient(135deg,${T.red},#c62828)`, color: '#fff', borderRadius: '50%', width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(234,67,53,0.5)' }}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="#fff">
                 <path d="M17.66 11.2C17.43 10.9 17.15 10.64 16.89 10.38C16.22 9.78 15.46 9.35 14.82 8.72C13.33 7.26 13 4.85 13.95 3C13 3.23 12.17 3.75 11.46 4.32C8.87 6.4 7.85 10.07 9.07 13.22C9.11 13.32 9.15 13.42 9.15 13.55C9.15 13.77 9 13.97 8.8 14.05C8.57 14.15 8.33 14.09 8.14 13.93C8.08 13.88 8.04 13.83 8 13.76C6.87 12.33 6.69 10.28 7.45 8.64C5.78 10 4.87 12.3 5 14.47C5.06 14.97 5.12 15.47 5.29 15.97C5.43 16.57 5.7 17.17 6 17.7C7.08 19.43 8.95 20.67 10.96 20.92C13.1 21.19 15.39 20.8 17.03 19.32C18.86 17.66 19.5 15 18.56 12.72L18.43 12.46C18.22 12 17.66 11.2 17.66 11.2Z"/>
               </svg>
             </div>
           ) : (
             <>
               {isFeat && (
-                <div style={{ display:'flex', alignItems:'center', gap:3, background:'#FF7A1A', color:'#fff', padding:'3px 8px', fontSize:9.5, fontWeight:800, borderRadius:50, boxShadow:'0 2px 6px rgba(255,122,26,0.4)', width:'fit-content' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 3, background: '#FF7A1A', color: '#fff', padding: '3px 8px', fontSize: 9.5, fontWeight: 800, borderRadius: 50, boxShadow: '0 2px 6px rgba(255,122,26,0.4)', width: 'fit-content' }}>
                   {Icon.star(9, '#fff')} Featured
                 </div>
               )}
               {isFlash && (
-                <div className="soko-hotdeal-pulse" style={{ background: `linear-gradient(135deg,${T.red},#c62828)`, color: '#fff', borderRadius: '50%', width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(234,67,53,0.5)' }}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff">
+                <div className="soko-hotdeal-pulse" style={{ background: `linear-gradient(135deg,${T.red},#c62828)`, color: '#fff', borderRadius: '50%', width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(234,67,53,0.5)' }}>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="#fff">
                     <path d="M17.66 11.2C17.43 10.9 17.15 10.64 16.89 10.38C16.22 9.78 15.46 9.35 14.82 8.72C13.33 7.26 13 4.85 13.95 3C13 3.23 12.17 3.75 11.46 4.32C8.87 6.4 7.85 10.07 9.07 13.22C9.11 13.32 9.15 13.42 9.15 13.55C9.15 13.77 9 13.97 8.8 14.05C8.57 14.15 8.33 14.09 8.14 13.93C8.08 13.88 8.04 13.83 8 13.76C6.87 12.33 6.69 10.28 7.45 8.64C5.78 10 4.87 12.3 5 14.47C5.06 14.97 5.12 15.47 5.29 15.97C5.43 16.57 5.7 17.17 6 17.7C7.08 19.43 8.95 20.67 10.96 20.92C13.1 21.19 15.39 20.8 17.03 19.32C18.86 17.66 19.5 15 18.56 12.72L18.43 12.46C18.22 12 17.66 11.2 17.66 11.2Z"/>
                   </svg>
                 </div>
@@ -2019,43 +2201,70 @@ function PremiumListingCard({ listing, onClick, delay = 0, large = false }) {
             </>
           )}
         </div>
-
-        
+        <ProductCardSaveBtn saved={saved} busy={saveBusy} onToggle={handleSave} />
       </div>
 
-      <div style={{ padding: '8px 10px 8px', background: '#fff', height: '38%', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-        <div style={{ fontSize: 12, fontWeight: 600, color: T.gray900, lineHeight: 1.3, overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical' }}>{listing.title}</div>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 5, flexWrap: 'wrap', minWidth: 0 }}>
-          <span style={{ fontSize: 13.5, fontWeight: 800, color: isFlash ? T.red : T.gray900, letterSpacing: '-0.3px', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.2 }}>{formatPrice(price)}</span>
+      <div className="soko-product-card-body">
+        <div className="soko-product-card-title">{listing.title}</div>
+        <div className="soko-product-card-price" style={{ color: isFlash ? T.red : T.greenD }}>
+          {formatPrice(price)}
           {isFlash && listing.price > price && (
-            <>
-              <span style={{ fontSize: 10.5, fontWeight: 600, color: T.gray500, textDecoration: 'line-through', whiteSpace: 'normal' }}>{formatPrice(listing.price)}</span>
-              <span style={{ fontSize: 9.5, fontWeight: 800, color: T.red }}>-{Math.round((1 - price / listing.price) * 100)}%</span>
-            </>
+            <span style={{ marginLeft: 5, fontSize: 11, fontWeight: 600, color: T.gray500, textDecoration: 'line-through' }}>{formatPrice(listing.price)}</span>
           )}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, color: T.gray600 }}>
-            <span style={{ color: T.green }}>{Icon.pin(13)}</span>
-            <span>{listing.city || 'Malawi'}</span>
-          </div>
-          {isVerif && Icon.verify(13)}
+        <div className="soko-product-card-meta">
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+            <span style={{ color: T.gray500, flexShrink: 0, display: 'flex' }}>{Icon.pin(11)}</span>
+            {listing.city || 'Malawi'}
+          </span>
+          {isVerif && <span style={{ flexShrink: 0, display: 'flex' }} title="Verified seller">{Icon.verify(12)}</span>}
         </div>
+      </div>
+      <ProductCardActions listing={listing} user={user} navigate={navigate} />
+    </div>
+  )
+}
+
+function SkeletonListingCard() {
+  return (
+    <div
+      className="soko-product-card soko-card-bg"
+      style={{ border: `1px solid ${T.gray100}`, boxShadow: T.shadow }}
+      aria-hidden="true"
+    >
+      <div className="soko-product-card-media skeleton-soft" />
+      <div className="soko-product-card-body">
+        <div className="skeleton" style={{ height: 12, width: '90%', borderRadius: 6 }} />
+        <div className="skeleton" style={{ height: 12, width: '58%', borderRadius: 6, marginTop: 6 }} />
+        <div className="skeleton" style={{ height: 15, width: '42%', borderRadius: 6, marginTop: 8 }} />
+        <div className="skeleton" style={{ height: 10, width: '36%', borderRadius: 6, marginTop: 'auto' }} />
+      </div>
+      <div className="soko-product-card-actions">
+        <div className="skeleton" style={{ flex: 1, height: 32, borderRadius: 10 }} />
+        <div className="skeleton" style={{ width: 32, height: 32, borderRadius: 10, flexShrink: 0 }} />
       </div>
     </div>
   )
 }
 
-function SkeletonListingCard({ large = false }) {
+/** Full home rail placeholder while listings boot */
+function HomeSectionSkeleton({ titleW = '38%', cards = 5, cardW = 160 }) {
   return (
-    <div className="soko-card-bg" style={{ background: T.white, borderRadius: 12, overflow: 'hidden', border: `1px solid ${T.gray100}`, height: large ? 360 : 220, display: 'flex', flexDirection: 'column' }}>
-      <div className="skeleton" style={{ width: '100%', height: '62%' }} />
-      <div style={{ padding: '8px 10px', height: '38%', display: 'flex', flexDirection: 'column', gap: 6, background: '#fff', justifyContent: 'center' }}>
-        <div className="skeleton" style={{ height: 12, width: '90%', borderRadius: 4 }} />
-        <div className="skeleton" style={{ height: 14, width: '50%', borderRadius: 4 }} />
-        <div className="skeleton" style={{ height: 10, width: '40%', borderRadius: 4 }} />
+    <section style={{ padding: '20px 0 8px', background: '#fff' }}>
+      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 20px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+          <div className="skeleton" style={{ height: 20, width: titleW, borderRadius: 8 }} />
+          <div className="skeleton" style={{ height: 14, width: 72, borderRadius: 8 }} />
+        </div>
+        <div className="soko-scroll" style={{ display: 'flex', gap: 12, overflow: 'hidden' }}>
+          {Array.from({ length: cards }).map((_, i) => (
+            <div key={i} style={{ flex: `0 0 ${cardW}px`, width: cardW }}>
+              <SkeletonListingCard />
+            </div>
+          ))}
+        </div>
       </div>
-    </div>
+    </section>
   )
 }
 
@@ -2069,75 +2278,22 @@ function SkeletonListingCard({ large = false }) {
    "Create Story" defers to the parent's handlers, which open the real
    StoryViewer / StatusUploadModal already wired up in HomeStatusRow.
 ───────────────────────────────────────────────────────────────────────────── */
-function LiveStoriesCard({ navigate, stories, loading, onOpenStory, onCreateStory }) {
-  const groups = useMemo(() => {
-    const seen = new Map()
-    for (const s of stories) {
-      if (!seen.has(s.user_id)) seen.set(s.user_id, s)
-    }
-    return [...seen.values()].slice(0, 4)
-  }, [stories])
-
-  const RING_COLORS = ['linear-gradient(135deg,#0F9D58,#0a7a44)', '#ea4335', '#1A73E8', '#7c5cff']
-
-  return (
-    <div className="soko-card-bg" style={{ background: '#fff', borderRadius: 18, border: `1px solid ${T.gray200}`, boxShadow: T.shadow, padding: 18, height: '100%', display: 'flex', flexDirection: 'column' }}>
-     
-
-      <div style={{ display: 'flex', gap: 14, marginBottom: 16, flexWrap: 'wrap' }}>
-        {loading
-          ? [1,2,3,4].map(i => <div key={i} className="skeleton" style={{ width: 52, height: 52, borderRadius: '50%' }} />)
-          : groups.length > 0
-            ? groups.map((s, i) => (
-              <button key={s.user_id} onClick={() => onOpenStory(s)} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, width: 56 }}>
-                <div style={{ position:'relative', width:52, height:52 }}>
-  <div style={{ width:52, height:52, borderRadius:'50%', padding:2, background:RING_COLORS[i % RING_COLORS.length], display:'flex', alignItems:'center', justifyContent:'center' }}>
-    <div style={{ width:'100%', height:'100%', borderRadius:'50%', overflow:'hidden', border:'2px solid #fff', background:T.gray100, display:'flex', alignItems:'center', justifyContent:'center', fontSize:16, fontWeight:800, color:T.gray600 }}>
-      {s.profiles?.avatar_url
-        ? <img src={s.profiles.avatar_url} alt="" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
-        : (s.profiles?.full_name?.[0] || 'S').toUpperCase()
-      }
-    </div>
-  </div>
-  {i === 0 && (
-    <div style={{ position:'absolute', bottom:-6, left:'50%', transform:'translateX(-50%)', background:T.red, color:'#fff', fontSize:8, fontWeight:800, borderRadius:50, padding:'2px 5px', whiteSpace:'nowrap', border:'1.5px solid #fff' }}>+LIVE</div>
-  )}
-</div>
-                <span style={{ fontSize: 10, fontWeight: 600, color: T.gray800, maxWidth: 56, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {s.profiles?.full_name?.split(' ')[0] || 'Seller'}
-                </span>
-              </button>
-            ))
-            : <p style={{ fontSize: 12.5, color: T.gray600 }}>No active stories right now.</p>
-        }
-      </div>
-
-      <p style={{ fontSize: 12, color: T.gray600, lineHeight: 1.5, marginBottom: 14, textAlign: 'center' }}>
-        Create a story to showcase your product. Stories disappear in 24 hours.
-      </p>
-
-      <button onClick={onCreateStory} className="soko-btn-primary" style={{ width: '100%', justifyContent: 'center', marginTop: 'auto' }}>
-        {Icon.plus(14)} Create Story
-      </button>
-    </div>
-  )
-}
-
 /* ─────────────────────────────────────────────────────────────────────────────
-   FEATURED LISTINGS + LIVE STORIES — two-column row matching the reference:
-   Featured Listings (wide, horizontal scroll) on the left, Live Stories
-   (compact card) on the right.
+   FEATURED LISTINGS — full-width rail (stories live in HomeStoriesStrip below)
 ───────────────────────────────────────────────────────────────────────────── */
-function FeaturedListingsRow({ listings, navigate, loading, stories, storiesLoading, onOpenStory, onCreateStory }) {
+/** Max cards on the featured rail — enough for a full horizontal scroll, not a dump */
+const FEATURED_HOME_CAP = 12
+
+function FeaturedListingsRow({ listings, navigate, loading, user, savedIds, onToggleSave }) {
   // Phase 3.1: dedicated featured rows only — never derived from latest posts
   const featured = useMemo(
-    () => (listings || []).filter(l => isListingFeatured(l)),
+    () => (listings || []).filter(l => isListingFeatured(l)).slice(0, FEATURED_HOME_CAP),
     [listings],
   )
   if (!loading && featured.length === 0) return null
   return (
     <section className="soko-section-pad soko-featured-section" style={{ padding: '24px 20px 4px', background: '#fff' }}>
-      <div style={{ maxWidth: 1400, margin: '0 auto' }}>
+      <div style={{ maxWidth: 1400, margin: '0 auto', minWidth: 0 }}>
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           marginBottom: 14, gap: 12,
@@ -2148,123 +2304,457 @@ function FeaturedListingsRow({ listings, navigate, loading, stories, storiesLoad
           <button
             type="button"
             onClick={() => navigate('/listings')}
-            style={{ background: 'none', border: 'none', fontSize: 13, fontWeight: 600, color: T.green, cursor: 'pointer', flexShrink: 0 }}
+            className="soko-link-quiet"
+            style={{ flexShrink: 0 }}
           >
             View all
           </button>
         </div>
 
-        <div className="soko-featured-stories-grid" style={{
-          display: 'grid',
-          gridTemplateColumns: 'minmax(0, 1fr) 260px',
-          gap: 16,
-          alignItems: 'start',
-        }}>
-
-          {/* Featured listings — horizontal snap rail (padding keeps top yellow edge visible) */}
-          <div style={{ minWidth: 0, overflow: 'hidden' }}>
-            <div className="soko-scroll soko-featured-rail" style={{
-              display: 'flex', gap: 12, overflowX: 'auto',
+        <div style={{ minWidth: 0, maxWidth: '100%', overflow: 'hidden' }}>
+          <div
+            className="soko-scroll soko-featured-rail"
+            style={{
+              gap: 12,
               paddingTop: 4,
               paddingBottom: 8,
-              width: '100%',
-              scrollSnapType: 'x mandatory',
-              WebkitOverflowScrolling: 'touch',
-            }}>
-              {loading
-                ? [1, 2, 3, 4].map(i => (
-                  <div key={i} className="soko-featured-card-wrap" style={{ flexShrink: 0, width: 175, scrollSnapAlign: 'start' }}>
-                    <SkeletonListingCard />
-                  </div>
-                ))
-                : featured.map((l, i) => (
-                  <div key={l.id} className="soko-featured-card-wrap" style={{ flexShrink: 0, width: 175, scrollSnapAlign: 'start' }}>
-                    <PremiumListingCard
-                      listing={l}
-                      delay={Math.min(i, 12) * 0.03}
-                      onClick={() => navigate('/listing/' + l.id)}
-                    />
-                  </div>
-                ))}
-            </div>
-          </div>
-
-          {/* Live Stories — desktop only in this column */}
-          <div className="soko-nav-desktop" style={{ width: 260, flexShrink: 0 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <span style={{ fontFamily: T.fontDisplay, fontSize: 16, fontWeight: 800, color: T.gray900 }}>Live Stories</span>
-              <button type="button" onClick={() => navigate('/status')} style={{ background: 'none', border: 'none', fontSize: 13, fontWeight: 600, color: T.green, cursor: 'pointer' }}>View all</button>
-            </div>
-            <LiveStoriesCard
-              navigate={navigate} stories={stories}
-              loading={storiesLoading} onOpenStory={onOpenStory}
-              onCreateStory={onCreateStory}
-            />
-          </div>
-        </div>
-
-        {/* Mobile: compact stories strip (desktop uses right column) */}
-        <div className="soko-stories-mobile" style={{ display: 'none', marginTop: 18 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <span className="soko-section-title" style={{ fontFamily: T.fontDisplay, fontSize: 16, fontWeight: 800, color: T.gray900 }}>Live Stories</span>
-            <button type="button" onClick={() => navigate('/status')} style={{ background: 'none', border: 'none', fontSize: 13, fontWeight: 600, color: T.green, cursor: 'pointer', minHeight: 44, minWidth: 44 }}>View all</button>
-          </div>
-          <div className="soko-scroll" style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 4, WebkitOverflowScrolling: 'touch' }}>
-            <button
-              type="button"
-              onClick={onCreateStory}
-              style={{
-                flexShrink: 0, width: 64, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-                background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-              }}
-            >
-              <div style={{
-                width: 56, height: 56, borderRadius: '50%', border: `2px dashed ${T.gray300}`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.green, background: T.gray50,
-              }}>
-                {Icon.plus(18)}
-              </div>
-              <span style={{ fontSize: 10, fontWeight: 600, color: T.gray700 }}>Yours</span>
-            </button>
-            {storiesLoading
-              ? [1, 2, 3, 4].map(i => (
-                <div key={i} className="skeleton" style={{ flexShrink: 0, width: 56, height: 56, borderRadius: '50%' }} />
+            }}
+          >
+            {loading
+              ? [1, 2, 3, 4, 5, 6].map(i => (
+                <div key={i} className="soko-featured-card-wrap">
+                  <SkeletonListingCard />
+                </div>
               ))
-              : (stories || []).slice(0, 12).map((s, i) => (
-                <button
-                  key={s.id || i}
-                  type="button"
-                  onClick={() => onOpenStory?.(s, i)}
-                  style={{
-                    flexShrink: 0, width: 64, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
-                    background: 'none', border: 'none', cursor: 'pointer', padding: 0,
-                  }}
-                >
-                  <div style={{
-                    width: 56, height: 56, borderRadius: '50%', padding: 2,
-                    background: `linear-gradient(135deg, ${T.amber}, ${T.green})`,
-                  }}>
-                    <div style={{
-                      width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden',
-                      border: '2px solid #fff', background: T.gray100,
-                    }}>
-                      {s.profiles?.avatar_url || s.media_url
-                        ? <img src={s.profiles?.avatar_url || s.media_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        : <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center', fontSize: 16, fontWeight: 700, color: T.gray500 }}>
-                            {(s.profiles?.full_name || 'S')[0]}
-                          </div>}
-                    </div>
-                  </div>
-                  <span style={{
-                    fontSize: 10, fontWeight: 600, color: T.gray800, maxWidth: 60,
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                  }}>
-                    {s.profiles?.full_name?.split(' ')[0] || 'Seller'}
-                  </span>
-                </button>
+              : featured.map((l, i) => (
+                <div key={l.id} className="soko-featured-card-wrap">
+                  <PremiumListingCard
+                    listing={l}
+                    delay={Math.min(i, 6) * 0.02}
+                    onClick={() => navigate('/listing/' + l.id)}
+                    user={user}
+                    navigate={navigate}
+                    saved={savedIds?.has?.(l.id)}
+                    onToggleSave={onToggleSave}
+                  />
+                </div>
               ))}
           </div>
         </div>
+      </div>
+    </section>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   HOME STORIES STRIP — status/stories between Featured and Latest
+   Ring segments = live statuses; green/amber = unviewed, gray = viewed.
+   Shop owners show business name + logo instead of personal profile.
+───────────────────────────────────────────────────────────────────────────── */
+
+/** Unviewed = yellow (matches status rows elsewhere); viewed = muted gray */
+const STORY_RING_ACTIVE = '#f9a825'
+const STORY_RING_VIEWED = '#9aa0a6'
+const STORY_VIEWED_KEY = 'viewedStories'
+
+function loadViewedStoryIds() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(STORY_VIEWED_KEY) || '[]')
+    return new Set(Array.isArray(raw) ? raw : [])
+  } catch {
+    return new Set()
+  }
+}
+
+function persistViewedStoryIds(set) {
+  try {
+    localStorage.setItem(STORY_VIEWED_KEY, JSON.stringify([...set]))
+  } catch { /* ignore */ }
+}
+
+/**
+ * SVG ring: one arc per status.
+ * `items` = [{ id, viewed }] oldest → newest (clock starts at top).
+ */
+function StoryStatusRing({ items = [], size = 64, children }) {
+  const list = items.length ? items.slice(0, 12) : [{ id: '_', viewed: false }]
+  const n = list.length
+  const stroke = size >= 60 ? 2.85 : 2.5
+  const pad = 1
+  const r = (size - stroke) / 2 - pad
+  const c = 2 * Math.PI * r
+  const gap = n <= 1 ? 0 : Math.max(4.5, c * 0.03)
+  const seg = (c - gap * n) / n
+  const cx = size / 2
+  const cy = size / 2
+  const allViewed = list.every(x => x.viewed)
+
+  return (
+    <div
+      className="soko-stories-strip-ring"
+      style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}
+      data-status-count={n}
+      data-all-viewed={allViewed ? '1' : '0'}
+    >
+      <svg
+        width={size}
+        height={size}
+        viewBox={`0 0 ${size} ${size}`}
+        aria-hidden="true"
+        style={{
+          position: 'absolute', inset: 0,
+          transform: 'rotate(-90deg)',
+          overflow: 'visible',
+        }}
+      >
+        {n > 1 && (
+          <circle cx={cx} cy={cy} r={r} fill="none" stroke={T.gray200} strokeWidth={stroke} />
+        )}
+        {list.map((item, i) => (
+          <circle
+            key={item.id || i}
+            cx={cx}
+            cy={cy}
+            r={r}
+            fill="none"
+            stroke={item.viewed ? STORY_RING_VIEWED : STORY_RING_ACTIVE}
+            strokeWidth={stroke}
+            strokeLinecap="round"
+            strokeDasharray={n <= 1 ? `${c} 0` : `${Math.max(0.5, seg)} ${Math.max(0, c - seg)}`}
+            strokeDashoffset={n <= 1 ? 0 : -(i * (seg + gap))}
+            style={{ transition: 'stroke 0.25s ease' }}
+          />
+        ))}
+      </svg>
+      <div
+        className="soko-stories-strip-avatar-wrap"
+        style={{
+          position: 'absolute',
+          inset: stroke + 1.5,
+          borderRadius: '50%',
+          background: '#fff',
+          padding: 2,
+          boxSizing: 'border-box',
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function HomeStoriesStrip({ navigate, stories, loading, onOpenStory, onCreateStory, currentUserId }) {
+  const [viewedIds, setViewedIds] = useState(loadViewedStoryIds)
+  const [shopByOwner, setShopByOwner] = useState({})
+
+  // One rail item per user; items = all live statuses (oldest first for ring order)
+  const groups = useMemo(() => {
+    const map = new Map()
+    for (const s of stories || []) {
+      const uid = s.user_id
+      if (!uid) continue
+      if (!map.has(uid)) {
+        map.set(uid, { user_id: uid, items: [s], lead: s })
+      } else {
+        const g = map.get(uid)
+        g.items.push(s)
+        // lead = newest for avatar fallback
+        if (new Date(s.created_at) > new Date(g.lead.created_at || 0)) g.lead = s
+      }
+    }
+    return [...map.values()].map(g => {
+      const items = [...g.items].sort(
+        (a, b) => new Date(a.created_at) - new Date(b.created_at),
+      )
+      return { ...g, items, count: items.length }
+    }).slice(0, 20)
+  }, [stories])
+
+  // Merge server status_views + localStorage for accurate viewed segments
+  useEffect(() => {
+    let cancelled = false
+    const ids = (stories || []).map(s => s.id).filter(Boolean)
+    if (!currentUserId || ids.length === 0) return undefined
+    ;(async () => {
+      try {
+        const { data, error } = await supabase
+          .from('status_views')
+          .select('status_id')
+          .eq('viewer_id', currentUserId)
+          .in('status_id', ids)
+        if (cancelled || error || !data) return
+        setViewedIds(prev => {
+          const next = new Set(prev)
+          data.forEach(r => { if (r.status_id) next.add(r.status_id) })
+          persistViewedStoryIds(next)
+          return next
+        })
+      } catch { /* ignore */ }
+    })()
+    return () => { cancelled = true }
+  }, [currentUserId, stories])
+
+  // Business name + logo for story authors who own a shop
+  useEffect(() => {
+    let cancelled = false
+    const uids = groups.map(g => g.user_id).filter(Boolean)
+    if (uids.length === 0) {
+      setShopByOwner({})
+      return undefined
+    }
+    ;(async () => {
+      try {
+        const { data, error } = await supabase
+          .from('shops')
+          .select('owner_id, name, logo_url, is_verified, slug')
+          .in('owner_id', uids)
+        if (cancelled || error) return
+        const map = {}
+        for (const sh of data || []) {
+          if (!sh.owner_id) continue
+          // Prefer first shop; if multiple, keep one with a logo
+          if (!map[sh.owner_id] || (sh.logo_url && !map[sh.owner_id].logo_url)) {
+            map[sh.owner_id] = sh
+          }
+        }
+        setShopByOwner(map)
+      } catch { /* ignore */ }
+    })()
+    return () => { cancelled = true }
+  }, [groups])
+
+  function markGroupViewed(statusIds) {
+    if (!statusIds?.length) return
+    setViewedIds(prev => {
+      const next = new Set(prev)
+      statusIds.forEach(id => next.add(id))
+      persistViewedStoryIds(next)
+      return next
+    })
+  }
+
+  function handleOpen(g) {
+    const ids = g.items.map(x => x.id).filter(Boolean)
+    markGroupViewed(ids)
+    onOpenStory?.(g.lead, g)
+  }
+
+  return (
+    <section className="soko-section-pad soko-stories-strip" style={{ padding: '18px 20px 12px', background: '#fff', borderTop: `1px solid ${T.gray100}` }}>
+      <style>{`
+        .soko-stories-strip-rail {
+          display: flex;
+          gap: 14px;
+          overflow-x: auto;
+          padding: 4px 2px 8px;
+          scroll-snap-type: x mandatory;
+          -webkit-overflow-scrolling: touch;
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+        }
+        .soko-stories-strip-rail::-webkit-scrollbar { display: none; }
+        .soko-stories-strip-item {
+          flex-shrink: 0;
+          width: 76px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 6px;
+          background: none;
+          border: none;
+          cursor: pointer;
+          padding: 0;
+          scroll-snap-align: start;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .soko-stories-strip-item:active { opacity: 0.88; }
+        .soko-stories-strip-create {
+          width: 64px;
+          height: 64px;
+          border-radius: 50%;
+          box-sizing: border-box;
+          border: 2px dashed ${T.gray300};
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: ${T.gray700};
+          background: ${T.gray50};
+          flex-shrink: 0;
+        }
+        .soko-stories-strip-avatar {
+          width: 100%;
+          height: 100%;
+          border-radius: 50%;
+          overflow: hidden;
+          background: ${T.gray100};
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 17px;
+          font-weight: 800;
+          color: ${T.gray600};
+        }
+        .soko-stories-strip-name {
+          font-size: 11px;
+          font-weight: 600;
+          color: ${T.gray800};
+          max-width: 74px;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          text-align: center;
+        }
+        .soko-stories-strip-name.is-shop {
+          font-weight: 700;
+          color: ${T.gray900};
+        }
+        .soko-stories-strip-count {
+          position: absolute;
+          right: -2px;
+          bottom: -1px;
+          min-width: 18px;
+          height: 18px;
+          padding: 0 5px;
+          border-radius: 999px;
+          background: ${STORY_RING_ACTIVE};
+          color: #1a1200;
+          font-size: 10px;
+          font-weight: 800;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          border: 2px solid #fff;
+          box-sizing: border-box;
+          line-height: 1;
+          z-index: 2;
+        }
+        .soko-stories-strip-count.is-all-viewed {
+          background: ${STORY_RING_VIEWED};
+          color: #fff;
+        }
+        @media (max-width: 768px) {
+          .soko-stories-strip {
+            padding: 14px 14px 10px !important;
+          }
+          .soko-stories-strip-item { width: 66px; }
+          .soko-stories-strip-create { width: 56px; height: 56px; }
+          .soko-stories-strip-name { font-size: 10px; max-width: 62px; }
+          .soko-stories-strip-count {
+            min-width: 16px;
+            height: 16px;
+            font-size: 9px;
+            padding: 0 4px;
+          }
+        }
+      `}</style>
+
+      <div style={{ maxWidth: 1400, margin: '0 auto' }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          marginBottom: 12, gap: 12,
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            <span className="soko-section-title" style={{ fontFamily: T.fontDisplay, fontSize: 17, fontWeight: 800, color: T.gray900 }}>
+              Live Stories
+            </span>
+            <span style={{
+              fontSize: 10, fontWeight: 800, letterSpacing: 0.4, textTransform: 'uppercase',
+              color: T.red, background: '#fdecea', borderRadius: 999, padding: '3px 8px',
+            }}>
+              Status
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => navigate('/status')}
+            className="soko-link-quiet"
+            style={{ flexShrink: 0, minHeight: 36 }}
+          >
+            View all
+          </button>
+        </div>
+
+        <div className="soko-scroll soko-stories-strip-rail">
+          <button type="button" className="soko-stories-strip-item" onClick={onCreateStory} aria-label="Create story">
+            <div className="soko-stories-strip-create">
+              {Icon.plus(20)}
+            </div>
+            <span className="soko-stories-strip-name">Yours</span>
+          </button>
+
+          {loading
+            ? [1, 2, 3, 4, 5, 6, 7, 8].map(i => (
+              <div key={i} className="soko-stories-strip-item" aria-hidden="true">
+                <div className="skeleton" style={{ width: 64, height: 64, borderRadius: '50%', flexShrink: 0 }} />
+                <div className="skeleton" style={{ width: 48, height: 10, borderRadius: 4 }} />
+              </div>
+            ))
+            : groups.map((g) => {
+              const s = g.lead
+              const shop = shopByOwner[g.user_id]
+              const isShop = !!(shop?.name)
+              const displayName = isShop
+                ? shop.name
+                : (s.profiles?.full_name?.split(' ')[0] || 'Seller')
+              const logoUrl = isShop
+                ? (shop.logo_url || s.profiles?.avatar_url || s.media_urls?.[0] || null)
+                : (s.profiles?.avatar_url || s.media_urls?.[0] || null)
+              const initial = (displayName || 'S')[0].toUpperCase()
+              const ringItems = g.items.map(st => ({
+                id: st.id,
+                viewed: viewedIds.has(st.id),
+              }))
+              const unviewed = ringItems.filter(x => !x.viewed).length
+              const allViewed = unviewed === 0
+              const count = g.count
+
+              return (
+                <button
+                  key={g.user_id || s.id}
+                  type="button"
+                  className="soko-stories-strip-item"
+                  onClick={() => handleOpen(g)}
+                  aria-label={
+                    isShop
+                      ? `${displayName}: ${count} status${count === 1 ? '' : 'es'}, ${unviewed} unviewed`
+                      : `${displayName}: ${count} status${count === 1 ? '' : 'es'}, ${unviewed} unviewed`
+                  }
+                  title={
+                    allViewed
+                      ? `${count} status${count === 1 ? '' : 'es'} · all viewed`
+                      : `${unviewed} unviewed of ${count}`
+                  }
+                >
+                  <div style={{ position: 'relative' }}>
+                    <StoryStatusRing items={ringItems} size={64}>
+                      <div className="soko-stories-strip-avatar">
+                        {logoUrl
+                          ? <img src={logoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          : initial}
+                      </div>
+                    </StoryStatusRing>
+                    {count > 1 && (
+                      <span
+                        className={`soko-stories-strip-count${allViewed ? ' is-all-viewed' : ''}`}
+                        aria-hidden="true"
+                      >
+                        {count > 9 ? '9+' : count}
+                      </span>
+                    )}
+                  </div>
+                  <span className={`soko-stories-strip-name${isShop ? ' is-shop' : ''}`}>
+                    {displayName}
+                  </span>
+                </button>
+              )
+            })}
+        </div>
+
+        {!loading && groups.length === 0 && (
+          <p style={{ fontSize: 13, color: T.gray600, margin: '4px 0 0', fontWeight: 500 }}>
+            No live stories yet — be the first to share a status.
+          </p>
+        )}
       </div>
     </section>
   )
@@ -2303,54 +2793,46 @@ function categoryChipLabel(cat) {
   return map[cat] || cat || 'Other'
 }
 
-function LatestListingCard({ listing, delay = 0, onClick }) {
+function LatestListingCard({ listing, delay = 0, onClick, user, navigate, saved, onToggleSave }) {
   const [hov, setHov]       = useState(false)
-  const [liked, setLiked]   = useState(false)
   const [imgErr, setImgErr] = useState(false)
+  const [saveBusy, setSaveBusy] = useState(false)
 
   const isVerif = listing.seller_verified || listing.shop_is_verified
   const isNew   = listing.created_at && (Date.now() - new Date(listing.created_at).getTime()) < 86400000
   const isFeat  = isListingFeatured(listing)
   const isFlash = isFlashActive(listing)
   const meta    = catIcon(listing.category)
+  const price   = isFlash ? (listing.flash_sale_price ?? listing.price) : listing.price
   const trustCount = listing.view_count ?? listing.inquiry_count ?? null
 
-  function handleLike(e) {
+  async function handleSave(e) {
     e.stopPropagation()
-    setLiked(l => !l)
+    if (saveBusy) return
+    setSaveBusy(true)
+    try { await onToggleSave?.(listing.id) } finally { setSaveBusy(false) }
   }
 
   return (
     <div
-      className="soko-latest-card"
+      className={`soko-product-card soko-latest-card soko-card-bg${isFeat && isFlash ? ' soko-dual-badge-card' : ''}`}
       onClick={onClick}
       onMouseEnter={() => setHov(true)}
       onMouseLeave={() => setHov(false)}
       style={{
-        background: T.white,
-        borderRadius: T.radius,
-        overflow: 'hidden',
-        cursor: 'pointer',
         border: isFeat && isFlash
           ? `1.5px solid ${hov ? T.red : T.amber}`
           : isFeat ? `1.5px solid ${hov ? T.amber : '#f5dfa3'}`
           : isFlash ? `1.5px solid ${T.red}44`
           : `1px solid ${hov ? '#cdeedc' : T.gray100}`,
-        boxShadow: isFeat && isFlash
-          ? '0 10px 28px rgba(249,171,0,0.18), 0 4px 14px rgba(234,67,53,0.16)'
-          : hov ? '0 18px 40px rgba(15,23,42,0.14), 0 6px 14px rgba(15,157,88,0.10)' : T.shadow,
-        transform: hov ? 'translateY(-6px)' : 'translateY(0)',
-        transition: 'transform 0.32s cubic-bezier(0.22,1,0.36,1), box-shadow 0.32s ease, border-color 0.32s ease',
-        animation: `fadeUp 0.5s cubic-bezier(0.22,1,0.36,1) ${delay}s both`,
-        display: 'flex', flexDirection: 'column',
-        height: '100%',
-        minWidth: 0,
+        boxShadow: hov ? T.shadowMd : T.shadow,
+        transform: hov ? 'translateY(-4px)' : 'translateY(0)',
+        transition: 'transform 0.28s cubic-bezier(0.22,1,0.36,1), box-shadow 0.28s ease, border-color 0.28s ease',
+        animation: `fadeUp 0.45s cubic-bezier(0.22,1,0.36,1) ${delay}s both`,
       }}
     >
-      {/* Photo stage — ~65% of card height via a fixed-height band rather than
-          aspect-ratio, so the body (title/price/meta) keeps a consistent height
-          across cards regardless of image shape. */}
-      <div className="soko-latest-photo" style={{ position: 'relative', width: '100%', height: 168, flexShrink: 0, overflow: 'hidden', background: T.gray100 }}>
+      {/* Square media — aspect-ratio keeps every card equal regardless of image shape */}
+      <div className="soko-product-card-media soko-latest-photo">
         {listing.images?.[0] && !imgErr ? (
           <img
             src={listing.images[0]}
@@ -2359,28 +2841,24 @@ function LatestListingCard({ listing, delay = 0, onClick }) {
             decoding="async"
             onError={() => setImgErr(true)}
             style={{
-              width: '100%', height: '100%', objectFit: 'cover',
-              transform: hov ? 'scale(1.07)' : 'scale(1)',
-              transition: 'transform 0.5s cubic-bezier(0.22,1,0.36,1)',
+              transform: hov ? 'scale(1.05)' : 'scale(1)',
+              transition: 'transform 0.45s cubic-bezier(0.22,1,0.36,1)',
             }}
           />
         ) : (
-          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 38, color: T.gray400 }}>
+          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36, color: T.gray400 }}>
             {meta.emoji}
           </div>
         )}
 
-        {/* Badge stack: Featured / Hot Deal take priority over NEW, since they
-            carry monetization signal — but both can co-occur (stacked), and
-            NEW still shows if there's room and nothing else present. */}
-        <div className="soko-latest-badge-stack" style={{ position: 'absolute', top: 10, left: 10, zIndex: 3, display: 'flex', flexDirection: 'column', gap: 5 }}>
-         {isFeat && isFlash ? (
+        <div className="soko-latest-badge-stack" style={{ position: 'absolute', top: 8, left: 8, zIndex: 3, display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {isFeat && isFlash ? (
             <span className="soko-hotdeal-pulse" style={{
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
               background: `linear-gradient(135deg,${T.red},#c62828)`, color: '#fff', borderRadius: '50%',
               width: 24, height: 24, boxShadow: '0 3px 10px rgba(234,67,53,0.5)',
             }}>
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="#fff">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="#fff">
                 <path d="M17.66 11.2C17.43 10.9 17.15 10.64 16.89 10.38C16.22 9.78 15.46 9.35 14.82 8.72C13.33 7.26 13 4.85 13.95 3C13 3.23 12.17 3.75 11.46 4.32C8.87 6.4 7.85 10.07 9.07 13.22C9.11 13.32 9.15 13.42 9.15 13.55C9.15 13.77 9 13.97 8.8 14.05C8.57 14.15 8.33 14.09 8.14 13.93C8.08 13.88 8.04 13.83 8 13.76C6.87 12.33 6.69 10.28 7.45 8.64C5.78 10 4.87 12.3 5 14.47C5.06 14.97 5.12 15.47 5.29 15.97C5.43 16.57 5.7 17.17 6 17.7C7.08 19.43 8.95 20.67 10.96 20.92C13.1 21.19 15.39 20.8 17.03 19.32C18.86 17.66 19.5 15 18.56 12.72L18.43 12.46C18.22 12 17.66 11.2 17.66 11.2Z"/>
               </svg>
             </span>
@@ -2388,11 +2866,11 @@ function LatestListingCard({ listing, delay = 0, onClick }) {
             <>
               {isFeat && (
                 <span style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 5, width: 'fit-content',
+                  display: 'inline-flex', alignItems: 'center', gap: 3, width: 'fit-content',
                   background: '#FF7A1A', color: '#fff', borderRadius: 50,
-                  padding: '6px 14px', fontSize: 11.5, fontWeight: 800, lineHeight: 1,
-                  boxShadow: '0 3px 10px rgba(255,122,26,0.4)', whiteSpace: 'nowrap',
-                }}>{Icon.star(12, '#fff')} Featured</span>
+                  padding: '4px 8px', fontSize: 10, fontWeight: 800, lineHeight: 1,
+                  boxShadow: '0 2px 8px rgba(255,122,26,0.4)', whiteSpace: 'nowrap',
+                }}>{Icon.star(10, '#fff')} Featured</span>
               )}
               {isFlash && (
                 <span className="soko-hotdeal-pulse" style={{
@@ -2400,7 +2878,7 @@ function LatestListingCard({ listing, delay = 0, onClick }) {
                   background: `linear-gradient(135deg,${T.red},#c62828)`, color: '#fff', borderRadius: '50%',
                   width: 24, height: 24, boxShadow: '0 3px 10px rgba(234,67,53,0.5)',
                 }}>
-                  <svg width="13" height="13" viewBox="0 0 24 24" fill="#fff">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="#fff">
                     <path d="M17.66 11.2C17.43 10.9 17.15 10.64 16.89 10.38C16.22 9.78 15.46 9.35 14.82 8.72C13.33 7.26 13 4.85 13.95 3C13 3.23 12.17 3.75 11.46 4.32C8.87 6.4 7.85 10.07 9.07 13.22C9.11 13.32 9.15 13.42 9.15 13.55C9.15 13.77 9 13.97 8.8 14.05C8.57 14.15 8.33 14.09 8.14 13.93C8.08 13.88 8.04 13.83 8 13.76C6.87 12.33 6.69 10.28 7.45 8.64C5.78 10 4.87 12.3 5 14.47C5.06 14.97 5.12 15.47 5.29 15.97C5.43 16.57 5.7 17.17 6 17.7C7.08 19.43 8.95 20.67 10.96 20.92C13.1 21.19 15.39 20.8 17.03 19.32C18.86 17.66 19.5 15 18.56 12.72L18.43 12.46C18.22 12 17.66 11.2 17.66 11.2Z"/>
                   </svg>
                 </span>
@@ -2410,148 +2888,127 @@ function LatestListingCard({ listing, delay = 0, onClick }) {
           {isNew && !isFeat && !isFlash && (
             <span style={{
               display: 'inline-flex', alignItems: 'center', width: 'fit-content',
-              height: 21, boxSizing: 'border-box',
-              background: T.green, color: '#fff', borderRadius: 50,
-              padding: '0 9px 0 8px', fontSize: 9.5, fontWeight: 800, lineHeight: 1,
-              letterSpacing: 0.4, boxShadow: '0 3px 10px rgba(15,157,88,0.4)',
-              whiteSpace: 'nowrap',
+              height: 20, boxSizing: 'border-box',
+              background: T.blue, color: '#fff', borderRadius: 50,
+              padding: '0 8px', fontSize: 9.5, fontWeight: 800, lineHeight: 1,
+              letterSpacing: 0.3, boxShadow: '0 2px 8px rgba(26,115,232,0.3)',
+              whiteSpace: 'nowrap', gap: 4,
             }}>
-              <span style={{ width: 10, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#fff', animation: 'pulse 1.8s ease-in-out infinite' }} />
-              </span>
+              <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#fff', animation: 'pulse 1.8s ease-in-out infinite' }} />
               NEW
             </span>
           )}
         </div>
 
-        {/* Wishlist — floating circular, fills on like */}
-        <button
-          className="soko-latest-wish"
-          onClick={handleLike}
-          aria-label={liked ? 'Remove from wishlist' : 'Add to wishlist'}
-          style={{
-            position: 'absolute', top: 9, right: 9, zIndex: 4,
-            width: 30, height: 30, borderRadius: '50%', border: 'none', cursor: 'pointer',
-            background: 'rgba(255,255,255,0.92)', backdropFilter: 'blur(6px)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: liked ? T.red : T.gray700,
-            boxShadow: '0 3px 10px rgba(0,0,0,0.15)',
-            transform: hov || liked ? 'scale(1)' : 'scale(0.92)',
-            opacity: hov || liked ? 1 : 0.88,
-            transition: 'transform 0.2s cubic-bezier(0.34,1.4,0.64,1), opacity 0.2s, color 0.2s',
-          }}
-        >
-          {Icon.heart(14, liked ? 'currentColor' : 'none')}
-        </button>
+        <ProductCardSaveBtn saved={saved} busy={saveBusy} onToggle={handleSave} />
       </div>
 
-      {/* Body — title first, then price, then location/time. Verified now lives
-          here as a small inline mark next to the title, not a loud image badge. */}
-      <div className="soko-latest-body" style={{ padding: '13px 14px 14px', display: 'flex', flexDirection: 'column', gap: 7, flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5, minWidth: 0 }}>
-          <span className="soko-latest-title" style={{
-            fontSize: 13.5, fontWeight: 700, color: T.gray900, lineHeight: 1.3,
-            overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 1, WebkitBoxOrient: 'vertical',
-            minWidth: 0,
-          }}>
-            {listing.title}
-          </span>
-          {isVerif && (
-            <span title="Verified seller" style={{ flexShrink: 0, display: 'flex', opacity: 0.9 }}>
-              {Icon.verify(13)}
+      {/* Fixed body structure — same slots on every card so row heights match */}
+      <div className="soko-product-card-body soko-latest-body">
+        <div className="soko-product-card-title soko-latest-title">{listing.title}</div>
+
+        <div className="soko-product-card-price soko-latest-price" style={{ color: isFlash ? T.red : T.greenD }}>
+          {formatPrice(price)}
+          {isFlash && listing.price > price && (
+            <span style={{ marginLeft: 5, fontSize: 11, fontWeight: 600, color: T.gray500, textDecoration: 'line-through' }}>
+              {formatPrice(listing.price)}
             </span>
           )}
         </div>
 
-        <div className="soko-latest-price" style={{ fontFamily: T.fontDisplay, fontSize: 16.5, fontWeight: 800, color: T.greenD, letterSpacing: '-0.3px', whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.2 }}>
-          {formatPrice(listing.price)}
-        </div>
-
-        <div className="soko-latest-meta" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 11, color: T.gray600, gap: 4, minWidth: 0 }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', minWidth: 0 }}>
-            <span style={{ color: T.green, flexShrink: 0, display: 'flex' }}>{Icon.pin(11)}</span>
+        <div className="soko-product-card-meta soko-latest-meta">
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+            <span style={{ color: T.gray500, flexShrink: 0, display: 'flex' }}>{Icon.pin(11)}</span>
             {listing.city || 'Malawi'}
           </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0, color: T.gray500 }}>
-            {Icon.clock(10)} {timeSincePosted(listing.created_at)}
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0, color: T.gray500 }}>
+            {isVerif && <span title="Verified seller" style={{ display: 'flex' }}>{Icon.verify(12)}</span>}
+            {trustCount != null
+              ? <><span style={{ display: 'flex' }}>{Icon.eye(10)}</span>{Number(trustCount).toLocaleString()}</>
+              : <><span style={{ display: 'flex' }}>{Icon.clock(10)}</span>{timeSincePosted(listing.created_at)}</>
+            }
           </span>
         </div>
-
-        {/* Trust indicator — views or inquiries, only renders if data exists */}
-        {trustCount != null && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 10.5, color: T.gray500, paddingTop: 2, borderTop: `1px solid ${T.gray100}`, marginTop: 1 }}>
-            {Icon.eye(11)} {trustCount.toLocaleString()} {listing.view_count != null ? 'views' : 'inquiries'}
-          </div>
-        )}
       </div>
+      <ProductCardActions listing={listing} user={user} navigate={navigate} />
     </div>
   )
 }
 
 function SkeletonLatestCard() {
   return (
-    <div className="soko-latest-card" style={{ background: T.white, borderRadius: T.radius, overflow: 'hidden', border: `1px solid ${T.gray100}`, height: '100%' }}>
-      <div className="skeleton soko-latest-photo" style={{ width: '100%', height: 168 }} />
-      <div className="soko-latest-body" style={{ padding: '13px 14px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <div className="skeleton" style={{ height: 14, width: '80%', borderRadius: 6 }} />
-        <div className="skeleton" style={{ height: 17, width: '45%', borderRadius: 6 }} />
-        <div className="skeleton" style={{ height: 11, width: '60%', borderRadius: 6 }} />
+    <div className="soko-product-card soko-latest-card soko-card-bg" style={{ border: `1px solid ${T.gray100}`, boxShadow: T.shadow }}>
+      <div className="soko-product-card-media skeleton" style={{ animation: 'none' }} />
+      <div className="soko-product-card-body">
+        <div className="skeleton" style={{ height: 14, width: '90%', borderRadius: 4 }} />
+        <div className="skeleton" style={{ height: 14, width: '72%', borderRadius: 4 }} />
+        <div className="skeleton" style={{ height: 16, width: '46%', borderRadius: 4, marginTop: 2 }} />
+        <div className="skeleton" style={{ height: 11, width: '55%', borderRadius: 4, marginTop: 'auto' }} />
+      </div>
+      <div className="soko-product-card-actions">
+        <div className="skeleton" style={{ flex: 1, height: 32, borderRadius: 10 }} />
       </div>
     </div>
   )
 }
 
-function LatestListingsSection({ listings, navigate, loading }) {
-  const PAGE_SIZE = 8
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE)
+/**
+ * Home latest grid — one solid first paint (not tiny 8-item stacks).
+ * HOME_LATEST_COUNT fills complete rows: 4×3 desktop / 2×6 mobile.
+ * No infinite "show more" on home — that was stacking the page taller forever.
+ * Browse the rest on /listings.
+ */
+const HOME_LATEST_COUNT = 12
+const HOME_LATEST_SKELETONS = 8
 
-  const sorted = useMemo(() =>
-    [...listings].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)),
-  [listings])
+function LatestListingsSection({ listings, navigate, loading, user, savedIds, onToggleSave, excludeIds }) {
+  const sorted = useMemo(() => {
+    const exclude = excludeIds instanceof Set ? excludeIds : new Set(excludeIds || [])
+    return [...(listings || [])]
+      .filter(l => l?.id && !exclude.has(l.id))
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+  }, [listings, excludeIds])
 
-  const latest = sorted.slice(0, visibleCount)
-  const hasMore = visibleCount < sorted.length
+  // Full first batch at once — no progressive append that stacks the home page
+  const latest = sorted.slice(0, HOME_LATEST_COUNT)
+  const hasMoreElsewhere = sorted.length > HOME_LATEST_COUNT
 
-  if (!loading && sorted.length === 0) return null
+  if (!loading && latest.length === 0) return null
 
   return (
     <section className="soko-latest-section" style={{ padding: '0 20px clamp(28px,4.5vw,48px) 20px', background: T.gray50 }}>
       <style>{`
-        .soko-latest-grid {
-          display: grid;
-          grid-template-columns: repeat(4, minmax(0, 1fr));
-          gap: 24px;
-        }
-        .soko-latest-card-wrap {
-          min-width: 0;
-          width: 100%;
-        }
-        @media (max-width: 980px) {
-          .soko-latest-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-        }
-        @media (max-width: 560px) {
-          .soko-latest-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-          .soko-latest-head { margin-bottom: 14px !important; align-items: stretch !important; }
-          .soko-latest-head h2 { font-size: 18px !important; margin-bottom: 2px !important; }
-          .soko-latest-head p { font-size: 12.5px !important; }
+        @media (max-width: 768px) {
+          .soko-latest-head {
+            margin-bottom: 12px !important;
+            align-items: center !important;
+            flex-wrap: nowrap !important;
+            gap: 8px !important;
+          }
+          .soko-latest-head h2 { font-size: 17px !important; margin-bottom: 0 !important; }
+          .soko-latest-head p,
+          .soko-latest-head > div > div:first-child { display: none !important; }
           .soko-latest-viewall {
-            width: 100%;
+            width: auto !important;
+            flex-shrink: 0;
             justify-content: center !important;
-            min-height: 44px;
-            margin-top: 4px;
+            min-height: 36px !important;
+            padding: 7px 12px !important;
+            font-size: 12px !important;
+            margin-top: 0 !important;
           }
         }
       `}</style>
 
-      <div style={{ maxWidth: 1400, margin: '0 auto' }}>
+      <div style={{ maxWidth: 1400, margin: '0 auto', minWidth: 0 }}>
         <div className="soko-latest-head" style={{
           display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
           marginBottom: 24, flexWrap: 'wrap', gap: 12,
         }}>
           <div style={{ minWidth: 0, flex: '1 1 180px' }}>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-              <span style={{ width: 7, height: 7, borderRadius: '50%', background: T.green, boxShadow: `0 0 0 4px ${T.greenL}` }} />
-              <span style={{ fontSize: 11.5, fontWeight: 800, color: T.green, letterSpacing: 0.8, textTransform: 'uppercase' }}>Updated daily</span>
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: T.amber, boxShadow: `0 0 0 4px ${T.amberL}` }} />
+              <span style={{ fontSize: 11.5, fontWeight: 800, color: T.amberD, letterSpacing: 0.8, textTransform: 'uppercase' }}>Updated daily</span>
             </div>
             <h2 style={{ fontFamily: T.fontDisplay, fontSize: 'clamp(20px, 2.6vw, 27px)', fontWeight: 800, color: T.gray900, letterSpacing: '-0.6px', marginBottom: 5 }}>
               Latest Listings
@@ -2562,10 +3019,8 @@ function LatestListingsSection({ listings, navigate, loading }) {
           <button
             type="button"
             onClick={() => navigate('/listings')}
-            className="soko-btn-primary soko-latest-viewall"
-            style={{ background: T.green, fontSize: 13.5, padding: '11px 22px', flexShrink: 0 }}
-            onMouseEnter={e => e.currentTarget.style.background = T.greenD}
-            onMouseLeave={e => e.currentTarget.style.background = T.green}
+            className="soko-btn-dark soko-latest-viewall"
+            style={{ fontSize: 13.5, padding: '11px 22px', flexShrink: 0 }}
           >
             View All Listings {Icon.chevR(15)}
           </button>
@@ -2573,35 +3028,39 @@ function LatestListingsSection({ listings, navigate, loading }) {
 
         <div className="soko-latest-grid">
           {loading
-            ? Array.from({ length: 6 }).map((_, i) => (
+            ? Array.from({ length: HOME_LATEST_SKELETONS }).map((_, i) => (
                 <div key={i} className="soko-latest-card-wrap"><SkeletonLatestCard /></div>
               ))
             : latest.map((l, i) => (
                 <div key={l.id} className="soko-latest-card-wrap">
                   <LatestListingCard
                     listing={l}
-                    delay={Math.min(i, 8) * 0.03}
+                    delay={Math.min(i, 8) * 0.015}
                     onClick={() => navigate('/listing/' + l.id)}
+                    user={user}
+                    navigate={navigate}
+                    saved={savedIds?.has?.(l.id)}
+                    onToggleSave={onToggleSave}
                   />
                 </div>
               ))
           }
         </div>
 
-        {!loading && hasMore && (
-          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 20 }}>
+        {!loading && hasMoreElsewhere && (
+          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 22 }}>
             <button
               type="button"
-              onClick={() => setVisibleCount(c => c + PAGE_SIZE)}
+              onClick={() => navigate('/listings')}
               className="soko-btn-outline"
               style={{
                 background: '#fff', color: T.gray800, border: `1.5px solid ${T.gray200}`,
                 minHeight: 44, padding: '11px 28px', fontSize: 13.5, fontWeight: 700,
               }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = T.green; e.currentTarget.style.color = T.green }}
+              onMouseEnter={e => { e.currentTarget.style.borderColor = T.gray800; e.currentTarget.style.color = T.gray900 }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = T.gray200; e.currentTarget.style.color = T.gray800 }}
             >
-              Show more listings
+              Browse all products {Icon.chevR(14)}
             </button>
           </div>
         )}
@@ -2706,14 +3165,14 @@ function expiryInfo(r) {
 /* Category colors for chips & card badges */
 function catColors(cat) {
   const m = {
-    Vehicles:    { bg:'#e9f7ec', fg:'#16a34a' },
+    Vehicles:    { bg:'#e0f2fe', fg:'#0369a1' },
     Electronics: { bg:'#eff6ff', fg:'#2563eb' },
     Property:    { bg:'#fff7ed', fg:'#ea580c' },
     Clothing:    { bg:'#fdf4ff', fg:'#9333ea' },
-    Agriculture: { bg:'#f0fdf4', fg:'#15803d' },
+    Agriculture: { bg:'#ecfdf5', fg:'#0f766e' },
     Furniture:   { bg:'#fffbeb', fg:'#d97706' },
     Food:        { bg:'#fff1f2', fg:'#e11d48' },
-    Services:    { bg:'#f0fdf4', fg:'#0a7a44' },
+    Services:    { bg:'#f1f5f9', fg:'#475569' },
     Jobs:        { bg:'#eff6ff', fg:'#2563eb' },
   }
   return m[cat] || { bg:'#f8fafc', fg:'#64748b' }
@@ -2748,7 +3207,7 @@ const ChatSVG = ({ color = '#fff', size = 13 }) => (
 )
 /* ── Pin SVG ── */
 const PinSVG = () => (
-  <svg width="11" height="11" viewBox="0 0 24 24" fill="#0F9D58">
+  <svg width="11" height="11" viewBox="0 0 24 24" fill="#64748b">
     <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
   </svg>
 )
@@ -2779,7 +3238,7 @@ const HeartSVG = () => (
 )
 /* ── Shield check (trust banner) ── */
 const ShieldCheckSVG = () => (
-  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0F9D58" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
     <polyline points="9 12 11 14 15 10"/>
   </svg>
@@ -2952,7 +3411,7 @@ function RequestCard({ request: r, delay = 0, navigate }) {
             type="button"
             onClick={e => { e.stopPropagation(); navigate('/looking-for') }}
             style={{
-              background: hov ? '#0a7a44' : '#0F9D58',
+              background: hov ? '#000' : '#202124',
               color: '#fff', border: 'none', borderRadius: 8,
               padding: '7px 12px', fontSize: 12, fontWeight: 700,
               cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 5,
@@ -2968,11 +3427,104 @@ function RequestCard({ request: r, delay = 0, navigate }) {
   )
 }
 
-function LookingForSection({ navigate, requests, loading }) {
+function LookingForSection({ navigate, requests, loading, userLat, userLng, activeDistrict, viewerLocation: viewerLocationProp }) {
   const scrollRef = React.useRef(null)
   const [canLeft,      setCanLeft]      = React.useState(false)
   const [canRight,     setCanRight]     = React.useState(false)
-  const [activeFilter, setActiveFilter] = React.useState('all')
+  const [viewerLoc,    setViewerLoc]    = React.useState(viewerLocationProp || null)
+  const [detectingGps, setDetectingGps] = React.useState(!viewerLocationProp)
+  const [gpsError,     setGpsError]     = React.useState(null)
+
+  // Same GPS pipeline as Looking For page: reverse-geocode → area + district
+  async function detectGps(force = false) {
+    setDetectingGps(true)
+    setGpsError(null)
+    try {
+      const gps = await getGPSLocation()
+      if (gps?.lat != null || gps?.label || gps?.district) {
+        setViewerLoc(gps)
+        try {
+          sessionStorage.setItem('userCoords', JSON.stringify({ lat: gps.lat, lng: gps.lng }))
+          sessionStorage.setItem('soko_gps_location', JSON.stringify(gps))
+        } catch { /* ignore */ }
+        setDetectingGps(false)
+        return gps
+      }
+      if (Number.isFinite(userLat) && Number.isFinite(userLng)) {
+        // Coords known but reverse-geocode failed — still usable for km distance
+        const fallback = {
+          lat: userLat,
+          lng: userLng,
+          label: activeDistrict && activeDistrict !== 'All Districts' ? activeDistrict : null,
+          district: activeDistrict && activeDistrict !== 'All Districts' ? activeDistrict : null,
+          city: activeDistrict && activeDistrict !== 'All Districts' ? activeDistrict : null,
+        }
+        setViewerLoc(fallback)
+        setDetectingGps(false)
+        return fallback
+      }
+      if (activeDistrict && activeDistrict !== 'All Districts') {
+        const d = { label: activeDistrict, district: activeDistrict, city: activeDistrict }
+        setViewerLoc(d)
+        setDetectingGps(false)
+        return d
+      }
+      if (force) setGpsError('Could not detect GPS. Allow location access.')
+      setDetectingGps(false)
+      return null
+    } catch {
+      setDetectingGps(false)
+      if (force) setGpsError('Could not detect GPS.')
+      return null
+    }
+  }
+
+  React.useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      // Prefer parent-provided GPS (Home boot) if fresh
+      if (viewerLocationProp?.lat != null || viewerLocationProp?.district) {
+        if (!cancelled) {
+          setViewerLoc(viewerLocationProp)
+          setDetectingGps(false)
+        }
+        return
+      }
+      // Cached full GPS object from prior detect
+      try {
+        const cached = sessionStorage.getItem('soko_gps_location')
+        if (cached) {
+          const parsed = JSON.parse(cached)
+          if (parsed?.lat != null || parsed?.district) {
+            if (!cancelled) {
+              setViewerLoc(parsed)
+              setDetectingGps(false)
+            }
+            // Refresh in background
+            detectGps(false)
+            return
+          }
+        }
+      } catch { /* ignore */ }
+      if (!cancelled) await detectGps(false)
+    })()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewerLocationProp])
+
+  // When header district changes and we still have no GPS, use district as area hint
+  React.useEffect(() => {
+    if (viewerLoc?.lat != null) return
+    if (activeDistrict && activeDistrict !== 'All Districts') {
+      setViewerLoc(prev => prev?.district === activeDistrict ? prev : {
+        label: activeDistrict,
+        district: activeDistrict,
+        city: activeDistrict,
+        lat: prev?.lat,
+        lng: prev?.lng,
+      })
+    }
+  }, [activeDistrict])
 
   function checkScroll() {
     const el = scrollRef.current
@@ -2981,6 +3533,29 @@ function LookingForSection({ navigate, requests, loading }) {
     setCanRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 8)
   }
 
+  // Nearest looking-for first + distance labels (same helpers as Looking For page)
+  const ranked = React.useMemo(() => {
+    const open = (requests || []).filter(r => r.status !== 'fulfilled')
+    const loc = viewerLoc
+      || (Number.isFinite(userLat) && Number.isFinite(userLng)
+        ? { lat: userLat, lng: userLng, district: activeDistrict !== 'All Districts' ? activeDistrict : null }
+        : null)
+      || (activeDistrict && activeDistrict !== 'All Districts'
+        ? { label: activeDistrict, district: activeDistrict, city: activeDistrict }
+        : null)
+    const byArea = sortRequestsByViewerLocation(open, loc, 'recent')
+    const withDist = withDistanceToBuyer(byArea, loc)
+    return [...withDist].sort((a, b) => {
+      const sa = a._locScore || 0
+      const sb = b._locScore || 0
+      if (sb !== sa) return sb - sa
+      const da = a._distanceKm != null ? a._distanceKm : 1e9
+      const db = b._distanceKm != null ? b._distanceKm : 1e9
+      if (da !== db) return da - db
+      return new Date(b.created_at || 0) - new Date(a.created_at || 0)
+    })
+  }, [requests, viewerLoc, userLat, userLng, activeDistrict])
+
   React.useEffect(() => {
     const el = scrollRef.current
     if (!el) return
@@ -2988,21 +3563,140 @@ function LookingForSection({ navigate, requests, loading }) {
     el.addEventListener('scroll', checkScroll, { passive: true })
     window.addEventListener('resize', checkScroll)
     return () => { el.removeEventListener('scroll', checkScroll); window.removeEventListener('resize', checkScroll) }
-  }, [requests, activeFilter])
+  }, [ranked])
 
   function scrollBy(dir) { scrollRef.current?.scrollBy({ left: dir * 540, behavior: 'smooth' }) }
 
-  const countFor = (key) => key === 'all' ? requests.length : requests.filter(r => r.category === key).length
-  const filtered = (activeFilter === 'all' ? requests : requests.filter(r => r.category === activeFilter))
-    .filter(r => r.status !== 'fulfilled')
+  const filtered = ranked
+  const placeLabel =
+    viewerLoc?.district ||
+    viewerLoc?.city ||
+    viewerLoc?.label ||
+    (activeDistrict && activeDistrict !== 'All Districts' ? activeDistrict : null)
+  const nearCount = filtered.filter(r => (r._locScore || 0) >= 85).length
 
-  /* Arrow SVG inline */
   const ArrowL = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
   const ArrowR = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
 
   return (
-    <section className="soko-section-pad" style={{ padding: '28px 20px 8px', background: '#fafbfa' }}>
+    <section className="soko-section-pad soko-lf-section" style={{ padding: '22px 20px 16px', background: '#fafbfa' }}>
       <style>{`
+        ${LOOKING_FOR_CARD_CSS}
+        .soko-lf-section .soko-lf-head {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px 16px;
+          margin-bottom: 12px;
+          flex-wrap: nowrap;
+        }
+        .soko-lf-section .soko-lf-head-left {
+          min-width: 0;
+          flex: 1 1 auto;
+        }
+        .soko-lf-section .soko-lf-eyebrow {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 11px;
+          font-weight: 800;
+          color: #c88a00;
+          letter-spacing: 0.55px;
+          text-transform: uppercase;
+          margin-bottom: 6px;
+        }
+        .soko-lf-section .soko-lf-title {
+          font-family: ${T.fontDisplay};
+          font-size: clamp(18px, 2.2vw, 24px);
+          font-weight: 800;
+          color: #111827;
+          letter-spacing: -0.45px;
+          margin: 0;
+          line-height: 1.2;
+        }
+        .soko-lf-section .soko-lf-sub {
+          font-size: 13px;
+          color: #6b7280;
+          margin: 4px 0 0;
+          line-height: 1.4;
+          font-weight: 500;
+        }
+        .soko-lf-section .soko-lf-head-actions {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          flex-shrink: 0;
+        }
+        .soko-lf-section .soko-lf-btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 5px;
+          border-radius: 10px;
+          padding: 9px 14px;
+          font-size: 13px;
+          font-weight: 700;
+          cursor: pointer;
+          font-family: inherit;
+          white-space: nowrap;
+          min-height: 40px;
+          transition: background 0.15s, border-color 0.15s, color 0.15s;
+        }
+        .soko-lf-section .soko-lf-btn-ghost {
+          background: #fff;
+          border: 1px solid #e5e7eb;
+          color: #374151;
+        }
+        .soko-lf-section .soko-lf-btn-ghost:hover {
+          border-color: #3c4043;
+          color: #202124;
+        }
+        .soko-lf-section .soko-lf-btn-primary {
+          background: #202124;
+          border: 1px solid #202124;
+          color: #fff;
+        }
+        .soko-lf-section .soko-lf-btn-primary:hover { background: #000; }
+        .soko-lf-gps {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-bottom: 14px;
+          padding: 10px 12px;
+          background: #f1f5f9;
+          border: 1px solid #e2e8f0;
+          border-radius: 12px;
+          min-width: 0;
+        }
+        .soko-lf-gps-ico {
+          width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0;
+          background: #fff; border: 1px solid #e2e8f0;
+          display: flex; align-items: center; justify-content: center;
+        }
+        .soko-lf-gps-text { min-width: 0; flex: 1; }
+        .soko-lf-gps-title {
+          font-size: 12.5px; font-weight: 800; color: #334155;
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .soko-lf-gps-sub {
+          font-size: 11.5px; color: #5f6368; font-weight: 600;
+          margin-top: 1px; line-height: 1.35;
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .soko-lf-gps-btn {
+          flex-shrink: 0;
+          border: 1.5px solid #cbd5e1;
+          background: #fff;
+          color: #334155;
+          border-radius: 10px;
+          padding: 8px 12px;
+          font-size: 12px;
+          font-weight: 800;
+          cursor: pointer;
+          font-family: inherit;
+          min-height: 36px;
+        }
+        .soko-lf-gps-btn:disabled { opacity: 0.65; cursor: default; }
         .lf3-arrow {
           position:absolute; top:50%; transform:translateY(-50%); z-index:10;
           width:36px; height:36px; border-radius:50%;
@@ -3011,134 +3705,152 @@ function LookingForSection({ navigate, requests, loading }) {
           cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.08);
           color:#374151; transition:all 0.15s; flex-shrink:0;
         }
-        .lf3-arrow:hover { background:#111827; border-color:#111827; color:#fff; }
+        .lf3-arrow:hover { background:#202124; border-color:#202124; color:#fff; }
         .lf3-arrow.hide  { opacity:0; pointer-events:none; }
-        .lf3-chip {
-          display:inline-flex; align-items:center; gap:6px;
-          padding:7px 12px; border-radius:999px;
-          border:1px solid #e5e7eb; background:#fff;
-          font-size:12.5px; font-weight:600; color:#4b5563;
-          cursor:pointer; white-space:nowrap; transition:all 0.15s;
-          flex-shrink:0;
+        .lf3-scroll {
+          display:flex; gap:12px; overflow-x:auto;
+          padding: 2px 2px 10px;
+          scrollbar-width:none; -ms-overflow-style:none;
+          -webkit-overflow-scrolling:touch;
+          align-items:stretch;
+          scroll-snap-type: x mandatory;
         }
-        .lf3-chip.active { background:#111827; border-color:#111827; color:#fff; }
-        .lf3-chip.active .lf3-chip-icon { color:#fff !important; }
-        .lf3-chip:not(.active):hover { border-color:#d1d5db; background:#f9fafb; color:#111827; }
-        .lf3-count { background:#f3f4f6; color:#6b7280; border-radius:999px; padding:1px 7px; font-size:10.5px; font-weight:700; }
-        .lf3-chip.active .lf3-count { background:rgba(255,255,255,0.16); color:#fff; }
-        .lf3-scroll { display:flex; gap:14px; overflow-x:auto; padding:4px 2px 12px; scrollbar-width:none; -ms-overflow-style:none; -webkit-overflow-scrolling:touch; }
         .lf3-scroll::-webkit-scrollbar { display:none; }
-        .lf3-chips { display:flex; gap:8px; overflow-x:auto; padding-bottom:2px; scrollbar-width:none; -ms-overflow-style:none; -webkit-overflow-scrolling:touch; }
-        .lf3-chips::-webkit-scrollbar { display:none; }
-        @media(max-width:768px){
-          .lf3-arrow{display:none!important;}
-          .lf3-chip { padding:8px 12px; font-size:12px; min-height:38px; }
-          .lf3-scroll { gap:12px; }
+        .lf3-scroll > .lf-card.is-carousel {
+          scroll-snap-align: start;
+        }
+        @media (max-width: 768px) {
+          .soko-lf-section { padding: 16px 14px 12px !important; }
+          .soko-lf-section .soko-lf-head {
+            flex-wrap: wrap !important;
+            align-items: flex-start !important;
+            gap: 10px !important;
+            margin-bottom: 10px !important;
+          }
+          .soko-lf-section .soko-lf-head-left { width: 100%; flex: 1 1 100% !important; }
+          .soko-lf-section .soko-lf-title {
+            font-size: 17px !important;
+            letter-spacing: -0.3px !important;
+          }
+          .soko-lf-section .soko-lf-sub { display: none !important; }
+          .soko-lf-section .soko-lf-head-actions {
+            width: 100% !important;
+            display: grid !important;
+            grid-template-columns: 1fr 1.2fr;
+            gap: 8px !important;
+          }
+          .soko-lf-section .soko-lf-btn {
+            width: 100%;
+            min-height: 42px;
+            font-size: 12.5px;
+            padding: 10px 12px;
+          }
+          .soko-lf-gps {
+            padding: 9px 10px !important;
+            gap: 8px !important;
+            margin-bottom: 12px !important;
+          }
+          .soko-lf-gps-ico { width: 28px; height: 28px; border-radius: 8px; }
+          .soko-lf-gps-sub {
+            white-space: normal !important;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+          }
+          .soko-lf-gps-btn {
+            padding: 7px 10px;
+            font-size: 11.5px;
+            min-height: 34px;
+          }
+          .lf3-arrow { display: none !important; }
+          .lf3-scroll {
+            gap: 10px !important;
+            margin: 0 -14px;
+            padding-left: 14px !important;
+            padding-right: 14px !important;
+            scroll-padding-inline: 14px;
+          }
         }
       `}</style>
 
       <div style={{ maxWidth: 1400, margin: '0 auto' }}>
 
-        {/* ── Header ── */}
-        <div className="soko-lf-head" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 16, flexWrap: 'wrap', gap: 14 }}>
-          <div style={{ minWidth: 0, flex: '1 1 200px' }}>
-            <div style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              fontSize: 11, fontWeight: 700, color: '#0F9D58',
-              letterSpacing: 0.4, textTransform: 'uppercase', marginBottom: 8,
-            }}>
-              <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#0F9D58' }} />
-              Buyer demand
+        {/* Header: title left · actions right (one clean row on desktop) */}
+        <div className="soko-lf-head">
+          <div className="soko-lf-head-left">
+            <div className="soko-lf-eyebrow">
+              <span style={{
+                width: 7, height: 7, borderRadius: '50%', background: '#F9AB00',
+                boxShadow: '0 0 0 3px rgba(249,171,0,0.22)',
+              }} />
+              Looking For
+              {filtered.length > 0 && (
+                <span style={{
+                  marginLeft: 4, fontSize: 10, fontWeight: 800, color: '#6b7280',
+                  background: '#f3f4f6', borderRadius: 999, padding: '2px 7px',
+                  letterSpacing: 0, textTransform: 'none',
+                }}>
+                  {filtered.length}
+                </span>
+              )}
             </div>
-            <h2 style={{
-              fontFamily: T.fontDisplay, fontSize: 'clamp(20px,2.6vw,26px)',
-              fontWeight: 800, color: '#111827', letterSpacing: '-0.5px',
-              margin: '0 0 6px', lineHeight: 1.15,
-            }}>
-              People Looking For
-            </h2>
-            <p style={{ fontSize: 13.5, color: '#6b7280', margin: 0, lineHeight: 1.45 }}>
-              Real buyer requests across Malawi — respond and close deals faster.
+            <h2 className="soko-lf-title">Buyers are ready. Be the first to sell.</h2>
+            <p className="soko-lf-sub soko-web-only">
+              Real demand near you · free to post · sellers respond fast
             </p>
           </div>
-
-          <div className="soko-lf-head-actions" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 8, flexShrink: 0 }}>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                onClick={() => navigate('/looking-for')}
-                style={{
-                  background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10,
-                  padding: '9px 14px', fontSize: 13, fontWeight: 600, color: '#374151',
-                  cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5,
-                  whiteSpace: 'nowrap', transition: 'all 0.15s',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = '#111827'; e.currentTarget.style.color = '#111827' }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = '#e5e7eb'; e.currentTarget.style.color = '#374151' }}
-              >
-                View all
-                <ArrowR />
-              </button>
-              <button
-                type="button"
-                onClick={() => navigate('/looking-for')}
-                style={{
-                  background: '#0F9D58', color: '#fff', border: 'none', borderRadius: 10,
-                  padding: '9px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap',
-                  transition: 'background 0.15s',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background = '#0a7a44' }}
-                onMouseLeave={e => { e.currentTarget.style.background = '#0F9D58' }}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                Post a request
-              </button>
-            </div>
-            <span style={{ fontSize: 11.5, color: '#9ca3af', fontWeight: 500 }}>
-              Free to post · Fast responses
-            </span>
+          <div className="soko-lf-head-actions">
+            <button type="button" className="soko-lf-btn soko-lf-btn-ghost" onClick={() => navigate('/looking-for')}>
+              View all <ArrowR />
+            </button>
+            <button type="button" className="soko-lf-btn soko-lf-btn-primary" onClick={() => navigate('/looking-for')}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" aria-hidden><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              Post a request
+            </button>
           </div>
         </div>
 
-        {/* ── Category filter chips ── */}
-        <div className="lf3-chips" style={{ marginBottom: 16 }}>
-          {CAT_FILTERS.map(f => {
-            const cc = catColors(f.key)
-            const isActive = activeFilter === f.key
-            return (
-              <button
-                key={f.key}
-                type="button"
-                className={`lf3-chip${isActive ? ' active' : ''}`}
-                onClick={() => setActiveFilter(f.key)}
-              >
-                <span
-                  className="lf3-chip-icon"
-                  style={{
-                    display: 'flex', alignItems: 'center',
-                    color: isActive ? '#fff' : (f.key === 'all' ? '#0F9D58' : cc.fg),
-                    transition: 'color 0.15s',
-                  }}
-                >
-                  {React.cloneElement(
-                    f.key === 'all' ? CatSVG.all : (CatSVG[f.key] || CatSVG.Other),
-                    { width: 14, height: 14 }
-                  )}
-                </span>
-                {f.label}
-                <span className="lf3-count">{countFor(f.key)}</span>
-              </button>
-            )
-          })}
+        {/* Compact GPS strip */}
+        <div className="soko-lf-gps">
+          <span className="soko-lf-gps-ico" aria-hidden>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z" /><circle cx="12" cy="10" r="2.2" />
+            </svg>
+          </span>
+          <div className="soko-lf-gps-text">
+            <div className="soko-lf-gps-title">
+              {detectingGps
+                ? 'Detecting your location…'
+                : placeLabel
+                  ? `Near you · ${placeLabel}`
+                  : 'Location not detected'}
+            </div>
+            <div className="soko-lf-gps-sub">
+              {gpsError
+                ? gpsError
+                : placeLabel
+                  ? nearCount > 0
+                    ? `${nearCount} near you first · distance on cards`
+                    : 'Nearest buyer demand first'
+                  : 'Allow GPS to prioritise nearby requests'}
+            </div>
+          </div>
+          <button
+            type="button"
+            className="soko-lf-gps-btn"
+            onClick={() => detectGps(true)}
+            disabled={detectingGps}
+          >
+            {detectingGps ? '…' : 'Update GPS'}
+          </button>
         </div>
 
-        {/* ── Carousel ── */}
+        {/* Horizontal request cards */}
         {loading ? (
-          <div style={{ display: 'flex', gap: 14 }}>
+          <div className="lf3-scroll">
             {[1, 2, 3, 4].map(i => (
               <div key={i} style={{
-                flexShrink: 0, width: 260, height: 280, borderRadius: 14,
+                flexShrink: 0, width: 260, height: 300, borderRadius: 14,
                 background: 'linear-gradient(90deg,#f0f0f0 25%,#e8e8e8 50%,#f0f0f0 75%)',
                 backgroundSize: '600px 100%', animation: 'shimmer 1.4s infinite',
                 border: '1px solid #eee',
@@ -3150,35 +3862,35 @@ function LookingForSection({ navigate, requests, loading }) {
             <button type="button" className={`lf3-arrow${canLeft ? '' : ' hide'}`} style={{ left: -18 }} onClick={() => scrollBy(-1)} aria-label="Scroll left"><ArrowL /></button>
             <button type="button" className={`lf3-arrow${canRight ? '' : ' hide'}`} style={{ right: -18 }} onClick={() => scrollBy(1)} aria-label="Scroll right"><ArrowR /></button>
             <div ref={scrollRef} className="lf3-scroll">
-              {filtered.map((r, i) => (
-                <RequestCard key={r.id} request={r} delay={i * 0.03} navigate={navigate} />
+              {filtered.map(r => (
+                <LookingForRequestCard
+                  key={r.id}
+                  req={r}
+                  carousel
+                  compactCta
+                  isNearYou={(r._locScore || 0) >= 85}
+                  onViewDetails={() => navigate(`/looking-for?request=${r.id}`)}
+                  onOffer={() => navigate(`/looking-for?request=${r.id}`)}
+                />
               ))}
             </div>
           </div>
         ) : (
           <div style={{
-            textAlign: 'center', padding: '40px 24px',
+            textAlign: 'center', padding: '32px 20px',
             border: '1px solid #e8eaed', borderRadius: 14, background: '#fff',
           }}>
-            <div style={{
-              width: 48, height: 48, borderRadius: 12, margin: '0 auto 12px',
-              background: '#f3f4f6', display: 'grid', placeItems: 'center', color: '#6b7280',
-            }}>
-              {CatSVG.all}
-            </div>
             <p style={{ fontSize: 14.5, fontWeight: 700, color: '#111827', margin: '0 0 6px' }}>
-              No requests in this category yet
+              No open requests yet
             </p>
-            <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 16px' }}>
+            <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 14px' }}>
               Be the first to post what you need.
             </p>
             <button
               type="button"
+              className="soko-lf-btn soko-lf-btn-primary"
               onClick={() => navigate('/looking-for')}
-              style={{
-                background: '#0F9D58', color: '#fff', border: 'none', borderRadius: 10,
-                padding: '10px 20px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
-              }}
+              style={{ margin: '0 auto' }}
             >
               Post a request
             </button>
@@ -3237,7 +3949,7 @@ function ShopsSection({ navigate, shops, loading }) {
           cursor: pointer; box-shadow: 0 2px 12px rgba(0,0,0,0.12);
           color: #374151; transition: all 0.2s; flex-shrink: 0;
         }
-        .shop-arrow:hover { background: #0F9D58; border-color: #0F9D58; color: #fff; box-shadow: 0 4px 18px rgba(15,157,88,0.35); transform: translateY(-50%) scale(1.08); }
+        .shop-arrow:hover { background: #202124; border-color: #202124; color: #fff; box-shadow: 0 4px 18px rgba(0,0,0,0.2); transform: translateY(-50%) scale(1.08); }
         .shop-arrow.hidden { opacity: 0; pointer-events: none; }
         .shop-card {
           flex-shrink: 0; width: 210px; background: #fff;
@@ -3251,11 +3963,11 @@ function ShopsSection({ navigate, shops, loading }) {
         .shop-logo-wrap { transition: transform 0.28s cubic-bezier(0.22,1,0.36,1); }
         .shop-card:hover .shop-logo-wrap { transform: scale(1.08); }
         .visit-btn {
-          width: 100%; background: #0F9D58; color: #fff; border: none;
+          width: 100%; background: #202124; color: #fff; border: none;
           padding: 11px 0; font-size: 13.5px; font-weight: 700; cursor: pointer;
           transition: background 0.15s;
         }
-        .visit-btn:hover { background: #0a7a44; }
+        .visit-btn:hover { background: #000; }
         @media (max-width: 768px) { .shop-arrow { display: none !important; } }
       `}</style>
 
@@ -3327,7 +4039,7 @@ function ShopsSection({ navigate, shops, loading }) {
                         <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.15)' }} />
                       </>
                     ) : (
-                      <div style={{ width: '100%', height: '100%', background: `linear-gradient(135deg, ${T.greenDk} 0%, ${T.green} 60%, ${T.amber}44 100%)` }} />
+                      <div style={{ width: '100%', height: '100%', background: `linear-gradient(135deg, #1e293b 0%, #334155 55%, ${T.amber}55 100%)` }} />
                     )}
                     {/* Gradient overlay at bottom for logo overlap */}
                     <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 48, background: 'linear-gradient(to bottom, transparent, rgba(0,0,0,0.18))' }} />
@@ -3338,7 +4050,7 @@ function ShopsSection({ navigate, shops, loading }) {
                     <div className="shop-logo-wrap" style={{
                       width: 56, height: 56, borderRadius: '50%',
                       border: '3px solid #fff',
-                      background: s.logo_url ? 'transparent' : `linear-gradient(135deg, ${T.green}, ${T.greenD})`,
+                      background: s.logo_url ? 'transparent' : `linear-gradient(135deg, #334155, #1e293b)`,
                       overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center',
                       color: '#fff', fontWeight: 800, fontSize: 20,
                       boxShadow: '0 2px 10px rgba(0,0,0,0.15)',
@@ -3402,12 +4114,12 @@ function ShopsSection({ navigate, shops, loading }) {
               {/* Create shop CTA card */}
               <div className="shop-card" onClick={() => navigate('/shop-setup')} style={{ border: `2px dashed ${T.gray200}`, background: T.gray50, justifyContent: 'center', alignItems: 'center', minHeight: 300 }}>
                 <div style={{ textAlign: 'center', padding: '20px 16px' }}>
-                  <div style={{ width: 48, height: 48, borderRadius: '50%', background: T.greenL, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', color: T.green }}>
+                  <div style={{ width: 48, height: 48, borderRadius: '50%', background: T.amberL, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', color: T.amberD }}>
                     {Icon.plus(22)}
                   </div>
                   <div style={{ fontSize: 13.5, fontWeight: 700, color: T.gray800, marginBottom: 6 }}>Open Your Shop</div>
                   <div style={{ fontSize: 11.5, color: T.gray600, lineHeight: 1.5, marginBottom: 14 }}>Reach buyers across all of Malawi</div>
-                  <span style={{ background: T.green, color: '#fff', borderRadius: 8, padding: '8px 16px', fontSize: 12.5, fontWeight: 700 }}>Get Started</span>
+                  <span style={{ background: T.gray900, color: '#fff', borderRadius: 8, padding: '8px 16px', fontSize: 12.5, fontWeight: 700 }}>Get Started</span>
                 </div>
               </div>
             </div>
@@ -3464,7 +4176,7 @@ function JobsServicesSection({ navigate, jobs, services, loading }) {
                 : services.length > 0
                   ? services.map(s => (
                     <div key={s.id} onClick={() => navigate('/services')} className="soko-card-bg soko-card-hover" style={{ background: '#fff', border: `1px solid ${T.gray200}`, borderRadius: 14, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <div style={{ width: 38, height: 38, borderRadius: 10, background: T.greenL, color: T.green, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{Icon.wrench(17)}</div>
+                      <div style={{ width: 38, height: 38, borderRadius: 10, background: T.violetL, color: T.violet, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{Icon.wrench(17)}</div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13.5, fontWeight: 700, color: T.gray900 }}>{s.name}</div>
                         <div style={{ fontSize: 11.5, color: T.gray600 }}>{s.category || s.city || 'Malawi'}</div>
@@ -3483,95 +4195,382 @@ function JobsServicesSection({ navigate, jobs, services, loading }) {
   )
 }
 
-function ShopMiniCard({ shop, navigate }) {
+/** Horizontal media card for jobs / services on Home */
+function HomeWorkCard({
+  title,
+  sub,
+  meta,
+  image,
+  fallbackIcon,
+  accentBg,
+  accentFg,
+  onClick,
+}) {
   return (
-    <div onClick={() => navigate('/shop/' + shop.slug)} className="soko-card-bg soko-card-hover" style={{ background: '#fff', border: `1px solid ${T.gray200}`, borderRadius: 14, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+    <button
+      type="button"
+      onClick={onClick}
+      className="soko-work-card"
+      style={{
+        flexShrink: 0,
+        width: 220,
+        maxWidth: 'min(220px, 72vw)',
+        border: `1px solid ${T.gray200}`,
+        borderRadius: 14,
+        overflow: 'hidden',
+        background: '#fff',
+        cursor: 'pointer',
+        padding: 0,
+        textAlign: 'left',
+        fontFamily: 'inherit',
+        display: 'flex',
+        flexDirection: 'column',
+        boxShadow: T.shadow,
+        scrollSnapAlign: 'start',
+      }}
+    >
       <div style={{
-        width: 38, height: 38, borderRadius: 10, flexShrink: 0, overflow: 'hidden',
-        background: shop.logo_url ? 'transparent' : `linear-gradient(135deg, ${T.green}, ${T.greenD})`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 800, fontSize: 14,
+        position: 'relative', width: '100%', height: 100, flexShrink: 0,
+        background: accentBg, overflow: 'hidden',
       }}>
-        {shop.logo_url ? <img src={shop.logo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (shop.name?.[0] || 'S').toUpperCase()}
+        {image ? (
+          <img
+            src={image}
+            alt=""
+            loading="lazy"
+            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+            onError={e => { e.currentTarget.style.display = 'none' }}
+          />
+        ) : (
+          <div style={{
+            width: '100%', height: '100%', display: 'flex', alignItems: 'center',
+            justifyContent: 'center', color: accentFg, opacity: 0.85,
+          }}>
+            {fallbackIcon}
+          </div>
+        )}
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: 'linear-gradient(180deg, transparent 40%, rgba(0,0,0,0.45) 100%)',
+          pointerEvents: 'none',
+        }} />
       </div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-          <span style={{ fontSize: 13.5, fontWeight: 700, color: T.gray900, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{shop.name}</span>
+      <div style={{ padding: '10px 12px 12px', display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, flex: 1 }}>
+        <div style={{
+          fontSize: 13.5, fontWeight: 800, color: T.gray900, lineHeight: 1.25,
+          overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
+        }}>
+          {title}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11.5, color: T.gray600 }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-            {Icon.star(11)} {shop.rating ? Number(shop.rating).toFixed(1) : 'New'}
-            {shop.review_count > 0 && <span style={{ color: T.gray500 }}>({shop.review_count})</span>}
-          </span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, marginTop: 1 }}>
-          <span style={{ color: T.gray500 }}>{shop.listing_count || 0} Listings</span>
-          {shop.is_verified && <span style={{ color: T.green, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 3 }}>{Icon.check(10)} Verified Shop</span>}
-        </div>
+        {sub && (
+          <div style={{
+            fontSize: 11.5, color: T.gray600, fontWeight: 600,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {sub}
+          </div>
+        )}
+        {meta && (
+          <div style={{
+            marginTop: 'auto', paddingTop: 6, fontSize: 11, color: T.gray500, fontWeight: 600,
+            display: 'flex', alignItems: 'center', gap: 4,
+          }}>
+            {Icon.pin(10)} {meta}
+          </div>
+        )}
       </div>
-    </div>
+    </button>
   )
 }
 
 function ShopsJobsServicesRow({ navigate, shops, jobs, services, loading }) {
+  const shopsRail = useRef(null)
+  const jobsRail = useRef(null)
+  const servicesRail = useRef(null)
+
   return (
-    <section style={{ padding: 'clamp(24px,4vw,40px) 20px', background: '#fff' }}>
+    <section className="soko-shops-jobs-section" style={{ padding: '22px 20px 18px', background: '#fff' }}>
+      <style>{`
+        .soko-sjs-block { margin-bottom: 22px; }
+        .soko-sjs-block:last-child { margin-bottom: 0; }
+        .soko-sjs-head {
+          display: flex; align-items: center; justify-content: space-between;
+          gap: 12px; margin-bottom: 12px;
+        }
+        .soko-sjs-title {
+          font-family: ${T.fontDisplay}; font-size: 18px; font-weight: 800;
+          color: ${T.gray900}; letter-spacing: -0.35px; margin: 0;
+        }
+        .soko-sjs-link {
+          background: none; border: none; font-size: 13px; font-weight: 700;
+          color: ${T.gray700}; cursor: pointer; font-family: inherit;
+          display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;
+          min-height: 36px;
+          transition: color 0.15s;
+        }
+        .soko-sjs-link:hover { color: ${T.gray900}; }
+        .soko-sjs-rail {
+          display: flex; gap: 12px; overflow-x: auto;
+          padding: 2px 2px 8px;
+          scroll-snap-type: x mandatory;
+          -webkit-overflow-scrolling: touch;
+          scrollbar-width: none; -ms-overflow-style: none;
+        }
+        .soko-sjs-rail::-webkit-scrollbar { display: none; }
+        .soko-shop-card-home {
+          flex-shrink: 0;
+          width: 200px;
+          max-width: min(200px, 68vw);
+          background: #fff;
+          border-radius: 16px;
+          border: 1px solid ${T.gray200};
+          box-shadow: ${T.shadow};
+          overflow: hidden;
+          cursor: pointer;
+          display: flex;
+          flex-direction: column;
+          scroll-snap-align: start;
+          text-align: left;
+          padding: 0;
+          font-family: inherit;
+          transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        .soko-shop-card-home:hover {
+          transform: translateY(-3px);
+          box-shadow: ${T.shadowMd};
+        }
+        .soko-shop-card-home:active { transform: scale(0.98); }
+        @media (max-width: 768px) {
+          .soko-shops-jobs-section { padding: 16px 14px 12px !important; }
+          .soko-sjs-title { font-size: 16px !important; }
+          .soko-sjs-rail {
+            margin: 0 -14px;
+            padding-left: 14px !important;
+            padding-right: 14px !important;
+            scroll-padding-inline: 14px;
+            gap: 10px !important;
+          }
+          .soko-sjs-block { margin-bottom: 18px; }
+        }
+      `}</style>
+
       <div style={{ maxWidth: 1400, margin: '0 auto' }}>
-        <div className="soko-jobs-services" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 20 }}>
 
-          <div>
-            <SectionHeader title="Shops & Shops" subtitle="Discover trusted sellers" action={{ label: 'View all shops', onClick: () => navigate('/shops') }} />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {loading
-                ? [1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 58, borderRadius: 14 }} />)
-                : shops.length > 0
-                  ? shops.slice(0, 4).map(s => <ShopMiniCard key={s.id} shop={s} navigate={navigate} />)
-                  : <EmptyMini text="No shops yet." cta="Open a Shop" onClick={() => navigate('/shop-setup')} />
-              }
-            </div>
+        {/* ── Shops (cover + logo) ── */}
+        <div className="soko-sjs-block">
+          <div className="soko-sjs-head">
+            <h2 className="soko-sjs-title">Featured Shops</h2>
+            <button type="button" className="soko-sjs-link" onClick={() => navigate('/shops')}>
+              View all {Icon.chevR(14)}
+            </button>
           </div>
 
-          <div>
-            <SectionHeader title="Jobs Near You" subtitle="Recent vacancies" action={{ label: 'View all jobs', onClick: () => navigate('/jobs') }} />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {loading
-                ? [1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 58, borderRadius: 14 }} />)
-                : jobs.length > 0
-                  ? jobs.map(j => (
-                    <div key={j.id} onClick={() => navigate('/jobs')} className="soko-card-bg soko-card-hover" style={{ background: '#fff', border: `1px solid ${T.gray200}`, borderRadius: 14, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <div style={{ width: 38, height: 38, borderRadius: 10, background: T.blueL, color: T.blue, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{Icon.briefcase(17)}</div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13.5, fontWeight: 700, color: T.gray900 }}>{j.title}</div>
-                        <div style={{ fontSize: 11.5, color: T.gray600 }}>{j.company || j.city} · {j.type || 'Full-time'}</div>
-                      </div>
-                      {Icon.chevR(15)}
+          {loading ? (
+            <div className="soko-sjs-rail">
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} style={{ flexShrink: 0, width: 200, borderRadius: 16, overflow: 'hidden', border: `1px solid ${T.gray100}` }}>
+                  <div className="skeleton" style={{ width: '100%', height: 96 }} />
+                  <div style={{ padding: '28px 12px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div className="skeleton" style={{ height: 13, width: '70%', borderRadius: 4, margin: '0 auto' }} />
+                    <div className="skeleton" style={{ height: 11, width: '50%', borderRadius: 4, margin: '0 auto' }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : shops.length > 0 ? (
+            <div ref={shopsRail} className="soko-sjs-rail">
+              {shops.map(s => (
+                <button
+                  key={s.id}
+                  type="button"
+                  className="soko-shop-card-home"
+                  onClick={() => navigate('/shop/' + s.slug)}
+                >
+                  {/* Cover photo */}
+                  <div style={{ position: 'relative', width: '100%', height: 96, flexShrink: 0, overflow: 'hidden', background: T.gray100 }}>
+                    {s.cover_url ? (
+                      <img
+                        src={s.cover_url}
+                        alt=""
+                        loading="lazy"
+                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                        onError={e => { e.currentTarget.style.display = 'none' }}
+                      />
+                    ) : s.logo_url ? (
+                      <>
+                        <img
+                          src={s.logo_url}
+                          alt=""
+                          style={{
+                            width: '100%', height: '100%', objectFit: 'cover',
+                            filter: 'blur(8px) saturate(1.3) brightness(0.8)', transform: 'scale(1.15)',
+                          }}
+                        />
+                        <div style={{ position: 'absolute', inset: 0, background: 'rgba(6,30,18,0.25)' }} />
+                      </>
+                    ) : (
+                      <div style={{
+                        width: '100%', height: '100%',
+                        background: `linear-gradient(135deg, #1e293b 0%, #475569 55%, ${T.amber}55 100%)`,
+                      }} />
+                    )}
+                    <div style={{
+                      position: 'absolute', bottom: 0, left: 0, right: 0, height: 40,
+                      background: 'linear-gradient(to top, rgba(0,0,0,0.35), transparent)',
+                    }} />
+                    {s.is_verified && (
+                      <span style={{
+                        position: 'absolute', top: 8, left: 8,
+                        display: 'inline-flex', alignItems: 'center', gap: 3,
+                        background: 'rgba(255,255,255,0.95)', color: '#15803d',
+                        borderRadius: 999, padding: '3px 8px', fontSize: 10, fontWeight: 800,
+                        boxShadow: '0 1px 4px rgba(0,0,0,0.12)',
+                      }}>
+                        {Icon.verify(10)} Verified
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Logo over cover */}
+                  <div style={{ display: 'flex', justifyContent: 'center', marginTop: -22, position: 'relative', zIndex: 2 }}>
+                    <div style={{
+                      width: 44, height: 44, borderRadius: '50%',
+                      border: '2.5px solid #fff',
+                      background: s.logo_url ? '#fff' : `linear-gradient(135deg, #334155, #1e293b)`,
+                      overflow: 'hidden',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: '#fff', fontWeight: 800, fontSize: 16,
+                      boxShadow: '0 2px 10px rgba(0,0,0,0.14)',
+                    }}>
+                      {s.logo_url
+                        ? <img src={s.logo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        : (s.name?.[0] || 'S').toUpperCase()}
                     </div>
-                  ))
-                  : <EmptyMini text="No jobs posted yet." cta="Post a Job" onClick={() => navigate('/jobs')} />
-              }
-            </div>
-          </div>
+                  </div>
 
-          <div>
-            <SectionHeader title="Services Near You" subtitle="Available service providers" action={{ label: 'View all services', onClick: () => navigate('/services') }} />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              {loading
-                ? [1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 58, borderRadius: 14 }} />)
-                : services.length > 0
-                  ? services.map(s => (
-                    <div key={s.id} onClick={() => navigate('/services')} className="soko-card-bg soko-card-hover" style={{ background: '#fff', border: `1px solid ${T.gray200}`, borderRadius: 14, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <div style={{ width: 38, height: 38, borderRadius: 10, background: T.greenL, color: T.green, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{Icon.wrench(17)}</div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 13.5, fontWeight: 700, color: T.gray900 }}>{s.name}</div>
-                        <div style={{ fontSize: 11.5, color: T.gray600 }}>{s.category || s.city || 'Malawi'}</div>
-                      </div>
-                      {Icon.chevR(15)}
+                  <div style={{ padding: '6px 12px 12px', display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center', textAlign: 'center', flex: 1 }}>
+                    <div style={{
+                      fontSize: 13.5, fontWeight: 800, color: T.gray900, lineHeight: 1.25,
+                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%',
+                    }}>
+                      {s.name}
                     </div>
-                  ))
-                  : <EmptyMini text="No services listed yet." cta="Offer a Service" onClick={() => navigate('/services')} />
-              }
-            </div>
-          </div>
+                    <div style={{ fontSize: 11, color: T.gray600, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
+                      {s.category || 'Shop'}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11.5, color: T.gray700, marginTop: 2 }}>
+                      {Icon.star(11)}
+                      <span style={{ fontWeight: 700 }}>{s.rating ? Number(s.rating).toFixed(1) : 'New'}</span>
+                      {s.review_count > 0 && <span style={{ color: T.gray500 }}>({s.review_count})</span>}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, color: T.gray500, marginTop: 1 }}>
+                      {Icon.pin(10)} {s.city || 'Malawi'}
+                      <span style={{ color: T.gray300 }}>·</span>
+                      {s.listing_count || 0} products
+                    </div>
+                  </div>
+                </button>
+              ))}
 
+              <button
+                type="button"
+                className="soko-shop-card-home"
+                onClick={() => navigate('/shop-setup')}
+                style={{
+                  border: `2px dashed ${T.gray200}`,
+                  background: T.gray50,
+                  boxShadow: 'none',
+                  minHeight: 220,
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                }}
+              >
+                <div style={{ textAlign: 'center', padding: 16 }}>
+                  <div style={{
+                    width: 42, height: 42, borderRadius: '50%', background: T.amberL,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    margin: '0 auto 10px', color: T.amberD,
+                  }}>
+                    {Icon.plus(18)}
+                  </div>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: T.gray800, marginBottom: 4 }}>Open a shop</div>
+                  <div style={{ fontSize: 11, color: T.gray600, lineHeight: 1.4 }}>Reach buyers nationwide</div>
+                </div>
+              </button>
+            </div>
+          ) : (
+            <EmptyMini text="No shops yet — open the first one." cta="Create My Shop" onClick={() => navigate('/shop-setup')} />
+          )}
+        </div>
+
+        {/* ── Jobs ── */}
+        <div className="soko-sjs-block">
+          <div className="soko-sjs-head">
+            <h2 className="soko-sjs-title">Jobs</h2>
+            <button type="button" className="soko-sjs-link" onClick={() => navigate('/jobs')}>
+              View all {Icon.chevR(14)}
+            </button>
+          </div>
+          {loading ? (
+            <div className="soko-sjs-rail">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="skeleton" style={{ flexShrink: 0, width: 220, height: 160, borderRadius: 14 }} />
+              ))}
+            </div>
+          ) : jobs.length > 0 ? (
+            <div ref={jobsRail} className="soko-sjs-rail">
+              {jobs.map(j => (
+                <HomeWorkCard
+                  key={j.id}
+                  title={j.title}
+                  sub={[j.company, j.type || 'Full-time', j.salary].filter(Boolean).join(' · ')}
+                  meta={j.city || 'Malawi'}
+                  image={j.cover_image_url || j.logo_url || null}
+                  fallbackIcon={Icon.briefcase(28)}
+                  accentBg={T.blueL}
+                  accentFg={T.blue}
+                  onClick={() => navigate(`/jobs?job=${j.id}`)}
+                />
+              ))}
+            </div>
+          ) : (
+            <EmptyMini text="No jobs posted yet." cta="Post a Job" onClick={() => navigate('/jobs')} />
+          )}
+        </div>
+
+        {/* ── Services ── */}
+        <div className="soko-sjs-block">
+          <div className="soko-sjs-head">
+            <h2 className="soko-sjs-title">Services</h2>
+            <button type="button" className="soko-sjs-link" onClick={() => navigate('/services')}>
+              View all {Icon.chevR(14)}
+            </button>
+          </div>
+          {loading ? (
+            <div className="soko-sjs-rail">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="skeleton" style={{ flexShrink: 0, width: 220, height: 160, borderRadius: 14 }} />
+              ))}
+            </div>
+          ) : services.length > 0 ? (
+            <div ref={servicesRail} className="soko-sjs-rail">
+              {services.map(s => (
+                <HomeWorkCard
+                  key={s.id}
+                  title={s.name}
+                  sub={[s.category || 'Service', s.rate].filter(Boolean).join(' · ')}
+                  meta={s.city || 'Malawi'}
+                  image={(Array.isArray(s.media_urls) ? s.media_urls[0] : null) || null}
+                  fallbackIcon={Icon.wrench(28)}
+                  accentBg={T.violetL}
+                  accentFg={T.violet}
+                  onClick={() => navigate(`/services?service=${s.id}`)}
+                />
+              ))}
+            </div>
+          ) : (
+            <EmptyMini text="No services listed yet." cta="Offer a Service" onClick={() => navigate('/services')} />
+          )}
         </div>
       </div>
     </section>
@@ -3582,133 +4581,263 @@ function EmptyMini({ text, cta, onClick }) {
   return (
     <div style={{ textAlign: 'center', padding: '24px 16px', border: `1.5px dashed ${T.gray200}`, borderRadius: 14 }}>
       <p style={{ fontSize: 13, color: T.gray600, marginBottom: 10 }}>{text}</p>
-      <button onClick={onClick} style={{ background: T.greenL, color: T.green, border: 'none', borderRadius: 10, padding: '7px 16px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>{cta}</button>
+      <button onClick={onClick} style={{ background: T.gray900, color: '#fff', border: 'none', borderRadius: 10, padding: '7px 16px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>{cta}</button>
     </div>
   )
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   VERIFICATION TRUST SECTION
+   SELL BANNER — compact single-shot strip (~160px)
 ───────────────────────────────────────────────────────────────────────────── */
-function VerificationTrustSection({ navigate, stats }) {
-  return (
-    <section style={{ padding: '20px 20px', background: '#fff', borderTop: `1px solid ${T.gray100}` }}>
-      <div style={{ maxWidth: 1400, margin: '0 auto', display: 'flex', alignItems: 'center', gap: 24, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: '0 0 auto' }}>
-          <div style={{ width: 48, height: 48, borderRadius: '50%', background: T.greenL, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            {Icon.shieldCheck(26)}
-          </div>
-          <div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: T.gray900 }}>Trade with confidence</div>
-            <div style={{ fontSize: 12.5, color: T.gray600 }}>
-              <span style={{ textDecoration: 'underline', cursor: 'pointer', color: T.green }} onClick={() => navigate('/listings')}>Choose verified sellers</span> and shops for a safer experience.
-            </div>
-          </div>
-        </div>
 
-        <div style={{ display: 'flex', gap: 32, flex: 1, flexWrap: 'wrap' }}>
-          {[
-            { stat: stats.sellers || '12K+', label: 'Verified Sellers' },
-            { stat: stats.shops   || '850+', label: 'Verified Shops'   },
-            { stat: stats.reviews || '98%',  label: 'Positive Reviews' },
-          ].map(item => (
-            <div key={item.label}>
-              <div style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 800, color: T.green }}>{item.stat}</div>
-              <div style={{ fontSize: 12, color: T.gray600 }}>{item.label}</div>
-            </div>
-          ))}
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14, background: T.gray50, border: `1px solid ${T.gray200}`, borderRadius: 14, padding: '14px 20px', flexShrink: 0 }}>
-          <div style={{ width: 40, height: 40, borderRadius: '50%', background: T.greenL, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            {Icon.shieldCheck(20)}
-          </div>
-          <div>
-            <div style={{ fontSize: 13.5, fontWeight: 700, color: T.gray900 }}>Become a Verified Seller</div>
-            <div style={{ fontSize: 12, color: T.gray600 }}>Build trust and sell more.</div>
-          </div>
-          <button onClick={() => navigate('/profile')} style={{ background: '#fff', border: `1.5px solid ${T.gray200}`, borderRadius: 50, padding: '9px 18px', fontSize: 13, fontWeight: 700, color: T.gray800, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
-            Get Verified {Icon.check(14)}
-          </button>
-        </div>
-      </div>
-    </section>
-  )
-}
-
-/* ─────────────────────────────────────────────────────────────────────────────
-   SELLER CONVERSION SECTION
-───────────────────────────────────────────────────────────────────────────── */
-const SellCtaIcon = {
-  free: (s=16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 9.5a2.5 2.5 0 0 1 5 0c0 1.5-2 2-2.5 3.2M12 17h.01"/></svg>,
-  reach: (s=16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z"/></svg>,
-  fast: (s=16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="currentColor"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>,
-  noFee: (s=16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg>,
-}
+const BOTTOM_BANNER_CSS = `
+  .soko-bb {
+    max-width: 1400px;
+    margin: 0 auto;
+    border-radius: 18px;
+    overflow: hidden;
+    position: relative;
+    /* Target height: marketing strips should stay ~140–180px desktop */
+    min-height: 0;
+    box-shadow: 0 12px 32px rgba(0,0,0,0.18);
+  }
+  .soko-bb-inner {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 16px 24px;
+    padding: 18px 22px;
+    min-height: 148px;
+  }
+  .soko-bb-copy {
+    flex: 1 1 280px;
+    min-width: 0;
+  }
+  .soko-bb-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border-radius: 999px;
+    padding: 3px 10px 3px 7px;
+    font-size: 10.5px;
+    font-weight: 800;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .soko-bb-title {
+    font-family: ${T.fontDisplay};
+    font-size: clamp(18px, 2.1vw, 24px);
+    font-weight: 800;
+    letter-spacing: -0.45px;
+    line-height: 1.18;
+    margin: 0 0 4px;
+    color: #fff;
+  }
+  .soko-bb-title em {
+    font-style: normal;
+  }
+  .soko-bb-sub {
+    font-size: 12.5px;
+    line-height: 1.4;
+    margin: 0 0 12px;
+    color: rgba(255,255,255,0.72);
+    font-weight: 500;
+    max-width: 420px;
+  }
+  .soko-bb-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .soko-bb-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    border-radius: 11px;
+    padding: 9px 16px;
+    font-size: 13px;
+    font-weight: 800;
+    font-family: inherit;
+    cursor: pointer;
+    min-height: 40px;
+    border: none;
+    transition: transform 0.12s, box-shadow 0.12s, background 0.12s;
+  }
+  .soko-bb-btn:hover { transform: translateY(-1px); }
+  .soko-bb-btn:active { transform: scale(0.98); }
+  .soko-bb-btn-light {
+    background: #fff;
+    color: ${T.gray900};
+    box-shadow: 0 4px 14px rgba(0,0,0,0.15);
+  }
+  .soko-bb-btn-gold {
+    background: linear-gradient(135deg, ${T.amber}, #e09800);
+    color: #1a0a00;
+    box-shadow: 0 6px 18px rgba(249,171,0,0.35);
+  }
+  .soko-bb-btn-ghost {
+    background: rgba(255,255,255,0.08);
+    color: #fff;
+    border: 1.5px solid rgba(255,255,255,0.22);
+  }
+  .soko-bb-side {
+    flex: 0 1 auto;
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    max-width: 52%;
+  }
+  .soko-bb-stat {
+    background: rgba(255,255,255,0.1);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 12px;
+    padding: 10px 12px;
+    min-width: 96px;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .soko-bb-stat-num {
+    font-family: ${T.fontDisplay};
+    font-size: 17px;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: -0.3px;
+    line-height: 1.1;
+  }
+  .soko-bb-stat-lbl {
+    font-size: 10.5px;
+    font-weight: 600;
+    color: rgba(255,255,255,0.58);
+    margin-top: 2px;
+    white-space: nowrap;
+  }
+  .soko-bb-cta-card {
+    background: rgba(0,0,0,0.22);
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 14px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 220px;
+    max-width: 280px;
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+  .soko-bb-cta-card p {
+    margin: 0;
+    font-size: 11.5px;
+    color: rgba(255,255,255,0.62);
+    line-height: 1.35;
+    font-weight: 500;
+  }
+  .soko-bb-cta-card strong {
+    display: block;
+    font-size: 13px;
+    font-weight: 800;
+    color: #fff;
+    margin-bottom: 2px;
+  }
+  @media (max-width: 900px) {
+    .soko-bb-inner {
+      flex-direction: column;
+      align-items: stretch;
+      padding: 16px 14px;
+      min-height: 0;
+      gap: 12px;
+    }
+    .soko-bb-side {
+      max-width: 100%;
+      justify-content: flex-start;
+    }
+    .soko-bb-stat { flex: 1 1 0; min-width: 0; }
+    .soko-bb-cta-card {
+      width: 100%;
+      max-width: none;
+      flex-wrap: wrap;
+    }
+    .soko-bb-actions { width: 100%; }
+    .soko-bb-btn { flex: 1 1 auto; }
+    .soko-bb-title { font-size: 18px !important; }
+    .soko-bb-sub { margin-bottom: 10px; font-size: 12px; }
+  }
+`
 
 function SellCtaBanner({ navigate }) {
-  const benefits = [
-    { icon: SellCtaIcon.free,  label: "It's Free",      sub: 'List in minutes'     },
-    { icon: SellCtaIcon.reach, label: 'Reach Millions', sub: 'Nationwide exposure' },
-    { icon: SellCtaIcon.fast,  label: 'Sell Faster',    sub: 'Get real results'    },
-    { icon: SellCtaIcon.noFee, label: 'No Commission',  sub: 'Keep what you earn'  },
+  const perks = [
+    { label: 'Free to list', icon: Icon.plus },
+    { label: 'Nationwide', icon: Icon.pin },
+    { label: '0% fees', icon: Icon.check },
+    { label: 'In-app chat', icon: Icon.chat },
   ]
+
   return (
-    <section style={{ padding: '20px 20px clamp(28px,4vw,40px) 20px', background: T.gray900 }}>
-      <div style={{
-        maxWidth: 1400, margin: '0 auto', background: T.greenDk, borderRadius: 20,
-        padding: 'clamp(24px,3vw,36px) clamp(24px,3.5vw,40px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        gap: 32, flexWrap: 'wrap', position: 'relative', overflow: 'hidden',
-      }}>
-
-        <div style={{ flex: '1 1 260px', position: 'relative', zIndex: 1 }}>
-          <h2 style={{ fontFamily: T.fontDisplay, fontSize: 'clamp(22px,2.8vw,30px)', fontWeight: 800, color: '#fff', letterSpacing: '-0.7px', marginBottom: 6 }}>
-            Have something to sell?
-          </h2>
-          <p style={{ fontSize: 13.5, color: 'rgba(255,255,255,0.6)', marginBottom: 18 }}>
-            Join thousands of sellers on SokoMW today.
-          </p>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <button className="soko-btn-primary" onClick={() => navigate('/post')} style={{ background: T.green, fontSize: 13.5, padding: '11px 24px' }}>
-              Sell Now
-            </button>
-            <button onClick={() => navigate('/profile')} style={{ background: 'rgba(255,255,255,0.08)', border: '1.5px solid rgba(255,255,255,0.2)', borderRadius: 14, padding: '11px 20px', fontSize: 13.5, fontWeight: 700, color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6 }}>
-              {Icon.plus ? null : null}▶ How it Works
-            </button>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', gap: 'clamp(16px,2.5vw,32px)', flexWrap: 'wrap', flex: '1 1 320px', justifyContent: 'center', position: 'relative', zIndex: 1 }}>
-          {benefits.map(b => (
-            <div key={b.label} style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 140 }}>
-              <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', color: T.amber, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{b.icon(15)}</div>
-              <div>
-                <div style={{ fontSize: 12.5, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap' }}>{b.label}</div>
-                <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', whiteSpace: 'nowrap' }}>{b.sub}</div>
-              </div>
+    <section className="soko-sell-cta" style={{ padding: '8px 20px 28px', background: '#0a0f0c' }}>
+      <style>{BOTTOM_BANNER_CSS}</style>
+      <div
+        className="soko-bb"
+        style={{
+          background: `
+            radial-gradient(ellipse 45% 100% at 0% 50%, rgba(15,157,88,0.35) 0%, transparent 55%),
+            radial-gradient(ellipse 40% 90% at 100% 20%, rgba(249,171,0,0.22) 0%, transparent 50%),
+            linear-gradient(105deg, #03140b 0%, #063d23 45%, #0a2818 100%)
+          `,
+          boxShadow: '0 0 0 1px rgba(255,255,255,0.06), 0 16px 40px rgba(0,0,0,0.35)',
+        }}
+      >
+        <div className="soko-bb-inner">
+          <div className="soko-bb-copy">
+            <div className="soko-bb-eyebrow" style={{
+              background: 'rgba(249,171,0,0.16)',
+              color: T.amber,
+              border: '1px solid rgba(249,171,0,0.35)',
+            }}>
+              {Icon.lightning(11)} Free forever · 0% commission
             </div>
-          ))}
-        </div>
+            <h2 className="soko-bb-title">
+              Have something to{' '}
+              <em style={{
+                background: `linear-gradient(90deg, ${T.amber}, #ffe08a)`,
+                WebkitBackgroundClip: 'text', backgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+              }}>
+                sell?
+              </em>
+            </h2>
+            <p className="soko-bb-sub">
+              List in minutes, chat with buyers, keep 100% of what you earn.
+            </p>
+            <div className="soko-bb-actions">
+              <button type="button" className="soko-bb-btn soko-bb-btn-gold" onClick={() => navigate('/post')}>
+                Sell Now {Icon.chevR(14)}
+              </button>
+              <button type="button" className="soko-bb-btn soko-bb-btn-ghost" onClick={() => navigate('/listings')}>
+                See listings
+              </button>
+            </div>
+          </div>
 
-        {/* Decorative shop/car illustration */}
-        <div className="soko-nav-desktop" style={{ display: 'flex', alignItems: 'flex-end', gap: 14, flexShrink: 0, position: 'relative', zIndex: 1 }}>
-          <svg width="54" height="54" viewBox="0 0 48 48" fill="none">
-            <rect x="6" y="14" width="36" height="28" rx="3" fill="rgba(255,255,255,0.12)"/>
-            <path d="M6 14l3-8h30l3 8" stroke="rgba(255,255,255,0.55)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
-            <path d="M16 22a8 8 0 0 0 16 0" stroke="rgba(255,255,255,0.65)" strokeWidth="2.2" strokeLinecap="round" fill="none"/>
-            <rect x="6" y="14" width="36" height="2.4" fill="rgba(255,255,255,0.3)"/>
-          </svg>
-          <svg width="58" height="40" viewBox="0 0 58 36" fill="none">
-            <path d="M5 24 9 12c1-3 3-4 6-4h18c3 0 5 1 6 4l4 12" stroke={T.amber} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" fill="rgba(249,171,0,0.14)"/>
-            <rect x="2" y="22" width="54" height="9" rx="3.5" fill={T.amber} fillOpacity="0.9"/>
-            <rect x="13" y="13" width="13" height="9" rx="1.5" fill="rgba(6,61,35,0.6)"/>
-            <rect x="28" y="13" width="13" height="9" rx="1.5" fill="rgba(6,61,35,0.6)"/>
-            <circle cx="13" cy="31" r="5" fill="#1a1a1a"/>
-            <circle cx="13" cy="31" r="2" fill="#555"/>
-            <circle cx="45" cy="31" r="5" fill="#1a1a1a"/>
-            <circle cx="45" cy="31" r="2" fill="#555"/>
-          </svg>
+          <div className="soko-bb-side">
+            {perks.map(p => (
+              <div key={p.label} className="soko-bb-stat" style={{ minWidth: 88, textAlign: 'center', padding: '10px 10px' }}>
+                <div style={{
+                  width: 28, height: 28, borderRadius: 8, margin: '0 auto 6px',
+                  background: 'rgba(249,171,0,0.18)', color: T.amber,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {p.icon(14)}
+                </div>
+                <div className="soko-bb-stat-lbl" style={{ color: 'rgba(255,255,255,0.85)', fontWeight: 700, whiteSpace: 'normal', lineHeight: 1.25 }}>
+                  {p.label}
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </section>
@@ -3765,7 +4894,7 @@ function EarlyAccessStrip() {
   const [vis, setVis] = useState(true)
   if (!vis) return null
   return (
-    <div style={{ background: 'linear-gradient(90deg, #f59e0b11, #f59e0b22, #f59e0b11)', borderBottom: `1px solid ${T.amber}44`, padding: '9px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+    <div className="soko-early-access" style={{ background: 'linear-gradient(90deg, #f59e0b11, #f59e0b22, #f59e0b11)', borderBottom: `1px solid ${T.amber}44`, padding: '9px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.amberD} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 3h6l1 8H8L9 3z"/><path d="M6.5 11l-2 7a1 1 0 0 0 1 1.3h9a1 1 0 0 0 1-1.3l-2-7"/><line x1="10" y1="7" x2="10" y2="11"/><line x1="14" y1="7" x2="14" y2="11"/></svg>
       <span style={{ fontSize: 12.5, fontWeight: 600, color: T.amberD }}>Early access — you're testing SokoMW. Official launch date coming soon.</span>
       <button onClick={() => setVis(false)} style={{ marginLeft: 8, background: 'none', border: 'none', cursor: 'pointer', color: T.amberD, display: 'flex', alignItems: 'center' }}>{Icon.x(12)}</button>
@@ -3803,6 +4932,17 @@ export default function Home() {
   const [notifCount, setNotifCount] = useState(0)
   const [unreadChats, setUnreadChats] = useState(0)
   const [search, setSearch] = useState('')
+  /**
+   * Smart progressive load:
+   * - Page chrome + skeletons paint immediately
+   * - Thin top progress tracks real fetch stages
+   * - Listings & aux sections load in parallel (not sequential)
+   */
+  const [loadProgress, setLoadProgress] = useState(12)
+  const [showLoadBar, setShowLoadBar] = useState(true)
+  const loadFlags = useRef({ auth: false, listings: false, sections: false })
+  /** Set of listing ids the signed-in user has saved (listing_saves). */
+  const [savedIds, setSavedIds] = useState(() => new Set())
 
   function handleSearch(val) {
     setSearch(val)
@@ -3812,9 +4952,69 @@ export default function Home() {
     }
   }
 
+  // Load saved listings for heart state on product cards
+  useEffect(() => {
+    let cancelled = false
+    if (!user?.id) {
+      setSavedIds(new Set())
+      return undefined
+    }
+    ;(async () => {
+      try {
+        const { data, error } = await supabase
+          .from('listing_saves')
+          .select('listing_id')
+          .eq('user_id', user.id)
+          .limit(500)
+        if (cancelled || error) return
+        setSavedIds(new Set((data || []).map(r => r.listing_id).filter(Boolean)))
+      } catch { /* table may not exist on older envs */ }
+    })()
+    return () => { cancelled = true }
+  }, [user?.id])
+
+  async function toggleListingSave(listingId) {
+    if (!listingId) return
+    if (!user?.id) {
+      try {
+        sessionStorage.setItem('soko_post_login', JSON.stringify({ type: 'save', listingId }))
+      } catch { /* ignore */ }
+      navigate('/login')
+      return
+    }
+    const wasSaved = savedIds.has(listingId)
+    // Optimistic UI
+    setSavedIds(prev => {
+      const next = new Set(prev)
+      if (wasSaved) next.delete(listingId)
+      else next.add(listingId)
+      return next
+    })
+    try {
+      const { data, error } = await supabase.rpc('toggle_listing_save', { p_listing_id: listingId })
+      if (error) throw error
+      // RPC returns true when now saved, false when removed
+      setSavedIds(prev => {
+        const next = new Set(prev)
+        if (data === true) next.add(listingId)
+        else if (data === false) next.delete(listingId)
+        return next
+      })
+    } catch {
+      // Revert on failure
+      setSavedIds(prev => {
+        const next = new Set(prev)
+        if (wasSaved) next.add(listingId)
+        else next.delete(listingId)
+        return next
+      })
+    }
+  }
+
   const [activeCategory, setActiveCategory] = useState('All')
   function handleCategoryChange(cat) { setActiveCategory(cat) }
   const [activeDistrict, setActiveDistrict] = useState('All Districts')
+  const [homeGpsLocation, setHomeGpsLocation] = useState(null)
 
   // ── New sections' data ────────────────────────────────────
   const [shops,    setShops]    = useState([])
@@ -3822,7 +5022,38 @@ export default function Home() {
   const [services, setServices] = useState([])
   const [requests, setRequests] = useState([])
   const [sectionsLoading, setSectionsLoading] = useState(true)
-  const [trustStats, setTrustStats] = useState({ sellers: '—', shops: '—', reviews: '—' })
+
+  // Boot GPS early (same reverse-geocode as Looking For page)
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const cached = sessionStorage.getItem('soko_gps_location')
+        if (cached) {
+          const parsed = JSON.parse(cached)
+          if (parsed?.lat != null || parsed?.district) {
+            if (!cancelled) setHomeGpsLocation(parsed)
+          }
+        }
+      } catch { /* ignore */ }
+      const gps = await getGPSLocation()
+      if (cancelled || !gps) return
+      setHomeGpsLocation(gps)
+      try {
+        sessionStorage.setItem('soko_gps_location', JSON.stringify(gps))
+        if (gps.lat != null && gps.lng != null) {
+          sessionStorage.setItem('userCoords', JSON.stringify({ lat: gps.lat, lng: gps.lng }))
+        }
+      } catch { /* ignore */ }
+      // Optionally align district filter with GPS when still on "All"
+      if (gps.district && activeDistrict === 'All Districts') {
+        // Don't auto-force filter — only store location for ranking
+      }
+    })()
+    return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
 
   // ── Stories (compact LiveStoriesCard + viewer/upload) ─────
   const [stories, setStories] = useState([])
@@ -3856,13 +5087,25 @@ export default function Home() {
     return () => { if (ch) supabase.removeChannel(ch) }
   }, [user?.id])
 
-  function openStoryGroup(groupLeader) {
-    const group = stories.filter(s => s.user_id === groupLeader.user_id)
-    const ids = group.map(x => x.id)
+  function openStoryGroup(groupLeader, groupMeta) {
+    // Prefer ordered items from the strip when provided; else filter flat list
+    const group = (groupMeta?.items?.length
+      ? groupMeta.items
+      : stories.filter(s => s.user_id === groupLeader.user_id)
+    ).slice().sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+    const ids = group.map(x => x.id).filter(Boolean)
+
+    // Local viewed state (shared key with HomeStatusRow / StatusPage)
+    try {
+      const prev = JSON.parse(localStorage.getItem('viewedStories') || '[]')
+      const next = new Set([...(Array.isArray(prev) ? prev : []), ...ids])
+      localStorage.setItem('viewedStories', JSON.stringify([...next]))
+    } catch { /* ignore */ }
+
     if (user?.id) {
       ids.forEach(id => {
         supabase.from('status_views')
-          .upsert({ status_id: id, viewer_id: user.id })
+          .upsert({ status_id: id, viewer_id: user.id }, { onConflict: 'status_id,viewer_id' })
           .then(() => {}, () => {})
       })
     }
@@ -3875,96 +5118,157 @@ export default function Home() {
     setShowUpload(true)
   }
 
+  /** Map completed stages → progress % (auth 28, listings 68, sections 100) */
+  function bumpLoadProgress(flag) {
+    loadFlags.current[flag] = true
+    const { auth, listings, sections } = loadFlags.current
+    let p = 12
+    if (auth) p = 28
+    if (listings) p = Math.max(p, 68)
+    if (sections) p = 100
+    // If both data stages done without auth race, still complete
+    if (listings && sections) p = 100
+    setLoadProgress(prev => Math.max(prev, p))
+  }
+
+  // Hide progress bar after both primary streams settle
+  useEffect(() => {
+    if (loading || sectionsLoading) return undefined
+    setLoadProgress(100)
+    const t = setTimeout(() => setShowLoadBar(false), 420)
+    return () => clearTimeout(t)
+  }, [loading, sectionsLoading])
+
+  // Safety: never leave the bar stuck
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setLoadProgress(100)
+      setShowLoadBar(false)
+      setLoading(false)
+      setSectionsLoading(false)
+    }, 8000)
+    return () => clearTimeout(t)
+  }, [])
+
   async function init() {
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user) {
-      const { data: profile } = await supabase.from('profiles')
-        .select('avatar_url, full_name, city, account_type').eq('id', user.id).maybeSingle()
-      const { data: shop } = await supabase.from('shops')
-        .select('slug').eq('owner_id', user.id).maybeSingle()
-      setUser({ ...user, avatar_url: profile?.avatar_url || null, account_type: profile?.account_type, shop_slug: shop?.slug || null })
-      loadNotifs(user.id)
-      loadUnreadChats(user.id)
-    }
-    await loadListings()
-    await loadAuxSections()
+    // Kick data fetches immediately in parallel — don't wait for profile enrichment
+    const listingsPromise = loadListings()
+    const sectionsPromise = loadAuxSections()
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        // Profile enrichment in parallel with marketplace data
+        const [profileRes, shopRes] = await Promise.all([
+          supabase.from('profiles')
+            .select('avatar_url, full_name, city, account_type, is_verified').eq('id', user.id).maybeSingle(),
+          supabase.from('shops')
+            .select('slug, is_verified').eq('owner_id', user.id).maybeSingle(),
+        ])
+        const profile = profileRes.data
+        const shop = shopRes.data
+        setUser({
+          ...user,
+          avatar_url: profile?.avatar_url || null,
+          account_type: profile?.account_type,
+          shop_slug: shop?.slug || null,
+          is_verified: !!(profile?.is_verified || shop?.is_verified),
+        })
+        loadNotifs(user.id)
+        loadUnreadChats(user.id)
+      }
+    } catch { /* auth optional for browsing */ }
+    bumpLoadProgress('auth')
+
+    await Promise.all([listingsPromise, sectionsPromise])
   }
 
   async function loadListings() {
     setLoading(true)
-    // Phase 3.1 — featured discovery is a dedicated query only (featured_until > now).
-    // Recent posts feed is separate and never used as the featured source.
-    const LISTING_SELECT =
-      'id, title, price, price_type, images, city, category, condition, featured, is_featured, featured_until, flash_sale_price, flash_sale_expires_at, promo_badge, bulk_pricing, stock_qty, created_at, seller_id, shop_id, latitude, longitude, status, description, tags'
-    const nowIso = new Date().toISOString()
+    try {
+      // Phase 3.1 — featured discovery is a dedicated query only (featured_until > now).
+      // Recent posts feed is separate and never used as the featured source.
+      const LISTING_SELECT =
+        'id, title, price, price_type, images, city, category, condition, featured, is_featured, featured_until, flash_sale_price, flash_sale_expires_at, promo_badge, bulk_pricing, stock_qty, created_at, seller_id, shop_id, latitude, longitude, status, description, tags, contact_methods, call_number'
+      const nowIso = new Date().toISOString()
+      // Live listings may be `published` or `active` depending on env/admin path
+      const LIVE = ['published', 'active']
+      // Fetch only what Home can show cleanly (not 60 that stack via Show more)
+      const FEATURED_FETCH = FEATURED_HOME_CAP
+      const LATEST_FETCH = HOME_LATEST_COUNT + FEATURED_HOME_CAP + 8
 
-    const [{ data: featuredRows }, { data: recentRows }] = await Promise.all([
-      supabase
-        .from('listings')
-        .select(LISTING_SELECT)
-        .eq('status', 'published')
-        .gt('featured_until', nowIso)
-        .order('featured_until', { ascending: false })
-        .limit(24),
-      supabase
-        .from('listings')
-        .select(LISTING_SELECT)
-        .eq('status', 'published')
-        .order('created_at', { ascending: false })
-        .limit(60),
-    ])
+      const [{ data: featuredRows }, { data: recentRows }] = await Promise.all([
+        supabase
+          .from('listings')
+          .select(LISTING_SELECT)
+          .in('status', LIVE)
+          .gt('featured_until', nowIso)
+          .order('featured_until', { ascending: false })
+          .limit(FEATURED_FETCH),
+        supabase
+          .from('listings')
+          .select(LISTING_SELECT)
+          .in('status', LIVE)
+          .order('created_at', { ascending: false })
+          .limit(LATEST_FETCH),
+      ])
 
-    async function enrichListingRows(rows) {
-      let withShopRatings = rows || []
-      const shopIds = [...new Set(withShopRatings.map(l => l.shop_id).filter(Boolean))]
-      const sellerIds = [...new Set(withShopRatings.map(l => l.seller_id).filter(Boolean))]
+      async function enrichListingRows(rows) {
+        let withShopRatings = rows || []
+        const shopIds = [...new Set(withShopRatings.map(l => l.shop_id).filter(Boolean))]
+        const sellerIds = [...new Set(withShopRatings.map(l => l.seller_id).filter(Boolean))]
 
-      if (shopIds.length > 0) {
-        const { data: shopsData } = await supabase.from('shops').select('id, rating, review_count, is_verified').in('id', shopIds)
-        const shopMap = {}
-        shopsData?.forEach(s => { shopMap[s.id] = s })
-        withShopRatings = withShopRatings.map(l => ({
-          ...l,
-          shop_rating: l.shop_id ? shopMap[l.shop_id]?.rating : null,
-          shop_review_count: l.shop_id ? shopMap[l.shop_id]?.review_count : null,
-          shop_is_verified: l.shop_id ? shopMap[l.shop_id]?.is_verified : false,
-        }))
+        if (shopIds.length > 0) {
+          const { data: shopsData } = await supabase.from('shops').select('id, rating, review_count, is_verified').in('id', shopIds)
+          const shopMap = {}
+          shopsData?.forEach(s => { shopMap[s.id] = s })
+          withShopRatings = withShopRatings.map(l => ({
+            ...l,
+            shop_rating: l.shop_id ? shopMap[l.shop_id]?.rating : null,
+            shop_review_count: l.shop_id ? shopMap[l.shop_id]?.review_count : null,
+            shop_is_verified: l.shop_id ? shopMap[l.shop_id]?.is_verified : false,
+          }))
+        }
+        if (sellerIds.length > 0) {
+          const { data: profilesData } = await supabase.from('profiles').select('id, is_verified').in('id', sellerIds)
+          const profileMap = {}
+          profilesData?.forEach(p => { profileMap[p.id] = p })
+          withShopRatings = withShopRatings.map(l => ({
+            ...l,
+            seller_verified: l.seller_id ? profileMap[l.seller_id]?.is_verified : false,
+          }))
+        }
+
+        let blocked = []
+        try { blocked = JSON.parse(localStorage.getItem('soko_blocked_shops') || '[]') } catch { /* ignore */ }
+        const blockedStr = blocked.map(id => String(id))
+        if (blockedStr.length === 0) return withShopRatings
+        return withShopRatings.filter(l => !l.shop_id || !blockedStr.includes(String(l.shop_id)))
       }
-      if (sellerIds.length > 0) {
-        const { data: profilesData } = await supabase.from('profiles').select('id, is_verified').in('id', sellerIds)
-        const profileMap = {}
-        profilesData?.forEach(p => { profileMap[p.id] = p })
-        withShopRatings = withShopRatings.map(l => ({
-          ...l,
-          seller_verified: l.seller_id ? profileMap[l.seller_id]?.is_verified : false,
-        }))
-      }
 
-      let blocked = []
-      try { blocked = JSON.parse(localStorage.getItem('soko_blocked_shops') || '[]') } catch { /* ignore */ }
-      const blockedStr = blocked.map(id => String(id))
-      if (blockedStr.length === 0) return withShopRatings
-      return withShopRatings.filter(l => !l.shop_id || !blockedStr.includes(String(l.shop_id)))
+      const [featuredEnriched, recentEnriched] = await Promise.all([
+        enrichListingRows(featuredRows || []),
+        enrichListingRows(recentRows || []),
+      ])
+
+      // Featured section: dedicated query + equal product rotation (Phase 3.2)
+      setFeaturedListings(
+        rotateFeaturedFairly(
+          featuredEnriched.filter(l => isListingFeatured(l)),
+          { intervalMs: 30_000, maxPerSeller: Number.POSITIVE_INFINITY },
+        ),
+      )
+
+      // Latest / general feed: recent posts only (not used for featured discovery)
+      const { data: { user: authUser } } = await supabase.auth.getUser()
+      const sorted = await sortProductsSmart(recentEnriched, userLat, userLng, authUser?.id)
+      setListings(sorted)
+    } catch (e) {
+      console.error('loadListings:', e)
+    } finally {
+      setLoading(false)
+      bumpLoadProgress('listings')
     }
-
-    const [featuredEnriched, recentEnriched] = await Promise.all([
-      enrichListingRows(featuredRows || []),
-      enrichListingRows(recentRows || []),
-    ])
-
-    // Featured section: dedicated query + equal product rotation (Phase 3.2)
-    setFeaturedListings(
-      rotateFeaturedFairly(
-        featuredEnriched.filter(l => isListingFeatured(l)),
-        { intervalMs: 30_000, maxPerSeller: Number.POSITIVE_INFINITY },
-      ),
-    )
-
-    // Latest / general feed: recent posts only (not used for featured discovery)
-    const { data: { user: authUser } } = await supabase.auth.getUser()
-    const sorted = await sortProductsSmart(recentEnriched, userLat, userLng, authUser?.id)
-    setListings(sorted)
-    setLoading(false)
   }
 
   // Auxiliary sections: shops, jobs, services, looking-for requests, trust
@@ -3973,64 +5277,119 @@ export default function Home() {
   // section's empty state instead.
   async function loadAuxSections() {
     setSectionsLoading(true)
+    try {
     await Promise.all([
       (async () => {
         try {
-          const { data, error, count } = await supabase.from('shops')
-            .select('id, name, slug, category, logo_url, cover_url, city, rating, review_count, listing_count, is_verified, follower_count', { count: 'exact' })
+          const { data, error } = await supabase.from('shops')
+            .select('id, name, slug, category, logo_url, cover_url, city, rating, review_count, listing_count, is_verified, follower_count')
             .eq('is_active', true)
             .order('follower_count', { ascending: false, nullsFirst: false })
             .limit(8)
           if (error) console.error('shops query error:', error)
           setShops(data || [])
-          setTrustStats(s => ({ ...s, shops: count != null ? `${count}+` : s.shops }))
         } catch (e) { console.error('shops catch:', e); setShops([]) }
       })(),
       (async () => {
         try {
+          // Jobs use status 'active' (PostJobForm / Jobs index) — not 'published'
           const today = new Date().toISOString().split('T')[0]
-          const { data, error } = await supabase.from('jobs')
-            .select('id, title, company, city, type, created_at, deadline')
-            .eq('status', 'published')
+          const jobSelect = 'id, title, company, city, type, created_at, deadline, cover_image_url, logo_url, salary'
+          let { data, error } = await supabase.from('jobs')
+            .select(jobSelect)
+            .eq('status', 'active')
             .or(`deadline.is.null,deadline.gte.${today}`)
-            .order('created_at', { ascending: false }).limit(4)
+            .order('created_at', { ascending: false })
+            .limit(8)
+          if (error && /cover_image_url|logo_url|salary|column/i.test(error.message || '')) {
+            ;({ data, error } = await supabase.from('jobs')
+              .select('id, title, company, city, type, created_at, deadline')
+              .eq('status', 'active')
+              .or(`deadline.is.null,deadline.gte.${today}`)
+              .order('created_at', { ascending: false })
+              .limit(8))
+          }
+          // Fallback: include published if any legacy rows use that status
+          if (!error && (!data || data.length === 0)) {
+            const alt = await supabase.from('jobs')
+              .select(jobSelect)
+              .in('status', ['active', 'published'])
+              .or(`deadline.is.null,deadline.gte.${today}`)
+              .order('created_at', { ascending: false })
+              .limit(8)
+            if (!alt.error && alt.data?.length) data = alt.data
+            else if (alt.error && /cover_image_url|logo_url|salary|column/i.test(alt.error.message || '')) {
+              const bare = await supabase.from('jobs')
+                .select('id, title, company, city, type, created_at, deadline')
+                .in('status', ['active', 'published'])
+                .or(`deadline.is.null,deadline.gte.${today}`)
+                .order('created_at', { ascending: false })
+                .limit(8)
+              if (!bare.error) data = bare.data
+            }
+          }
           if (error) console.error('jobs query error:', error)
           setJobs(data || [])
         } catch (e) { console.error('jobs catch:', e); setJobs([]) }
       })(),
       (async () => {
         try {
-          const { data, error } = await supabase.from('services')
-            .select('id, name, category, city, created_at')
-            .eq('status', 'published')
-            .order('created_at', { ascending: false }).limit(4)
+          // Services use status 'active' (ServiceForm / ServicesPage) — not 'published'
+          let { data, error } = await supabase.from('services')
+            .select('id, name, category, city, created_at, media_urls, rate, rating, verified')
+            .eq('status', 'active')
+            .order('created_at', { ascending: false })
+            .limit(8)
+          if (error && /media_urls|rate|rating|verified|column/i.test(error.message || '')) {
+            ;({ data, error } = await supabase.from('services')
+              .select('id, name, category, city, created_at, media_urls, rate')
+              .eq('status', 'active')
+              .order('created_at', { ascending: false })
+              .limit(8))
+          }
+          if (error && /media_urls|rate|column/i.test(error.message || '')) {
+            ;({ data, error } = await supabase.from('services')
+              .select('id, name, category, city, created_at')
+              .eq('status', 'active')
+              .order('created_at', { ascending: false })
+              .limit(8))
+          }
+          if (!error && (!data || data.length === 0)) {
+            const alt = await supabase.from('services')
+              .select('id, name, category, city, created_at, media_urls, rate')
+              .in('status', ['active', 'published'])
+              .order('created_at', { ascending: false })
+              .limit(8)
+            if (!alt.error && alt.data?.length) data = alt.data
+          }
           if (error) console.error('services query error:', error)
           setServices(data || [])
         } catch (e) { console.error('services catch:', e); setServices([]) }
       })(),
       (async () => {
         try {
-          const { data } = await supabase.from('buyer_requests')
-            .select('id, title, description, category, city, cities, created_at, budget, offer_count, urgency, image_url')
+          let { data, error } = await supabase.from('buyer_requests')
+            .select('id, title, description, category, city, cities, created_at, budget, offer_count, view_count, urgency, image_url, image_urls, expires_at, lat, lng, user_id, profiles:user_id(full_name,avatar_url,is_verified)')
             .not('status', 'eq', 'fulfilled')
             .order('created_at', { ascending: false })
-            .limit(20)
+            .limit(40)
+          if (error && /lat|lng|column/i.test(error.message || '')) {
+            ;({ data } = await supabase.from('buyer_requests')
+              .select('id, title, description, category, city, cities, created_at, budget, offer_count, view_count, urgency, image_url, image_urls, expires_at, user_id, profiles:user_id(full_name,avatar_url,is_verified)')
+              .not('status', 'eq', 'fulfilled')
+              .order('created_at', { ascending: false })
+              .limit(40))
+          }
           setRequests(data || [])
         } catch { setRequests([]) }
       })(),
-      (async () => {
-        try {
-          const { count: sellerCount } = await supabase.from('profiles').select('*', { count: 'exact', head: true }).eq('is_verified', true)
-          const { count: reviewCount } = await supabase.from('reviews').select('*', { count: 'exact', head: true }).gte('rating', 4)
-          setTrustStats(s => ({
-            ...s,
-            sellers: sellerCount != null ? `${sellerCount}+` : s.sellers,
-            reviews: reviewCount != null ? `${reviewCount}+` : s.reviews,
-          }))
-        } catch {}
-      })(),
     ])
-    setSectionsLoading(false)
+    } catch (e) {
+      console.error('loadAuxSections:', e)
+    } finally {
+      setSectionsLoading(false)
+      bumpLoadProgress('sections')
+    }
   }
 
   async function loadNotifs(uid) {
@@ -4056,59 +5415,126 @@ export default function Home() {
     // handleImageFile should be wired in here unchanged.
   }
 
+  const pageBusy = loading || sectionsLoading
+
+  // Dedupe: don't re-stack the same featured products in Latest
+  const featuredIdSet = useMemo(
+    () => new Set((featuredListings || []).map(l => l.id).filter(Boolean)),
+    [featuredListings],
+  )
+
   return (
     <div className="soko-v3">
       <GlobalStyles />
 
-      <SokoNav
-        user={user} notifCount={notifCount} search={search} setSearch={handleSearch}
-        navigate={navigate} onImageFile={handleImageFile} animKeywords={animKeywords} animIdx={animIdx}
-        listings={listings} activeCategory={activeCategory} onCategoryChange={handleCategoryChange}
-        activeDistrict={activeDistrict} onDistrictChange={setActiveDistrict} onFocusChange={setIsFocused}
-      />
+      {/* Deterministic top progress — tracks real fetch stages, never blocks the page */}
+      {(showLoadBar || pageBusy) && (
+        <div
+          className={`soko-loadbar${!pageBusy && loadProgress >= 100 ? ' is-done' : ''}`}
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(loadProgress)}
+          aria-label="Loading marketplace"
+        >
+          <div className="soko-loadbar-track">
+            <div className="soko-loadbar-fill" style={{ width: `${Math.min(100, loadProgress)}%` }} />
+          </div>
+        </div>
+      )}
 
-      {/* Persistent verification action / review banner (seller) */}
-      {user?.id && <VerificationAttentionBanner userId={user.id} />}
+      {/* Chrome first — interactive immediately while data streams in */}
+      <div className="soko-settle soko-settle-d1">
+        <SokoNav
+          user={user} notifCount={notifCount} search={search} setSearch={handleSearch}
+          navigate={navigate} onImageFile={handleImageFile} animKeywords={animKeywords} animIdx={animIdx}
+          activeDistrict={activeDistrict} onDistrictChange={setActiveDistrict} onFocusChange={setIsFocused}
+          activePillar="marketplace"
+          ctaLabel="Sell Now"
+          onCta={() => navigate('/post')}
+        />
+      </div>
 
-      <EarlyAccessStrip />
+      {user?.id && (
+        <div className="soko-settle soko-settle-d1">
+          <VerificationAttentionBanner userId={user.id} />
+        </div>
+      )}
 
-      {/* Revenue hero: marketing message + featured carousel (dedicated featured query) */}
-      <RevenueHero navigate={navigate} listings={featuredListings} />
+      <div className="soko-settle soko-settle-d2">
+        <EarlyAccessStrip />
+      </div>
 
-      {/* One-click category access */}
-      <CategoryGrid navigate={navigate} onCategoryChange={handleCategoryChange} />
+      {/* Static / local sections paint immediately */}
+      <div className="soko-settle soko-settle-d2">
+        <AdHeroBanner navigate={navigate} />
+      </div>
 
-      {/* Monetization: premium Featured marketing strip (listings only for now) */}
-      <FeaturedRevenueBanner navigate={navigate} user={user} />
+      <div className="soko-settle soko-settle-d3">
+        <CategoryGrid navigate={navigate} onCategoryChange={handleCategoryChange} />
+      </div>
 
-      {/* Featured Listings (left) + Live Stories card (right) — not recent feed */}
-      <FeaturedListingsRow
-        listings={featuredListings} navigate={navigate} loading={loading}
-        stories={stories} storiesLoading={storiesLoading}
-        onOpenStory={openStoryGroup} onCreateStory={handleCreateStory}
-      />
+      <div className="soko-settle soko-settle-d3">
+        <FeaturedRevenueBanner navigate={navigate} user={user} />
+      </div>
 
-      {/* Latest Listings — just-posted rail (recent only) */}
-      <LatestListingsSection listings={listings} navigate={navigate} loading={loading} />
+      {/* Data sections: skeleton in place → content swap (no remount keys — those stacked thrash) */}
+      <div className={!loading ? 'soko-swap-in' : undefined}>
+        <FeaturedListingsRow
+          listings={featuredListings} navigate={navigate} loading={loading}
+          user={user}
+          savedIds={savedIds}
+          onToggleSave={toggleListingSave}
+        />
+      </div>
 
-      {/* People Looking For — buyer requests, "I Can Help" */}
-      <LookingForSection navigate={navigate} requests={requests} loading={sectionsLoading} />
+      <div className={!storiesLoading ? 'soko-swap-in' : undefined}>
+        <HomeStoriesStrip
+          navigate={navigate}
+          stories={stories}
+          loading={storiesLoading}
+          onOpenStory={openStoryGroup}
+          onCreateStory={handleCreateStory}
+          currentUserId={user?.id}
+        />
+      </div>
 
-      {/* Shops + Jobs + Services — three column row matching reference */}
-      <ShopsJobsServicesRow navigate={navigate} shops={shops} jobs={jobs} services={services} loading={sectionsLoading} />
+      <div className={!loading ? 'soko-swap-in' : undefined}>
+        <LatestListingsSection
+          listings={listings}
+          navigate={navigate}
+          loading={loading}
+          user={user}
+          savedIds={savedIds}
+          onToggleSave={toggleListingSave}
+          excludeIds={featuredIdSet}
+        />
+      </div>
 
-      {/* Verification trust metrics */}
-      <VerificationTrustSection navigate={navigate} stats={trustStats} />
+      <div className={!sectionsLoading ? 'soko-swap-in' : undefined}>
+        <LookingForSection
+          navigate={navigate}
+          requests={requests}
+          loading={sectionsLoading}
+          userLat={userLat}
+          userLng={userLng}
+          activeDistrict={activeDistrict}
+          viewerLocation={homeGpsLocation}
+        />
+      </div>
 
-      {/* Seller conversion CTA */}
-      <SellCtaBanner navigate={navigate} />
+      <div className={!sectionsLoading ? 'soko-swap-in' : undefined}>
+        <ShopsJobsServicesRow navigate={navigate} shops={shops} jobs={jobs} services={services} loading={sectionsLoading} />
+      </div>
 
-      {/* Footer */}
+      <div className="soko-settle soko-settle-d8">
+        <SellCtaBanner navigate={navigate} />
+      </div>
+
       <SokoFooter navigate={navigate} />
 
       {/* Mobile bottom nav: mounted once in App.jsx (Home / Explore / Sell / Chats / Profile) */}
 
-      {/* Story viewer + upload modal — same components HomeStatusRow uses */}
       {viewing !== null && (
         <StoryViewer stories={viewerStories} startIndex={viewing} currentUserId={user?.id} onClose={() => setViewing(null)} />
       )}

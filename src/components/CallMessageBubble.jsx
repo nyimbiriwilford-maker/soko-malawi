@@ -44,30 +44,29 @@ export default function CallMessageBubble({ msg, isMine }) {
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 12,
+        gap: 11,
         borderRadius: 14,
-        padding: '11px 13px',
-        marginBottom: 4,
-        minWidth: 160,
+        padding: '10px 12px',
+        minWidth: 168,
         background: isMine
-          ? 'rgba(255,255,255,0.14)'
-          : 'linear-gradient(135deg, #f0fdf4 0%, #e8f5ee 100%)',
-        border: isMine ? '1px solid rgba(255,255,255,0.12)' : '1px solid #d4ead9',
+          ? 'rgba(255,255,255,0.12)'
+          : 'linear-gradient(145deg, #f4fbf7 0%, #eaf6ef 100%)',
+        border: isMine ? '1px solid rgba(255,255,255,0.1)' : '1px solid #d7ebdf',
       }}
     >
       <div
         style={{
           width: 36,
           height: 36,
-          borderRadius: 12,
+          borderRadius: 11,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           flexShrink: 0,
-          background: isMine ? 'rgba(255,255,255,0.12)' : 'rgba(15,157,88,0.12)',
+          background: isMine ? 'rgba(255,255,255,0.14)' : 'rgba(15,157,88,0.12)',
         }}
       >
-        <Icon size={18} strokeWidth={2.1} color={iconColor} aria-hidden />
+        <Icon size={17} strokeWidth={2.15} color={iconColor} aria-hidden />
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div
@@ -75,7 +74,7 @@ export default function CallMessageBubble({ msg, isMine }) {
             fontSize: 13,
             fontWeight: 700,
             color: isMine ? '#fff' : '#0f1410',
-            letterSpacing: '-0.01em',
+            letterSpacing: '-0.015em',
           }}
         >
           {isVideo ? 'Video call' : 'Voice call'}

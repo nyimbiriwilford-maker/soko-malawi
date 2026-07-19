@@ -433,7 +433,9 @@ export default function PublicProfile() {
                     navigate('/chats')
                     return
                   }
-                  navigate(`/chat/${profile.id}`)
+                  navigate(`/chat/${profile.id}?src=direct`, {
+                    state: { source: 'direct' },
+                  })
                 }}
                 className="pp-btn-message"
               >

@@ -13,6 +13,11 @@ export async function registerPushNotifications(userId, supabase) {
     return null
   }
 
+  // Never register SW during Vite dev — it intercepts HMR and blanks the app.
+  if (import.meta.env.DEV) {
+    return null
+  }
+
   try {
     const reg = await navigator.serviceWorker.register('/sw.js')
     await navigator.serviceWorker.ready

@@ -15,12 +15,20 @@
   --white: #ffffff;
 }
 
+html {
+  /* App-like scroll + safe areas on mobile browsers / PWA */
+  height: 100%;
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   font-family: 'DM Sans', sans-serif;
   background: var(--surface);
   color: var(--dark);
   font-size: 15px;
   line-height: 1.6;
+  min-height: 100%;
+  min-height: 100dvh;
 }
 
 /* ── Desktop layout shell ── */
@@ -70,8 +78,17 @@ body {
 
 /* Room for fixed mobile bottom nav (Home · Explore · Sell · Chats · Profile) */
 @media (max-width: 768px) {
+  html, body {
+    overscroll-behavior-y: contain;
+    -webkit-tap-highlight-color: transparent;
+  }
   body {
     padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+    background: #f3f4f6;
+  }
+  /* Home shell already sits above the tab bar — avoid double pad */
+  .soko-v3 {
+    padding-bottom: 8px !important;
   }
 }
 

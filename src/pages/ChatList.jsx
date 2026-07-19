@@ -104,6 +104,15 @@ export default function ChatList() {
 
   useEffect(() => { loadChats() }, [])
 
+  // Fired by Chat.jsx right after any message send — catches the case where
+  // the user stays on the same chat route the whole time, so nothing else
+  // here would otherwise trigger a refetch.
+  useEffect(() => {
+    function onUpdate() { loadChats() }
+    window.addEventListener('soko:messages-updated', onUpdate)
+    return () => window.removeEventListener('soko:messages-updated', onUpdate)
+  }, [])
+
   function toggleStar(key, e) {
     e.stopPropagation()
     setStarred(prev => {

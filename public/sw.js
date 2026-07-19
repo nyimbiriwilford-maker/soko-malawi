@@ -1,4 +1,4 @@
-const CACHE = 'sokomw-v6'
+const CACHE = 'sokomw-v7'
 const ASSETS = ['/', '/index.html']
 
 // ── Install & cache ──────────────────────────────────────
@@ -15,24 +15,66 @@ self.addEventListener('activate', e => {
   self.clients.claim()
 })
 
+function isDevBypass(url) {
+  // Never intercept Vite / HMR / source modules — these break localhost:5173
+  const path = url.pathname || ''
+  if (
+    path.startsWith('/@vite') ||
+    path.startsWith('/@react-refresh') ||
+    path.startsWith('/@fs') ||
+    path.startsWith('/@id') ||
+    path.startsWith('/src/') ||
+    path.startsWith('/node_modules/') ||
+    path.includes('__vite') ||
+    url.searchParams.has('t') && (path.endsWith('.jsx') || path.endsWith('.tsx') || path.endsWith('.js') || path.endsWith('.ts') || path.endsWith('.css'))
+  ) {
+    return true
+  }
+  // Local dev hosts — leave everything to the network (Vite)
+  const host = url.hostname
+  if (host === 'localhost' || host === '127.0.0.1' || host.endsWith('.local')) {
+    return true
+  }
+  return false
+}
+
 // ── Fetch (network first, cache fallback) ────────────────
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return
+
+  let url
+  try {
+    url = new URL(e.request.url)
+  } catch {
+    return
+  }
+
+  // Cross-origin APIs
+  if (url.origin !== self.location.origin) return
   if (e.request.url.includes('supabase.co')) return
-  // Never cache JS/JSX files — always fetch fresh
-  if (e.request.url.includes('.js') || e.request.url.includes('.jsx')) {
+
+  // Critical: do not touch Vite dev / HMR traffic
+  if (isDevBypass(url)) return
+
+  // Never cache JS modules — always fetch fresh (production bundles)
+  if (
+    url.pathname.endsWith('.js') ||
+    url.pathname.endsWith('.mjs') ||
+    url.pathname.endsWith('.jsx') ||
+    url.pathname.endsWith('.ts') ||
+    url.pathname.endsWith('.tsx') ||
+    url.pathname.endsWith('.css') ||
+    url.pathname.endsWith('.map')
+  ) {
     e.respondWith(fetch(e.request))
     return
   }
+
   e.respondWith(
     fetch(e.request).catch(async () => {
       const cached = await caches.match(e.request)
       if (cached) return cached
-      // No live response and no cache match — fall back to the cached
-      // app shell so navigations never resolve to undefined (which
-      // throws "Failed to convert value to 'Response'" and breaks the
-      // page load). Only meaningful for navigation requests; other
-      // assets with no cache entry will still correctly fail.
+      // App shell fallback for navigations only
       if (e.request.mode === 'navigate') {
         const shell = await caches.match('/index.html')
         if (shell) return shell
@@ -76,7 +118,6 @@ self.addEventListener('push', event => {
         `📞 Incoming ${data.callType || 'Video'} Call from ${data.callerName}`,
         options
       ),
-      // Forward to app if open so it can play ringtone
       self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
         clientList.forEach(client => {
           client.postMessage({ type: 'INCOMING_CALL', ...data })
@@ -111,7 +152,6 @@ self.addEventListener('notificationclick', event => {
           return
         }
       }
-      // App is closed — open it, call will be handled via restorePendingCall
       return self.clients.openWindow(url)
     })
   )
