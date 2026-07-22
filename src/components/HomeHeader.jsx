@@ -1,6 +1,7 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CAT_META, CITIES, PRICE_RANGES, SORT_OPTIONS } from '../constants/homeConstants'
+import { MALAWI_DISTRICTS } from '../constants/malawiDistricts'
 
 export default function HomeHeader({
   user,
@@ -25,6 +26,9 @@ export default function HomeHeader({
   const navigate = useNavigate()
   const inputRef = useRef(null)
   const fileInputRef = useRef(null)
+  const [distOpen, setDistOpen] = useState(false)
+  const districts = ['All Districts', ...MALAWI_DISTRICTS]
+  const districtLabel = city || 'All Districts'
 
   function handleSearchBarClick() {
     if (search || isFocused) return
@@ -41,26 +45,139 @@ export default function HomeHeader({
     inputRef.current?.focus()
   }
 
+  function changeDistrict(d) {
+    setCity?.(d === 'All Districts' ? '' : d)
+    setDistOpen(false)
+  }
+
   const totalActive = activeFilters + (sortIdx !== 0 ? 1 : 0)
 
   return (
     <div style={S.header} className="soko-top-nav-mobile">
       <div style={S.headerInner}>
 
-        {/* ══ SINGLE TOP ROW: logo · search · actions ══ */}
-        <div style={S.topRow}>
+        {/* ══ TOP ROW: logo · district filter · notification bell ══ */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 0 6px' }}>
 
           {/* Logo */}
-   <div style={S.logoWrap}>
-  <div style={S.brand}>
-    <span style={{ animation: 'brandReveal 0.4s ease 0.15s both' }}>
-      Soko<span style={{ color: '#f59e0b' }}>Mw</span>
-    </span>
-  </div>
-</div>
-          {/* Search bar — grows to fill all available space */}
+          <div style={S.logoWrap} onClick={() => navigate('/')}>
+            <div style={S.brand}>
+              <span style={{ animation: 'brandReveal 0.4s ease 0.15s both' }}>
+                Soko<span style={{ color: '#f59e0b' }}>Mw</span>
+              </span>
+            </div>
+          </div>
+
+          {/* Right actions: District filter + Notification icon */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {/* District Filter button */}
+            <div style={{ position: 'relative' }}>
+              <button
+                type="button"
+                onClick={() => setDistOpen(d => !d)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '5px 11px', borderRadius: 50,
+                  background: '#f4f8f5', border: '1px solid #e0e8e2',
+                  fontSize: 12, fontWeight: 600, color: '#1a7a4a',
+                  cursor: 'pointer', whiteSpace: 'nowrap', maxWidth: 150,
+                  fontFamily: 'inherit',
+                }}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="#1a7a4a" aria-hidden>
+                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                </svg>
+                <span style={{
+                  color: districtLabel !== 'All Districts' ? '#f59e0b' : '#1a7a4a',
+                  fontWeight: districtLabel !== 'All Districts' ? 800 : 600,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 95,
+                }}>
+                  {districtLabel}
+                </span>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
+                  <polyline points="6 9 12 15 18 9"/>
+                </svg>
+              </button>
+
+              {/* Mobile District Dropdown Drawer */}
+              {distOpen && (
+                <>
+                  <div
+                    onClick={() => setDistOpen(false)}
+                    style={{ position: 'fixed', inset: 0, zIndex: 998, background: 'rgba(0,0,0,0.32)' }}
+                  />
+                  <div style={{
+                    position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 999,
+                    background: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20,
+                    padding: '16px 16px calc(24px + env(safe-area-inset-bottom, 0px))',
+                    maxHeight: '70vh', display: 'flex', flexDirection: 'column',
+                    boxShadow: '0 -8px 30px rgba(0,0,0,0.15)',
+                  }}>
+                    <div style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      paddingBottom: 12, borderBottom: '1px solid #f3f4f6', marginBottom: 10,
+                      fontWeight: 700, fontSize: 16, color: '#111827',
+                    }}>
+                      <span>Select District</span>
+                      <button
+                        type="button"
+                        onClick={() => setDistOpen(false)}
+                        style={{
+                          background: '#f3f4f6', border: 'none', borderRadius: '50%',
+                          width: 28, height: 28, cursor: 'pointer', fontSize: 14, color: '#6b7280',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}
+                      >✕</button>
+                    </div>
+                    <div style={{
+                      overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)',
+                      gap: 8, paddingTop: 4,
+                    }}>
+                      {districts.map(d => {
+                        const isSel = (d === 'All Districts' && !city) || city === d
+                        return (
+                          <button
+                            key={d}
+                            type="button"
+                            onClick={() => changeDistrict(d)}
+                            style={{
+                              padding: '10px 12px', borderRadius: 12,
+                              background: isSel ? '#e6f4ec' : '#f9fafb',
+                              border: `1px solid ${isSel ? '#1a7a4a' : '#e5e7eb'}`,
+                              fontSize: 13, fontWeight: isSel ? 700 : 500,
+                              color: isSel ? '#1a7a4a' : '#374151',
+                              textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit',
+                            }}
+                          >
+                            {d}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Notifications */}
+            <button
+              style={{ ...S.iconBtn, position: 'relative' }}
+              onClick={() => navigate('/notifications')}
+            >
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+              </svg>
+              {notifCount > 0 && <span style={S.bellBadge}>{notifCount > 9 ? '9+' : notifCount}</span>}
+            </button>
+          </div>
+        </div>
+
+        {/* ══ ROW 2: Full width search bar ══ */}
+        <div style={{ padding: '0 0 8px' }}>
           <div style={{
             ...S.searchBox,
+            width: '100%',
             borderColor: isFocused ? '#1a7a4a' : '#e8ede9',
             boxShadow: isFocused ? '0 0 0 3px rgba(26,122,74,0.10)' : 'none',
           }}>
@@ -81,19 +198,19 @@ export default function HomeHeader({
                 onBlur={() => setIsFocused(false)}
                 onKeyDown={e => e.key === 'Enter' && handleSearchSubmit()}
               />
-             {!search && !isFocused && (
-  <div style={S.animPlaceholder} onClick={handleSearchBarClick}>
-    <span style={S.animPrefix}>Search </span>
-    <div style={S.animSlotOuter}>
-      <span
-        key={animIdx}
-        style={S.animSlotWord}
-      >
-        {animKeywords[animIdx % animKeywords.length]}
-      </span>
-    </div>
-  </div>
-)}
+              {!search && !isFocused && (
+                <div style={S.animPlaceholder} onClick={handleSearchBarClick}>
+                  <span style={S.animPrefix}>Search </span>
+                  <div style={S.animSlotOuter}>
+                    <span
+                      key={animIdx}
+                      style={S.animSlotWord}
+                    >
+                      {animKeywords[animIdx % animKeywords.length]}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {search ? (
@@ -123,35 +240,6 @@ export default function HomeHeader({
                 }
               </button>
             )}
-          </div>
-
-          {/* Action buttons */}
-          <div style={S.actions}>
-            {/* Notifications */}
-            <button
-              style={{ ...S.iconBtn, position: 'relative' }}
-              onClick={() => navigate('/notifications')}
-            >
-              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-                <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-              </svg>
-              {notifCount > 0 && <span style={S.bellBadge}>{notifCount > 9 ? '9+' : notifCount}</span>}
-            </button>
-
-            {/* Profile */}
-            <button
-              style={S.profileBtn}
-              onClick={() => navigate('/profile')}
-            >
-              {user?.user_metadata?.avatar_url
-                ? <img src={user.user_metadata.avatar_url} alt="avatar" style={S.avatarImg} />
-                : <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                    <circle cx="12" cy="7" r="4"/>
-                  </svg>
-              }
-            </button>
           </div>
         </div>
 

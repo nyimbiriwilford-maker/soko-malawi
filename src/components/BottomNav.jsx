@@ -67,13 +67,7 @@ export default function BottomNav() {
   const path = location.pathname
 
   const isHome = path === '/'
-  const isExplore =
-    path.startsWith('/search') ||
-    path.startsWith('/listings') ||
-    path.startsWith('/looking-for') ||
-    path.startsWith('/shops') ||
-    path.startsWith('/services') ||
-    path.startsWith('/jobs')
+  const isExplore = path.startsWith('/explore')
   const isChats = path.startsWith('/chats') || path.startsWith('/chat')
   const isProfileTab = path === '/profile' || path === '/profile/'
 
@@ -183,7 +177,10 @@ export default function BottomNav() {
           <NavItem
             active={isExplore}
             label="Explore"
-            onClick={() => navigate('/search')}
+            onClick={() => {
+              const isMobile = window.innerWidth < 769
+              navigate(isMobile ? '/explore' : '/search')
+            }}
             icon={<Compass {...ICON} />}
           />
 

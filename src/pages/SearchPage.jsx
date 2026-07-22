@@ -342,6 +342,7 @@ function GlobalStyles() {
       .sp-nav-desktop { display: flex; }
       .sp-nav-mobile  { display: none; }
       .sp-nav-pillars { display: block; }
+        .sp-search-tabs-mobile { display: flex; }
       .sp-search-field {
         flex:1; display:flex; align-items:center;
         background:${T.gray100}; border:1.5px solid transparent; border-radius:50px;
@@ -635,7 +636,6 @@ function GlobalStyles() {
         .sp-page { padding: 0 14px !important; }
         .sp-nav-desktop { display: none !important; }
         .sp-nav-mobile  { display: flex !important; }
-        .sp-nav-pillars { display: none !important; }
         .sp-main-cols { gap: 0 !important; padding-top: 12px !important; padding-bottom: 24px !important; }
         .sp-filter-drawer-panel {
           width: min(100%, 100vw) !important;
@@ -2988,7 +2988,7 @@ export default function SearchPage() {
         </div>
 
         {/* â”€â”€ Pillar tabs â”€â”€ */}
-        <div className="sp-scroll sp-tabs-scroll sp-tabs-row" style={{ marginTop:14 }}>
+       <div className="sp-scroll sp-tabs-scroll" style={{ display:'flex', gap:4, overflowX:'auto', marginTop:12, borderBottom:`1px solid ${T.gray200}`, WebkitOverflowScrolling:'touch' }}>
           {SEARCH_TABS.map(t => {
             const count = tabCounts[t.key]
             return (

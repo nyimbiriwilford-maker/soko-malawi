@@ -29,6 +29,7 @@ const ShopPage          = lazy(() => import('./pages/ShopPage'))
 const ShopsPage         = lazy(() => import('./pages/ShopsPage'))
 const SearchPage        = lazy(() => import('./pages/SearchPage'))
 const ListingsPage      = lazy(() => import('./pages/ListingsPage'))
+const ExplorePage       = lazy(() => import('./pages/ExplorePage'))
 
 import GlobalCallListener from './components/GlobalCallListener'
 import PersistentCallShell from './components/PersistentCallShell'
@@ -316,6 +317,7 @@ const [installPrompt, setInstallPrompt] = useState(null)
             <Route path="/shop/:slug"              element={authed ? <ShopPage />       : <Navigate to="/login" />} />
             <Route path="/shops"                   element={authed ? <ShopsPage />      : <Navigate to="/login" />} />
             <Route path="/search"                  element={authed ? <SearchPage />     : <Navigate to="/login" />} />
+            <Route path="/explore"                 element={authed ? <ExplorePage />    : <Navigate to="/login" />} />
             <Route path="/listings"                element={authed ? <ListingsPage />   : <Navigate to="/login" />} />
             <Route path="*"                        element={<Navigate to="/" />} />
           </Routes>

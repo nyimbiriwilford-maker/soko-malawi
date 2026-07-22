@@ -1,9 +1,10 @@
 /**
  * Shared top navigation (Home + Looking For + other marketplace pages).
- * Desktop + mobile layout match Home. Only the primary CTA differs per page.
+ * Desktop + mobile layout. Only the primary CTA differs per page.
  */
 import { useState, useRef } from 'react'
 import { T } from '../constants/tokens'
+import { MALAWI_DISTRICTS } from '../constants/malawiDistricts'
 
 const Icon = {
   search: (s = 18) => (
@@ -43,7 +44,7 @@ const Icon = {
   ),
 }
 
-export const SOKO_PILLARS = [
+const SOKO_PILLARS = [
   {
     key: 'marketplace', label: 'Marketplace', path: '/',
     icon: (s) => (
@@ -103,12 +104,7 @@ function NavIconBtn({ icon, label, onClick }) {
     <button
       type="button"
       onClick={onClick}
-      style={{
-        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3,
-        background: 'none', border: 'none', cursor: 'pointer', padding: '6px 10px',
-        borderRadius: 12, color: T.gray800, fontSize: 10, fontWeight: 600,
-        transition: 'background 0.15s', fontFamily: 'inherit',
-      }}
+      style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, background: 'none', border: 'none', cursor: 'pointer', padding: '6px 10px', borderRadius: 12, color: T.gray800, fontSize: 10, fontWeight: 600, transition: 'background 0.15s', fontFamily: 'inherit' }}
       onMouseEnter={e => { e.currentTarget.style.background = T.gray100 }}
       onMouseLeave={e => { e.currentTarget.style.background = 'none' }}
     >
@@ -149,10 +145,7 @@ export default function SokoNav({
   const fileRef = useRef(null)
   const inputRef = useRef(null)
 
-  const districts = [
-    'All Districts', 'Lilongwe', 'Blantyre', 'Mzuzu', 'Zomba',
-    'Kasungu', 'Mangochi', 'Salima', 'Dedza', 'Ntchisi', 'Dowa',
-  ]
+  const districts = ['All Districts', ...MALAWI_DISTRICTS]
   const kw = animKeywords?.length > 0
     ? animKeywords[animIdx % animKeywords.length]
     : 'Samsung Galaxy A57'
@@ -189,215 +182,116 @@ export default function SokoNav({
         .soko-scroll::-webkit-scrollbar { display: none; }
         @media (max-width: 768px) {
           .soko-nav-desktop { display: none !important; }
-          .soko-nav-mobile { display: flex !important; }
+          .soko-nav-mobile {
+            display: flex !important;
+            flex-direction: column !important;
+            padding: 10px 14px 8px !important;
+            width: 100% !important;
+            gap: 8px !important;
+            background: #fff !important;
+            box-sizing: border-box !important;
+          }
           .soko-pillar-row { display: none !important; }
-          .soko-nav-row1 {
-            padding: 8px 14px !important;
-            min-height: 52px !important;
-            gap: 10px !important;
-          }
-          .soko-nav-brand-mark { font-size: 18px !important; }
-          .soko-nav-mobile-search {
-            min-height: 40px !important;
-            padding: 0 12px !important;
-            border-radius: 12px !important;
-            background: #f3f4f6 !important;
-            border-color: #e5e7eb !important;
-          }
-          .soko-nav-mobile-pillars { padding: 6px 12px 10px !important; }
-          .soko-nav-mobile-pillars button {
-            padding: 7px 12px !important;
-            font-size: 12px !important;
-            border-radius: 999px !important;
-          }
         }
         @media (min-width: 769px) {
           .soko-nav-mobile { display: none !important; }
         }
       `}</style>
 
-      {/* Row 1 */}
-      <div className="soko-nav-row1" style={{
+      {/* ════════════════════ DESKTOP LAYOUT ════════════════════ */}
+      <div className="soko-nav-desktop" style={{
         maxWidth: 1400, margin: '0 auto', padding: '10px 20px',
         display: 'flex', alignItems: 'center', gap: 14, minHeight: 70,
       }}>
-        <div onClick={() => navigate('/')} className="soko-nav-brand" style={{ cursor: 'pointer', flexShrink: 0, userSelect: 'none' }}>
-          <div className="soko-nav-brand-mark" style={{
-            fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 800,
-            color: T.green, letterSpacing: '-0.5px', lineHeight: 1.1,
-          }}>
+
+        {/* Brand */}
+        <div onClick={() => navigate('/')} style={{ cursor: 'pointer', flexShrink: 0, userSelect: 'none' }}>
+          <div style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 800, color: T.green, letterSpacing: '-0.5px', lineHeight: 1.1 }}>
             Soko<span style={{ color: T.amber }}>Mw</span>
           </div>
-          <div className="soko-nav-desktop" style={{ fontSize: 10.5, color: T.gray600, fontWeight: 500, whiteSpace: 'nowrap' }}>
+          <div style={{ fontSize: 10.5, color: T.gray600, fontWeight: 500, whiteSpace: 'nowrap' }}>
             Buy. Sell. Find. Anywhere in Malawi.
           </div>
         </div>
 
-        {/* Desktop district */}
-        <div className="soko-nav-desktop" style={{ position: 'relative', flexShrink: 0 }}>
-          <button
-            type="button"
-            onClick={() => setDistOpen(d => !d)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 6,
-              padding: '7px 12px', borderRadius: 50,
-              background: '#fff', border: `1.5px solid ${T.gray200}`,
-              fontSize: 13, fontWeight: 600, color: T.gray800,
-              cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit',
-            }}
-          >
+        {/* Desktop District Filter */}
+        <div style={{ position: 'relative', flexShrink: 0 }}>
+          <button type="button" onClick={() => setDistOpen(d => !d)}
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 50, background: '#fff', border: `1.5px solid ${T.gray200}`, fontSize: 13, fontWeight: 600, color: T.gray800, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit' }}>
             {Icon.pin(13)}
-            <span style={{
-              color: district !== 'All Districts' ? T.amber : T.green,
-              fontWeight: district !== 'All Districts' ? 800 : 600,
-            }}>{district}</span>
+            <span style={{ color: district !== 'All Districts' ? T.amber : T.green, fontWeight: district !== 'All Districts' ? 800 : 600 }}>{district}</span>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
               <polyline points="6 9 12 15 18 9" />
             </svg>
             {district !== 'All Districts' && (
-              <span
-                role="button"
-                tabIndex={0}
+              <span role="button" tabIndex={0}
                 onClick={e => { e.stopPropagation(); changeDistrict('All Districts') }}
                 onKeyDown={e => e.key === 'Enter' && changeDistrict('All Districts')}
-                style={{ marginLeft: 2, color: T.gray400, fontSize: 11, lineHeight: 1 }}
-              >✕</span>
+                style={{ marginLeft: 2, color: T.gray400, fontSize: 11, lineHeight: 1 }}>✕</span>
             )}
           </button>
           {distOpen && (
-            <div style={{
-              position: 'absolute', top: 'calc(100% + 8px)', left: 0,
-              background: T.white, borderRadius: 16, padding: '8px 0',
-              boxShadow: T.shadowLg, minWidth: 200,
-              border: `1px solid ${T.gray200}`, zIndex: 200,
-            }}>
+            <div style={{ position: 'absolute', top: 'calc(100% + 8px)', left: 0, background: T.white, borderRadius: 16, padding: '8px 0', boxShadow: T.shadowLg, minWidth: 200, border: `1px solid ${T.gray200}`, zIndex: 200 }}>
               {districts.map(d => (
-                <button
-                  key={d}
-                  type="button"
-                  onClick={() => changeDistrict(d)}
-                  style={{
-                    display: 'block', width: '100%', padding: '9px 16px', textAlign: 'left',
-                    background: d === district ? T.greenL : 'transparent', border: 'none',
-                    fontSize: 13.5, fontWeight: d === district ? 700 : 500,
-                    color: d === district ? T.green : T.gray800, cursor: 'pointer',
-                    fontFamily: 'inherit',
-                  }}
-                >{d}</button>
+                <button key={d} type="button" onClick={() => changeDistrict(d)}
+                  style={{ display: 'block', width: '100%', padding: '9px 16px', textAlign: 'left', background: d === district ? T.greenL : 'transparent', border: 'none', fontSize: 13.5, fontWeight: d === district ? 700 : 500, color: d === district ? T.green : T.gray800, cursor: 'pointer', fontFamily: 'inherit' }}>
+                  {d}
+                </button>
               ))}
             </div>
           )}
         </div>
 
-        {/* Desktop search */}
-        <div className="soko-nav-desktop" style={{
-          flex: 1, display: 'flex', alignItems: 'center',
-          background: focused ? '#fff' : T.gray100,
-          border: `1.5px solid ${focused ? T.green : 'transparent'}`,
-          borderRadius: 50, padding: '4px 4px 4px 14px', gap: 0,
-          transition: 'border-color 0.2s, background 0.2s',
-          boxShadow: focused ? '0 0 0 3px rgba(15,157,88,0.10)' : 'none',
-          minHeight: 42,
-        }}>
-          <span style={{ color: T.gray600, flexShrink: 0, display: 'flex', alignItems: 'center', marginRight: 8 }}>
-            {Icon.search(15)}
-          </span>
-          <input
-            ref={inputRef}
-            value={search}
-            onChange={e => {
-              const val = e.target.value
-              setSearch?.(val)
-              navigate(`/search?q=${encodeURIComponent(val)}&focus=1`)
-            }}
+        {/* Desktop Search */}
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', background: focused ? '#fff' : T.gray100, border: `1.5px solid ${focused ? T.green : 'transparent'}`, borderRadius: 50, padding: '4px 4px 4px 14px', transition: 'border-color 0.2s, background 0.2s', boxShadow: focused ? '0 0 0 3px rgba(15,157,88,0.10)' : 'none', minHeight: 42 }}>
+          <span style={{ color: T.gray600, flexShrink: 0, display: 'flex', alignItems: 'center', marginRight: 8 }}>{Icon.search(15)}</span>
+          <input ref={inputRef} value={search}
+            onChange={e => { const val = e.target.value; setSearch?.(val); navigate(`/search?q=${encodeURIComponent(val)}&focus=1`) }}
             onFocus={() => { setFocused(true); navigate('/search?focus=1') }}
             onBlur={() => setFocused(false)}
             onKeyDown={handleKey}
             placeholder="Search for anything (e.g. iPhone, Toyota, jobs, services...)"
-            style={{
-              flex: 1, border: 'none', background: 'transparent', fontSize: 13.5,
-              color: T.gray900, outline: 'none', padding: 0, minWidth: 0, cursor: 'text',
-              fontFamily: 'inherit',
-            }}
+            style={{ flex: 1, border: 'none', background: 'transparent', fontSize: 13.5, color: T.gray900, outline: 'none', padding: 0, minWidth: 0, cursor: 'text', fontFamily: 'inherit' }}
           />
           {search && (
-            <button
-              type="button"
-              onClick={() => setSearch?.('')}
-              style={{
-                background: T.gray200, border: 'none', borderRadius: '50%',
-                width: 18, height: 18, display: 'flex', alignItems: 'center',
-                justifyContent: 'center', cursor: 'pointer', color: T.gray600,
-                flexShrink: 0, marginRight: 6,
-              }}
-            >{Icon.x(9)}</button>
+            <button type="button" onClick={() => setSearch?.('')}
+              style={{ background: T.gray200, border: 'none', borderRadius: '50%', width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: T.gray600, flexShrink: 0, marginRight: 6 }}>
+              {Icon.x(9)}
+            </button>
           )}
-          <button
-            type="button"
-            onClick={() => { if (search.trim()) navigate(`/search?q=${encodeURIComponent(search.trim())}`) }}
-            style={{
-              flexShrink: 0, background: T.green, color: '#fff', border: 'none',
-              borderRadius: 50, height: 34, padding: '0 20px',
-              fontSize: 13.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
-            }}
-          >
+          <button type="button" onClick={() => { if (search.trim()) navigate(`/search?q=${encodeURIComponent(search.trim())}`) }}
+            style={{ flexShrink: 0, background: T.green, color: '#fff', border: 'none', borderRadius: 50, height: 34, padding: '0 20px', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
             Search
           </button>
-          {onImageFile && (
-            <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onImageFile} />
-          )}
+          {onImageFile && <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onImageFile} />}
         </div>
 
-        {/* Desktop actions */}
-        <div className="soko-nav-desktop" style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        {/* Desktop Action Icons */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           <NavIconBtn icon={Icon.chat(18)} label="Chats" onClick={() => navigate('/chats')} />
           <div style={{ position: 'relative' }}>
             <NavIconBtn icon={Icon.bell(18)} label="Alerts" onClick={() => navigate('/notifications')} />
             {notifCount > 0 && (
-              <span style={{
-                position: 'absolute', top: 4, right: 6, background: T.red, color: '#fff',
-                borderRadius: '50%', width: 17, height: 17, fontSize: 9, fontWeight: 800,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                border: '2px solid #fff',
-              }}>{notifCount > 9 ? '9+' : notifCount}</span>
+              <span style={{ position: 'absolute', top: 4, right: 6, background: T.red, color: '#fff', borderRadius: '50%', width: 17, height: 17, fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #fff' }}>
+                {notifCount > 9 ? '9+' : notifCount}
+              </span>
             )}
           </div>
           {!hideCta && (
-            <button
-              type="button"
-              onClick={handleCta}
-              style={{
-                height: 38, padding: '0 18px', fontSize: 13.5, fontWeight: 700,
-                background: T.green, color: '#fff', border: 'none', borderRadius: 50,
-                cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6,
-                whiteSpace: 'nowrap', fontFamily: 'inherit',
-              }}
-            >
+            <button type="button" onClick={handleCta}
+              style={{ height: 38, padding: '0 18px', fontSize: 13.5, fontWeight: 700, background: T.green, color: '#fff', border: 'none', borderRadius: 50, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', fontFamily: 'inherit' }}>
               {Icon.plus(14)} {ctaLabel}
             </button>
           )}
           <div style={{ position: 'relative' }}>
-            <button
-              type="button"
-              onClick={() => setAvatarOpen(o => !o)}
-              style={{
-                width: 38, height: 38, borderRadius: '50%',
-                background: user?.avatar_url ? 'transparent' : `linear-gradient(135deg, ${T.green}, ${T.greenD})`,
-                border: `2px solid ${T.green}`, cursor: 'pointer', overflow: 'hidden',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#fff', fontSize: 14, fontWeight: 700, flexShrink: 0, padding: 0,
-              }}
-            >
+            <button type="button" onClick={() => setAvatarOpen(o => !o)}
+              style={{ width: 38, height: 38, borderRadius: '50%', background: user?.avatar_url ? 'transparent' : `linear-gradient(135deg, ${T.green}, ${T.greenD})`, border: `2px solid ${T.green}`, cursor: 'pointer', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 14, fontWeight: 700, flexShrink: 0, padding: 0 }}>
               {user?.avatar_url
                 ? <img src={user.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 : (user?.email?.[0] || user?.full_name?.[0] || 'S').toUpperCase()}
             </button>
             {avatarOpen && (
-              <div style={{
-                position: 'absolute', top: 'calc(100% + 10px)', right: 0,
-                background: T.white, borderRadius: 16, padding: '8px 0',
-                boxShadow: T.shadowLg, minWidth: 190, border: `1px solid ${T.gray200}`, zIndex: 200,
-              }}>
+              <div style={{ position: 'absolute', top: 'calc(100% + 10px)', right: 0, background: T.white, borderRadius: 16, padding: '8px 0', boxShadow: T.shadowLg, minWidth: 190, border: `1px solid ${T.gray200}`, zIndex: 200 }}>
                 {[
                   { label: 'My Profile', path: '/profile' },
                   ...(user?.shop_slug
@@ -411,138 +305,138 @@ export default function SokoNav({
                 ].map((item, i) => item.divider
                   ? <div key={i} style={{ height: 1, background: T.gray200, margin: '4px 0' }} />
                   : (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => { navigate(item.path); setAvatarOpen(false) }}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: 8, width: '100%',
-                        padding: '9px 16px', textAlign: 'left', background: 'transparent',
-                        border: 'none', fontSize: 13.5,
-                        fontWeight: item.green ? 700 : 500,
-                        color: item.red ? T.red : item.green ? T.green : T.gray800,
-                        cursor: 'pointer', fontFamily: 'inherit',
-                      }}
-                    >
+                    <button key={i} type="button" onClick={() => { navigate(item.path); setAvatarOpen(false) }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '9px 16px', textAlign: 'left', background: 'transparent', border: 'none', fontSize: 13.5, fontWeight: item.green ? 700 : 500, color: item.red ? T.red : item.green ? T.green : T.gray800, cursor: 'pointer', fontFamily: 'inherit' }}>
                       {item.isShop && Icon.shop(13)}
                       {item.label}
                     </button>
-                  ))}
+                  )
+                )}
               </div>
             )}
           </div>
         </div>
 
-        {/* Mobile: search + alerts */}
-        <div className="soko-nav-mobile" style={{ display: 'none', flex: 1, alignItems: 'center', gap: 8, minWidth: 0 }}>
-          <div
-            className="soko-nav-mobile-search"
-            style={{
-              flex: 1, display: 'flex', alignItems: 'center', gap: 8, minWidth: 0,
-              background: T.gray100, borderRadius: 12, padding: '0 12px', minHeight: 40,
-              border: `1px solid ${focused ? T.green : T.gray200}`, position: 'relative', cursor: 'pointer',
-            }}
-            onClick={() => navigate('/search?focus=1')}
-          >
-            <span style={{ color: focused ? T.green : T.gray400, flexShrink: 0, display: 'flex' }}>{Icon.search(16)}</span>
-            <div style={{ flex: 1, position: 'relative', height: 22, minWidth: 0 }}>
-              <input
-                value={search}
-                onChange={e => {
-                  e.stopPropagation()
-                  const val = e.target.value
-                  setSearch?.(val)
-                  navigate(`/search?q=${encodeURIComponent(val)}&focus=1`)
-                }}
-                onFocus={() => { setFocused(true); navigate('/search?focus=1') }}
-                onBlur={() => setFocused(false)}
-                aria-label="Search marketplace"
-                style={{
-                  position: 'absolute', inset: 0, width: '100%', border: 'none',
-                  background: 'transparent', fontSize: 14, color: T.gray900, outline: 'none',
-                  zIndex: search || focused ? 2 : 0, fontFamily: 'inherit',
-                }}
-              />
-              {!search && !focused && (
-                <div style={{
-                  position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
-                  pointerEvents: 'none', fontSize: 13.5, color: T.gray400, overflow: 'hidden',
-                }}>
-                  Search&nbsp;
-                  <span style={{ color: T.green, fontWeight: 600 }}>{kw}</span>
-                </div>
+      </div>
+      {/* ════════════════════ END DESKTOP LAYOUT ════════════════════ */}
+
+      {/* ════════════════════ MOBILE HEADER ════════════════════ */}
+      <div className="soko-nav-mobile">
+
+        {/* Row 1: Logo + District Pill + Notification Bell */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+
+          {/* Logo */}
+          <div onClick={() => navigate('/')} style={{ cursor: 'pointer', userSelect: 'none' }}>
+            <div style={{ fontFamily: T.fontDisplay, fontSize: 20, fontWeight: 800, color: T.green, letterSpacing: '-0.5px' }}>
+              Soko<span style={{ color: T.amber }}>Mw</span>
+            </div>
+          </div>
+
+          {/* Right side: District + Bell */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+
+            {/* District Filter Button */}
+            <div style={{ position: 'relative' }}>
+              <button type="button" onClick={() => setDistOpen(d => !d)}
+                style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 11px', borderRadius: 50, background: '#f3f4f6', border: `1px solid ${T.gray200}`, fontSize: 12, fontWeight: 600, color: T.gray800, cursor: 'pointer', whiteSpace: 'nowrap', maxWidth: 150, fontFamily: 'inherit' }}>
+                {Icon.pin(12)}
+                <span style={{ color: district !== 'All Districts' ? T.amber : T.green, fontWeight: district !== 'All Districts' ? 800 : 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 90 }}>
+                  {district}
+                </span>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
+                  <polyline points="6 9 12 15 18 9" />
+                </svg>
+              </button>
+
+              {/* Mobile District Bottom Sheet */}
+              {distOpen && (
+                <>
+                  <div onClick={() => setDistOpen(false)}
+                    style={{ position: 'fixed', inset: 0, zIndex: 998, background: 'rgba(0,0,0,0.32)' }} />
+                  <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 999, background: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: '16px 16px calc(24px + env(safe-area-inset-bottom, 0px))', maxHeight: '70vh', display: 'flex', flexDirection: 'column', boxShadow: '0 -8px 30px rgba(0,0,0,0.15)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 12, borderBottom: `1px solid ${T.gray100}`, marginBottom: 10, fontWeight: 700, fontSize: 16, color: T.gray900 }}>
+                      <span>Select District</span>
+                      <button type="button" onClick={() => setDistOpen(false)}
+                        style={{ background: T.gray100, border: 'none', borderRadius: '50%', width: 28, height: 28, cursor: 'pointer', fontSize: 14, color: T.gray600, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        ✕
+                      </button>
+                    </div>
+                    <div style={{ overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, paddingTop: 4 }}>
+                      {districts.map(d => (
+                        <button key={d} type="button" onClick={() => changeDistrict(d)}
+                          style={{ padding: '10px 12px', borderRadius: 12, background: d === district ? T.greenL : T.gray50, border: `1px solid ${d === district ? T.green : T.gray200}`, fontSize: 13, fontWeight: d === district ? 700 : 500, color: d === district ? T.green : T.gray800, textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit' }}>
+                          {d}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
               )}
             </div>
-            {search && (
-              <button
-                type="button"
-                onClick={e => { e.stopPropagation(); setSearch?.('') }}
-                style={{
-                  background: T.gray200, border: 'none', borderRadius: '50%',
-                  width: 22, height: 22, display: 'flex', alignItems: 'center',
-                  justifyContent: 'center', cursor: 'pointer', color: T.gray600, flexShrink: 0,
-                }}
-              >{Icon.x(10)}</button>
+
+            {/* Notification Bell */}
+            <button type="button" onClick={() => navigate('/notifications')} aria-label="Notifications"
+              style={{ width: 36, height: 36, borderRadius: '50%', background: '#f3f4f6', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: T.gray800, flexShrink: 0, position: 'relative' }}>
+              {Icon.bell(19)}
+              {notifCount > 0 && (
+                <span style={{ position: 'absolute', top: 1, right: 1, background: T.red, color: '#fff', borderRadius: '50%', minWidth: 15, height: 15, fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1.5px solid #fff', padding: '0 3px' }}>
+                  {notifCount > 9 ? '9+' : notifCount}
+                </span>
+              )}
+            </button>
+
+          </div>
+        </div>
+
+        {/* Row 2: Full-width Search Bar */}
+        <div
+          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, background: T.gray100, borderRadius: 14, padding: '0 12px', minHeight: 40, border: `1.5px solid ${focused ? T.green : T.gray200}`, position: 'relative', cursor: 'pointer', boxSizing: 'border-box' }}
+          onClick={() => navigate('/search?focus=1')}
+        >
+          <span style={{ color: focused ? T.green : T.gray400, flexShrink: 0, display: 'flex' }}>{Icon.search(16)}</span>
+          <div style={{ flex: 1, position: 'relative', height: 22, minWidth: 0 }}>
+            <input
+              ref={inputRef} value={search}
+              onChange={e => { e.stopPropagation(); const val = e.target.value; setSearch?.(val); navigate(`/search?q=${encodeURIComponent(val)}&focus=1`) }}
+              onFocus={() => { setFocused(true); navigate('/search?focus=1') }}
+              onBlur={() => setFocused(false)}
+              aria-label="Search marketplace"
+              style={{ position: 'absolute', inset: 0, width: '100%', border: 'none', background: 'transparent', fontSize: 13.5, color: T.gray900, outline: 'none', zIndex: search || focused ? 2 : 0, fontFamily: 'inherit' }}
+            />
+            {!search && !focused && (
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', pointerEvents: 'none', fontSize: 13, color: T.gray400, overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                Search&nbsp;<span style={{ color: T.green, fontWeight: 600 }}>{kw}</span>
+              </div>
             )}
           </div>
-          {!hideCta && (
-            <button
-              type="button"
-              onClick={handleCta}
-              aria-label={ctaLabel}
-              style={{
-                height: 40, padding: '0 12px', borderRadius: 12, border: 'none',
-                background: T.green, color: '#fff', fontWeight: 800, fontSize: 12,
-                cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4,
-                flexShrink: 0, fontFamily: 'inherit', whiteSpace: 'nowrap',
-              }}
-            >
-              {Icon.plus(14)} Post
+          {search ? (
+            <button type="button" onClick={e => { e.stopPropagation(); setSearch?.('') }}
+              style={{ background: T.gray200, border: 'none', borderRadius: '50%', width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: T.gray600, flexShrink: 0 }}>
+              {Icon.x(10)}
             </button>
-          )}
-          <button
-            type="button"
-            onClick={() => navigate('/notifications')}
-            aria-label="Notifications"
-            style={{
-              width: 40, height: 40, borderRadius: 12, background: 'transparent', border: 'none',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-              color: T.gray800, flexShrink: 0, position: 'relative',
-            }}
-          >
-            {Icon.bell(20)}
-            {notifCount > 0 && (
-              <span style={{
-                position: 'absolute', top: 4, right: 4, background: T.red, color: '#fff',
-                borderRadius: '50%', minWidth: 16, height: 16, fontSize: 9, fontWeight: 800,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                border: '2px solid #fff', padding: '0 3px',
-              }}>{notifCount > 9 ? '9+' : notifCount}</span>
-            )}
-          </button>
+          ) : onImageFile ? (
+            <button type="button" onClick={e => { e.stopPropagation(); fileRef.current?.click() }} title="Search by photo"
+              style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '2px 4px', flexShrink: 0 }}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={T.green} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+                <circle cx="12" cy="13" r="4" />
+              </svg>
+            </button>
+          ) : null}
         </div>
-      </div>
 
-      {/* Desktop pillars */}
+      </div>
+      {/* ════════════════════ END MOBILE HEADER ════════════════════ */}
+
+      {/* Desktop Pillar Navigation Row */}
       <div className="soko-pillar-row soko-nav-desktop" style={{ borderTop: `1px solid ${T.gray100}` }}>
         <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 20px', display: 'flex', alignItems: 'center', gap: 0 }}>
           {SOKO_PILLARS.map(p => {
             const isActive = p.key === activePillar
             return (
-              <button
-                key={p.key}
-                type="button"
-                onClick={() => navigate(p.path)}
-                style={{
-                  position: 'relative', display: 'flex', alignItems: 'center', gap: 6,
-                  padding: '10px 16px',
-                  background: 'none', border: 'none',
-                  borderBottom: isActive ? `2.5px solid ${T.green}` : '2.5px solid transparent',
-                  cursor: 'pointer', fontSize: 13.5, fontWeight: isActive ? 700 : 500,
-                  color: isActive ? T.green : T.gray800,
-                  whiteSpace: 'nowrap', fontFamily: 'inherit',
-                }}
-              >
+              <button key={p.key} type="button" onClick={() => navigate(p.path)}
+                style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', background: 'none', border: 'none', borderBottom: isActive ? `2.5px solid ${T.green}` : '2.5px solid transparent', cursor: 'pointer', fontSize: 13.5, fontWeight: isActive ? 700 : 500, color: isActive ? T.green : T.gray800, whiteSpace: 'nowrap', fontFamily: 'inherit' }}>
                 <span style={{ color: isActive ? T.green : T.gray600, display: 'flex' }}>{p.icon(15)}</span>
                 {p.label}
               </button>
@@ -551,33 +445,6 @@ export default function SokoNav({
         </div>
       </div>
 
-      {/* Mobile pillar chips */}
-      <div className="soko-nav-mobile soko-nav-mobile-pillars" style={{ display: 'none', borderTop: `1px solid ${T.gray100}` }}>
-        <div className="soko-scroll" style={{ display: 'flex', gap: 8, overflowX: 'auto', padding: '0 12px' }}>
-          {SOKO_PILLARS.map(p => {
-            const isActive = p.key === activePillar
-            return (
-              <button
-                key={p.key}
-                type="button"
-                onClick={() => navigate(p.path)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
-                  background: isActive ? T.greenL : T.gray100,
-                  border: isActive ? `1.5px solid ${T.green}` : 'none',
-                  borderRadius: 999, padding: '7px 12px', fontSize: 12,
-                  fontWeight: isActive ? 700 : 600,
-                  color: isActive ? T.green : T.gray800, cursor: 'pointer',
-                  fontFamily: 'inherit',
-                }}
-              >
-                <span style={{ display: 'flex', color: isActive ? T.green : T.gray600 }}>{p.icon(13)}</span>
-                {p.label}
-              </button>
-            )
-          })}
-        </div>
-      </div>
     </nav>
   )
 }
