@@ -1139,6 +1139,16 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
         }}>
           {/* ════════ MEDIA STAGE ════════ */}
           <div style={{ position: 'relative', flex: 1, minHeight: 0, background: '#0a0a0a' }}>
+            {/* Skeleton shimmer while media is still buffering — avoids the blank/black gap */}
+            {media0 && !mediaReady && !showLoadError && (
+              <div style={{
+                position: 'absolute', inset: 0, zIndex: 3,
+                background: 'linear-gradient(100deg, #111827 30%, #1f2937 50%, #111827 70%)',
+                backgroundSize: '200% 100%',
+                animation: 'svShimmer 1.4s ease-in-out infinite',
+              }} />
+            )}
+
             {/* Only show error state (no downloading % UI) */}
             {showLoadError && (
               <div style={{
