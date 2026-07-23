@@ -5172,9 +5172,9 @@ export default function Home() {
         // Profile enrichment in parallel with marketplace data
         const [profileRes, shopRes] = await Promise.all([
           supabase.from('profiles')
-            .select('avatar_url, full_name, city, account_type, is_verified').eq('id', user.id).maybeSingle(),
+            .select('id, avatar_url, full_name, city, account_type, is_verified').eq('id', user.id).maybeSingle(),
           supabase.from('shops')
-            .select('slug, is_verified').eq('owner_id', user.id).maybeSingle(),
+            .select('id, slug, name, is_verified').eq('owner_id', user.id).maybeSingle(),
         ])
         const profile = profileRes.data
         const shop = shopRes.data
@@ -5390,7 +5390,7 @@ export default function Home() {
       (async () => {
         try {
           let { data, error } = await supabase.from('buyer_requests')
-            .select('id, title, description, category, city, cities, created_at, budget, offer_count, view_count, urgency, image_url, image_urls, expires_at, lat, lng, user_id, profiles:user_id(full_name,avatar_url,is_verified)')
+            .select('id, title, description, category, city, cities, created_at, budget, offer_count, view_count, urgency, image_url, image_urls, expires_at, lat, lng, user_id')
             .not('status', 'eq', 'fulfilled')
             .order('created_at', { ascending: false })
             .limit(40)

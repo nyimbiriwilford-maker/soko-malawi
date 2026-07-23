@@ -1,5 +1,5 @@
 ﻿/**
- * SokoMW â€” SearchPage.jsx
+ * SokoMW - SearchPage.jsx
  * Modern multi-pillar search: Marketplace, Shops, Looking For, Jobs, Services.
  * Reads `?q=` from URL; filters + live overlay; Lucide-style icon system.
  */
@@ -12,9 +12,9 @@ import { supabase } from '../lib/supabase'
 import { isListingFeatured, rotateFeaturedFairly } from '../utils/homeUtils'
 import SokoNav from '../components/SokoNav'
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* -----------------------------------------------------------------------------
    DESIGN TOKENS
-â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+----------------------------------------------------------------------------- */
 const T = {
   green:   '#0F9D58',
   greenD:  '#0a7a44',
@@ -49,9 +49,9 @@ const T = {
   fontDisplay: "'Sora', 'Inter', system-ui, sans-serif",
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   MODERN ICONS â€” Lucide-style (stroke 1.75, round caps)
-â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* -----------------------------------------------------------------------------
+   MODERN ICONS - Lucide-style (stroke 1.75, round caps)
+----------------------------------------------------------------------------- */
 const sw = 1.75
 const Icon = {
   search:   (s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" aria-hidden><circle cx="11" cy="11" r="7.5"/><path d="m20 20-3.5-3.5"/></svg>,
@@ -100,9 +100,9 @@ const Icon = {
   layers:   (s=15) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="m12 2 10 5.5-10 5.5L2 7.5 12 2z"/><path d="m2 12.5 10 5.5 10-5.5"/><path d="m2 17.5 10 5.5 10-5.5"/></svg>,
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* -----------------------------------------------------------------------------
    HELPERS
-â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+----------------------------------------------------------------------------- */
 function formatPrice(n) {
   if (!n && n !== 0) return ''
   return `MK ${n.toLocaleString()}`
@@ -127,11 +127,11 @@ function timeAgo(ts) {
   return `${m}m ago`
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   SEARCH TABS â€” one per SokoMW pillar. Each tab queries its own table;
+/* -----------------------------------------------------------------------------
+   SEARCH TABS - one per SokoMW pillar. Each tab queries its own table;
    counts are fetched in parallel up front so badges populate without
    forcing a tab switch.
-â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+----------------------------------------------------------------------------- */
 const SEARCH_TABS = [
   { key: 'listings',   label: 'Marketplace',         icon: Icon.home },
   { key: 'shops',      label: 'Shops',               icon: Icon.shop },
@@ -140,9 +140,9 @@ const SEARCH_TABS = [
   { key: 'services',   label: 'Services',            icon: Icon.wrench },
 ]
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* -----------------------------------------------------------------------------
    CATEGORIES (nested for sidebar checkbox tree)
-â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+----------------------------------------------------------------------------- */
 const CATEGORY_TREE = [
   { key: 'Electronics', label: 'Electronics', children: [
     { key: 'Phones & Tablets',    label: 'Phones & Tablets' },
@@ -239,9 +239,9 @@ const ALL_DISTRICTS = [
   'Chikwawa','Nsanje','Mwanza','Neno','Likoma',
 ]
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* -----------------------------------------------------------------------------
    GLOBAL STYLES
-â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+----------------------------------------------------------------------------- */
 function GlobalStyles() {
   return (
     <style>{`
@@ -414,7 +414,7 @@ function GlobalStyles() {
         background:rgba(255,255,255,.18); color:#fff;
       }
 
-      /* Results grid â€” marketplace product cards */
+      /* Results grid - marketplace product cards */
       .sp-results-grid.grid-modern {
         display:grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -704,9 +704,9 @@ function Checkbox({ checked, onChange, label, indent = 0 }) {
   )
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   CATEGORY CHECKBOX TREE â€” recursive
-â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* -----------------------------------------------------------------------------
+   CATEGORY CHECKBOX TREE - recursive
+----------------------------------------------------------------------------- */
 function CategoryTree({ node, checked, onToggle, depth = 0, forceOpen, defaultOpenKey }) {
   const [expanded, setExpanded] = useState(node.key === defaultOpenKey)
   const hasChildren = node.children?.length > 0
@@ -744,9 +744,9 @@ function CategoryTree({ node, checked, onToggle, depth = 0, forceOpen, defaultOp
   )
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* -----------------------------------------------------------------------------
    FILTER SIDEBAR CONTENT
-â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+----------------------------------------------------------------------------- */
 function FilterPanel({
   checkedCats, onToggleCat, onClearAll,
   priceMin, setPriceMin, priceMax, setPriceMax,
@@ -787,7 +787,7 @@ function FilterPanel({
             <div className="sp-toggle-thumb" />
           </div>
         </div>
-        {locating && <div style={{ fontSize:11.5, color:T.gray500, marginTop:8, paddingLeft:37 }}>Finding your locationâ€¦</div>}
+        {locating && <div style={{ fontSize:11.5, color:T.gray500, marginTop:8, paddingLeft:37 }}>Finding your location...</div>}
       </div>
 
       {/* CATEGORIES */}
@@ -820,7 +820,7 @@ function FilterPanel({
             <span className="sp-range-prefix">MK</span>
             <input className="sp-range-input" type="number" placeholder="Min" value={priceMin} onChange={e => setPriceMin(e.target.value)} />
           </div>
-          <span style={{ color:T.gray400, fontSize:12, fontWeight:600 }}>â€“</span>
+          <span style={{ color:T.gray400, fontSize:12, fontWeight:600 }}>-</span>
           <div className="sp-range-wrap">
             <span className="sp-range-prefix">MK</span>
             <input className="sp-range-input" type="number" placeholder="Max" value={priceMax} onChange={e => setPriceMax(e.target.value)} />
@@ -883,9 +883,9 @@ function FilterPanel({
   )
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   RESULT CARD â€” GRID mode (Marketplace / listings tab)
-â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* -----------------------------------------------------------------------------
+   RESULT CARD - GRID mode (Marketplace / listings tab)
+----------------------------------------------------------------------------- */
 function ResultCardGrid({ listing, delay, onClick }) {
   const [hov, setHov]     = useState(false)
   const [liked, setLiked] = useState(false)
@@ -939,9 +939,9 @@ function ResultCardGrid({ listing, delay, onClick }) {
   )
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   RESULT CARD â€” LIST mode (Marketplace / listings tab)
-â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* -----------------------------------------------------------------------------
+   RESULT CARD - LIST mode (Marketplace / listings tab)
+----------------------------------------------------------------------------- */
 function ResultCardList({ listing, delay, onClick }) {
   const [liked, setLiked] = useState(false)
   const [imgErr, setImgErr] = useState(false)
@@ -983,9 +983,9 @@ function ResultCardList({ listing, delay, onClick }) {
   )
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   SHOP RESULT CARD â€” Shops tab
-â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* -----------------------------------------------------------------------------
+   SHOP RESULT CARD - Shops tab
+----------------------------------------------------------------------------- */
 function ShopResultCard({ shop, delay, onClick }) {
   return (
     <div className="sp-row-card" style={{ animationDelay:`${delay}s` }} onClick={onClick}>
@@ -1008,9 +1008,9 @@ function ShopResultCard({ shop, delay, onClick }) {
   )
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   JOB RESULT CARD â€” Jobs tab
-â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* -----------------------------------------------------------------------------
+   JOB RESULT CARD - Jobs tab
+----------------------------------------------------------------------------- */
 function JobResultCard({ job, delay, onClick }) {
   return (
     <div className="sp-row-card" style={{ animationDelay:`${delay}s` }} onClick={onClick}>
@@ -1029,9 +1029,9 @@ function JobResultCard({ job, delay, onClick }) {
   )
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   SERVICE RESULT CARD â€” Services tab
-â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* -----------------------------------------------------------------------------
+   SERVICE RESULT CARD - Services tab
+----------------------------------------------------------------------------- */
 function ServiceResultCard({ service, delay, onClick }) {
   return (
     <div className="sp-row-card" style={{ animationDelay:`${delay}s` }} onClick={onClick}>
@@ -1049,9 +1049,9 @@ function ServiceResultCard({ service, delay, onClick }) {
   )
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   REQUEST RESULT CARD â€” People Looking For tab
-â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* -----------------------------------------------------------------------------
+   REQUEST RESULT CARD - People Looking For tab
+----------------------------------------------------------------------------- */
 function RequestResultCard({ request, delay, onClick }) {
   return (
     <div className="sp-row-card" style={{ animationDelay:`${delay}s` }} onClick={onClick}>
@@ -1074,9 +1074,9 @@ function RequestResultCard({ request, delay, onClick }) {
   )
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* -----------------------------------------------------------------------------
    SKELETON CARDS
-â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+----------------------------------------------------------------------------- */
 function SkeletonCard() {
   return (
     <div style={{ background:'#fff', borderRadius:16, overflow:'hidden', border:`1px solid ${T.gray100}` }}>
@@ -1103,9 +1103,9 @@ function SkeletonRowCard() {
   )
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* -----------------------------------------------------------------------------
    EMPTY STATE
-â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+----------------------------------------------------------------------------- */
 function EmptyState({ query, onClearFilters, label = 'results' }) {
   return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', padding:'56px 24px', textAlign:'center', background:'#fff', borderRadius:20, border:`1px solid ${T.gray100}`, boxShadow:T.shadow }}>
@@ -1113,7 +1113,7 @@ function EmptyState({ query, onClearFilters, label = 'results' }) {
         {Icon.search(30)}
       </div>
       <div style={{ fontFamily:T.fontDisplay, fontSize:18, fontWeight:800, color:T.gray900, marginBottom:8, letterSpacing:'-0.3px' }}>
-        No {label} for â€œ{query || 'your search'}â€
+        No {label} for "{query || 'your search'}"
       </div>
       <div style={{ fontSize:14, color:T.gray600, marginBottom:22, maxWidth:340, lineHeight:1.5 }}>
         Try different keywords, switch tabs, or clear filters to broaden results.
@@ -1125,9 +1125,9 @@ function EmptyState({ query, onClearFilters, label = 'results' }) {
   )
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   SEE MORE â€” cumulative load (20 at a time), no numbered page grid
-â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* -----------------------------------------------------------------------------
+   SEE MORE - cumulative load (20 at a time), no numbered page grid
+----------------------------------------------------------------------------- */
 const PAGE_SIZE = 20
 
 function SeeMoreButton({ onClick, loading, remaining }) {
@@ -1150,7 +1150,7 @@ function SeeMoreButton({ onClick, loading, remaining }) {
         }}
       >
         {loading ? (
-          <>{Icon.spinner(15)} Loadingâ€¦</>
+          <>{Icon.spinner(15)} Loading...</>
         ) : (
           <>See more{remaining > 0 ? ` (${Math.min(PAGE_SIZE, remaining)})` : ''}</>
         )}
@@ -1164,13 +1164,13 @@ function SeeMoreButton({ onClick, loading, remaining }) {
   )
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* -----------------------------------------------------------------------------
    MAIN SEARCH PAGE COMPONENT
-â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+----------------------------------------------------------------------------- */
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* -----------------------------------------------------------------------------
    LIVE SEARCH OVERLAY
-â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+----------------------------------------------------------------------------- */
 function LiveSearchOverlay({ liveQuery, setLiveQuery, liveResults, liveLoading, onClose, onCommit, navigate }) {
   const inputRef = useRef(null)
 
@@ -1198,7 +1198,7 @@ function LiveSearchOverlay({ liveQuery, setLiveQuery, liveResults, liveLoading, 
     if (extra <= 0) return null
     return (
       <button onClick={onClick} style={{ display:'block', width:'100%', textAlign:'left', padding:'6px 18px 10px', fontSize:12, fontWeight:700, color:T.green, background:'none', border:'none', cursor:'pointer' }}>
-        +{extra} more {label} â†’
+        +{extra} more {label} →
       </button>
     )
   }
@@ -1225,7 +1225,7 @@ function LiveSearchOverlay({ liveQuery, setLiveQuery, liveResults, liveLoading, 
             value={liveQuery}
             onChange={e => setLiveQuery(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') commit(liveQuery); if (e.key === 'Escape') onClose() }}
-            placeholder="Search listings, shops, jobsâ€¦"
+            placeholder="Search listings, shops, jobs..."
             enterKeyHint="search"
             autoComplete="off"
             style={{ flex:1, border:'none', outline:'none', fontSize:16, fontWeight:500, color:T.gray900, background:'transparent', minWidth:0 }}
@@ -1240,7 +1240,7 @@ function LiveSearchOverlay({ liveQuery, setLiveQuery, liveResults, liveLoading, 
         <div style={{ overflowY:'auto', flex:1 }}>
           {!liveQuery.trim() && (
             <div style={{ padding:'32px 20px', textAlign:'center', color:T.gray500, fontSize:14 }}>
-              Start typing to search across all of SokoMWâ€¦
+              Start typing to search across all of SokoMW...
             </div>
           )}
 
@@ -1261,7 +1261,7 @@ function LiveSearchOverlay({ liveQuery, setLiveQuery, liveResults, liveLoading, 
           {liveQuery.trim() && !liveLoading && total === 0 && (
             <div style={{ padding:'40px 20px', textAlign:'center' }}>
               <div style={{ width:48, height:48, borderRadius:14, background:T.gray50, color:T.gray500, display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 12px' }}>{Icon.search(22)}</div>
-              <div style={{ fontSize:15, fontWeight:700, color:T.gray800, marginBottom:6 }}>No results for â€œ{liveQuery}â€</div>
+              <div style={{ fontSize:15, fontWeight:700, color:T.gray800, marginBottom:6 }}>No results for "{liveQuery}"</div>
               <div style={{ fontSize:13, color:T.gray500 }}>Try different keywords or check the spelling</div>
             </div>
           )}
@@ -1303,7 +1303,7 @@ function LiveSearchOverlay({ liveQuery, setLiveQuery, liveResults, liveLoading, 
                   {liveResults.shops.map(s => (
                     <LiveRow key={s.id} onClick={() => { navigate('/shop/'+s.slug); onClose() }}
                       avatar={s.logo_url ? <img src={s.logo_url} alt="" style={{ width:'100%', height:'100%', objectFit:'cover', borderRadius:'50%' }} /> : <span style={{ color:T.gray600, display:'flex' }}>{Icon.shop(18)}</span>}
-                      title={s.name} sub={[s.category, s.city].filter(Boolean).join(' Â· ')}
+                      title={s.name} sub={[s.category, s.city].filter(Boolean).join(' - ')}
                     />
                   ))}
                   <MoreHint shown={liveResults.shops.length} total={liveResults.shopsTotal} label="shops" onClick={() => { commit(liveQuery) }} />
@@ -1316,7 +1316,7 @@ function LiveSearchOverlay({ liveQuery, setLiveQuery, liveResults, liveLoading, 
                   {liveResults.jobs.map(j => (
                     <LiveRow key={j.id} onClick={() => { navigate('/jobs'); onClose() }}
                       avatar={<span style={{ color:T.blue, display:'flex' }}>{Icon.briefcase(18)}</span>}
-                      title={j.title} sub={[j.company, j.city].filter(Boolean).join(' Â· ')}
+                      title={j.title} sub={[j.company, j.city].filter(Boolean).join(' - ')}
                     />
                   ))}
                   <MoreHint shown={liveResults.jobs.length} total={liveResults.jobsTotal} label="jobs" onClick={() => { navigate('/jobs'); onClose() }} />
@@ -1329,7 +1329,7 @@ function LiveSearchOverlay({ liveQuery, setLiveQuery, liveResults, liveLoading, 
                   {liveResults.services.map(s => (
                     <LiveRow key={s.id} onClick={() => { navigate('/services'); onClose() }}
                       avatar={<span style={{ color:T.violet, display:'flex' }}>{Icon.wrench(18)}</span>}
-                      title={s.name} sub={[s.category, s.city].filter(Boolean).join(' Â· ')}
+                      title={s.name} sub={[s.category, s.city].filter(Boolean).join(' - ')}
                     />
                   ))}
                   <MoreHint shown={liveResults.services.length} total={liveResults.servicesTotal} label="services" onClick={() => { navigate('/services'); onClose() }} />
@@ -1353,7 +1353,7 @@ function LiveSearchOverlay({ liveQuery, setLiveQuery, liveResults, liveLoading, 
               <div style={{ padding:'12px 14px 4px' }}>
                 <button onClick={() => commit(liveQuery)}
                   style={{ width:'100%', background:T.greenL, color:T.green, border:`1.5px solid ${T.green}`, borderRadius:12, padding:'12px 0', fontSize:14, fontWeight:700, cursor:'pointer' }}>
-                  See all results for "{liveQuery}" â†’
+                  See all results for "{liveQuery}" →
                 </button>
               </div>
             </div>
@@ -1392,9 +1392,9 @@ function LiveRow({ onClick, avatar, title, sub }) {
   )
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-   NOTIFY ME â€” modern advanced alert builder + manager
-â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+/* -----------------------------------------------------------------------------
+   NOTIFY ME - modern advanced alert builder + manager
+----------------------------------------------------------------------------- */
 const ALERT_SUGGESTIONS = ['iPhone', 'Toyota', 'Laptop', 'Land', 'Solar', 'Fridge', 'House rent', 'Generator']
 
 function parseKeywordList(str) {
@@ -1687,7 +1687,7 @@ function NotifyMeModal({ query, onClose, user }) {
                   Smart listing alerts
                 </div>
                 <div style={{ fontSize:12.5, color:'rgba(255,255,255,.68)', marginTop:4, lineHeight:1.4, fontWeight:500 }}>
-                  Watch the marketplace â€” we ping you when a match lands.
+                  Watch the marketplace - we ping you when a match lands.
                 </div>
               </div>
             </div>
@@ -1728,7 +1728,7 @@ function NotifyMeModal({ query, onClose, user }) {
 
         {/* Body */}
         <div className="sp-alert-body">
-          {/* â”€â”€ CREATE â”€â”€ */}
+          {/* -- CREATE -- */}
           {tab === 'create' && !submitted && (
             <div style={{ display:'flex', flexDirection:'column', gap:18 }}>
               {/* Keywords */}
@@ -1753,12 +1753,12 @@ function NotifyMeModal({ query, onClose, user }) {
                     onChange={e => setKeywordInput(e.target.value)}
                     onKeyDown={onKeywordKeyDown}
                     onBlur={() => { if (keywordInput.trim()) addTag(keywordInput) }}
-                    placeholder={tags.length ? 'Add anotherâ€¦' : 'e.g. iPhone 13, Toyota Hiluxâ€¦'}
+                    placeholder={tags.length ? 'Add another...' : 'e.g. iPhone 13, Toyota Hilux...'}
                     style={{ flex:1, minWidth:120, border:'none', outline:'none', fontSize:13.5, color:T.gray900, background:'transparent', fontFamily:'inherit', padding:'4px 2px' }}
                   />
                 </div>
                 <div style={{ fontSize:11.5, color:T.gray500, marginTop:6, display:'flex', alignItems:'center', gap:5 }}>
-                  {Icon.sparkles(11)} Press Enter or comma to add Â· up to 12 keywords
+                  {Icon.sparkles(11)} Press Enter or comma to add - up to 12 keywords
                 </div>
                 <div style={{ display:'flex', flexWrap:'wrap', gap:6, marginTop:10 }}>
                   {ALERT_SUGGESTIONS.filter(s => !tags.some(t => t.toLowerCase() === s.toLowerCase())).slice(0, 6).map(s => (
@@ -1886,7 +1886,7 @@ function NotifyMeModal({ query, onClose, user }) {
                       Watching for{' '}
                       <span style={{ color:T.greenD }}>
                         {previewKeywords.map((k, i) => (
-                          <span key={k}>{i > 0 ? ', ' : ''}â€œ{k}â€</span>
+                          <span key={k}>{i > 0 ? ', ' : ''}"{k}"</span>
                         ))}
                       </span>
                     </div>
@@ -1901,9 +1901,9 @@ function NotifyMeModal({ query, onClose, user }) {
                         <span style={{ display:'inline-flex', alignItems:'center', gap:4, background:'#fff', border:`1px solid ${T.gray200}`, borderRadius:999, padding:'4px 9px' }}>
                           {Icon.cash(11)}{' '}
                           {minPrice && maxPrice
-                            ? `MK ${Number(minPrice).toLocaleString()} â€“ ${Number(maxPrice).toLocaleString()}`
+                            ? `MK ${Number(minPrice).toLocaleString()} - ${Number(maxPrice).toLocaleString()}`
                             : maxPrice
-                              ? `â‰¤ MK ${Number(maxPrice).toLocaleString()}`
+                              ? `<= MK ${Number(maxPrice).toLocaleString()}`
                               : `â‰¥ MK ${Number(minPrice).toLocaleString()}`}
                         </span>
                       )}
@@ -1935,7 +1935,7 @@ function NotifyMeModal({ query, onClose, user }) {
             </div>
           )}
 
-          {/* â”€â”€ SUCCESS â”€â”€ */}
+          {/* -- SUCCESS -- */}
           {submitted && (
             <div style={{ textAlign:'center', padding:'12px 4px 8px' }}>
               <div style={{
@@ -1951,9 +1951,9 @@ function NotifyMeModal({ query, onClose, user }) {
                 Alert is live
               </div>
               <div style={{ fontSize:14, color:T.gray600, marginBottom:8, lineHeight:1.55, maxWidth:340, marginLeft:'auto', marginRight:'auto' }}>
-                Weâ€™ll watch for{' '}
+                We"™ll watch for{' '}
                 <strong style={{ color:T.gray900 }}>
-                  {tags.map((k, i) => (i ? ', ' : '') + `â€œ${k}â€`)}
+                  {tags.map((k, i) => (i ? ', ' : '') + `"${k}"`)}
                 </strong>
                 {' '}and notify you as soon as something matches.
               </div>
@@ -1979,7 +1979,7 @@ function NotifyMeModal({ query, onClose, user }) {
             </div>
           )}
 
-          {/* â”€â”€ MANAGE â”€â”€ */}
+          {/* -- MANAGE -- */}
           {tab === 'manage' && !submitted && (
             <div>
               {loadingAlerts ? (
@@ -1996,7 +1996,7 @@ function NotifyMeModal({ query, onClose, user }) {
                   </div>
                   <div style={{ fontSize:15, fontWeight:800, color:T.gray900, marginBottom:6 }}>No alerts yet</div>
                   <div style={{ fontSize:13, color:T.gray500, marginBottom:18, lineHeight:1.45, maxWidth:280, marginLeft:'auto', marginRight:'auto' }}>
-                    Create a smart alert and weâ€™ll watch the marketplace for you.
+                    Create a smart alert and we"™ll watch the marketplace for you.
                   </div>
                   <button
                     type="button"
@@ -2009,7 +2009,7 @@ function NotifyMeModal({ query, onClose, user }) {
               ) : (
                 <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
                   <div style={{ fontSize:12.5, color:T.gray600, fontWeight:600, marginBottom:2 }}>
-                    {alerts.filter(a => a.active).length} active Â· {alerts.length} total
+                    {alerts.filter(a => a.active).length} active - {alerts.length} total
                   </div>
                   {alerts.map(a => {
                     const kw = Array.isArray(a.keywords) ? a.keywords : parseKeywordList(a.keywords)
@@ -2039,7 +2039,7 @@ function NotifyMeModal({ query, onClose, user }) {
                             <div style={{ display:'flex', flexWrap:'wrap', gap:6, fontSize:11.5, color:T.gray600 }}>
                               <span style={{ display:'inline-flex', alignItems:'center', gap:3 }}>{Icon.layers(11)} {a.category || 'Any category'}</span>
                               {a.district && <span style={{ display:'inline-flex', alignItems:'center', gap:3 }}>{Icon.pin(11)} {a.district}</span>}
-                              {a.budget_max != null && <span style={{ display:'inline-flex', alignItems:'center', gap:3 }}>{Icon.cash(11)} â‰¤ MK {Number(a.budget_max).toLocaleString()}</span>}
+                              {a.budget_max != null && <span style={{ display:'inline-flex', alignItems:'center', gap:3 }}>{Icon.cash(11)} {'<='} MK {Number(a.budget_max).toLocaleString()}</span>}
                               {a.notify_email && <span style={{ display:'inline-flex', alignItems:'center', gap:3 }}>{Icon.mail(11)} Email</span>}
                               {a.notify_push && <span style={{ display:'inline-flex', alignItems:'center', gap:3 }}>{Icon.bell(11)} Push</span>}
                             </div>
@@ -2102,10 +2102,10 @@ function NotifyMeModal({ query, onClose, user }) {
                 transition:'opacity .15s',
               }}
             >
-              {saving ? <>{Icon.spinner(16)} Activatingâ€¦</> : <>{Icon.bell(16)} Activate smart alert</>}
+              {saving ? <>{Icon.spinner(16)} Activating...</> : <>{Icon.bell(16)} Activate smart alert</>}
             </button>
             <div style={{ fontSize:11, color:T.gray500, textAlign:'center', marginTop:8, lineHeight:1.4 }}>
-              Free Â· Instant when matches post Â· Pause anytime
+              Free - Instant when matches post - Pause anytime
             </div>
           </div>
         )}
@@ -2114,9 +2114,9 @@ function NotifyMeModal({ query, onClose, user }) {
   )
 }
 
-/* â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+/* -----------------------------------------------------------------------------
    FACEBOOK-STYLE LISTING CARD
-â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+----------------------------------------------------------------------------- */
 const CAT_STYLE = {
   Electronics:      { color:'#16a34a', bg:null },
   Furniture:        { color:'#be185d', bg:'#fce7f3' },
@@ -2165,7 +2165,7 @@ function FBListingCard({ listing, onClick }) {
         transition:'box-shadow .25s ease, transform .25s ease',
       }}
     >
-      {/* Image â€” 4:3 ratio */}
+      {/* Image - 4:3 ratio */}
       <div style={{ position:'relative', width:'100%', paddingBottom:'75%', background:T.gray100, overflow:'hidden' }}>
         <div style={{ position:'absolute', inset:0 }}>
           {listing.images?.[0] && !imgErr
@@ -2229,7 +2229,7 @@ function FBListingCard({ listing, onClick }) {
         <div style={{ display:'flex', alignItems:'center', gap:4, fontSize:11.5, color:T.gray500, marginBottom: listing._distanceKm != null || views != null || chats != null ? 6 : 10 }}>
           <span style={{ display:'flex', color:T.gray500 }}>{Icon.pin(12)}</span>
           <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-            {[listing.district, listing.city].filter(Boolean).join(' â€¢ ') || 'Malawi'}
+            {[listing.district, listing.city].filter(Boolean).join(' "¢ ') || 'Malawi'}
           </span>
         </div>
 
@@ -2298,11 +2298,11 @@ export default function SearchPage() {
   const [user, setUser]           = useState(null)
   const [notifCount, setNotifCount] = useState(0)
 
-  // â”€â”€ Active tab â”€â”€
+  // -- Active tab --
   const [activeTab, setActiveTab] = useState('listings')
   const [tabCounts, setTabCounts] = useState({ listings: null, shops: null, lookingfor: null, jobs: null, services: null })
 
-  // â”€â”€ Results state â”€â”€
+  // -- Results state --
   const [allResults, setAllResults] = useState([])
   const [loading, setLoading]       = useState(false)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -2310,7 +2310,7 @@ export default function SearchPage() {
   /** Cumulative page: page 1 = 20, page 2 = 40, etc. (See more, not numbered grid) */
   const [page, setPage]             = useState(1)
 
-  // â”€â”€ Filter state (Marketplace tab only) â”€â”€
+  // -- Filter state (Marketplace tab only) --
   const [checkedCats, setCheckedCats]   = useState(new Set())
   const [priceMin, setPriceMin]         = useState('')
   const [priceMax, setPriceMax]         = useState('')
@@ -2333,7 +2333,7 @@ export default function SearchPage() {
   const [liveLoading, setLiveLoading]           = useState(false)
   const liveRef                                 = useRef(null)
 
-  // â”€â”€ Applied (committed) filters â€” only change on "Apply" â”€â”€
+  // -- Applied (committed) filters - only change on "Apply" --
   const [applied, setApplied] = useState({
     cats: new Set(), priceMin:'', priceMax:'', district:'All Districts',
     conditions: new Set(), delivery: new Set(), verifiedOnly: false,
@@ -2343,7 +2343,7 @@ export default function SearchPage() {
   // applied looks structurally identical (e.g. clearing already-empty filters)
   const [searchTick, setSearchTick] = useState(0)
 
-  /* Sync URL â†’ search input */
+  /* Sync URL → search input */
   useEffect(() => { setSearch(queryParam) }, [queryParam])
 
   /* Auth */
@@ -2357,7 +2357,7 @@ export default function SearchPage() {
     })
   }, [])
 
-  /* Near Me â€” request geolocation once when toggled on, then search
+  /* Near Me - request geolocation once when toggled on, then search
      immediately once coordinates resolve (no extra "Apply" click needed) */
   const geoAttempted = useRef(false)
   useEffect(() => {
@@ -2391,7 +2391,7 @@ export default function SearchPage() {
     )
   }, [nearMe, userCoords])
 
-  /* Live search â€” fires 300 ms after the user stops typing */
+  /* Live search - fires 300 ms after the user stops typing */
   useEffect(() => {
     if (!liveQuery.trim()) {
       setLiveResults({ listings:[], shops:[], jobs:[], services:[], requests:[] })
@@ -2502,7 +2502,7 @@ export default function SearchPage() {
     setTabCounts({ listings: listingsC, shops: shopsC, lookingfor: lookingforC, jobs: jobsC, services: servicesC })
   }
 
-  /* â”€â”€ doSearch: dispatches to the right table for the active tab â”€â”€
+  /* -- doSearch: dispatches to the right table for the active tab --
      Cumulative pages: page N shows first N * PAGE_SIZE results (See more). */
   async function doSearch(tab, filters, currentSort, currentPage) {
     if (currentPage <= 1) setLoading(true)
@@ -2524,14 +2524,14 @@ export default function SearchPage() {
     setLoadingMore(false)
   }
 
-  /* â”€â”€ Marketplace listings â”€â”€ */
+  /* -- Marketplace listings -- */
   async function searchListings(filters, currentSort, currentPage) {
     let query = supabase
       .from('listings')
       .select('id, title, price, images, city, district, category, condition, featured, is_featured, featured_until, created_at, seller_id, shop_id, description, latitude, longitude, precise_location, contact_methods, whatsapp_number, call_number', { count: 'exact' })
       .eq('status', 'published')
 
-    // Only filter by title when there's an actual search term â€” an empty
+    // Only filter by title when there's an actual search term - an empty
     // query means "browse everything" (needed for Near Me / filter-only browsing)
     if (queryParam) query = query.ilike('title', `%${queryParam}%`)
 
@@ -2551,7 +2551,7 @@ export default function SearchPage() {
 
     let rows = allData || []
 
-    // Near Me â€” compute distance and sort by it, overriding other sort modes
+    // Near Me - compute distance and sort by it, overriding other sort modes
     if (filters.nearMe && filters.userCoords) {
       rows = rows
         .map(l => ({
@@ -2635,7 +2635,7 @@ export default function SearchPage() {
     setTotalCount(filters.verifiedOnly ? merged.length : merged.length)
   }
 
-  /* â”€â”€ Shops tab â€” searches shops.name, scoped to active shops â”€â”€ */
+  /* -- Shops tab - searches shops.name, scoped to active shops -- */
   async function searchShops(currentSort, currentPage) {
     let query = supabase
       .from('shops')
@@ -2658,7 +2658,7 @@ export default function SearchPage() {
     setTotalCount(count || 0)
   }
 
-  /* â”€â”€ People Looking For tab â€” searches buyer_requests.title â”€â”€ */
+  /* -- People Looking For tab - searches buyer_requests.title -- */
   async function searchLookingFor(currentSort, currentPage) {
     let query = supabase
       .from('buyer_requests')
@@ -2681,7 +2681,7 @@ export default function SearchPage() {
     setTotalCount(count || 0)
   }
 
-  /* â”€â”€ Jobs tab â€” searches jobs.title, scoped to active + non-expired â”€â”€ */
+  /* -- Jobs tab - searches jobs.title, scoped to active + non-expired -- */
   async function searchJobs(currentSort, currentPage) {
     const today = new Date().toISOString().split('T')[0]
     let query = supabase
@@ -2701,7 +2701,7 @@ export default function SearchPage() {
     setTotalCount(count || 0)
   }
 
-  /* â”€â”€ Services tab â€” searches services.name, scoped to active â”€â”€ */
+  /* -- Services tab - searches services.name, scoped to active -- */
   async function searchServices(currentSort, currentPage) {
     let query = supabase
       .from('services')
@@ -2785,7 +2785,7 @@ export default function SearchPage() {
   
 
   // Instant-apply variant for simple toggle filters (Near Me, Featured,
-  // Verified) â€” takes explicit overrides so it doesn't depend on React
+  // Verified) - takes explicit overrides so it doesn't depend on React
   // state having flushed yet, and searches immediately without requiring
   // the person to also click "Apply Filters".
   function applyFiltersInstant(overrides) {
@@ -2831,7 +2831,7 @@ export default function SearchPage() {
   const remaining = Math.max(0, totalCount - allResults.length)
   const showFilterSidebar = activeTab === 'listings'
 
-  // Toggle handlers that update local state AND search immediately â€”
+  // Toggle handlers that update local state AND search immediately -
   // used for Near Me / Featured / Verified, which feel better as instant
   // switches rather than requiring a separate "Apply" tap.
   function toggleNearMeInstant() {
@@ -2839,7 +2839,7 @@ export default function SearchPage() {
     setNearMe(next)
     // If turning on and we don't have coords yet, the geolocation effect
     // will fire and call applyFiltersInstant itself once coords resolve
-    // (see Patch 3) â€” don't search yet with stale/no coords.
+    // (see Patch 3) - don't search yet with stale/no coords.
     if (!next || userCoords) {
       applyFiltersInstant({ nearMe: next, userCoords: next ? userCoords : null })
     }
@@ -2959,18 +2959,18 @@ export default function SearchPage() {
 
       <div className="sp-page">
 
-        {/* â”€â”€ Search summary â”€â”€ */}
+        {/* -- Search summary -- */}
         <div className="sp-summary-card" style={{ marginTop:14 }}>
           <div style={{ minWidth:0, flex:1 }}>
             <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
               <span className="sp-summary-ico" style={{ display:'flex', width:32, height:32, borderRadius:10, background:T.gray100, color:T.gray700, alignItems:'center', justifyContent:'center', flexShrink:0 }}>{Icon.search(16)}</span>
               <div className="sp-summary-title" style={{ fontFamily:T.fontDisplay, fontSize:18, fontWeight:800, color:T.gray900, letterSpacing:'-0.4px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                {queryParam ? <>Results for <span style={{ color:T.greenD }}>â€œ{queryParam}â€</span></> : 'Browse marketplace'}
+                {queryParam ? <>Results for <span style={{ color:T.greenD }}>"{queryParam}"</span></> : 'Browse marketplace'}
               </div>
             </div>
             <div className="sp-summary-meta" style={{ fontSize:13.5, color:T.gray600, fontWeight:500, paddingLeft:40 }}>
               {loading ? (
-                <span style={{ display:'inline-flex', alignItems:'center', gap:6 }}>{Icon.spinner(13)} Searchingâ€¦</span>
+                <span style={{ display:'inline-flex', alignItems:'center', gap:6 }}>{Icon.spinner(13)} Searching...</span>
               ) : (
                 `${totalCount.toLocaleString()} ${resultsLabel} found`
               )}
@@ -2987,7 +2987,7 @@ export default function SearchPage() {
           </div>
         </div>
 
-        {/* â”€â”€ Pillar tabs â”€â”€ */}
+        {/* -- Pillar tabs -- */}
        <div className="sp-scroll sp-tabs-scroll" style={{ display:'flex', gap:4, overflowX:'auto', marginTop:12, borderBottom:`1px solid ${T.gray200}`, WebkitOverflowScrolling:'touch' }}>
           {SEARCH_TABS.map(t => {
             const count = tabCounts[t.key]
@@ -3008,7 +3008,7 @@ export default function SearchPage() {
 
         <div className="sp-main-cols" style={{ display:'flex', gap:22, alignItems:'flex-start', paddingTop:18, paddingBottom:40 }}>
 
-          {/* â”€â”€ LEFT SIDEBAR â€” desktop only, Marketplace tab â”€â”€ */}
+          {/* -- LEFT SIDEBAR - desktop only, Marketplace tab -- */}
           {showFilterSidebar && (
             <div className="sp-sidebar" style={{ alignSelf:'flex-start', position:'sticky', top:90, width:250 }}>
               <div
@@ -3024,7 +3024,7 @@ export default function SearchPage() {
             </div>
           )}
 
-          {/* â”€â”€ RIGHT COLUMN â”€â”€ */}
+          {/* -- RIGHT COLUMN -- */}
           <div style={{ flex:1, minWidth:0 }}>
 
             {/* Sort + view toolbar */}
@@ -3071,7 +3071,7 @@ export default function SearchPage() {
               )}
             </div>
 
-            {/* â”€â”€ Results â”€â”€ */}
+            {/* -- Results -- */}
             {loading ? (
               activeTab === 'listings' ? (
                 <div className="sp-results-grid grid-modern">
@@ -3124,7 +3124,7 @@ export default function SearchPage() {
               </div>
             )}
 
-            {/* â”€â”€ See more (20 at a time) â€” no numbered page grid â”€â”€ */}
+            {/* -- See more (20 at a time) - no numbered page grid -- */}
             {!loading && allResults.length > 0 && hasMore && (
               <SeeMoreButton
                 loading={loadingMore}
@@ -3136,12 +3136,12 @@ export default function SearchPage() {
         </div>
       </div>
 
-      {/* â”€â”€ Notify Me modal â”€â”€ */}
+      {/* -- Notify Me modal -- */}
       {notifyOpen && (
         <NotifyMeModal query={queryParam} user={user} onClose={() => setNotifyOpen(false)} />
       )}
 
-      {/* â”€â”€ Mobile filter drawer â€” Marketplace tab only â”€â”€ */}
+      {/* -- Mobile filter drawer - Marketplace tab only -- */}
       {mobileFilterOpen && showFilterSidebar && (
         <div className="sp-filter-drawer">
           <div className="sp-filter-drawer-overlay" onClick={() => setMobileFilterOpen(false)} />
@@ -3157,3 +3157,4 @@ export default function SearchPage() {
     </div>
   )
 }
+

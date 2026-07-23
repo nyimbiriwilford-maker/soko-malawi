@@ -147,6 +147,7 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
   const fileInputRef = useRef(null)
   const cameraInputRef = useRef(null)
   const trimGenRef = useRef(0)
+  const videoPreviewRef = useRef(null)
 
   useEffect(() => {
     if (!user?.id) return
@@ -315,6 +316,22 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
     setTrimDirty(true)
   }
 
+  // Keep the live <video> preview looping within the currently selected trim window
+  useEffect(() => {
+    const el = videoPreviewRef.current
+    if (!el || mediaType !== 'video') return
+    function onTimeUpdate() {
+      if (el.currentTime < clipStart || el.currentTime >= clipStart + clipSeconds) {
+        el.currentTime = clipStart
+      }
+    }
+    el.addEventListener('timeupdate', onTimeUpdate)
+    if (el.currentTime < clipStart || el.currentTime > clipStart + clipSeconds) {
+      el.currentTime = clipStart
+    }
+    return () => el.removeEventListener('timeupdate', onTimeUpdate)
+  }, [clipStart, clipSeconds, mediaType])
+
   function clearMedia() {
     trimGenRef.current += 1
     if (mediaPreview?.startsWith?.('blob:')) URL.revokeObjectURL(mediaPreview)
@@ -357,9 +374,14 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
   }
 
   async function uploadToStorage(file) {
-    const ext = (file.name?.split('.').pop() || (file.type.startsWith('video/') ? 'mp4' : 'jpg')).toLowerCase()
+    const ext = (file.name?.split('.').pop()
+      || (file.type.startsWith('video/') ? 'mp4'
+        : file.type === 'image/png' ? 'png'
+        : file.type.startsWith('image/') ? 'jpg'
+        : 'bin')).toLowerCase()
     const path = `${user.id}/${Date.now()}.${ext}`
     // Prefer story-media (app standard); fall back to status-media
+    const errors = []
     for (const bucket of ['story-media', 'status-media']) {
       const { error } = await supabase.storage
         .from(bucket)
@@ -368,8 +390,9 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
         const { data } = supabase.storage.from(bucket).getPublicUrl(path)
         return data.publicUrl
       }
+      errors.push(`${bucket}: ${error.message}`)
     }
-    throw new Error('Media upload failed')
+    throw new Error(`Media upload failed — ${errors.join(' | ')}`)
   }
 
   async function handlePublish() {
@@ -395,18 +418,21 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
         // Apply user trim prefs on publish if still dirty (or over hard max)
         if (mediaType === 'video' && sourceFile && (trimDirty || (sourceDuration != null && sourceDuration > STATUS_VIDEO_MAX_SECONDS))) {
           setIsTrimming(true)
-          const result = await trimStatusVideo(sourceFile, {
-            startSeconds: clipStart,
-            durationSeconds: clipSeconds,
-            onProgress: (pct) => setTrimPct(pct),
-          })
-          setIsTrimming(false)
-          setTrimPct(0)
-          fileToUpload = result.file
-          setPreferredClipSeconds(clipSeconds)
-          setTrimDirty(false)
-          if (result.file.size > 25 * 1024 * 1024) {
-            throw new Error('Video is too large after trim. Choose a shorter length.')
+          try {
+            const result = await trimStatusVideo(sourceFile, {
+              startSeconds: clipStart,
+              durationSeconds: clipSeconds,
+              onProgress: (pct) => setTrimPct(pct),
+            })
+            fileToUpload = result.file
+            setPreferredClipSeconds(clipSeconds)
+            setTrimDirty(false)
+            if (result.file.size > 25 * 1024 * 1024) {
+              throw new Error('Video is too large after trim. Choose a shorter length.')
+            }
+          } finally {
+            setIsTrimming(false)
+            setTrimPct(0)
           }
         }
         if (!fileToUpload) throw new Error('Add a photo or video first')
@@ -418,7 +444,8 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
             const overlayUrl = await uploadToStorage(overlayFile)
             mediaUrls.push(overlayUrl)
           } catch (e) {
-            console.warn('Overlay upload failed', e)
+            console.error('Overlay upload failed', e)
+            throw new Error(`Edits failed to save (${e?.message || 'upload error'}) — try again or remove the marks.`)
           }
         }
       } else if (tab === 'text') {
@@ -427,7 +454,7 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
       }
 
       const expiresAt = new Date(Date.now() + 24 * 3600 * 1000).toISOString()
-      const defaultCaption = mediaType === 'video' ? 'Video update' : 'Photo update'
+      const defaultCaption = mediaType === 'video' ? '' : 'Photo update'
 
       const kind = taggedKind || (taggedId ? 'listing' : null)
       const statusType = kind === 'job' || kind === 'service'
@@ -586,7 +613,7 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
                 }}>
                   {mediaType === 'image'
                     ? <img src={mediaPreview} alt="" style={{ maxHeight: 240, width: '100%', objectFit: 'contain' }} />
-                    : <video src={mediaPreview} controls style={{ maxHeight: 240, width: '100%' }} />
+                    : <video ref={videoPreviewRef} src={mediaPreview} controls style={{ maxHeight: 240, width: '100%' }} />
                   }
                   <div style={{
                     position: 'absolute', top: 10, left: 10,
@@ -680,7 +707,39 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
                     </div>
                   )}
                 </div>
-              ) : (
+              ) : null}
+
+              {mediaType === 'video' && mediaPreview && sourceDuration != null && (
+                <div style={{ marginTop: 10 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <span style={{ fontSize: 11, fontWeight: 800, color: '#64748b', letterSpacing: 0.3 }}>
+                      DRAG TO TRIM
+                    </span>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: '#0f172a' }}>
+                      {formatDurationLabel(clipStart)}
+                      <span style={{ color: '#94a3b8', fontWeight: 600 }}> → </span>
+                      {formatDurationLabel(clipStart + clipSeconds)}
+                    </span>
+                  </div>
+                  <TrimBar
+                    duration={sourceDuration}
+                    start={clipStart}
+                    length={clipSeconds}
+                    maxLength={Math.min(STATUS_VIDEO_MAX_SECONDS, sourceDuration)}
+                    minLength={Math.min(1, sourceDuration)}
+                    disabled={isTrimming || isUploading}
+                    onChange={(newStart, newLength) => {
+                      setClipStart(newStart)
+                      setClipSeconds(newLength)
+                      setPreferredClipSeconds(newLength)
+                      setTrimDirty(true)
+                      if (videoPreviewRef.current) videoPreviewRef.current.currentTime = newStart
+                    }}
+                  />
+                </div>
+              )}
+
+              {!mediaPreview && (
                 <div
                   onDragOver={e => { e.preventDefault(); setIsDragging(true) }}
                   onDragLeave={() => setIsDragging(false)}
@@ -876,74 +935,7 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
                 <IconClock size={16} color="#64748b" />
               </div>
 
-              <div>
-                <div style={{ fontSize: 11, fontWeight: 800, color: '#64748b', marginBottom: 7, letterSpacing: 0.3 }}>
-                  CLIP LENGTH
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {lengthOptions.map(sec => {
-                    const on = clipSeconds === sec
-                    return (
-                      <button
-                        key={sec}
-                        type="button"
-                        disabled={isTrimming || isUploading}
-                        onClick={() => onClipSecondsChange(sec)}
-                        style={{
-                          border: `1.5px solid ${on ? G : '#e2e8f0'}`,
-                          background: on ? '#ecfdf5' : '#fff',
-                          color: on ? G : '#475569',
-                          borderRadius: 999,
-                          padding: '7px 12px',
-                          fontSize: 12,
-                          fontWeight: 800,
-                          cursor: isTrimming ? 'default' : 'pointer',
-                          fontFamily: 'inherit',
-                        }}
-                      >
-                        {sec}s
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {maxStart > 0.5 && (
-                <div>
-                  <div style={{
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                    marginBottom: 6,
-                  }}>
-                    <span style={{ fontSize: 11, fontWeight: 800, color: '#64748b', letterSpacing: 0.3 }}>
-                      START AT
-                    </span>
-                    <span style={{ fontSize: 12, fontWeight: 800, color: '#0f172a' }}>
-                      {formatDurationLabel(clipStart)}
-                      <span style={{ color: '#94a3b8', fontWeight: 600 }}>
-                        {' '}→ {formatDurationLabel(clipStart + clipSeconds)}
-                      </span>
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min={0}
-                    max={maxStart}
-                    step={0.5}
-                    value={Math.min(clipStart, maxStart)}
-                    disabled={isTrimming || isUploading}
-                    onChange={e => onClipStartChange(Number(e.target.value))}
-                    style={{ width: '100%', accentColor: G }}
-                    aria-label="Clip start time"
-                  />
-                  <div style={{
-                    display: 'flex', justifyContent: 'space-between',
-                    fontSize: 10, color: '#94a3b8', fontWeight: 600, marginTop: 2,
-                  }}>
-                    <span>0:00</span>
-                    <span>{formatDurationLabel(maxStart)}</span>
-                  </div>
-                </div>
-              )}
+              
 
               <button
                 type="button"
@@ -1061,6 +1053,101 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
           onApply={handleAnnotateApply}
         />
       )}
+    </div>
+  )
+}
+
+function TrimBar({ duration, start, length, maxLength, minLength = 1, disabled, onChange }) {
+  const trackRef = useRef(null)
+  const dragRef = useRef(null) // 'start' | 'end' | 'move'
+
+  const startPct = (start / duration) * 100
+  const endPct = ((start + length) / duration) * 100
+
+  function timeFromEvent(e) {
+    const rect = trackRef.current.getBoundingClientRect()
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX
+    let pct = (clientX - rect.left) / rect.width
+    pct = Math.max(0, Math.min(1, pct))
+    return pct * duration
+  }
+
+  function handleDrag(e) {
+    if (e.cancelable) e.preventDefault()
+    const time = timeFromEvent(e)
+    if (dragRef.current === 'start') {
+      let newStart = Math.max(0, Math.min(time, start + length - minLength))
+      let newLength = Math.min(start + length - newStart, maxLength)
+      onChange(newStart, newLength)
+    } else if (dragRef.current === 'end') {
+      let newEnd = Math.max(time, start + minLength)
+      let newLength = Math.min(newEnd - start, maxLength, duration - start)
+      onChange(start, newLength)
+    } else if (dragRef.current === 'move') {
+      let newStart = Math.max(0, Math.min(duration - length, time - length / 2))
+      onChange(newStart, length)
+    }
+  }
+
+  function onPointerDown(handle) {
+    return (e) => {
+      if (disabled) return
+      e.preventDefault()
+      dragRef.current = handle
+      const move = (ev) => handleDrag(ev)
+      const up = () => {
+        dragRef.current = null
+        window.removeEventListener('mousemove', move)
+        window.removeEventListener('mouseup', up)
+        window.removeEventListener('touchmove', move)
+        window.removeEventListener('touchend', up)
+      }
+      window.addEventListener('mousemove', move)
+      window.addEventListener('mouseup', up)
+      window.addEventListener('touchmove', move, { passive: false })
+      window.addEventListener('touchend', up)
+    }
+  }
+
+  return (
+    <div ref={trackRef} style={{ position: 'relative', height: 44, borderRadius: 10, background: '#e2e8f0', touchAction: 'none', userSelect: 'none' }}>
+      <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: `${startPct}%`, background: 'rgba(15,23,42,0.35)', borderRadius: '10px 0 0 10px' }} />
+      <div style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: `${100 - endPct}%`, background: 'rgba(15,23,42,0.35)', borderRadius: '0 10px 10px 0' }} />
+      <div
+        onMouseDown={onPointerDown('move')}
+        onTouchStart={onPointerDown('move')}
+        style={{
+          position: 'absolute', top: 0, bottom: 0,
+          left: `${startPct}%`, width: `${endPct - startPct}%`,
+          border: `2px solid ${G}`, boxSizing: 'border-box',
+          cursor: disabled ? 'default' : 'grab',
+          background: 'rgba(26,122,74,0.12)',
+        }}
+      />
+      <div
+        onMouseDown={onPointerDown('start')}
+        onTouchStart={onPointerDown('start')}
+        style={{
+          position: 'absolute', top: 0, bottom: 0, left: `calc(${startPct}% - 8px)`,
+          width: 16, borderRadius: 6, background: G,
+          cursor: disabled ? 'default' : 'ew-resize',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2,
+        }}
+      >
+        <div style={{ width: 3, height: 16, borderRadius: 2, background: '#fff' }} />
+      </div>
+      <div
+        onMouseDown={onPointerDown('end')}
+        onTouchStart={onPointerDown('end')}
+        style={{
+          position: 'absolute', top: 0, bottom: 0, left: `calc(${endPct}% - 8px)`,
+          width: 16, borderRadius: 6, background: G,
+          cursor: disabled ? 'default' : 'ew-resize',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2,
+        }}
+      >
+        <div style={{ width: 3, height: 16, borderRadius: 2, background: '#fff' }} />
+      </div>
     </div>
   )
 }

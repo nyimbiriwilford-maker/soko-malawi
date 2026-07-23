@@ -150,6 +150,24 @@ function IconChevronRight({ size = 14, color = 'currentColor' }) {
     </svg>
   )
 }
+function IconMuted({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M11 5 6 9H2v6h4l5 4V5z" />
+      <path d="M23 9l-6 6" />
+      <path d="M17 9l6 6" />
+    </svg>
+  )
+}
+function IconUnmuted({ size = 16 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M11 5 6 9H2v6h4l5 4V5z" />
+      <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+      <path d="M18.5 6a9 9 0 0 1 0 12" />
+    </svg>
+  )
+}
 
 function fmtK(n) {
   const v = Number(n) || 0
@@ -390,12 +408,15 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
   const [showReplies, setShowReplies] = useState(false)
   const [repliesLoading, setRepliesLoading] = useState(false)
   const [toast, setToast] = useState('')
+  const [muted, setMuted] = useState(false)
 
   const timerRef = useRef()
   const holdRef = useRef()
   const toastRef = useRef()
   const mediaGenRef = useRef(0)
   const videoRef = useRef(null)
+  const activeBarRef = useRef(null)
+  const rafRef = useRef(null)
   const loggedViewsRef = useRef(new Set())
   /** Image / text status display time */
   const IMAGE_DURATION_MS = 7000
@@ -433,6 +454,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
     setShowReplies(false)
     setReplies([])
     setReplyCount(0)
+    setMuted(false)
   }, [story?.id])
 
   // ── Stream media right away (no download % UI) ─────────────────────────────
@@ -539,36 +561,40 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
     if (!mediaReady || mediaError) return undefined
     if (paused || showViewers || shareUrl || showMenu || showReplies) return undefined
 
-    // Video progress tracks the actual playback position
+    // Video progress: update the bar directly via the DOM every frame (rAF),
+    // instead of React state, so playback stays smooth (no re-render per frame).
     if (mediaKind === 'video' && videoRef.current) {
       const v = videoRef.current
-      const onTime = () => {
-        const dur = Number.isFinite(v.duration) && v.duration > 0
-          ? Math.min(VIDEO_MAX_MS / 1000, Math.max(VIDEO_MIN_MS / 1000, v.duration))
-          : VIDEO_FALLBACK_MS / 1000
-        // If real duration is shorter than min, still play full clip once
-        const real = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : dur
-        const p = Math.min(100, (v.currentTime / real) * 100)
-        setProgress(p)
+      const start = Date.now()
+      let done = false
+
+      function tick() {
+        if (done) return
+        const dur = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : VIDEO_FALLBACK_MS / 1000
+        const p = Math.min(100, (v.currentTime / dur) * 100)
+        if (activeBarRef.current) activeBarRef.current.style.width = `${p}%`
+
+        if (Date.now() - start >= VIDEO_MAX_MS) {
+          done = true
+          setProgress(100)
+          advance()
+          return
+        }
+        rafRef.current = requestAnimationFrame(tick)
       }
-      const onEnded = () => {
+
+      function onEnded() {
+        if (done) return
+        done = true
         setProgress(100)
         advance()
       }
-      // Cap very long videos: jump advance after VIDEO_MAX_MS
-      const start = Date.now()
-      timerRef.current = setInterval(() => {
-        if (Date.now() - start >= VIDEO_MAX_MS) {
-          clearInterval(timerRef.current)
-          setProgress(100)
-          advance()
-        }
-      }, 250)
-      v.addEventListener('timeupdate', onTime)
+
+      rafRef.current = requestAnimationFrame(tick)
       v.addEventListener('ended', onEnded)
       return () => {
-        clearInterval(timerRef.current)
-        v.removeEventListener('timeupdate', onTime)
+        done = true
+        cancelAnimationFrame(rafRef.current)
         v.removeEventListener('ended', onEnded)
       }
     }
@@ -599,6 +625,10 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
       if (p?.catch) p.catch(() => {})
     }
   }, [mediaReady, mediaSrc, mediaKind, paused, showViewers, shareUrl, showMenu, showReplies])
+
+  useEffect(() => {
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current) }
+  }, [])
 
   function advance() {
     // Next media in same story first
@@ -976,6 +1006,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
   }
 
   function onPointerDown() {
+    clearTimeout(holdRef.current)
     holdRef.current = setTimeout(() => setPaused(true), 140)
   }
   function onPointerUp() {
@@ -1151,7 +1182,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                 key={mediaSrc}
                 src={mediaSrc}
                 autoPlay
-                muted
+                muted={muted}
                 playsInline
                 preload="auto"
                 onLoadedData={() => setMediaReady(true)}
@@ -1256,10 +1287,13 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                   flex: 1, height: 2.5, borderRadius: 99,
                   background: 'rgba(255,255,255,0.28)', overflow: 'hidden',
                 }}>
-                  <div style={{
-                    height: '100%', borderRadius: 99, background: '#fff',
-                    width: i < barActive ? '100%' : i === barActive ? `${progress}%` : '0%',
-                  }} />
+                  <div
+                    ref={i === barActive ? activeBarRef : null}
+                    style={{
+                      height: '100%', borderRadius: 99, background: '#fff',
+                      width: i < barActive ? '100%' : i === barActive ? `${progress}%` : '0%',
+                    }}
+                  />
                 </div>
               ))}
             </div>
@@ -1400,6 +1434,31 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
               </div>
             )}
 
+            {/* Mute / unmute toggle — only for video */}
+            {mediaKind === 'video' && showMedia && (
+              <button
+                type="button"
+                className="sv-tap"
+                onPointerDown={e => e.stopPropagation()}
+                onPointerUp={e => { e.stopPropagation(); setMuted(m => !m) }}
+                aria-label={muted ? 'Unmute video' : 'Mute video'}
+                style={{
+                  position: 'absolute',
+                  right: 14,
+                  top: mediaCount > 1 ? 116 : 78,
+                  zIndex: 20,
+                  width: 34, height: 34, borderRadius: '50%',
+                  background: 'rgba(0,0,0,0.55)', color: '#fff',
+                  border: '1px solid rgba(255,255,255,0.12)',
+                  backdropFilter: 'blur(8px)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer',
+                }}
+              >
+                {muted ? <IconMuted size={16} /> : <IconUnmuted size={16} />}
+              </button>
+            )}
+
             {/* Product / entity card — overlaid on the image (only after media ready) */}
             {tagged && mediaReady && !mediaError && (
               <div
@@ -1523,11 +1582,21 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
 
             {/* Tap zones — stop above product card */}
             <div
-              onPointerUp={e => { e.stopPropagation(); goBack() }}
+              onPointerUp={e => {
+                e.stopPropagation()
+                clearTimeout(holdRef.current)
+                setPaused(false)
+                goBack()
+              }}
               style={{ position: 'absolute', left: 0, top: 70, bottom: tagged ? 100 : 0, width: '32%', zIndex: 12 }}
             />
             <div
-              onPointerUp={e => { e.stopPropagation(); advance() }}
+              onPointerUp={e => {
+                e.stopPropagation()
+                clearTimeout(holdRef.current)
+                setPaused(false)
+                advance()
+              }}
               style={{ position: 'absolute', right: 0, top: 70, bottom: tagged ? 100 : 0, width: '32%', zIndex: 12 }}
             />
           </div>
