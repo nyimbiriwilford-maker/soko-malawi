@@ -4932,6 +4932,7 @@ export default function Home() {
   const [notifCount, setNotifCount] = useState(0)
   const [unreadChats, setUnreadChats] = useState(0)
   const [search, setSearch] = useState('')
+  const [imageSearchBusy, setImageSearchBusy] = useState(false)
   /**
    * Smart progressive load:
    * - Page chrome + skeletons paint immediately
@@ -5069,6 +5070,16 @@ export default function Home() {
 
   useEffect(() => { init() }, [])
 
+  const isFirstDistrictRender = useRef(true)
+  useEffect(() => {
+    if (isFirstDistrictRender.current) {
+      isFirstDistrictRender.current = false
+      return
+    }
+    loadListings()
+    loadAuxSections()
+  }, [activeDistrict])
+
   // Stories: fetch + realtime subscription, same pattern HomeStatusRow uses
   // internally — replicated here (rather than reused) because the compact
   // LiveStoriesCard needs the raw story list, not HomeStatusRow's own
@@ -5197,21 +5208,25 @@ export default function Home() {
       const FEATURED_FETCH = FEATURED_HOME_CAP
       const LATEST_FETCH = HOME_LATEST_COUNT + FEATURED_HOME_CAP + 8
 
-      const [{ data: featuredRows }, { data: recentRows }] = await Promise.all([
-        supabase
-          .from('listings')
-          .select(LISTING_SELECT)
-          .in('status', LIVE)
-          .gt('featured_until', nowIso)
-          .order('featured_until', { ascending: false })
-          .limit(FEATURED_FETCH),
-        supabase
-          .from('listings')
-          .select(LISTING_SELECT)
-          .in('status', LIVE)
-          .order('created_at', { ascending: false })
-          .limit(LATEST_FETCH),
-      ])
+      let featuredQuery = supabase
+        .from('listings')
+        .select(LISTING_SELECT)
+        .in('status', LIVE)
+        .gt('featured_until', nowIso)
+      let recentQuery = supabase
+        .from('listings')
+        .select(LISTING_SELECT)
+        .in('status', LIVE)
+
+      if (activeDistrict !== 'All Districts') {
+        featuredQuery = featuredQuery.eq('city', activeDistrict)
+        recentQuery = recentQuery.eq('city', activeDistrict)
+      }
+
+      featuredQuery = featuredQuery.order('featured_until', { ascending: false }).limit(FEATURED_FETCH)
+      recentQuery = recentQuery.order('created_at', { ascending: false }).limit(LATEST_FETCH)
+
+      const [{ data: featuredRows }, { data: recentRows }] = await Promise.all([featuredQuery, recentQuery])
 
       async function enrichListingRows(rows) {
         let withShopRatings = rows || []
@@ -5281,9 +5296,11 @@ export default function Home() {
     await Promise.all([
       (async () => {
         try {
-          const { data, error } = await supabase.from('shops')
+          let shopsQuery = supabase.from('shops')
             .select('id, name, slug, category, logo_url, cover_url, city, rating, review_count, listing_count, is_verified, follower_count')
             .eq('is_active', true)
+          if (activeDistrict !== 'All Districts') shopsQuery = shopsQuery.eq('city', activeDistrict)
+          const { data, error } = await shopsQuery
             .order('follower_count', { ascending: false, nullsFirst: false })
             .limit(8)
           if (error) console.error('shops query error:', error)
@@ -5295,10 +5312,12 @@ export default function Home() {
           // Jobs use status 'active' (PostJobForm / Jobs index) — not 'published'
           const today = new Date().toISOString().split('T')[0]
           const jobSelect = 'id, title, company, city, type, created_at, deadline, cover_image_url, logo_url, salary'
-          let { data, error } = await supabase.from('jobs')
+          let jobsQuery = supabase.from('jobs')
             .select(jobSelect)
             .eq('status', 'active')
             .or(`deadline.is.null,deadline.gte.${today}`)
+          if (activeDistrict !== 'All Districts') jobsQuery = jobsQuery.eq('city', activeDistrict)
+          let { data, error } = await jobsQuery
             .order('created_at', { ascending: false })
             .limit(8)
           if (error && /cover_image_url|logo_url|salary|column/i.test(error.message || '')) {
@@ -5335,9 +5354,11 @@ export default function Home() {
       (async () => {
         try {
           // Services use status 'active' (ServiceForm / ServicesPage) — not 'published'
-          let { data, error } = await supabase.from('services')
+          let servicesQuery = supabase.from('services')
             .select('id, name, category, city, created_at, media_urls, rate, rating, verified')
             .eq('status', 'active')
+          if (activeDistrict !== 'All Districts') servicesQuery = servicesQuery.eq('city', activeDistrict)
+          let { data, error } = await servicesQuery
             .order('created_at', { ascending: false })
             .limit(8)
           if (error && /media_urls|rate|rating|verified|column/i.test(error.message || '')) {
@@ -5411,8 +5432,42 @@ export default function Home() {
     const file = e.target.files?.[0]
     if (!file) return
     e.target.value = ''
-    // Existing image-search-by-photo logic from the previous Home.jsx
-    // handleImageFile should be wired in here unchanged.
+
+    if (!file.type.startsWith('image/')) {
+      alert('Please choose an image file.')
+      return
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      alert('Image is too large — please choose one under 8MB.')
+      return
+    }
+
+    setImageSearchBusy(true)
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader()
+        reader.onload = () => resolve(reader.result.split(',')[1])
+        reader.onerror = reject
+        reader.readAsDataURL(file)
+      })
+
+      const { data, error } = await supabase.functions.invoke('image-search', {
+        body: { base64, mediaType: file.type },
+      })
+
+      if (error) throw error
+      const term = data?.term
+      if (!term) {
+        alert('Could not identify the item in that photo — try a clearer image.')
+        return
+      }
+      navigate(`/search?q=${encodeURIComponent(term)}`)
+    } catch (err) {
+      console.error('image search failed:', err)
+      alert('Image search failed. Please try again.')
+    } finally {
+      setImageSearchBusy(false)
+    }
   }
 
   const pageBusy = loading || sectionsLoading
@@ -5444,17 +5499,15 @@ export default function Home() {
       )}
 
       {/* Chrome first — interactive immediately while data streams in */}
-      <div className="soko-settle soko-settle-d1">
-        <SokoNav
-          user={user} notifCount={notifCount} search={search} setSearch={handleSearch}
-          navigate={navigate} onImageFile={handleImageFile} animKeywords={animKeywords} animIdx={animIdx}
-          activeDistrict={activeDistrict} onDistrictChange={setActiveDistrict} onFocusChange={setIsFocused}
-          activePillar="marketplace"
-          ctaLabel="Sell Now"
-          onCta={() => navigate('/post')}
-        />
-      </div>
-
+     <SokoNav
+  user={user} notifCount={notifCount} search={search} setSearch={handleSearch}
+  navigate={navigate} onImageFile={handleImageFile} animKeywords={animKeywords} animIdx={animIdx}
+  activeDistrict={activeDistrict} onDistrictChange={setActiveDistrict} onFocusChange={setIsFocused}
+  activePillar="marketplace"
+  ctaLabel="Sell Now"
+  onCta={() => navigate('/post')}
+  imageSearchBusy={imageSearchBusy}
+/>
       {user?.id && (
         <div className="soko-settle soko-settle-d1">
           <VerificationAttentionBanner userId={user.id} />

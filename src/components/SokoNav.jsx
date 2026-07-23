@@ -3,6 +3,7 @@
  * Desktop + mobile layout. Only the primary CTA differs per page.
  */
 import { useState, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { T } from '../constants/tokens'
 import { MALAWI_DISTRICTS } from '../constants/malawiDistricts'
 
@@ -140,12 +141,16 @@ export default function SokoNav({
   const [focused, setFocusedRaw] = useState(false)
   function setFocused(v) { setFocusedRaw(v); onFocusChange?.(v) }
   const [distOpen, setDistOpen] = useState(false)
+const [districtSearch, setDistrictSearch] = useState('')
   const [avatarOpen, setAvatarOpen] = useState(false)
   const district = activeDistrict || 'All Districts'
   const fileRef = useRef(null)
   const inputRef = useRef(null)
 
   const districts = ['All Districts', ...MALAWI_DISTRICTS]
+const filteredDistricts = districts.filter(d =>
+  d.toLowerCase().includes(districtSearch.trim().toLowerCase())
+)
   const kw = animKeywords?.length > 0
     ? animKeywords[animIdx % animKeywords.length]
     : 'Samsung Galaxy A57'
@@ -161,10 +166,11 @@ export default function SokoNav({
     else navigate('/post')
   }
 
-  function changeDistrict(d) {
-    onDistrictChange?.(d)
-    setDistOpen(false)
-  }
+ function changeDistrict(d) {
+  onDistrictChange?.(d)
+  setDistOpen(false)
+  setDistrictSearch('')
+}
 
   return (
     <nav className="soko-nav-glass">
@@ -350,28 +356,48 @@ export default function SokoNav({
               </button>
 
               {/* Mobile District Bottom Sheet */}
-              {distOpen && (
+              {distOpen && createPortal(
                 <>
                   <div onClick={() => setDistOpen(false)}
                     style={{ position: 'fixed', inset: 0, zIndex: 998, background: 'rgba(0,0,0,0.32)' }} />
                   <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 999, background: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: '16px 16px calc(24px + env(safe-area-inset-bottom, 0px))', maxHeight: '70vh', display: 'flex', flexDirection: 'column', boxShadow: '0 -8px 30px rgba(0,0,0,0.15)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 12, borderBottom: `1px solid ${T.gray100}`, marginBottom: 10, fontWeight: 700, fontSize: 16, color: T.gray900 }}>
                       <span>Select District</span>
-                      <button type="button" onClick={() => setDistOpen(false)}
+                      <button type="button" onClick={() => { setDistOpen(false); setDistrictSearch('') }}
                         style={{ background: T.gray100, border: 'none', borderRadius: '50%', width: 28, height: 28, cursor: 'pointer', fontSize: 14, color: T.gray600, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         ✕
                       </button>
                     </div>
+                    <div style={{ position: 'relative', marginBottom: 10, flexShrink: 0 }}>
+                      <input
+                        autoFocus
+                        value={districtSearch}
+                        onChange={e => setDistrictSearch(e.target.value)}
+                        placeholder="Search district..."
+                        style={{ width: '100%', padding: '10px 14px', borderRadius: 12, border: `1.5px solid ${T.gray200}`, fontSize: 14, color: T.gray900, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
+                      />
+                      {districtSearch && (
+                        <button type="button" onClick={() => setDistrictSearch('')}
+                          style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: T.gray200, border: 'none', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: T.gray600 }}>
+                          {Icon.x(10)}
+                        </button>
+                      )}
+                    </div>
                     <div style={{ overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, paddingTop: 4 }}>
-                      {districts.map(d => (
+                      {filteredDistricts.length > 0 ? filteredDistricts.map(d => (
                         <button key={d} type="button" onClick={() => changeDistrict(d)}
                           style={{ padding: '10px 12px', borderRadius: 12, background: d === district ? T.greenL : T.gray50, border: `1px solid ${d === district ? T.green : T.gray200}`, fontSize: 13, fontWeight: d === district ? 700 : 500, color: d === district ? T.green : T.gray800, textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit' }}>
                           {d}
                         </button>
-                      ))}
+                      )) : (
+                        <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '20px 0', fontSize: 13, color: T.gray500 }}>
+                          No district found
+                        </div>
+                      )}
                     </div>
                   </div>
-                </>
+                </>,
+                document.body
               )}
             </div>
 
