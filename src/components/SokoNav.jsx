@@ -225,7 +225,7 @@ const filteredDistricts = districts.filter(d =>
           <button type="button" onClick={() => setDistOpen(d => !d)}
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 50, background: '#fff', border: `1.5px solid ${T.gray200}`, fontSize: 13, fontWeight: 600, color: T.gray800, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit' }}>
             {Icon.pin(13)}
-            <span style={{ color: district !== 'All Districts' ? T.amber : T.green, fontWeight: district !== 'All Districts' ? 800 : 600 }}>{district}</span>
+            <span style={{ color: district !== 'All Districts' ? T.amber : T.gray900, fontWeight: district !== 'All Districts' ? 800 : 600 }}>{district}</span>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
               <polyline points="6 9 12 15 18 9" />
             </svg>
@@ -269,7 +269,7 @@ const filteredDistricts = districts.filter(d =>
             style={{ flexShrink: 0, background: T.green, color: '#fff', border: 'none', borderRadius: 50, height: 34, padding: '0 20px', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
             Search
           </button>
-          {onImageFile && <input ref={fileRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={onImageFile} />}
+          
         </div>
 
         {/* Desktop Action Icons */}
@@ -334,8 +334,11 @@ const filteredDistricts = districts.filter(d =>
 
           {/* Logo */}
           <div onClick={() => navigate('/')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-            <div style={{ fontFamily: T.fontDisplay, fontSize: 20, fontWeight: 800, color: T.green, letterSpacing: '-0.5px' }}>
+            <div style={{ fontFamily: T.fontDisplay, fontSize: 20, fontWeight: 800, color: T.green, letterSpacing: '-0.5px', lineHeight: 1.1 }}>
               Soko<span style={{ color: T.amber }}>Mw</span>
+            </div>
+            <div style={{ fontSize: 9.5, color: T.gray600, fontWeight: 500, whiteSpace: 'nowrap' }}>
+              Buy. Sell. Find. Anywhere in Malawi.
             </div>
           </div>
 
@@ -347,7 +350,7 @@ const filteredDistricts = districts.filter(d =>
               <button type="button" onClick={() => setDistOpen(d => !d)}
                 style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 11px', borderRadius: 50, background: '#f3f4f6', border: `1px solid ${T.gray200}`, fontSize: 12, fontWeight: 600, color: T.gray800, cursor: 'pointer', whiteSpace: 'nowrap', maxWidth: 150, fontFamily: 'inherit' }}>
                 {Icon.pin(12)}
-                <span style={{ color: district !== 'All Districts' ? T.amber : T.green, fontWeight: district !== 'All Districts' ? 800 : 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 90 }}>
+                <span style={{ color: district !== 'All Districts' ? T.amber : T.gray900, fontWeight: district !== 'All Districts' ? 800 : 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 90 }}>
                   {district}
                 </span>
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
@@ -432,24 +435,16 @@ const filteredDistricts = districts.filter(d =>
             />
             {!search && !focused && (
               <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', pointerEvents: 'none', fontSize: 13, color: T.gray400, overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                Search&nbsp;<span style={{ color: T.green, fontWeight: 600 }}>{kw}</span>
+                Search anything...
               </div>
             )}
           </div>
-          {search ? (
+          {search && (
             <button type="button" onClick={e => { e.stopPropagation(); setSearch?.('') }}
               style={{ background: T.gray200, border: 'none', borderRadius: '50%', width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: T.gray600, flexShrink: 0 }}>
               {Icon.x(10)}
             </button>
-          ) : onImageFile ? (
-            <button type="button" onClick={e => { e.stopPropagation(); fileRef.current?.click() }} title="Search by photo"
-              style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', padding: '2px 4px', flexShrink: 0 }}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={T.green} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                <circle cx="12" cy="13" r="4" />
-              </svg>
-            </button>
-          ) : null}
+          )}
         </div>
 
       </div>

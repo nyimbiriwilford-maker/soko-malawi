@@ -2186,11 +2186,6 @@ function PremiumListingCard({ listing, onClick, delay = 0, user, navigate, saved
             </div>
           ) : (
             <>
-              {isFeat && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 3, background: '#FF7A1A', color: '#fff', padding: '3px 8px', fontSize: 9.5, fontWeight: 800, borderRadius: 50, boxShadow: '0 2px 6px rgba(255,122,26,0.4)', width: 'fit-content' }}>
-                  {Icon.star(9, '#fff')} Featured
-                </div>
-              )}
               {isFlash && (
                 <div className="soko-hotdeal-pulse" style={{ background: `linear-gradient(135deg,${T.red},#c62828)`, color: '#fff', borderRadius: '50%', width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(234,67,53,0.5)' }}>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="#fff">
@@ -2299,7 +2294,7 @@ function FeaturedListingsRow({ listings, navigate, loading, user, savedIds, onTo
           marginBottom: 14, gap: 12,
         }}>
           <span className="soko-section-title" style={{ fontFamily: T.fontDisplay, fontSize: 18, fontWeight: 800, color: T.gray900 }}>
-            Featured Listings
+            Featured Listings 🔥
           </span>
           <button
             type="button"
@@ -2966,14 +2961,6 @@ function LatestListingCard({ listing, delay = 0, onClick, user, navigate, saved,
             </span>
           ) : (
             <>
-              {isFeat && (
-                <span style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 3, width: 'fit-content',
-                  background: '#FF7A1A', color: '#fff', borderRadius: 50,
-                  padding: '4px 8px', fontSize: 10, fontWeight: 800, lineHeight: 1,
-                  boxShadow: '0 2px 8px rgba(255,122,26,0.4)', whiteSpace: 'nowrap',
-                }}>{Icon.star(10, '#fff')} Featured</span>
-              )}
               {isFlash && (
                 <span className="soko-hotdeal-pulse" style={{
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center',

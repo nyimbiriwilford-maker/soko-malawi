@@ -8,6 +8,7 @@ import {
   User, AlertCircle, Loader, Video, PlayCircle, Film,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import SokoNav from '../components/SokoNav'
 import {
   FEATURED_PRICE_MWK,
   FEATURED_DURATION_DAYS,
@@ -845,6 +846,13 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
         mapInstanceRef.current = L.map(mapContainerRef.current, {
           zoomControl: false,
           attributionControl: true,
+          dragging: false,
+          touchZoom: false,
+          scrollWheelZoom: false,
+          doubleClickZoom: false,
+          boxZoom: false,
+          keyboard: false,
+          tap: false,
         }).setView([location.lat, location.lng], 15)
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -1523,6 +1531,12 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
         @media (max-width: 1100px) {
           .pl-sidebar { position: static; max-height: none; overflow: visible; padding-right: 0; }
         }
+        @media (max-width: 768px) {
+          .pl-sticky-bar {
+            bottom: calc(60px + env(safe-area-inset-bottom, 0px)) !important;
+            box-shadow: 0 -6px 20px -8px rgba(15,20,16,0.25) !important;
+          }
+        }
         .pl-pulse-ring { animation: plPulse 2.2s ease-in-out infinite; }
         .pl-search-wrap { transition: border-color .15s ease, background .15s ease, box-shadow .15s ease; }
         .pl-search-wrap:focus-within { border-color: ${C.green} !important; background: #fff !important; box-shadow: ${SHADOW.focusRing}; }
@@ -1544,6 +1558,13 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
         html { scroll-behavior: smooth; }
         .leaflet-control-attribution { font-size: 9px !important; background: rgba(255,255,255,0.75) !important; padding: 1px 4px !important; }
         .leaflet-control-zoom { display: none !important; }
+        /* Contain Leaflet's internal panes so they never escape the map box and cover the sticky bar / bottom nav */
+        .pl-map-container { position: relative; z-index: 0; isolation: isolate; }
+        .pl-map-container .leaflet-container { z-index: 0 !important; }
+        .pl-map-container .leaflet-pane,
+        .pl-map-container .leaflet-top,
+        .pl-map-container .leaflet-bottom,
+        .pl-map-container .leaflet-control { z-index: auto !important; }
       `}</style>
 
       <Toast message={toast.message} type={toast.type} />
@@ -1554,38 +1575,13 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
       </div>
 
       {/* ── Header ── */}
-      <header style={S.headerOuter}>
-        <div style={S.headerRow1} className="pl-row1">
-          <div style={{ cursor: 'pointer', flexShrink: 0 }} onClick={() => navigate('/')}>
-            <div style={S.brand}><span style={{ color: C.green }}>Soko</span><span style={{ color: C.gold }}>Mw</span></div>
-            <div style={S.tagline}>Buy, Sell, Find. Anywhere in Malawi.</div>
-          </div>
-
-          <div style={S.searchWrap} className="pl-search-wrap">
-            <Search size={16} color={C.muted} style={{ flexShrink: 0 }} />
-            <input style={S.searchInput} placeholder="Search for anything (e.g. iPhone, Toyota, jobs, services...)" />
-            <PrimaryButton style={{ padding: '9px 20px', borderRadius: 18, boxShadow: 'none' }}>Search</PrimaryButton>
-          </div>
-
-          <div style={S.navActions}>
-            <button style={S.navBtn}><MessageCircle size={19} /><span style={S.navBtnLabel}>Chats</span></button>
-            <button style={S.navBtn}><Bell size={19} /><span style={S.navBtnLabel}>Alerts</span></button>
-            <PrimaryButton style={{ borderRadius: 20, padding: '10px 18px' }}><Plus size={15} /> Sell Now</PrimaryButton>
-            <div style={S.avatar}><User size={17} color="#8a9e8f" /></div>
-          </div>
-        </div>
-
-        <nav style={S.tabsRow}>
-          {NAV_TABS.map(tab => {
-            const TabIcon = tab.icon
-            return (
-              <button key={tab.label} onClick={() => tab.path && navigate(tab.path)} style={tab.active ? S.tabActive : S.tab}>
-                <TabIcon size={15} /> {tab.label}
-              </button>
-            )
-          })}
-        </nav>
-      </header>
+      <SokoNav
+        user={user}
+        navigate={navigate}
+        activePillar="marketplace"
+        ctaLabel="Sell Now"
+        onCta={() => navigate('/post')}
+      />
 
       {/* ── Page container ── */}
       <div style={S.container}>
@@ -2197,7 +2193,7 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
               )}
 
               {/* Live map — OpenStreetMap iframe, no API key needed */}
-            <div style={{ position: 'relative', height: 136, borderRadius: 14, marginBottom: 12, overflow: 'hidden', border: `1px solid ${C.cardLine}` }}>
+            <div className="pl-map-container" style={{ position: 'relative', height: 136, borderRadius: 14, marginBottom: 12, overflow: 'hidden', border: `1px solid ${C.cardLine}` }}>
                 {location.lat && location.lng ? (
                   <>
                     <div ref={mapContainerRef} style={{ width: '100%', height: '100%' }} />
@@ -2332,7 +2328,7 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
       </div>
 
       {/* ── Sticky bottom action bar ── */}
-      <div style={S.stickyBar}>
+      <div style={S.stickyBar} className="pl-sticky-bar">
         <OutlineButton onClick={handleSaveDraft} disabled={savingDraft || submitting}>
           {savingDraft ? 'Saving…' : 'Save as Draft'}
         </OutlineButton>
@@ -2363,6 +2359,7 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
    ──────────────────────────────────────────────────────────── */
 const S = {
   page: { minHeight: '100vh', background: C.surface, fontFamily: DMSANS, color: C.dark, fontSize: 15, paddingBottom: 96 },
+  // mobile bottom padding handled via .pl-page-mobile-pad class added below
 
   progressBarOuter: { position: 'sticky', top: 0, zIndex: 60, height: 3, background: C.line, overflow: 'hidden' },
   progressBarFill:  { height: '100%', background: GRAD.primaryBtn, transition: 'width 0.4s cubic-bezier(0.4,0,0.2,1)' },

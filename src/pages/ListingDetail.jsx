@@ -1562,7 +1562,7 @@ const S = {
   backToResults:{ display: 'flex', alignItems: 'center', gap: 5, background: 'none', border: 'none', cursor: 'pointer', fontSize: 13, color: '#374151', fontWeight: 500, padding: '4px 0 12px' },
 
   // ── TWO COLUMN ──
-  twoCol:     { display: 'flex', gap: 24, alignItems: 'flex-start', paddingBottom: 100 },
+  twoCol:     { display: 'flex', gap: 24, alignItems: 'flex-start', paddingBottom: 160 },
   mainCol:    { flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 4 },
   sidebar:    { width: 360, flexShrink: 0, position: 'sticky', top: 118, maxHeight: 'calc(100vh - 140px)', overflowY: 'auto', paddingTop: 4, display: 'flex', flexDirection: 'column', gap: 14 },
 
@@ -1687,7 +1687,7 @@ const S = {
   barChatBtn:      { display: 'flex', alignItems: 'center', gap: 7, background: '#1a7a4a', color: '#fff', border: 'none', borderRadius: 10, padding: '11px 26px', fontSize: 14, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(26,122,74,.28)' },
 
   // Mobile footer
-  mobileBar:     { position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100, background: '#fff', borderTop: '1px solid #e5e7eb', padding: '10px 14px', paddingBottom: 'calc(10px + env(safe-area-inset-bottom))', display: 'none', gap: 10, boxShadow: '0 -4px 20px rgba(0,0,0,.08)' },
+  mobileBar:     { position: 'fixed', bottom: 60, left: 0, right: 0, zIndex: 100, background: '#fff', borderTop: '1px solid #e5e7eb', padding: '10px 14px', paddingBottom: 'calc(10px + env(safe-area-inset-bottom))', display: 'none', gap: 10, boxShadow: '0 -4px 20px rgba(0,0,0,.08)' },
   mobileCallBtn: { flex: 1, background: '#fff', border: '1.5px solid #d1d5db', borderRadius: 10, padding: '12px', fontSize: 14, fontWeight: 700, color: '#374151', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 },
   mobileChatBtn: { flex: 2, background: '#1a7a4a', color: '#fff', border: 'none', borderRadius: 10, padding: '12px', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, boxShadow: '0 4px 12px rgba(26,122,74,.28)' },
 
