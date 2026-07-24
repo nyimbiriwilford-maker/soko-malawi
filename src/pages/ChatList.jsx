@@ -622,7 +622,7 @@ export default function ChatList() {
 
 const S = {
   appShell: { display: 'flex', minHeight: '100vh', background: '#f4f8f5', fontFamily: 'system-ui, sans-serif' },
-  page: { flex: 1, minWidth: 0, paddingBottom: '80px' },
+  page: { flex: 1, minWidth: 0, paddingBottom: '80px', display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' },
   header: { background: '#fff', borderBottom: '1px solid #e8f0eb', position: 'sticky', top: 0, zIndex: 50 },
   headerTop: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', padding: '22px 24px 14px', flexWrap: 'wrap' },
   headerTitle: { fontSize: '26px', fontWeight: '800', color: '#0f1410' },
