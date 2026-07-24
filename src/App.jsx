@@ -74,7 +74,8 @@ function AppMobileBottomNav({ enabled }) {
     p.startsWith('/admin') ||
     p.startsWith('/onboarding') ||
     p.startsWith('/verify-payment') ||
-    p.startsWith('/chat/')
+    p.startsWith('/chat/') ||
+    p.startsWith('/chats')
   ) {
     return null
   }
