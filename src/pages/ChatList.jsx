@@ -534,7 +534,7 @@ export default function ChatList() {
         onNewChat={() => navigate('/')}
       />
 
-      <div style={S.page} className="soko-main-panel">
+      <div style={S.page} className="soko-main-panel chat-list-panel">
         {/* Header */}
         <div style={S.header}>
           <div style={S.headerTop}>
@@ -612,7 +612,7 @@ export default function ChatList() {
         )}
 
         {/* Chat list */}
-        <div style={S.list}>
+        <div style={S.list} className="chat-list-scroll">
           {filtered.map((chat, i) => renderChatRow(chat, i))}
         </div>
       </div>
@@ -641,7 +641,7 @@ const S = {
   emptyTitle: { fontSize: '18px', fontWeight: '700', color: '#0f1410', marginBottom: '8px' },
   emptySub: { fontSize: '14px', color: '#888', marginBottom: '24px', lineHeight: '1.6' },
   browseBtn: { background: '#1a7a4a', color: '#fff', border: 'none', borderRadius: '10px', padding: '12px 24px', fontSize: '15px', fontWeight: '600', cursor: 'pointer' },
-  list: { paddingBottom: '8px' },
+  list: { paddingBottom: '8px', overflowY: 'auto', flex: 1, minHeight: 0, WebkitOverflowScrolling: 'touch' },
   chatRow: { display: 'flex', alignItems: 'center', gap: '14px', padding: '14px 24px', borderBottom: '1px solid #f0f4f1', cursor: 'pointer', animation: 'fadeUp 0.3s ease both', transition: 'background 0.15s' },
   avatarWrap: { position: 'relative', flexShrink: 0 },
   avatar: { width: '56px', height: '56px', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', boxShadow: '0 2px 8px rgba(0,0,0,0.1)' },
