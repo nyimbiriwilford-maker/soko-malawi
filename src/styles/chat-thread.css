@@ -234,6 +234,118 @@
   color: #1a4a2e;
 }
 
+/* Status reply quote — shows status caption so the replied status is easy to identify */
+.chat-thread .msg-status-quote {
+  max-width: 100%;
+  border-radius: 12px 12px 4px 4px;
+  padding: 8px 11px 9px;
+  margin-bottom: 2px;
+  cursor: pointer;
+  border-left: 3px solid #f59e0b;
+  outline: none;
+  transition: filter 0.15s ease, transform 0.12s ease;
+}
+
+.chat-thread .msg-status-quote:hover,
+.chat-thread .msg-status-quote:focus-visible {
+  filter: brightness(0.97);
+}
+
+.chat-thread .msg-status-quote:active {
+  transform: scale(0.99);
+}
+
+.chat-thread .msg-row.is-mine .msg-status-quote {
+  background: rgba(0, 0, 0, 0.2);
+  color: rgba(255, 255, 255, 0.96);
+  border-left-color: #fbbf24;
+}
+
+.chat-thread .msg-row.is-theirs .msg-status-quote {
+  background: linear-gradient(135deg, #fff8e8 0%, #f3faf5 100%);
+  color: #1a4a2e;
+  border-left-color: #f59e0b;
+  box-shadow: inset 0 0 0 1px rgba(245, 158, 11, 0.12);
+}
+
+.chat-thread .msg-status-quote-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.chat-thread .msg-status-quote-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  flex-shrink: 0;
+  background: rgba(245, 158, 11, 0.18);
+  color: #d97706;
+}
+
+.chat-thread .msg-row.is-mine .msg-status-quote-badge {
+  background: rgba(251, 191, 36, 0.22);
+  color: #fde68a;
+}
+
+.chat-thread .msg-status-quote-label {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #b45309;
+  flex-shrink: 0;
+}
+
+.chat-thread .msg-row.is-mine .msg-status-quote-label {
+  color: #fde68a;
+}
+
+.chat-thread .msg-status-quote-hint {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 600;
+  opacity: 0.65;
+  white-space: nowrap;
+}
+
+.chat-thread .msg-status-quote-caption {
+  margin-top: 5px;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.35;
+  white-space: normal;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+
+.chat-thread .msg-status-quote-caption.is-empty {
+  font-weight: 600;
+  opacity: 0.75;
+  font-style: italic;
+}
+
+.chat-thread .msg-status-quote-product {
+  margin-top: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  opacity: 0.8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-thread .msg-status-quote-product::before {
+  content: '📦 ';
+}
+
 /* Bubble */
 .chat-thread .msg-bubble {
   position: relative;
@@ -1516,6 +1628,224 @@
 
   .chat-thread .media-image-wrap {
     max-width: 300px;
+  }
+}
+
+/* =========================================================
+   MOBILE THREAD — proper fit, touch, keyboard, safe areas
+   ========================================================= */
+@media (max-width: 899px) {
+  .chat-page.chat-thread {
+    height: 100%;
+    max-height: 100%;
+    min-height: 0;
+    width: 100%;
+    overflow: hidden;
+  }
+
+  /* Compact header so name + call actions fit narrow screens */
+  .chat-thread .chat-topbar {
+    gap: 6px !important;
+    padding: 8px 8px 8px 4px !important;
+    min-height: 56px;
+  }
+
+  .chat-thread .chat-topbar .chat-top-name {
+    font-size: 14.5px;
+    max-width: 100%;
+  }
+
+  .chat-thread .chat-icon-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 11px;
+  }
+
+  /* Messages: use more horizontal space; only message list scrolls */
+  .chat-thread .chat-messages {
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 10px 8px 12px;
+    overscroll-behavior-y: contain;
+  }
+
+  .chat-thread .msg-row.is-mine {
+    padding-left: 28px;
+  }
+
+  .chat-thread .msg-row.is-theirs {
+    padding-right: 28px;
+  }
+
+  .chat-thread .msg-stack {
+    max-width: min(86%, 100%);
+  }
+
+  .chat-thread .msg-avatar {
+    width: 26px;
+    height: 26px;
+  }
+
+  /* Desktop hover reply is useless on touch — hide it; long-press opens actions */
+  .chat-thread .msg-reply-btn {
+    display: none;
+  }
+
+  .chat-thread .media-image-wrap {
+    max-width: min(72vw, 280px);
+  }
+
+  .chat-thread .media-video-wrap {
+    max-width: min(78vw, 300px);
+  }
+
+  .chat-thread .voice-note,
+  .chat-thread .media-file {
+    max-width: min(72vw, 280px);
+    min-width: 0;
+  }
+
+  .chat-thread .deal-card {
+    max-width: min(88%, 300px);
+  }
+
+  /* Composer: 16px prevents iOS focus zoom; keep bar sticky at bottom */
+  .chat-thread .chat-input-bar {
+    flex-shrink: 0;
+    padding: 8px 8px calc(8px + env(safe-area-inset-bottom, 0px)) !important;
+    gap: 5px !important;
+  }
+
+  .chat-thread .chat-composer {
+    min-height: 42px;
+    border-radius: 20px;
+  }
+
+  .chat-thread .chat-composer textarea {
+    font-size: 16px !important; /* iOS zoom guard */
+    padding: 9px 6px !important;
+    max-height: 100px;
+  }
+
+  .chat-thread .chat-attach-btn,
+  .chat-thread .chat-emoji-btn {
+    width: 34px;
+    height: 34px;
+  }
+
+  .chat-thread .chat-send-btn,
+  .chat-thread .chat-mic-btn {
+    width: 42px;
+    height: 42px;
+  }
+
+  /* Disappear chips: single compact row, no wrap overflow */
+  .chat-thread .chat-disappear-bar {
+    padding: 4px 10px 0;
+    gap: 4px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .chat-thread .chat-disappear-bar::-webkit-scrollbar {
+    display: none;
+  }
+
+  .chat-thread .chat-disappear-label {
+    font-size: 10.5px;
+  }
+
+  .chat-thread .chat-disappear-chip {
+    padding: 3px 8px;
+    font-size: 10.5px;
+  }
+
+  /* Emoji / attach menus stay inside the thread height */
+  .chat-thread .emoji-picker-panel {
+    bottom: 62px;
+    left: 6px;
+    right: 6px;
+    max-width: none;
+    max-height: min(48vh, 340px);
+  }
+
+  .chat-thread .emoji-grid {
+    max-height: min(28vh, 180px);
+    grid-template-columns: repeat(7, 1fr);
+  }
+
+  .chat-thread .attach-menu {
+    left: 6px;
+    right: 6px;
+    min-width: 0;
+    max-width: none;
+    bottom: calc(100% + 8px);
+  }
+
+  .chat-thread .chat-scroll-fab {
+    right: 12px;
+    bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .chat-thread .chat-toast {
+    bottom: calc(100px + env(safe-area-inset-bottom, 0px));
+    max-width: calc(100% - 32px);
+    white-space: normal;
+    text-align: center;
+  }
+
+  .chat-thread .chat-context-bar {
+    padding: 7px 10px;
+    gap: 8px;
+  }
+
+  .chat-thread .chat-context-thumb {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+  }
+
+  .chat-thread .dm-safety-gate {
+    padding: 10px 12px;
+    max-height: 45vh;
+    overflow-y: auto;
+  }
+
+  /* Action sheet / preview respect home indicator */
+  .chat-action-sheet,
+  .chat-preview-card {
+    max-width: 100%;
+    border-radius: 18px 18px 0 0;
+  }
+
+  .chat-preview-card {
+    padding: 14px 14px calc(14px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .chat-lightbox img,
+  .chat-lightbox video {
+    max-width: 100vw;
+    max-height: min(72dvh, 72vh);
+  }
+}
+
+/* Very narrow phones */
+@media (max-width: 380px) {
+  .chat-thread .msg-row.is-mine {
+    padding-left: 18px;
+  }
+
+  .chat-thread .msg-row.is-theirs {
+    padding-right: 18px;
+  }
+
+  .chat-thread .msg-stack {
+    max-width: 90%;
+  }
+
+  .chat-thread .chat-icon-btn {
+    width: 34px;
+    height: 34px;
   }
 }
 

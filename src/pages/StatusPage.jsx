@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { fetchAllActiveStories } from '../hooks/useStatuses'
 import StoryViewer from '../components/StoryViewer'
@@ -571,6 +571,8 @@ export default function StatusPage() {
 // Main page component
 // ─────────────────────────────────────────────
 function StatusPageInner({ user, navigate }) {
+  const { statusId: statusIdParam } = useParams()
+  const [searchParams, setSearchParams] = useSearchParams()
   // Same upload modal as Home (StatusUploadModal)
   const [showUpload, setShowUpload] = useState(false)
   const [headerSearch, setHeaderSearch] = useState('')
@@ -578,18 +580,21 @@ function StatusPageInner({ user, navigate }) {
   const [notifCount, setNotifCount] = useState(0)
 
   const [stories, setStories]               = useState([])
+  const [storiesLoaded, setStoriesLoaded]   = useState(false)
   const [viewerStories, setViewerStories]   = useState([])
   const [viewing, setViewing]               = useState(null)
   const [categoryFilter, setCategoryFilter] = useState('All')
   const [sortOption, setSortOption]         = useState('Latest')
   const [searchQuery, setSearchQuery]       = useState('')
   const [followedIds, setFollowedIds]       = useState(new Set())
+  const openedStatusRef = useRef(null)
   const [viewedIds, setViewedIds] = useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem('viewedStories') || '[]')) }
     catch { return new Set() }
   })
 
   function reloadStories() {
+    setStoriesLoaded(false)
     return fetchAllActiveStories(user.id, categoryFilter).then(async data => {
       const listingIds = [...new Set(data.filter(s => s.tagged_listing_id).map(s => s.tagged_listing_id))]
       if (listingIds.length > 0) {
@@ -600,6 +605,9 @@ function StatusPageInner({ user, navigate }) {
       } else {
         setStories(data)
       }
+      setStoriesLoaded(true)
+    }).catch(() => {
+      setStoriesLoaded(true)
     })
   }
 
@@ -617,6 +625,76 @@ function StatusPageInner({ user, navigate }) {
   useEffect(() => {
     reloadStories()
   }, [categoryFilter, user.id])
+
+  // Auto-open a specific status when navigated from a chat status reply
+  // Supports /status/:statusId and /status?status=<id>
+  useEffect(() => {
+    const targetId = statusIdParam || searchParams.get('status')
+    if (!targetId) {
+      openedStatusRef.current = null
+      return
+    }
+    if (openedStatusRef.current === targetId) return
+
+    const STATUS_SELECT = `id, content, status_type, expires_at, created_at, media_urls, tagged_listing_id, tagged_kind, tagged_ref_id, user_id, location_hint,
+      profiles:user_id ( id, full_name, avatar_url, city ),
+      tagged:tagged_listing_id ( id, title, price, images, category, description, city, district )`
+
+    function openStatus(match, pool) {
+      const list = pool || stories
+      const group = list.filter(s => s.user_id === match.user_id)
+      const orderedGroup = group.length > 0 ? group : [match]
+      const startIdx = Math.max(0, orderedGroup.findIndex(x => x.id === targetId))
+      setViewerStories([
+        ...orderedGroup,
+        ...list.filter(x => x.user_id !== match.user_id),
+      ])
+      setViewing(startIdx)
+      openedStatusRef.current = targetId
+    }
+
+    // Prefer opening from the loaded feed so the viewer can swipe that user's other statuses
+    const inFeed = stories.find(s => s.id === targetId)
+    if (inFeed) {
+      openStatus(inFeed, stories)
+      return
+    }
+
+    // Wait until the feed has finished loading before falling back to a direct fetch
+    if (!storiesLoaded) return
+
+    let cancelled = false
+    ;(async () => {
+      // Fetch the exact status (even if expired — user came from a chat reply to it)
+      const { data: row } = await supabase
+        .from('user_statuses')
+        .select(STATUS_SELECT)
+        .eq('id', targetId)
+        .maybeSingle()
+
+      if (cancelled || !row || openedStatusRef.current === targetId) return
+
+      // Load that author's other active statuses so the viewer still feels natural
+      const { data: siblings } = await supabase
+        .from('user_statuses')
+        .select(STATUS_SELECT)
+        .eq('user_id', row.user_id)
+        .gt('expires_at', new Date().toISOString())
+        .order('created_at', { ascending: false })
+
+      if (cancelled || openedStatusRef.current === targetId) return
+
+      const group = siblings?.length
+        ? (siblings.some(s => s.id === row.id) ? siblings : [row, ...siblings])
+        : [row]
+      const startIdx = Math.max(0, group.findIndex(x => x.id === targetId))
+      setViewerStories(group)
+      setViewing(startIdx)
+      openedStatusRef.current = targetId
+    })()
+
+    return () => { cancelled = true }
+  }, [statusIdParam, searchParams, stories, storiesLoaded])
 
   // Realtime
   useEffect(() => {

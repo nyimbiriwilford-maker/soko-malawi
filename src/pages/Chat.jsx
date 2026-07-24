@@ -61,14 +61,14 @@ function encodeReply(body, replyTo) {
 }
 
 function decodeReply(body) {
-  if (!body) return { body, replyPreview: null, replyToId: null }
+  if (!body) return { body, replyPreview: null, replyToId: null, isStatusReply: false, statusCaption: null, statusProduct: null }
   // New format: \x02[preview|||id]\x03body
   // eslint-disable-next-line no-control-regex
   const match = body.match(/^\x02\[(.+?)\|\|\|([^\]]+)\]\x03(.*)$/s)
-  if (match) return { body: match[3], replyPreview: match[1], replyToId: match[2] }
+  if (match) return { body: match[3], replyPreview: match[1], replyToId: match[2], isStatusReply: false, statusCaption: null, statusProduct: null }
   // Fallback for old corrupted messages: preview|||uuid]body
   const fallback = body.match(/^(.+?)\|\|\|([a-f0-9-]{36})\](.*)$/s)
-  if (fallback) return { body: fallback[3], replyPreview: fallback[1], replyToId: fallback[2] }
+  if (fallback) return { body: fallback[3], replyPreview: fallback[1], replyToId: fallback[2], isStatusReply: false, statusCaption: null, statusProduct: null }
 
   // Status-viewer replies: [[status_reply:uuid]]\nuser text\n\n— replied on your status...
   const statusMatch = String(body).match(/^\[\[status_reply:([a-f0-9-]+)\]\]\s*([\s\S]*)$/i)
@@ -77,16 +77,29 @@ function decodeReply(body) {
     const parts = rest.split(/\n*— replied on your status\s*/i)
     const userText = (parts[0] || '').trim()
     const meta = (parts[1] || '').trim()
-    const statusLine = meta.split('\n').find(l => /^Status:/i.test(l)) || 'your status'
-    const preview = `Status reply · ${statusLine.replace(/^Status:\s*/i, '').replace(/[“”"]/g, '').slice(0, 48)}`
+    const metaLines = meta.split('\n').map(l => l.trim()).filter(Boolean)
+    const statusLine = metaLines.find(l => /^Status:/i.test(l)) || ''
+    const productLine = metaLines.find(l => /^(Product|Listing):/i.test(l)) || ''
+    const statusCaption = statusLine
+      .replace(/^Status:\s*/i, '')
+      .replace(/^[“"']|[”"']$/g, '')
+      .trim()
+    const statusProduct = productLine
+      .replace(/^(Product|Listing):\s*/i, '')
+      .trim()
+    const captionLabel = statusCaption || statusProduct || 'View status'
+    const preview = `Status · ${captionLabel.slice(0, 72)}`
     return {
-      body: userText || rest.trim(),
+      body: userText || '',
       replyPreview: preview,
       replyToId: statusMatch[1],
+      isStatusReply: true,
+      statusCaption: statusCaption || null,
+      statusProduct: statusProduct || null,
     }
   }
 
-  return { body, replyPreview: null, replyToId: null }
+  return { body, replyPreview: null, replyToId: null, isStatusReply: false, statusCaption: null, statusProduct: null }
 }
 
 function fileLabelFromUrl(url) {
@@ -304,6 +317,33 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
   }
 
   // ── Effects ──────────────────────────────────────────────────────────────
+
+  // Keep the thread fitted to the *visible* viewport on mobile when the
+  // soft keyboard / browser chrome resizes the visual viewport.
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined
+    const root = document.documentElement
+    const apply = () => {
+      const vv = window.visualViewport
+      const h = vv ? Math.round(vv.height) : window.innerHeight
+      root.style.setProperty('--chat-vvh', `${h}px`)
+      // Offset for visualViewport.offsetTop when the page is scrolled under the keyboard
+      root.style.setProperty('--chat-vv-top', `${vv ? Math.round(vv.offsetTop) : 0}px`)
+    }
+    apply()
+    const vv = window.visualViewport
+    vv?.addEventListener('resize', apply)
+    vv?.addEventListener('scroll', apply)
+    window.addEventListener('resize', apply)
+    return () => {
+      vv?.removeEventListener('resize', apply)
+      vv?.removeEventListener('scroll', apply)
+      window.removeEventListener('resize', apply)
+      root.style.removeProperty('--chat-vvh')
+      root.style.removeProperty('--chat-vv-top')
+    }
+  }, [])
+
   useEffect(() => {
     init()
     return () => {
@@ -1848,6 +1888,23 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
         @keyframes onlinePulse{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,0.5)}50%{box-shadow:0 0 0 4px rgba(34,197,94,0)}}
         .emoji-btn:hover{transform:scale(1.25);transition:transform 0.1s}
         @media (min-width: 900px) { .chat-back-btn { display: none !important; } }
+        @media (max-width: 899px) {
+          .chat-page.chat-thread {
+            height: var(--chat-vvh, 100%) !important;
+            max-height: var(--chat-vvh, 100%) !important;
+          }
+          .chat-top-actions { gap: 3px !important; }
+          .chat-top-actions .chat-icon-btn,
+          .chat-top-actions button { width: 34px !important; height: 34px !important; }
+          /* Free header space: search lives in ⋮ menu on phones */
+          .chat-search-toggle { display: none !important; }
+        }
+        @media (min-width: 900px) {
+          .chat-menu-search { display: none !important; }
+        }
+        @media (max-width: 360px) {
+          .chat-top-actions .chat-icon-btn:not([aria-label="Chat options"]) { width: 32px !important; height: 32px !important; }
+        }
       `}</style>
 
       {/* ── Top bar ── */}
@@ -1879,13 +1936,13 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
               {otherRecording ? (
                 <span style={{ color: '#dc2626', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
                   <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#ef4444', display: 'inline-block', animation: 'pulse 1s infinite' }} />
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>
-                    {otherName.split(' ')[0]} is recording audio…
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 'min(160px, 38vw)' }}>
+                    {otherName.split(' ')[0]} is recording…
                   </span>
                 </span>
               ) : otherTyping ? (
                 <span style={{ color: '#1a7a4a', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 'min(140px, 34vw)' }}>
                     {otherName.split(' ')[0]} is typing
                   </span>
                   <span style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
@@ -1908,8 +1965,8 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
           </button>
         </div>
 
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <button type="button" className="chat-icon-btn" onClick={() => setChatSearch(s => s === null ? '' : null)} title="Search" aria-label="Search messages">
+        <div className="chat-top-actions" style={S.topActions}>
+          <button type="button" className="chat-icon-btn chat-search-toggle" onClick={() => setChatSearch(s => s === null ? '' : null)} title="Search" aria-label="Search messages">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
               <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
             </svg>
@@ -1963,6 +2020,16 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
                     }}
                   >
                     <span className="chat-action-ico">👤</span> View profile
+                  </button>
+                  <button
+                    type="button"
+                    className="chat-menu-search"
+                    onClick={() => {
+                      setShowChatMenu(false)
+                      setChatSearch(s => s === null ? '' : s)
+                    }}
+                  >
+                    <span className="chat-action-ico">🔍</span> Search messages
                   </button>
                   <button
                     type="button"
@@ -2271,6 +2338,7 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
       <div
         ref={messagesListRef}
         className="chat-messages"
+        style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}
         onClick={() => { setShowEmoji(false); setShowAttach(false) }}
         onScroll={e => {
           const el = e.currentTarget
@@ -2378,16 +2446,59 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
                 <div className="msg-stack">
                   {decoded.replyPreview && (
                     <div
-                      className="msg-reply-quote"
+                      className={decoded.isStatusReply ? 'msg-status-quote' : 'msg-reply-quote'}
+                      role="button"
+                      tabIndex={0}
+                      title={decoded.isStatusReply ? 'Open the status that was replied to' : 'Go to message'}
                       onClick={() => {
+                        // Status-viewer replies: open the actual status that was replied to
+                        if (decoded.isStatusReply && decoded.replyToId) {
+                          navigate(`/status/${decoded.replyToId}`)
+                          return
+                        }
                         const el = document.getElementById(`msg-${decoded.replyToId}`)
                         if (el) {
                           el.scrollIntoView({ behavior: 'smooth', block: 'center' })
                           highlightMsg(el)
                         }
                       }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault()
+                          e.currentTarget.click()
+                        }
+                      }}
                     >
-                      ↩ {decoded.replyPreview}
+                      {decoded.isStatusReply ? (
+                        <>
+                          <div className="msg-status-quote-top">
+                            <span className="msg-status-quote-badge" aria-hidden>
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                                <circle cx="12" cy="12" r="9" />
+                                <circle cx="12" cy="12" r="3.5" fill="currentColor" stroke="none" />
+                              </svg>
+                            </span>
+                            <span className="msg-status-quote-label">Replied to status</span>
+                            <span className="msg-status-quote-hint">Tap to open</span>
+                          </div>
+                          {decoded.statusCaption ? (
+                            <div className="msg-status-quote-caption">
+                              “{decoded.statusCaption}”
+                            </div>
+                          ) : (
+                            <div className="msg-status-quote-caption is-empty">
+                              Status update
+                            </div>
+                          )}
+                          {decoded.statusProduct && (
+                            <div className="msg-status-quote-product">
+                              {decoded.statusProduct}
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <>↩ {decoded.replyPreview}</>
+                      )}
                     </div>
                   )}
 
@@ -2553,7 +2664,9 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
         <button
           type="button"
           className={`chat-scroll-fab${unreadBelow > 0 ? ' has-unread' : ''}`}
-          style={{ bottom: recording ? 84 : (replyTo ? 136 : 84) }}
+          style={{
+            bottom: `calc(${recording ? 84 : (replyTo ? 136 : 84)}px + env(safe-area-inset-bottom, 0px))`,
+          }}
           onClick={() => scrollToBottom(true)}
           aria-label={unreadBelow > 0 ? `${unreadBelow} new messages` : 'Scroll to bottom'}
         >
@@ -2909,7 +3022,7 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
         <HideDuringCall>
         <>
         {/* Default disappearing timer for new messages */}
-        <div className="chat-disappear-bar">
+        <div className="chat-disappear-bar" style={{ flexShrink: 0, overflowX: 'auto', whiteSpace: 'nowrap' }}>
           <span className="chat-disappear-label">New msgs auto-delete:</span>
           {[
             { label: 'Off', ms: null },
@@ -3021,14 +3134,15 @@ const S = {
   page: { display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, position: 'relative', overflow: 'hidden' },
   loadCenter: { display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: 0 },
   spinner: { width: 28, height: 28, border: '3px solid #e0ebe3', borderTopColor: '#1a7a4a', borderRadius: '50%', animation: 'spin 0.8s linear infinite' },
-  topbar: { display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between', flexShrink: 0 },
-  topInfo: { display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 },
+  topbar: { display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between', flexShrink: 0, padding: '10px 12px', background: '#fff', borderBottom: '1px solid #e8ede9', zIndex: 10, minWidth: 0 },
+  topInfo: { display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, overflow: 'hidden' },
   onlineDot: { position: 'absolute', bottom: 1, right: 1, width: 11, height: 11, borderRadius: '50%', transition: 'background 0.3s' },
-  topStatus: { fontSize: 12, marginTop: 2, display: 'flex', alignItems: 'center' },
+  topStatus: { fontSize: 12, marginTop: 2, display: 'flex', alignItems: 'center', minWidth: 0, overflow: 'hidden' },
   callBtn: { background: '#f3f7f4', border: 'none', borderRadius: 12, width: 38, height: 38, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 },
   ctxTitle: { fontSize: 13, fontWeight: 650, color: '#0f1410', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
   ctxSub: { fontSize: 11, color: '#1a7a4a', fontWeight: 650 },
   recordingBar: { display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 },
   cancelRecBtn: { background: '#fef0f0', border: 'none', borderRadius: '50%', width: 38, height: 38, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  inputBar: { display: 'flex', alignItems: 'flex-end', gap: 6, flexShrink: 0, zIndex: 5 },
+  inputBar: { display: 'flex', alignItems: 'flex-end', gap: 6, flexShrink: 0, zIndex: 5, padding: '6px 10px 10px', background: '#fff', borderTop: '1px solid #e8ede9' },
+  topActions: { display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 },
 }

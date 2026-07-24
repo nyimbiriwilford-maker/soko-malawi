@@ -27,6 +27,24 @@ function decodeReply(body) {
   if (match) return { body: match[3], replyPreview: match[1], replyToId: match[2] }
   const fallback = body.match(/^(.+?)\|\|\|([a-f0-9-]{36})\](.*)$/s)
   if (fallback) return { body: fallback[3], replyPreview: fallback[1], replyToId: fallback[2] }
+  // Status-viewer replies: show caption + user reply in chat list
+  const statusMatch = String(body).match(/^\[\[status_reply:([a-f0-9-]+)\]\]\s*([\s\S]*)$/i)
+  if (statusMatch) {
+    const rest = statusMatch[2] || ''
+    const parts = rest.split(/\n*— replied on your status\s*/i)
+    const userText = (parts[0] || '').trim()
+    const meta = (parts[1] || '').trim()
+    const statusLine = meta.split('\n').find(l => /^Status:/i.test(l)) || ''
+    const caption = statusLine.replace(/^Status:\s*/i, '').replace(/^[“"']|[”"']$/g, '').trim()
+    const label = caption
+      ? `Status: ${caption.slice(0, 40)}${caption.length > 40 ? '…' : ''}`
+      : 'Status reply'
+    return {
+      body: userText ? `${label} · ${userText}` : label,
+      replyPreview: label,
+      replyToId: statusMatch[1],
+    }
+  }
   if (BARE_UUID_RE.test(body.trim())) {
     return { body: '', replyPreview: null, replyToId: body.trim().replace(/\]$/, '') }
   }

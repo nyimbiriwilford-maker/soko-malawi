@@ -908,10 +908,16 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
     const text = replyText.trim()
     setReplySending(true)
 
-    const statusSnippet = (story.content || '').replace(/\s+/g, ' ').trim().slice(0, 80)
+    // Keep a clear status caption in the chat body so replies are easy to identify
+    let statusSnippet = (story.content || '').replace(/\s+/g, ' ').trim().slice(0, 100)
+    if (!statusSnippet) {
+      const firstMedia = Array.isArray(story.media_urls) ? story.media_urls[0] : null
+      const isVideo = firstMedia && /\.(mp4|webm|mov)(\?|$)/i.test(String(firstMedia))
+      statusSnippet = isVideo ? 'Video status' : firstMedia ? 'Photo status' : 'Status update'
+    }
     const productLine = story.tagged?.title
-      ? `\nProduct: ${story.tagged.title}`
-      : (story.tagged_listing_id ? `\nListing: ${story.tagged_listing_id}` : '')
+      ? `Product: ${story.tagged.title}`
+      : null
 
     // Marker lets us find replies later; body is readable in chat for the seller
     const marker = `[[status_reply:${story.id}]]`
@@ -920,8 +926,8 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
       text,
       '',
       '— replied on your status',
-      statusSnippet ? `Status: “${statusSnippet}${statusSnippet.length >= 80 ? '…' : ''}”` : null,
-      productLine.trim() || null,
+      `Status: “${statusSnippet}${statusSnippet.length >= 100 ? '…' : ''}”`,
+      productLine || null,
     ].filter(Boolean).join('\n')
 
     let messageId = null
