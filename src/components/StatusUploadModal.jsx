@@ -613,7 +613,7 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
                 }}>
                   {mediaType === 'image'
                     ? <img src={mediaPreview} alt="" style={{ maxHeight: 240, width: '100%', objectFit: 'contain' }} />
-                    : <video ref={videoPreviewRef} src={mediaPreview} controls style={{ maxHeight: 240, width: '100%' }} />
+                    : <video ref={videoPreviewRef} src={mediaPreview} controls style={{ maxHeight: 240, width: '100%', objectFit: 'contain', background: '#000' }} />
                   }
                   <div style={{
                     position: 'absolute', top: 10, left: 10,

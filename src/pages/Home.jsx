@@ -2539,12 +2539,22 @@ function HomeStoriesStrip({ navigate, stories, loading, onOpenStory, onCreateSto
     onOpenStory?.(g.lead, g)
   }
 
+  const ownGroup = groups.find(g => g.user_id === currentUserId)
+  const ownAvatarUrl = ownGroup?.lead?.profiles?.avatar_url || null
+
   return (
     <section className="soko-section-pad soko-stories-strip" style={{ padding: '18px 20px 12px', background: '#fff', borderTop: `1px solid ${T.gray100}` }}>
       <style>{`
+        .soko-stories-card {
+          background: #fff;
+          border-radius: 20px;
+          border: 1px solid ${T.gray100};
+          box-shadow: ${T.shadow};
+          padding: 20px 20px 16px;
+        }
         .soko-stories-strip-rail {
           display: flex;
-          gap: 14px;
+          gap: 22px;
           overflow-x: auto;
           padding: 4px 2px 8px;
           scroll-snap-type: x mandatory;
@@ -2559,7 +2569,7 @@ function HomeStoriesStrip({ navigate, stories, loading, onOpenStory, onCreateSto
           display: flex;
           flex-direction: column;
           align-items: center;
-          gap: 6px;
+          gap: 8px;
           background: none;
           border: none;
           cursor: pointer;
@@ -2573,12 +2583,12 @@ function HomeStoriesStrip({ navigate, stories, loading, onOpenStory, onCreateSto
           height: 64px;
           border-radius: 50%;
           box-sizing: border-box;
-          border: 2px dashed ${T.gray300};
+          border: 2px dashed ${T.green};
           display: flex;
           align-items: center;
           justify-content: center;
-          color: ${T.gray700};
-          background: ${T.gray50};
+          color: #fff;
+          background: ${T.greenL};
           flex-shrink: 0;
         }
         .soko-stories-strip-avatar {
@@ -2595,14 +2605,18 @@ function HomeStoriesStrip({ navigate, stories, loading, onOpenStory, onCreateSto
           color: ${T.gray600};
         }
         .soko-stories-strip-name {
-          font-size: 11px;
-          font-weight: 600;
+          font-size: 12px;
+          font-weight: 700;
           color: ${T.gray800};
-          max-width: 74px;
+          max-width: 78px;
           overflow: hidden;
           text-overflow: ellipsis;
           white-space: nowrap;
           text-align: center;
+        }
+        .soko-stories-strip-name.is-create {
+          color: ${T.green};
+          font-weight: 800;
         }
         .soko-stories-strip-name.is-shop {
           font-weight: 700;
@@ -2612,149 +2626,202 @@ function HomeStoriesStrip({ navigate, stories, loading, onOpenStory, onCreateSto
           position: absolute;
           right: -2px;
           bottom: -1px;
-          min-width: 18px;
-          height: 18px;
+          min-width: 20px;
+          height: 20px;
           padding: 0 5px;
           border-radius: 999px;
           background: ${STORY_RING_ACTIVE};
-          color: #1a1200;
-          font-size: 10px;
+          color: #fff;
+          font-size: 10.5px;
           font-weight: 800;
           display: flex;
           align-items: center;
           justify-content: center;
-          border: 2px solid #fff;
+          border: 2.5px solid #fff;
           box-sizing: border-box;
           line-height: 1;
           z-index: 2;
         }
         .soko-stories-strip-count.is-all-viewed {
-          background: ${STORY_RING_VIEWED};
+          background: ${T.gray500};
           color: #fff;
         }
+        .soko-stories-add-btn {
+          flex-shrink: 0;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          background: ${T.greenL};
+          color: ${T.greenD};
+          border: none;
+          border-radius: 999px;
+          padding: 9px 16px;
+          font-size: 13px;
+          font-weight: 800;
+          cursor: pointer;
+          font-family: inherit;
+          white-space: nowrap;
+          transition: background 0.15s;
+        }
+        .soko-stories-add-btn:hover { background: #d9f0e3; }
         @media (max-width: 768px) {
           .soko-stories-strip {
             padding: 14px 14px 10px !important;
           }
+          .soko-stories-card { padding: 16px 14px 14px; border-radius: 16px; }
+          .soko-stories-strip-rail { gap: 16px; }
           .soko-stories-strip-item { width: 66px; }
           .soko-stories-strip-create { width: 56px; height: 56px; }
-          .soko-stories-strip-name { font-size: 10px; max-width: 62px; }
+          .soko-stories-strip-name { font-size: 10.5px; max-width: 62px; }
           .soko-stories-strip-count {
-            min-width: 16px;
-            height: 16px;
+            min-width: 17px;
+            height: 17px;
             font-size: 9px;
             padding: 0 4px;
+          }
+          .soko-stories-add-btn {
+            padding: 7px 12px;
+            font-size: 12px;
           }
         }
       `}</style>
 
       <div style={{ maxWidth: 1400, margin: '0 auto' }}>
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          marginBottom: 12, gap: 12,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-            <span className="soko-section-title" style={{ fontFamily: T.fontDisplay, fontSize: 17, fontWeight: 800, color: T.gray900 }}>
-              Live Stories
-            </span>
-            <span style={{
-              fontSize: 10, fontWeight: 800, letterSpacing: 0.4, textTransform: 'uppercase',
-              color: T.red, background: '#fdecea', borderRadius: 999, padding: '3px 8px',
-            }}>
-              Status
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={() => navigate('/status')}
-            className="soko-link-quiet"
-            style={{ flexShrink: 0, minHeight: 36 }}
-          >
-            View all
-          </button>
-        </div>
-
-        <div className="soko-scroll soko-stories-strip-rail">
-          <button type="button" className="soko-stories-strip-item" onClick={onCreateStory} aria-label="Create story">
-            <div className="soko-stories-strip-create">
-              {Icon.plus(20)}
-            </div>
-            <span className="soko-stories-strip-name">Yours</span>
-          </button>
-
-          {loading
-            ? [1, 2, 3, 4, 5, 6, 7, 8].map(i => (
-              <div key={i} className="soko-stories-strip-item" aria-hidden="true">
-                <div className="skeleton" style={{ width: 64, height: 64, borderRadius: '50%', flexShrink: 0 }} />
-                <div className="skeleton" style={{ width: 48, height: 10, borderRadius: 4 }} />
+        <div className="soko-stories-card">
+          <div style={{
+            display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+            marginBottom: 14, gap: 12,
+          }}>
+            <div style={{ minWidth: 0 }}>
+              <div style={{
+                fontSize: 11, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase',
+                color: T.green, marginBottom: 3,
+              }}>
+                Now live
               </div>
-            ))
-            : groups.map((g) => {
-              const s = g.lead
-              const shop = shopByOwner[g.user_id]
-              const isShop = !!(shop?.name)
-              const displayName = isShop
-                ? shop.name
-                : (s.profiles?.full_name?.split(' ')[0] || 'Seller')
-              const logoUrl = isShop
-                ? (shop.logo_url || s.profiles?.avatar_url || s.media_urls?.[0] || null)
-                : (s.profiles?.avatar_url || s.media_urls?.[0] || null)
-              const initial = (displayName || 'S')[0].toUpperCase()
-              const ringItems = g.items.map(st => ({
-                id: st.id,
-                viewed: viewedIds.has(st.id),
-              }))
-              const unviewed = ringItems.filter(x => !x.viewed).length
-              const allViewed = unviewed === 0
-              const count = g.count
-
-              return (
-                <button
-                  key={g.user_id || s.id}
-                  type="button"
-                  className="soko-stories-strip-item"
-                  onClick={() => handleOpen(g)}
-                  aria-label={
-                    isShop
-                      ? `${displayName}: ${count} status${count === 1 ? '' : 'es'}, ${unviewed} unviewed`
-                      : `${displayName}: ${count} status${count === 1 ? '' : 'es'}, ${unviewed} unviewed`
-                  }
-                  title={
-                    allViewed
-                      ? `${count} status${count === 1 ? '' : 'es'} · all viewed`
-                      : `${unviewed} unviewed of ${count}`
-                  }
-                >
-                  <div style={{ position: 'relative' }}>
-                    <StoryStatusRing items={ringItems} size={64}>
-                      <div className="soko-stories-strip-avatar">
-                        {logoUrl
-                          ? <img src={logoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          : initial}
-                      </div>
-                    </StoryStatusRing>
-                    {count > 1 && (
-                      <span
-                        className={`soko-stories-strip-count${allViewed ? ' is-all-viewed' : ''}`}
-                        aria-hidden="true"
-                      >
-                        {count > 9 ? '9+' : count}
-                      </span>
-                    )}
-                  </div>
-                  <span className={`soko-stories-strip-name${isShop ? ' is-shop' : ''}`}>
-                    {displayName}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span className="soko-section-title" style={{ fontFamily: T.fontDisplay, fontSize: 19, fontWeight: 800, color: T.gray900, letterSpacing: -0.3 }}>
+                  Stories
+                </span>
+                {groups.length > 0 && (
+                  <span style={{
+                    background: T.greenL, color: T.greenD,
+                    fontSize: 11.5, fontWeight: 800, borderRadius: 999, padding: '2px 9px',
+                  }}>
+                    {groups.length}
                   </span>
-                </button>
-              )
-            })}
-        </div>
+                )}
+              </div>
+            </div>
+            <button
+              type="button"
+              className="soko-stories-add-btn"
+              onClick={onCreateStory}
+            >
+              {Icon.plus(13)} Add yours
+            </button>
+          </div>
 
-        {!loading && groups.length === 0 && (
-          <p style={{ fontSize: 13, color: T.gray600, margin: '4px 0 0', fontWeight: 500 }}>
-            No live stories yet — be the first to share a status.
-          </p>
-        )}
+          <div className="soko-scroll soko-stories-strip-rail">
+            <button type="button" className="soko-stories-strip-item" onClick={onCreateStory} aria-label="Create story">
+              <div className="soko-stories-strip-create" style={{ position: 'relative', overflow: 'hidden' }}>
+                {ownAvatarUrl && (
+                  <img
+                    src={ownAvatarUrl}
+                    alt=""
+                    style={{
+                      position: 'absolute', inset: 0,
+                      width: '100%', height: '100%', objectFit: 'cover',
+                      opacity: 0.45,
+                    }}
+                  />
+                )}
+                <span style={{
+                  position: 'relative', zIndex: 1,
+                  width: 26, height: 26, borderRadius: '50%',
+                  background: T.green, color: '#fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: '0 4px 12px rgba(15,157,88,0.35)',
+                }}>
+                  {Icon.plus(16)}
+                </span>
+              </div>
+              <span className="soko-stories-strip-name is-create">Your status</span>
+            </button>
+
+            {loading
+              ? [1, 2, 3, 4, 5, 6, 7, 8].map(i => (
+                <div key={i} className="soko-stories-strip-item" aria-hidden="true">
+                  <div className="skeleton" style={{ width: 64, height: 64, borderRadius: '50%', flexShrink: 0 }} />
+                  <div className="skeleton" style={{ width: 48, height: 10, borderRadius: 4 }} />
+                </div>
+              ))
+              : groups.map((g) => {
+                const s = g.lead
+                const isOwn = g.user_id === currentUserId
+                const shop = shopByOwner[g.user_id]
+                const isShop = !!(shop?.name)
+                const displayName = isOwn
+                  ? 'You'
+                  : isShop
+                    ? shop.name
+                    : (s.profiles?.full_name?.split(' ')[0] || 'Seller')
+                const logoUrl = isShop
+                  ? (shop.logo_url || s.profiles?.avatar_url || s.media_urls?.[0] || null)
+                  : (s.profiles?.avatar_url || s.media_urls?.[0] || null)
+                const initial = (displayName || 'S')[0].toUpperCase()
+                const ringItems = g.items.map(st => ({
+                  id: st.id,
+                  viewed: viewedIds.has(st.id),
+                }))
+                const unviewed = ringItems.filter(x => !x.viewed).length
+                const allViewed = unviewed === 0
+                const count = g.count
+
+                return (
+                  <button
+                    key={g.user_id || s.id}
+                    type="button"
+                    className="soko-stories-strip-item"
+                    onClick={() => handleOpen(g)}
+                    aria-label={`${displayName}: ${count} status${count === 1 ? '' : 'es'}, ${unviewed} unviewed`}
+                    title={
+                      allViewed
+                        ? `${count} status${count === 1 ? '' : 'es'} · all viewed`
+                        : `${unviewed} unviewed of ${count}`
+                    }
+                  >
+                    <div style={{ position: 'relative' }}>
+                      <StoryStatusRing items={ringItems} size={64}>
+                        <div className="soko-stories-strip-avatar">
+                          {logoUrl
+                            ? <img src={logoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                            : initial}
+                        </div>
+                      </StoryStatusRing>
+                      {count >= 1 && (
+                        <span
+                          className={`soko-stories-strip-count${allViewed ? ' is-all-viewed' : ''}`}
+                          aria-hidden="true"
+                        >
+                          {count > 9 ? '9+' : count}
+                        </span>
+                      )}
+                    </div>
+                    <span className={`soko-stories-strip-name${isShop && !isOwn ? ' is-shop' : ''}`}>
+                      {displayName}
+                    </span>
+                  </button>
+                )
+              })}
+          </div>
+
+          {!loading && groups.length === 0 && (
+            <p style={{ fontSize: 13, color: T.gray600, margin: '4px 0 0', fontWeight: 500 }}>
+              No live stories yet — be the first to share a status.
+            </p>
+          )}
+        </div>
       </div>
     </section>
   )

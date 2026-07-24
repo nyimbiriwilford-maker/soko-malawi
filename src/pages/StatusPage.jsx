@@ -330,6 +330,7 @@ function StoryCard({ s, index, isOwn, viewedIds, onClick, nearBadge }) {
   const name   = s.profiles?.full_name || 'Seller'
   const avatar = s.profiles?.avatar_url
   const media  = s.media_urls?.[0]
+  const isVideo = media && (/\.(mp4|mov|webm)(\?|$)/i.test(media) || media.includes('video'))
   const initial = name[0]?.toUpperCase() || 'S'
   const isUrgent = s.content?.toLowerCase().includes('price drop') ||
                    s.content?.toLowerCase().includes('first to confirm') ||
@@ -365,7 +366,10 @@ function StoryCard({ s, index, isOwn, viewedIds, onClick, nearBadge }) {
       }}
     >
       {media
-        ? <img src={media} alt="" className="st-story-tile-media" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+        ? (isVideo
+            ? <video src={media} muted playsInline preload="metadata" className="st-story-tile-media" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+            : <img src={media} alt="" className="st-story-tile-media" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+          )
         : avatar
           ? <img src={avatar} alt="" className="st-story-tile-media" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: 'brightness(0.88) saturate(1.1)', transform: 'scale(1.06)' }} />
           : null

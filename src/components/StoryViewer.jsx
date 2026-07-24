@@ -63,16 +63,16 @@ function IconHeart({ size = 20, filled = false }) {
     </svg>
   )
 }
-function IconComment({ size = 19 }) {
+function IconComment({ size = 19, color = '#64748b' }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
     </svg>
   )
 }
-function IconShare({ size = 18 }) {
+function IconShare({ size = 18, color = '#64748b' }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#64748b" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
       <circle cx="18" cy="5" r="3" />
       <circle cx="6" cy="12" r="3" />
       <circle cx="18" cy="19" r="3" />
@@ -1031,8 +1031,10 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
   // Text-only statuses: content is the main stage
   const isTextOnlyStage = !media0 && !textBoard
   // Stream media immediately — no download progress UI
-  const showMedia = !!mediaSrc && !mediaError
-  const showLoadError = !!mediaError && !!media0
+  // Videos: never show the error card — keep the <video> mounted so its
+  // own first-frame/poster acts as the WhatsApp-style preview while it loads.
+  const showMedia = mediaKind === 'video' ? !!mediaSrc : (!!mediaSrc && !mediaError)
+  const showLoadError = !!mediaError && !!media0 && mediaKind !== 'video'
 
   const tagged = story.tagged || story._taggedEntity || null
   const taggedKind = story.tagged_kind
@@ -1113,6 +1115,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
         }
         .sv-tap:active { opacity: 0.85; }
         .sv-hide-scroll::-webkit-scrollbar { display: none; }
+        #sv-reply-input::placeholder { color: rgba(255,255,255,0.65); }
       `}</style>
 
       <div
@@ -1198,11 +1201,12 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                 onLoadedData={() => setMediaReady(true)}
                 onCanPlay={() => setMediaReady(true)}
                 onError={() => {
-                  setMediaError('Video failed to load')
+                  // Never surface an error card for video — just keep the element
+                  // mounted (shows last good frame / poster) and let the retry below run.
                   setMediaReady(false)
                 }}
                 style={{
-                  width: '100%', height: '100%', objectFit: 'cover', display: 'block',
+                  width: '100%', height: '100%', objectFit: 'contain', display: 'block',
                   background: '#000',
                 }}
               />
@@ -1469,8 +1473,8 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
               </button>
             )}
 
-            {/* Product / entity card — overlaid on the image (only after media ready) */}
-            {tagged && mediaReady && !mediaError && (
+            {/* Product / entity card now lives inside the floating bottom chrome — see below */}
+            {false && tagged && mediaReady && !mediaError && (
               <div
                 onPointerDown={e => e.stopPropagation()}
                 onPointerUp={e => e.stopPropagation()}
@@ -1484,22 +1488,21 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                   onClick={openTaggedEntity}
                   style={{
                     width: '100%',
-                    background: 'linear-gradient(145deg, rgba(15,45,28,0.94) 0%, rgba(10,36,22,0.96) 100%)',
-                    backdropFilter: 'blur(16px)',
-                    border: '1px solid rgba(34,197,94,0.28)',
-                    borderRadius: 16,
-                    padding: '11px 12px',
+                    background: 'rgba(255,255,255,0.14)',
+                    backdropFilter: 'blur(8px)',
+                    border: '1.5px solid rgba(255,255,255,0.25)',
+                    borderRadius: 14,
+                    padding: '8px 10px',
                     textAlign: 'left',
                     cursor: 'pointer',
-                    boxShadow: '0 10px 32px rgba(0,0,0,0.45)',
                     fontFamily: 'inherit',
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 12,
+                    gap: 10,
                   }}
                 >
                   <div style={{
-                    width: 54, height: 54, borderRadius: 13, flexShrink: 0,
+                    width: 40, height: 40, borderRadius: 10, flexShrink: 0,
                     overflow: 'hidden',
                     background: 'rgba(255,255,255,0.1)',
                     border: '1px solid rgba(255,255,255,0.14)',
@@ -1513,64 +1516,54 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                           width: '100%', height: '100%',
                           objectFit: (taggedKind === 'shop' || taggedKind === 'job') ? 'contain' : 'cover',
                           background: (taggedKind === 'shop' || taggedKind === 'job') ? '#fff' : 'transparent',
-                          padding: (taggedKind === 'shop' || taggedKind === 'job') ? 4 : 0,
+                          padding: (taggedKind === 'shop' || taggedKind === 'job') ? 3 : 0,
                           boxSizing: 'border-box',
                         }}
                       />
                     ) : (
-                      <IconPackage size={22} />
+                      <IconPackage size={18} />
                     )}
                   </div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{
-                      fontSize: 10, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase',
-                      color: 'rgba(255,255,255,0.45)', marginBottom: 2,
-                    }}>
-                      {kindLabel}
-                    </div>
-                    <div style={{
-                      fontSize: 15, fontWeight: 800, color: '#f8fafc',
-                      lineHeight: 1.25, marginBottom: 2,
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>
-                      {productTitle}
-                    </div>
-                    {productPrice && (
-                      <div style={{
-                        fontSize: 16, fontWeight: 900, color: GOLD,
-                        letterSpacing: -0.2, lineHeight: 1.15, marginBottom: 3,
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
+                      <span style={{
+                        fontSize: 13.5, fontWeight: 800, color: '#fff',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        textShadow: '0 1px 4px rgba(0,0,0,0.5)',
                       }}>
-                        {typeof productPrice === 'string' && !/^(MK|mk)/.test(productPrice) && Number.isFinite(Number(productPrice))
-                          ? formatPrice(productPrice)
-                          : productPrice}
-                      </div>
-                    )}
+                        {productTitle}
+                      </span>
+                      {productPrice && (
+                        <span style={{
+                          fontSize: 13, fontWeight: 900, color: GOLD,
+                          textShadow: '0 1px 4px rgba(0,0,0,0.5)', flexShrink: 0,
+                        }}>
+                          {typeof productPrice === 'string' && !/^(MK|mk)/.test(productPrice) && Number.isFinite(Number(productPrice))
+                            ? formatPrice(productPrice)
+                            : productPrice}
+                        </span>
+                      )}
+                    </div>
                     <div style={{
                       display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap',
-                      fontSize: 11, color: 'rgba(255,255,255,0.65)', fontWeight: 600,
+                      fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 600, marginTop: 1,
                     }}>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#4ade80' }}>
-                        <IconCheck size={10} />
+                        <IconCheck size={9} />
                         Verified
                       </span>
                       {productCity && (
                         <>
                           <span style={{ opacity: 0.4 }}>·</span>
                           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                            <IconMapPin size={10} />
+                            <IconMapPin size={9} />
                             {productCity}
                           </span>
                         </>
                       )}
                     </div>
                   </div>
-                  <div style={{
-                    width: 28, height: 28, borderRadius: 8, flexShrink: 0,
-                    background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.3)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: GREEN,
-                  }}>
-                    <IconChevronRight size={14} color={GREEN} />
-                  </div>
+                  <IconChevronRight size={16} color="rgba(255,255,255,0.6)" />
                 </button>
               </div>
             )}
@@ -1590,7 +1583,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
               </div>
             )}
 
-            {/* Tap zones — stop above product card */}
+            {/* Tap zones — full height, chrome now floats over the media */}
             <div
               onPointerUp={e => {
                 e.stopPropagation()
@@ -1598,7 +1591,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                 setPaused(false)
                 goBack()
               }}
-              style={{ position: 'absolute', left: 0, top: 70, bottom: tagged ? 100 : 0, width: '32%', zIndex: 12 }}
+              style={{ position: 'absolute', left: 0, top: 70, bottom: 0, width: '32%', zIndex: 12 }}
             />
             <div
               onPointerUp={e => {
@@ -1607,201 +1600,263 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                 setPaused(false)
                 advance()
               }}
-              style={{ position: 'absolute', right: 0, top: 70, bottom: tagged ? 100 : 0, width: '32%', zIndex: 12 }}
+              style={{ position: 'absolute', right: 0, top: 70, bottom: 0, width: '32%', zIndex: 12 }}
             />
-          </div>
 
-          {/* ════════ BOTTOM CHROME — likes / replies always free ════════ */}
-          <div
-            onPointerDown={e => e.stopPropagation()}
-            onPointerUp={e => e.stopPropagation()}
-            style={{
-              flexShrink: 0,
-              background: '#f4f6f8',
-              padding: '12px 14px calc(12px + env(safe-area-inset-bottom, 0px))',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 12,
-              borderTop: '1px solid #e8ecf0',
-            }}
-          >
-            {/* Engagement */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 18, padding: '0 2px' }}>
-              <button
-                type="button"
-                className="sv-tap"
-                onClick={handleLove}
-                disabled={reacting || isOwn}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  background: 'none', border: 'none', padding: 0,
-                  cursor: isOwn ? 'default' : 'pointer', fontFamily: 'inherit',
-                }}
-              >
-                <IconHeart size={20} filled={myReaction === 'love'} />
-                <span style={{ fontSize: 14, fontWeight: 800, color: '#1e293b' }}>
-                  {fmtK(loveCount)}
-                </span>
-              </button>
+            {/* ════════ FLOATING BOTTOM CHROME — overlaid on media, WhatsApp/IG style ════════ */}
+            <div
+              onPointerDown={e => e.stopPropagation()}
+              onPointerUp={e => e.stopPropagation()}
+              style={{
+                position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 25,
+                background: 'linear-gradient(to top, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.6) 40%, rgba(0,0,0,0.15) 80%, transparent 100%)',
+                padding: '30px 14px calc(12px + env(safe-area-inset-bottom, 0px))',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+              }}
+            >
+              {/* Tagged product / entity card — now stacks naturally above the actions below */}
+              {tagged && mediaReady && !mediaError && (
+                <button
+                  type="button"
+                  className="sv-tap"
+                  onClick={openTaggedEntity}
+                  style={{
+                    width: '100%',
+                    background: 'rgba(255,255,255,0.14)',
+                    backdropFilter: 'blur(8px)',
+                    border: '1.5px solid rgba(255,255,255,0.25)',
+                    borderRadius: 14,
+                    padding: '8px 10px',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                  }}
+                >
+                  <div style={{
+                    width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+                    overflow: 'hidden',
+                    background: 'rgba(255,255,255,0.1)',
+                    border: '1px solid rgba(255,255,255,0.14)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {entityLogo || productImage ? (
+                      <img
+                        src={entityLogo || productImage}
+                        alt=""
+                        style={{
+                          width: '100%', height: '100%',
+                          objectFit: (taggedKind === 'shop' || taggedKind === 'job') ? 'contain' : 'cover',
+                          background: (taggedKind === 'shop' || taggedKind === 'job') ? '#fff' : 'transparent',
+                          padding: (taggedKind === 'shop' || taggedKind === 'job') ? 3 : 0,
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                    ) : (
+                      <IconPackage size={18} />
+                    )}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
+                      <span style={{
+                        fontSize: 13.5, fontWeight: 800, color: '#fff',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        textShadow: '0 1px 4px rgba(0,0,0,0.5)',
+                      }}>
+                        {productTitle}
+                      </span>
+                      {productPrice && (
+                        <span style={{
+                          fontSize: 13, fontWeight: 900, color: GOLD,
+                          textShadow: '0 1px 4px rgba(0,0,0,0.5)', flexShrink: 0,
+                        }}>
+                          {typeof productPrice === 'string' && !/^(MK|mk)/.test(productPrice) && Number.isFinite(Number(productPrice))
+                            ? formatPrice(productPrice)
+                            : productPrice}
+                        </span>
+                      )}
+                    </div>
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap',
+                      fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 600, marginTop: 1,
+                    }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#4ade80' }}>
+                        <IconCheck size={9} />
+                        Verified
+                      </span>
+                      {productCity && (
+                        <>
+                          <span style={{ opacity: 0.4 }}>·</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                            <IconMapPin size={9} />
+                            {productCity}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <IconChevronRight size={16} color="rgba(255,255,255,0.6)" />
+                </button>
+              )}
 
-              {/* Message icon → read replies (not open chat) */}
-              <button
-                type="button"
-                className="sv-tap"
-                onClick={openReplies}
-                aria-label="View replies"
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  background: 'none', border: 'none', padding: 0,
-                  cursor: 'pointer', fontFamily: 'inherit',
-                }}
-              >
-                <IconComment size={19} />
-                <span style={{ fontSize: 14, fontWeight: 800, color: '#1e293b' }}>
-                  {fmtK(replyCount)}
-                </span>
-              </button>
+              {/* Engagement */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 18, padding: '0 2px' }}>
+                <button
+                  type="button"
+                  className="sv-tap"
+                  onClick={handleLove}
+                  disabled={reacting || isOwn}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    background: 'none', border: 'none', padding: 0,
+                    cursor: isOwn ? 'default' : 'pointer', fontFamily: 'inherit',
+                  }}
+                >
+                  <IconHeart size={20} filled={myReaction === 'love'} />
+                  <span style={{ fontSize: 14, fontWeight: 800, color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>
+                    {fmtK(loveCount)}
+                  </span>
+                </button>
 
-              <button
-                type="button"
-                className="sv-tap"
-                onClick={openShare}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  background: 'none', border: 'none', padding: 0,
-                  cursor: 'pointer', fontFamily: 'inherit', marginLeft: 'auto',
-                }}
-              >
-                <IconShare size={18} />
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#64748b' }}>Share</span>
-              </button>
-            </div>
+                <button
+                  type="button"
+                  className="sv-tap"
+                  onClick={openReplies}
+                  aria-label="View replies"
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    background: 'none', border: 'none', padding: 0,
+                    cursor: 'pointer', fontFamily: 'inherit',
+                  }}
+                >
+                  <IconComment size={19} color="#fff" />
+                  <span style={{ fontSize: 14, fontWeight: 800, color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>
+                    {fmtK(replyCount)}
+                  </span>
+                </button>
 
-            {/* CTAs */}
-            {!isOwn ? (
-              <div style={{ display: 'flex', gap: 10 }}>
-                {tagged && (
+                <button
+                  type="button"
+                  className="sv-tap"
+                  onClick={openShare}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    background: 'none', border: 'none', padding: 0,
+                    cursor: 'pointer', fontFamily: 'inherit', marginLeft: 'auto',
+                  }}
+                >
+                  <IconShare size={18} color="#fff" />
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'rgba(255,255,255,0.85)', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>Share</span>
+                </button>
+              </div>
+
+              {/* CTAs */}
+              {!isOwn ? (
+                <div style={{ display: 'flex', gap: 10 }}>
                   <button
                     type="button"
                     className="sv-tap"
-                    onClick={openTaggedEntity}
+                    onClick={goChat}
                     style={{
                       flex: 1,
-                      background: GOLD_BTN,
+                      background: GREEN,
                       border: 'none',
                       borderRadius: 999,
-                      padding: '13px 12px',
-                      fontSize: 14, fontWeight: 800, color: '#1a1a1a',
+                      padding: '12px 12px',
+                      fontSize: 14, fontWeight: 800, color: '#fff',
                       cursor: 'pointer',
-                      boxShadow: '0 3px 12px rgba(240,192,0,0.35)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                      boxShadow: '0 3px 12px rgba(26,122,74,0.3)',
                       fontFamily: 'inherit',
                     }}
                   >
-                    {taggedKind === 'job' ? 'View Job'
-                      : taggedKind === 'service' ? 'View Service'
-                      : taggedKind === 'shop' ? 'View Shop'
-                      : taggedKind === 'request' ? 'View Request'
-                      : 'View Product'}
+                    <IconMessage size={15} />
+                    Message Seller
                   </button>
-                )}
+                </div>
+              ) : (
                 <button
                   type="button"
                   className="sv-tap"
-                  onClick={goChat}
+                  onClick={openViewers}
                   style={{
-                    flex: 1,
-                    background: GREEN,
-                    border: 'none',
+                    width: '100%',
+                    background: 'rgba(255,255,255,0.14)',
+                    border: '1.5px solid rgba(255,255,255,0.3)',
+                    backdropFilter: 'blur(8px)',
                     borderRadius: 999,
-                    padding: '13px 12px',
-                    fontSize: 14, fontWeight: 800, color: '#fff',
+                    padding: '11px',
+                    fontSize: 13, fontWeight: 800, color: '#fff',
                     cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-                    boxShadow: '0 3px 12px rgba(26,122,74,0.3)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                     fontFamily: 'inherit',
                   }}
                 >
-                  <IconMessage size={15} />
-                  Message Seller
+                  <IconEye size={15} />
+                  {fmtK(viewCount)} {viewCount === 1 ? 'view' : 'views'} · See who viewed
                 </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                className="sv-tap"
-                onClick={openViewers}
-                style={{
-                  width: '100%',
-                  background: '#fff',
-                  border: '1.5px solid #e2e8f0',
-                  borderRadius: 999,
-                  padding: '12px',
-                  fontSize: 13, fontWeight: 800, color: GREEN,
-                  cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                  fontFamily: 'inherit',
-                }}
-              >
-                <IconEye size={15} />
-                {fmtK(viewCount)} {viewCount === 1 ? 'view' : 'views'} · See who viewed
-              </button>
-            )}
+              )}
 
-            {/* Reply bar */}
-            {!isOwn && (
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 10,
-                background: '#fff',
-                borderRadius: 999,
-                padding: '6px 8px 6px 6px',
-                border: '1.5px solid #e2e8f0',
-                boxShadow: '0 1px 4px rgba(0,0,0,0.04)',
-              }}>
+              {/* Reply bar */}
+              {!isOwn && (
                 <div style={{
-                  width: 36, height: 36, borderRadius: '50%', flexShrink: 0,
-                  overflow: 'hidden',
-                  background: `linear-gradient(135deg,${GREEN},#22c55e)`,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 12, fontWeight: 800, color: '#fff',
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  background: 'rgba(255,255,255,0.14)',
+                  backdropFilter: 'blur(8px)',
+                  borderRadius: 999,
+                  padding: '6px 8px 6px 6px',
+                  border: '1.5px solid rgba(255,255,255,0.25)',
                 }}>
-                  {myAvatar
-                    ? <img src={myAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    : myInitial}
-                </div>
-                <input
-                  id="sv-reply-input"
-                  value={replyText}
-                  onChange={e => setReplyText(e.target.value)}
-                  onFocus={() => setPaused(true)}
-                  onBlur={() => { if (!shareUrl && !showViewers && !showMenu && !showReplies) setPaused(false) }}
-                  onKeyDown={e => e.key === 'Enter' && handleReply()}
-                  placeholder="Reply to status…"
-                  maxLength={400}
-                  style={{
-                    flex: 1, border: 'none', outline: 'none', background: 'transparent',
-                    fontSize: 14, color: '#0f172a', fontFamily: 'inherit', minWidth: 0,
-                  }}
-                />
-                <button
-                  type="button"
-                  className="sv-tap"
-                  onClick={handleReply}
-                  disabled={!replyText.trim() || replySending}
-                  aria-label="Send reply"
-                  style={{
-                    width: 38, height: 38, borderRadius: '50%', border: 'none',
-                    background: replyText.trim() ? GREEN : 'transparent',
-                    color: replyText.trim() ? '#fff' : '#94a3b8',
-                    cursor: replyText.trim() && !replySending ? 'pointer' : 'default',
+                  <div style={{
+                    width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+                    overflow: 'hidden',
+                    background: `linear-gradient(135deg,${GREEN},#22c55e)`,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    transition: 'all 0.15s',
-                    opacity: replySending ? 0.7 : 1,
-                  }}
-                >
-                  <IconSend size={17} />
-                </button>
-              </div>
-            )}
+                    fontSize: 11, fontWeight: 800, color: '#fff',
+                  }}>
+                    {myAvatar
+                      ? <img src={myAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      : myInitial}
+                  </div>
+                  <input
+                    id="sv-reply-input"
+                    value={replyText}
+                    onChange={e => setReplyText(e.target.value)}
+                    onFocus={() => setPaused(true)}
+                    onBlur={() => { if (!shareUrl && !showViewers && !showMenu && !showReplies) setPaused(false) }}
+                    onKeyDown={e => e.key === 'Enter' && handleReply()}
+                    placeholder="Reply to status…"
+                    maxLength={400}
+                    style={{
+                      flex: 1, border: 'none', outline: 'none', background: 'transparent',
+                      fontSize: 14, color: '#fff', fontFamily: 'inherit', minWidth: 0,
+                    }}
+                  />
+                  <button
+                    type="button"
+                    className="sv-tap"
+                    onClick={handleReply}
+                    disabled={!replyText.trim() || replySending}
+                    aria-label="Send reply"
+                    style={{
+                      width: 34, height: 34, borderRadius: '50%', border: 'none',
+                      background: replyText.trim() ? GREEN : 'transparent',
+                      color: replyText.trim() ? '#fff' : 'rgba(255,255,255,0.5)',
+                      cursor: replyText.trim() && !replySending ? 'pointer' : 'default',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      transition: 'all 0.15s',
+                      opacity: replySending ? 0.7 : 1,
+                    }}
+                  >
+                    <IconSend size={17} />
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Toast — reply sent confirmation */}

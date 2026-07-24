@@ -129,11 +129,17 @@ export default function SavedStatusesPage() {
                   {media && (
                     <div
                       onClick={() => setViewing(i)}
-                      style={{ width: '100%', height: 140, overflow: 'hidden', position: 'relative' }}
+                      style={{ width: '100%', height: 140, overflow: 'hidden', position: 'relative', background: '#000' }}
                     >
-                      <img src={media} alt="" style={{
-                        width: '100%', height: '100%', objectFit: 'cover',
-                      }} />
+                      {/^https?:\/\/\S+\.(mp4|webm|mov|m4v)(\?|$)/i.test(media) ? (
+                        <video src={media} muted playsInline preload="metadata" style={{
+                          width: '100%', height: '100%', objectFit: 'cover',
+                        }} />
+                      ) : (
+                        <img src={media} alt="" style={{
+                          width: '100%', height: '100%', objectFit: 'cover',
+                        }} />
+                      )}
                       <div style={{
                         position: 'absolute', inset: 0,
                         background: 'linear-gradient(to top, rgba(0,0,0,0.5), transparent)',
