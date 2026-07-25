@@ -17,6 +17,7 @@
  * as HomeStatusRow, but rendered as a compact LiveStoriesCard next to
  * Featured Listings (matching the reference layout) rather than
  * HomeStatusRow's full-width dark bar, which doesn't fit that slot.
+ * Status section uses HomeStatusSection component (StatusPage-style).
  */
 
 import React, {
@@ -27,8 +28,6 @@ import { supabase }              from '../lib/supabase'
 import useSearchAnimation        from '../hooks/useSearchAnimation'
 import { useUserLocation }       from '../hooks/useUserLocation'
 import { fetchAllActiveStories } from '../hooks/useStatuses'
-import StoryViewer                from '../components/StoryViewer'
-import StatusUploadModal          from '../components/StatusUploadModal'
 import VerificationAttentionBanner from '../components/VerificationAttentionBanner'
 import SokoNav from '../components/SokoNav'
 import LookingForRequestCard, { LOOKING_FOR_CARD_CSS } from '../components/LookingFor/LookingForRequestCard'
@@ -49,6 +48,7 @@ import {
   FEATURED_PRICE_MWK,
 } from '../constants/featuredPricing'
 import lookingForHeroImg from '../assets/looking-for-hero.jpg'
+import HomeStatusSection from '../components/HomeStatusSection'
 
 /* ─────────────────────────────────────────────────────────────────────────────
    DESIGN TOKENS
@@ -2269,12 +2269,11 @@ function HomeSectionSkeleton({ titleW = '38%', cards = 5, cardW = 160 }) {
    a thin presentational wrapper around the same fetchAllActiveStories data
    HomeStatusRow uses, but sized for the side-column slot next to Featured
    Listings rather than HomeStatusRow's full-width dark bar (which has
-   200×340px cards and wouldn't fit this slot). Clicking a story or
-   "Create Story" defers to the parent's handlers, which open the real
-   StoryViewer / StatusUploadModal already wired up in HomeStatusRow.
+   200×340px cards and wouldn't fit this slot).
+   Status section now uses HomeStatusSection (StatusPage-style with rings + tiles).
 ───────────────────────────────────────────────────────────────────────────── */
 /* ─────────────────────────────────────────────────────────────────────────────
-   FEATURED LISTINGS — full-width rail (stories live in HomeStoriesStrip below)
+   FEATURED LISTINGS — full-width rail (stories section lives below)
 ───────────────────────────────────────────────────────────────────────────── */
 /** Max cards on the featured rail — enough for a full horizontal scroll, not a dump */
 const FEATURED_HOME_CAP = 12
@@ -2335,522 +2334,6 @@ function FeaturedListingsRow({ listings, navigate, loading, user, savedIds, onTo
                 </div>
               ))}
           </div>
-        </div>
-      </div>
-    </section>
-  )
-}
-
-/* ─────────────────────────────────────────────────────────────────────────────
-   HOME STORIES STRIP — status/stories between Featured and Latest
-   Ring segments = live statuses; green/amber = unviewed, gray = viewed.
-   Shop owners show business name + logo instead of personal profile.
-───────────────────────────────────────────────────────────────────────────── */
-
-/** Unviewed = yellow (matches status rows elsewhere); viewed = muted gray */
-const STORY_RING_ACTIVE = '#f9a825'
-const STORY_RING_VIEWED = '#c4c7c5'
-const STORY_VIEWED_KEY = 'viewedStories'
-
-function loadViewedStoryIds() {
-  try {
-    const raw = JSON.parse(localStorage.getItem(STORY_VIEWED_KEY) || '[]')
-    return new Set(Array.isArray(raw) ? raw : [])
-  } catch {
-    return new Set()
-  }
-}
-
-function persistViewedStoryIds(set) {
-  try {
-    localStorage.setItem(STORY_VIEWED_KEY, JSON.stringify([...set]))
-  } catch { /* ignore */ }
-}
-
-/**
- * SVG ring: one arc per status.
- * `items` = [{ id, viewed }] oldest → newest (clock starts at top).
- */
-function StoryStatusRing({ items = [], size = 64, children }) {
-  const list = items.length ? items.slice(0, 12) : [{ id: '_', viewed: false }]
-  const n = list.length
-  const stroke = size >= 60 ? 2.85 : 2.5
-  const pad = 1
-  const r = (size - stroke) / 2 - pad
-  const c = 2 * Math.PI * r
-  const gap = n <= 1 ? 0 : Math.max(4.5, c * 0.03)
-  const seg = (c - gap * n) / n
-  const cx = size / 2
-  const cy = size / 2
-  const allViewed = list.every(x => x.viewed)
-
-  return (
-    <div
-      className="soko-stories-strip-ring"
-      style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}
-      data-status-count={n}
-      data-all-viewed={allViewed ? '1' : '0'}
-    >
-      <svg
-        width={size}
-        height={size}
-        viewBox={`0 0 ${size} ${size}`}
-        aria-hidden="true"
-        style={{
-          position: 'absolute', inset: 0,
-          transform: 'rotate(-90deg)',
-          overflow: 'visible',
-        }}
-      >
-        {n > 1 && (
-          <circle cx={cx} cy={cy} r={r} fill="none" stroke={T.gray200} strokeWidth={stroke} />
-        )}
-        {list.map((item, i) => (
-          <circle
-            key={item.id || i}
-            cx={cx}
-            cy={cy}
-            r={r}
-            fill="none"
-            stroke={item.viewed ? STORY_RING_VIEWED : STORY_RING_ACTIVE}
-            strokeWidth={stroke}
-            strokeLinecap="round"
-            strokeDasharray={n <= 1 ? `${c} 0` : `${Math.max(0.5, seg)} ${Math.max(0, c - seg)}`}
-            strokeDashoffset={n <= 1 ? 0 : -(i * (seg + gap))}
-            style={{ transition: 'stroke 0.25s ease' }}
-          />
-        ))}
-      </svg>
-      <div
-        className="soko-stories-strip-avatar-wrap"
-        style={{
-          position: 'absolute',
-          inset: stroke + 1.5,
-          borderRadius: '50%',
-          background: '#fff',
-          padding: 2,
-          boxSizing: 'border-box',
-        }}
-      >
-        {children}
-      </div>
-    </div>
-  )
-}
-
-function HomeStoriesStrip({ navigate, stories, loading, onOpenStory, onCreateStory, currentUserId }) {
-  const [viewedIds, setViewedIds] = useState(loadViewedStoryIds)
-  const [shopByOwner, setShopByOwner] = useState({})
-
-  // One rail item per user; items = all live statuses (oldest first for ring order)
-  const groups = useMemo(() => {
-    const map = new Map()
-    for (const s of stories || []) {
-      const uid = s.user_id
-      if (!uid) continue
-      if (!map.has(uid)) {
-        map.set(uid, { user_id: uid, items: [s], lead: s })
-      } else {
-        const g = map.get(uid)
-        g.items.push(s)
-        // lead = newest for avatar fallback
-        if (new Date(s.created_at) > new Date(g.lead.created_at || 0)) g.lead = s
-      }
-    }
-    return [...map.values()].map(g => {
-      const items = [...g.items].sort(
-        (a, b) => new Date(a.created_at) - new Date(b.created_at),
-      )
-      return { ...g, items, count: items.length }
-    }).slice(0, 20)
-  }, [stories])
-
-  // Merge server status_views + localStorage for accurate viewed segments
-  useEffect(() => {
-    let cancelled = false
-    const ids = (stories || []).map(s => s.id).filter(Boolean)
-    if (!currentUserId || ids.length === 0) return undefined
-    ;(async () => {
-      try {
-        const { data, error } = await supabase
-          .from('status_views')
-          .select('status_id')
-          .eq('viewer_id', currentUserId)
-          .in('status_id', ids)
-        if (cancelled || error || !data) return
-        setViewedIds(prev => {
-          const next = new Set(prev)
-          data.forEach(r => { if (r.status_id) next.add(r.status_id) })
-          persistViewedStoryIds(next)
-          return next
-        })
-      } catch { /* ignore */ }
-    })()
-    return () => { cancelled = true }
-  }, [currentUserId, stories])
-
-  // Business name + logo for story authors who own a shop
-  useEffect(() => {
-    let cancelled = false
-    const uids = groups.map(g => g.user_id).filter(Boolean)
-    if (uids.length === 0) {
-      setShopByOwner({})
-      return undefined
-    }
-    ;(async () => {
-      try {
-        const { data, error } = await supabase
-          .from('shops')
-          .select('owner_id, name, logo_url, is_verified, slug')
-          .in('owner_id', uids)
-        if (cancelled || error) return
-        const map = {}
-        for (const sh of data || []) {
-          if (!sh.owner_id) continue
-          // Prefer first shop; if multiple, keep one with a logo
-          if (!map[sh.owner_id] || (sh.logo_url && !map[sh.owner_id].logo_url)) {
-            map[sh.owner_id] = sh
-          }
-        }
-        setShopByOwner(map)
-      } catch { /* ignore */ }
-    })()
-    return () => { cancelled = true }
-  }, [groups])
-
-  function markGroupViewed(statusIds) {
-    if (!statusIds?.length) return
-    setViewedIds(prev => {
-      const next = new Set(prev)
-      statusIds.forEach(id => next.add(id))
-      persistViewedStoryIds(next)
-      return next
-    })
-  }
-
-  function handleOpen(g) {
-    const ids = g.items.map(x => x.id).filter(Boolean)
-    markGroupViewed(ids)
-    onOpenStory?.(g.lead, g)
-  }
-
-  const ownGroup = groups.find(g => g.user_id === currentUserId)
-  const ownAvatarUrl = ownGroup?.lead?.profiles?.avatar_url || null
-
-  const HOME_STORIES_DISPLAY_CAP = 10
-  const displayGroups = groups.slice(0, HOME_STORIES_DISPLAY_CAP)
-  const hasMoreStories = groups.length > HOME_STORIES_DISPLAY_CAP
-
-  return (
-    <section className="soko-section-pad soko-stories-strip" style={{ padding: '18px 20px 12px', background: '#fff', borderTop: `1px solid ${T.gray100}` }}>
-      <style>{`
-        .soko-stories-card {
-          background: #fff;
-          border-radius: 20px;
-          border: 1px solid ${T.gray100};
-          box-shadow: ${T.shadow};
-          padding: 20px 20px 16px;
-        }
-        .soko-stories-strip-rail {
-          display: flex;
-          gap: 14px;
-          overflow-x: auto;
-          padding: 4px 2px 8px;
-          scroll-snap-type: x mandatory;
-          -webkit-overflow-scrolling: touch;
-          scrollbar-width: none;
-          -ms-overflow-style: none;
-        }
-        .soko-stories-strip-rail::-webkit-scrollbar { display: none; }
-        .soko-stories-strip-item {
-          flex-shrink: 0;
-          width: 84px;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 8px;
-          background: none;
-          border: none;
-          cursor: pointer;
-          padding: 0;
-          scroll-snap-align: start;
-          -webkit-tap-highlight-color: transparent;
-        }
-        .soko-stories-strip-item:active { opacity: 0.88; }
-        .soko-stories-strip-create {
-          width: 74px;
-          height: 74px;
-          border-radius: 50%;
-          box-sizing: border-box;
-          border: 2px dashed ${T.green};
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: #fff;
-          background: ${T.greenL};
-          flex-shrink: 0;
-        }
-        .soko-stories-strip-more {
-          width: 74px;
-          height: 74px;
-          border-radius: 50%;
-          box-sizing: border-box;
-          border: 1.5px solid ${T.gray200};
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          color: ${T.gray700};
-          background: ${T.gray50};
-          flex-shrink: 0;
-        }
-        .soko-stories-strip-avatar {
-          width: 100%;
-          height: 100%;
-          border-radius: 50%;
-          overflow: hidden;
-          background: linear-gradient(135deg,#0F9D58,#34c77a);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 22px;
-          font-weight: 800;
-          color: #fff;
-        }
-        .soko-stories-strip-name {
-          font-size: 11.5px;
-          font-weight: 700;
-          color: ${T.gray900};
-          max-width: 80px;
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-          text-align: center;
-        }
-        .soko-stories-strip-name.is-viewed {
-          color: ${T.gray500};
-        }
-        .soko-stories-strip-name.is-create {
-          color: ${T.green};
-          font-weight: 800;
-        }
-        .soko-stories-strip-name.is-shop {
-          font-weight: 700;
-          color: ${T.gray900};
-        }
-        .soko-stories-strip-count {
-          position: absolute;
-          right: -2px;
-          bottom: -1px;
-          min-width: 20px;
-          height: 20px;
-          padding: 0 5px;
-          border-radius: 999px;
-          background: ${STORY_RING_ACTIVE};
-          color: #fff;
-          font-size: 10.5px;
-          font-weight: 800;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border: 2.5px solid #fff;
-          box-sizing: border-box;
-          line-height: 1;
-          z-index: 2;
-        }
-        .soko-stories-strip-count.is-all-viewed {
-          background: ${T.gray500};
-          color: #fff;
-        }
-        .soko-stories-add-btn {
-          flex-shrink: 0;
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          background: ${T.greenL};
-          color: ${T.greenD};
-          border: none;
-          border-radius: 999px;
-          padding: 9px 16px;
-          font-size: 13px;
-          font-weight: 800;
-          cursor: pointer;
-          font-family: inherit;
-          white-space: nowrap;
-          transition: background 0.15s;
-        }
-        .soko-stories-add-btn:hover { background: #d9f0e3; }
-        @media (max-width: 768px) {
-          .soko-stories-strip {
-            padding: 14px 14px 10px !important;
-          }
-          .soko-stories-card { padding: 16px 14px 14px; border-radius: 16px; }
-          .soko-stories-strip-rail { gap: 16px; }
-          .soko-stories-strip-item { width: 66px; }
-          .soko-stories-strip-create { width: 56px; height: 56px; }
-          .soko-stories-strip-name { font-size: 10.5px; max-width: 62px; }
-          .soko-stories-strip-count {
-            min-width: 17px;
-            height: 17px;
-            font-size: 9px;
-            padding: 0 4px;
-          }
-          .soko-stories-add-btn {
-            padding: 7px 12px;
-            font-size: 12px;
-          }
-        }
-      `}</style>
-
-      <div style={{ maxWidth: 1400, margin: '0 auto' }}>
-        <div className="soko-stories-card">
-          <div style={{
-            display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
-            marginBottom: 14, gap: 12,
-          }}>
-            <div style={{ minWidth: 0 }}>
-              <div style={{
-                fontSize: 11, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase',
-                color: T.green, marginBottom: 3,
-              }}>
-                Now live
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span className="soko-section-title" style={{ fontFamily: T.fontDisplay, fontSize: 19, fontWeight: 800, color: T.gray900, letterSpacing: -0.3 }}>
-                  Stories
-                </span>
-                {groups.length > 0 && (
-                  <span style={{
-                    background: T.greenL, color: T.greenD,
-                    fontSize: 11.5, fontWeight: 800, borderRadius: 999, padding: '2px 9px',
-                  }}>
-                    {groups.length}
-                  </span>
-                )}
-              </div>
-            </div>
-            <button
-              type="button"
-              className="soko-stories-add-btn"
-              onClick={onCreateStory}
-            >
-              {Icon.plus(13)} Add yours
-            </button>
-          </div>
-
-          <div className="soko-scroll soko-stories-strip-rail">
-            <button type="button" className="soko-stories-strip-item" onClick={onCreateStory} aria-label="Create story">
-              <div className="soko-stories-strip-create" style={{ position: 'relative' }}>
-                {ownAvatarUrl && (
-                  <img
-                    src={ownAvatarUrl}
-                    alt=""
-                    style={{
-                      position: 'absolute', inset: 3,
-                      width: 'calc(100% - 6px)', height: 'calc(100% - 6px)',
-                      borderRadius: '50%', objectFit: 'cover', opacity: 0.45,
-                    }}
-                  />
-                )}
-                <span style={{
-                  position: 'relative', zIndex: 1,
-                  width: 28, height: 28, borderRadius: '50%',
-                  background: T.green, color: '#fff',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 20, fontWeight: 700, lineHeight: 1,
-                  boxShadow: '0 4px 12px rgba(15,157,88,0.35)',
-                }}>
-                  {Icon.plus(17)}
-                </span>
-              </div>
-              <span className="soko-stories-strip-name is-create">Your status</span>
-            </button>
-
-            {loading
-              ? [1, 2, 3, 4, 5, 6, 7, 8].map(i => (
-                <div key={i} className="soko-stories-strip-item" aria-hidden="true">
-                  <div className="skeleton" style={{ width: 64, height: 64, borderRadius: '50%', flexShrink: 0 }} />
-                  <div className="skeleton" style={{ width: 48, height: 10, borderRadius: 4 }} />
-                </div>
-              ))
-              : displayGroups.map((g) => {
-                const s = g.lead
-                const isOwn = g.user_id === currentUserId
-                const shop = shopByOwner[g.user_id]
-                const isShop = !!(shop?.name)
-                const displayName = isOwn
-                  ? 'You'
-                  : isShop
-                    ? shop.name
-                    : (s.profiles?.full_name?.split(' ')[0] || 'Seller')
-                const logoUrl = isShop
-                  ? (shop.logo_url || s.profiles?.avatar_url || s.media_urls?.[0] || null)
-                  : (s.profiles?.avatar_url || s.media_urls?.[0] || null)
-                const initial = (displayName || 'S')[0].toUpperCase()
-                const ringItems = g.items.map(st => ({
-                  id: st.id,
-                  viewed: viewedIds.has(st.id),
-                }))
-                const unviewed = ringItems.filter(x => !x.viewed).length
-                const allViewed = unviewed === 0
-                const count = g.count
-
-                return (
-                  <button
-                    key={g.user_id || s.id}
-                    type="button"
-                    className="soko-stories-strip-item"
-                    onClick={() => handleOpen(g)}
-                    aria-label={`${displayName}: ${count} status${count === 1 ? '' : 'es'}, ${unviewed} unviewed`}
-                    title={
-                      allViewed
-                        ? `${count} status${count === 1 ? '' : 'es'} · all viewed`
-                        : `${unviewed} unviewed of ${count}`
-                    }
-                  >
-                    <div style={{ position: 'relative' }}>
-                      <StoryStatusRing items={ringItems} size={74}>
-                        <div className="soko-stories-strip-avatar">
-                          {logoUrl
-                            ? <img src={logoUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                            : initial}
-                        </div>
-                      </StoryStatusRing>
-                      {count > 1 && (
-                        <span
-                          className={`soko-stories-strip-count${allViewed ? ' is-all-viewed' : ''}`}
-                          aria-hidden="true"
-                        >
-                          {count > 9 ? '9+' : count}
-                        </span>
-                      )}
-                    </div>
-                    <span className={`soko-stories-strip-name${allViewed && !isOwn ? ' is-viewed' : ''}${isShop && !isOwn ? ' is-shop' : ''}`}>
-                      {displayName}
-                    </span>
-                  </button>
-                )
-              })}
-
-            {!loading && hasMoreStories && (
-              <button
-                type="button"
-                className="soko-stories-strip-item"
-                onClick={() => navigate('/status')}
-                aria-label={`View ${groups.length - HOME_STORIES_DISPLAY_CAP} more stories`}
-              >
-                <div className="soko-stories-strip-more">
-                  {Icon.chevR(20)}
-                </div>
-                <span className="soko-stories-strip-name">View more</span>
-              </button>
-            )}
-          </div>
-
-          {!loading && groups.length === 0 && (
-            <p style={{ fontSize: 13, color: T.gray600, margin: '4px 0 0', fontWeight: 500 }}>
-              No live stories yet — be the first to share a status.
-            </p>
-          )}
         </div>
       </div>
     </section>
@@ -5148,9 +4631,6 @@ export default function Home() {
   // ── Stories (compact LiveStoriesCard + viewer/upload) ─────
   const [stories, setStories] = useState([])
   const [storiesLoading, setStoriesLoading] = useState(true)
-  const [viewing, setViewing] = useState(null)
-  const [viewerStories, setViewerStories] = useState([])
-  const [showUpload, setShowUpload] = useState(false)
 
   // ── Animation / location (preserved) ──────────────────────
   const [isFocused, setIsFocused] = useState(false)
@@ -5187,35 +4667,8 @@ export default function Home() {
     return () => { if (ch) supabase.removeChannel(ch) }
   }, [user?.id])
 
-  function openStoryGroup(groupLeader, groupMeta) {
-    // Prefer ordered items from the strip when provided; else filter flat list
-    const group = (groupMeta?.items?.length
-      ? groupMeta.items
-      : stories.filter(s => s.user_id === groupLeader.user_id)
-    ).slice().sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
-    const ids = group.map(x => x.id).filter(Boolean)
-
-    // Local viewed state (shared key with HomeStatusRow / StatusPage)
-    try {
-      const prev = JSON.parse(localStorage.getItem('viewedStories') || '[]')
-      const next = new Set([...(Array.isArray(prev) ? prev : []), ...ids])
-      localStorage.setItem('viewedStories', JSON.stringify([...next]))
-    } catch { /* ignore */ }
-
-    if (user?.id) {
-      ids.forEach(id => {
-        supabase.from('status_views')
-          .upsert({ status_id: id, viewer_id: user.id }, { onConflict: 'status_id,viewer_id' })
-          .then(() => {}, () => {})
-      })
-    }
-    setViewerStories(group.length > 0 ? group : [groupLeader])
-    setViewing(0)
-  }
-
   function handleCreateStory() {
     if (!user) { navigate('/login'); return }
-    setShowUpload(true)
   }
 
   /** Map completed stages → progress % (auth 28, listings 68, sections 100) */
@@ -5631,11 +5084,10 @@ export default function Home() {
       </div>
 
       <div className={!storiesLoading ? 'soko-swap-in' : undefined}>
-        <HomeStoriesStrip
+        <HomeStatusSection
           navigate={navigate}
           stories={stories}
           loading={storiesLoading}
-          onOpenStory={openStoryGroup}
           onCreateStory={handleCreateStory}
           currentUserId={user?.id}
         />
@@ -5677,19 +5129,7 @@ export default function Home() {
 
       {/* Mobile bottom nav: mounted once in App.jsx (Home / Explore / Sell / Chats / Profile) */}
 
-      {viewing !== null && (
-        <StoryViewer stories={viewerStories} startIndex={viewing} currentUserId={user?.id} onClose={() => setViewing(null)} />
-      )}
-      {showUpload && (
-        <StatusUploadModal
-          user={user}
-          onClose={() => setShowUpload(false)}
-          onSuccess={() => {
-            setShowUpload(false)
-            if (user?.id) fetchAllActiveStories(user.id, 'All').then(setStories)
-          }}
-        />
-      )}
+
     </div>
   )
 }

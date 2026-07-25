@@ -1317,7 +1317,6 @@ const S = {
     minHeight: 0,
     background: '#fff',
     fontFamily: 'system-ui, -apple-system, sans-serif',
-    overflow: 'hidden',
   },
 
   brandRow: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '16px 20px 12px', flexShrink: 0 },
@@ -1496,7 +1495,7 @@ const S = {
     boxShadow: '0 4px 14px rgba(26,122,74,0.35)',
   },
 
-  list: { flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', WebkitOverflowScrolling: 'touch' },
+  list: { flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', touchAction: 'pan-y' },
 
   // === MODERN CHAT ROW ===
   chatRow: {
