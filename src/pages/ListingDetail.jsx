@@ -452,6 +452,18 @@ export default function ListingDetail() {
         .ld-thumb-item:hover { border-color: #1a7a4a; }
         .ld-share-opt:hover { background: #f9fafb !important; }
 
+        /* Mobile sticky bar — sits above bottom nav */
+        .ld-mobile-bar {
+          border-radius: 16px 16px 0 0;
+          backdrop-filter: blur(20px);
+          -webkit-backdrop-filter: blur(20px);
+          background: rgba(255,255,255,.96) !important;
+        }
+        .ld-mobile-bar button:active { transform: scale(.97); }
+        .ld-mobile-bar button { transition: transform .12s, opacity .12s; }
+        .ld-mobile-bar button:active:not(:disabled) { opacity: .85; }
+        .ld-mobile-bar button:disabled { opacity: .5; }
+
         /* Two column layout breakpoints */
         @media (max-width: 900px) {
           .ld-two-col { flex-direction: column !important; }
@@ -1371,19 +1383,19 @@ export default function ListingDetail() {
       {!isOwner ? (
         <div className="ld-mobile-bar" style={S.mobileBar}>
           <button style={S.mobileCallBtn} onClick={() => seller?.phone && (window.location.href = `tel:${seller.phone}`)}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.4 2 2 0 0 1 3.58 1.22h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-            Call Seller
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.4 2 2 0 0 1 3.58 1.22h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+            <span>Call Seller</span>
           </button>
           <button style={S.mobileChatBtn} onClick={handleChatWithSeller}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            Chat with Seller
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <span>Chat with Seller</span>
           </button>
         </div>
       ) : (
         <div className="ld-mobile-bar" style={S.mobileBar}>
           {!isListingFeatured(listing) && (
             <button
-              style={{ ...S.mobileCallBtn, color: '#b45309', borderColor: '#fde68a' }}
+              style={{ ...S.mobileCallBtn, color: '#b45309', borderColor: '#fde68a', background: '#fffbeb' }}
               disabled={featuring}
               onClick={async () => {
                 if (!currentUser || featuring) return
@@ -1402,11 +1414,15 @@ export default function ListingDetail() {
                 }
               }}
             >
-              {featuring ? '…' : '⭐ Feature'}
+              <span>{featuring ? '…' : '⭐ Feature'}</span>
             </button>
           )}
-          <button style={S.mobileCallBtn} onClick={() => navigate('/post/edit/' + listing.id)}>Edit</button>
-          <button style={{ ...S.mobileChatBtn, background: '#dc2626' }} onClick={() => setShowDeleteConfirm(true)}>Delete</button>
+          <button style={S.mobileCallBtn} onClick={() => navigate('/post/edit/' + listing.id)}>
+            <span>Edit</span>
+          </button>
+          <button style={{ ...S.mobileChatBtn, background: '#dc2626', boxShadow: '0 4px 12px rgba(220,38,38,.28)' }} onClick={() => setShowDeleteConfirm(true)}>
+            <span>Delete</span>
+          </button>
         </div>
       )}
 
@@ -1687,9 +1703,9 @@ const S = {
   barChatBtn:      { display: 'flex', alignItems: 'center', gap: 7, background: '#1a7a4a', color: '#fff', border: 'none', borderRadius: 10, padding: '11px 26px', fontSize: 14, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(26,122,74,.28)' },
 
   // Mobile footer
-  mobileBar:     { position: 'fixed', bottom: 60, left: 0, right: 0, zIndex: 100, background: '#fff', borderTop: '1px solid #e5e7eb', padding: '10px 14px', paddingBottom: 'calc(10px + env(safe-area-inset-bottom))', display: 'none', gap: 10, boxShadow: '0 -4px 20px rgba(0,0,0,.08)' },
-  mobileCallBtn: { flex: 1, background: '#fff', border: '1.5px solid #d1d5db', borderRadius: 10, padding: '12px', fontSize: 14, fontWeight: 700, color: '#374151', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 },
-  mobileChatBtn: { flex: 2, background: '#1a7a4a', color: '#fff', border: 'none', borderRadius: 10, padding: '12px', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, boxShadow: '0 4px 12px rgba(26,122,74,.28)' },
+  mobileBar:     { position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100, background: '#fff', borderTop: '1px solid #e5e7eb', padding: '10px 14px', paddingBottom: 'calc(10px + env(safe-area-inset-bottom, 0px))', display: 'none', gap: 10, boxShadow: '0 -4px 20px rgba(0,0,0,.08)' },
+  mobileCallBtn: { flex: 1, minWidth: 0, background: '#fff', border: '1.5px solid #d1d5db', borderRadius: 12, padding: '13px 8px', fontSize: 13.5, fontWeight: 700, color: '#374151', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontFamily: 'inherit', transition: 'background .12s, border-color .12s' },
+  mobileChatBtn: { flex: 1, minWidth: 0, background: '#1a7a4a', color: '#fff', border: 'none', borderRadius: 12, padding: '13px 8px', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontFamily: 'inherit', boxShadow: '0 4px 14px rgba(26,122,74,.3)' },
 
   // Modals
   overlay:     { position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', backdropFilter: 'blur(4px)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' },
