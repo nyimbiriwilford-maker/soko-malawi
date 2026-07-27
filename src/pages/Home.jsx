@@ -4787,7 +4787,7 @@ export default function Home() {
         <CategoryGrid navigate={navigate} onCategoryChange={handleCategoryChange} />
       </div>
 
-      <div className="soko-settle soko-settle-d3">
+      <div className="soko-settle soko-settle-d3 soko-web-only">
         <FeaturedRevenueBanner navigate={navigate} user={user} />
       </div>
 
