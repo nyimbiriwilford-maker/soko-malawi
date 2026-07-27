@@ -200,21 +200,21 @@ function GlobalStyles() {
         animation: sokoSettle 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
       }
       /* Scroll-triggered fade-up for LookingForSection */
-      .lf-fade-up {
-        opacity: 0;
-        transform: translateY(24px);
-        transition: opacity 0.5s ease, transform 0.5s ease;
+      @keyframes lfFadeSlide {
+        from { opacity: 0; transform: translateY(14px); }
+        to   { opacity: 1; transform: translateY(0); }
       }
-      .lf-fade-up.lf-visible {
-        opacity: 1;
-        transform: translateY(0);
+      .lf-fade-in {
+        animation: lfFadeSlide 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+        will-change: opacity, transform;
       }
       @media (prefers-reduced-motion: reduce) {
-        .soko-settle, .soko-swap-in, .soko-loadbar-fill {
+        .soko-settle, .soko-swap-in, .soko-loadbar-fill, .lf-fade-in {
           animation: none !important;
           transition: none !important;
         }
         .soko-settle, .soko-swap-in { opacity: 1; transform: none; }
+        .lf-fade-in { opacity: 1; transform: none; }
         .soko-loadbar { transition: opacity 0.15s ease; }
       }
       @keyframes liveRing { 0%,100% { box-shadow:0 0 0 3px rgba(234,67,53,.25);} 50% { box-shadow:0 0 0 7px rgba(234,67,53,.06);} }
@@ -2304,7 +2304,7 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
   const ArrowR = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
 
   return (
-    <section ref={lfRef} className={'soko-section-pad soko-lf-section lf-fade-up' + (lfVisible ? ' lf-visible' : '')} style={{ padding: '4px 20px 16px', background: '#fafbfa' }}>
+    <section ref={lfRef} className={'soko-section-pad soko-lf-section' + (lfVisible ? ' lf-fade-in' : '')} style={{ padding: '4px 20px 16px', background: '#fafbfa' }}>
       <style>{`
         ${LOOKING_FOR_CARD_CSS}
         .soko-lf-section .soko-lf-head {
@@ -4979,6 +4979,7 @@ export default function Home() {
         display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
         height:40, padding:'0 20px',
         background: 'linear-gradient(180deg, #F8FAFC 0%, #fafbfa 100%)',
+        opacity: sectionsLoading ? 0 : 1, transition: 'opacity 0.25s ease',
       }}>
         <div style={{
           width:'100%', maxWidth:160, height:1, borderRadius:1,
