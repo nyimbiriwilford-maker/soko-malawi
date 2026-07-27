@@ -3772,7 +3772,7 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
             padding: 0;
             align-items: start;
           }
-          .hero-content { max-width: 100%; padding: 24px 16px; box-sizing: border-box; }
+          .hero-content { position: relative; z-index: 1; max-width: 100%; padding: 24px 16px; box-sizing: border-box; }
           .hero-content h1 { font-size: 32px !important; line-height: 1.15 !important; overflow-wrap: break-word; word-break: break-word; hyphens: auto; }
           .hero-content p { font-size: 15px !important; line-height: 1.5 !important; overflow-wrap: break-word; word-break: break-word; hyphens: auto; }
           .hero-visual {
