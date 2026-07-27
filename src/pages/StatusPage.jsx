@@ -577,6 +577,13 @@ function StatusPageInner({ user, navigate }) {
     try { return new Set(JSON.parse(localStorage.getItem('viewedStories') || '[]')) }
     catch { return new Set() }
   })
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth)
+  useEffect(() => {
+    const handler = () => setWindowWidth(window.innerWidth)
+    window.addEventListener('resize', handler)
+    return () => window.removeEventListener('resize', handler)
+  }, [])
+  const isMobile = windowWidth < 768
 
   function reloadStories() {
     setStoriesLoaded(false)
@@ -802,100 +809,101 @@ function StatusPageInner({ user, navigate }) {
         onCta={() => setShowUpload(true)}
       />
 
-      {/* ── Page hero (photo + scrim, like Looking For) ── */}
-      <section className="st-hero" style={{
-        position: 'relative',
-        overflow: 'hidden',
-        borderBottom: `1px solid ${T.border}`,
-      }}>
-        <div
-          aria-hidden
-          className="st-hero-bg"
-          style={{
-            position: 'absolute', inset: 0,
-            backgroundImage: `url(${STATUS_HERO_IMG})`,
-            backgroundSize: 'cover',
-            backgroundPosition: 'center 40%',
-            transform: 'scale(1.02)',
-          }}
-        />
-        <div aria-hidden style={{
-          position: 'absolute', inset: 0, pointerEvents: 'none',
-          background: `
-            linear-gradient(105deg,
-              rgba(6, 40, 22, 0.92) 0%,
-              rgba(10, 80, 45, 0.82) 42%,
-              rgba(15, 157, 88, 0.55) 72%,
-              rgba(15, 157, 88, 0.35) 100%
-            ),
-            linear-gradient(180deg,
-              rgba(0,0,0,0.15) 0%,
-              transparent 45%,
-              rgba(0,0,0,0.25) 100%
-            )
-          `,
-        }} />
-        <div className="st-hero-inner" style={{
-          position: 'relative', zIndex: 1,
-          maxWidth: 1400, margin: '0 auto',
-          padding: '32px 24px 28px',
-          display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20,
+      {!isMobile && (
+        <section className="st-hero" style={{
+          position: 'relative',
+          overflow: 'hidden',
+          borderBottom: `1px solid ${T.border}`,
         }}>
-          <div style={{ minWidth: 0, flex: 1 }}>
-            <div style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              background: 'rgba(255,255,255,0.14)',
-              border: '1px solid rgba(255,255,255,0.22)',
-              backdropFilter: 'blur(8px)',
-              borderRadius: 999, padding: '5px 11px', marginBottom: 10,
-              fontSize: 11, fontWeight: 800, letterSpacing: 0.7, textTransform: 'uppercase',
-              color: 'rgba(255,255,255,0.95)',
-            }}>
-              <span style={{
-                width: 7, height: 7, borderRadius: '50%', background: '#4ade80',
-                boxShadow: '0 0 0 3px rgba(74,222,128,0.3)',
-              }} />
-              Live on SokoMw
-            </div>
-            <h1 className="st-hero-title" style={{
-              fontFamily: T.fontDisplay,
-              fontSize: 'clamp(22px, 3.5vw, 32px)',
-              fontWeight: 800, color: '#fff', margin: '0 0 8px',
-              letterSpacing: -0.5, lineHeight: 1.15,
-              textShadow: '0 2px 18px rgba(0,0,0,0.35)',
-            }}>
-              Status updates
-            </h1>
-            <p className="st-hero-sub" style={{
-              margin: 0, fontSize: 14.5, fontWeight: 500,
-              color: 'rgba(255,255,255,0.9)', maxWidth: 480, lineHeight: 1.5,
-              textShadow: '0 1px 10px rgba(0,0,0,0.3)',
-            }}>
-              See what sellers are posting right now — availability, deals, and work across Malawi.
-            </p>
-          </div>
-          <button
-            type="button"
-            className="st-hero-cta"
-            onClick={() => setShowUpload(true)}
+          <div
+            aria-hidden
+            className="st-hero-bg"
             style={{
-              flexShrink: 0,
-              background: T.orange,
-              color: '#1a1a1a',
-              border: 'none',
-              borderRadius: 12,
-              padding: '12px 18px',
-              fontSize: 14, fontWeight: 800,
-              cursor: 'pointer',
-              fontFamily: 'inherit',
-              boxShadow: '0 4px 18px rgba(249,171,0,0.4)',
-              whiteSpace: 'nowrap',
+              position: 'absolute', inset: 0,
+              backgroundImage: `url(${STATUS_HERO_IMG})`,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center 40%',
+              transform: 'scale(1.02)',
             }}
-          >
-            + Post status
-          </button>
-        </div>
-      </section>
+          />
+          <div aria-hidden style={{
+            position: 'absolute', inset: 0, pointerEvents: 'none',
+            background: `
+              linear-gradient(105deg,
+                rgba(6, 40, 22, 0.92) 0%,
+                rgba(10, 80, 45, 0.82) 42%,
+                rgba(15, 157, 88, 0.55) 72%,
+                rgba(15, 157, 88, 0.35) 100%
+              ),
+              linear-gradient(180deg,
+                rgba(0,0,0,0.15) 0%,
+                transparent 45%,
+                rgba(0,0,0,0.25) 100%
+              )
+            `,
+          }} />
+          <div className="st-hero-inner" style={{
+            position: 'relative', zIndex: 1,
+            maxWidth: 1400, margin: '0 auto',
+            padding: '32px 24px 28px',
+            display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20,
+          }}>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+                background: 'rgba(255,255,255,0.14)',
+                border: '1px solid rgba(255,255,255,0.22)',
+                backdropFilter: 'blur(8px)',
+                borderRadius: 999, padding: '5px 11px', marginBottom: 10,
+                fontSize: 11, fontWeight: 800, letterSpacing: 0.7, textTransform: 'uppercase',
+                color: 'rgba(255,255,255,0.95)',
+              }}>
+                <span style={{
+                  width: 7, height: 7, borderRadius: '50%', background: '#4ade80',
+                  boxShadow: '0 0 0 3px rgba(74,222,128,0.3)',
+                }} />
+                Live on SokoMw
+              </div>
+              <h1 className="st-hero-title" style={{
+                fontFamily: T.fontDisplay,
+                fontSize: 'clamp(22px, 3.5vw, 32px)',
+                fontWeight: 800, color: '#fff', margin: '0 0 8px',
+                letterSpacing: -0.5, lineHeight: 1.15,
+                textShadow: '0 2px 18px rgba(0,0,0,0.35)',
+              }}>
+                Status updates
+              </h1>
+              <p className="st-hero-sub" style={{
+                margin: 0, fontSize: 14.5, fontWeight: 500,
+                color: 'rgba(255,255,255,0.9)', maxWidth: 480, lineHeight: 1.5,
+                textShadow: '0 1px 10px rgba(0,0,0,0.3)',
+              }}>
+                See what sellers are posting right now — availability, deals, and work across Malawi.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="st-hero-cta"
+              onClick={() => setShowUpload(true)}
+              style={{
+                flexShrink: 0,
+                background: T.orange,
+                color: '#1a1a1a',
+                border: 'none',
+                borderRadius: 12,
+                padding: '12px 18px',
+                fontSize: 14, fontWeight: 800,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                boxShadow: '0 4px 18px rgba(249,171,0,0.4)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              + Post status
+            </button>
+          </div>
+        </section>
+      )}
 
       <div className="st-main" style={{
         maxWidth: 1400, margin: '0 auto',
