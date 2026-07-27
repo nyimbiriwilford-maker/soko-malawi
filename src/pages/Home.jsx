@@ -199,6 +199,16 @@ function GlobalStyles() {
       .soko-swap-in {
         animation: sokoSettle 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
       }
+      /* Scroll-triggered fade-up for LookingForSection */
+      .lf-fade-up {
+        opacity: 0;
+        transform: translateY(24px);
+        transition: opacity 0.5s ease, transform 0.5s ease;
+      }
+      .lf-fade-up.lf-visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
       @media (prefers-reduced-motion: reduce) {
         .soko-settle, .soko-swap-in, .soko-loadbar-fill {
           animation: none !important;
@@ -1668,7 +1678,7 @@ function LatestListingsSection({ listings, navigate, loading, user, savedIds, on
   if (!loading && latest.length === 0) return null
 
   return (
-    <section className="soko-latest-section" style={{ padding: '0 20px clamp(28px,4.5vw,48px) 20px', background: '#F8FAFC' }}>
+    <section className="soko-latest-section" style={{ padding: '0 20px clamp(4px,0.5vw,8px) 20px', background: '#F8FAFC' }}>
       <style>{`
         @keyframes latestFadeSlide {
           from { opacity: 0; transform: translateY(20px); }
@@ -2276,11 +2286,25 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
     (activeDistrict && activeDistrict !== 'All Districts' ? activeDistrict : null)
   const nearCount = filtered.filter(r => (r._locScore || 0) >= 85).length
 
+  const [lfVisible, setLfVisible] = React.useState(false)
+  const lfRef = React.useRef(null)
+
+  React.useEffect(() => {
+    const el = lfRef.current
+    if (!el) return
+    const io = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setLfVisible(true); io.disconnect() } },
+      { threshold: 0.08 }
+    )
+    io.observe(el)
+    return () => io.disconnect()
+  }, [])
+
   const ArrowL = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
   const ArrowR = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
 
   return (
-    <section className="soko-section-pad soko-lf-section" style={{ padding: '22px 20px 16px', background: '#fafbfa' }}>
+    <section ref={lfRef} className={'soko-section-pad soko-lf-section lf-fade-up' + (lfVisible ? ' lf-visible' : '')} style={{ padding: '4px 20px 16px', background: '#fafbfa' }}>
       <style>{`
         ${LOOKING_FOR_CARD_CSS}
         .soko-lf-section .soko-lf-head {
@@ -2421,7 +2445,7 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
           scroll-snap-align: start;
         }
         @media (max-width: 768px) {
-          .soko-lf-section { padding: 16px 14px 12px !important; }
+          .soko-lf-section { padding: 4px 14px 12px !important; }
           .soko-lf-section .soko-lf-head {
             flex-wrap: wrap !important;
             align-items: flex-start !important;
@@ -4893,6 +4917,7 @@ export default function Home() {
         .bridge-divider { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 0 12px; background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%); }
         @media (max-width: 980px) {
           .bc-bridge { height: 28px !important; }
+          .ll-lf-bridge { height: 24px !important; }
         }
         @media (max-width: 767px) {
           .section-divider { gap: 4px; padding: 6px 0 4px; }
@@ -4948,6 +4973,17 @@ export default function Home() {
           onToggleSave={toggleListingSave}
           excludeIds={featuredIdSet}
         />
+      </div>
+
+      <div className="ll-lf-bridge" style={{
+        display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+        height:40, padding:'0 20px',
+        background: 'linear-gradient(180deg, #F8FAFC 0%, #fafbfa 100%)',
+      }}>
+        <div style={{
+          width:'100%', maxWidth:160, height:1, borderRadius:1,
+          background:'linear-gradient(90deg, transparent, #D1D5DB, transparent)',
+        }} />
       </div>
 
       <div className={!sectionsLoading ? 'soko-swap-in' : undefined}>
