@@ -127,6 +127,35 @@ export function rotateFeaturedFairly(listings, opts = {}) {
   return ordered
 }
 
+/**
+ * Phase — Featured promotion priority sort.
+ * Separates listings into tiers (paid promo → free promo → admin-featured),
+ * rotates fairly within each tier, then concatenates in priority order.
+ *
+ * Tiers (listing._promoTier):
+ *   0 = paid promotion  (listing_promotions.price_mwk > 0)
+ *   1 = free promotion  (listing_promotions.price_mwk = 0)
+ *   2 = admin-featured  (no matching listing_promotions row)
+ *
+ * @param {Array}  listings  Active featured rows with _promoTier set
+ * @param {Object} [opts]   Same options passed to rotateFeaturedFairly
+ * @returns {Array}
+ */
+export function prioritizeFeatured(listings, opts = {}) {
+  if (!listings?.length) return []
+  const tiers = [[], [], []]
+  for (const l of listings) {
+    const t = l._promoTier ?? 2
+    if (tiers[t]) tiers[t].push(l)
+    else tiers[2].push(l)
+  }
+  const out = []
+  for (const group of tiers) {
+    if (group.length) out.push(...rotateFeaturedFairly(group, opts))
+  }
+  return out
+}
+
 export function flashTimeLeft(expiresAt) {
   const ms = new Date(expiresAt) - Date.now()
   if (ms <= 0) return null

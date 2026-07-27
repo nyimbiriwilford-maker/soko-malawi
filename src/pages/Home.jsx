@@ -41,7 +41,8 @@ import {
   ALL_CATEGORIES,
 } from '../constants/homeConstants'
 import {
-  isFlashActive, isListingFeatured, rotateFeaturedFairly, sortProductsSmart, trackSearch,
+  isFlashActive, isListingFeatured, prioritizeFeatured, rotateFeaturedFairly,
+  sortProductsSmart, trackSearch,
 } from '../utils/homeUtils'
 import { buildChatPath } from '../utils/chatSources'
 import {
@@ -4582,6 +4583,24 @@ export default function Home() {
 
       const [{ data: featuredRows }, { data: recentRows }] = await Promise.all([featuredQuery, recentQuery])
 
+      // Fetch promotion data to distinguish paid vs free promotions
+      let promoMap = {}
+      if (featuredRows?.length) {
+        const fIds = featuredRows.map(r => r.id).filter(Boolean)
+        if (fIds.length) {
+          const { data: promos } = await supabase
+            .from('listing_promotions')
+            .select('listing_id, price_mwk, status')
+            .in('listing_id', fIds)
+            .eq('status', 'active')
+          if (promos?.length) {
+            for (const p of promos) {
+              promoMap[p.listing_id] = { price_mwk: p.price_mwk, status: p.status }
+            }
+          }
+        }
+      }
+
       async function enrichListingRows(rows) {
         let withShopRatings = rows || []
         const shopIds = [...new Set(withShopRatings.map(l => l.shop_id).filter(Boolean))]
@@ -4620,12 +4639,23 @@ export default function Home() {
         enrichListingRows(recentRows || []),
       ])
 
-      // Featured section: dedicated query + equal product rotation (Phase 3.2)
+      // Featured section: promotion-priority sort + fair rotation within tiers
+      const featuredActive = featuredEnriched.filter(l => isListingFeatured(l))
+      const withPromoTier = featuredActive.map(l => {
+        const promo = promoMap[l.id]
+        const hasPromo = promo && promo.status === 'active'
+        return {
+          ...l,
+          _promoTier: hasPromo ? (promo.price_mwk > 0 ? 0 : 1) : 2,
+          _isPaidPromo: hasPromo && promo.price_mwk > 0,
+        }
+      })
       setFeaturedListings(
-        rotateFeaturedFairly(
-          featuredEnriched.filter(l => isListingFeatured(l)),
-          { intervalMs: 30_000, maxPerSeller: Number.POSITIVE_INFINITY, now: Date.now() + sessionShift * 30_000 },
-        ),
+        prioritizeFeatured(withPromoTier, {
+          intervalMs: 30_000,
+          maxPerSeller: Number.POSITIVE_INFINITY,
+          now: Date.now() + sessionShift * 30_000,
+        }),
       )
 
       // Latest / general feed: recent posts only (not used for featured discovery)

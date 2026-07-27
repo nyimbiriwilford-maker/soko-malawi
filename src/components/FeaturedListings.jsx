@@ -84,6 +84,22 @@ function FeaturedCard({ listing, onClick }) {
               {catIcon(listing.category).emoji}
             </div>
         }
+        {listing._isPaidPromo && (
+          <div style={{
+            position: 'absolute', top: 10, left: 10,
+            background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)',
+            borderRadius: 6, padding: '3px 7px',
+            display: 'flex', alignItems: 'center', gap: 4,
+            fontSize: 10, fontWeight: 700, color: '#fff',
+            letterSpacing: '0.03em', textTransform: 'uppercase',
+            lineHeight: 1,
+          }}>
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+            </svg>
+            Promoted
+          </div>
+        )}
       </div>
 
       <div style={{
