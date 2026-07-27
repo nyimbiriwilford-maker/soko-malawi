@@ -522,6 +522,7 @@ function GlobalStyles() {
           max-width: none !important;
           width: 100% !important;
         }
+        .cat-header-row { padding: 0 14px; margin-bottom: 12px !important; }
         .soko-cat-grid {
           display: flex !important;
           flex-direction: row !important;
@@ -4890,13 +4891,15 @@ export default function Home() {
         .divider-desk { display: inline; }
         .divider-mob { display: none; }
         .bridge-divider { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 0 12px; background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%); }
+        @media (max-width: 980px) {
+          .bc-bridge { height: 28px !important; }
+        }
         @media (max-width: 767px) {
           .section-divider { gap: 4px; padding: 6px 0 4px; }
           .section-gradient { height: 16px; }
           .divider-desk { display: none; }
           .divider-mob { display: inline; }
           .bridge-divider { display: none; }
-          .bc-bridge { height: 28px !important; }
         }
       `}</style>
       <div className="section-divider">
