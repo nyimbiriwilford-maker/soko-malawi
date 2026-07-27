@@ -4849,11 +4849,6 @@ export default function Home() {
         <FeaturedRevenueBanner navigate={navigate} user={user} />
       </div>
 
-      {/* — Premium Banner → Status transition — */}
-      <div className="banner-status-bridge">
-        <div className="bs-bridge-line" />
-      </div>
-
       {/* Data sections: skeleton in place → content swap (no remount keys — those stacked thrash) */}
       <div className={!storiesLoading ? 'soko-swap-in' : undefined}>
         <HomeStatusSection
@@ -4872,23 +4867,12 @@ export default function Home() {
         .divider-desk { display: inline; }
         .divider-mob { display: none; }
         .bridge-divider { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 0 12px; background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%); }
-        .banner-status-bridge {
-          display: flex; flex-direction: column; align-items: center; justify-content: center;
-          height: 40px; padding: 0 20px;
-          background: linear-gradient(180deg, #F8FAFC 0%, #FFFFFF 100%);
-        }
-        .bs-bridge-line {
-          width: 100%; max-width: 160px; height: 1px;
-          border-radius: 1px;
-          background: linear-gradient(90deg, transparent, #D1D5DB, transparent);
-        }
         @media (max-width: 767px) {
           .section-divider { gap: 4px; padding: 6px 0 4px; }
           .section-gradient { height: 16px; }
           .divider-desk { display: none; }
           .divider-mob { display: inline; }
           .bridge-divider { display: none; }
-          .banner-status-bridge { height: 28px; }
         }
       `}</style>
       <div className="section-divider">
