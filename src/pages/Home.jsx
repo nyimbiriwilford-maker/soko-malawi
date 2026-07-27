@@ -4786,7 +4786,7 @@ export default function Home() {
       </div>
 
       {/* Hero banner */}
-      <div className="hero-banner-wrap" style={{ padding: '0 20px', marginTop: 8, overflow: 'hidden', width: '100%', boxSizing: 'border-box' }}>
+      <div className="hero-banner-wrap" style={{ padding: '0 20px', marginTop: 8, width: '100%', boxSizing: 'border-box' }}>
         <HeroBanner navigate={navigate} onSearch={handleSearch} />
       </div>
 
