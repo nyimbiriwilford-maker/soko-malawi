@@ -1136,10 +1136,25 @@ function EmptyState({ query, onClearFilters, onNotify, label, user, latestProduc
           No products found for &ldquo;{keyword}&rdquo;
         </div>
         <div style={{ fontSize:13, color:T.gray600, marginBottom:18, maxWidth:360, lineHeight:1.5, margin:'0 auto 18px' }}>
-          We couldn&rsquo;t find what you&rsquo;re looking for. Try these:
+          We couldn&rsquo;t find what you&rsquo;re looking for.
         </div>
 
-        <ul style={{ margin:'0 auto 20px', padding:0, listStyle:'none', textAlign:'left', display:'inline-block' }}>
+        {/* — Notify Me quick action — */}
+        <button type="button" onClick={onNotify}
+          style={{
+            width:'100%', border:'none', background:'#0F9D58', borderRadius:12,
+            padding:'12px 18px', fontSize:14, fontWeight:800, color:'#fff',
+            cursor:'pointer', fontFamily:'inherit', marginBottom:14,
+            display:'flex', alignItems:'center', justifyContent:'center', gap:8,
+            boxShadow:'0 2px 8px rgba(15,157,88,0.25)',
+          }}>
+          <span style={{ fontSize:18 }}>🔔</span>
+          Notify me when &ldquo;{keyword}&rdquo; is available
+        </button>
+
+        <div style={{ fontSize:12, fontWeight:700, color:'#9CA3AF', marginBottom:8, textAlign:'center' }}>Or try:</div>
+
+        <ul style={{ margin:'0 auto 14px', padding:0, listStyle:'none', textAlign:'left', display:'inline-block' }}>
           {SUGGESTIONS.map((s, i) => (
             <li key={i} style={{ display:'flex', alignItems:'center', gap:8, fontSize:12.5, color:T.gray700, lineHeight:2.2 }}>
               <span style={{ width:18, height:18, borderRadius:'50%', background:T.greenL, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, color:T.green, fontSize:11, fontWeight:800 }}>{i + 1}</span>
@@ -1160,21 +1175,6 @@ function EmptyState({ query, onClearFilters, onNotify, label, user, latestProduc
           <button type="button" onClick={onClearFilters}
             style={{ border:'1px solid #D1D5DB', background:'#fff', borderRadius:10, padding:'9px 16px', fontSize:12, fontWeight:700, color:'#374151', cursor:'pointer', fontFamily:'inherit', display:'inline-flex', alignItems:'center', gap:6 }}>
             {Icon.sliders(13)} Clear Filters
-          </button>
-        </div>
-
-        {/* — Notify Me card — */}
-        <div style={{ background:'linear-gradient(135deg, #e8f5ee 0%, #f0fdf4 100%)', border:`1px solid #a7f3d0`, borderRadius:16, padding:'16px 18px', textAlign:'left' }}>
-          <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
-            <span style={{ fontSize:20 }}>🔔</span>
-            <div style={{ flex:1, minWidth:0 }}>
-              <div style={{ fontSize:13, fontWeight:800, color:'#065f46', lineHeight:1.3 }}>Get notified when it&rsquo;s available</div>
-              <div style={{ fontSize:11.5, color:'#047857', lineHeight:1.4 }}>We&rsquo;ll watch for &ldquo;{keyword}&rdquo; and alert you</div>
-            </div>
-          </div>
-          <button type="button" onClick={onNotify}
-            style={{ width:'100%', border:'none', background:'#0F9D58', color:'#fff', borderRadius:10, padding:'10px 16px', fontSize:13, fontWeight:800, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
-            {Icon.bell(14)} Notify me
           </button>
         </div>
       </div>

@@ -4000,6 +4000,15 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
                             <li>Browse categories</li>
                             <li>View latest listings</li>
                           </ul>
+                          <button type="button" onClick={() => { setSearchFocused(false); navigate?.('/search?q=' + encodeURIComponent(searchQuery.trim())) }}
+                            style={{
+                              width:'100%', border:'none', background:'#0F9D58', borderRadius:8,
+                              padding:'9px 12px', fontSize:12, fontWeight:800, color:'#fff',
+                              cursor:'pointer', fontFamily:'inherit', marginBottom:10,
+                              display:'flex', alignItems:'center', justifyContent:'center', gap:6,
+                            }}>
+                            🔔 Notify me when &ldquo;{searchQuery.trim()}&rdquo; is available
+                          </button>
                           <div style={{ display: 'flex', gap: 8 }}>
                             <button type="button" onClick={() => { setSearchFocused(false); navigate?.('/search') }}
                               style={{
@@ -4010,7 +4019,7 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
                             >Explore Categories</button>
                             <button type="button" onClick={() => { setSearchFocused(false); navigate?.('/search?sort=newest') }}
                               style={{
-                                flex: 1, border: 'none', background: '#0F9D58', borderRadius: 8,
+                                flex: 1, border: 'none', background: '#374151', borderRadius: 8,
                                 padding: '8px 12px', fontSize: 11, fontWeight: 700, color: '#fff',
                                 cursor: 'pointer', fontFamily: 'inherit',
                               }}
