@@ -3762,12 +3762,14 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
           .hero-banner { width: 100%; }
           .hero-inner {
             grid-template-columns: 1fr;
-            min-height: 420px;
+            min-height: auto;
+            height: auto;
             padding: 0;
+            align-items: start;
           }
-          .hero-content { max-width: 100%; padding: 24px 16px; }
-          .hero-content h1 { font-size: 32px !important; line-height: 1.15 !important; }
-          .hero-content p { font-size: 15px !important; line-height: 1.5 !important; }
+          .hero-content { max-width: 100%; padding: 24px 16px; box-sizing: border-box; }
+          .hero-content h1 { font-size: 32px !important; line-height: 1.15 !important; overflow-wrap: break-word; word-break: break-word; hyphens: auto; }
+          .hero-content p { font-size: 15px !important; line-height: 1.5 !important; overflow-wrap: break-word; word-break: break-word; hyphens: auto; }
           .hero-visual {
             position: relative;
             inset: auto;
