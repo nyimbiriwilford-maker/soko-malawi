@@ -842,6 +842,11 @@ function GlobalStyles() {
         }
         .soko-product-card-title { font-size: 12px; }
         .soko-product-card-price { font-size: 13px; }
+
+        /* Banner search dropdown — remove overflow clip so results are fully visible */
+        .hero-banner-wrap {
+          overflow: visible !important;
+        }
       }
       @media (hover: none) {
         .soko-card-hover:hover { transform: none; box-shadow: inherit !important; }
@@ -4781,7 +4786,7 @@ export default function Home() {
       </div>
 
       {/* Hero banner */}
-      <div style={{ padding: '0 20px', marginTop: 8, overflow: 'hidden', width: '100%', boxSizing: 'border-box' }}>
+      <div className="hero-banner-wrap" style={{ padding: '0 20px', marginTop: 8, overflow: 'hidden', width: '100%', boxSizing: 'border-box' }}>
         <HeroBanner navigate={navigate} onSearch={handleSearch} />
       </div>
 
