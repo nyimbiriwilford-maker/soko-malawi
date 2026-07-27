@@ -36,6 +36,7 @@ import {
   sortRequestsByViewerLocation,
   withDistanceToBuyer,
 } from '../utils/lookingFor'
+import NotifyMeModal from '../components/NotifyMeModal'
 import {
   ALL_CATEGORIES,
 } from '../constants/homeConstants'
@@ -3515,6 +3516,7 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
   const [searchQuery, setSearchQuery] = useState('')
   const [liveResults, setLiveResults] = useState(null)
   const [liveLoading, setLiveLoading] = useState(false)
+  const [notifyOpen, setNotifyOpen] = useState(false)
   const searchRef = useRef(null)
   const searchInputRef = useRef(null)
 
@@ -3682,6 +3684,9 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
           to { opacity: 1; transform: scale(1); }
         }
         @keyframes spinner {
+          to { transform: rotate(360deg); }
+        }
+        @keyframes spin {
           to { transform: rotate(360deg); }
         }
         .hero-banner {
@@ -4000,7 +4005,7 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
                             <li>Browse categories</li>
                             <li>View latest listings</li>
                           </ul>
-                          <button type="button" onClick={() => { setSearchFocused(false); navigate?.('/search?q=' + encodeURIComponent(searchQuery.trim())) }}
+                          <button type="button" onClick={() => { setSearchFocused(false); setNotifyOpen(true) }}
                             style={{
                               width:'100%', border:'none', background:'#0F9D58', borderRadius:8,
                               padding:'9px 12px', fontSize:12, fontWeight:800, color:'#fff',
@@ -4941,6 +4946,10 @@ export default function Home() {
 
       {/* Mobile bottom nav: mounted once in App.jsx (Home / Explore / Sell / Chats / Profile) */}
 
+      {/* -- Notify Me modal -- */}
+      {notifyOpen && (
+        <NotifyMeModal query={searchQuery.trim()} user={user} onClose={() => setNotifyOpen(false)} />
+      )}
 
     </div>
   )
