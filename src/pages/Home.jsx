@@ -3509,14 +3509,13 @@ function getActiveSlides(slides) {
     .sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999))
 }
 
-function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
+function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
   const [fetchedSlides, setFetchedSlides] = useState([])
   const [dbLoaded, setDbLoaded] = useState(false)
   const [searchFocused, setSearchFocused] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [liveResults, setLiveResults] = useState(null)
   const [liveLoading, setLiveLoading] = useState(false)
-  const [notifyOpen, setNotifyOpen] = useState(false)
   const searchRef = useRef(null)
   const searchInputRef = useRef(null)
 
@@ -4005,7 +4004,7 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
                             <li>Browse categories</li>
                             <li>View latest listings</li>
                           </ul>
-                          <button type="button" onClick={() => { setSearchFocused(false); setNotifyOpen(true) }}
+                          <button type="button" onClick={() => { setSearchFocused(false); onNotify?.(searchQuery.trim()) }}
                             style={{
                               width:'100%', border:'none', background:'#0F9D58', borderRadius:8,
                               padding:'9px 12px', fontSize:12, fontWeight:800, color:'#fff',
@@ -4272,6 +4271,8 @@ export default function Home() {
   const [notifCount, setNotifCount] = useState(0)
   const [unreadChats, setUnreadChats] = useState(0)
   const [search, setSearch] = useState('')
+  const [notifyOpen, setNotifyOpen] = useState(false)
+  const [notifyQuery, setNotifyQuery] = useState('')
   const [imageSearchBusy, setImageSearchBusy] = useState(false)
   /**
    * Smart progressive load:
@@ -4837,7 +4838,7 @@ export default function Home() {
 
       {/* Hero banner */}
       <div className="hero-banner-wrap" style={{ padding: '0 20px', marginTop: 8, width: '100%', boxSizing: 'border-box' }}>
-        <HeroBanner navigate={navigate} onSearch={handleSearch} />
+        <HeroBanner navigate={navigate} onSearch={handleSearch} onNotify={(q) => { setNotifyOpen(true); setNotifyQuery(q) }} />
       </div>
 
       <div className="soko-settle soko-settle-d3">
@@ -4948,7 +4949,7 @@ export default function Home() {
 
       {/* -- Notify Me modal -- */}
       {notifyOpen && (
-        <NotifyMeModal query={searchQuery.trim()} user={user} onClose={() => setNotifyOpen(false)} />
+        <NotifyMeModal query={notifyQuery} user={user} onClose={() => setNotifyOpen(false)} />
       )}
 
     </div>
