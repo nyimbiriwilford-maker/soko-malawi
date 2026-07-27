@@ -4841,6 +4841,18 @@ export default function Home() {
         <HeroBanner navigate={navigate} onSearch={handleSearch} onNotify={(q) => { setNotifyOpen(true); setNotifyQuery(q) }} />
       </div>
 
+      {/* — Premium Banner → Categories transition — */}
+      <div className="bc-bridge" style={{
+        display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+        height:40, padding:'0 20px',
+        background:'linear-gradient(180deg, #F8FAFC 0%, #FFFFFF 100%)',
+      }}>
+        <div style={{
+          width:'100%', maxWidth:160, height:1, borderRadius:1,
+          background:'linear-gradient(90deg, transparent, #D1D5DB, transparent)',
+        }} />
+      </div>
+
       <div className="soko-settle soko-settle-d3">
         <CategoryGrid navigate={navigate} onCategoryChange={handleCategoryChange} />
       </div>
@@ -4873,6 +4885,7 @@ export default function Home() {
           .divider-desk { display: none; }
           .divider-mob { display: inline; }
           .bridge-divider { display: none; }
+          .bc-bridge { height: 28px !important; }
         }
       `}</style>
       <div className="section-divider">
