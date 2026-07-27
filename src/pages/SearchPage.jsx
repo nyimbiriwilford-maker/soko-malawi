@@ -1104,23 +1104,126 @@ function SkeletonRowCard() {
 }
 
 /* -----------------------------------------------------------------------------
-   EMPTY STATE
+   EMPTY STATE — Premium No Results
 ----------------------------------------------------------------------------- */
-function EmptyState({ query, onClearFilters, label = 'results' }) {
+const SUGGESTIONS = [
+  'Different spelling or keywords',
+  'Browse popular categories below',
+  'View latest products just added',
+]
+
+const POPULAR_CATEGORIES = [
+  { key:'Phones & Tablets', label:'Phones & Tablets', icon:'📱' },
+  { key:"Men's Wear", label:"Men's Wear", icon:'👔' },
+  { key:'Shoes', label:'Shoes', icon:'👟' },
+  { key:'Cars', label:'Cars', icon:'🚗' },
+  { key:'Furniture', label:'Furniture', icon:'🛋️' },
+  { key:'Electronics', label:'Electronics', icon:'💻' },
+]
+
+function EmptyState({ query, onClearFilters, onNotify, label, user, latestProducts, navigate }) {
+  const keyword = query || 'your search'
+  const [imgErrors, setImgErrors] = useState({})
+
   return (
-    <div style={{ display:'flex', flexDirection:'column', alignItems:'center', padding:'56px 24px', textAlign:'center', background:'#fff', borderRadius:20, border:`1px solid ${T.gray100}`, boxShadow:T.shadow }}>
-      <div style={{ width:72, height:72, borderRadius:20, background:T.gray50, border:`1px solid ${T.gray100}`, display:'flex', alignItems:'center', justifyContent:'center', marginBottom:18, color:T.gray500 }}>
-        {Icon.search(30)}
+    <div>
+      {/* — Empty result card — */}
+      <div style={{ display:'flex', flexDirection:'column', padding:'40px 24px', textAlign:'center', background:'#fff', borderRadius:20, border:`1px solid ${T.gray100}`, boxShadow:T.shadow, marginBottom:16 }}>
+        <div style={{ width:64, height:64, borderRadius:16, background:T.gray50, border:`1px solid ${T.gray100}`, display:'flex', alignItems:'center', justifyContent:'center', margin:'0 auto 16px', color:T.gray500 }}>
+          {Icon.search(26)}
+        </div>
+        <div style={{ fontFamily:T.fontDisplay, fontSize:17, fontWeight:800, color:T.gray900, marginBottom:6, letterSpacing:'-0.3px' }}>
+          No products found for &ldquo;{keyword}&rdquo;
+        </div>
+        <div style={{ fontSize:13, color:T.gray600, marginBottom:18, maxWidth:360, lineHeight:1.5, margin:'0 auto 18px' }}>
+          We couldn&rsquo;t find what you&rsquo;re looking for. Try these:
+        </div>
+
+        <ul style={{ margin:'0 auto 20px', padding:0, listStyle:'none', textAlign:'left', display:'inline-block' }}>
+          {SUGGESTIONS.map((s, i) => (
+            <li key={i} style={{ display:'flex', alignItems:'center', gap:8, fontSize:12.5, color:T.gray700, lineHeight:2.2 }}>
+              <span style={{ width:18, height:18, borderRadius:'50%', background:T.greenL, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, color:T.green, fontSize:11, fontWeight:800 }}>{i + 1}</span>
+              {s}
+            </li>
+          ))}
+        </ul>
+
+        <div style={{ display:'flex', flexWrap:'wrap', gap:8, justifyContent:'center', marginBottom:16 }}>
+          <button type="button" onClick={() => navigate('/search')}
+            style={{ border:'1px solid #D1D5DB', background:'#fff', borderRadius:10, padding:'9px 16px', fontSize:12, fontWeight:700, color:'#374151', cursor:'pointer', fontFamily:'inherit', display:'inline-flex', alignItems:'center', gap:6 }}>
+            {Icon.grid(13)} Explore Categories
+          </button>
+          <button type="button" onClick={() => navigate('/search?sort=newest')}
+            style={{ border:'1px solid #D1D5DB', background:'#fff', borderRadius:10, padding:'9px 16px', fontSize:12, fontWeight:700, color:'#374151', cursor:'pointer', fontFamily:'inherit', display:'inline-flex', alignItems:'center', gap:6 }}>
+            {Icon.clock(13)} Latest Products
+          </button>
+          <button type="button" onClick={onClearFilters}
+            style={{ border:'1px solid #D1D5DB', background:'#fff', borderRadius:10, padding:'9px 16px', fontSize:12, fontWeight:700, color:'#374151', cursor:'pointer', fontFamily:'inherit', display:'inline-flex', alignItems:'center', gap:6 }}>
+            {Icon.sliders(13)} Clear Filters
+          </button>
+        </div>
+
+        {/* — Notify Me card — */}
+        <div style={{ background:'linear-gradient(135deg, #e8f5ee 0%, #f0fdf4 100%)', border:`1px solid #a7f3d0`, borderRadius:16, padding:'16px 18px', textAlign:'left' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
+            <span style={{ fontSize:20 }}>🔔</span>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontSize:13, fontWeight:800, color:'#065f46', lineHeight:1.3 }}>Get notified when it&rsquo;s available</div>
+              <div style={{ fontSize:11.5, color:'#047857', lineHeight:1.4 }}>We&rsquo;ll watch for &ldquo;{keyword}&rdquo; and alert you</div>
+            </div>
+          </div>
+          <button type="button" onClick={onNotify}
+            style={{ width:'100%', border:'none', background:'#0F9D58', color:'#fff', borderRadius:10, padding:'10px 16px', fontSize:13, fontWeight:800, cursor:'pointer', fontFamily:'inherit', display:'flex', alignItems:'center', justifyContent:'center', gap:6 }}>
+            {Icon.bell(14)} Notify me
+          </button>
+        </div>
       </div>
-      <div style={{ fontFamily:T.fontDisplay, fontSize:18, fontWeight:800, color:T.gray900, marginBottom:8, letterSpacing:'-0.3px' }}>
-        No {label} for "{query || 'your search'}"
+
+      {/* — Popular categories — */}
+      <div style={{ marginBottom:16 }}>
+        <div style={{ fontSize:14, fontWeight:800, color:T.gray900, marginBottom:10, letterSpacing:'-0.2px' }}>Popular categories</div>
+        <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+          {POPULAR_CATEGORIES.map(cat => (
+            <button key={cat.key} type="button" onClick={() => navigate(`/search?category=${encodeURIComponent(cat.key)}`)}
+              style={{ display:'inline-flex', alignItems:'center', gap:6, background:'#fff', border:`1px solid ${T.gray200}`, borderRadius:12, padding:'8px 14px', fontSize:12, fontWeight:700, color:T.gray800, cursor:'pointer', fontFamily:'inherit', transition:'all 0.15s' }}>
+              <span style={{ fontSize:16 }}>{cat.icon}</span>
+              {cat.label}
+            </button>
+          ))}
+        </div>
       </div>
-      <div style={{ fontSize:14, color:T.gray600, marginBottom:22, maxWidth:340, lineHeight:1.5 }}>
-        Try different keywords, switch tabs, or clear filters to broaden results.
-      </div>
-      <button type="button" onClick={onClearFilters} style={{ background:T.gray900, color:'#fff', border:'none', borderRadius:12, padding:'12px 26px', fontSize:14, fontWeight:700, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:8 }}>
-        {Icon.sliders(15)} Clear filters
-      </button>
+
+      {/* — Latest products — */}
+      {latestProducts.length > 0 && (
+        <div>
+          <div style={{ fontSize:14, fontWeight:800, color:T.gray900, marginBottom:10, letterSpacing:'-0.2px' }}>Latest products</div>
+          <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(150px, 1fr))', gap:10 }}>
+            {latestProducts.slice(0, 6).map(item => (
+              <button key={item.id} type="button" onClick={() => navigate(`/listing/${item.id}`)}
+                style={{ border:'none', background:'#fff', borderRadius:14, overflow:'hidden', cursor:'pointer', fontFamily:'inherit', textAlign:'left', boxShadow:'0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04)', padding:0 }}>
+                <div style={{ width:'100%', aspectRatio:'4/3', background:T.gray100, position:'relative', overflow:'hidden' }}>
+                  {item.images?.[0] && !imgErrors[item.id] ? (
+                    <img src={item.images[0]} alt="" loading="lazy"
+                      onError={() => setImgErrors(p => ({ ...p, [item.id]: true }))}
+                      style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} />
+                  ) : (
+                    <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', color:T.gray400, fontSize:24 }}>📦</div>
+                  )}
+                </div>
+                <div style={{ padding:'8px 10px 10px' }}>
+                  <div style={{ fontSize:12, fontWeight:700, color:T.gray900, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginBottom:3 }}>{item.title}</div>
+                  {item.price != null && (
+                    <div style={{ fontSize:13, fontWeight:800, color:T.green }}>MK {Number(item.price).toLocaleString()}</div>
+                  )}
+                  {item.city && (
+                    <div style={{ fontSize:10, color:T.gray500, marginTop:2 }}>{item.city}</div>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -2329,6 +2432,7 @@ const locationParam = searchParams.get('location') || ''
   const [mobileFilterOpen, setMobileFilterOpen] = useState(false)
   
   const [notifyOpen, setNotifyOpen]             = useState(false)
+  const [latestProducts, setLatestProducts]       = useState([])
   const [searchOpen, setSearchOpen]             = useState(!!searchParams.get('focus'))
   const [liveQuery, setLiveQuery]               = useState(searchParams.get('focus') ? (searchParams.get('q') || '') : '')
   const [liveResults, setLiveResults]           = useState({ listings:[], listingsTotal:0, shops:[], shopsTotal:0, jobs:[], jobsTotal:0, services:[], servicesTotal:0, requests:[], requestsTotal:0 })
@@ -2829,6 +2933,21 @@ const locationParam = searchParams.get('location') || ''
     clearAll()
   }
 
+  useEffect(() => {
+    if (allResults.length > 0 || loading) return
+    let cancelled = false
+    ;(async () => {
+      const { data } = await supabase
+        .from('listings')
+        .select('id, title, price, images, city, district, category, condition, featured, is_featured, created_at, seller_id, description')
+        .eq('status', 'published')
+        .order('created_at', { ascending: false })
+        .limit(12)
+      if (!cancelled) setLatestProducts(data || [])
+    })()
+    return () => { cancelled = true }
+  }, [allResults.length, loading])
+
   function handleTabChange(tabKey) {
     if (tabKey === activeTab) return
     setActiveTab(tabKey)
@@ -3104,7 +3223,7 @@ const locationParam = searchParams.get('location') || ''
                 </div>
               )
             ) : allResults.length === 0 ? (
-              <EmptyState query={queryParam} onClearFilters={clearFiltersAndSearch} label={resultsLabel} />
+              <EmptyState query={queryParam} onClearFilters={clearFiltersAndSearch} onNotify={() => setNotifyOpen(true)} user={user} latestProducts={latestProducts} navigate={navigate} label={resultsLabel} />
             ) : activeTab === 'listings' ? (
               viewMode === 'list' ? (
                 <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
