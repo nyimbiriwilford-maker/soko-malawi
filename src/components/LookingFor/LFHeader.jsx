@@ -1,7 +1,8 @@
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { T } from '../../constants/tokens'
 import { Icon } from './Icons'
+import { supabase } from '../../lib/supabase'
 
 /**
  * LFHeader — matches the SokoMW Home nav exactly:
@@ -47,6 +48,46 @@ export default function LFHeader({
   // Search
   const [focused, setFocused] = useState(false)
   const inputRef = useRef(null)
+
+  const [chatCount, setChatCount] = useState(0)
+
+  useEffect(() => {
+    let channel
+    let cancelled = false
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user || cancelled) return
+
+      const fetchUnread = async () => {
+        const { count } = await supabase
+          .from('messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('to_user', user.id)
+          .eq('read', false)
+        if (!cancelled) setChatCount(count || 0)
+      }
+
+      fetchUnread()
+
+      channel = supabase
+        .channel(`lf_header_chat_${user.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'messages',
+            filter: `to_user=eq.${user.id}`,
+          },
+          fetchUnread,
+        )
+        .subscribe()
+    })
+
+    return () => {
+      cancelled = true
+      if (channel) supabase.removeChannel(channel)
+    }
+  }, [])
   // Avatar menu
   const [avatarOpen, setAvatarOpen] = useState(false)
 
@@ -123,7 +164,14 @@ export default function LFHeader({
         </div>
 
         {/* Chats */}
-        <NavIconBtn icon={Icon.chat(18)} label="Chats" onClick={() => navigate('/chats')} />
+        <div style={{ position: 'relative' }}>
+          <NavIconBtn icon={Icon.chat(18)} label="Chats" onClick={() => navigate('/chats')} />
+          {chatCount > 0 && (
+            <span style={{ position: 'absolute', top: 4, right: 6, background: T.red, color: '#fff', borderRadius: '50%', width: 17, height: 17, fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #fff' }}>
+              {chatCount > 9 ? '9+' : chatCount}
+            </span>
+          )}
+        </div>
 
         {/* Notifications bell */}
         <div style={{ position: 'relative' }}>

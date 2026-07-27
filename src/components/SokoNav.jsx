@@ -2,10 +2,11 @@
  * Shared top navigation (Home + Looking For + other marketplace pages).
  * Desktop + mobile layout. Only the primary CTA differs per page.
  */
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { T } from '../constants/tokens'
 import { MALAWI_DISTRICTS } from '../constants/malawiDistricts'
+import { supabase } from '../lib/supabase'
 
 const Icon = {
   search: (s = 18) => (
@@ -143,6 +144,46 @@ export default function SokoNav({
   const [distOpen, setDistOpen] = useState(false)
 const [districtSearch, setDistrictSearch] = useState('')
   const [avatarOpen, setAvatarOpen] = useState(false)
+  const [chatCount, setChatCount] = useState(0)
+
+  useEffect(() => {
+    let channel
+    let cancelled = false
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user || cancelled) return
+
+      const fetchUnread = async () => {
+        const { count } = await supabase
+          .from('messages')
+          .select('*', { count: 'exact', head: true })
+          .eq('to_user', user.id)
+          .eq('read', false)
+        if (!cancelled) setChatCount(count || 0)
+      }
+
+      fetchUnread()
+
+      channel = supabase
+        .channel(`nav_chat_count_${user.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'messages',
+            filter: `to_user=eq.${user.id}`,
+          },
+          fetchUnread,
+        )
+        .subscribe()
+    })
+
+    return () => {
+      cancelled = true
+      if (channel) supabase.removeChannel(channel)
+    }
+  }, [])
+
   const district = activeDistrict || 'All Districts'
   const fileRef = useRef(null)
   const inputRef = useRef(null)
@@ -274,7 +315,14 @@ const filteredDistricts = districts.filter(d =>
 
         {/* Desktop Action Icons */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-          <NavIconBtn icon={Icon.chat(18)} label="Chats" onClick={() => navigate('/chats')} />
+          <div style={{ position: 'relative' }}>
+            <NavIconBtn icon={Icon.chat(18)} label="Chats" onClick={() => navigate('/chats')} />
+            {chatCount > 0 && (
+              <span style={{ position: 'absolute', top: 4, right: 6, background: T.red, color: '#fff', borderRadius: '50%', width: 17, height: 17, fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #fff' }}>
+                {chatCount > 9 ? '9+' : chatCount}
+              </span>
+            )}
+          </div>
           <div style={{ position: 'relative' }}>
             <NavIconBtn icon={Icon.bell(18)} label="Alerts" onClick={() => navigate('/notifications')} />
             {notifCount > 0 && (
