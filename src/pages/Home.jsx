@@ -3988,8 +3988,34 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
                         </>
                       )}
                       {liveResults.listings.length === 0 && liveResults.shops.length === 0 && (
-                        <div style={{ padding: '20px 16px', textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>
-                          No results for "{searchQuery.trim()}"
+                        <div style={{ padding: '20px 16px 16px' }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 4 }}>
+                            No products found for "{searchQuery.trim()}"
+                          </div>
+                          <div style={{ fontSize: 11, fontWeight: 600, color: '#9CA3AF', marginBottom: 12 }}>
+                            Try:
+                          </div>
+                          <ul style={{ margin: '0 0 14px', padding: '0 0 0 16px', fontSize: 11, color: '#6B7280', lineHeight: 1.8 }}>
+                            <li>Different spelling</li>
+                            <li>Browse categories</li>
+                            <li>View latest listings</li>
+                          </ul>
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button type="button" onClick={() => { setSearchFocused(false); navigate?.('/search') }}
+                              style={{
+                                flex: 1, border: '1px solid #D1D5DB', background: '#fff', borderRadius: 8,
+                                padding: '8px 12px', fontSize: 11, fontWeight: 700, color: '#374151',
+                                cursor: 'pointer', fontFamily: 'inherit',
+                              }}
+                            >Explore Categories</button>
+                            <button type="button" onClick={() => { setSearchFocused(false); navigate?.('/search?sort=newest') }}
+                              style={{
+                                flex: 1, border: 'none', background: '#0F9D58', borderRadius: 8,
+                                padding: '8px 12px', fontSize: 11, fontWeight: 700, color: '#fff',
+                                cursor: 'pointer', fontFamily: 'inherit',
+                              }}
+                            >View Latest Products</button>
+                          </div>
                         </div>
                       )}
                     </>
