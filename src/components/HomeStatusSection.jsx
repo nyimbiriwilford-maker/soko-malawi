@@ -701,14 +701,10 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
         }
       `}</style>
 
-      <section className="hs-section" style={{
-        padding: isMobile ? 0 : '20px 0',
-        marginBottom: isMobile ? 0 : 48,
-        background: isMobile ? 'transparent' : '#FFFFFF',
-      }}>
-        <div style={isMobile ? { padding: '0 20px' } : { maxWidth: 1400, margin: '0 auto', padding: '0 20px' }}>
+      <section className="hs-section" style={{ padding: '20px 0', marginBottom: 48, background: '#FFFFFF' }}>
+        <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 20px' }}>
           {loading ? (
-            <div style={isMobile ? { padding: '20px 0' } : {
+            <div style={{
               background: G.surface, border: '1px solid ' + G.gray200, borderRadius: 24,
               boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.04)',
               padding: '20px 24px',
@@ -722,7 +718,7 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
               </div>
             </div>
           ) : (
-            <div style={isMobile ? {} : {
+            <div style={{
               background: G.surface, border: '1px solid ' + G.gray200, borderRadius: 24,
               boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.04)',
               padding: '20px 24px',
