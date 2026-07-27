@@ -3917,9 +3917,19 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
                       </div>
                     </>
                   ) : liveLoading ? (
-                    <div style={{ padding: '20px 16px', textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>
-                      <span style={{ display: 'inline-block', width: 16, height: 16, border: '2px solid #E5E7EB', borderTopColor: '#0F9D58', borderRadius: '50%', marginRight: 8, verticalAlign: 'middle', animation: 'spinner 0.6s linear infinite' }} />
-                      Searching...
+                    <div style={{ padding: '16px 16px 12px' }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 }}>
+                        Searching products...
+                      </div>
+                      {[1, 2, 3].map(i => (
+                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0' }}>
+                          <div className="skeleton" style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0, background: '#E5E7EB' }} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div className="skeleton" style={{ width: `${60 + i * 10}%`, height: 12, borderRadius: 4, marginBottom: 6, background: '#E5E7EB' }} />
+                            <div className="skeleton" style={{ width: `${30 + i * 5}%`, height: 10, borderRadius: 4, background: '#E5E7EB' }} />
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   ) : liveResults ? (
                     <>
