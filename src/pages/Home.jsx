@@ -959,6 +959,17 @@ function CategoryGrid({ navigate, onCategoryChange }) {
   return (
     <section className="soko-cat-section" style={{ padding: '28px 20px 8px', background: '#fff' }}>
       <div style={{ maxWidth: 1400, margin: '0 auto' }}>
+        {/* — Section header — */}
+        <div className="cat-header-row" style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', marginBottom:20 }}>
+          <div>
+            <div style={{ fontFamily:T.fontDisplay, fontSize:20, fontWeight:800, color:T.gray900, letterSpacing:'-0.3px', lineHeight:1.2 }}>Browse Categories</div>
+            <div style={{ fontSize:13, color:T.gray600, marginTop:4, fontWeight:500, lineHeight:1.3 }}>Find products by category</div>
+          </div>
+          <button type="button" onClick={() => navigate('/categories')}
+            style={{ background:'none', border:'none', padding:0, fontSize:13, fontWeight:700, color:T.green, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:4 }}>
+            View All <span style={{ fontSize:14, lineHeight:1 }}>→</span>
+          </button>
+        </div>
         {/* Desktop: 9-col grid. Mobile/tablet (≤980): forced single-line horizontal scroll via CSS. */}
         <div
           className="soko-cat-grid"
