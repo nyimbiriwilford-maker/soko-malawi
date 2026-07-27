@@ -4585,21 +4585,14 @@ export default function Home() {
 
       // Fetch promotion data to distinguish paid vs free promotions
       let promoMap = {}
-      if (featuredRows?.length) {
-        const fIds = featuredRows.map(r => r.id).filter(Boolean)
-        if (fIds.length) {
-          const { data: promos } = await supabase
-            .from('listing_promotions')
-            .select('listing_id, price_mwk, status')
-            .in('listing_id', fIds)
-            .eq('status', 'active')
-          if (promos?.length) {
-            for (const p of promos) {
-              promoMap[p.listing_id] = { price_mwk: p.price_mwk, status: p.status }
-            }
+      try {
+        const { data: promoData, error: promoErr } = await supabase.rpc('get_active_promotion_data')
+        if (!promoErr && promoData?.length) {
+          for (const p of promoData) {
+            promoMap[p.listing_id] = { price_mwk: p.price_mwk, status: 'active' }
           }
         }
-      }
+      } catch { /* RPC may not exist — fall back to no promotion data */ }
 
       async function enrichListingRows(rows) {
         let withShopRatings = rows || []
