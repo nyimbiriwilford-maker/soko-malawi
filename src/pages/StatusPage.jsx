@@ -164,11 +164,8 @@ function StoryStatusRing({ items = [], size = 72, children }) {
       </svg>
       <div style={{
         position: 'absolute',
-        inset: stroke + 2,
+        inset: stroke + 1,
         borderRadius: '50%',
-        background: '#fff',
-        padding: 2.5,
-        boxSizing: 'border-box',
         overflow: 'hidden',
       }}>
         {children}
@@ -265,7 +262,6 @@ function StoryRingItem({ s, isOwn, viewedIds, onClick, label }) {
   const group = s._ownGroup || [s]
   const ringItems = group.map(st => ({ id: st.id, viewed: viewedIds.has(st.id) }))
   const allViewed = ringItems.every(x => x.viewed)
-  const count = group.length
   const display = label || (isOwn ? 'You' : name.split(' ')[0])
   const face = avatar || media
   const initial = (display || 'S')[0].toUpperCase()
@@ -304,17 +300,6 @@ function StoryRingItem({ s, isOwn, viewedIds, onClick, label }) {
               : initial}
           </div>
         </StoryStatusRing>
-        {count > 1 && (
-          <span className="st-ring-count" style={{
-            position: 'absolute', right: 0, bottom: 2,
-            minWidth: 20, height: 20, padding: '0 5px',
-            borderRadius: 999, background: allViewed ? '#6b7280' : T.green,
-            color: '#fff', fontSize: 10, fontWeight: 800,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            border: '2px solid #fff',
-            boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
-          }}>{count > 9 ? '9+' : count}</span>
-        )}
       </div>
       <span style={{
         fontSize: 11.5, fontWeight: 700, color: allViewed && !isOwn ? T.textMuted : T.text,
@@ -337,7 +322,6 @@ function StoryCard({ s, index, isOwn, viewedIds, onClick, nearBadge }) {
                    s.content?.toLowerCase().includes('urgent')
   const group = s._ownGroup || [s]
   const allViewed = group.every(x => viewedIds.has(x.id))
-  const count = group.length
   const ringItems = group.map(st => ({ id: st.id, viewed: viewedIds.has(st.id) }))
 
   return (
@@ -384,7 +368,7 @@ function StoryCard({ s, index, isOwn, viewedIds, onClick, nearBadge }) {
         position: 'absolute', top: 10, left: 10, right: 10,
         display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 6,
       }}>
-        <StoryStatusRing items={ringItems} size={40}>
+        <StoryStatusRing items={ringItems} size={52}>
           <div style={{
             width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden',
             background: 'linear-gradient(135deg,#0F9D58,#22c55e)',
@@ -401,7 +385,6 @@ function StoryCard({ s, index, isOwn, viewedIds, onClick, nearBadge }) {
             <span className="st-glass-chip">📍 Near</span>
           )}
           {isUrgent && <span className="st-glass-chip st-glass-urgent">Hot</span>}
-          {count > 1 && <span className="st-glass-chip">{count} posts</span>}
         </div>
       </div>
 
@@ -444,6 +427,7 @@ function StatusListCard({ s, onOpen, currentUserId }) {
   const name    = s.profiles?.full_name || 'Seller'
   const avatar  = s.profiles?.avatar_url
   const initial = name[0]?.toUpperCase() || 'S'
+  const isVerified = s.profiles?.is_verified || false
   const media   = s.media_urls?.[0]
   const isVideo = media && (/\.(mp4|mov|webm)(\?|$)/i.test(media) || media.includes('video'))
   const isUrgent = s.content?.toLowerCase().includes('price drop') ||
@@ -477,7 +461,7 @@ function StatusListCard({ s, onOpen, currentUserId }) {
           <div className="st-feed-who">
             <div className="st-feed-name-row">
               <span className="st-feed-name">{name}</span>
-              <VerifiedBadge />
+              {isVerified && <VerifiedBadge />}
             </div>
             <div className="st-feed-meta">
               <Badge color={isUrgent ? T.orangeDeep : T.green} bg={isUrgent ? T.orangeLight : T.greenLight}>
@@ -588,6 +572,7 @@ function StatusPageInner({ user, navigate }) {
   const [searchQuery, setSearchQuery]       = useState('')
   const [followedIds, setFollowedIds]       = useState(new Set())
   const openedStatusRef = useRef(null)
+  const autoOpenedRef = useRef(false)
   const [viewedIds, setViewedIds] = useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem('viewedStories') || '[]')) }
     catch { return new Set() }
@@ -637,7 +622,7 @@ function StatusPageInner({ user, navigate }) {
     if (openedStatusRef.current === targetId) return
 
     const STATUS_SELECT = `id, content, status_type, expires_at, created_at, media_urls, tagged_listing_id, tagged_kind, tagged_ref_id, user_id, location_hint,
-      profiles:user_id ( id, full_name, avatar_url, city ),
+      profiles:user_id ( id, full_name, avatar_url, city, is_verified ),
       tagged:tagged_listing_id ( id, title, price, images, category, description, city, district )`
 
     function openStatus(match, pool) {
@@ -652,6 +637,8 @@ function StatusPageInner({ user, navigate }) {
       setViewing(startIdx)
       openedStatusRef.current = targetId
     }
+
+    autoOpenedRef.current = true
 
     // Prefer opening from the loaded feed so the viewer can swipe that user's other statuses
     const inFeed = stories.find(s => s.id === targetId)
@@ -687,6 +674,10 @@ function StatusPageInner({ user, navigate }) {
       const group = siblings?.length
         ? (siblings.some(s => s.id === row.id) ? siblings : [row, ...siblings])
         : [row]
+      // Normalize profiles join (Supabase may return array)
+      for (const s of group) {
+        if (Array.isArray(s.profiles)) s.profiles = s.profiles[0] || null
+      }
       const startIdx = Math.max(0, group.findIndex(x => x.id === targetId))
       setViewerStories(group)
       setViewing(startIdx)
@@ -776,11 +767,15 @@ function StatusPageInner({ user, navigate }) {
     } else {
       const { data } = await supabase.from('user_statuses')
         .select(`id, content, status_type, expires_at, created_at, media_urls, tagged_listing_id, user_id, location_hint,
-          profiles:user_id ( id, full_name, avatar_url ),
+          profiles:user_id ( id, full_name, avatar_url, is_verified ),
           tagged:tagged_listing_id ( id, title, price, images, category, description )`)
         .eq('user_id', s.user_id).gt('expires_at', new Date().toISOString())
         .order('created_at', { ascending: false })
-      setViewerStories(data || [s])
+      const norm = (data || []).map(x => {
+        if (Array.isArray(x.profiles)) x.profiles = x.profiles[0] || null
+        return x
+      })
+      setViewerStories(norm.length ? norm : [s])
       setViewing(0)
     }
   }
@@ -1101,11 +1096,15 @@ function StatusPageInner({ user, navigate }) {
                   onOpen={async () => {
                     const { data } = await supabase.from('user_statuses')
                       .select(`id, content, status_type, expires_at, created_at, media_urls, tagged_listing_id, user_id, location_hint,
-                        profiles:user_id ( id, full_name, avatar_url ),
+          profiles:user_id ( id, full_name, avatar_url, is_verified ),
                         tagged:tagged_listing_id ( id, title, price, images, category, description )`)
                       .eq('user_id', s.user_id).gt('expires_at', new Date().toISOString())
                       .order('created_at', { ascending: false })
-                    setViewerStories(data || [s])
+                    const norm = (data || []).map(x => {
+                      if (Array.isArray(x.profiles)) x.profiles = x.profiles[0] || null
+                      return x
+                    })
+                    setViewerStories(norm.length ? norm : [s])
                     setViewing(0)
                   }}
                 />
@@ -1127,7 +1126,13 @@ function StatusPageInner({ user, navigate }) {
 
       {/* Story viewer + upload — same components as Home */}
       {viewing !== null && (
-        <StoryViewer stories={viewerStories} startIndex={viewing} currentUserId={user.id} onClose={() => setViewing(null)} />
+        <StoryViewer stories={viewerStories} startIndex={viewing} currentUserId={user.id} onClose={() => {
+          setViewing(null)
+          if (autoOpenedRef.current) {
+            autoOpenedRef.current = false
+            navigate('/', { replace: true })
+          }
+        }} />
       )}
       {showUpload && (
         <StatusUploadModal

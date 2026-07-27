@@ -2,7 +2,7 @@
  * StatusUploadModal — modern story status uploader
  * Photo/video or text board + tag your marketplace products.
  */
-import { useState, useRef, useEffect } from 'react'
+import { useState, useRef, useEffect, useMemo } from 'react'
 import { supabase } from '../lib/supabase'
 import ProductTagPicker, { loadOwnerTagItems } from './ProductTagPicker'
 import StatusLocationField from './StatusLocationField'
@@ -10,13 +10,19 @@ import StatusMediaAnnotator from './StatusMediaAnnotator'
 import {
   STATUS_VIDEO_MAX_SECONDS,
   STATUS_VIDEO_LENGTH_PRESETS,
+  STATUS_VIDEO_MAX_UPLOAD_BYTES,
   trimStatusVideo,
+  compressForUpload,
   formatDurationLabel,
   getVideoDuration,
   getPreferredClipSeconds,
   setPreferredClipSeconds,
   getClipLengthOptions,
+  applyClipToMediaUrl,
+  needsClipFragment,
+  generateThumbnails,
 } from '../utils/statusVideo'
+import Timeline from './Timeline'
 
 const BG_COLORS = [
   '#0f766e', '#1e3a8a', '#0f172a', '#7c3aed',
@@ -137,6 +143,10 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
   const [clipSeconds, setClipSeconds] = useState(() => getPreferredClipSeconds())
   const [clipStart, setClipStart] = useState(0)
   const [trimDirty, setTrimDirty] = useState(false) // prefs changed since last apply
+  // Committed trim values used for the #t= fragment in previewSrc.
+  // Updated only when drag ends (onCommit) or trim is applied — never during drag.
+  const [committedStart, setCommittedStart] = useState(0)
+  const [committedSeconds, setCommittedSeconds] = useState(() => getPreferredClipSeconds())
   const [tagItems, setTagItems] = useState([])
   const [taggedId, setTaggedId] = useState(null)
   const [taggedKind, setTaggedKind] = useState(null)
@@ -144,10 +154,18 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
   const [showAnnotator, setShowAnnotator] = useState(false)
   const [overlayFile, setOverlayFile] = useState(null) // PNG marks for video
   const [annotateNote, setAnnotateNote] = useState('')
+  const [currentTime, setCurrentTime] = useState(0)
+  const [loopPlayback, setLoopPlayback] = useState(false)
+  const [thumbnails, setThumbnails] = useState([])
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [videoReady, setVideoReady] = useState(false)
   const fileInputRef = useRef(null)
   const cameraInputRef = useRef(null)
   const trimGenRef = useRef(0)
   const videoPreviewRef = useRef(null)
+  const thumbGenRef = useRef(0)
+  const loopStartRef = useRef(0)
+  const loopEndRef = useRef(0)
 
   useEffect(() => {
     if (!user?.id) return
@@ -164,6 +182,24 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
       if (mediaPreview?.startsWith?.('blob:')) URL.revokeObjectURL(mediaPreview)
     }
   }, [mediaPreview])
+
+  // Generate thumbnails when source video loads
+  useEffect(() => {
+    if (!sourceFile || mediaType !== 'video') return
+    const gen = ++thumbGenRef.current
+    const count = Math.min(20, Math.ceil(sourceDuration || 30))
+    generateThumbnails(sourceFile, count).then((thumbs) => {
+      if (gen === thumbGenRef.current) {
+        setThumbnails(thumbs)
+      } else {
+        thumbs.forEach(t => URL.revokeObjectURL(t.url))
+      }
+    })
+    return () => {
+      thumbGenRef.current = -1
+      setThumbnails([])
+    }
+  }, [sourceFile, sourceDuration, mediaType])
 
   const lengthOptions = sourceDuration != null
     ? getClipLengthOptions(sourceDuration)
@@ -214,6 +250,8 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
     trimGenRef.current += 1
     setIsTrimming(false)
     setTrimPct(0)
+    setIsPlaying(false)
+    setVideoReady(false)
     if (mediaPreview?.startsWith?.('blob:')) URL.revokeObjectURL(mediaPreview)
     setMediaPreview(URL.createObjectURL(file))
     setSourceFile(file)
@@ -227,6 +265,8 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
       const chosen = opts.includes(pref) ? pref : opts[opts.length - 1]
       setClipSeconds(chosen)
       setClipStart(0)
+      setCommittedStart(0)
+      setCommittedSeconds(chosen)
 
       // Must trim if over hard max; otherwise wait for user preference
       if (duration > STATUS_VIDEO_MAX_SECONDS + 0.35) {
@@ -260,35 +300,24 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
       const result = await trimStatusVideo(src, {
         startSeconds: start,
         durationSeconds: length,
-        onProgress: (pct) => {
-          if (trimGenRef.current === gen) setTrimPct(pct)
-        },
       })
 
       if (trimGenRef.current !== gen) return
 
-      if (result.file.size > 25 * 1024 * 1024) {
-        setErrorMsg('Video is still too large after trim. Pick a shorter length.')
-        return
-      }
-
+      // Always meta trim: keep original bytes + clip window
       setMediaFile(result.file)
-      if (mediaPreview?.startsWith?.('blob:')) URL.revokeObjectURL(mediaPreview)
-      setMediaPreview(URL.createObjectURL(result.file))
+      if (!mediaPreview) {
+        setMediaPreview(URL.createObjectURL(result.file))
+      }
+      setClipStart(result.startSeconds || start)
+      setClipSeconds(result.durationSeconds || length)
+
       setTrimDirty(false)
       setPreferredClipSeconds(length)
 
-      if (result.trimmed) {
-        setTrimNote(
-          `Your clip: ${formatDurationLabel(result.durationSeconds)} starting at ${formatDurationLabel(result.startSeconds)} (source ${formatDurationLabel(result.originalDuration)})`,
-        )
-      } else if (result.note === 'trim-unsupported' || result.note === 'trim-failed') {
-        setTrimNote(
-          `Trim not available on this device. Viewers may only see up to ${STATUS_VIDEO_MAX_SECONDS}s.`,
-        )
-      } else {
-        setTrimNote(`Using full clip (${formatDurationLabel(result.originalDuration || length)}).`)
-      }
+      setTrimNote(
+        `Clip set · ${formatDurationLabel(result.durationSeconds)} from ${formatDurationLabel(result.startSeconds)} (smooth original audio + video)`,
+      )
     } catch (err) {
       if (trimGenRef.current !== gen) return
       console.error(err)
@@ -316,21 +345,52 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
     setTrimDirty(true)
   }
 
-  // Keep the live <video> preview looping within the currently selected trim window
+  // Preview URL uses the same #t=start,end media fragment that StoryViewer uses,
+  // so preview and export are identical. The browser natively clamps playback to
+  // the clip window — no JS timeupdate hack needed.
+  // Uses committedStart/committedSeconds (stable across drags) so the video src
+  // never changes during trim-handle dragging — prevents unwanted reload/pause.
+  const previewSrc = useMemo(() => {
+    if (mediaType !== 'video' || !mediaPreview) return mediaPreview
+    const base = mediaPreview.split('#')[0]
+    const end = committedStart + committedSeconds
+    return `${base}#t=${committedStart.toFixed(3)},${end.toFixed(3)}`
+  }, [mediaPreview, committedStart, committedSeconds, mediaType])
+
+  // Keep refs in sync with committed boundaries for the rAF loop
+  useEffect(() => {
+    loopStartRef.current = committedStart
+    loopEndRef.current = committedStart + committedSeconds
+  }, [committedStart, committedSeconds])
+
+  // ── Frame-accurate loop enforcement via rAF ─────────────────────────────────
+  // Checks currentTime on every animation frame when loop is active.
+  // When playback reaches the trim end, seeks back to the trim start instantly.
+  // This is more reliable than relying on the #t= fragment end or onEnded event,
+  // which are inconsistently supported across browsers.
   useEffect(() => {
     const el = videoPreviewRef.current
-    if (!el || mediaType !== 'video') return
-    function onTimeUpdate() {
-      if (el.currentTime < clipStart || el.currentTime >= clipStart + clipSeconds) {
-        el.currentTime = clipStart
+    if (!el || mediaType !== 'video' || !loopPlayback || !isPlaying) return
+
+    let rafId
+
+    const tick = () => {
+      rafId = requestAnimationFrame(tick)
+      const end = loopEndRef.current
+      if (el.currentTime >= end - 0.017 || el.ended) {
+        el.currentTime = loopStartRef.current
+        if (el.ended || el.paused) {
+          el.play().catch(() => {})
+        }
       }
     }
-    el.addEventListener('timeupdate', onTimeUpdate)
-    if (el.currentTime < clipStart || el.currentTime > clipStart + clipSeconds) {
-      el.currentTime = clipStart
+
+    rafId = requestAnimationFrame(tick)
+
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId)
     }
-    return () => el.removeEventListener('timeupdate', onTimeUpdate)
-  }, [clipStart, clipSeconds, mediaType])
+  }, [loopPlayback, isPlaying, mediaType])
 
   function clearMedia() {
     trimGenRef.current += 1
@@ -348,6 +408,8 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
     setOverlayFile(null)
     setAnnotateNote('')
     setShowAnnotator(false)
+    setIsPlaying(false)
+    setVideoReady(false)
   }
 
   function handleAnnotateApply(result) {
@@ -409,34 +471,82 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
       return
     }
 
+    // Stop preview player before any export work
+    if (videoPreviewRef.current) {
+      const pv = videoPreviewRef.current
+      pv.pause()
+      pv.muted = true
+      pv.removeAttribute('src')
+      pv.load()
+    }
+
     setIsUploading(true)
     setErrorMsg('')
     try {
       let mediaUrls = []
       if (tab === 'media') {
         let fileToUpload = mediaFile
+        let publishClipStart = mediaType === 'video' ? clipStart : 0
+        let publishClipDur = mediaType === 'video' ? clipSeconds : null
+        let publishOrigDur = sourceDuration
+
         // Apply user trim prefs on publish if still dirty (or over hard max)
+        // trimStatusVideo always returns meta-trim — original bytes + clip window.
         if (mediaType === 'video' && sourceFile && (trimDirty || (sourceDuration != null && sourceDuration > STATUS_VIDEO_MAX_SECONDS))) {
           setIsTrimming(true)
           try {
             const result = await trimStatusVideo(sourceFile, {
               startSeconds: clipStart,
               durationSeconds: clipSeconds,
-              onProgress: (pct) => setTrimPct(pct),
             })
             fileToUpload = result.file
             setPreferredClipSeconds(clipSeconds)
             setTrimDirty(false)
-            if (result.file.size > 25 * 1024 * 1024) {
-              throw new Error('Video is too large after trim. Choose a shorter length.')
-            }
+            publishClipStart = result.startSeconds
+            publishClipDur = result.durationSeconds
+            publishOrigDur = result.originalDuration
           } finally {
             setIsTrimming(false)
             setTrimPct(0)
           }
         }
         if (!fileToUpload) throw new Error('Add a photo or video first')
-        const url = await uploadToStorage(fileToUpload)
+
+        // If the file exceeds the upload limit, compress it first.
+        // Compression re-encodes the clip window — the result is already cut,
+        // so no #t= fragment is needed.
+        if (fileToUpload.size > STATUS_VIDEO_MAX_UPLOAD_BYTES) {
+          setIsTrimming(true)
+          setTrimPct(5)
+          try {
+            const compressed = await compressForUpload(
+              fileToUpload,
+              publishClipStart,
+              publishClipDur,
+              (pct) => setTrimPct(pct),
+            )
+            if (compressed) {
+              fileToUpload = compressed
+              publishClipStart = 0
+              publishClipDur = null
+              publishOrigDur = null
+            } else {
+              throw new Error('Video is too large. Choose a shorter length or smaller file.')
+            }
+          } finally {
+            setIsTrimming(false)
+            setTrimPct(0)
+          }
+        }
+
+        let url = await uploadToStorage(fileToUpload)
+        if (
+          mediaType === 'video'
+          && publishClipDur != null
+          && needsClipFragment(publishClipStart, publishClipDur, publishOrigDur)
+        ) {
+          url = applyClipToMediaUrl(url, publishClipStart, publishClipDur)
+        }
         mediaUrls = [url]
         // Video annotation overlay (transparent PNG) as second media entry
         if (mediaType === 'video' && overlayFile) {
@@ -608,13 +718,38 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
               {mediaPreview ? (
                 <div style={{
                   position: 'relative', borderRadius: 16, overflow: 'hidden',
-                  background: '#0f172a', maxHeight: 240,
+                  background: '#0f172a', height: 240,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}>
                   {mediaType === 'image'
-                    ? <img src={mediaPreview} alt="" style={{ maxHeight: 240, width: '100%', objectFit: 'contain' }} />
-                    : <video ref={videoPreviewRef} src={mediaPreview} controls style={{ maxHeight: 240, width: '100%', objectFit: 'contain', background: '#000' }} />
+                    ? <img src={mediaPreview} alt="" style={{ maxHeight: '100%', width: '100%', objectFit: 'contain' }} />
+                    : <video
+                        ref={videoPreviewRef}
+                        src={previewSrc}
+                        muted
+                        playsInline
+                        preload="auto"
+                        controls
+                        onTimeUpdate={e => setCurrentTime(e.target.currentTime)}
+                        onEnded={() => {
+                          if (!loopPlayback) setIsPlaying(false)
+                        }}
+                        onPlay={() => setIsPlaying(true)}
+                        onPause={() => setIsPlaying(false)}
+                        onLoadedData={() => setVideoReady(true)}
+                        onLoadStart={() => { if (!videoReady) setVideoReady(false) }}
+                        style={{ maxHeight: '100%', width: '100%', objectFit: 'contain', background: '#000' }}
+                      />
                   }
+                  {!videoReady && mediaType === 'video' && sourceFile && (
+                    <div style={{
+                      position: 'absolute', inset: 0, zIndex: 5,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      background: 'rgba(15,23,42,0.7)',
+                    }}>
+                      <IconSpinner size={22} />
+                    </div>
+                  )}
                   <div style={{
                     position: 'absolute', top: 10, left: 10,
                     background: 'rgba(0,0,0,0.55)', color: '#fff',
@@ -711,31 +846,73 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
 
               {mediaType === 'video' && mediaPreview && sourceDuration != null && (
                 <div style={{ marginTop: 10 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                    <span style={{ fontSize: 11, fontWeight: 800, color: '#64748b', letterSpacing: 0.3 }}>
-                      DRAG TO TRIM
-                    </span>
-                    <span style={{ fontSize: 12, fontWeight: 800, color: '#0f172a' }}>
-                      {formatDurationLabel(clipStart)}
-                      <span style={{ color: '#94a3b8', fontWeight: 600 }}> → </span>
-                      {formatDurationLabel(clipStart + clipSeconds)}
-                    </span>
-                  </div>
-                  <TrimBar
+                  <Timeline
                     duration={sourceDuration}
                     start={clipStart}
                     length={clipSeconds}
                     maxLength={Math.min(STATUS_VIDEO_MAX_SECONDS, sourceDuration)}
                     minLength={Math.min(1, sourceDuration)}
                     disabled={isTrimming || isUploading}
+                    currentTime={currentTime}
+                    thumbnails={thumbnails}
                     onChange={(newStart, newLength) => {
                       setClipStart(newStart)
                       setClipSeconds(newLength)
                       setPreferredClipSeconds(newLength)
                       setTrimDirty(true)
-                      if (videoPreviewRef.current) videoPreviewRef.current.currentTime = newStart
+                      const el = videoPreviewRef.current
+                      if (el) {
+                        if (!el.paused) el.pause()
+                        el.currentTime = newStart
+                      }
+                      setIsPlaying(false)
+                    }}
+                    onCommit={(committedStartVal, committedLength) => {
+                      setCommittedStart(committedStartVal)
+                      setCommittedSeconds(committedLength)
+                      setTrimDirty(true)
+                      const el = videoPreviewRef.current
+                      if (el) el.currentTime = committedStartVal
+                      setCurrentTime(committedStartVal)
+                    }}
+                    onSeek={(time) => {
+                      const el = videoPreviewRef.current
+                      if (el) {
+                        if (!el.paused) el.pause()
+                        el.currentTime = time
+                        setIsPlaying(false)
+                      }
+                      setCurrentTime(time)
                     }}
                   />
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 6 }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const next = !loopPlayback
+                        setLoopPlayback(next)
+                        if (next) {
+                          const el = videoPreviewRef.current
+                          if (el && el.paused) {
+                            el.play().catch(() => {})
+                            setIsPlaying(true)
+                          }
+                        } else {
+                          setIsPlaying(false)
+                        }
+                      }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 5,
+                        padding: '5px 10px', borderRadius: 8, border: 'none',
+                        background: loopPlayback ? G : '#e8edf5',
+                        color: loopPlayback ? '#fff' : '#64748b',
+                        cursor: 'pointer', fontSize: 11, fontWeight: 700, fontFamily: 'inherit',
+                      }}
+                    >
+                      <span style={{ fontSize: 13 }}>🔁</span>
+                      {loopPlayback ? 'Loop on' : 'Loop off'}
+                    </button>
+                  </div>
                 </div>
               )}
 
@@ -932,7 +1109,18 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
                     Source {formatDurationLabel(sourceDuration)} · max {STATUS_VIDEO_MAX_SECONDS}s
                   </div>
                 </div>
-                <IconClock size={16} color="#64748b" />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <div style={{
+                    display: 'flex', alignItems: 'center', gap: 4,
+                    background: '#ecfdf5', color: '#166534',
+                    padding: '2px 8px', borderRadius: 20,
+                    fontSize: 10, fontWeight: 800,
+                  }}>
+                    <span>✓</span>
+                    <span>{formatDurationLabel(clipSeconds)} clip</span>
+                  </div>
+                  <IconClock size={16} color="#64748b" />
+                </div>
               </div>
 
               
@@ -1057,100 +1245,6 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
   )
 }
 
-function TrimBar({ duration, start, length, maxLength, minLength = 1, disabled, onChange }) {
-  const trackRef = useRef(null)
-  const dragRef = useRef(null) // 'start' | 'end' | 'move'
-
-  const startPct = (start / duration) * 100
-  const endPct = ((start + length) / duration) * 100
-
-  function timeFromEvent(e) {
-    const rect = trackRef.current.getBoundingClientRect()
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX
-    let pct = (clientX - rect.left) / rect.width
-    pct = Math.max(0, Math.min(1, pct))
-    return pct * duration
-  }
-
-  function handleDrag(e) {
-    if (e.cancelable) e.preventDefault()
-    const time = timeFromEvent(e)
-    if (dragRef.current === 'start') {
-      let newStart = Math.max(0, Math.min(time, start + length - minLength))
-      let newLength = Math.min(start + length - newStart, maxLength)
-      onChange(newStart, newLength)
-    } else if (dragRef.current === 'end') {
-      let newEnd = Math.max(time, start + minLength)
-      let newLength = Math.min(newEnd - start, maxLength, duration - start)
-      onChange(start, newLength)
-    } else if (dragRef.current === 'move') {
-      let newStart = Math.max(0, Math.min(duration - length, time - length / 2))
-      onChange(newStart, length)
-    }
-  }
-
-  function onPointerDown(handle) {
-    return (e) => {
-      if (disabled) return
-      e.preventDefault()
-      dragRef.current = handle
-      const move = (ev) => handleDrag(ev)
-      const up = () => {
-        dragRef.current = null
-        window.removeEventListener('mousemove', move)
-        window.removeEventListener('mouseup', up)
-        window.removeEventListener('touchmove', move)
-        window.removeEventListener('touchend', up)
-      }
-      window.addEventListener('mousemove', move)
-      window.addEventListener('mouseup', up)
-      window.addEventListener('touchmove', move, { passive: false })
-      window.addEventListener('touchend', up)
-    }
-  }
-
-  return (
-    <div ref={trackRef} style={{ position: 'relative', height: 44, borderRadius: 10, background: '#e2e8f0', touchAction: 'none', userSelect: 'none' }}>
-      <div style={{ position: 'absolute', top: 0, bottom: 0, left: 0, width: `${startPct}%`, background: 'rgba(15,23,42,0.35)', borderRadius: '10px 0 0 10px' }} />
-      <div style={{ position: 'absolute', top: 0, bottom: 0, right: 0, width: `${100 - endPct}%`, background: 'rgba(15,23,42,0.35)', borderRadius: '0 10px 10px 0' }} />
-      <div
-        onMouseDown={onPointerDown('move')}
-        onTouchStart={onPointerDown('move')}
-        style={{
-          position: 'absolute', top: 0, bottom: 0,
-          left: `${startPct}%`, width: `${endPct - startPct}%`,
-          border: `2px solid ${G}`, boxSizing: 'border-box',
-          cursor: disabled ? 'default' : 'grab',
-          background: 'rgba(26,122,74,0.12)',
-        }}
-      />
-      <div
-        onMouseDown={onPointerDown('start')}
-        onTouchStart={onPointerDown('start')}
-        style={{
-          position: 'absolute', top: 0, bottom: 0, left: `calc(${startPct}% - 8px)`,
-          width: 16, borderRadius: 6, background: G,
-          cursor: disabled ? 'default' : 'ew-resize',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2,
-        }}
-      >
-        <div style={{ width: 3, height: 16, borderRadius: 2, background: '#fff' }} />
-      </div>
-      <div
-        onMouseDown={onPointerDown('end')}
-        onTouchStart={onPointerDown('end')}
-        style={{
-          position: 'absolute', top: 0, bottom: 0, left: `calc(${endPct}% - 8px)`,
-          width: 16, borderRadius: 6, background: G,
-          cursor: disabled ? 'default' : 'ew-resize',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2,
-        }}
-      >
-        <div style={{ width: 3, height: 16, borderRadius: 2, background: '#fff' }} />
-      </div>
-    </div>
-  )
-}
 
 function UploadAction({ icon, label, onClick }) {
   return (

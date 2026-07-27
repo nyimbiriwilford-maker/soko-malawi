@@ -1,6 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { X, MoreHorizontal, Heart, MessageCircle, Share2, MapPin, ChevronRight, VolumeX, Volume2, Eye, Send, Copy, Search } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { STATUS_COLORS, STATUS_META } from '../constants/homeConstants'
+import {
+  parseClipWindow,
+  mediaUrlBase,
+  isStatusVideoUrl,
+} from '../utils/statusVideo'
 
 /**
  * Status / story viewer — product-first layout (reference design).
@@ -205,11 +212,13 @@ function isRemoteMediaUrl(url) {
   if (!url || typeof url !== 'string') return false
   if (isColorUrl(url)) return false
   if (url.startsWith('blob:') || url.startsWith('data:')) return true
-  return /^https?:\/\//i.test(url) || url.startsWith('/')
+  // Allow status clip fragments: https://.../vid.webm#t=5,20
+  const base = mediaUrlBase(url)
+  return /^https?:\/\//i.test(base) || base.startsWith('/')
 }
 
 function isVideoUrl(url) {
-  return !!url?.match(/\.(mp4|mov|webm|m4v)(\?|$)/i)
+  return isStatusVideoUrl(url)
 }
 
 /**
@@ -218,16 +227,18 @@ function isVideoUrl(url) {
  */
 async function downloadMediaFully(url, onProgress) {
   if (!url) throw new Error('No media url')
-  if (url.startsWith('blob:') || url.startsWith('data:')) {
+  // Clip fragments (#t=) are playback hints only — fetch/cache the bare file URL
+  const fetchUrl = mediaUrlBase(url) || url
+  if (fetchUrl.startsWith('blob:') || fetchUrl.startsWith('data:')) {
     onProgress?.(100)
-    return { blobUrl: url, kind: isVideoUrl(url) ? 'video' : 'image' }
+    return { blobUrl: fetchUrl, kind: isVideoUrl(url) ? 'video' : 'image' }
   }
-  if (mediaBlobCache.has(url)) {
+  if (mediaBlobCache.has(fetchUrl)) {
     onProgress?.(100)
-    return mediaBlobCache.get(url)
+    return mediaBlobCache.get(fetchUrl)
   }
-  if (mediaInflight.has(url)) {
-    const cached = await mediaInflight.get(url)
+  if (mediaInflight.has(fetchUrl)) {
+    const cached = await mediaInflight.get(fetchUrl)
     onProgress?.(100)
     return cached
   }
@@ -238,7 +249,7 @@ async function downloadMediaFully(url, onProgress) {
 
     // Prefer full fetch with byte progress (CORS required)
     try {
-      const res = await fetch(url, { mode: 'cors', credentials: 'omit', cache: 'force-cache' })
+      const res = await fetch(fetchUrl, { mode: 'cors', credentials: 'omit', cache: 'force-cache' })
       if (!res.ok) throw new Error(`Download failed (${res.status})`)
 
       const total = Number(res.headers.get('content-length')) || 0
@@ -383,6 +394,10 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
   const [mediaIdx, setMediaIdx] = useState(0)
   const [progress, setProgress] = useState(0)
   const [paused, setPaused] = useState(false)
+  const [closing, setClosing] = useState(false)
+  const touchStartRef = useRef(null)
+  const [showMarketplace, setShowMarketplace] = useState(true)
+  const marketplaceTimerRef = useRef(null)
   const [localStories, setLocalStories] = useState(stories || [])
   const [replyText, setReplyText] = useState('')
   const [replySending, setReplySending] = useState(false)
@@ -455,7 +470,18 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
     setReplies([])
     setReplyCount(0)
     setMuted(false)
+    setShowMarketplace(true)
   }, [story?.id])
+
+  // ── Auto-hide marketplace card after 4s ─────────────────────────────────────
+  const hasTaggedEntity = story?.tagged || story?._taggedEntity
+  useEffect(() => {
+    if (!hasTaggedEntity || paused || showViewers || shareUrl || showMenu || showReplies) return
+    clearTimeout(marketplaceTimerRef.current)
+    setShowMarketplace(true)
+    marketplaceTimerRef.current = setTimeout(() => setShowMarketplace(false), 4000)
+    return () => clearTimeout(marketplaceTimerRef.current)
+  }, [story?.id, mediaIdx, hasTaggedEntity, paused, showViewers, shareUrl, showMenu, showReplies])
 
   // ── Stream media right away (no download % UI) ─────────────────────────────
   useEffect(() => {
@@ -485,9 +511,13 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
     setMediaError(null)
     setProgress(0)
 
-    // Prefer cached blob if we already have it; otherwise stream remote URL
+    // Prefer cached blob if we already have it; otherwise stream remote URL.
+    // Preserve #t=... clip window so the video "knows" it's trimmed.
+    // Cache stores blob URLs without fragment; reattach it for playback.
+    const clipFrag = remote.includes('#t=') ? remote.slice(remote.indexOf('#')) : ''
     const cached = mediaBlobCache.get(remote)
-    const src = cached?.blobUrl || remote
+    let src = cached?.blobUrl || remote
+    if (clipFrag && src.indexOf('#') === -1) src += clipFrag
     setMediaSrc(src)
     // Images can show as soon as src is set; videos wait for canplay (handled by element)
     if (kind === 'image') {
@@ -568,10 +598,15 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
       const start = Date.now()
       let done = false
 
+      // Detect meta-trim clip window (#t=start,end) so progress uses clip range
+      const clip = parseClipWindow(mediaSrc || v.currentSrc || '')
+      const clipStart = clip?.start ?? 0
+      const clipDur = clip?.duration ?? (Number.isFinite(v.duration) && v.duration > 0 ? v.duration : VIDEO_FALLBACK_MS / 1000)
+
       function tick() {
         if (done) return
-        const dur = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : VIDEO_FALLBACK_MS / 1000
-        const p = Math.min(100, (v.currentTime / dur) * 100)
+        const elapsed = v.currentTime - clipStart
+        const p = Math.min(100, (elapsed / clipDur) * 100)
         if (activeBarRef.current) activeBarRef.current.style.width = `${p}%`
 
         if (Date.now() - start >= VIDEO_MAX_MS) {
@@ -665,7 +700,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
       let { data } = await supabase
         .from('user_statuses')
         .select(`id, content, status_type, expires_at, created_at, media_urls, tagged_listing_id, tagged_kind, tagged_ref_id, user_id, location_hint,
-          profiles:user_id ( id, full_name, avatar_url, city ),
+          profiles:user_id ( id, full_name, avatar_url, city, is_verified ),
           tagged:tagged_listing_id ( id, title, price, images, category, description, city, district )`)
         .eq('user_id', nextStory.user_id)
         .gt('expires_at', new Date().toISOString())
@@ -675,6 +710,10 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
           const { hydrateStatusTags } = await import('../hooks/useStatuses')
           data = await hydrateStatusTags(data)
         } catch { /* ignore */ }
+        // Normalize profiles join (Supabase may return array)
+        for (const s of data) {
+          if (Array.isArray(s.profiles)) s.profiles = s.profiles[0] || null
+        }
         setLocalStories([...localStories.slice(0, nextIdx), ...data, ...localStories.slice(nextIdx + 1)])
       }
     }
@@ -1017,7 +1056,17 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
   }
   function onPointerUp() {
     clearTimeout(holdRef.current)
-    if (!showViewers && !shareUrl && !showMenu && !showReplies) setPaused(false)
+    if (!showViewers && !shareUrl && !showMenu && !showReplies) {
+      setPaused(false)
+      setShowMarketplace(true)
+      clearTimeout(marketplaceTimerRef.current)
+      marketplaceTimerRef.current = setTimeout(() => setShowMarketplace(false), 4000)
+    }
+  }
+
+  function handleClose() {
+    setClosing(true)
+    setTimeout(() => onClose?.(), 280)
   }
 
   if (!story) return null
@@ -1074,13 +1123,13 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
     : (!isTextOnlyStage && story.content
       ? String(story.content).replace(/\s+/g, ' ').trim().slice(0, 90)
       : null)
-  const kindLabel = ({
-    listing: 'Product',
-    job: 'Job',
-    service: 'Service',
-    shop: 'Shop',
-    request: 'Looking for',
-  })[taggedKind] || 'Tagged'
+  const kindMeta = taggedKind ? STATUS_META[taggedKind] : null
+  const kindLabel = kindMeta?.label
+    || (story.status_type === 'promo' || story.status_type === 'promotion' ? STATUS_META.promotion.label : null)
+    || null
+  const kindColor = kindMeta?.color
+    || (kindLabel ? STATUS_COLORS.promotion : null)
+    || null
 
   // Progress bars: one per media item in this user's current story group,
   // or fall back to per-story-in-user-group
@@ -1119,6 +1168,14 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
           0% { background-position: -200% 0; }
           100% { background-position: 200% 0; }
         }
+        @keyframes svOpen {
+          from { opacity: 0; transform: scale(0.96); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        @keyframes svClose {
+          from { opacity: 1; transform: scale(1); }
+          to { opacity: 0; transform: scale(0.92) translateY(40px); }
+        }
         .sv-tap:active { opacity: 0.85; }
         .sv-hide-scroll::-webkit-scrollbar { display: none; }
         #sv-reply-input::placeholder { color: rgba(255,255,255,0.65); }
@@ -1127,27 +1184,45 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
       <div
         style={{
           position: 'fixed', inset: 0, zIndex: 998,
-          background: '#000',
+          background: '#0d0d0d',
           fontFamily: "'DM Sans', system-ui, sans-serif",
           userSelect: 'none',
           display: 'flex',
+          alignItems: 'center',
           justifyContent: 'center',
+          animation: closing ? 'svClose 0.28s ease forwards' : 'svOpen 0.25s ease',
         }}
         onPointerDown={onPointerDown}
         onPointerUp={onPointerUp}
+        onTouchStart={e => { touchStartRef.current = { y: e.touches[0].clientY, x: e.touches[0].clientX } }}
+        onTouchMove={e => {
+          if (!touchStartRef.current) return
+          const dy = e.touches[0].clientY - touchStartRef.current.y
+          if (dy > 80) { touchStartRef.current = null; handleClose() }
+        }}
+        onTouchEnd={() => { touchStartRef.current = null }}
+        onKeyDown={e => {
+          if (e.key === 'Escape') handleClose()
+          else if (e.key === 'ArrowLeft') { clearTimeout(holdRef.current); goBack() }
+          else if (e.key === 'ArrowRight') { clearTimeout(holdRef.current); advance() }
+        }}
+        tabIndex={0}
+        ref={el => el?.focus()}
       >
-        <div style={{
-          position: 'relative',
-          width: '100%',
-          maxWidth: 430,
-          height: '100%',
-          background: '#000',
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-        }}>
-          {/* ════════ MEDIA STAGE ════════ */}
-          <div style={{ position: 'relative', flex: 1, minHeight: 0, background: '#0a0a0a' }}>
+          <div style={{
+            position: 'relative',
+            width: '100%',
+            maxWidth: 'min(520px, 100vw)',
+            height: '100%',
+            maxHeight: '100vh',
+            background: '#0d0d0d',
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            borderRadius: 0,
+          }}>
+            {/* ════════ MEDIA STAGE ════════ */}
+            <div style={{ position: 'relative', flex: 1, minHeight: 0, background: '#0d0d0d' }}>
             {/* Skeleton shimmer while media is still buffering — avoids the blank/black gap */}
             {media0 && !mediaReady && !showLoadError && (
               <div style={{
@@ -1213,7 +1288,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                 }}
                 style={{
                   width: '100%', height: '100%', objectFit: 'contain', display: 'block',
-                  background: '#000',
+                  background: '#0d0d0d',
                 }}
               />
             )}
@@ -1298,20 +1373,21 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
             {/* ── Progress bars ── */}
             <div style={{
               position: 'absolute', top: 0, left: 0, right: 0, zIndex: 30,
-              display: 'flex', gap: 3,
-              padding: '10px 12px 0',
-              paddingTop: 'max(10px, env(safe-area-inset-top, 10px))',
+              display: 'flex', gap: 2,
+              padding: '8px 10px 0',
+              paddingTop: 'max(8px, env(safe-area-inset-top, 8px))',
             }}>
               {Array.from({ length: barCount }).map((_, i) => (
                 <div key={i} style={{
-                  flex: 1, height: 2.5, borderRadius: 99,
-                  background: 'rgba(255,255,255,0.28)', overflow: 'hidden',
+                  flex: 1, height: 2, borderRadius: 99,
+                  background: 'rgba(255,255,255,0.25)', overflow: 'hidden',
                 }}>
                   <div
                     ref={i === barActive ? activeBarRef : null}
                     style={{
                       height: '100%', borderRadius: 99, background: '#fff',
                       width: i < barActive ? '100%' : i === barActive ? `${progress}%` : '0%',
+                      transition: 'width 0.1s linear',
                     }}
                   />
                 </div>
@@ -1321,9 +1397,9 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
             {/* ── Header ── */}
             <div style={{
               position: 'absolute', top: 0, left: 0, right: 0, zIndex: 30,
-              display: 'flex', alignItems: 'center', gap: 10,
-              padding: '18px 12px 0',
-              paddingTop: 'max(22px, calc(env(safe-area-inset-top, 8px) + 14px))',
+              display: 'flex', alignItems: 'center', gap: 8,
+              padding: '14px 12px 0',
+              paddingTop: 'max(18px, calc(env(safe-area-inset-top, 8px) + 10px))',
             }}>
               <button
                 type="button"
@@ -1335,19 +1411,19 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                   navigate(`/profile/${story.user_id}`)
                 }}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 9,
+                  display: 'flex', alignItems: 'center', gap: 10,
                   background: 'none', border: 'none', padding: 0,
                   cursor: 'pointer', flex: 1, minWidth: 0, textAlign: 'left',
                 }}
               >
                 <div style={{
-                  width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
-                  border: '2px solid rgba(255,255,255,0.95)',
+                  width: 42, height: 42, borderRadius: '50%', flexShrink: 0,
+                  border: '2px solid rgba(255,255,255,0.9)',
                   overflow: 'hidden',
                   background: `linear-gradient(135deg,${GREEN},#22c55e)`,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 14, fontWeight: 800, color: '#fff',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.35)',
+                  fontSize: 15, fontWeight: 800, color: '#fff',
+                  boxShadow: '0 2px 10px rgba(0,0,0,0.4)',
                 }}>
                   {avatar
                     ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -1356,8 +1432,8 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                 <div style={{ minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                     <span style={{
-                      fontSize: 14, fontWeight: 800, color: '#fff',
-                      textShadow: '0 1px 4px rgba(0,0,0,0.5)',
+                      fontSize: 15, fontWeight: 800, color: '#fff',
+                      textShadow: '0 1px 6px rgba(0,0,0,0.6)',
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                       maxWidth: 160,
                     }}>
@@ -1366,15 +1442,26 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                     <IconVerified size={14} />
                   </div>
                   <div style={{
-                    fontSize: 11, color: 'rgba(255,255,255,0.7)', fontWeight: 600,
-                    marginTop: 1, textShadow: '0 1px 3px rgba(0,0,0,0.45)',
+                    fontSize: 11, color: 'rgba(255,255,255,0.65)', fontWeight: 500,
+                    marginTop: 1, textShadow: '0 1px 4px rgba(0,0,0,0.5)',
+                    display: 'flex', alignItems: 'center', gap: 6,
                   }}>
-                    {createdAgo}
+                    <span>{createdAgo}</span>
+                    {kindLabel && (
+                      <span style={{
+                        fontSize: 9, fontWeight: 800,
+                        color: '#fff', borderRadius: 4,
+                        padding: '1px 6px', lineHeight: 1.6,
+                        background: kindColor || '#666',
+                      }}>
+                        {kindLabel}
+                      </span>
+                    )}
                   </div>
                 </div>
               </button>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
                 <button
                   type="button"
                   className="sv-tap"
@@ -1385,19 +1472,31 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                     setPaused(true)
                   }}
                   aria-label="More"
-                  style={iconBtnStyle}
+                  style={{
+                    ...iconBtnStyle,
+                    width: 40, height: 40,
+                    background: 'rgba(0,0,0,0.3)',
+                    backdropFilter: 'blur(6px)',
+                    borderRadius: '50%',
+                  }}
                 >
-                  <IconMore />
+                  <MoreHorizontal size={18} />
                 </button>
                 <button
                   type="button"
                   className="sv-tap"
                   onPointerDown={e => e.stopPropagation()}
-                  onPointerUp={e => { e.stopPropagation(); onClose?.() }}
+                  onPointerUp={e => { e.stopPropagation(); handleClose() }}
                   aria-label="Close"
-                  style={iconBtnStyle}
+                  style={{
+                    ...iconBtnStyle,
+                    width: 40, height: 40,
+                    background: 'rgba(0,0,0,0.3)',
+                    backdropFilter: 'blur(6px)',
+                    borderRadius: '50%',
+                  }}
                 >
-                  <IconClose />
+                  <X size={18} />
                 </button>
               </div>
             </div>
@@ -1428,7 +1527,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
             {/* FEATURED badge */}
             {isFeatured && (
               <div style={{
-                position: 'absolute', left: 14, top: 78, zIndex: 20,
+                position: 'absolute', left: 14, top: 68, zIndex: 20,
                 background: GOLD_BTN, color: '#1a1a1a',
                 borderRadius: 999, padding: '6px 11px',
                 fontSize: 10, fontWeight: 900, letterSpacing: 0.6,
@@ -1443,7 +1542,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
             {/* media counter */}
             {mediaCount > 1 && (
               <div style={{
-                position: 'absolute', right: 14, top: 78, zIndex: 20,
+                position: 'absolute', right: 14, top: 68, zIndex: 20,
                 background: 'rgba(0,0,0,0.55)', color: '#fff',
                 borderRadius: 999, padding: '5px 10px',
                 fontSize: 11, fontWeight: 800,
@@ -1456,16 +1555,16 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
 
             {/* Mute / unmute toggle — only for video */}
             {mediaKind === 'video' && showMedia && (
-              <button
-                type="button"
-                className="sv-tap"
-                onPointerDown={e => e.stopPropagation()}
-                onPointerUp={e => { e.stopPropagation(); setMuted(m => !m) }}
-                aria-label={muted ? 'Unmute video' : 'Mute video'}
-                style={{
-                  position: 'absolute',
-                  right: 14,
-                  top: mediaCount > 1 ? 116 : 78,
+                <button
+                  type="button"
+                  className="sv-tap"
+                  onPointerDown={e => e.stopPropagation()}
+                  onPointerUp={e => { e.stopPropagation(); setMuted(m => !m) }}
+                  aria-label={muted ? 'Unmute video' : 'Mute video'}
+                  style={{
+                    position: 'absolute',
+                    right: 14,
+                    top: mediaCount > 1 ? 104 : 68,
                   zIndex: 20,
                   width: 34, height: 34, borderRadius: '50%',
                   background: 'rgba(0,0,0,0.55)', color: '#fff',
@@ -1597,7 +1696,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                 setPaused(false)
                 goBack()
               }}
-              style={{ position: 'absolute', left: 0, top: 70, bottom: 0, width: '32%', zIndex: 12 }}
+              style={{ position: 'absolute', left: 0, top: 60, bottom: 0, width: '32%', zIndex: 12 }}
             />
             <div
               onPointerUp={e => {
@@ -1606,141 +1705,162 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                 setPaused(false)
                 advance()
               }}
-              style={{ position: 'absolute', right: 0, top: 70, bottom: 0, width: '32%', zIndex: 12 }}
+              style={{ position: 'absolute', right: 0, top: 60, bottom: 0, width: '32%', zIndex: 12 }}
             />
 
-            {/* ════════ FLOATING BOTTOM CHROME — overlaid on media, WhatsApp/IG style ════════ */}
+            {/* ════════ FLOATING BOTTOM CHROME — overlaid on media ════════ */}
             <div
               onPointerDown={e => e.stopPropagation()}
               onPointerUp={e => e.stopPropagation()}
               style={{
                 position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 25,
-                background: 'linear-gradient(to top, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.6) 40%, rgba(0,0,0,0.15) 80%, transparent 100%)',
-                padding: '30px 14px calc(12px + env(safe-area-inset-bottom, 0px))',
+                background: 'linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.5) 35%, rgba(0,0,0,0.1) 75%, transparent 100%)',
+                padding: '16px 12px calc(8px + env(safe-area-inset-bottom, 0px))',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: 10,
+                gap: 8,
               }}
             >
-              {/* Tagged product / entity card — now stacks naturally above the actions below */}
+              {/* Tagged product / entity card — auto-hides after 4s */}
               {tagged && mediaReady && !mediaError && (
-                <button
-                  type="button"
-                  className="sv-tap"
-                  onClick={openTaggedEntity}
-                  style={{
-                    width: '100%',
-                    background: 'rgba(255,255,255,0.14)',
-                    backdropFilter: 'blur(8px)',
-                    border: '1.5px solid rgba(255,255,255,0.25)',
-                    borderRadius: 14,
-                    padding: '8px 10px',
-                    textAlign: 'left',
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                  }}
-                >
-                  <div style={{
-                    width: 40, height: 40, borderRadius: 10, flexShrink: 0,
-                    overflow: 'hidden',
-                    background: 'rgba(255,255,255,0.1)',
-                    border: '1px solid rgba(255,255,255,0.14)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    {entityLogo || productImage ? (
-                      <img
-                        src={entityLogo || productImage}
-                        alt=""
-                        style={{
-                          width: '100%', height: '100%',
-                          objectFit: (taggedKind === 'shop' || taggedKind === 'job') ? 'contain' : 'cover',
-                          background: (taggedKind === 'shop' || taggedKind === 'job') ? '#fff' : 'transparent',
-                          padding: (taggedKind === 'shop' || taggedKind === 'job') ? 3 : 0,
-                          boxSizing: 'border-box',
-                        }}
-                      />
-                    ) : (
-                      <IconPackage size={18} />
-                    )}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
-                      <span style={{
-                        fontSize: 13.5, fontWeight: 800, color: '#fff',
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                        textShadow: '0 1px 4px rgba(0,0,0,0.5)',
-                      }}>
-                        {productTitle}
-                      </span>
-                      {productPrice && (
-                        <span style={{
-                          fontSize: 13, fontWeight: 900, color: GOLD,
-                          textShadow: '0 1px 4px rgba(0,0,0,0.5)', flexShrink: 0,
-                        }}>
-                          {typeof productPrice === 'string' && !/^(MK|mk)/.test(productPrice) && Number.isFinite(Number(productPrice))
-                            ? formatPrice(productPrice)
-                            : productPrice}
-                        </span>
-                      )}
-                    </div>
+                <div style={{
+                  opacity: showMarketplace ? 1 : 0,
+                  transform: showMarketplace ? 'translateY(0)' : 'translateY(8px)',
+                  transition: 'opacity 0.35s ease, transform 0.35s ease',
+                  pointerEvents: showMarketplace ? 'auto' : 'none',
+                }}>
+                  <button
+                    type="button"
+                    className="sv-tap"
+                    onClick={openTaggedEntity}
+                    style={{
+                      width: '100%',
+                      background: 'rgba(255,255,255,0.08)',
+                      backdropFilter: 'blur(16px)',
+                      WebkitBackdropFilter: 'blur(16px)',
+                      border: '1px solid rgba(255,255,255,0.15)',
+                      borderRadius: 12,
+                      padding: '6px 8px',
+                      textAlign: 'left',
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                    }}
+                  >
                     <div style={{
-                      display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap',
-                      fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 600, marginTop: 1,
+                      width: 36, height: 36, borderRadius: 8, flexShrink: 0,
+                      overflow: 'hidden',
+                      background: 'rgba(255,255,255,0.06)',
+                      border: '1px solid rgba(255,255,255,0.1)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
                     }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#4ade80' }}>
-                        <IconCheck size={9} />
-                        Verified
-                      </span>
-                      {productCity && (
-                        <>
-                          <span style={{ opacity: 0.4 }}>·</span>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                            <IconMapPin size={9} />
-                            {productCity}
-                          </span>
-                        </>
+                      {entityLogo || productImage ? (
+                        <img
+                          src={entityLogo || productImage}
+                          alt=""
+                          style={{
+                            width: '100%', height: '100%',
+                            objectFit: (taggedKind === 'shop' || taggedKind === 'job') ? 'contain' : 'cover',
+                            background: (taggedKind === 'shop' || taggedKind === 'job') ? '#fff' : 'transparent',
+                            padding: (taggedKind === 'shop' || taggedKind === 'job') ? 3 : 0,
+                            boxSizing: 'border-box',
+                          }}
+                        />
+                      ) : (
+                        <IconPackage size={16} />
                       )}
                     </div>
-                  </div>
-                  <IconChevronRight size={16} color="rgba(255,255,255,0.6)" />
-                </button>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+                        <span style={{
+                          fontSize: 12.5, fontWeight: 800, color: '#fff',
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          textShadow: '0 1px 4px rgba(0,0,0,0.4)',
+                        }}>
+                          {productTitle}
+                        </span>
+                        {productPrice && (
+                          <span style={{
+                            fontSize: 12, fontWeight: 900, color: GOLD,
+                            textShadow: '0 1px 4px rgba(0,0,0,0.4)', flexShrink: 0,
+                          }}>
+                            {typeof productPrice === 'string' && !/^(MK|mk)/.test(productPrice) && Number.isFinite(Number(productPrice))
+                              ? formatPrice(productPrice)
+                              : productPrice}
+                          </span>
+                        )}
+                      </div>
+                      {productCity && (
+                        <div style={{
+                          display: 'flex', alignItems: 'center', gap: 3,
+                          fontSize: 10, color: 'rgba(255,255,255,0.6)', fontWeight: 500, marginTop: 1,
+                        }}>
+                          <MapPin size={8} />
+                          {productCity}
+                        </div>
+                      )}
+                    </div>
+                    <ChevronRight size={14} color="rgba(255,255,255,0.5)" />
+                  </button>
+                </div>
               )}
 
-              {/* Engagement */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 18, padding: '0 2px' }}>
-                <button
-                  type="button"
-                  className="sv-tap"
-                  onClick={handleLove}
-                  disabled={reacting || isOwn}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 6,
-                    background: 'none', border: 'none', padding: 0,
-                    cursor: isOwn ? 'default' : 'pointer', fontFamily: 'inherit',
-                  }}
-                >
-                  <IconHeart size={20} filled={myReaction === 'love'} />
-                  <span style={{ fontSize: 14, fontWeight: 800, color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>
-                    {fmtK(loveCount)}
-                  </span>
-                </button>
+              {/* Action bar */}
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 16, padding: '2px 0',
+              }}>
+                {!isOwn ? (
+                  <button
+                    type="button"
+                    className="sv-tap"
+                    onClick={handleLove}
+                    disabled={reacting}
+                    aria-label="Like"
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 5,
+                      background: 'none', border: 'none', padding: 0,
+                      cursor: 'pointer', fontFamily: 'inherit',
+                    }}
+                  >
+                    <IconHeart size={19} filled={myReaction === 'love'} />
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>
+                      {fmtK(loveCount)}
+                    </span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="sv-tap"
+                    onClick={openViewers}
+                    aria-label="View analytics"
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 5,
+                      background: 'none', border: 'none', padding: 0,
+                      cursor: 'pointer', fontFamily: 'inherit',
+                    }}
+                  >
+                    <Eye size={19} />
+                    <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>
+                      {fmtK(viewCount)}
+                    </span>
+                  </button>
+                )}
 
                 <button
                   type="button"
                   className="sv-tap"
                   onClick={openReplies}
-                  aria-label="View replies"
+                  aria-label="Comment"
                   style={{
-                    display: 'flex', alignItems: 'center', gap: 6,
+                    display: 'flex', alignItems: 'center', gap: 5,
                     background: 'none', border: 'none', padding: 0,
                     cursor: 'pointer', fontFamily: 'inherit',
                   }}
                 >
-                  <IconComment size={19} color="#fff" />
-                  <span style={{ fontSize: 14, fontWeight: 800, color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>
+                  <MessageCircle size={19} />
+                  <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>
                     {fmtK(replyCount)}
                   </span>
                 </button>
@@ -1749,80 +1869,62 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                   type="button"
                   className="sv-tap"
                   onClick={openShare}
+                  aria-label="Share"
                   style={{
-                    display: 'flex', alignItems: 'center', gap: 6,
+                    display: 'flex', alignItems: 'center', gap: 5,
                     background: 'none', border: 'none', padding: 0,
-                    cursor: 'pointer', fontFamily: 'inherit', marginLeft: 'auto',
+                    cursor: 'pointer', fontFamily: 'inherit',
                   }}
                 >
-                  <IconShare size={18} color="#fff" />
-                  <span style={{ fontSize: 13, fontWeight: 700, color: 'rgba(255,255,255,0.85)', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>Share</span>
+                  <Share2 size={17} />
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.8)', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>Share</span>
                 </button>
-              </div>
 
-              {/* CTAs */}
-              {!isOwn ? (
-                <div style={{ display: 'flex', gap: 10 }}>
+                {/* Spacer */}
+                <div style={{ flex: 1 }} />
+
+                {/* Message / View product CTA */}
+                {!isOwn ? (
                   <button
                     type="button"
                     className="sv-tap"
                     onClick={goChat}
+                    aria-label="Message seller"
                     style={{
-                      flex: 1,
+                      display: 'flex', alignItems: 'center', gap: 5,
                       background: GREEN,
                       border: 'none',
                       borderRadius: 999,
-                      padding: '12px 12px',
-                      fontSize: 14, fontWeight: 800, color: '#fff',
+                      padding: '7px 14px',
+                      fontSize: 12.5, fontWeight: 800, color: '#fff',
                       cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-                      boxShadow: '0 3px 12px rgba(26,122,74,0.3)',
                       fontFamily: 'inherit',
+                      boxShadow: '0 2px 10px rgba(26,122,74,0.3)',
                     }}
                   >
-                    <IconMessage size={15} />
-                    Message Seller
+                    <Send size={13} />
+                    Message
                   </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  className="sv-tap"
-                  onClick={openViewers}
-                  style={{
-                    width: '100%',
-                    background: 'rgba(255,255,255,0.14)',
-                    border: '1.5px solid rgba(255,255,255,0.3)',
-                    backdropFilter: 'blur(8px)',
-                    borderRadius: 999,
-                    padding: '11px',
-                    fontSize: 13, fontWeight: 800, color: '#fff',
-                    cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                    fontFamily: 'inherit',
-                  }}
-                >
-                  <IconEye size={15} />
-                  {fmtK(viewCount)} {viewCount === 1 ? 'view' : 'views'} · See who viewed
-                </button>
-              )}
+                ) : null}
+              </div>
 
               {/* Reply bar */}
               {!isOwn && (
                 <div style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  background: 'rgba(255,255,255,0.14)',
-                  backdropFilter: 'blur(8px)',
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  background: 'rgba(255,255,255,0.06)',
+                  backdropFilter: 'blur(12px)',
+                  WebkitBackdropFilter: 'blur(12px)',
                   borderRadius: 999,
-                  padding: '6px 8px 6px 6px',
-                  border: '1.5px solid rgba(255,255,255,0.25)',
+                  padding: '4px 6px 4px 4px',
+                  border: '1px solid rgba(255,255,255,0.1)',
                 }}>
                   <div style={{
-                    width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+                    width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
                     overflow: 'hidden',
                     background: `linear-gradient(135deg,${GREEN},#22c55e)`,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 11, fontWeight: 800, color: '#fff',
+                    fontSize: 10, fontWeight: 800, color: '#fff',
                   }}>
                     {myAvatar
                       ? <img src={myAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -1839,7 +1941,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                     maxLength={400}
                     style={{
                       flex: 1, border: 'none', outline: 'none', background: 'transparent',
-                      fontSize: 14, color: '#fff', fontFamily: 'inherit', minWidth: 0,
+                      fontSize: 13, color: '#fff', fontFamily: 'inherit', minWidth: 0,
                     }}
                   />
                   <button
@@ -1849,16 +1951,16 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                     disabled={!replyText.trim() || replySending}
                     aria-label="Send reply"
                     style={{
-                      width: 34, height: 34, borderRadius: '50%', border: 'none',
+                      width: 30, height: 30, borderRadius: '50%', border: 'none',
                       background: replyText.trim() ? GREEN : 'transparent',
-                      color: replyText.trim() ? '#fff' : 'rgba(255,255,255,0.5)',
+                      color: replyText.trim() ? '#fff' : 'rgba(255,255,255,0.4)',
                       cursor: replyText.trim() && !replySending ? 'pointer' : 'default',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       transition: 'all 0.15s',
                       opacity: replySending ? 0.7 : 1,
                     }}
                   >
-                    <IconSend size={17} />
+                    <Send size={13} />
                   </button>
                 </div>
               )}
@@ -1906,7 +2008,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}
               >
-                <IconClose size={15} />
+                <X size={15} />
               </button>
             </div>
 
@@ -2031,7 +2133,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                 background: 'rgba(26,122,74,0.12)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
-                <IconShare size={16} />
+                <Share2 size={16} />
               </div>
               <div>
                 <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>Share status</div>
@@ -2075,11 +2177,11 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
             }}>
               <div>
                 <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <IconEye size={16} />
-                  {viewCount} {viewCount === 1 ? 'view' : 'views'}
-                </div>
-                <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, marginTop: 2 }}>
-                  People who viewed this status
+              <Eye size={16} />
+              {viewCount} {viewCount === 1 ? 'view' : 'views'}
+            </div>
+            <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, marginTop: 2 }}>
+              People who viewed this status
                 </div>
               </div>
               <button
@@ -2091,7 +2193,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}
               >
-                <IconClose size={15} />
+                <X size={15} />
               </button>
             </div>
 
@@ -2100,7 +2202,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
               background: '#f8fafc', border: '1.5px solid #e2e8f0',
               borderRadius: 999, padding: '9px 14px', marginBottom: 10,
             }}>
-              <span style={{ color: '#94a3b8', display: 'flex' }}><IconSearch size={14} /></span>
+              <span style={{ color: '#94a3b8', display: 'flex' }}><Search size={14} /></span>
               <input
                 value={viewerSearch}
                 onChange={e => setViewerSearch(e.target.value)}

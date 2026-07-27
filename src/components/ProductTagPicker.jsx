@@ -2,14 +2,15 @@
  * Tag picker for status posts — owner's listings, jobs, services, shops, looking-for.
  */
 import { useMemo, useState } from 'react'
+import { STATUS_COLORS } from '../constants/homeConstants'
 
 const G = '#1a7a4a'
 
 const KIND_META = {
-  listing: { label: 'Products', short: 'Product', color: '#2563eb' },
-  job: { label: 'Jobs', short: 'Job', color: '#0891b2' },
-  service: { label: 'Services', short: 'Service', color: '#7c3aed' },
-  shop: { label: 'Shops', short: 'Shop', color: '#0d9488' },
+  listing: { label: 'Products', short: 'Product', color: STATUS_COLORS.listing },
+  job: { label: 'Jobs', short: 'Job', color: STATUS_COLORS.job },
+  service: { label: 'Services', short: 'Service', color: STATUS_COLORS.service },
+  shop: { label: 'Shops', short: 'Shop', color: STATUS_COLORS.shop },
   request: { label: 'Looking for', short: 'Request', color: '#c9820a' },
 }
 

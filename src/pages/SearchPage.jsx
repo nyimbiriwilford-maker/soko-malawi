@@ -2291,8 +2291,10 @@ function FBListingCard({ listing, onClick }) {
 }
 export default function SearchPage() {
   const navigate = useNavigate()
-  const [searchParams, setSearchParams] = useSearchParams()
-  const queryParam = searchParams.get('q') || ''
+const [searchParams, setSearchParams] = useSearchParams()
+const queryParam = searchParams.get('q') || ''
+const categoryParam = searchParams.get('category') || ''
+const locationParam = searchParams.get('location') || ''
 
   const [search, setSearch]       = useState(queryParam)
   const [user, setUser]           = useState(null)
@@ -2345,6 +2347,25 @@ export default function SearchPage() {
 
   /* Sync URL → search input */
   useEffect(() => { setSearch(queryParam) }, [queryParam])
+
+  /* Sync URL → category & location filters + auto-search */
+  useEffect(() => {
+    if (!categoryParam && !locationParam) return
+    const newCats = categoryParam ? new Set([categoryParam]) : new Set()
+    setCheckedCats(newCats)
+    setDistrict(locationParam || 'All Districts')
+    const next = {
+      cats: newCats,
+      priceMin: '', priceMax: '',
+      district: locationParam || 'All Districts',
+      conditions: new Set(), delivery: new Set(),
+      verifiedOnly: false, featuredOnly: false, nearMe: false, userCoords: null,
+    }
+    setApplied(next)
+    setPage(1)
+    setSearchTick(t => t + 1)
+    doSearch(activeTab, next, sortBy, 1)
+  }, [categoryParam, locationParam])
 
   /* Auth */
   useEffect(() => {
@@ -2965,7 +2986,7 @@ export default function SearchPage() {
             <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:4 }}>
               <span className="sp-summary-ico" style={{ display:'flex', width:32, height:32, borderRadius:10, background:T.gray100, color:T.gray700, alignItems:'center', justifyContent:'center', flexShrink:0 }}>{Icon.search(16)}</span>
               <div className="sp-summary-title" style={{ fontFamily:T.fontDisplay, fontSize:18, fontWeight:800, color:T.gray900, letterSpacing:'-0.4px', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                {queryParam ? <>Results for <span style={{ color:T.greenD }}>"{queryParam}"</span></> : 'Browse marketplace'}
+                {queryParam ? <>Results for <span style={{ color:T.greenD }}>"{queryParam}"</span></> : categoryParam ? <><span style={{ color:T.greenD }}>{CATEGORY_TREE.find(n => n.key === categoryParam)?.label || categoryParam}</span></> : 'Browse marketplace'}
               </div>
             </div>
             <div className="sp-summary-meta" style={{ fontSize:13.5, color:T.gray600, fontWeight:500, paddingLeft:40 }}>

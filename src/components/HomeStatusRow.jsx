@@ -8,7 +8,6 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { fetchAllActiveStories } from '../hooks/useStatuses'
-import StoryViewer from './StoryViewer'
 import StatusUploadModal from './StatusUploadModal'
 
 // ─── Category badge colours (matches screenshot exactly) ─────────────────────
@@ -347,8 +346,6 @@ function StoryCard({ s, index, isOwn, viewedIds, onClick, onReact }) {
 export default function HomeStatusRow({ user }) {
   const navigate = useNavigate()
   const [stories,        setStories]       = useState([])
-  const [viewing,        setViewing]       = useState(null)
-  const [viewerStories,  setViewerStories] = useState([])
   const [showUpload,     setShowUpload]    = useState(false)
   const [viewedIds,      setViewedIds]     = useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem('viewedStories') || '[]')) }
@@ -387,7 +384,6 @@ export default function HomeStatusRow({ user }) {
       localStorage.setItem('viewedStories', JSON.stringify([...next]))
       return next
     })
-    // Record views (fire-and-forget, Supabase v2 returns a thenable not a Promise)
     if (user?.id) {
       ids.forEach(id => {
         supabase.from('status_views')
@@ -395,8 +391,7 @@ export default function HomeStatusRow({ user }) {
           .then(() => {}, () => {})
       })
     }
-    setViewerStories(groupLeader._ownGroup || [groupLeader])
-    setViewing(0)
+    navigate(`/story/${groupLeader.id}`)
   }
 
   async function handleReact(statusId, type) {
@@ -543,17 +538,6 @@ export default function HomeStatusRow({ user }) {
         </div>
       </div>
 
-      {/* Story viewer */}
-      {viewing !== null && (
-        <StoryViewer
-          stories={viewerStories}
-          startIndex={viewing}
-          currentUserId={user?.id}
-          onClose={() => setViewing(null)}
-        />
-      )}
-
-      {/* Upload modal */}
       {showUpload && (
         <StatusUploadModal
           user={user}

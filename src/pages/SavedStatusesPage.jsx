@@ -27,7 +27,7 @@ export default function SavedStatusesPage() {
         status:status_id (
           id, content, status_type, expires_at, created_at,
           media_urls, tagged_listing_id, user_id, location_hint,
-          profiles:user_id ( id, full_name, avatar_url ),
+          profiles:user_id ( id, full_name, avatar_url, is_verified ),
           tagged:tagged_listing_id ( id, title, price, images )
         )
       `)

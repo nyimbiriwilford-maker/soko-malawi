@@ -32,6 +32,32 @@ export const BADGE_META = {
   featured: { label: '⭐ Featured',bg: '#fffbeb', color: '#f59e0b' },
 }
 
+export const STATUS_COLORS = {
+  product:   '#0F9D58',
+  listing:   '#0F9D58',
+  shop:      '#1A73E8',
+  job:       '#ea580c',
+  service:   '#7c3aed',
+  promotion: '#dc2626',
+  promo:     '#dc2626',
+  event:     '#dc2626',
+  featured:  '#f9a825',
+  verified:  '#059669',
+}
+
+export const STATUS_META = {
+  listing:  { label: '🛒 Product',     color: STATUS_COLORS.listing },
+  product:  { label: '🛒 Product',     color: STATUS_COLORS.product },
+  shop:     { label: '🏪 Shop Update', color: STATUS_COLORS.shop },
+  job:      { label: '💼 Job Vacancy', color: STATUS_COLORS.job },
+  service:  { label: '🛠 Service',     color: STATUS_COLORS.service },
+  promo:    { label: '📢 Promotion',   color: STATUS_COLORS.promo },
+  promotion:{ label: '📢 Promotion',   color: STATUS_COLORS.promotion },
+  event:    { label: '🎉 Event',       color: STATUS_COLORS.event },
+  featured: { label: '⭐ Featured',    color: STATUS_COLORS.featured },
+  verified: { label: '✔ Verified',     color: STATUS_COLORS.verified },
+}
+
 export const CONDITION_SHORT = {
   new:       { label: 'New',      color: '#15803d' },
   like_new:  { label: 'Like New', color: '#1a7a4a' },

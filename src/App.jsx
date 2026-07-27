@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-route
 import { supabase, isSupabaseConfigured } from './lib/supabase'
 import BottomNav from './components/BottomNav'
 const StatusPage          = lazy(() => import('./pages/StatusPage'))
+const StoryViewerPage     = lazy(() => import('./pages/StoryViewerPage'))
 const SavedStatusesPage   = lazy(() => import('./pages/SavedStatusesPage'))
 const LookingFor = lazy(() => import('./pages/LookingFor/LookingFor'))
 
@@ -309,7 +310,8 @@ const [installPrompt, setInstallPrompt] = useState(null)
             <Route path="/profile/:id"             element={authed ? <PublicProfile />  : <Navigate to="/login" />} />
             <Route path="/post/edit/:id"           element={authed ? <PostListing />    : <Navigate to="/login" />} />
             <Route path="/status"          element={authed ? <StatusPage />        : <Navigate to="/login" />} />
-<Route path="/status/:statusId" element={authed ? <StatusPage />       : <Navigate to="/login" />} />
+            <Route path="/status/:statusId" element={authed ? <StatusPage />       : <Navigate to="/login" />} />
+            <Route path="/story/:storyId"   element={authed ? <StoryViewerPage />   : <Navigate to="/login" />} />
             <Route path="/saved-statuses"  element={authed ? <SavedStatusesPage /> : <Navigate to="/login" />} />
             <Route path="/notifications"           element={authed ? <Notifications />  : <Navigate to="/login" />} />
             <Route path="/looking-for"             element={authed ? <LookingFor />     : <Navigate to="/login" />} />

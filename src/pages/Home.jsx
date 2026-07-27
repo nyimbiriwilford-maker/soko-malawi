@@ -21,7 +21,7 @@
  */
 
 import React, {
-  useEffect, useState, useMemo, useRef,
+  useEffect, useState, useMemo, useRef, useCallback,
 } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase }              from '../lib/supabase'
@@ -47,8 +47,9 @@ import {
   FEATURED_DURATION_DAYS,
   FEATURED_PRICE_MWK,
 } from '../constants/featuredPricing'
-import lookingForHeroImg from '../assets/looking-for-hero.jpg'
+
 import HomeStatusSection from '../components/HomeStatusSection'
+import FeaturedListingsRow, { FEATURED_POOL_SIZE } from '../components/FeaturedListings'
 
 /* ─────────────────────────────────────────────────────────────────────────────
    DESIGN TOKENS
@@ -436,6 +437,7 @@ function GlobalStyles() {
           max-width: 150px !important;
         }
       }
+
 
       .soko-btn-primary {
         background:${T.green}; color:#fff; border:none; border-radius:14px;
@@ -922,728 +924,6 @@ function formatPrice(n) {
 /* SokoNav is shared — see src/components/SokoNav.jsx */
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   HOME AD BANNER
-   Full-bleed photo ads (image + left scrim for copy). Not product listings.
-   HOME_ADS catalog is local for now — swap for CMS/ads table later.
-───────────────────────────────────────────────────────────────────────────── */
-const HOME_ADS = [
-  {
-    id: 'ad-shop',
-    label: 'Sponsored',
-    eyebrow: 'Advertise on SokoMW',
-    title: 'Put your brand in front of buyers nationwide',
-    sub: 'Promote shops, launches, and campaigns across Malawi.',
-    cta: 'Advertise with us',
-    path: '/shop-setup',
-    accent: T.amber,
-    glow: 'rgba(249,171,0,0.35)',
-    image: 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?auto=format&fit=crop&w=1800&q=80',
-    imagePos: 'center 40%',
-    points: ['Nationwide reach', 'Shop storefronts', 'Campaign ready'],
-  },
-  {
-    id: 'ad-verify',
-    label: 'Ad',
-    eyebrow: 'Trusted sellers',
-    title: 'Get Verified — sell with more confidence',
-    sub: 'Buyers prefer verified sellers. Build trust and close deals faster.',
-    cta: 'Get Verified',
-    path: '/profile',
-    accent: T.green,
-    glow: 'rgba(15,157,88,0.4)',
-    image: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?auto=format&fit=crop&w=1800&q=80',
-    imagePos: 'center 35%',
-    points: ['Trust badge', 'More inquiries', 'Safer deals'],
-  },
-  {
-    id: 'ad-post',
-    label: 'Sponsored',
-    eyebrow: 'Sell faster',
-    title: 'List free. Reach buyers across every district',
-    sub: 'Post in minutes. Chat in-app. No commission on SokoMW.',
-    cta: 'Sell Now',
-    path: '/post',
-    accent: '#5b8def',
-    glow: 'rgba(26,115,232,0.35)',
-    image: 'https://images.unsplash.com/photo-1556742111-a301076d9d18?auto=format&fit=crop&w=1800&q=80',
-    imagePos: 'center 45%',
-    points: ['Free to list', 'In-app chat', '0% commission'],
-  },
-  {
-    id: 'ad-looking',
-    label: 'Ad',
-    eyebrow: 'Buyer demand',
-    title: 'Respond to Looking For requests near you',
-    sub: 'Real buyers with budgets. Be the first seller to reply.',
-    cta: 'Browse requests',
-    path: '/looking-for',
-    accent: '#c9820a',
-    glow: 'rgba(201,130,10,0.35)',
-    image: lookingForHeroImg,
-    imagePos: 'center 50%',
-    points: ['Live demand', 'Nearby buyers', 'Fast replies'],
-  },
-]
-
-function AdHeroBanner({ navigate }) {
-  const ads = HOME_ADS
-  const n = ads.length
-  const [idx, setIdx] = useState(0)
-  const [paused, setPaused] = useState(false)
-  const [imgReady, setImgReady] = useState(false)
-  const [progressKey, setProgressKey] = useState(0)
-  const touchStartX = useRef(null)
-  const ROTATE_MS = 6000
-
-  // Auto-rotate; restarts on slide change so swipe + progress stay in sync
-  useEffect(() => {
-    if (paused || n < 2) return undefined
-    const t = setInterval(() => setIdx(i => (i + 1) % n), ROTATE_MS)
-    return () => clearInterval(t)
-  }, [paused, n, idx])
-
-  // Preload next slide image + restart story progress bar
-  useEffect(() => {
-    setImgReady(false)
-    setProgressKey(k => k + 1)
-    const nextAd = ads[(idx + 1) % n]
-    if (nextAd?.image) {
-      const img = new Image()
-      img.src = nextAd.image
-    }
-  }, [idx, n, ads])
-
-  const ad = ads[idx] || ads[0]
-
-  function goTo(i) {
-    setIdx(((i % n) + n) % n)
-  }
-  function next() { setIdx(i => (i + 1) % n) }
-  function prev() { setIdx(i => ((i - 1) + n) % n) }
-
-  function onTouchStart(e) {
-    touchStartX.current = e.touches?.[0]?.clientX ?? null
-    setPaused(true)
-  }
-  function onTouchEnd(e) {
-    const start = touchStartX.current
-    touchStartX.current = null
-    const end = e.changedTouches?.[0]?.clientX
-    if (start != null && end != null && Math.abs(end - start) > 40) {
-      if (end < start) next()
-      else prev()
-    }
-    setTimeout(() => setPaused(false), 3200)
-  }
-
-  if (!ad) return null
-
-  const ctaDark = ad.accent === T.amber || ad.accent === '#c9820a'
-
-  return (
-    <section
-      className="soko-hero-section soko-ad-banner"
-      aria-label="Advertisements"
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-      onTouchStart={onTouchStart}
-      onTouchEnd={onTouchEnd}
-      style={{ position: 'relative', overflow: 'hidden' }}
-    >
-      <style>{`
-        @keyframes adFadeIn {
-          from { opacity: 0; transform: translateY(8px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes adKenBurns {
-          from { transform: scale(1.04); }
-          to   { transform: scale(1.1); }
-        }
-        @keyframes adProgress {
-          from { transform: scaleX(0); }
-          to   { transform: scaleX(1); }
-        }
-        .soko-ad-banner {
-          margin: 0;
-          min-height: clamp(220px, 28vw, 320px);
-        }
-        .soko-ad-bg-img {
-          position: absolute;
-          inset: 0;
-          width: 100%;
-          height: 100%;
-          object-fit: cover;
-          object-position: center center;
-          display: block;
-          z-index: 0;
-          animation: adKenBurns ${ROTATE_MS + 1500}ms ease-out both;
-          will-change: transform;
-        }
-        .soko-ad-scrim {
-          position: absolute;
-          inset: 0;
-          z-index: 1;
-          pointer-events: none;
-        }
-        .soko-ad-progress {
-          display: none;
-        }
-        .soko-ad-inner {
-          position: relative;
-          z-index: 2;
-          max-width: 1400px;
-          margin: 0 auto;
-          padding: clamp(28px, 4vw, 48px) 24px;
-          min-height: clamp(220px, 28vw, 320px);
-          display: grid;
-          grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
-          align-items: center;
-          gap: clamp(20px, 4vw, 48px);
-          box-sizing: border-box;
-        }
-        .soko-ad-copy {
-          animation: adFadeIn 0.4s ease both;
-          max-width: 560px;
-        }
-        .soko-ad-visual {
-          animation: adFadeIn 0.45s ease 0.06s both;
-          display: flex;
-          flex-direction: column;
-          gap: 12px;
-          min-width: 0;
-        }
-        .soko-ad-panel {
-          background: rgba(8, 16, 12, 0.52);
-          border: 1px solid rgba(255,255,255,0.14);
-          border-radius: 18px;
-          padding: 18px 18px 16px;
-          backdrop-filter: blur(14px) saturate(1.2);
-          -webkit-backdrop-filter: blur(14px) saturate(1.2);
-          box-shadow: 0 16px 40px rgba(0,0,0,0.28);
-        }
-        .soko-ad-points {
-          display: grid;
-          grid-template-columns: 1fr;
-          gap: 10px;
-        }
-        .soko-ad-point {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          font-size: 13.5px;
-          font-weight: 600;
-          color: rgba(255,255,255,0.92);
-        }
-        .soko-ad-point-dot {
-          width: 28px;
-          height: 28px;
-          border-radius: 10px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-shrink: 0;
-          background: rgba(255,255,255,0.12);
-          border: 1px solid rgba(255,255,255,0.14);
-        }
-        .soko-ad-mobile-chips {
-          display: none;
-        }
-        .soko-ad-cta {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          border: none;
-          border-radius: 12px;
-          padding: 12px 20px;
-          font-size: 14px;
-          font-weight: 800;
-          cursor: pointer;
-          font-family: inherit;
-          min-height: 44px;
-          transition: transform 0.15s, box-shadow 0.15s;
-        }
-        .soko-ad-cta:hover { transform: translateY(-1px); }
-        .soko-ad-cta:active { transform: scale(0.98); }
-        .soko-ad-nav {
-          position: absolute;
-          top: 50%;
-          transform: translateY(-50%);
-          z-index: 5;
-          width: 40px;
-          height: 40px;
-          border-radius: 50%;
-          border: 1px solid rgba(255,255,255,0.22);
-          background: rgba(0,0,0,0.4);
-          color: #fff;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          cursor: pointer;
-          backdrop-filter: blur(10px);
-          -webkit-backdrop-filter: blur(10px);
-          font-size: 20px;
-          line-height: 1;
-        }
-        .soko-ad-nav:hover { background: rgba(15,157,88,0.75); border-color: rgba(255,255,255,0.35); }
-        .soko-ad-nav.prev { left: 14px; }
-        .soko-ad-nav.next { right: 14px; }
-        .soko-ad-dots {
-          display: flex;
-          align-items: center;
-          gap: 6px;
-        }
-        .soko-ad-meta-row {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          margin-bottom: 12px;
-          flex-wrap: wrap;
-        }
-        /* ── Mobile / tablet: compact cinematic ad card ── */
-        @media (max-width: 900px) {
-          .soko-ad-banner {
-            min-height: 0 !important;
-            /* Fit phone: fixed app-ad height (not a tall website hero) */
-            height: clamp(168px, 46vw, 210px) !important;
-            max-height: 210px;
-            border-radius: 0;
-          }
-          .soko-ad-progress {
-            display: flex !important;
-            position: absolute;
-            top: 10px;
-            left: 12px;
-            right: 12px;
-            z-index: 6;
-            gap: 4px;
-            pointer-events: none;
-          }
-          .soko-ad-progress-seg {
-            flex: 1;
-            height: 3px;
-            border-radius: 99px;
-            background: rgba(255,255,255,0.28);
-            overflow: hidden;
-          }
-          .soko-ad-progress-fill {
-            display: block;
-            height: 100%;
-            width: 100%;
-            border-radius: inherit;
-            transform-origin: left center;
-            transform: scaleX(0);
-            background: #fff;
-            box-shadow: 0 0 8px rgba(255,255,255,0.45);
-          }
-          .soko-ad-progress-fill.is-done {
-            transform: scaleX(1);
-            animation: none;
-          }
-          .soko-ad-progress-fill.is-active {
-            animation: adProgress ${ROTATE_MS}ms linear forwards;
-          }
-          .soko-ad-progress-fill.is-paused {
-            animation-play-state: paused;
-          }
-          .soko-ad-scrim {
-            background:
-              linear-gradient(180deg,
-                rgba(0,0,0,0.45) 0%,
-                rgba(0,0,0,0.08) 32%,
-                rgba(0,0,0,0.15) 48%,
-                rgba(3,10,7,0.72) 78%,
-                rgba(3,10,7,0.92) 100%
-              ) !important;
-          }
-          .soko-ad-inner {
-            display: flex !important;
-            flex-direction: column !important;
-            justify-content: flex-end !important;
-            align-items: stretch !important;
-            grid-template-columns: 1fr !important;
-            height: 100% !important;
-            min-height: 0 !important;
-            padding: 36px 14px 12px !important;
-            gap: 0 !important;
-            box-sizing: border-box;
-          }
-          .soko-ad-visual { display: none !important; }
-          .soko-ad-copy {
-            max-width: 100% !important;
-            animation: adFadeIn 0.32s ease both;
-          }
-          .soko-ad-meta-row {
-            margin-bottom: 6px !important;
-            gap: 6px !important;
-          }
-          .soko-ad-badge {
-            font-size: 9px !important;
-            padding: 3px 8px !important;
-            letter-spacing: 0.6px !important;
-          }
-          .soko-ad-eyebrow {
-            font-size: 10px !important;
-            letter-spacing: 0.4px !important;
-          }
-          .soko-ad-title {
-            font-size: clamp(15px, 4.2vw, 18px) !important;
-            line-height: 1.2 !important;
-            letter-spacing: -0.3px !important;
-            margin: 0 0 4px !important;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-          }
-          .soko-ad-sub {
-            display: none !important;
-          }
-          .soko-ad-mobile-chips {
-            display: flex !important;
-            flex-wrap: nowrap;
-            gap: 6px;
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-            scrollbar-width: none;
-            margin: 0 0 10px;
-            padding-bottom: 1px;
-          }
-          .soko-ad-mobile-chips::-webkit-scrollbar { display: none; }
-          .soko-ad-chip {
-            flex: 0 0 auto;
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            font-size: 10.5px;
-            font-weight: 700;
-            color: rgba(255,255,255,0.95);
-            background: rgba(255,255,255,0.12);
-            border: 1px solid rgba(255,255,255,0.16);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border-radius: 999px;
-            padding: 4px 9px 4px 6px;
-            white-space: nowrap;
-          }
-          .soko-ad-chip-dot {
-            width: 16px;
-            height: 16px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: rgba(255,255,255,0.14);
-            flex-shrink: 0;
-          }
-          .soko-ad-footer-row {
-            display: flex !important;
-            flex-direction: row !important;
-            align-items: center !important;
-            justify-content: space-between !important;
-            gap: 10px !important;
-            flex-wrap: nowrap !important;
-          }
-          .soko-ad-cta {
-            width: auto !important;
-            flex: 1 1 auto;
-            max-width: 220px;
-            justify-content: center;
-            min-height: 36px !important;
-            height: 36px;
-            padding: 0 14px !important;
-            font-size: 12.5px !important;
-            border-radius: 10px !important;
-            box-shadow: 0 6px 18px rgba(0,0,0,0.28) !important;
-          }
-          .soko-ad-dots {
-            display: none !important;
-          }
-          .soko-ad-slide-count {
-            display: inline-flex !important;
-            align-items: center;
-            justify-content: center;
-            min-width: 42px;
-            height: 28px;
-            padding: 0 10px;
-            border-radius: 999px;
-            font-size: 11px;
-            font-weight: 800;
-            color: #fff;
-            background: rgba(0,0,0,0.4);
-            border: 1px solid rgba(255,255,255,0.18);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            letter-spacing: 0.2px;
-            flex-shrink: 0;
-          }
-          .soko-ad-nav { display: none !important; }
-          .soko-ad-bg-img {
-            animation: adKenBurns ${ROTATE_MS + 800}ms ease-out both;
-          }
-        }
-        @media (max-width: 380px) {
-          .soko-ad-banner {
-            height: 158px !important;
-            max-height: 158px;
-          }
-          .soko-ad-inner {
-            padding: 30px 12px 10px !important;
-          }
-          .soko-ad-title {
-            font-size: 14.5px !important;
-          }
-          .soko-ad-mobile-chips { display: none !important; }
-          .soko-ad-cta {
-            min-height: 34px !important;
-            height: 34px;
-            font-size: 12px !important;
-          }
-        }
-      `}</style>
-
-      {/* Fallback tint under photo */}
-      <div
-        aria-hidden="true"
-        style={{
-          position: 'absolute', inset: 0, zIndex: 0,
-          background: 'linear-gradient(135deg, #061510 0%, #0a2a1c 50%, #0c1a12 100%)',
-        }}
-      />
-      {/* Full-bleed photo — fills entire banner */}
-      <img
-        key={ad.id + '-img'}
-        className="soko-ad-bg-img"
-        src={ad.image}
-        alt=""
-        aria-hidden="true"
-        loading={idx === 0 ? 'eager' : 'lazy'}
-        decoding="async"
-        onLoad={() => setImgReady(true)}
-        style={{
-          zIndex: 0,
-          objectPosition: ad.imagePos || 'center center',
-          opacity: imgReady || idx > 0 ? 1 : 0.9,
-        }}
-      />
-      {/* Scrim: desktop left-readability; mobile uses bottom gradient via CSS */}
-      <div
-        className="soko-ad-scrim"
-        aria-hidden="true"
-        style={{
-          background: `
-            linear-gradient(100deg,
-              rgba(3,10,7,0.90) 0%,
-              rgba(3,10,7,0.78) 32%,
-              rgba(3,10,7,0.38) 58%,
-              rgba(3,10,7,0.12) 82%,
-              rgba(3,10,7,0.22) 100%
-            ),
-            linear-gradient(180deg,
-              rgba(0,0,0,0.12) 0%,
-              transparent 40%,
-              rgba(0,0,0,0.32) 100%
-            ),
-            radial-gradient(ellipse 48% 65% at 88% 42%, ${ad.glow} 0%, transparent 62%)
-          `,
-        }}
-      />
-
-      {/* Story-style progress segments (mobile) */}
-      {n > 1 && (
-        <div className="soko-ad-progress" aria-hidden="true">
-          {ads.map((a, i) => (
-            <div key={a.id} className="soko-ad-progress-seg">
-              <span
-                key={i === idx ? `fill-${idx}-${progressKey}` : `fill-${i}`}
-                className={
-                  'soko-ad-progress-fill'
-                  + (i < idx ? ' is-done' : '')
-                  + (i === idx ? ' is-active' : '')
-                  + (i === idx && paused ? ' is-paused' : '')
-                }
-                style={{ background: i <= idx ? (i === idx ? '#fff' : ad.accent) : undefined }}
-              />
-            </div>
-          ))}
-        </div>
-      )}
-
-      {n > 1 && (
-        <>
-          <button type="button" className="soko-ad-nav prev soko-nav-desktop" onClick={prev} aria-label="Previous ad">‹</button>
-          <button type="button" className="soko-ad-nav next soko-nav-desktop" onClick={next} aria-label="Next ad">›</button>
-        </>
-      )}
-
-      <div className="soko-ad-inner">
-        {/* Left: ad copy */}
-        <div key={ad.id + '-copy'} className="soko-ad-copy">
-          <div className="soko-ad-meta-row">
-            <span
-              className="soko-ad-badge"
-              style={{
-                fontSize: 10, fontWeight: 800, letterSpacing: 0.7, textTransform: 'uppercase',
-                color: 'rgba(255,255,255,0.7)',
-                background: 'rgba(0,0,0,0.35)',
-                border: '1px solid rgba(255,255,255,0.16)',
-                borderRadius: 999, padding: '4px 10px',
-                backdropFilter: 'blur(6px)',
-              }}
-            >
-              {ad.label}
-            </span>
-            <span
-              className="soko-ad-eyebrow"
-              style={{
-                fontSize: 11.5, fontWeight: 800, color: ad.accent,
-                letterSpacing: 0.5, textTransform: 'uppercase',
-                textShadow: '0 1px 8px rgba(0,0,0,0.45)',
-              }}
-            >
-              {ad.eyebrow}
-            </span>
-          </div>
-
-          <h1
-            className="soko-ad-title"
-            style={{
-              fontFamily: T.fontDisplay,
-              fontSize: 'clamp(24px, 3.2vw, 38px)',
-              fontWeight: 800,
-              color: '#fff',
-              lineHeight: 1.15,
-              letterSpacing: '-0.7px',
-              margin: '0 0 10px',
-              textShadow: '0 2px 18px rgba(0,0,0,0.45)',
-            }}
-          >
-            {ad.title}
-          </h1>
-
-          <p
-            className="soko-ad-sub"
-            style={{
-              fontSize: 15,
-              color: 'rgba(255,255,255,0.78)',
-              lineHeight: 1.5,
-              margin: '0 0 18px',
-              maxWidth: 480,
-              fontWeight: 500,
-              textShadow: '0 1px 10px rgba(0,0,0,0.4)',
-            }}
-          >
-            {ad.sub}
-          </p>
-
-          {/* Mobile: compact benefit chips */}
-          {(ad.points || []).length > 0 && (
-            <div className="soko-ad-mobile-chips" aria-hidden="true">
-              {(ad.points || []).slice(0, 3).map((p, i) => (
-                <span key={p} className="soko-ad-chip">
-                  <span className="soko-ad-chip-dot" style={{ color: ad.accent }}>
-                    {i === 0 ? Icon.check(10) : i === 1 ? Icon.star(9, ad.accent) : Icon.lightning(10)}
-                  </span>
-                  {p}
-                </span>
-              ))}
-            </div>
-          )}
-
-          <div className="soko-ad-footer-row" style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              className="soko-ad-cta"
-              onClick={() => navigate(ad.path)}
-              style={{
-                background: ad.accent,
-                color: ctaDark ? '#1a0a00' : '#fff',
-                boxShadow: `0 8px 28px ${ad.glow}`,
-              }}
-            >
-              {ad.cta} {Icon.chevR(15)}
-            </button>
-
-            {n > 1 && (
-              <div
-                className="soko-ad-dots"
-                role="tablist"
-                aria-label="Advertisement slides"
-              >
-                {ads.map((a, i) => (
-                  <button
-                    key={a.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={i === idx}
-                    aria-label={`Ad ${i + 1} of ${n}`}
-                    onClick={() => { goTo(i); setPaused(true); setTimeout(() => setPaused(false), 3200) }}
-                    style={{
-                      width: i === idx ? 20 : 7,
-                      height: 7,
-                      borderRadius: 50,
-                      border: 'none',
-                      padding: 0,
-                      cursor: 'pointer',
-                      background: i === idx ? ad.accent : 'rgba(255,255,255,0.4)',
-                      boxShadow: i === idx ? `0 0 0 3px ${ad.glow}` : 'none',
-                      transition: 'all 0.25s ease',
-                    }}
-                  />
-                ))}
-              </div>
-            )}
-
-            {n > 1 && (
-              <span className="soko-ad-slide-count" style={{ display: 'none' }}>
-                {idx + 1}/{n}
-              </span>
-            )}
-          </div>
-        </div>
-
-        {/* Right: glass panel — desktop only */}
-        <div key={ad.id + '-vis'} className="soko-ad-visual soko-nav-desktop">
-          <div className="soko-ad-panel">
-            <div style={{
-              fontSize: 11, fontWeight: 800, letterSpacing: 0.6, textTransform: 'uppercase',
-              color: 'rgba(255,255,255,0.55)', marginBottom: 12,
-            }}>
-              Why this matters
-            </div>
-            <div className="soko-ad-points">
-              {(ad.points || []).map((p, i) => (
-                <div key={p} className="soko-ad-point">
-                  <span className="soko-ad-point-dot" style={{ color: ad.accent }}>
-                    {i === 0 ? Icon.check(13) : i === 1 ? Icon.star(12, ad.accent) : Icon.lightning(13)}
-                  </span>
-                  {p}
-                </div>
-              ))}
-            </div>
-            <div style={{
-              marginTop: 14, paddingTop: 12,
-              borderTop: '1px solid rgba(255,255,255,0.1)',
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8,
-            }}>
-              <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', fontWeight: 500 }}>
-                SokoMW marketplace
-              </span>
-              <span style={{
-                fontSize: 11, fontWeight: 800, color: ad.accent,
-                background: 'rgba(255,255,255,0.08)',
-                borderRadius: 999, padding: '4px 10px',
-              }}>
-                {idx + 1} / {n}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </section>
-  )
-}
-
-/* ─────────────────────────────────────────────────────────────────────────────
    CATEGORY QUICK ACCESS — one-click entry to every category. Matches the
    reference's fixed 8-tile layout (All Categories, Vehicles, Electronics,
    Fashion, Property, Agriculture, Jobs, Services) plus a 9th "More" tile
@@ -2117,108 +1397,7 @@ function ProductCardActions({ listing, user, navigate }) {
   )
 }
 
-/* ─────────────────────────────────────────────────────────────────────────────
-   LISTING CARD — "featured" gets a visibly larger gold-bordered treatment
-   per the brief ("Featured Listings: Large premium cards. Bigger than
-   normal listings. Gold featured badge.")
-───────────────────────────────────────────────────────────────────────────── */
-function PremiumListingCard({ listing, onClick, delay = 0, user, navigate, saved, onToggleSave }) {
-  const [hov, setHov] = useState(false)
-  const [imgErr, setImgErr] = useState(false)
-  const [imgReady, setImgReady] = useState(false)
-  const [saveBusy, setSaveBusy] = useState(false)
 
-  const price   = isFlashActive(listing) ? listing.flash_sale_price : listing.price
-  const isFlash = isFlashActive(listing)
-  const isVerif = listing.seller_verified || listing.shop_is_verified
-  const isFeat  = isListingFeatured(listing)
-
-  async function handleSave(e) {
-    e.stopPropagation()
-    if (saveBusy) return
-    setSaveBusy(true)
-    try { await onToggleSave?.(listing.id) } finally { setSaveBusy(false) }
-  }
-
-  return (
-    <div
-      onClick={onClick}
-      onMouseEnter={() => setHov(true)}
-      onMouseLeave={() => setHov(false)}
-      className={`soko-product-card soko-card-bg${isFeat && isFlash ? ' soko-dual-badge-card' : ''}`}
-      style={{
-        border: isFeat && isFlash
-          ? `1.5px solid ${hov ? T.red : '#f0a8a0'}`
-          : isFeat
-            ? `1.5px solid ${hov ? T.amber : '#e8d9a8'}`
-            : isFlash
-              ? `1.5px solid ${T.red}55`
-              : `1px solid ${hov ? T.gray200 : T.gray100}`,
-        boxShadow: hov ? T.shadowMd : T.shadow,
-        transform: hov ? 'translateY(-3px)' : 'none',
-        transition: 'transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease',
-        animation: `fadeUp 0.4s ease ${delay}s both`,
-      }}
-    >
-      <div className="soko-product-card-media" style={{ background: '#eef1f3' }}>
-        {listing.images?.[0] && !imgErr
-          ? <img
-              src={listing.images[0]}
-              alt={listing.title}
-              loading="lazy"
-              decoding="async"
-              onLoad={() => setImgReady(true)}
-              onError={() => setImgErr(true)}
-              style={{
-                opacity: imgReady ? 1 : 0,
-                transform: hov ? 'scale(1.05)' : 'scale(1)',
-                transition: 'opacity 0.35s ease, transform 0.45s cubic-bezier(0.34,1.2,0.64,1)',
-              }}
-            />
-          : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 36, color: T.gray400 }}>{catIcon(listing.category).emoji}</div>
-        }
-        <div style={{ position: 'absolute', top: 8, left: 8, display: 'flex', flexDirection: 'column', gap: 4, zIndex: 2 }}>
-          {isFeat && isFlash ? (
-            <div className="soko-hotdeal-pulse" style={{ background: `linear-gradient(135deg,${T.red},#c62828)`, color: '#fff', borderRadius: '50%', width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(234,67,53,0.5)' }}>
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="#fff">
-                <path d="M17.66 11.2C17.43 10.9 17.15 10.64 16.89 10.38C16.22 9.78 15.46 9.35 14.82 8.72C13.33 7.26 13 4.85 13.95 3C13 3.23 12.17 3.75 11.46 4.32C8.87 6.4 7.85 10.07 9.07 13.22C9.11 13.32 9.15 13.42 9.15 13.55C9.15 13.77 9 13.97 8.8 14.05C8.57 14.15 8.33 14.09 8.14 13.93C8.08 13.88 8.04 13.83 8 13.76C6.87 12.33 6.69 10.28 7.45 8.64C5.78 10 4.87 12.3 5 14.47C5.06 14.97 5.12 15.47 5.29 15.97C5.43 16.57 5.7 17.17 6 17.7C7.08 19.43 8.95 20.67 10.96 20.92C13.1 21.19 15.39 20.8 17.03 19.32C18.86 17.66 19.5 15 18.56 12.72L18.43 12.46C18.22 12 17.66 11.2 17.66 11.2Z"/>
-              </svg>
-            </div>
-          ) : (
-            <>
-              {isFlash && (
-                <div className="soko-hotdeal-pulse" style={{ background: `linear-gradient(135deg,${T.red},#c62828)`, color: '#fff', borderRadius: '50%', width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(234,67,53,0.5)' }}>
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="#fff">
-                    <path d="M17.66 11.2C17.43 10.9 17.15 10.64 16.89 10.38C16.22 9.78 15.46 9.35 14.82 8.72C13.33 7.26 13 4.85 13.95 3C13 3.23 12.17 3.75 11.46 4.32C8.87 6.4 7.85 10.07 9.07 13.22C9.11 13.32 9.15 13.42 9.15 13.55C9.15 13.77 9 13.97 8.8 14.05C8.57 14.15 8.33 14.09 8.14 13.93C8.08 13.88 8.04 13.83 8 13.76C6.87 12.33 6.69 10.28 7.45 8.64C5.78 10 4.87 12.3 5 14.47C5.06 14.97 5.12 15.47 5.29 15.97C5.43 16.57 5.7 17.17 6 17.7C7.08 19.43 8.95 20.67 10.96 20.92C13.1 21.19 15.39 20.8 17.03 19.32C18.86 17.66 19.5 15 18.56 12.72L18.43 12.46C18.22 12 17.66 11.2 17.66 11.2Z"/>
-                  </svg>
-                </div>
-              )}
-            </>
-          )}
-        </div>
-        <ProductCardSaveBtn saved={saved} busy={saveBusy} onToggle={handleSave} />
-      </div>
-
-      <div className="soko-product-card-body">
-        <div className="soko-product-card-title">{listing.title}</div>
-        <div className="soko-product-card-price" style={{ color: isFlash ? T.red : T.greenD }}>
-          {formatPrice(price)}
-          {isFlash && listing.price > price && (
-            <span style={{ marginLeft: 5, fontSize: 11, fontWeight: 600, color: T.gray500, textDecoration: 'line-through' }}>{formatPrice(listing.price)}</span>
-          )}
-        </div>
-        <div className="soko-product-card-meta">
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-            <span style={{ color: T.gray500, flexShrink: 0, display: 'flex' }}>{Icon.pin(11)}</span>
-            {listing.city || 'Malawi'}
-          </span>
-          {isVerif && <span style={{ flexShrink: 0, display: 'flex' }} title="Verified seller">{Icon.verify(12)}</span>}
-        </div>
-      </div>
-      <ProductCardActions listing={listing} user={user} navigate={navigate} />
-    </div>
-  )
-}
 
 function SkeletonListingCard() {
   return (
@@ -2257,83 +1436,6 @@ function HomeSectionSkeleton({ titleW = '38%', cards = 5, cardW = 160 }) {
               <SkeletonListingCard />
             </div>
           ))}
-        </div>
-      </div>
-    </section>
-  )
-}
-
-/* ─────────────────────────────────────────────────────────────────────────────
-   LIVE STORIES CARD — compact boxed card matching the reference exactly:
-   circular avatars in a row, "View all" link, "Create Story" CTA. This is
-   a thin presentational wrapper around the same fetchAllActiveStories data
-   HomeStatusRow uses, but sized for the side-column slot next to Featured
-   Listings rather than HomeStatusRow's full-width dark bar (which has
-   200×340px cards and wouldn't fit this slot).
-   Status section now uses HomeStatusSection (StatusPage-style with rings + tiles).
-───────────────────────────────────────────────────────────────────────────── */
-/* ─────────────────────────────────────────────────────────────────────────────
-   FEATURED LISTINGS — full-width rail (stories section lives below)
-───────────────────────────────────────────────────────────────────────────── */
-/** Max cards on the featured rail — enough for a full horizontal scroll, not a dump */
-const FEATURED_HOME_CAP = 12
-
-function FeaturedListingsRow({ listings, navigate, loading, user, savedIds, onToggleSave }) {
-  // Phase 3.1: dedicated featured rows only — never derived from latest posts
-  const featured = useMemo(
-    () => (listings || []).filter(l => isListingFeatured(l)).slice(0, FEATURED_HOME_CAP),
-    [listings],
-  )
-  if (!loading && featured.length === 0) return null
-  return (
-    <section className="soko-section-pad soko-featured-section" style={{ padding: '24px 20px 4px', background: '#fff' }}>
-      <div style={{ maxWidth: 1400, margin: '0 auto', minWidth: 0 }}>
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          marginBottom: 14, gap: 12,
-        }}>
-          <span className="soko-section-title" style={{ fontFamily: T.fontDisplay, fontSize: 18, fontWeight: 800, color: T.gray900 }}>
-            Featured Listings 🔥
-          </span>
-          <button
-            type="button"
-            onClick={() => navigate('/listings')}
-            className="soko-link-quiet"
-            style={{ flexShrink: 0 }}
-          >
-            View all
-          </button>
-        </div>
-
-        <div style={{ minWidth: 0, maxWidth: '100%', overflow: 'hidden' }}>
-          <div
-            className="soko-scroll soko-featured-rail"
-            style={{
-              gap: 12,
-              paddingTop: 4,
-              paddingBottom: 8,
-            }}
-          >
-            {loading
-              ? [1, 2, 3, 4, 5, 6].map(i => (
-                <div key={i} className="soko-featured-card-wrap">
-                  <SkeletonListingCard />
-                </div>
-              ))
-              : featured.map((l, i) => (
-                <div key={l.id} className="soko-featured-card-wrap">
-                  <PremiumListingCard
-                    listing={l}
-                    delay={Math.min(i, 6) * 0.02}
-                    onClick={() => navigate('/listing/' + l.id)}
-                    user={user}
-                    navigate={navigate}
-                    saved={savedIds?.has?.(l.id)}
-                    onToggleSave={onToggleSave}
-                  />
-                </div>
-              ))}
-          </div>
         </div>
       </div>
     </section>
@@ -2548,8 +1650,15 @@ function LatestListingsSection({ listings, navigate, loading, user, savedIds, on
   if (!loading && latest.length === 0) return null
 
   return (
-    <section className="soko-latest-section" style={{ padding: '0 20px clamp(28px,4.5vw,48px) 20px', background: T.gray50 }}>
+    <section className="soko-latest-section" style={{ padding: '0 20px clamp(28px,4.5vw,48px) 20px', background: '#F8FAFC' }}>
       <style>{`
+        @keyframes latestFadeSlide {
+          from { opacity: 0; transform: translateY(20px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        .latest-animate-in {
+          animation: latestFadeSlide 0.5s ease forwards;
+        }
         @media (max-width: 768px) {
           .soko-latest-head {
             margin-bottom: 12px !important;
@@ -2558,8 +1667,8 @@ function LatestListingsSection({ listings, navigate, loading, user, savedIds, on
             gap: 8px !important;
           }
           .soko-latest-head h2 { font-size: 17px !important; margin-bottom: 0 !important; }
-          .soko-latest-head p,
-          .soko-latest-head > div > div:first-child { display: none !important; }
+          .soko-latest-head p { display: none !important; }
+          .soko-latest-badge { display: flex !important; }
           .soko-latest-viewall {
             width: auto !important;
             flex-shrink: 0;
@@ -2573,14 +1682,16 @@ function LatestListingsSection({ listings, navigate, loading, user, savedIds, on
       `}</style>
 
       <div style={{ maxWidth: 1400, margin: '0 auto', minWidth: 0 }}>
-        <div className="soko-latest-head" style={{
+        <div className="soko-latest-head latest-animate-in" style={{
           display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
           marginBottom: 24, flexWrap: 'wrap', gap: 12,
         }}>
           <div style={{ minWidth: 0, flex: '1 1 180px' }}>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-              <span style={{ width: 7, height: 7, borderRadius: '50%', background: T.amber, boxShadow: `0 0 0 4px ${T.amberL}` }} />
-              <span style={{ fontSize: 11.5, fontWeight: 800, color: T.amberD, letterSpacing: 0.8, textTransform: 'uppercase' }}>Updated daily</span>
+            <div className="soko-latest-badge" style={{
+              display: 'none', alignItems: 'center', gap: 4, marginBottom: 6,
+            }}>
+              <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#16A34A' }} />
+              <span style={{ fontSize: 9.5, fontWeight: 700, color: '#9CA3AF', letterSpacing: 0.6, textTransform: 'uppercase' }}>Updated daily</span>
             </div>
             <h2 style={{ fontFamily: T.fontDisplay, fontSize: 'clamp(20px, 2.6vw, 27px)', fontWeight: 800, color: T.gray900, letterSpacing: '-0.6px', marginBottom: 5 }}>
               Latest Listings
@@ -4340,6 +3451,602 @@ const BOTTOM_BANNER_CSS = `
   }
 `
 
+/* ─────────────────────────────────────────────────────────────────────────────
+   HERO BANNER — premium marketplace carousel
+   
+   Fetches active banners from the `home_banners` table (admin-managed).
+   Falls back to empty if the table doesn't exist yet. Pass `slides` prop
+   for admin preview or to inject external data.
+   
+   DB column → component prop mapping:
+     title       → title
+     description → desc (fallback description → desc)
+     image_url   → image
+     image_pos   → imagePos (fallback 'center center')
+     button_text → cta (fallback button_text → cta)
+     button_link → path (fallback button_link → path)
+     accent      → accent
+     badge       → badge
+     badge_icon  → badgeIcon
+     priority    → priority
+     status      → status
+───────────────────────────────────────────────────────────────────────────── */
+function mapBanner(row) {
+  return {
+    id: row.id,
+    title: row.title,
+    desc: row.description || '',
+    image: row.image_url,
+    mobileImage: row.mobile_image_url || '',
+    imagePos: row.image_pos || 'center center',
+    cta: row.button_text || 'Learn More',
+    path: row.button_link || '/',
+    accent: row.accent || '#0F9D58',
+    badge: row.badge || '',
+    badgeIcon: row.badge_icon || '',
+    priority: row.priority ?? 5,
+    status: row.status || 'draft',
+    start_date: row.start_date,
+    end_date: row.end_date,
+  }
+}
+
+function getActiveSlides(slides) {
+  const now = Date.now()
+  return slides
+    .filter(s => s.status === 'active')
+    .filter(s => {
+      if (s.start_date && new Date(s.start_date).getTime() > now) return false
+      if (s.end_date && new Date(s.end_date).getTime() < now) return false
+      return true
+    })
+    .sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999))
+}
+
+function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
+  const [fetchedSlides, setFetchedSlides] = useState([])
+  const [dbLoaded, setDbLoaded] = useState(false)
+  const [searchFocused, setSearchFocused] = useState(false)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [liveResults, setLiveResults] = useState(null)
+  const [liveLoading, setLiveLoading] = useState(false)
+  const searchRef = useRef(null)
+  const searchInputRef = useRef(null)
+
+  const POPULAR_SEARCHES = ['Phones', 'Clothes', 'Cars', 'Farm products', 'Electronics']
+  const SEARCH_CATEGORIES = [
+    { key: 'Electronics', label: 'Electronics' },
+    { key: 'Clothing', label: 'Fashion' },
+    { key: 'Vehicles', label: 'Vehicles' },
+    { key: 'Agriculture', label: 'Agriculture' },
+    { key: 'Services', label: 'Services' },
+  ]
+
+  const handleSearchSubmit = (val) => {
+    if (onSearch && val.trim()) onSearch(val.trim())
+    setSearchFocused(false)
+  }
+
+  const handleSuggestionClick = (term) => {
+    setSearchQuery(term)
+    if (onSearch) onSearch(term)
+    setSearchFocused(false)
+  }
+
+  const handleCategoryClick = (catKey) => {
+    if (onSearch) onSearch('', { category: catKey })
+    setSearchQuery('')
+    setSearchFocused(false)
+  }
+
+  // Debounced live search
+  useEffect(() => {
+    if (!searchQuery.trim() || !searchFocused) {
+      setLiveResults(null)
+      setLiveLoading(false)
+      return
+    }
+    const q = searchQuery.trim().toLowerCase()
+    setLiveLoading(true)
+    const timer = setTimeout(async () => {
+      try {
+        const [listingsData, shopsData] = await Promise.all([
+          supabase.from('listings')
+            .select('id,title,price,images,city')
+            .eq('status', 'published')
+            .ilike('title', `%${q}%`)
+            .order('created_at', { ascending: false })
+            .limit(5),
+          supabase.from('shops')
+            .select('id,name,slug,logo_url,city')
+            .eq('is_active', true)
+            .ilike('name', `%${q}%`)
+            .limit(3),
+        ])
+        setLiveResults({
+          listings: listingsData.data || [],
+          shops: shopsData.data || [],
+        })
+      } catch (e) {
+        console.error('Live search error:', e)
+        setLiveResults({ listings: [], shops: [] })
+      }
+      setLiveLoading(false)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery, searchFocused])
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (searchRef.current && !searchRef.current.contains(e.target)) {
+        setSearchFocused(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [])
+
+  const fetchBanners = useCallback(async () => {
+    try {
+      const now = new Date().toISOString()
+      const { data } = await supabase
+        .from('home_banners')
+        .select('*')
+        .eq('status', 'active')
+        .or(`start_date.is.null,start_date.lte.${now}`)
+        .or(`end_date.is.null,end_date.gte.${now}`)
+        .order('priority', { ascending: true })
+      setFetchedSlides((data || []).map(mapBanner))
+    } catch {
+      // table may not exist yet — silently fall back to empty
+    }
+    setDbLoaded(true)
+  }, [])
+
+  useEffect(() => {
+    fetchBanners()
+  }, [fetchBanners])
+
+  // Refetch when the user returns to the tab (e.g. after saving in admin)
+  useEffect(() => {
+    const onShow = () => { fetchBanners() }
+    document.addEventListener('visibilitychange', onShow)
+    return () => document.removeEventListener('visibilitychange', onShow)
+  }, [fetchBanners])
+
+  const source = externalSlides || fetchedSlides
+  const slides = getActiveSlides(source)
+  const n = slides.length
+  const [idx, setIdx] = useState(0)
+  const [paused, setPaused] = useState(false)
+  const [fade, setFade] = useState('in')
+
+  const goTo = (i) => {
+    if (fade === 'out') return
+    setFade('out')
+    setTimeout(() => {
+      setIdx(i)
+      setFade('in')
+    }, 400)
+  }
+
+  useEffect(() => {
+    if (paused || searchFocused || n < 2) return
+    const t = setInterval(() => {
+      setFade('out')
+      setTimeout(() => {
+        setIdx(i => (i + 1) % n)
+        setFade('in')
+      }, 400)
+    }, 5000)
+    return () => clearInterval(t)
+  }, [paused, searchFocused, n])
+
+  // Track banner impressions (only for DB-sourced slides)
+  const trackedImpression = useRef(null)
+  const isDbSource = !externalSlides && dbLoaded
+  const currentSlideId = slides[idx]?.id
+  useEffect(() => {
+    if (!isDbSource || !currentSlideId) return
+    if (trackedImpression.current === currentSlideId) return
+    trackedImpression.current = currentSlideId
+    supabase.rpc('increment_banner_metric', {
+      p_banner_id: currentSlideId,
+      p_metric: 'impression',
+    }).then(() => {}).catch(() => {})
+  }, [idx, isDbSource, fetchedSlides, currentSlideId])
+
+  const slide = slides[idx]
+  if (!slide) return null
+
+  return (
+    <section className="hero-banner" style={{
+      position: 'relative', zIndex: 1,
+      background: '#fff',
+      borderRadius: 24,
+      margin: '0 auto',
+      maxWidth: 1400,
+    }}>
+      <style>{`
+        @keyframes heroFadeSlide {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes heroScaleIn {
+          from { opacity: 0; transform: scale(0.98); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        @keyframes spinner {
+          to { transform: rotate(360deg); }
+        }
+        .hero-banner {
+          box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.04);
+        }
+        .hero-inner {
+          border-radius: 24px;
+        }
+        .hero-inner {
+          display: grid;
+          grid-template-columns: 1.1fr 0.9fr;
+          min-height: clamp(450px, 36vw, 550px);
+          gap: 0;
+          align-items: center;
+          box-sizing: border-box;
+        }
+        .hero-content {
+          animation: heroFadeSlide 0.6s ease both;
+          max-width: 520px;
+          padding: 48px 0 40px 48px;
+        }
+        .hero-visual {
+          animation: heroScaleIn 0.6s ease 0.05s both;
+          position: absolute;
+          inset: 0;
+          left: 55%;
+          border-radius: 0 24px 24px 0;
+          overflow: hidden;
+        }
+        .hero-visual img {
+          width: 100%; height: 100%;
+          object-fit: cover;
+          display: block;
+        }
+        .hero-search {
+          display: flex;
+          align-items: center;
+          gap: 0;
+          background: #fff;
+          height: 60px;
+          border-radius: 16px;
+          transition: box-shadow 0.3s ease;
+          box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+        }
+        .hero-search:focus-within {
+          box-shadow: 0 10px 30px rgba(0,0,0,0.08), 0 0 0 3px rgba(15,157,88,0.12);
+        }
+        .hero-search-input {
+          flex: 1;
+          border: none;
+          outline: none;
+          padding: 0 16px;
+          font-size: 14px;
+          font-family: inherit;
+          color: #111827;
+          background: transparent;
+          min-width: 0;
+        }
+        .hero-search-input::placeholder { color: #9CA3AF; }
+        .hero-dots {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 6px;
+          padding: 0 48px 20px;
+        }
+        .hero-dot {
+          width: 8px;
+          height: 8px;
+          border-radius: 50%;
+          border: none;
+          padding: 0;
+          cursor: pointer;
+          background: #d1d5db;
+          transition: all 0.25s ease;
+        }
+        .hero-dot.is-active {
+          width: 28px;
+          border-radius: 4px;
+          background: #0F9D58;
+        }
+        @media (max-width: 900px) {
+          .hero-banner { width: 100%; }
+          .hero-inner {
+            grid-template-columns: 1fr;
+            min-height: 420px;
+            padding: 0;
+          }
+          .hero-content { max-width: 100%; padding: 24px 16px; }
+          .hero-content h1 { font-size: 32px !important; line-height: 1.15 !important; }
+          .hero-content p { font-size: 15px !important; line-height: 1.5 !important; }
+          .hero-visual {
+            position: relative;
+            inset: auto;
+            left: auto;
+            border-radius: 20px;
+            overflow: hidden;
+            margin-top: 20px;
+            width: 100%;
+            height: 260px;
+          }
+          .hero-visual img { border-radius: 0; }
+          .hero-image-wrapper {
+            overflow: hidden;
+            border-radius: 20px;
+            background: #F8FAFC;
+            width: 100%;
+            height: 100%;
+          }
+          .hero-image-wrapper img { width: 100%; height: 100%; object-fit: cover; display: block; }
+          .hero-search { max-width: 100% !important; height: 56px; border-radius: 16px; }
+          .hero-search-input { width: 100%; }
+          .hero-dots { padding: 14px 16px 20px; }
+          @media (max-width: 375px) {
+            .hero-visual { height: 230px; }
+          }
+        }
+      `}</style>
+
+      <div className="hero-inner" style={{
+        position: 'relative',
+        opacity: fade === 'in' ? 1 : 0,
+        transition: 'opacity 0.4s ease',
+      }}>
+        <div className="hero-content">
+          {slide.badge && (
+            <div style={{
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+              fontSize: 10, fontWeight: 800, letterSpacing: 0.5,
+              color: slide.accent, background: `${slide.accent}12`,
+              borderRadius: 999, padding: '3px 10px 3px 8px', marginBottom: 10,
+              textTransform: 'uppercase',
+            }}>
+              <span style={{ fontSize: 11 }}>{slide.badgeIcon}</span>
+              {slide.badge}
+            </div>
+          )}
+          <h1 style={{
+            margin: '0 0 10px',
+            fontFamily: T.fontDisplay,
+            fontSize: 'clamp(24px, 3.2vw, 36px)',
+            fontWeight: 800,
+            color: '#111827',
+            lineHeight: 1.2,
+            letterSpacing: '-0.5px',
+            whiteSpace: 'pre-line',
+          }}>
+            {slide.title}
+          </h1>
+          <p style={{
+            margin: '0 0 20px',
+            fontSize: 14.5,
+            color: '#6B7280',
+            lineHeight: 1.6,
+            fontWeight: 500,
+          }}>
+            {slide.description || slide.desc}
+          </p>
+
+          {onSearch && (
+            <div ref={searchRef} style={{ maxWidth: 420, position: 'relative', zIndex: 100 }}>
+              <div className="hero-search">
+                <div style={{ display: 'flex', alignItems: 'center', height: '100%', borderRadius: 16, overflow: 'hidden', width: '100%' }}>
+                  <input
+                    ref={searchInputRef}
+                    className="hero-search-input"
+                    type="text"
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    placeholder="Search products, services, shops..."
+                    onFocus={() => setSearchFocused(true)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter') handleSearchSubmit(searchQuery)
+                    }}
+                    aria-label="Search marketplace"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => handleSearchSubmit(searchQuery)}
+                    style={{
+                      border: 'none', background: '#0F9D58', color: '#fff',
+                      padding: '0 22px', cursor: 'pointer', fontFamily: 'inherit',
+                      fontSize: 14, fontWeight: 700, whiteSpace: 'nowrap',
+                      height: '100%',
+                      display: 'flex', alignItems: 'center', gap: 6,
+                      letterSpacing: 0.3, flexShrink: 0,
+                    }}
+                  >
+                    Search
+                  </button>
+                </div>
+              </div>
+              {searchFocused && (
+                <div style={{
+                  position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
+                  background: '#fff', borderRadius: 16, marginTop: 6,
+                  boxShadow: '0 12px 40px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.04)',
+                  padding: '12px 0', maxHeight: 400, overflowY: 'auto',
+                }}>
+                  {!searchQuery.trim() ? (
+                    <>
+                      <div style={{ padding: '0 16px 10px', fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        Popular searches
+                      </div>
+                      {POPULAR_SEARCHES.map(term => (
+                        <button key={term} type="button" onClick={() => handleSuggestionClick(term)}
+                          style={{
+                            display: 'block', width: '100%', textAlign: 'left',
+                            padding: '8px 16px', border: 'none', background: 'transparent',
+                            fontSize: 13.5, fontWeight: 500, color: '#374151', cursor: 'pointer',
+                            fontFamily: 'inherit', transition: 'background 0.1s',
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = '#F3F4F6'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >{term}</button>
+                      ))}
+                      <div style={{ borderTop: '1px solid #F3F4F6', margin: '8px 16px 0' }} />
+                      <div style={{ padding: '10px 16px 4px', fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        Browse categories
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '8px 16px 4px' }}>
+                        {SEARCH_CATEGORIES.map(cat => (
+                          <button key={cat.key} type="button" onClick={() => handleCategoryClick(cat.key)}
+                            style={{
+                              padding: '5px 12px', borderRadius: 8, border: '1px solid #E5E7EB',
+                              background: '#F9FAFB', fontSize: 12, fontWeight: 600, color: '#374151',
+                              cursor: 'pointer', fontFamily: 'inherit',
+                            }}
+                          >{cat.label}</button>
+                        ))}
+                      </div>
+                    </>
+                  ) : liveLoading ? (
+                    <div style={{ padding: '20px 16px', textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>
+                      <span style={{ display: 'inline-block', width: 16, height: 16, border: '2px solid #E5E7EB', borderTopColor: '#0F9D58', borderRadius: '50%', marginRight: 8, verticalAlign: 'middle', animation: 'spinner 0.6s linear infinite' }} />
+                      Searching...
+                    </div>
+                  ) : liveResults ? (
+                    <>
+                      {liveResults.listings.length > 0 && (
+                        <>
+                          <div style={{ padding: '0 16px 8px', fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                            Products
+                          </div>
+                          {liveResults.listings.map(item => (
+                            <button key={item.id} type="button" onClick={() => handleSuggestionClick(item.title)}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
+                                padding: '7px 16px', border: 'none', background: 'transparent',
+                                cursor: 'pointer', fontFamily: 'inherit', transition: 'background 0.1s',
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.background = '#F3F4F6'}
+                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                            >
+                              <div style={{ width: 32, height: 32, borderRadius: 8, background: '#F3F4F6', overflow: 'hidden', flexShrink: 0 }}>
+                                {item.images?.[0] && <img src={item.images[0]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
+                                <div style={{ fontSize: 11, color: '#6B7280' }}>
+                                  {item.price ? `MK ${Number(item.price).toLocaleString()}` : ''}{item.city ? ` · ${item.city}` : ''}
+                                </div>
+                              </div>
+                            </button>
+                          ))}
+                        </>
+                      )}
+                      {liveResults.shops.length > 0 && (
+                        <>
+                          <div style={{ borderTop: liveResults.listings.length > 0 ? '1px solid #F3F4F6' : 'none', padding: '8px 16px 8px', fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                            Shops
+                          </div>
+                          {liveResults.shops.map(shop => (
+                            <button key={shop.id} type="button" onClick={() => handleSuggestionClick(shop.name)}
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
+                                padding: '7px 16px', border: 'none', background: 'transparent',
+                                cursor: 'pointer', fontFamily: 'inherit', transition: 'background 0.1s',
+                              }}
+                              onMouseEnter={e => e.currentTarget.style.background = '#F3F4F6'}
+                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                            >
+                              <div style={{ width: 32, height: 32, borderRadius: 8, background: '#F3F4F6', overflow: 'hidden', flexShrink: 0 }}>
+                                {shop.logo_url && <img src={shop.logo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{shop.name}</div>
+                                <div style={{ fontSize: 11, color: '#6B7280' }}>{shop.city || 'Shop'}</div>
+                              </div>
+                            </button>
+                          ))}
+                        </>
+                      )}
+                      {liveResults.listings.length === 0 && liveResults.shops.length === 0 && (
+                        <div style={{ padding: '20px 16px', textAlign: 'center', color: '#9CA3AF', fontSize: 13 }}>
+                          No results for "{searchQuery.trim()}"
+                        </div>
+                      )}
+                    </>
+                  ) : null}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div style={{ marginTop: 16 }}>
+            <button
+              type="button"
+              onClick={() => {
+                if (isDbSource && slide) {
+                  supabase.rpc('increment_banner_metric', {
+                    p_banner_id: slide.id,
+                    p_metric: 'click',
+                  }).then(() => {}).catch(() => {})
+                }
+                navigate(slide.button_link || slide.path)
+              }}
+              style={{
+                border: 'none', borderRadius: 12,
+                padding: '12px 24px',
+                fontSize: 14, fontWeight: 700,
+                background: slide.accent, color: '#fff',
+                cursor: 'pointer', fontFamily: 'inherit',
+                transition: 'transform 0.15s, box-shadow 0.15s',
+                boxShadow: `0 4px 14px ${slide.accent}33`,
+              }}
+              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = `0 6px 20px ${slide.accent}44` }}
+              onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = `0 4px 14px ${slide.accent}33` }}
+            >
+              {slide.button_text || slide.cta}
+            </button>
+          </div>
+        </div>
+
+        <div className="hero-visual">
+          <div className="hero-image-wrapper">
+            <picture>
+              {slide.mobileImage && <source media="(max-width: 900px)" srcSet={slide.mobileImage} />}
+              <img
+                key={slide.id + '-img'}
+                src={slide.image}
+                alt=""
+                aria-hidden="true"
+                loading={idx === 0 ? 'eager' : 'lazy'}
+                style={{ objectPosition: slide.imagePos || 'center center' }}
+              />
+            </picture>
+          </div>
+        </div>
+      </div>
+
+      {n > 1 && (
+        <div className="hero-dots" role="tablist" aria-label="Hero slides">
+          {slides.map((s, i) => (
+            <button
+              key={s.id}
+              type="button"
+              className={'hero-dot' + (i === idx ? ' is-active' : '')}
+              role="tab"
+              aria-selected={i === idx}
+              aria-label={`Slide ${i + 1} of ${n}`}
+              onClick={() => { goTo(i); setPaused(true); setTimeout(() => setPaused(false), 3000) }}
+            />
+          ))}
+        </div>
+      )}
+    </section>
+  )
+}
+
 function SellCtaBanner({ navigate }) {
   const perks = [
     { label: 'Free to list', icon: Icon.plus },
@@ -4487,6 +4194,9 @@ export default function Home() {
   const [featuredListings, setFeaturedListings] = useState([])
   const [loading,    setLoading]    = useState(true)
 
+  // Per-session offset so different users see different rotation orders
+  const sessionShift = useRef(Math.floor(Math.random() * 100)).current
+
   // Phase 3.2 — re-rotate featured order every 30s (equal product inclusion)
   useEffect(() => {
     const t = setInterval(() => {
@@ -4495,11 +4205,12 @@ export default function Home() {
         return rotateFeaturedFairly(prev, {
           intervalMs: 30_000,
           maxPerSeller: Number.POSITIVE_INFINITY,
+          now: Date.now() + sessionShift * 30_000,
         })
       })
     }, 30_000)
     return () => clearInterval(t)
-  }, [])
+  }, [sessionShift])
   const [user,       setUser]       = useState(null)
   const [notifCount, setNotifCount] = useState(0)
   const [unreadChats, setUnreadChats] = useState(0)
@@ -4517,11 +4228,17 @@ export default function Home() {
   /** Set of listing ids the signed-in user has saved (listing_saves). */
   const [savedIds, setSavedIds] = useState(() => new Set())
 
-  function handleSearch(val) {
+  function handleSearch(val, context = {}) {
     setSearch(val)
+    const params = new URLSearchParams()
     if (val.trim()) {
+      params.set('q', val.trim())
       trackSearch(val, user?.id)
-      navigate(`/search?q=${encodeURIComponent(val.trim())}`)
+    }
+    if (context.category) params.set('category', context.category)
+    if (context.location) params.set('location', context.location)
+    if (val.trim() || context.category) {
+      navigate(`/search?${params.toString()}`)
     }
   }
 
@@ -4723,6 +4440,7 @@ export default function Home() {
         setUser({
           ...user,
           avatar_url: profile?.avatar_url || null,
+          full_name: profile?.full_name || null,
           account_type: profile?.account_type,
           shop_slug: shop?.slug || null,
           is_verified: !!(profile?.is_verified || shop?.is_verified),
@@ -4747,8 +4465,8 @@ export default function Home() {
       // Live listings may be `published` or `active` depending on env/admin path
       const LIVE = ['published', 'active']
       // Fetch only what Home can show cleanly (not 60 that stack via Show more)
-      const FEATURED_FETCH = FEATURED_HOME_CAP
-      const LATEST_FETCH = HOME_LATEST_COUNT + FEATURED_HOME_CAP + 8
+      const FEATURED_FETCH = FEATURED_POOL_SIZE
+      const LATEST_FETCH = HOME_LATEST_COUNT + FEATURED_POOL_SIZE + 8
 
       let featuredQuery = supabase
         .from('listings')
@@ -4812,7 +4530,7 @@ export default function Home() {
       setFeaturedListings(
         rotateFeaturedFairly(
           featuredEnriched.filter(l => isListingFeatured(l)),
-          { intervalMs: 30_000, maxPerSeller: Number.POSITIVE_INFINITY },
+          { intervalMs: 30_000, maxPerSeller: Number.POSITIVE_INFINITY, now: Date.now() + sessionShift * 30_000 },
         ),
       )
 
@@ -5060,9 +4778,9 @@ export default function Home() {
         <EarlyAccessStrip />
       </div>
 
-      {/* Static / local sections paint immediately */}
-      <div className="soko-settle soko-settle-d2">
-        <AdHeroBanner navigate={navigate} />
+      {/* Hero banner */}
+      <div style={{ padding: '0 20px', marginTop: 8, overflow: 'hidden', width: '100%', boxSizing: 'border-box' }}>
+        <HeroBanner navigate={navigate} onSearch={handleSearch} />
       </div>
 
       <div className="soko-settle soko-settle-d3">
@@ -5074,15 +4792,6 @@ export default function Home() {
       </div>
 
       {/* Data sections: skeleton in place → content swap (no remount keys — those stacked thrash) */}
-      <div className={!loading ? 'soko-swap-in' : undefined}>
-        <FeaturedListingsRow
-          listings={featuredListings} navigate={navigate} loading={loading}
-          user={user}
-          savedIds={savedIds}
-          onToggleSave={toggleListingSave}
-        />
-      </div>
-
       <div className={!storiesLoading ? 'soko-swap-in' : undefined}>
         <HomeStatusSection
           navigate={navigate}
@@ -5090,9 +4799,60 @@ export default function Home() {
           loading={storiesLoading}
           onCreateStory={handleCreateStory}
           currentUserId={user?.id}
+          currentUserProfile={user ? { avatar_url: user.avatar_url, full_name: user.full_name, is_verified: user.is_verified } : null}
         />
       </div>
 
+      <style>{`
+        .section-divider { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 0 8px; }
+        .section-gradient { height: 32px; background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%); pointer-events: none; }
+        .divider-desk { display: inline; }
+        .divider-mob { display: none; }
+        .bridge-divider { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 0 12px; background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%); }
+        @media (max-width: 767px) {
+          .section-divider { gap: 4px; padding: 6px 0 4px; }
+          .section-gradient { height: 16px; }
+          .divider-desk { display: none; }
+          .divider-mob { display: inline; }
+          .bridge-divider { display: none; }
+        }
+      `}</style>
+      <div className="section-divider">
+        <div style={{
+          width: 40, height: 1.5, borderRadius: 1,
+          background: 'linear-gradient(90deg, transparent, #16A34A, transparent)',
+          opacity: 0.4,
+        }} />
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          fontSize: 11, fontWeight: 600, color: '#9CA3AF', letterSpacing: '0.04em',
+        }}>
+          <span style={{ opacity: 0.5 }}>&#9734;</span>
+          <span className="divider-desk">From stories to marketplace</span>
+          <span className="divider-mob">Marketplace picks</span>
+          <span style={{ opacity: 0.5 }}>&#9734;</span>
+        </div>
+      </div>
+
+      <div className="section-gradient" />
+      <div className={!loading ? 'soko-swap-in' : undefined}>
+        <FeaturedListingsRow
+          listings={featuredListings} navigate={navigate} loading={loading}
+        />
+      </div>
+
+      <div className="bridge-divider">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" strokeLinecap="round">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+        <span style={{ fontSize: 11, fontWeight: 600, color: '#9CA3AF', letterSpacing: '0.04em' }}>
+          Explore More Products
+        </span>
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#F9AB00' }} />
+          <span style={{ fontSize: 9.5, fontWeight: 700, color: '#9CA3AF', letterSpacing: 0.4, textTransform: 'uppercase' }}>Updated daily</span>
+        </div>
+      </div>
       <div className={!loading ? 'soko-swap-in' : undefined}>
         <LatestListingsSection
           listings={listings}

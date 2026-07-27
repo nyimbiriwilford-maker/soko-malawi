@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { isListingFeatured } from '../utils/homeUtils'
@@ -18,7 +18,7 @@ import AdminVerificationSettings from '../components/AdminVerificationSettings'
 import AdminVerifiedSellers from '../components/AdminVerifiedSellers'
 import AdminVerificationHub from '../components/AdminVerificationHub'
 
-const TABS = ['Dashboard', 'Featured', 'Listings', 'Users', 'Verifications', 'Verify Settings', 'Shop Reports', 'Safety', 'Broadcast']
+const TABS = ['Dashboard', 'Featured', 'Listings', 'Users', 'Verifications', 'Verify Settings', 'Shop Reports', 'Safety', 'Broadcast', 'Banners']
 
 export default function Admin() {
   const navigate = useNavigate()
@@ -57,6 +57,12 @@ export default function Admin() {
   const [broadcastResult, setBroadcastResult] = useState(null)
   const [broadcastFilter, setBroadcastFilter] = useState({ role: 'all', city: '' })
   const [selectedUsers, setSelectedUsers] = useState([])
+  const [banners, setBanners] = useState([])
+  const [bannerLoading, setBannerLoading] = useState(false)
+  const [bannerEditor, setBannerEditor] = useState(null) // editing banner obj or null for new
+  const [bannerSaving, setBannerSaving] = useState(false)
+  const [bannerAnalytics, setBannerAnalytics] = useState([])
+  const [bannerAnalyticsLoading, setBannerAnalyticsLoading] = useState(false)
 
   useEffect(() => { init() }, [])
 
@@ -112,6 +118,8 @@ export default function Admin() {
       loadShopReports(),
       loadUserSafety(),
       loadSettings(),
+      loadBanners(),
+      loadBannerAnalytics(),
     ])
     setLoading(false)
   }
@@ -134,6 +142,79 @@ export default function Admin() {
       showToast(next ? '✅ Free featured listing enabled' : '🚫 Free featured listing disabled')
     }
     setSettingsLoading(false)
+  }
+
+  async function loadBanners() {
+    setBannerLoading(true)
+    const { data } = await supabase
+      .from('home_banners')
+      .select('*')
+      .order('priority', { ascending: true })
+    if (data) setBanners(data)
+    setBannerLoading(false)
+  }
+
+  async function loadBannerAnalytics() {
+    setBannerAnalyticsLoading(true)
+    try {
+      const { data } = await supabase.rpc('get_banner_performance')
+      if (data) setBannerAnalytics(data)
+    } catch {
+      // analytics table may not exist yet
+    }
+    setBannerAnalyticsLoading(false)
+  }
+
+  async function saveBanner(b) {
+    setBannerSaving(true)
+    const isNew = !b.id
+    const payload = {
+      title: b.title,
+      description: b.description || '',
+      image_url: b.image_url,
+      mobile_image_url: b.mobile_image_url || null,
+      button_text: b.button_text || 'Learn More',
+      button_link: b.button_link || '/',
+      priority: b.priority ?? 5,
+      status: b.status || 'draft',
+      accent: b.accent || '#0F9D58',
+      image_pos: b.image_pos || 'center center',
+      badge: b.badge || '',
+      badge_icon: b.badge_icon || '',
+      start_date: b.start_date ? `${b.start_date}T00:00:00Z` : null,
+      end_date: b.end_date ? `${b.end_date}T23:59:59.999Z` : null,
+      ...(isNew && adminUserId ? { created_by: adminUserId } : {}),
+    }
+    if (isNew) {
+      const { error } = await supabase.from('home_banners').insert(payload)
+      if (error) { showToast(`❌ ${error.message}`); setBannerSaving(false); return }
+    } else {
+      const { error } = await supabase.from('home_banners').update(payload).eq('id', b.id)
+      if (error) { showToast(`❌ ${error.message}`); setBannerSaving(false); return }
+    }
+    await loadBanners()
+    loadBannerAnalytics()
+    setBannerEditor(null)
+    setBannerSaving(false)
+    showToast(isNew ? '✅ Banner created' : '✅ Banner updated')
+  }
+
+  async function deleteBanner(id) {
+    if (!confirm('Delete this banner permanently?')) return
+    const { error } = await supabase.from('home_banners').delete().eq('id', id)
+    if (error) { showToast(`❌ ${error.message}`); return }
+    await loadBanners()
+    loadBannerAnalytics()
+    showToast('🗑️ Banner deleted')
+  }
+
+  async function toggleBannerStatus(id, current) {
+    const next = current === 'active' ? 'inactive' : 'active'
+    const { error } = await supabase.from('home_banners').update({ status: next }).eq('id', id)
+    if (error) { showToast(`❌ ${error.message}`); return }
+    await loadBanners()
+    loadBannerAnalytics()
+    showToast(next === 'active' ? '✅ Banner activated' : '⏸️ Banner deactivated')
   }
 
  async function loadListings() {
@@ -732,7 +813,7 @@ async function loadUsers() {
   const TAB_ICONS = {
     Dashboard: '📊', Featured: '⭐', Listings: '📦', Users: '👥',
     Verifications: '✅', 'Verify Settings': '⚙️', 'Shop Reports': '🚩',
-    Safety: '🛡️', Broadcast: '📣',
+    Safety: '🛡️', Broadcast: '📣', Banners: '🖼️',
   }
 
   return (
@@ -775,7 +856,7 @@ async function loadUsers() {
 
           <nav style={{ marginTop: 32 }}>
             <div style={S.navLabel}>MAIN MENU</div>
-            {TABS.map(t => (
+            {TABS.filter(t => !['Banners'].includes(t)).map(t => (
               <button
                 key={t}
                 className="nav-item"
@@ -810,6 +891,21 @@ async function loadUsers() {
 )}
               </button>
             ))}
+            <div style={{ ...S.navLabel, marginTop: 20 }}>MARKETING</div>
+            <button
+              className="nav-item"
+              onClick={() => setTab('Banners')}
+              style={{
+                ...S.navItem,
+                ...(tab === 'Banners' ? S.navItemActive : {}),
+              }}
+            >
+              <span style={{ fontSize: 16 }}>{TAB_ICONS['Banners']}</span>
+              Home Banners
+              {banners.filter(b => b.status === 'active').length > 0 && (
+                <span style={S.navPill}>{banners.filter(b => b.status === 'active').length}</span>
+              )}
+            </button>
           </nav>
         </div>
 
@@ -847,6 +943,7 @@ async function loadUsers() {
               {tab === 'Featured' && 'Control homepage spotlight'}
               {tab === 'Listings' && `${filteredListings.length} listings`}
               {tab === 'Users' && `${stats.users} accounts`}
+              {tab === 'Banners' && `${banners.length} banners`}
               {tab === 'Verifications' && 'Review seller applications'}
               {tab === 'Verify Settings' && 'Fees, docs, methods & analytics'}
             </div>
@@ -875,9 +972,175 @@ async function loadUsers() {
                 <option value="published">Published only</option>
               </select>
             </div>
-          )}
-        </div>
+        )}
 
+        {tab === 'Banners' && (
+          <div style={S.content}>
+            {bannerEditor !== null ? (
+              <BannerEditor
+                banner={bannerEditor}
+                onSave={saveBanner}
+                onCancel={() => setBannerEditor(null)}
+                saving={bannerSaving}
+              />
+            ) : (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+                  <button
+                    onClick={() => setBannerEditor({})}
+                    style={{
+                      background: '#1a7a4a', color: '#fff', border: 'none',
+                      borderRadius: 10, padding: '10px 18px', fontSize: 13, fontWeight: 700,
+                      cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                      fontFamily: "'DM Sans', system-ui, sans-serif",
+                    }}
+                  >
+                    + New Banner
+                  </button>
+                </div>
+                <div style={S.tableCard}>
+                  <div style={S.tableHeader}>
+                    <div style={S.tableTitle}>Homepage Banners</div>
+                  </div>
+                  {bannerLoading ? (
+                    <div style={{ padding: 40, textAlign: 'center', color: '#999', fontSize: 13 }}>Loading...</div>
+                  ) : banners.length === 0 ? (
+                    <div style={{ padding: 40, textAlign: 'center', color: '#aaa', fontSize: 13 }}>
+                      No banners yet. Click "+ New Banner" to create one.
+                    </div>
+                  ) : (
+                    <table style={S.table}>
+                      <thead>
+                        <tr>
+                          <th style={S.th}>Priority</th>
+                          <th style={S.th}>Title</th>
+                          <th style={S.th}>Status</th>
+                          <th style={S.th}>Dates</th>
+                          <th style={S.th}>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {banners.map(b => (
+                          <tr key={b.id} style={S.tr}>
+                            <td style={S.td}>
+                              <span style={{
+                                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                                width: 28, height: 28, borderRadius: 8,
+                                background: '#f3f4f6', fontWeight: 800, fontSize: 13,
+                              }}>{b.priority}</span>
+                            </td>
+                            <td style={S.td}>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: '#111', maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {b.title?.replace(/\n/g, ' ')}
+                              </div>
+                              <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {b.description}
+                              </div>
+                            </td>
+                            <td style={S.td}>
+                              <StatusBadge status={b.status} />
+                            </td>
+                            <td style={{ ...S.td, fontSize: 12, color: '#666' }}>
+                              {b.start_date ? new Date(b.start_date).toLocaleDateString() : '—'}
+                              {' → '}
+                              {b.end_date ? new Date(b.end_date).toLocaleDateString() : '∞'}
+                            </td>
+                            <td style={S.td}>
+                              <div style={{ display: 'flex', gap: 6 }}>
+                                <ActionBtn
+                                  bg="#f3f4f6" color="#555"
+                                  onClick={() => setBannerEditor(b)}
+                                  title="Edit"
+                                >✏️</ActionBtn>
+                                <ActionBtn
+                                  bg={b.status === 'active' ? '#fef3c7' : '#e6f4ec'}
+                                  color={b.status === 'active' ? '#b45309' : '#1a7a4a'}
+                                  onClick={() => toggleBannerStatus(b.id, b.status)}
+                                  title={b.status === 'active' ? 'Deactivate' : 'Activate'}
+                                >{b.status === 'active' ? '⏸' : '▶'}</ActionBtn>
+                                <ActionBtn
+                                  bg="#fee2e2" color="#dc2626"
+                                  onClick={() => deleteBanner(b.id)}
+                                  title="Delete"
+                                >🗑️</ActionBtn>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+
+                <div style={{ ...S.tableCard, marginTop: 24 }}>
+                  <div style={S.tableHeader}>
+                    <div style={S.tableTitle}>Banner Performance</div>
+                  </div>
+                  {bannerAnalyticsLoading ? (
+                    <div style={{ padding: 40, textAlign: 'center', color: '#999', fontSize: 13 }}>Loading...</div>
+                  ) : bannerAnalytics.length === 0 ? (
+                    <div style={{ padding: 40, textAlign: 'center', color: '#aaa', fontSize: 13 }}>
+                      No analytics data yet. Banner metrics appear after visitors view banners.
+                    </div>
+                  ) : (
+                    <table style={S.table}>
+                      <thead>
+                        <tr>
+                          <th style={S.th}>Banner</th>
+                          <th style={{ ...S.th, textAlign: 'right' }}>Impressions</th>
+                          <th style={{ ...S.th, textAlign: 'right' }}>Clicks</th>
+                          <th style={{ ...S.th, textAlign: 'right' }}>CTR</th>
+                          <th style={{ ...S.th, textAlign: 'right' }}>7d Impressions</th>
+                          <th style={{ ...S.th, textAlign: 'right' }}>7d Clicks</th>
+                          <th style={{ ...S.th, textAlign: 'right' }}>7d CTR</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {bannerAnalytics.map(a => (
+                          <tr key={a.banner_id} style={S.tr}>
+                            <td style={S.td}>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: '#111' }}>{a.title?.replace(/\n/g, ' ')}</div>
+                            </td>
+                            <td style={{ ...S.td, textAlign: 'right', fontSize: 13, fontWeight: 700, color: '#111' }}>
+                              {Number(a.total_impressions).toLocaleString()}
+                            </td>
+                            <td style={{ ...S.td, textAlign: 'right', fontSize: 13, fontWeight: 700, color: '#111' }}>
+                              {Number(a.total_clicks).toLocaleString()}
+                            </td>
+                            <td style={{ ...S.td, textAlign: 'right' }}>
+                              <span style={{
+                                fontSize: 13, fontWeight: 700,
+                                color: Number(a.ctr) > 3 ? '#1a7a4a' : Number(a.ctr) > 1 ? '#b45309' : '#6b7280',
+                              }}>
+                                {Number(a.ctr).toFixed(2)}%
+                              </span>
+                            </td>
+                            <td style={{ ...S.td, textAlign: 'right', fontSize: 13, color: '#374151' }}>
+                              {Number(a.last_7d_impressions).toLocaleString()}
+                            </td>
+                            <td style={{ ...S.td, textAlign: 'right', fontSize: 13, color: '#374151' }}>
+                              {Number(a.last_7d_clicks).toLocaleString()}
+                            </td>
+                            <td style={{ ...S.td, textAlign: 'right' }}>
+                              <span style={{
+                                fontSize: 13, fontWeight: 600,
+                                color: Number(a.last_7d_ctr) > 3 ? '#1a7a4a' : Number(a.last_7d_ctr) > 1 ? '#b45309' : '#6b7280',
+                              }}>
+                                {Number(a.last_7d_ctr).toFixed(2)}%
+                              </span>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+      </div>
         {/* ══ TAB: DASHBOARD ══ */}
         {tab === 'Dashboard' && (
           <div style={S.content}>
@@ -2003,6 +2266,249 @@ function ActionBtn({ children, bg, color, onClick, disabled, title }) {
       {children}
     </button>
   )
+}
+
+function BannerEditor({ banner, onSave, onCancel, saving }) {
+  const [form, setForm] = useState({
+    title: banner?.title || '',
+    description: banner?.description || '',
+    image_url: banner?.image_url || '',
+    mobile_image_url: banner?.mobile_image_url || '',
+    button_text: banner?.button_text || 'Explore Marketplace',
+    button_link: banner?.button_link || '/listings',
+    priority: banner?.priority ?? 1,
+    status: banner?.status || 'active',
+    start_date: banner?.start_date ? banner.start_date.slice(0, 10) : '',
+    end_date: banner?.end_date ? banner.end_date.slice(0, 10) : '',
+  })
+  const [uploading, setUploading] = useState(false)
+  const [mobileUploading, setMobileUploading] = useState(false)
+  const [uploadError, setUploadError] = useState('')
+  const [mobileUploadError, setMobileUploadError] = useState('')
+  const fileRef = useRef(null)
+  const mobileFileRef = useRef(null)
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
+
+  const compressImage = (file) => new Promise((resolve, reject) => {
+    const MAX_DIM = 1920
+    const MAX_FILE = 5 * 1024 * 1024
+
+    if (file.size > MAX_FILE) {
+      reject(new Error(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max 5MB.`))
+      return
+    }
+
+    const img = new Image()
+    const url = URL.createObjectURL(file)
+    img.onload = () => {
+      URL.revokeObjectURL(url)
+      if (img.width < 400 || img.height < 200) {
+        reject(new Error(`Image too small: ${img.width}×${img.height}. Minimum 400×200.`))
+        return
+      }
+
+      let w = img.width, h = img.height
+      if (w > MAX_DIM || h > MAX_DIM) {
+        const ratio = Math.min(MAX_DIM / w, MAX_DIM / h)
+        w = Math.round(w * ratio)
+        h = Math.round(h * ratio)
+      }
+
+      const canvas = document.createElement('canvas')
+      canvas.width = w
+      canvas.height = h
+      const ctx = canvas.getContext('2d')
+      ctx.imageSmoothingQuality = 'high'
+      ctx.drawImage(img, 0, 0, w, h)
+
+      canvas.toBlob(blob => {
+        if (!blob) { reject(new Error('Compression failed')); return }
+        resolve(blob)
+      }, 'image/webp', 0.85)
+    }
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('Failed to load image')) }
+    img.src = url
+  })
+
+  const handleFilePick = async (e, targetField, setUploadingFn, setUploadErrorFn) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setUploadErrorFn('')
+    setUploadingFn(true)
+
+    try {
+      const compressed = await compressImage(file)
+      const name = `banner_${Date.now()}.webp`
+      const path = `banner-images/${name}`
+
+      const { error: upErr } = await supabase.storage
+        .from('banners')
+        .upload(path, compressed, {
+          upsert: false,
+          cacheControl: '3600',
+          contentType: 'image/webp',
+        })
+
+      if (upErr) throw new Error(upErr.message)
+      set(targetField, supabase.storage.from('banners').getPublicUrl(path).data.publicUrl)
+    } catch (err) {
+      setUploadErrorFn(err.message)
+    }
+    setUploadingFn(false)
+  }
+
+  const handleSave = () => {
+    if (!form.title.trim()) { alert('Title is required'); return }
+    if (!form.image_url.trim()) { alert('Please upload a desktop image'); return }
+    onSave({ ...form, id: banner?.id })
+  }
+
+  return (
+    <div style={{ maxWidth: 560 }}>
+      <div style={{
+        background: '#fff', borderRadius: 16, border: '1px solid #e8f0ec', padding: 28,
+      }}>
+        <div style={{ fontSize: 18, fontWeight: 800, color: '#0f1410', marginBottom: 24 }}>
+          {banner?.id ? 'Edit Home Banner' : 'Create Home Banner'}
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>TITLE</div>
+          <input type="text" value={form.title} onChange={e => set('title', e.target.value)}
+            placeholder="Buy. Sell. Discover. Everything Malawi."
+            style={i} />
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>DESCRIPTION</div>
+          <textarea value={form.description} onChange={e => set('description', e.target.value)}
+            placeholder="Supporting text for the banner"
+            rows={3} style={{ ...i, resize: 'vertical' }} />
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>DESKTOP IMAGE</div>
+          <input ref={fileRef} type="file" accept="image/*" hidden
+            onChange={e => handleFilePick(e, 'image_url', setUploading, setUploadError)} />
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
+              style={{
+                padding: '10px 20px', borderRadius: 10, border: '1px solid #d0ddd5',
+                background: uploading ? '#f0f0f0' : '#fff', fontSize: 13, fontWeight: 700,
+                cursor: uploading ? 'default' : 'pointer', fontFamily: 'inherit',
+              }}
+            >{uploading ? '⏳ Compressing & Uploading...' : 'Choose File'}</button>
+            {uploading && <span style={{ fontSize: 12, color: '#888' }}>Compressing to WebP...</span>}
+            {!uploading && form.image_url && <span style={{ fontSize: 12, color: '#1a7a4a' }}>✅ WebP ready</span>}
+          </div>
+          {uploadError && (
+            <div style={{ marginTop: 6, fontSize: 12, color: '#dc2626' }}>⚠️ {uploadError}</div>
+          )}
+          {form.image_url ? (
+            <div style={{ marginTop: 10, borderRadius: 12, overflow: 'hidden', height: 120, background: '#f0f5f1' }}>
+              <img src={form.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            </div>
+          ) : (
+            <div style={{ marginTop: 10, borderRadius: 12, height: 80, background: '#f4f7f5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: '#bbb' }}>
+              No image selected
+            </div>
+          )}
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>MOBILE IMAGE <span style={{ fontWeight: 400, color: '#aaa' }}>(optional)</span></div>
+          <input ref={mobileFileRef} type="file" accept="image/*" hidden
+            onChange={e => handleFilePick(e, 'mobile_image_url', setMobileUploading, setMobileUploadError)} />
+          <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+            <button type="button" onClick={() => mobileFileRef.current?.click()} disabled={mobileUploading}
+              style={{
+                padding: '10px 20px', borderRadius: 10, border: '1px solid #d0ddd5',
+                background: mobileUploading ? '#f0f0f0' : '#fff', fontSize: 13, fontWeight: 700,
+                cursor: mobileUploading ? 'default' : 'pointer', fontFamily: 'inherit',
+              }}
+            >{mobileUploading ? '⏳ Compressing & Uploading...' : 'Choose File'}</button>
+            {mobileUploading && <span style={{ fontSize: 12, color: '#888' }}>Compressing to WebP...</span>}
+            {!mobileUploading && form.mobile_image_url && <span style={{ fontSize: 12, color: '#1a7a4a' }}>✅ WebP ready</span>}
+          </div>
+          {mobileUploadError && (
+            <div style={{ marginTop: 6, fontSize: 12, color: '#dc2626' }}>⚠️ {mobileUploadError}</div>
+          )}
+          {form.mobile_image_url ? (
+            <div style={{ marginTop: 10, borderRadius: 12, overflow: 'hidden', height: 120, background: '#f0f5f1' }}>
+              <img src={form.mobile_image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            </div>
+          ) : (
+            <div style={{ marginTop: 10, borderRadius: 12, height: 80, background: '#f4f7f5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: '#bbb' }}>
+              No image selected
+            </div>
+          )}
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>BUTTON TEXT</div>
+          <input type="text" value={form.button_text} onChange={e => set('button_text', e.target.value)}
+            placeholder="Explore Marketplace" style={i} />
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>BUTTON LINK</div>
+          <input type="text" value={form.button_link} onChange={e => set('button_link', e.target.value)}
+            placeholder="/listings" style={i} />
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>START DATE</div>
+            <input type="date" value={form.start_date} onChange={e => set('start_date', e.target.value)} style={i} />
+          </div>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>END DATE</div>
+            <input type="date" value={form.end_date} onChange={e => set('end_date', e.target.value)} style={i} />
+          </div>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 24 }}>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>PRIORITY</div>
+            <input type="number" min="1" max="99" value={form.priority}
+              onChange={e => set('priority', Number(e.target.value))} style={i} />
+          </div>
+          <div>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>STATUS</div>
+            <select value={form.status} onChange={e => set('status', e.target.value)}
+              style={{ ...i, appearance: 'auto' }}>
+              <option value="active">Active</option>
+              <option value="draft">Draft</option>
+              <option value="inactive">Inactive</option>
+              <option value="expired">Expired</option>
+            </select>
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', borderTop: '1px solid #e8f0ec', paddingTop: 20 }}>
+          <button onClick={onCancel}
+            style={{
+              padding: '10px 24px', borderRadius: 10, border: '1px solid #d0ddd5',
+              background: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit',
+            }}
+          >Cancel</button>
+          <button onClick={handleSave} disabled={saving}
+            style={{
+              padding: '10px 24px', borderRadius: 10, border: 'none',
+              background: saving ? '#aaa' : '#1a7a4a', color: '#fff',
+              fontSize: 13, fontWeight: 700, cursor: saving ? 'default' : 'pointer', fontFamily: 'inherit',
+            }}
+          >{saving ? 'Saving...' : 'Save Banner'}</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const i = {
+  width: '100%', padding: '10px 14px', borderRadius: 10, border: '1px solid #d0ddd5',
+  fontSize: 14, fontFamily: 'inherit', boxSizing: 'border-box', outline: 'none',
 }
 
 // ── Styles ───────────────────────────────────────────────

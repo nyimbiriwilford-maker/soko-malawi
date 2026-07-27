@@ -231,7 +231,7 @@ export async function fetchAllActiveStories(currentUserId = null, category = nul
     .select(`
       id, content, status_type, expires_at, created_at,
       media_urls, tagged_listing_id, tagged_kind, tagged_ref_id, user_id, location_hint,
-      profiles:user_id ( id, full_name, avatar_url, city ),
+      profiles:user_id ( id, full_name, avatar_url, city, is_verified ),
       tagged:tagged_listing_id ( id, title, price, images, category, description, city, district )
     `)
     .gt('expires_at', new Date().toISOString())
@@ -245,7 +245,7 @@ export async function fetchAllActiveStories(currentUserId = null, category = nul
       .select(`
         id, content, status_type, expires_at, created_at,
         media_urls, tagged_listing_id, user_id, location_hint,
-        profiles:user_id ( id, full_name, avatar_url, city ),
+        profiles:user_id ( id, full_name, avatar_url, city, is_verified ),
         tagged:tagged_listing_id ( id, title, price, images, category, description, city, district )
       `)
       .gt('expires_at', new Date().toISOString())
@@ -260,6 +260,14 @@ export async function fetchAllActiveStories(currentUserId = null, category = nul
 
   const withCounts = (data || []).map(s => ({ ...s, _statusCount: countMap[s.user_id] }))
   const hydrated = await hydrateTaggedEntities(withCounts)
+
+  // Normalize profiles — Supabase foreign key joins can return an array
+  for (const s of hydrated) {
+    if (Array.isArray(s.profiles)) s.profiles = s.profiles[0] || null
+    if (s.profiles) {
+      s.profiles.is_verified = s.profiles.is_verified === true
+    }
+  }
 
   const applyFilter = (s) => {
     if (!isFiltered) return true
