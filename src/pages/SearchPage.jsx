@@ -2210,6 +2210,8 @@ const locationParam = searchParams.get('location') || ''
 
   function clearFiltersAndSearch() {
     clearAll()
+    setSearch('')
+    setSearchParams({}, { replace: true })
   }
 
   useEffect(() => {
