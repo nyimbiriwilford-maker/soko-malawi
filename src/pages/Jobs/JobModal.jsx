@@ -19,7 +19,7 @@ function BulletList({ text }) {
   )
 }
 
-export default function JobModal({ job, savedIds, onToggleSave, onClose }) {
+export default function JobModal({ job, savedIds, onToggleSave, onClose, fullScreen }) {
   const navigate = useNavigate()
   const [showApply, setShowApply] = useState(false)
   const [copied, setCopied] = useState(false)
@@ -51,10 +51,13 @@ export default function JobModal({ job, savedIds, onToggleSave, onClose }) {
     })
   }
 
+  const fsCloseBtn = { position: 'fixed', top: 14, right: 14, zIndex: 1100, width: 38, height: 38, borderRadius: '50%', background: 'rgba(0,0,0,0.5)', border: 'none', color: '#fff', fontSize: 22, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }
+
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
-        <div className="modal-drag-bar" />
+    <div className="modal-overlay" style={fullScreen ? { position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(15,23,42,0.85)', backdropFilter: 'blur(12px)', display: 'flex', flexDirection: 'column' } : {}} onClick={onClose}>
+      {fullScreen && <button onClick={onClose} style={fsCloseBtn}>✕</button>}
+      <div className="modal" style={fullScreen ? { borderRadius: 0, padding: '0 20px 24px', width: '100%', flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column', maxHeight: 'none', maxWidth: '100%', animation: 'none' } : {}} onClick={e => e.stopPropagation()}>
+        <div className="modal-drag-bar" style={fullScreen ? { display: 'none' } : {}} />
 
         {/* ── Cover Image / Artwork ── */}
         {job.cover_image_url && (

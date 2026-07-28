@@ -62,8 +62,22 @@ export default function ProviderModal({ provider, currentUser, onClose }) {
   const hasContact = !!provider.contact
 
   return (
-    <div style={S.modalOverlay} onClick={onClose}>
-      <div style={S.modal} onClick={e => e.stopPropagation()}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(15,23,42,0.85)', backdropFilter: 'blur(12px)', display: 'flex', flexDirection: 'column' }} onClick={onClose}>
+      <div style={{ background: '#fff', width: '100%', flex: '1 1 auto', minHeight: 0, display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+        {/* ── Close button ── */}
+        <button
+          onClick={onClose}
+          style={{
+            position: 'fixed', top: 14, right: 14, zIndex: 1100,
+            width: 38, height: 38, borderRadius: '50%',
+            background: 'rgba(0,0,0,0.5)', border: 'none',
+            color: '#fff', fontSize: 22, lineHeight: 1,
+            cursor: 'pointer', display: 'flex', alignItems: 'center',
+            justifyContent: 'center', backdropFilter: 'blur(4px)',
+          }}
+        >
+          ✕
+        </button>
 
         {/* ── Hero ─────────────────────────────────── */}
         <div style={{ position: 'relative', flexShrink: 0 }}>
@@ -102,7 +116,6 @@ export default function ProviderModal({ provider, currentUser, onClose }) {
             </div>
             <div style={S.modalSubline}>
               {provider.rating > 0 && <span style={{ color: '#f0c040' }}>{renderStars(provider.rating)} {provider.rating} · </span>}
-              {provider.jobs_done > 0 && <span>{provider.jobs_done} jobs · </span>}
               {provider.city && <span>📍 {provider.city}</span>}
               {(provider.views || 0) > 0 && <span> · 👁 {provider.views}</span>}
             </div>
@@ -128,23 +141,19 @@ export default function ProviderModal({ provider, currentUser, onClose }) {
         </div>
 
         {/* ── Body ─────────────────────────────────── */}
-        <div style={S.modalBody}>
+        <div style={{ ...S.modalBody, overflowY: 'auto' }}>
 
           {activeTab === 'info' && (
             <>
               {/* Stats */}
               <div style={S.statsRow}>
                 <div style={S.statBox}>
-                  <div style={S.statVal}>{provider.rate || '—'}</div>
-                  <div style={S.statLabel}>Rate</div>
-                </div>
-                <div style={S.statBox}>
                   <div style={S.statVal}>{provider.experience || '—'}</div>
                   <div style={S.statLabel}>Experience</div>
                 </div>
                 <div style={S.statBox}>
-                  <div style={S.statVal}>{provider.jobs_done || 0}</div>
-                  <div style={S.statLabel}>Jobs done</div>
+                  <div style={S.statVal}>{provider.rate || '—'}</div>
+                  <div style={S.statLabel}>Rate</div>
                 </div>
               </div>
 

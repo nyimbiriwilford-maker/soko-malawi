@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { MapPin, CheckCircle, Lock, AlertTriangle, ShieldCheck } from 'lucide-react'
+import SokoNav from '../components/SokoNav'
 import Comments from '../components/Comments'
 import VouchChainBanner from '../components/VouchChainBanner'
 import TrustBadge from '../components/TrustBadge'
@@ -21,14 +23,6 @@ const CAT_META = {
   Food:        { color: '#dc2626', bg: '#fee2e2' },
   Services:    { color: '#d97706', bg: '#fef3c7' },
   Other:       { color: '#6b7280', bg: '#f3f4f6' },
-}
-
-const BADGE_META = {
-  hot:      { label: '🔥 Hot Deal',      bg: '#dc2626' },
-  sale:     { label: '💸 On Sale',       bg: '#d97706' },
-  new_in:   { label: '🆕 New In',        bg: '#1d4ed8' },
-  limited:  { label: '⚡ Limited Stock', bg: '#7c3aed' },
-  featured: { label: '⭐ Featured',      bg: '#1a7a4a' },
 }
 
 const CONDITION_META = {
@@ -139,6 +133,7 @@ export default function ListingDetail() {
   const [sellerStatus, setSellerStatus]   = useState(null)
   const [isFavorited, setIsFavorited]     = useState(false)
   const [featuring, setFeaturing]         = useState(false)
+  const [ldSearch, setLdSearch] = useState('')
   const touchStartX = useRef(null)
   const viewNotifSent = useRef(false)
 
@@ -367,7 +362,6 @@ export default function ListingDetail() {
   const flashDiscount = flash ? Math.round((1 - listing.flash_sale_price / listing.price) * 100) : 0
   const displayPrice  = flash ? listing.flash_sale_price : listing.price
   const catMeta       = CAT_META[listing.category] || { color: '#1a7a4a', bg: '#e6f4ec' }
-  const badge         = listing.promo_badge && BADGE_META[listing.promo_badge]
   const condition     = listing.condition && CONDITION_META[listing.condition]
   const hasBulk       = listing.price_tiers && listing.price_tiers.length > 0
 
@@ -471,83 +465,10 @@ export default function ListingDetail() {
         }
       `}</style>
 
-      {/* ── TOP NAV (desktop) ── */}
-      <div className="ld-topnav" style={S.topnav}>
-        <div style={S.topnavInner}>
-          {/* Logo */}
-          <div style={S.logo} onClick={() => navigate('/')}>
-            <span style={S.logoSoko}>Soko</span><span style={S.logoMw}>Mw</span>
-            <div style={S.logoSub}>Buy. Sell. Find. Anywhere in Malawi.</div>
-          </div>
-          {/* Search */}
-          <div style={S.searchWrap}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', pointerEvents: 'none' }}>
-              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
-            <input style={S.searchInput} placeholder="Search for anything (e.g. iPhone, Toyota, jobs, services...)" />
-            <button style={S.searchBtn}>Search</button>
-          </div>
-          {/* Right actions */}
-          <div style={S.navRight}>
-            <button style={S.navIconBtn} onClick={() => navigate('/chats')}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="1.8" strokeLinecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-              <span style={S.navIconLabel}>Chats</span>
-            </button>
-            <button style={S.navIconBtn} onClick={() => navigate('/alerts')}>
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="1.8" strokeLinecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-              <span style={S.navIconLabel}>Alerts</span>
-            </button>
-            <button style={S.sellNowBtn} onClick={() => navigate('/post')}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.5" strokeLinecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Sell Now
-            </button>
-            <div style={S.avatarCircle} onClick={() => navigate('/profile')}>
-              {currentUser ? (currentUser.email || 'U')[0].toUpperCase() : 'G'}
-            </div>
-          </div>
-        </div>
-      </div>
+      {/* ── SokoNav (desktop + mobile + pillars) ── */}
+      <SokoNav navigate={navigate} user={currentUser} search={ldSearch} setSearch={setLdSearch} />
 
-      {/* ── TAB NAV ── */}
-      <div className="ld-tabnav" style={S.tabnav}>
-        <div style={S.tabnavInner}>
-          {[
-            { label: 'Marketplace', icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>, path: '/' },
-            { label: 'Shops', icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>, path: '/shops' },
-            { label: 'People Looking For', icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>, path: '/looking-for' },
-            { label: 'Jobs', icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>, path: '/jobs' },
-            { label: 'Services', icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M4.93 4.93a10 10 0 0 0 0 14.14"/></svg>, path: '/services' },
-            { label: 'Statuses (Stories)', icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>, path: '/statuses' },
-            { label: 'Verification', icon: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>, path: '/verification' },
-          ].map(({ label, icon, path }) => (
-            <button
-              key={label}
-              className={`ld-tab${path === '/' && listing ? ' ld-tab-active' : ''}`}
-              onClick={() => navigate(path)}
-            >
-              {icon}{label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ── MOBILE TOP NAV ── */}
-      <div className="ld-mobile-topnav" style={S.mobilenav}>
-        <button style={S.mobileBackBtn} onClick={() => navigate(-1)}>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
-        </button>
-        <div style={S.mobilenavTitle}>{listing.category}</div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button style={S.mobileNavBtn} onClick={handleShare}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-          </button>
-          {isOwner && (
-            <button style={{ ...S.mobileNavBtn, color: '#dc2626' }} onClick={() => setShowDeleteConfirm(true)}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
-            </button>
-          )}
-        </div>
-      </div>
+      {/* ── PAGE BODY ── */}
 
       {/* ── PAGE BODY ── */}
       <div style={S.pageBody}>
@@ -582,20 +503,11 @@ export default function ListingDetail() {
 
             {/* GALLERY CARD */}
             <div style={S.galleryCard}>
-              {/* badge + fav overlay */}
-              {badge && (
-                <div style={{ ...S.galleryBadge, background: badge.bg }}>{badge.label}</div>
-              )}
+              {/* featured badge only */}
               {isListingFeatured(listing) && (
-                <div style={{ ...S.galleryBadge, top: badge ? 44 : 12, background: '#1a7a4a', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <div style={{ ...S.galleryBadge, top: 12, background: '#1a7a4a', display: 'flex', alignItems: 'center', gap: 4 }}>
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="white"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
                   Featured
-                </div>
-              )}
-              {(listing.videos || []).length > 0 && (
-                <div style={{ ...S.galleryBadge, left: 'auto', right: !isOwner ? 56 : 12, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="white"><path d="M4 4h12a2 2 0 0 1 2 2v2.5l4-2.5v12l-4-2.5V18a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/></svg>
-                  {listing.videos.length} video{listing.videos.length > 1 ? 's' : ''}
                 </div>
               )}
               {!isOwner && (
@@ -1203,13 +1115,13 @@ export default function ListingDetail() {
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
                   {[
-                    { icon: '🗺️',  color: '#dbeafe', stroke: '#1d4ed8', text: 'Meet in a public place' },
-                    { icon: '✅',  color: '#dcfce7', stroke: '#15803d', text: 'Check the item before you pay' },
-                    { icon: '🔒', color: '#dcfce7', stroke: '#15803d', text: 'Use secure payment methods' },
-                    { icon: '⚠️', color: '#fee2e2', stroke: '#dc2626', text: 'Report suspicious activity' },
-                  ].map(({ icon, text }) => (
-                    <div key={text} style={S.trustRow}>
-                      <span style={{ fontSize: 15, flexShrink: 0 }}>{icon}</span>
+                    { icon: <MapPin size={16} strokeWidth={2.2} />,  color: '#dbeafe', stroke: '#1d4ed8', text: 'Meet in a public place' },
+                    { icon: <CheckCircle size={16} strokeWidth={2.2} />, color: '#dcfce7', stroke: '#15803d', text: 'Check the item before you pay' },
+                    { icon: <Lock size={16} strokeWidth={2.2} />, color: '#dcfce7', stroke: '#15803d', text: 'Use secure payment methods' },
+                    { icon: <AlertTriangle size={16} strokeWidth={2.2} />, color: '#fee2e2', stroke: '#dc2626', text: 'Report suspicious activity' },
+                  ].map(({ icon, color, stroke, text }) => (
+                    <div key={text} style={{ ...S.trustRow, gap: 10 }}>
+                      <span style={{ width: 28, height: 28, borderRadius: 8, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: stroke }}>{icon}</span>
                       <span style={{ fontSize: 13, color: '#374151' }}>{text}</span>
                     </div>
                   ))}

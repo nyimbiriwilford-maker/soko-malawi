@@ -8,6 +8,13 @@ export default function StoryViewerPage() {
   const navigate = useNavigate()
   const [stories, setStories] = useState([])
   const [startIdx, setStartIdx] = useState(0)
+  const [userId, setUserId] = useState(null)
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data?.user) setUserId(data.user.id)
+    })
+  }, [])
 
   useEffect(() => {
     if (!storyId) return
@@ -52,6 +59,7 @@ export default function StoryViewerPage() {
     <StoryViewer
       stories={stories}
       startIndex={startIdx}
+      currentUserId={userId}
       onClose={() => navigate('/', { replace: true })}
     />
   )

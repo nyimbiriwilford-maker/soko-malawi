@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 
+const GREEN = '#1a7a4a'
+
 function timeAgo(date) {
   const diff = Date.now() - new Date(date)
   const mins = Math.floor(diff / 60000)
@@ -13,33 +15,88 @@ function timeAgo(date) {
   return new Date(date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
 }
 
+function isMobileShareDevice() {
+  return /Android|iPhone|iPad|iPod/i.test(typeof navigator !== 'undefined' ? navigator.userAgent : '')
+}
+
+function IconReplyArrow({ size = 12 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M9 17H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h11" />
+      <path d="M15 3l5 5-5 5" />
+    </svg>
+  )
+}
+
+function IconCopy({ size = 12 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <rect x="9" y="9" width="13" height="13" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </svg>
+  )
+}
+
 export default function Comments({ listingId, currentUser }) {
   const [comments, setComments] = useState([])
   const [loading, setLoading] = useState(true)
   const [replyingTo, setReplyingTo] = useState(null) // { id, name }
   const [expandedReplies, setExpandedReplies] = useState({})
+  const [copyToast, setCopyToast] = useState('')
+  const [highlightId, setHighlightId] = useState(null)
+  const itemRefs = useRef({})
 
   useEffect(() => { loadComments() }, [listingId])
 
+  // Deep-link highlight: /listing/:id?comment=:id
+  useEffect(() => {
+    try {
+      const id = new URLSearchParams(window.location.search).get('comment')
+      if (id) setHighlightId(id)
+    } catch { /* ignore */ }
+  }, [])
+
+  useEffect(() => {
+    if (!highlightId || loading) return
+    const t = setTimeout(() => {
+      itemRefs.current[highlightId]?.scrollIntoView?.({ behavior: 'smooth', block: 'center' })
+    }, 150)
+    return () => clearTimeout(t)
+  }, [highlightId, loading, comments])
+
   async function loadComments() {
     const { data } = await supabase
-  .from('comments')
-  .select('*')
-  .eq('listing_id', listingId)
-  .order('created_at', { ascending: true })
+      .from('comments')
+      .select('*')
+      .eq('listing_id', listingId)
+      .order('created_at', { ascending: true })
 
-const list = data || []
-const userIds = [...new Set(list.map(c => c.user_id).filter(Boolean))]
-if (userIds.length > 0) {
-  const { data: profiles } = await supabase
-    .from('profiles')
-    .select('id, full_name, avatar_url')
-    .in('id', userIds)
-  const map = Object.fromEntries((profiles || []).map(p => [p.id, p]))
-  list.forEach(c => { c.profiles = map[c.user_id] || null })
-}
-setComments(list)
-setLoading(false)
+    const list = data || []
+    const userIds = [...new Set(list.map(c => c.user_id).filter(Boolean))]
+    if (userIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, full_name, avatar_url')
+        .in('id', userIds)
+      const map = Object.fromEntries((profiles || []).map(p => [p.id, p]))
+      list.forEach(c => { c.profiles = map[c.user_id] || null })
+    }
+    setComments(list)
+    setLoading(false)
+    // Auto-expand threads that contain the deep-linked comment
+    try {
+      const target = new URLSearchParams(window.location.search).get('comment')
+      if (target) {
+        const byId = Object.fromEntries(list.map(c => [c.id, c]))
+        let cur = byId[target]
+        const open = {}
+        while (cur?.parent_id) {
+          open[cur.parent_id] = true
+          cur = byId[cur.parent_id]
+        }
+        if (Object.keys(open).length) setExpandedReplies(e => ({ ...e, ...open }))
+      }
+    } catch { /* ignore */ }
   }
 
   async function deleteComment(id) {
@@ -47,19 +104,54 @@ setLoading(false)
     setComments(c => c.filter(x => x.id !== id))
   }
 
+  async function shareOrCopyComment(commentId) {
+    const url = `${window.location.origin}/listing/${listingId}?comment=${commentId}`
+    if (isMobileShareDevice() && typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ url, title: 'Comment on Soko Malawi' })
+      } catch { /* cancelled */ }
+      return
+    }
+    try {
+      await navigator.clipboard.writeText(url)
+    } catch {
+      const el = document.createElement('textarea')
+      el.value = url
+      document.body.appendChild(el)
+      el.select()
+      document.execCommand('copy')
+      document.body.removeChild(el)
+    }
+    setCopyToast('Link copied')
+    setTimeout(() => setCopyToast(''), 1600)
+  }
+
   // Build tree structure
   const topLevel = comments.filter(c => !c.parent_id)
   const getReplies = (parentId) => comments.filter(c => c.parent_id === parentId)
+  const parentNameById = Object.fromEntries(
+    comments.map(c => [c.id, c.profiles?.full_name || 'Anonymous'])
+  )
 
   function toggleReplies(id) {
     setExpandedReplies(e => ({ ...e, [id]: !e[id] }))
   }
 
   return (
-    <div style={{ marginBottom: 16 }}>
+    <div style={{ marginBottom: 16, position: 'relative' }}>
       <div style={{ fontSize: 12, fontWeight: 800, color: '#9ca3af', textTransform: 'uppercase', letterSpacing: 0.8, marginBottom: 12 }}>
         Comments ({comments.length})
       </div>
+
+      {copyToast && (
+        <div style={{
+          position: 'fixed', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+          background: '#0f172a', color: '#fff', padding: '8px 16px', borderRadius: 999,
+          fontSize: 13, fontWeight: 700, zIndex: 1000, boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
+        }}>
+          {copyToast}
+        </div>
+      )}
 
       {loading && (
         <div style={{ fontSize: 13, color: '#aaa', textAlign: 'center', padding: '16px 0' }}>Loading comments…</div>
@@ -77,6 +169,7 @@ setLoading(false)
           comment={comment}
           replies={getReplies(comment.id)}
           allComments={comments}
+          parentNameById={parentNameById}
           currentUser={currentUser}
           replyingTo={replyingTo}
           setReplyingTo={setReplyingTo}
@@ -84,8 +177,11 @@ setLoading(false)
           toggleReplies={toggleReplies}
           onDelete={deleteComment}
           onNewComment={(c) => setComments(prev => [...prev, c])}
+          onShare={shareOrCopyComment}
           listingId={listingId}
           depth={0}
+          highlightId={highlightId}
+          itemRefs={itemRefs}
         />
       ))}
 
@@ -103,8 +199,8 @@ setLoading(false)
   )
 }
 
-function CommentThread({ comment, replies, allComments, currentUser, replyingTo, setReplyingTo,
-  expandedReplies, toggleReplies, onDelete, onNewComment, listingId, depth }) {
+function CommentThread({ comment, replies, allComments, parentNameById, currentUser, replyingTo, setReplyingTo,
+  expandedReplies, toggleReplies, onDelete, onNewComment, onShare, listingId, depth, highlightId, itemRefs }) {
 
   const hasReplies = replies.length > 0
   const isExpanded = expandedReplies[comment.id]
@@ -112,11 +208,25 @@ function CommentThread({ comment, replies, allComments, currentUser, replyingTo,
   const isOwn = currentUser?.id === comment.user_id
   const name = comment.profiles?.full_name || 'Anonymous'
   const avatar = comment.profiles?.avatar_url
+  const isReply = depth > 0 && comment.parent_id
+  const repliedToName = isReply ? (parentNameById[comment.parent_id] || 'someone') : null
+  const isHighlighted = highlightId === comment.id
+  const desktopCopy = !isMobileShareDevice()
 
   return (
-    <div style={{ marginLeft: depth > 0 ? 32 : 0, marginBottom: 2 }}>
+    <div style={{ marginLeft: depth > 0 ? 20 : 0, marginBottom: 2 }}>
       {/* Comment bubble */}
-      <div style={{ background: '#fff', borderRadius: 14, padding: '12px 14px', border: '1px solid #edf2ee', marginBottom: 6 }}>
+      <div
+        ref={el => { if (el && itemRefs) itemRefs.current[comment.id] = el }}
+        style={{
+          background: isHighlighted ? 'rgba(26,122,74,0.06)' : '#fff',
+          borderRadius: 14,
+          padding: '12px 14px',
+          border: isHighlighted ? `1.5px solid ${GREEN}` : '1px solid #edf2ee',
+          marginBottom: 6,
+          transition: 'background 0.2s, border 0.2s',
+        }}
+      >
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
           <div style={{ width: 32, height: 32, borderRadius: '50%', background: '#1a7a4a', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 13, fontWeight: 700, flexShrink: 0, overflow: 'hidden' }}>
@@ -125,8 +235,24 @@ function CommentThread({ comment, replies, allComments, currentUser, replyingTo,
               : name[0].toUpperCase()
             }
           </div>
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#0f1410' }}>{name}</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 13, fontWeight: 700, color: '#0f1410' }}>{name}</span>
+              {repliedToName && (
+                <span
+                  title={`Replied to ${repliedToName}`}
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 3,
+                    fontSize: 11, fontWeight: 700, color: GREEN,
+                    background: 'rgba(26,122,74,0.08)',
+                    borderRadius: 999, padding: '1px 8px 1px 6px',
+                  }}
+                >
+                  <IconReplyArrow size={10} />
+                  {repliedToName}
+                </span>
+              )}
+            </div>
             <div style={{ fontSize: 11, color: '#9ca3af' }}>{timeAgo(comment.created_at)}</div>
           </div>
           {isOwn && (
@@ -163,17 +289,35 @@ function CommentThread({ comment, replies, allComments, currentUser, replyingTo,
         )}
 
         {/* Actions */}
-        <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+        <div style={{ display: 'flex', gap: 14, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           <button
             onClick={() => setReplyingTo(isReplying ? null : { id: comment.id, name })}
-            style={{ background: 'none', border: 'none', fontSize: 12, fontWeight: 600, color: isReplying ? '#1a7a4a' : '#9ca3af', cursor: 'pointer', padding: 0 }}
+            style={{
+              background: 'none', border: 'none', fontSize: 12, fontWeight: 600,
+              color: isReplying ? GREEN : '#9ca3af', cursor: 'pointer', padding: 0,
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+            }}
           >
-            {isReplying ? '✕ Cancel' : '↩ Reply'}
+            <IconReplyArrow size={11} />
+            {isReplying ? 'Cancel' : 'Reply'}
+          </button>
+          <button
+            type="button"
+            onClick={() => onShare?.(comment.id)}
+            title={desktopCopy ? 'Copy link to this comment' : 'Share this comment'}
+            style={{
+              background: 'none', border: 'none', fontSize: 12, fontWeight: 600,
+              color: '#9ca3af', cursor: 'pointer', padding: 0,
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+            }}
+          >
+            {desktopCopy && <IconCopy size={11} />}
+            {desktopCopy ? 'Copy link' : 'Share'}
           </button>
           {hasReplies && (
             <button
               onClick={() => toggleReplies(comment.id)}
-              style={{ background: 'none', border: 'none', fontSize: 12, fontWeight: 600, color: '#1a7a4a', cursor: 'pointer', padding: 0 }}
+              style={{ background: 'none', border: 'none', fontSize: 12, fontWeight: 600, color: GREEN, cursor: 'pointer', padding: 0 }}
             >
               {isExpanded ? `▲ Hide ${replies.length} repl${replies.length !== 1 ? 'ies' : 'y'}` : `▼ ${replies.length} repl${replies.length !== 1 ? 'ies' : 'y'}`}
             </button>
@@ -183,30 +327,40 @@ function CommentThread({ comment, replies, allComments, currentUser, replyingTo,
 
       {/* Reply box */}
       {isReplying && (
-        <div style={{ marginLeft: 32, marginBottom: 6 }}>
-          <div style={{ fontSize: 11, color: '#1a7a4a', fontWeight: 600, marginBottom: 4 }}>
+        <div style={{ marginLeft: depth > 0 ? 12 : 32, marginBottom: 6 }}>
+          <div style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6,
+            fontSize: 11, color: GREEN, fontWeight: 700, marginBottom: 6,
+            background: 'rgba(26,122,74,0.08)', borderRadius: 999, padding: '4px 10px',
+          }}>
+            <IconReplyArrow size={11} />
             Replying to {replyingTo.name}
           </div>
           <CommentBox
             listingId={listingId}
             parentId={comment.id}
             currentUser={currentUser}
-            onSubmit={(c) => { onNewComment(c); setReplyingTo(null); toggleReplies(comment.id) }}
+            onSubmit={(c) => {
+              onNewComment(c)
+              setReplyingTo(null)
+              if (!expandedReplies[comment.id]) toggleReplies(comment.id)
+            }}
             placeholder={`Reply to ${replyingTo.name}…`}
             autoFocus
           />
         </div>
       )}
 
-      {/* Nested replies */}
+      {/* Nested replies with thread line */}
       {hasReplies && isExpanded && (
-        <div style={{ borderLeft: '2px solid #e6f4ec', marginLeft: 16, paddingLeft: 4 }}>
+        <div style={{ borderLeft: '2px solid #d1fae5', marginLeft: 16, paddingLeft: 8 }}>
           {replies.map(reply => (
             <CommentThread
               key={reply.id}
               comment={reply}
               replies={allComments.filter(c => c.parent_id === reply.id)}
               allComments={allComments}
+              parentNameById={parentNameById}
               currentUser={currentUser}
               replyingTo={replyingTo}
               setReplyingTo={setReplyingTo}
@@ -214,8 +368,11 @@ function CommentThread({ comment, replies, allComments, currentUser, replyingTo,
               toggleReplies={toggleReplies}
               onDelete={onDelete}
               onNewComment={onNewComment}
+              onShare={onShare}
               listingId={listingId}
               depth={depth + 1}
+              highlightId={highlightId}
+              itemRefs={itemRefs}
             />
           ))}
         </div>
@@ -266,7 +423,15 @@ function CommentBox({ listingId, parentId, currentUser, onSubmit, placeholder, a
       }).select('*').single()
 
       if (error) throw error
-      onSubmit(data)
+      // Attach current user's profile so reply arrows show the right name immediately
+      onSubmit({
+        ...data,
+        profiles: data.profiles || {
+          id: currentUser.id,
+          full_name: currentUser.full_name || currentUser.user_metadata?.full_name || 'You',
+          avatar_url: currentUser.avatar_url || currentUser.user_metadata?.avatar_url || null,
+        },
+      })
       setText('')
       setImages([])
       setVideos([])

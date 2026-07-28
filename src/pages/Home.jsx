@@ -24,18 +24,25 @@ import React, {
   useEffect, useState, useMemo, useRef, useCallback,
 } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { MapPin, Clock, Zap, Eye, MessageCircle, Plus, ChevronRight, Navigation, Sparkles, TrendingUp, Star, UserCheck, AlertTriangle, DollarSign, ArrowRight, ShieldCheck, Search, Heart, Share2, Flag, ExternalLink } from 'lucide-react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { supabase }              from '../lib/supabase'
 import useSearchAnimation        from '../hooks/useSearchAnimation'
 import { useUserLocation }       from '../hooks/useUserLocation'
+import ProviderModal              from './ProviderModal'
+import JobModal                   from './Jobs/JobModal'
+import './Jobs/Jobs.css'
 import { fetchAllActiveStories } from '../hooks/useStatuses'
 import VerificationAttentionBanner from '../components/VerificationAttentionBanner'
 import SokoNav from '../components/SokoNav'
-import LookingForRequestCard, { LOOKING_FOR_CARD_CSS } from '../components/LookingFor/LookingForRequestCard'
+import LookingForRequestCard from '../components/LookingFor/LookingForRequestCard'
 import {
   getGPSLocation,
   sortRequestsByViewerLocation,
   withDistanceToBuyer,
+  fmtMWK,
 } from '../utils/lookingFor'
+import { CATEGORIES, SORT_OPTIONS } from '../constants/lookingFor'
 import NotifyMeModal from '../components/NotifyMeModal'
 import {
   ALL_CATEGORIES,
@@ -51,6 +58,7 @@ import {
 } from '../constants/featuredPricing'
 
 import HomeStatusSection from '../components/HomeStatusSection'
+import StatusUploadModal from '../components/StatusUploadModal'
 import FeaturedListingsRow, { FEATURED_POOL_SIZE } from '../components/FeaturedListings'
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -612,7 +620,7 @@ function GlobalStyles() {
         .soko-nav-desktop { display: none !important; }
         .soko-nav-mobile  { display: flex !important; }
         .soko-pillar-row  { display: none !important; }
-        .soko-shops-grid { grid-template-columns: 1fr !important; }
+        .soko-shops-grid { grid-template-columns: repeat(2, 1fr) !important; }
         .soko-footer-grid { grid-template-columns: 1fr 1fr !important; gap: 16px !important; }
         .soko-trust-grid { grid-template-columns: 1fr 1fr !important; gap: 10px !important; }
 
@@ -884,14 +892,17 @@ const Icon = {
   heart:  (s=16,fill='none') => <svg width={s} height={s} viewBox="0 0 24 24" fill={fill} stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>,
   verify: (s=14) => <svg width={s} height={s} viewBox="0 0 24 24"><path fill="#16a34a" d="M12 0a4 4 0 0 1 3.2 1.6 4 4 0 0 1 3.6 1 4 4 0 0 1 1 3.6A4 4 0 0 1 21.4 9.4a4 4 0 0 1 0 5.2A4 4 0 0 1 19.8 17.8a4 4 0 0 1-1 3.6 4 4 0 0 1-3.6 1A4 4 0 0 1 12 24a4 4 0 0 1-3.2-1.6 4 4 0 0 1-3.6-1 4 4 0 0 1-1-3.6A4 4 0 0 1 2.6 14.6a4 4 0 0 1 0-5.2A4 4 0 0 1 4.2 6.2a4 4 0 0 1 1-3.6 4 4 0 0 1 3.6-1A4 4 0 0 1 12 0Z"/><path d="m7.5 12.5 3 3 6-7" stroke="#fff" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>,
   eye:    (s=13) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>,
-  pin:    (s=13) => <svg width={s} height={s} viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>,
+  pin:    (s=13) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/></svg>,
   clock:  (s=13) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
   chevR:  (s=16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>,
   fire:   (s=14) => <svg width={s} height={s} viewBox="0 0 24 24" fill={T.red}><path d="M17.66 11.2C17.43 10.9 17.15 10.64 16.89 10.38C16.22 9.78 15.46 9.35 14.82 8.72C13.33 7.26 13 4.85 13.95 3C13 3.23 12.17 3.75 11.46 4.32C8.87 6.4 7.85 10.07 9.07 13.22C9.11 13.32 9.15 13.42 9.15 13.55C9.15 13.77 9 13.97 8.8 14.05C8.57 14.15 8.33 14.09 8.14 13.93C8.08 13.88 8.04 13.83 8 13.76C6.87 12.33 6.69 10.28 7.45 8.64C5.78 10 4.87 12.3 5 14.47C5.06 14.97 5.12 15.47 5.29 15.97C5.43 16.57 5.7 17.17 6 17.7C7.08 19.43 8.95 20.67 10.96 20.92C13.1 21.19 15.39 20.8 17.03 19.32C18.86 17.66 19.5 15 18.56 12.72L18.43 12.46C18.22 12 17.66 11.2 17.66 11.2Z"/></svg>,
   shield: (s=20) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
   shieldCheck: (s=20) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><path d="M9 12l2 2 4-4"/></svg>,
   statusClock: (s=20) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="13" r="8"/><polyline points="12 9 12 13 15 14.5"/><path d="M9 2h6"/></svg>,
-  star:   (s=13,fill='#F9AB00') => <svg width={s} height={s} viewBox="0 0 24 24" fill={fill}><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>,
+  star:   (s=13,fill='#F9AB00') => {
+    const isFilled = fill && fill !== 'none'
+    return <svg width={s} height={s} viewBox="0 0 24 24" fill={isFilled ? fill : 'none'} stroke={isFilled ? fill : 'currentColor'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+  },
   cam:    (s=15) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>,
   x:      (s=14) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>,
   check:  (s=16) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>,
@@ -910,6 +921,8 @@ const Icon = {
   houseFilled: (s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.5 2 11h3v9h6v-6h2v6h6v-9h3z"/></svg>,
   leaf:   (s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><path d="M5 21c0-9 5-15 14-16-1 9-7 14-16 16z"/><path d="M5 21c2-4 5-7 9-9"/></svg>,
   tools:  (s=18) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.1" strokeLinecap="round" strokeLinejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l1.9-1.9a4.5 4.5 0 0 1-5.6 5.6L7 21H4v-3l8-8a4.5 4.5 0 0 1 5.6-5.6z"/></svg>,
+  send:   (s=14,c='currentColor') => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 2 11 13"/><path d="M22 2 15 22l-4-9-9-4z"/></svg>,
+  copy:   (s=14) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>,
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -2139,15 +2152,44 @@ function RequestCard({ request: r, delay = 0, navigate }) {
   )
 }
 
-function LookingForSection({ navigate, requests, loading, userLat, userLng, activeDistrict, viewerLocation: viewerLocationProp }) {
-  const scrollRef = React.useRef(null)
-  const [canLeft,      setCanLeft]      = React.useState(false)
-  const [canRight,     setCanRight]     = React.useState(false)
+function LookingForSection({ navigate, requests, loading, userLat, userLng, activeDistrict, viewerLocation: viewerLocationProp, user }) {
   const [viewerLoc,    setViewerLoc]    = React.useState(viewerLocationProp || null)
   const [detectingGps, setDetectingGps] = React.useState(!viewerLocationProp)
   const [gpsError,     setGpsError]     = React.useState(null)
+  const viewedIdsRef = React.useRef(new Set())
 
-  // Same GPS pipeline as Looking For page: reverse-geocode → area + district
+  async function trackRequestView(req) {
+    if (!req?.id || !user?.id) return
+    if (req.user_id === user.id) return
+    if (viewedIdsRef.current.has(req.id)) return
+    const storageKey = `lf_viewed_${user.id}`
+    let seen = []
+    try { seen = JSON.parse(localStorage.getItem(storageKey) || '[]') } catch { seen = [] }
+    if (seen.includes(req.id)) { viewedIdsRef.current.add(req.id); return }
+    await supabase.rpc('increment_buyer_request_view', { request_id: req.id })
+    viewedIdsRef.current.add(req.id)
+    try { localStorage.setItem(storageKey, JSON.stringify([...seen, req.id].slice(-500))) } catch {}
+  }
+
+  async function sendOffer(req) {
+    await trackRequestView(req)
+    const looking = (req.cities?.length ? req.cities.join(', ') : '') || req.city || ''
+    const msg = `Hi, I can help with your request: "${req.title}"${req.budget ? `\nBudget: ${fmtMWK(req.budget)}` : ''}${req.city ? `\nBuyer stays: ${req.city}` : ''}${looking ? `\nLooking in: ${looking}` : ''}\n\nI have exactly what you need. Let's discuss!`
+    const { error: offerErr } = await supabase.from('buyer_request_offers')
+      .insert({ request_id: req.id, seller_id: user.id })
+    if (!offerErr) {
+      await supabase.rpc('increment_offer_count', { request_id: req.id })
+    }
+    navigate(`/chat/${req.user_id}/${req.id}?src=request`, {
+      state: {
+        source: 'request',
+        isRequest: true,
+        prefillMessage: msg,
+        requestTitle: req.title,
+      },
+    })
+  }
+
   async function detectGps(force = false) {
     setDetectingGps(true)
     setGpsError(null)
@@ -2163,10 +2205,8 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
         return gps
       }
       if (Number.isFinite(userLat) && Number.isFinite(userLng)) {
-        // Coords known but reverse-geocode failed — still usable for km distance
         const fallback = {
-          lat: userLat,
-          lng: userLng,
+          lat: userLat, lng: userLng,
           label: activeDistrict && activeDistrict !== 'All Districts' ? activeDistrict : null,
           district: activeDistrict && activeDistrict !== 'All Districts' ? activeDistrict : null,
           city: activeDistrict && activeDistrict !== 'All Districts' ? activeDistrict : null,
@@ -2194,25 +2234,16 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
   React.useEffect(() => {
     let cancelled = false
     ;(async () => {
-      // Prefer parent-provided GPS (Home boot) if fresh
       if (viewerLocationProp?.lat != null || viewerLocationProp?.district) {
-        if (!cancelled) {
-          setViewerLoc(viewerLocationProp)
-          setDetectingGps(false)
-        }
+        if (!cancelled) { setViewerLoc(viewerLocationProp); setDetectingGps(false) }
         return
       }
-      // Cached full GPS object from prior detect
       try {
         const cached = sessionStorage.getItem('soko_gps_location')
         if (cached) {
           const parsed = JSON.parse(cached)
           if (parsed?.lat != null || parsed?.district) {
-            if (!cancelled) {
-              setViewerLoc(parsed)
-              setDetectingGps(false)
-            }
-            // Refresh in background
+            if (!cancelled) { setViewerLoc(parsed); setDetectingGps(false) }
             detectGps(false)
             return
           }
@@ -2221,33 +2252,37 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
       if (!cancelled) await detectGps(false)
     })()
     return () => { cancelled = true }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewerLocationProp])
 
-  // When header district changes and we still have no GPS, use district as area hint
   React.useEffect(() => {
     if (viewerLoc?.lat != null) return
     if (activeDistrict && activeDistrict !== 'All Districts') {
       setViewerLoc(prev => prev?.district === activeDistrict ? prev : {
-        label: activeDistrict,
-        district: activeDistrict,
-        city: activeDistrict,
-        lat: prev?.lat,
-        lng: prev?.lng,
+        label: activeDistrict, district: activeDistrict, city: activeDistrict, lat: prev?.lat, lng: prev?.lng,
       })
     }
   }, [activeDistrict])
 
-  function checkScroll() {
-    const el = scrollRef.current
-    if (!el) return
-    setCanLeft(el.scrollLeft > 8)
-    setCanRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 8)
-  }
+  const [lfCategory, setLfCategory] = React.useState('All')
+  const [lfSort, setLfSort] = React.useState('recent')
 
-  // Nearest looking-for first + distance labels (same helpers as Looking For page)
+  const MAX_CARDS_DESKTOP = 8
+  const MAX_CARDS_TABLET = 6
+  const MAX_CARDS_SMALL_TABLET = 4
+  const MAX_CARDS_MOBILE = 4
+
   const ranked = React.useMemo(() => {
-    const open = (requests || []).filter(r => r.status !== 'fulfilled')
+    const now = Date.now()
+    const thirtyDays = 30 * 24 * 60 * 60 * 1000
+    let open = (requests || []).filter(r => {
+      if (r.status === 'fulfilled') return false
+      if (r.approved != null && r.approved !== true) return false
+      if (r.deleted === true) return false
+      if (r.expires_at && new Date(r.expires_at).getTime() <= now) return false
+      if (r.created_at && (now - new Date(r.created_at).getTime()) > thirtyDays) return false
+      if (lfCategory !== 'All' && r.category !== lfCategory) return false
+      return true
+    })
     const loc = viewerLoc
       || (Number.isFinite(userLat) && Number.isFinite(userLng)
         ? { lat: userLat, lng: userLng, district: activeDistrict !== 'All Districts' ? activeDistrict : null }
@@ -2257,7 +2292,13 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
         : null)
     const byArea = sortRequestsByViewerLocation(open, loc, 'recent')
     const withDist = withDistanceToBuyer(byArea, loc)
-    return [...withDist].sort((a, b) => {
+    const sorted = [...withDist].sort((a, b) => {
+      if (lfSort === 'budget') return (b.budget || 0) - (a.budget || 0)
+      if (lfSort === 'demand') return (b.offer_count ?? b.offerCount ?? 0) - (a.offer_count ?? a.offerCount ?? 0)
+      if (lfSort === 'urgent') return (b.urgency === 'urgent' ? 1 : 0) - (a.urgency === 'urgent' ? 1 : 0)
+      const aImg = (a.image_urls && Array.isArray(a.image_urls) && a.image_urls.length > 0) || a.image_url ? 1 : 0
+      const bImg = (b.image_urls && Array.isArray(b.image_urls) && b.image_urls.length > 0) || b.image_url ? 1 : 0
+      if (bImg !== aImg) return bImg - aImg
       const sa = a._locScore || 0
       const sb = b._locScore || 0
       if (sb !== sa) return sb - sa
@@ -2266,29 +2307,67 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
       if (da !== db) return da - db
       return new Date(b.created_at || 0) - new Date(a.created_at || 0)
     })
-  }, [requests, viewerLoc, userLat, userLng, activeDistrict])
-
-  React.useEffect(() => {
-    const el = scrollRef.current
-    if (!el) return
-    setTimeout(checkScroll, 100)
-    el.addEventListener('scroll', checkScroll, { passive: true })
-    window.addEventListener('resize', checkScroll)
-    return () => { el.removeEventListener('scroll', checkScroll); window.removeEventListener('resize', checkScroll) }
-  }, [ranked])
-
-  function scrollBy(dir) { scrollRef.current?.scrollBy({ left: dir * 540, behavior: 'smooth' }) }
+    const w = typeof window !== 'undefined' ? window.innerWidth : 1400
+    const maxCards = w >= 1024 ? MAX_CARDS_DESKTOP : w >= 768 ? MAX_CARDS_TABLET : w >= 640 ? MAX_CARDS_SMALL_TABLET : MAX_CARDS_MOBILE
+    return sorted.slice(0, maxCards)
+  }, [requests, viewerLoc, userLat, userLng, activeDistrict, lfCategory, lfSort])
 
   const filtered = ranked
-  const placeLabel =
-    viewerLoc?.district ||
-    viewerLoc?.city ||
-    viewerLoc?.label ||
-    (activeDistrict && activeDistrict !== 'All Districts' ? activeDistrict : null)
+  const placeLabel = viewerLoc?.district || viewerLoc?.city || viewerLoc?.label || (activeDistrict && activeDistrict !== 'All Districts' ? activeDistrict : null)
   const nearCount = filtered.filter(r => (r._locScore || 0) >= 85).length
 
+  const [lfNearby, setLfNearby] = React.useState('All')
+  const [lfNearbyOpen, setLfNearbyOpen] = React.useState(false)
+  const [lfCatOpen, setLfCatOpen] = React.useState(false)
+  const [lfSortOpen, setLfSortOpen] = React.useState(false)
+  const lfNearbyRef = React.useRef(null)
+  const lfCatRef = React.useRef(null)
+  const lfSortRef = React.useRef(null)
+
   const [lfVisible, setLfVisible] = React.useState(false)
+  const [lfLightbox, setLfLightbox] = React.useState(null)
+  const [lfLbIdx, setLfLbIdx] = React.useState(0)
+  const [galleryZoomed, setGalleryZoomed] = React.useState(false)
+  const galleryTouchStart = React.useRef(null)
+  const galleryTouchY = React.useRef(null)
+  const galleryPinchDist = React.useRef(null)
+  const [lfSavedIds, setLfSavedIds] = React.useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem('soko_saved_requests') || '[]')) } catch { return new Set() }
+  })
+
+  function toggleLfSave(id) {
+    setLfSavedIds(prev => {
+      const n = new Set(prev)
+      n.has(id) ? n.delete(id) : n.add(id)
+      try { localStorage.setItem('soko_saved_requests', JSON.stringify([...n])) } catch {}
+      return n
+    })
+  }
+
+  async function shareRequest(req) {
+    const url = window.location.origin + `/looking-for?request=${req.id}`
+    const text = `Check out this request on SokoMw: "${req.title}"`
+    try {
+      if (navigator.share && /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '')) {
+        await navigator.share({ title: req.title || 'SokoMw', text, url })
+      } else if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(url)
+      } else {
+        window.prompt('Copy this link', url)
+      }
+    } catch (e) { if (e?.name !== 'AbortError') try { await navigator.clipboard?.writeText(url) } catch {} }
+  }
   const lfRef = React.useRef(null)
+
+  React.useEffect(() => {
+    function handleClick(e) {
+      if (lfNearbyRef.current && !lfNearbyRef.current.contains(e.target)) setLfNearbyOpen(false)
+      if (lfCatRef.current && !lfCatRef.current.contains(e.target)) setLfCatOpen(false)
+      if (lfSortRef.current && !lfSortRef.current.contains(e.target)) setLfSortOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
 
   React.useEffect(() => {
     const el = lfRef.current
@@ -2301,328 +2380,780 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
     return () => io.disconnect()
   }, [])
 
-  const ArrowL = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
-  const ArrowR = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+  React.useEffect(() => {
+    if (!lfLightbox) return
+    const total = lfLightbox.image_urls && Array.isArray(lfLightbox.image_urls) ? lfLightbox.image_urls.length : lfLightbox.image_url ? 1 : 0
+    function onKey(e) {
+      if (e.key === 'Escape') { setLfLightbox(null); return }
+      if (e.key === 'ArrowLeft') { setLfLbIdx(i => Math.max(0, i - 1)); setGalleryZoomed(false) }
+      if (e.key === 'ArrowRight') { setLfLbIdx(i => Math.min(total - 1, i + 1)); setGalleryZoomed(false) }
+    }
+    window.addEventListener('keydown', onKey)
+    document.body.style.overflow = 'hidden'
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = ''
+      setGalleryZoomed(false)
+    }
+  }, [lfLightbox])
+
+  const G = T
+
+  function timeAgoLF(ts) {
+    const diff = Date.now() - new Date(ts).getTime()
+    const h = Math.floor(diff / 3600000)
+    const m = Math.floor(diff / 60000)
+    if (h >= 24) return `${Math.floor(h / 24)}d ago`
+    if (h >= 1) return `${h}h ago`
+    if (m < 1) return 'now'
+    return `${m}m ago`
+  }
+
+  function fmtBudget(v) {
+    if (v == null) return null
+    const n = Number(v)
+    if (n >= 1e6) return `MK ${(n / 1e6).toFixed(1)}M`
+    if (n >= 1e3) return `MK ${(n / 1e3).toFixed(0)}K`
+    return `MK ${n}`
+  }
+
+  const URG = {
+    urgent: { label: 'Urgent', color: '#dc2626', bg: '#fef2f2' },
+    normal: { label: 'Standard', color: '#2563eb', bg: '#eff6ff' },
+    low:    { label: 'Open', color: '#16a34a', bg: '#f0fdf4' },
+  }
+
+  const actBtn = {
+    display:'inline-flex', alignItems:'center', gap:3, background:'transparent',
+    border:'none', borderRadius:6, padding:'4px 7px', cursor:'pointer',
+    fontSize:11, fontWeight:600, color:'#64748b', fontFamily:'inherit', whiteSpace:'nowrap',
+    transition:'all 0.15s',
+  }
 
   return (
-    <section ref={lfRef} className={'soko-section-pad soko-lf-section' + (lfVisible ? ' lf-fade-in' : '')} style={{ padding: '4px 20px 16px', background: '#fafbfa' }}>
+    <section ref={lfRef} className={'soko-section-pad' + (lfVisible ? ' lf-fade-in' : '')} style={{
+      padding: '12px 20px 32px', background: '#f8fafc',
+    }}>
       <style>{`
-        ${LOOKING_FOR_CARD_CSS}
-        .soko-lf-section .soko-lf-head {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          gap: 12px 16px;
-          margin-bottom: 12px;
-          flex-wrap: nowrap;
+        .lfr-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; padding:4px 0 16px; }
+        .lfr-grid > * { content-visibility:auto; contain-intrinsic-size:420px; }
+        .lfr-card {
+          background:#fff; border-radius:20px; border:1px solid #f1f5f9;
+          box-shadow:0 1px 3px rgba(0,0,0,0.04),0 4px 16px rgba(0,0,0,0.04);
+          display:flex; flex-direction:column; min-height:0;
+          opacity:0; animation:lfrFadeIn 0.5s ease forwards;
+          transition:box-shadow 0.35s cubic-bezier(0.22,1,0.36,1),transform 0.35s cubic-bezier(0.22,1,0.36,1),border-color 0.35s ease;
+          will-change:transform;
         }
-        .soko-lf-section .soko-lf-head-left {
-          min-width: 0;
-          flex: 1 1 auto;
+        .lfr-card:hover {
+          transform:translateY(-6px);
+          box-shadow:0 12px 40px rgba(22,101,52,0.1),0 3px 12px rgba(0,0,0,0.06);
+          border-color:#bbf7d0;
         }
-        .soko-lf-section .soko-lf-eyebrow {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          font-size: 11px;
-          font-weight: 800;
-          color: #c88a00;
-          letter-spacing: 0.55px;
-          text-transform: uppercase;
-          margin-bottom: 6px;
+        .lfr-card .lfr-badge { animation:lfrBadgeIn 0.35s ease forwards; opacity:0; }
+        @keyframes lfrFadeIn { 0%{opacity:0;transform:translateY(16px)} 100%{opacity:1;transform:translateY(0)} }
+        @keyframes lfrBadgeIn { 0%{opacity:0;transform:scale(0.85)} 100%{opacity:1;transform:scale(1)} }
+        .lfr-skel { border-radius:20px; background:linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%); background-size:600px 100%; animation:lfrShimmer 1.4s infinite; border:1px solid #f1f5f9; }
+        .lfr-card .lfr-img-cell { transition:transform 0.4s cubic-bezier(0.22,1,0.36,1); will-change:transform; }
+        @media (hover:hover) { .lfr-card:hover .lfr-img-cell { transform:scale(1.06); } }
+
+        @keyframes lfrShimmer { 0%{background-position:600px 0} 100%{background-position:-600px 0} }
+        .lfr-act-btn {
+          position:relative; overflow:hidden; transition:all 0.2s ease !important;
         }
-        .soko-lf-section .soko-lf-title {
-          font-family: ${T.fontDisplay};
-          font-size: clamp(18px, 2.2vw, 24px);
-          font-weight: 800;
-          color: #111827;
-          letter-spacing: -0.45px;
-          margin: 0;
-          line-height: 1.2;
+        .lfr-act-btn:hover { background:#f1f5f9 !important; color:#0f172a !important; transform:scale(1.05); }
+        .lfr-act-btn:active { transform:scale(0.95); }
+        .lfr-act-btn::after {
+          content:''; position:absolute; inset:0; border-radius:6px;
+          background:radial-gradient(circle,rgba(22,101,52,0.2) 10%,transparent 10%);
+          background-position:center; background-repeat:no-repeat; background-size:0%;
+          transition:background-size 0s;
         }
-        .soko-lf-section .soko-lf-sub {
-          font-size: 13px;
-          color: #6b7280;
-          margin: 4px 0 0;
-          line-height: 1.4;
-          font-weight: 500;
+        .lfr-act-btn:active::after { background-size:1000%; transition:background-size 0.4s; }
+        .lfr-card:nth-child(1) { animation-delay:0.02s; }
+        .lfr-card:nth-child(2) { animation-delay:0.06s; }
+        .lfr-card:nth-child(3) { animation-delay:0.10s; }
+        .lfr-card:nth-child(4) { animation-delay:0.14s; }
+        .lfr-card:nth-child(5) { animation-delay:0.18s; }
+        .lfr-card:nth-child(6) { animation-delay:0.22s; }
+        .lfr-card:nth-child(7) { animation-delay:0.26s; }
+        .lfr-card:nth-child(8) { animation-delay:0.30s; }
+        .lfr-respond-btn {
+          position:relative; overflow:hidden; transition:all 0.2s ease !important;
         }
-        .soko-lf-section .soko-lf-head-actions {
-          display: flex;
-          align-items: center;
-          gap: 8px;
-          flex-shrink: 0;
+        .lfr-respond-btn:hover { transform:scale(1.04); box-shadow:0 4px 16px rgba(22,101,52,0.3) !important; }
+        .lfr-respond-btn:active { transform:scale(0.96); }
+        .lfr-respond-btn::after {
+          content:''; position:absolute; inset:0; border-radius:999px;
+          background:radial-gradient(circle,rgba(255,255,255,0.3) 10%,transparent 10%);
+          background-position:center; background-repeat:no-repeat; background-size:0%;
+          transition:background-size 0s;
         }
-        .soko-lf-section .soko-lf-btn {
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          gap: 5px;
-          border-radius: 10px;
-          padding: 9px 14px;
-          font-size: 13px;
-          font-weight: 700;
-          cursor: pointer;
-          font-family: inherit;
-          white-space: nowrap;
-          min-height: 40px;
-          transition: background 0.15s, border-color 0.15s, color 0.15s;
-        }
-        .soko-lf-section .soko-lf-btn-ghost {
-          background: #fff;
-          border: 1px solid #e5e7eb;
-          color: #374151;
-        }
-        .soko-lf-section .soko-lf-btn-ghost:hover {
-          border-color: #3c4043;
-          color: #202124;
-        }
-        .soko-lf-section .soko-lf-btn-primary {
-          background: #202124;
-          border: 1px solid #202124;
-          color: #fff;
-        }
-        .soko-lf-section .soko-lf-btn-primary:hover { background: #000; }
-        .soko-lf-gps {
-          display: flex;
-          align-items: center;
-          gap: 10px;
-          margin-bottom: 14px;
-          padding: 10px 12px;
-          background: #f1f5f9;
-          border: 1px solid #e2e8f0;
-          border-radius: 12px;
-          min-width: 0;
-        }
-        .soko-lf-gps-ico {
-          width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0;
-          background: #fff; border: 1px solid #e2e8f0;
-          display: flex; align-items: center; justify-content: center;
-        }
-        .soko-lf-gps-text { min-width: 0; flex: 1; }
-        .soko-lf-gps-title {
-          font-size: 12.5px; font-weight: 800; color: #334155;
-          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-        }
-        .soko-lf-gps-sub {
-          font-size: 11.5px; color: #5f6368; font-weight: 600;
-          margin-top: 1px; line-height: 1.35;
-          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-        }
-        .soko-lf-gps-btn {
-          flex-shrink: 0;
-          border: 1.5px solid #cbd5e1;
-          background: #fff;
-          color: #334155;
-          border-radius: 10px;
-          padding: 8px 12px;
-          font-size: 12px;
-          font-weight: 800;
-          cursor: pointer;
-          font-family: inherit;
-          min-height: 36px;
-        }
-        .soko-lf-gps-btn:disabled { opacity: 0.65; cursor: default; }
-        .lf3-arrow {
-          position:absolute; top:50%; transform:translateY(-50%); z-index:10;
-          width:36px; height:36px; border-radius:50%;
-          background:#fff; border:1px solid #e5e7eb;
-          display:flex; align-items:center; justify-content:center;
-          cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.08);
-          color:#374151; transition:all 0.15s; flex-shrink:0;
-        }
-        .lf3-arrow:hover { background:#202124; border-color:#202124; color:#fff; }
-        .lf3-arrow.hide  { opacity:0; pointer-events:none; }
-        .lf3-scroll {
-          display:flex; gap:12px; overflow-x:auto;
-          padding: 2px 2px 10px;
-          scrollbar-width:none; -ms-overflow-style:none;
-          -webkit-overflow-scrolling:touch;
-          align-items:stretch;
-          scroll-snap-type: x mandatory;
-        }
-        .lf3-scroll::-webkit-scrollbar { display:none; }
-        .lf3-scroll > .lf-card.is-carousel {
-          scroll-snap-align: start;
-        }
-        @media (max-width: 768px) {
-          .soko-lf-section { padding: 4px 14px 12px !important; }
-          .soko-lf-section .soko-lf-head {
-            flex-wrap: wrap !important;
-            align-items: flex-start !important;
-            gap: 10px !important;
-            margin-bottom: 10px !important;
-          }
-          .soko-lf-section .soko-lf-head-left { width: 100%; flex: 1 1 100% !important; }
-          .soko-lf-section .soko-lf-title {
-            font-size: 17px !important;
-            letter-spacing: -0.3px !important;
-          }
-          .soko-lf-section .soko-lf-sub { display: none !important; }
-          .soko-lf-section .soko-lf-head-actions {
-            width: 100% !important;
-            display: grid !important;
-            grid-template-columns: 1fr 1.2fr;
-            gap: 8px !important;
-          }
-          .soko-lf-section .soko-lf-btn {
-            width: 100%;
-            min-height: 42px;
-            font-size: 12.5px;
-            padding: 10px 12px;
-          }
-          .soko-lf-gps {
-            padding: 9px 10px !important;
-            gap: 8px !important;
-            margin-bottom: 12px !important;
-          }
-          .soko-lf-gps-ico { width: 28px; height: 28px; border-radius: 8px; }
-          .soko-lf-gps-sub {
-            white-space: normal !important;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-          }
-          .soko-lf-gps-btn {
-            padding: 7px 10px;
-            font-size: 11.5px;
-            min-height: 34px;
-          }
-          .lf3-arrow { display: none !important; }
-          .lf3-scroll {
-            gap: 10px !important;
-            margin: 0 -14px;
-            padding-left: 14px !important;
-            padding-right: 14px !important;
-            scroll-padding-inline: 14px;
-          }
+        .lfr-respond-btn:active::after { background-size:1000%; transition:background-size 0.4s; }
+        @media (max-width:1024px) { .lfr-grid { grid-template-columns:repeat(3,1fr); } }
+        @media (max-width:768px) { .lfr-grid { grid-template-columns:repeat(2,1fr); gap:12px; } }
+        @media (max-width:640px) {
+          .lfr-grid { grid-template-columns:1fr; gap:12px; }
+          .lfr-head-actions { width:100% !important; display:grid !important; grid-template-columns:1fr 1fr; gap:6px !important; margin-top:8px !important; }
         }
       `}</style>
 
       <div style={{ maxWidth: 1400, margin: '0 auto' }}>
 
-        {/* Header: title left · actions right (one clean row on desktop) */}
-        <div className="soko-lf-head">
-          <div className="soko-lf-head-left">
-            <div className="soko-lf-eyebrow">
-              <span style={{
-                width: 7, height: 7, borderRadius: '50%', background: '#F9AB00',
-                boxShadow: '0 0 0 3px rgba(249,171,0,0.22)',
-              }} />
-              Looking For
-              {filtered.length > 0 && (
-                <span style={{
-                  marginLeft: 4, fontSize: 10, fontWeight: 800, color: '#6b7280',
-                  background: '#f3f4f6', borderRadius: 999, padding: '2px 7px',
-                  letterSpacing: 0, textTransform: 'none',
-                }}>
-                  {filtered.length}
-                </span>
+        {/* ─── Header ─── */}
+        <div style={{ marginBottom:16 }}>
+          <div style={{ display:'inline-flex', alignItems:'center', gap:8, fontSize:13, fontWeight:800, color:'#166534', marginBottom:6 }}>
+            <span style={{ fontSize:16 }}>🔥</span>
+            <span>Looking For</span>
+            {filtered.length > 0 && (
+              <span style={{ fontSize:11, fontWeight:700, color:'#fff', background:'#dc2626', borderRadius:999, padding:'1px 9px', lineHeight:'20px' }}>
+                {filtered.length} Active{filtered.length === 1 ? '' : ''} Today
+              </span>
+            )}
+          </div>
+          <h2 style={{ fontFamily:'Sora, system-ui, sans-serif', fontSize:'clamp(18px, 2.2vw, 24px)', fontWeight:800, color:'#0f172a', letterSpacing:-0.4, margin:'0 0 2px', lineHeight:1.2 }}>
+            Real buyers across Malawi looking for products and services
+          </h2>
+
+          {/* Filter row */}
+          <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:14, flexWrap:'wrap' }}>
+            {/* Nearby filter */}
+            <div ref={lfNearbyRef} style={{ position:'relative' }}>
+              <button type="button" onClick={() => { setLfNearbyOpen(!lfNearbyOpen); setLfCatOpen(false); setLfSortOpen(false) }} style={{
+                display:'inline-flex', alignItems:'center', gap:5, borderRadius:999, padding:'7px 13px',
+                fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap',
+                background:'#fff', border:'1.5px solid #e2e8f0', color:'#475569', transition:'all 0.15s',
+                minHeight:34,
+              }}>
+                <MapPin size={13} /> {lfNearby === 'All' ? 'Near You' : lfNearby} <ChevronRight size={12} style={{ transform:'rotate(90deg)', marginLeft:2 }} />
+              </button>
+              {lfNearbyOpen && (
+                <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, background:'#fff', borderRadius:12, border:'1px solid #e2e8f0', boxShadow:'0 8px 24px rgba(0,0,0,0.1)', zIndex:20, minWidth:160, overflow:'hidden', padding:'4px' }}>
+                  {[{ v:'All', l: placeLabel ? `${placeLabel} (Near You)` : 'All Locations' }, { v:'All', l:'All Locations' }].filter((x,i,a) => a.findIndex(y=>y.v===x.v)===i).map(opt => (
+                    <button key={opt.v} type="button" onClick={() => { setLfNearby(opt.v); setLfNearbyOpen(false) }} style={{
+                      display:'block', width:'100%', textAlign:'left', background:'none', border:'none', padding:'8px 12px',
+                      fontSize:12, fontWeight: lfNearby===opt.v ? 700 : 500, color: lfNearby===opt.v ? '#166534' : '#334155',
+                      cursor:'pointer', fontFamily:'inherit', borderRadius:8,
+                    }}>
+                      {opt.l}
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
-            <h2 className="soko-lf-title">Buyers are ready. Be the first to sell.</h2>
-            <p className="soko-lf-sub soko-web-only">
-              Real demand near you · free to post · sellers respond fast
-            </p>
-          </div>
-          <div className="soko-lf-head-actions">
-            <button type="button" className="soko-lf-btn soko-lf-btn-ghost" onClick={() => navigate('/looking-for')}>
-              View all <ArrowR />
-            </button>
-            <button type="button" className="soko-lf-btn soko-lf-btn-primary" onClick={() => navigate('/looking-for')}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5" strokeLinecap="round" aria-hidden><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              Post a request
-            </button>
+
+            {/* Category filter */}
+            <div ref={lfCatRef} style={{ position:'relative' }}>
+              <button type="button" onClick={() => { setLfCatOpen(!lfCatOpen); setLfNearbyOpen(false); setLfSortOpen(false) }} style={{
+                display:'inline-flex', alignItems:'center', gap:5, borderRadius:999, padding:'7px 13px',
+                fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap',
+                background: lfCategory !== 'All' ? '#f0fdf4' : '#fff', border:'1.5px solid #e2e8f0', color: lfCategory !== 'All' ? '#166534' : '#475569',
+                transition:'all 0.15s', minHeight:34,
+              }}>
+                <Search size={12} /> {lfCategory === 'All' ? 'All Categories' : lfCategory} <ChevronRight size={12} style={{ transform:'rotate(90deg)', marginLeft:2 }} />
+              </button>
+              {lfCatOpen && (
+                <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, background:'#fff', borderRadius:12, border:'1px solid #e2e8f0', boxShadow:'0 8px 24px rgba(0,0,0,0.1)', zIndex:20, minWidth:180, overflow:'hidden', padding:'4px', maxHeight:280, overflowY:'auto' }}>
+                  {CATEGORIES.map(cat => (
+                    <button key={cat} type="button" onClick={() => { setLfCategory(cat); setLfCatOpen(false) }} style={{
+                      display:'flex', alignItems:'center', gap:8, width:'100%', textAlign:'left', background:'none', border:'none', padding:'8px 12px',
+                      fontSize:12, fontWeight: lfCategory===cat ? 700 : 500, color: lfCategory===cat ? '#166534' : '#334155',
+                      cursor:'pointer', fontFamily:'inherit', borderRadius:8,
+                    }}>
+                      {cat === 'All' ? '📋' : (cat === 'Products' ? '📦' : cat === 'Electronics' ? '📱' : cat === 'Fashion' ? '👗' : cat === 'Vehicles' ? '🚗' : cat === 'Property' ? '🏠' : cat === 'Agriculture' ? '🌾' : cat === 'Services' ? '⚙️' : cat === 'Jobs' ? '💼' : cat === 'Business Partners' ? '🤝' : '📋')}
+                      {cat}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Sort filter */}
+            <div ref={lfSortRef} style={{ position:'relative' }}>
+              <button type="button" onClick={() => { setLfSortOpen(!lfSortOpen); setLfNearbyOpen(false); setLfCatOpen(false) }} style={{
+                display:'inline-flex', alignItems:'center', gap:5, borderRadius:999, padding:'7px 13px',
+                fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap',
+                background:'#fff', border:'1.5px solid #e2e8f0', color:'#475569', transition:'all 0.15s',
+                minHeight:34,
+              }}>
+                <TrendingUp size={12} /> {SORT_OPTIONS.find(s => s.k === lfSort)?.l || 'Newest'} <ChevronRight size={12} style={{ transform:'rotate(90deg)', marginLeft:2 }} />
+              </button>
+              {lfSortOpen && (
+                <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, background:'#fff', borderRadius:12, border:'1px solid #e2e8f0', boxShadow:'0 8px 24px rgba(0,0,0,0.1)', zIndex:20, minWidth:160, overflow:'hidden', padding:'4px' }}>
+                  {SORT_OPTIONS.map(opt => (
+                    <button key={opt.k} type="button" onClick={() => { setLfSort(opt.k); setLfSortOpen(false) }} style={{
+                      display:'block', width:'100%', textAlign:'left', background:'none', border:'none', padding:'8px 12px',
+                      fontSize:12, fontWeight: lfSort===opt.k ? 700 : 500, color: lfSort===opt.k ? '#166534' : '#334155',
+                      cursor:'pointer', fontFamily:'inherit', borderRadius:8,
+                    }}>
+                      {opt.l}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ flex:1 }} />
+
+            {/* View all + Post request */}
+            <div className="lfr-head-actions" style={{ display:'flex', alignItems:'center', gap:6 }}>
+              <button type="button" onClick={() => navigate('/looking-for')} style={{
+                display:'inline-flex', alignItems:'center', gap:4, borderRadius:999, padding:'7px 14px',
+                fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap',
+                background:'#fff', border:'1.5px solid #e2e8f0', color:'#475569', transition:'all 0.15s',
+                minHeight:34,
+              }}>
+                View all <ArrowRight size={13} />
+              </button>
+              <button type="button" onClick={() => navigate('/looking-for')} style={{
+                display:'inline-flex', alignItems:'center', gap:5, borderRadius:999, padding:'7px 16px',
+                fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap',
+                background:'#166534', border:'1.5px solid #166534', color:'#fff',
+                boxShadow:'0 3px 10px rgba(22,101,52,0.25)', minHeight:34,
+              }}>
+                <Plus size={13} strokeWidth={3} /> Post Request
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Compact GPS strip */}
-        <div className="soko-lf-gps">
-          <span className="soko-lf-gps-ico" aria-hidden>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#475569" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z" /><circle cx="12" cy="10" r="2.2" />
-            </svg>
-          </span>
-          <div className="soko-lf-gps-text">
-            <div className="soko-lf-gps-title">
-              {detectingGps
-                ? 'Detecting your location…'
-                : placeLabel
-                  ? `Near you · ${placeLabel}`
-                  : 'Location not detected'}
-            </div>
-            <div className="soko-lf-gps-sub">
-              {gpsError
-                ? gpsError
-                : placeLabel
-                  ? nearCount > 0
-                    ? `${nearCount} near you first · distance on cards`
-                    : 'Nearest buyer demand first'
-                  : 'Allow GPS to prioritise nearby requests'}
-            </div>
-          </div>
-          <button
-            type="button"
-            className="soko-lf-gps-btn"
-            onClick={() => detectGps(true)}
-            disabled={detectingGps}
-          >
-            {detectingGps ? '…' : 'Update GPS'}
-          </button>
-        </div>
-
-        {/* Horizontal request cards */}
+        {/* ─── Cards ─── */}
         {loading ? (
-          <div className="lf3-scroll">
-            {[1, 2, 3, 4].map(i => (
-              <div key={i} style={{
-                flexShrink: 0, width: 260, height: 300, borderRadius: 14,
-                background: 'linear-gradient(90deg,#f0f0f0 25%,#e8e8e8 50%,#f0f0f0 75%)',
-                backgroundSize: '600px 100%', animation: 'shimmer 1.4s infinite',
-                border: '1px solid #eee',
-              }} />
+          <div className="lfr-grid">
+            {[1,2,3,4,5,6,7,8].map(i => (
+              <div key={i} className="lfr-skel" style={{ aspectRatio:'3/4', minHeight:360 }} />
             ))}
           </div>
         ) : filtered.length > 0 ? (
-          <div style={{ position: 'relative' }}>
-            <button type="button" className={`lf3-arrow${canLeft ? '' : ' hide'}`} style={{ left: -18 }} onClick={() => scrollBy(-1)} aria-label="Scroll left"><ArrowL /></button>
-            <button type="button" className={`lf3-arrow${canRight ? '' : ' hide'}`} style={{ right: -18 }} onClick={() => scrollBy(1)} aria-label="Scroll right"><ArrowR /></button>
-            <div ref={scrollRef} className="lf3-scroll">
-              {filtered.map(r => (
-                <LookingForRequestCard
-                  key={r.id}
-                  req={r}
-                  carousel
-                  compactCta
-                  isNearYou={(r._locScore || 0) >= 85}
-                  onViewDetails={() => navigate(`/looking-for?request=${r.id}`)}
-                  onOffer={() => navigate(`/looking-for?request=${r.id}`)}
-                />
-              ))}
+          <div className="lfr-grid">
+              {filtered.map(r => {
+                const author = r.profiles || {}
+                const hasName = !!author.full_name
+                const aname = hasName ? author.full_name : 'Anonymous Buyer'
+                const aavatar = author.avatar_url
+                const ainitial = (aname[0] || 'A').toUpperCase()
+                const isVerified = author.is_verified || author.verified || false
+                const isAnonymous = !hasName
+                const budgetVal = r.budget
+                const budgetMax = fmtBudget(budgetVal)
+                const cat = r.category || ''
+                const city = r.city || ''
+                const offerCount = r.offer_count ?? r.offerCount ?? 0
+                const distLabel = r._distanceLabel || null
+                const budgetNum = Number(r.budget) || 0
+                const memberSince = author?.created_at ? new Date(author.created_at) : null
+                const memberYears = memberSince ? Math.floor((Date.now() - memberSince.getTime()) / 31536000000) : 0
+                const allImages = r.image_urls && Array.isArray(r.image_urls) && r.image_urls.length > 0
+                  ? r.image_urls
+                  : r.image_url ? [r.image_url] : []
+                const imgCount = allImages.length
+                const hasImages = imgCount > 0
+                const showImages = allImages.slice(0, 3)
+                const extraCount = imgCount - 3
+                const badges = []
+                if (r.urgency === 'urgent') badges.push({ label:'Urgent', fg:'#dc2626', bg:'#fef2f2', icon: '🔥' })
+                if (r._distanceKm != null && r._distanceKm < 5) badges.push({ label:'Nearby', fg:'#2563eb', bg:'#eff6ff' })
+                if (r.created_at && (Date.now() - new Date(r.created_at).getTime()) < 86400000) badges.push({ label:'New', fg:'#16a34a', bg:'#f0fdf4' })
+                const catEmoji = cat === 'Electronics' ? '📱' : cat === 'Fashion' ? '👗' : cat === 'Vehicles' ? '🚗' : cat === 'Property' ? '🏠' : cat === 'Agriculture' ? '🌾' : cat === 'Services' ? '⚙️' : cat === 'Jobs' ? '💼' : cat === 'Business Partners' ? '🤝' : '📋'
+                const allAreas = r.cities?.length > 0 ? r.cities : (r.city ? [r.city] : [])
+                const extraAreas = allAreas.length - 1
+
+                return (
+                  <div key={r.id} className="lfr-card" onClick={() => navigate(`/looking-for?request=${r.id}`)}>
+
+                    {/* Image collage */}
+                    <div style={{
+                      position:'relative', width:'100%', paddingBottom:'56.25%', borderRadius:'16px 16px 0 0',
+                      overflow:'hidden', flexShrink:0, cursor:'pointer',
+                      background:'linear-gradient(135deg,#f0fdf4,#dcfce7)',
+                      boxShadow:'inset 0 -1px 0 rgba(0,0,0,0.04)',
+                    }}>
+                      {hasImages ? (
+                        <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column', gap:2 }}>
+                          {showImages.length === 1 ? (
+                            <div style={{ flex:1, overflow:'hidden', borderRadius:14 }}
+                              onClick={e => { e.stopPropagation(); setLfLightbox(r); setLfLbIdx(0) }}>
+                              <img src={showImages[0]} alt="" loading="lazy" className="lfr-img-cell"
+                                style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                            </div>
+                          ) : showImages.length === 2 ? (
+                            <div style={{ display:'flex', flexDirection:'column', gap:2, width:'100%', height:'100%' }}>
+                              <div style={{ flex:'0 0 60%', overflow:'hidden', borderRadius:14 }}
+                                onClick={e => { e.stopPropagation(); setLfLightbox(r); setLfLbIdx(0) }}>
+                                <img src={showImages[0]} alt="" loading="lazy" className="lfr-img-cell"
+                                  style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                              </div>
+                              <div style={{ flex:1, display:'flex', gap:2 }}>
+                                <div style={{ flex:'0 0 50%', overflow:'hidden', borderRadius:14 }}
+                                  onClick={e => { e.stopPropagation(); setLfLightbox(r); setLfLbIdx(1) }}>
+                                  <img src={showImages[1]} alt="" loading="lazy" className="lfr-img-cell"
+                                    style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{ display:'flex', flexDirection:'column', gap:2, width:'100%', height:'100%' }}>
+                              <div style={{ flex:'0 0 55%', overflow:'hidden', borderRadius:14 }}
+                                onClick={e => { e.stopPropagation(); setLfLightbox(r); setLfLbIdx(0) }}>
+                                <img src={showImages[0]} alt="" loading="lazy" className="lfr-img-cell"
+                                  style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                              </div>
+                              <div style={{ flex:1, display:'flex', gap:2 }}>
+                                {[1,2].map(i => (
+                                  <div key={i} style={{ flex:1, overflow:'hidden', borderRadius:14, position:'relative' }}
+                                    onClick={e => { e.stopPropagation(); setLfLightbox(r); setLfLbIdx(i) }}>
+                                    <img src={showImages[i]} alt="" loading="lazy" className="lfr-img-cell"
+                                      style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                                    {i === 2 && extraCount > 0 && (
+                                      <div style={{
+                                        position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center',
+                                      }}>
+                                        <span style={{
+                                          display:'inline-flex', alignItems:'center', justifyContent:'center',
+                                          minWidth:32, height:28, borderRadius:999,
+                                          background:'rgba(0,0,0,0.55)', backdropFilter:'blur(4px)',
+                                          border:'1px solid rgba(255,255,255,0.15)',
+                                          fontSize:13, fontWeight:800, color:'#fff',
+                                          padding:'0 8px',
+                                        }}>+{extraCount}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', fontSize:44 }}>
+                          {catEmoji}
+                        </div>
+                      )}
+
+                      {/* Subtle dark gradient at bottom for overlays */}
+                      {hasImages && <div style={{
+                        position:'absolute', bottom:0, left:0, right:0, height:'35%',
+                        background:'linear-gradient(to top, rgba(0,0,0,0.3), transparent)',
+                        pointerEvents:'none',
+                      }} />}
+
+                      {/* Badges on image (max 3) */}
+                      <div style={{ position:'absolute', top:10, left:10, display:'flex', gap:4, flexWrap:'wrap', zIndex:2 }}>
+                        {badges.slice(0, 3).map((b, i) => (
+                          <span key={i} className="lfr-badge" style={{
+                            display:'inline-flex', alignItems:'center', gap:3,
+                            fontSize: b.label === 'Urgent' ? 10 : 9.5, fontWeight: b.label === 'Urgent' ? 800 : 700,
+                            color: b.label === 'Urgent' ? '#dc2626' : '#fff',
+                            background: b.label === 'Urgent' ? 'rgba(254,242,242,0.9)' : 'rgba(0,0,0,0.55)',
+                            backdropFilter:'blur(4px)',
+                            borderRadius:999, padding:'1px 8px', lineHeight:'18px',
+                            animationDelay:`${i * 0.08}s`,
+                          }}>
+                            {b.icon ? <span style={{ fontSize:10 }}>{b.icon}</span> : null}{b.label}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Avatar + Name row (below image) */}
+                    <div style={{ padding:'12px 16px 0', display:'flex', alignItems:'center', gap:10 }}>
+                      <div style={{
+                        width:36, height:36, borderRadius:'50%', overflow:'hidden', flexShrink:0,
+                        background: isAnonymous
+                          ? 'linear-gradient(135deg,#e2e8f0,#cbd5e1)'
+                          : 'linear-gradient(135deg,#166534,#22c55e)',
+                        display:'flex', alignItems:'center', justifyContent:'center',
+                        fontSize: isAnonymous ? 11 : 10, fontWeight:700, color: isAnonymous ? '#64748b' : '#fff',
+                      }}>
+                        {aavatar && !isAnonymous
+                          ? <img src={aavatar} alt="" loading="lazy" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
+                          : ainitial
+                        }
+                      </div>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ display:'flex', alignItems:'center', gap:4, fontSize:13, fontWeight:700, color:'#0f172a', lineHeight:1.2 }}>
+                          {aname}
+                          {isVerified && <ShieldCheck size={12} color="#16a34a" fill="#16a34a" />}
+                        </div>
+                        <div style={{ fontSize:10.5, color:'#16a34a', fontWeight:600, marginTop:1 }}>
+                          {isVerified ? 'Verified Buyer' : 'Buyer'}
+                          {memberYears > 0 && <span style={{ color:'#94a3b8', fontWeight:500 }}> · {memberYears}y on Soko</span>}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Looking for + Title */}
+                    <div style={{ padding:'8px 16px 0' }}>
+                      <div style={{ fontSize:9.5, fontWeight:600, color:'#94a3b8', letterSpacing:0.4, textTransform:'uppercase', marginBottom:1 }}>
+                        Looking for
+                      </div>
+                      <div style={{
+                        fontSize:17, fontWeight:800, color:'#0f172a', lineHeight:1.25,
+                        display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden',
+                      }}>
+                        {r.title || 'Untitled request'}
+                      </div>
+                    </div>
+
+                    {/* Description */}
+                    {r.description && (
+                      <div style={{ padding:'5px 16px 0' }}>
+                        <div style={{
+                          fontSize:12, color:'#64748b', lineHeight:1.4, fontWeight:500,
+                          display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden',
+                        }}>
+                          {r.description}
+                        </div>
+                        <div style={{ fontSize:10.5, fontWeight:600, color:'#16a34a', marginTop:3, cursor:'pointer' }}>
+                          View Details →
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Budget */}
+                    <div style={{ padding:'8px 16px 0' }}>
+                      {budgetMax && (
+                        <span style={{ fontSize:19, fontWeight:800, color:'#16a34a', letterSpacing:-0.3 }}>
+                          {budgetMax} Budget
+                        </span>
+                      )}
+                    </div>
+
+                    {/* Location + Time row */}
+                    <div style={{ padding:'4px 16px 0', display:'flex', alignItems:'center', gap:3, flexWrap:'wrap', fontSize:11, color:'#64748b', fontWeight:500 }}>
+                      <MapPin size={10} /> {city || 'Malawi'}
+                      {extraAreas > 0 && (
+                        <span style={{ fontSize:10, fontWeight:600, color:'#166534', background:'#f0fdf4', borderRadius:999, padding:'1px 7px', border:'1px solid #bbf7d0' }}>
+                          +{extraAreas} more
+                        </span>
+                      )}
+                      {distLabel && <><span style={{ color:'#cbd5e1' }}>·</span> {distLabel}</>}
+                      <span style={{ color:'#cbd5e1' }}>·</span>
+                      <Clock size={10} /> {r.created_at ? timeAgoLF(r.created_at) : ''}
+                    </div>
+
+                    {/* Spacer */}
+                    <div style={{ flex:1 }} />
+
+                    {/* Footer row: responses | Save Share (left)  Respond (right) */}
+                    <div style={{ padding:'8px 14px 14px', display:'flex', alignItems:'center' }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                        <span style={{ display:'flex', alignItems:'center', gap:3, fontSize:12.5, fontWeight:700, color:'#6366f1', marginRight:2 }}>
+                          <MessageCircle size={14} color="#6366f1" /> {offerCount}
+                        </span>
+                        <button type="button" className="lfr-act-btn" onClick={e => { e.stopPropagation(); toggleLfSave(r.id) }} style={{...actBtn, padding:'5px 7px', color: lfSavedIds.has(r.id) ? '#dc2626' : '#64748b'}} title={lfSavedIds.has(r.id) ? 'Saved' : 'Save'}>
+                          <Heart size={14} fill={lfSavedIds.has(r.id) ? '#dc2626' : 'none'} />
+                        </button>
+                        <button type="button" className="lfr-act-btn" onClick={e => { e.stopPropagation(); shareRequest(r) }} style={{...actBtn, padding:'5px 7px'}} title="Share">
+                          <Share2 size={14} />
+                        </button>
+                      </div>
+                      <div style={{ flex:1 }} />
+                      <button type="button" className="lfr-respond-btn" onClick={e => { e.stopPropagation(); sendOffer(r) }} style={{
+                        display:'inline-flex', alignItems:'center', justifyContent:'center', gap:6,
+                        borderRadius:999, padding:'10px 28px', fontSize:13.5, fontWeight:700, cursor:'pointer',
+                        fontFamily:'inherit', background:'#166534', border:'1.5px solid #166534', color:'#fff',
+                        boxShadow:'0 4px 14px rgba(22,101,52,0.3)', whiteSpace:'nowrap',
+                      }}>
+                        Respond <ArrowRight size={15} />
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
-          </div>
         ) : (
-          <div style={{
-            textAlign: 'center', padding: '32px 20px',
-            border: '1px solid #e8eaed', borderRadius: 14, background: '#fff',
-          }}>
-            <p style={{ fontSize: 14.5, fontWeight: 700, color: '#111827', margin: '0 0 6px' }}>
-              No open requests yet
+          <div style={{ textAlign:'center', padding:'52px 24px', borderRadius:20, background:'#fff', border:'1px solid #f1f5f9', boxShadow:'0 1px 3px rgba(0,0,0,0.03)' }}>
+            <svg width="80" height="80" viewBox="0 0 80 80" fill="none" style={{ margin:'0 auto 16px', display:'block' }}>
+              <rect x="8" y="12" width="64" height="56" rx="12" fill="#f0fdf4" stroke="#bbf7d0" strokeWidth="2"/>
+              <rect x="16" y="24" width="16" height="10" rx="3" fill="#22c55e" opacity="0.3"/>
+              <rect x="36" y="24" width="28" height="6" rx="3" fill="#e2e8f0"/>
+              <rect x="36" y="34" width="20" height="4" rx="2" fill="#e2e8f0"/>
+              <circle cx="20" cy="56" r="10" fill="#fff" stroke="#cbd5e1" strokeWidth="1.5"/>
+              <circle cx="20" cy="56" r="4" fill="#16a34a"/>
+              <line x1="20" y1="52" x2="20" y2="60" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/>
+              <line x1="16" y1="56" x2="24" y2="56" stroke="#fff" strokeWidth="1.5" strokeLinecap="round"/>
+              <rect x="44" y="48" width="20" height="14" rx="7" fill="#166534"/>
+              <path d="M50 55l4 4 8-8" stroke="#fff" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+            <h3 style={{ margin:'0 0 6px', fontSize:16, fontWeight:800, color:'#0f172a', fontFamily:'Sora, system-ui, sans-serif' }}>No buyers looking nearby</h3>
+            <p style={{ margin:'0 0 20px', fontSize:13, color:'#64748b', fontWeight:500, lineHeight:1.4, maxWidth:260, marginLeft:'auto', marginRight:'auto' }}>
+              Be the first to post a request.
             </p>
-            <p style={{ fontSize: 13, color: '#6b7280', margin: '0 0 14px' }}>
-              Be the first to post what you need.
-            </p>
-            <button
-              type="button"
-              className="soko-lf-btn soko-lf-btn-primary"
-              onClick={() => navigate('/looking-for')}
-              style={{ margin: '0 auto' }}
-            >
-              Post a request
+            <button type="button" onClick={() => navigate('/looking-for')} style={{
+              display:'inline-flex', alignItems:'center', gap:6, borderRadius:999, padding:'10px 20px',
+              fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'inherit',
+              background:'#166534', border:'1.5px solid #166534', color:'#fff',
+              boxShadow:'0 3px 12px rgba(22,101,52,0.3)',
+            }}>
+              <Plus size={14} strokeWidth={3} /> Post Request
             </button>
           </div>
         )}
+
+        {/* Demand footer */}
+        {filtered.length > 3 && (
+          <div style={{ textAlign:'center', marginTop:6 }}>
+            <button type="button" onClick={() => navigate('/looking-for')} style={{
+              display:'inline-flex', alignItems:'center', gap:5, background:'none', border:'none',
+              padding:'8px 16px', fontSize:12.5, fontWeight:700, color:'#166534', cursor:'pointer',
+              fontFamily:'inherit',
+            }}>
+              Browse all {filtered.length} requests <ArrowRight size={13} />
+            </button>
+          </div>
+        )}
+
       </div>
+
+      {/* ─── Premium Image Gallery ─── */}
+      {lfLightbox && (() => {
+        const imgs = lfLightbox.image_urls && Array.isArray(lfLightbox.image_urls) && lfLightbox.image_urls.length > 0
+          ? lfLightbox.image_urls
+          : lfLightbox.image_url ? [lfLightbox.image_url] : []
+        const total = imgs.length
+
+        function goTo(idx) {
+          setLfLbIdx(Math.max(0, Math.min(total - 1, idx)))
+          setGalleryZoomed(false)
+        }
+
+        function onImgClick() {
+          setGalleryZoomed(z => !z)
+        }
+
+        function onTouchStart(e) {
+          if (e.touches.length === 1) {
+            galleryTouchStart.current = e.touches[0].clientX
+            galleryTouchY.current = e.touches[0].clientY
+          }
+          if (e.touches.length === 2) {
+            const dx = e.touches[0].clientX - e.touches[1].clientX
+            const dy = e.touches[0].clientY - e.touches[1].clientY
+            galleryPinchDist.current = Math.sqrt(dx * dx + dy * dy)
+          }
+        }
+
+        function onTouchMove(e) {
+          if (e.touches.length === 2) {
+            e.preventDefault()
+            const dx = e.touches[0].clientX - e.touches[1].clientX
+            const dy = e.touches[0].clientY - e.touches[1].clientY
+            const dist = Math.sqrt(dx * dx + dy * dy)
+            if (galleryPinchDist.current) {
+              if (dist / galleryPinchDist.current > 1.15) setGalleryZoomed(true)
+              if (dist / galleryPinchDist.current < 0.85) setGalleryZoomed(false)
+            }
+          }
+        }
+
+        function onTouchEnd(e) {
+          if (galleryTouchStart.current != null && e.changedTouches.length === 1) {
+            const dx = e.changedTouches[0].clientX - galleryTouchStart.current
+            const dy = e.changedTouches[0].clientY - galleryTouchY.current
+            if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 50) {
+              if (dx > 0) goTo(lfLbIdx - 1)
+              else goTo(lfLbIdx + 1)
+            }
+          }
+          galleryTouchStart.current = null
+          galleryTouchY.current = null
+          galleryPinchDist.current = null
+        }
+
+        let lastTap = 0
+        function onImgTap(e) {
+          e.stopPropagation()
+          const now = Date.now()
+          if (now - lastTap < 300) { onImgClick(); lastTap = 0 }
+          else lastTap = now
+        }
+
+        return (
+          <AnimatePresence>
+            <motion.div
+              key="gallery-overlay"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.25 }}
+              onTouchStart={onTouchStart}
+              onTouchMove={onTouchMove}
+              onTouchEnd={onTouchEnd}
+              style={{
+                position:'fixed', inset:0, zIndex:99999,
+                background:'rgba(0,0,0,0.95)',
+                display:'flex', alignItems:'center', justifyContent:'center',
+                cursor:'default',
+              }}
+            >
+              {/* Close button */}
+              <motion.button
+                type="button"
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15 }}
+                onClick={() => setLfLightbox(null)}
+                style={{
+                  position:'absolute', top:20, right:20, width:44, height:44, borderRadius:'50%',
+                  background:'rgba(255,255,255,0.1)', backdropFilter:'blur(8px)',
+                  border:'1px solid rgba(255,255,255,0.15)', color:'#fff', fontSize:20,
+                  cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center',
+                  zIndex:10, transition:'all 0.2s',
+                }}
+              >
+                ✕
+              </motion.button>
+
+              {/* Counter */}
+              {total > 1 && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.2 }}
+                  style={{
+                    position:'absolute', top:24, left:'50%', transform:'translateX(-50%)',
+                    display:'flex', alignItems:'center', gap:6,
+                    background:'rgba(255,255,255,0.1)', backdropFilter:'blur(8px)',
+                    borderRadius:999, padding:'5px 14px',
+                    border:'1px solid rgba(255,255,255,0.12)',
+                    fontSize:13, fontWeight:700, color:'#fff', letterSpacing:0.3,
+                    zIndex:10,
+                  }}
+                >
+                  <span>{lfLbIdx + 1}</span>
+                  <span style={{ color:'rgba(255,255,255,0.4)', fontWeight:400 }}>/</span>
+                  <span style={{ color:'rgba(255,255,255,0.6)' }}>{total}</span>
+                </motion.div>
+              )}
+
+              {/* Previous arrow */}
+              {total > 1 && lfLbIdx > 0 && (
+                <motion.button
+                  type="button"
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.25 }}
+                  whileHover={{ scale: 1.1, background:'rgba(255,255,255,0.2)' }}
+                  onClick={e => { e.stopPropagation(); goTo(lfLbIdx - 1) }}
+                  style={{
+                    position:'absolute', left:20, width:48, height:48, borderRadius:'50%',
+                    background:'rgba(255,255,255,0.1)', backdropFilter:'blur(8px)',
+                    border:'1px solid rgba(255,255,255,0.15)', color:'#fff', fontSize:22,
+                    cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center',
+                    zIndex:10,
+                  }}
+                >
+                  ‹
+                </motion.button>
+              )}
+
+              {/* Next arrow */}
+              {total > 1 && lfLbIdx < total - 1 && (
+                <motion.button
+                  type="button"
+                  initial={{ opacity: 0, x: 10 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: 0.25 }}
+                  whileHover={{ scale: 1.1, background:'rgba(255,255,255,0.2)' }}
+                  onClick={e => { e.stopPropagation(); goTo(lfLbIdx + 1) }}
+                  style={{
+                    position:'absolute', right:20, width:48, height:48, borderRadius:'50%',
+                    background:'rgba(255,255,255,0.1)', backdropFilter:'blur(8px)',
+                    border:'1px solid rgba(255,255,255,0.15)', color:'#fff', fontSize:22,
+                    cursor:'pointer', display:'flex', alignItems:'center', justifyContent:'center',
+                    zIndex:10,
+                  }}
+                >
+                  ›
+                </motion.button>
+              )}
+
+              {/* Zoom control */}
+              <motion.button
+                type="button"
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+                whileHover={{ scale: 1.05 }}
+                onClick={e => { e.stopPropagation(); setGalleryZoomed(z => !z) }}
+                style={{
+                  position:'absolute', bottom:90, left:'50%', transform:'translateX(-50%)',
+                  display:'flex', alignItems:'center', gap:5, zIndex:10,
+                  background:'rgba(255,255,255,0.1)', backdropFilter:'blur(8px)',
+                  border:'1px solid rgba(255,255,255,0.15)', color:'#fff',
+                  borderRadius:999, padding:'6px 16px', fontSize:12, fontWeight:600,
+                  cursor:'pointer', fontFamily:'inherit',
+                }}
+              >
+                {galleryZoomed ? '⤢ Reset' : '⤡ Zoom'}
+              </motion.button>
+
+              {/* Image with animated transitions */}
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={lfLbIdx}
+                  initial={{ opacity: 0, scale: 0.92 }}
+                  animate={{ opacity: 1, scale: galleryZoomed ? 2 : 1 }}
+                  exit={{ opacity: 0, scale: 0.92 }}
+                  transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                  style={{
+                    display:'flex', alignItems:'center', justifyContent:'center',
+                    width:'100%', height:'100%',
+                    cursor: galleryZoomed ? 'zoom-out' : 'zoom-in',
+                    overflow:'hidden',
+                  }}
+                  onClick={onImgTap}
+                >
+                  <img
+                    src={imgs[lfLbIdx]}
+                    alt=""
+                    style={{
+                      maxWidth:'92%', maxHeight:'88%', objectFit:'contain',
+                      borderRadius:8, userSelect:'none', willChange:'transform',
+                      transform: galleryZoomed ? 'scale(1.8)' : 'scale(1)',
+                      transition:'transform 0.3s cubic-bezier(0.22,1,0.36,1)',
+                    }}
+                    onClick={e => e.stopPropagation()}
+                    onDoubleClick={e => { e.stopPropagation(); onImgClick() }}
+                  />
+                </motion.div>
+              </AnimatePresence>
+
+              {/* Preload adjacent */}
+              <div style={{ display:'none' }}>
+                {lfLbIdx > 0 && <img src={imgs[lfLbIdx - 1]} alt="" />}
+                {lfLbIdx < total - 1 && <img src={imgs[lfLbIdx + 1]} alt="" />}
+              </div>
+
+              {/* Dots */}
+              {total > 1 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.35 }}
+                  style={{
+                    position:'absolute', bottom:124, left:'50%', transform:'translateX(-50%)',
+                    display:'flex', gap:5, zIndex:10,
+                  }}
+                >
+                  {imgs.map((_, i) => (
+                    <button key={i} type="button"
+                      onClick={e => { e.stopPropagation(); goTo(i) }}
+                      style={{
+                        width: i === lfLbIdx ? 20 : 7, height:7, borderRadius:999,
+                        border:'none', cursor:'pointer',
+                        background: i === lfLbIdx ? '#16a34a' : 'rgba(255,255,255,0.3)',
+                        transition:'all 0.25s', padding:0,
+                      }}
+                    />
+                  ))}
+                </motion.div>
+              )}
+            </motion.div>
+          </AnimatePresence>
+        )
+      })()}
     </section>
   )
 }
@@ -2931,91 +3462,221 @@ function HomeWorkCard({
   accentBg,
   accentFg,
   onClick,
+  contact,
 }) {
+  const subParts = sub ? sub.split(' · ') : []
+  const company = subParts[0] || ''
+  const jobType = subParts[1] || ''
+  const salary = subParts.slice(2).join(' · ') || ''
+  const [showApply, setShowApply] = React.useState(false)
+  const applyRef = React.useRef(null)
+
+  const isEmail = c => c?.includes('@')
+  const isPhone = c => /^\+?[\d\s\-()]+$/.test(c || '')
+  const isUrl = c => c?.startsWith('http') || c?.startsWith('www.')
+
+  React.useEffect(() => {
+    if (!showApply) return
+    function handleClick(e) {
+      if (applyRef.current && !applyRef.current.contains(e.target)) setShowApply(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [showApply])
+
+  function handleApply(e) {
+    e.stopPropagation()
+    if (!contact) { onClick(); return }
+    if (isUrl(contact)) {
+      window.open(contact.startsWith('http') ? contact : `https://${contact}`, '_blank', 'noreferrer')
+    } else if (isPhone(contact)) {
+      window.location.href = `tel:${contact.replace(/\s/g, '')}`
+    } else {
+      setShowApply(v => !v)
+    }
+  }
+
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onClick() }}
       className="soko-work-card"
-      style={{
-        flexShrink: 0,
-        width: 220,
-        maxWidth: 'min(220px, 72vw)',
-        border: `1px solid ${T.gray200}`,
-        borderRadius: 14,
-        overflow: 'hidden',
-        background: '#fff',
-        cursor: 'pointer',
-        padding: 0,
-        textAlign: 'left',
-        fontFamily: 'inherit',
-        display: 'flex',
-        flexDirection: 'column',
-        boxShadow: T.shadow,
-        scrollSnapAlign: 'start',
-      }}
     >
-      <div style={{
-        position: 'relative', width: '100%', height: 100, flexShrink: 0,
-        background: accentBg, overflow: 'hidden',
-      }}>
+      <div className="soko-wc-top" style={{ background: accentBg }}>
         {image ? (
           <img
             src={image}
             alt=""
             loading="lazy"
-            style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+            className="soko-wc-img"
             onError={e => { e.currentTarget.style.display = 'none' }}
           />
         ) : (
-          <div style={{
-            width: '100%', height: '100%', display: 'flex', alignItems: 'center',
-            justifyContent: 'center', color: accentFg, opacity: 0.85,
-          }}>
+          <div className="soko-wc-fallback" style={{ color: accentFg }}>
             {fallbackIcon}
           </div>
         )}
-        <div style={{
-          position: 'absolute', inset: 0,
-          background: 'linear-gradient(180deg, transparent 40%, rgba(0,0,0,0.45) 100%)',
-          pointerEvents: 'none',
-        }} />
+        {jobType && <span className="soko-wc-type">{jobType}</span>}
       </div>
-      <div style={{ padding: '10px 12px 12px', display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, flex: 1 }}>
-        <div style={{
-          fontSize: 13.5, fontWeight: 800, color: T.gray900, lineHeight: 1.25,
-          overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
-        }}>
-          {title}
+      <div className="soko-wc-body">
+        <div className="soko-wc-title">{title}</div>
+        {company && <div className="soko-wc-company">{company}</div>}
+        <div className="soko-wc-foot">
+          {salary && <span className="soko-wc-salary">{salary}</span>}
+          {meta && <span className="soko-wc-loc">{Icon.pin(9)} {meta}</span>}
         </div>
-        {sub && (
-          <div style={{
-            fontSize: 11.5, color: T.gray600, fontWeight: 600,
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>
-            {sub}
+        <div className="soko-wc-apply-row" ref={applyRef}>
+          <button
+            type="button"
+            className="soko-wc-apply-btn"
+            onClick={handleApply}
+          >
+            {contact && isUrl(contact)
+              ? <><span className="soko-wc-apply-ico">{Icon.shield(10)}</span> Apply Now</>
+              : contact && isPhone(contact)
+                ? <><span className="soko-wc-apply-ico">{Icon.phoneCall(10)}</span> Call</>
+                : <><span className="soko-wc-apply-ico">{Icon.send(10)}</span> Apply</>}
+          </button>
+          {showApply && contact && (
+            <div className="soko-wc-apply-pop">
+              <div className="soko-wc-apply-pop-arrow" />
+              <div className="soko-wc-apply-pop-label">
+                {isEmail(contact) ? 'Email' : 'Contact'}
+              </div>
+              <div className="soko-wc-apply-pop-value">{contact}</div>
+              <button
+                type="button"
+                className="soko-wc-apply-pop-copy"
+                onClick={e => {
+                  e.stopPropagation()
+                  navigator.clipboard?.writeText(contact)
+                  setShowApply(false)
+                }}
+              >
+                {Icon.copy(12)} Copy
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function HomeServiceCard({
+  name,
+  category,
+  rate,
+  meta,
+  image,
+  providerId,
+  serviceId,
+  navigate,
+  currentUser,
+  onClick,
+}) {
+  const [imgErr, setImgErr] = React.useState(false)
+
+  function goChat(e) {
+    e.stopPropagation()
+    if (currentUser) {
+      navigate(`/chat/${providerId}/${serviceId}?src=service`, { state: { source: 'service' } })
+    }
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="soko-service-card"
+    >
+      <div className="soko-sc-top">
+        {image && !imgErr ? (
+          <img
+            src={image}
+            alt=""
+            loading="lazy"
+            className="soko-sc-img"
+            onError={() => setImgErr(true)}
+          />
+        ) : (
+          <div className="soko-sc-fallback">
+            {Icon.wrench(28)}
           </div>
         )}
-        {meta && (
-          <div style={{
-            marginTop: 'auto', paddingTop: 6, fontSize: 11, color: T.gray500, fontWeight: 600,
-            display: 'flex', alignItems: 'center', gap: 4,
-          }}>
-            {Icon.pin(10)} {meta}
+        <div className="soko-sc-overlay" />
+        {category && <span className="soko-sc-cat">{category}</span>}
+      </div>
+      <div className="soko-sc-body">
+        <div className="soko-sc-name">{name}</div>
+        <div className="soko-sc-meta-row">
+          <span className="soko-sc-loc">{Icon.pin(9)} {meta || 'Malawi'}</span>
+          {rate && <span className="soko-sc-rate">{rate}</span>}
+        </div>
+        <div className="soko-sc-cta-row">
+            {currentUser && (
+              <span className="soko-sc-cta-btn" onClick={goChat}>
+                {Icon.lightning(11)} Book Now
+              </span>
+            )}
           </div>
-        )}
       </div>
     </button>
   )
 }
 
-function ShopsJobsServicesRow({ navigate, shops, jobs, services, loading }) {
+function ShopsJobsServicesRow({ navigate, shops, jobs, services, loading, currentUser, onServiceClick, onJobClick }) {
   const shopsRail = useRef(null)
   const jobsRail = useRef(null)
   const servicesRail = useRef(null)
+  const [shopCount, setShopCount] = React.useState(8)
+
+  const [jobCat, setJobCat] = React.useState('All')
+  const [jobType, setJobType] = React.useState('All')
+  const [jobSort, setJobSort] = React.useState('recent')
+  const [jobCatOpen, setJobCatOpen] = React.useState(false)
+  const [jobTypeOpen, setJobTypeOpen] = React.useState(false)
+  const [jobSortOpen, setJobSortOpen] = React.useState(false)
+  const jobCatRef = React.useRef(null)
+  const jobTypeRef = React.useRef(null)
+  const jobSortRef = React.useRef(null)
+
+  const JOB_CATEGORIES = ['All', 'Technology', 'Education', 'Health', 'Finance', 'Agriculture', 'Construction', 'Transport', 'Hospitality', 'Sales & Marketing', 'Other']
+  const JOB_TYPES = ['All', 'Full-time', 'Part-time', 'Contract', 'Internship', 'Volunteer']
+  const JOB_SORTS = [{ k: 'recent', l: 'Newest' }, { k: 'oldest', l: 'Oldest' }]
+
+  const filteredJobs = React.useMemo(() => {
+    let list = [...jobs]
+    if (jobCat !== 'All') list = list.filter(j => j.category === jobCat)
+    if (jobType !== 'All') list = list.filter(j => j.type === jobType)
+    if (jobSort === 'oldest') list.reverse()
+    return list
+  }, [jobs, jobCat, jobType, jobSort])
+
+  React.useEffect(() => {
+    function update() {
+      const w = window.innerWidth
+      setShopCount(w >= 1025 ? 8 : w >= 768 ? 6 : 4)
+    }
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [])
+
+  React.useEffect(() => {
+    function handleClick(e) {
+      if (jobCatRef.current && !jobCatRef.current.contains(e.target)) setJobCatOpen(false)
+      if (jobTypeRef.current && !jobTypeRef.current.contains(e.target)) setJobTypeOpen(false)
+      if (jobSortRef.current && !jobSortRef.current.contains(e.target)) setJobSortOpen(false)
+    }
+    document.addEventListener('mousedown', handleClick)
+    return () => document.removeEventListener('mousedown', handleClick)
+  }, [])
 
   return (
-    <section className="soko-shops-jobs-section" style={{ padding: '22px 20px 18px', background: '#fff' }}>
+    <section className="soko-shops-jobs-section" style={{ padding: '10px 20px 18px', background: '#f8f9fa' }}>
       <style>{`
         .soko-sjs-block { margin-bottom: 22px; }
         .soko-sjs-block:last-child { margin-bottom: 0; }
@@ -3066,8 +3727,473 @@ function ShopsJobsServicesRow({ navigate, shops, jobs, services, loading }) {
           box-shadow: ${T.shadowMd};
         }
         .soko-shop-card-home:active { transform: scale(0.98); }
+
+        /* ── Shops Section Header ── */
+        .soko-shops-head {
+          margin-bottom: 14px;
+        }
+        .soko-shops-head-intro {
+          background: linear-gradient(135deg, #f0fdf4, #ecfdf5);
+          border-radius: 12px; padding: 10px 14px;
+          margin-bottom: 12px;
+          display: flex; align-items: center; justify-content: space-between;
+          gap: 12px; flex-wrap: wrap;
+        }
+        .soko-shops-head-intro p {
+          font-size: 11.5px; color: #4b5563; font-weight: 500;
+          margin: 0; line-height: 1.4;
+        }
+        .soko-shops-head-badges {
+          display: flex; flex-wrap: wrap; gap: 5px;
+        }
+        .soko-shops-head-badge {
+          display: inline-flex; align-items: center; gap: 3px;
+          font-size: 10px; font-weight: 600; color: #166534;
+          background: rgba(22,101,52,0.08);
+          border-radius: 999px; padding: 3px 9px; line-height: 1;
+          white-space: nowrap;
+        }
+        .soko-shops-head-title-row {
+          display: flex; align-items: flex-end; justify-content: space-between;
+          gap: 12px; margin-bottom: 14px;
+        }
+        .soko-shops-head-title {
+          font-family: ${T.fontDisplay}; font-size: 18px; font-weight: 800;
+          color: ${T.gray900}; letter-spacing: -0.35px; margin: 0;
+          line-height: 1.2;
+        }
+        .soko-shops-head-link {
+          background: none; border: none; font-size: 12px; font-weight: 700;
+          color: ${T.green}; cursor: pointer; font-family: inherit;
+          display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;
+          padding: 2px 0;
+          transition: color 0.15s;
+        }
+        .soko-shops-head-link:hover { color: #15803d; }
+
+/* ── Shop Directory Grid ── */
+        .soko-shops-grid {
+          display: grid;
+          grid-template-columns: repeat(4, 1fr);
+          gap: 12px;
+        }
+        .soko-shop-card-dir {
+          background: #fff;
+          border: 1px solid #e5e7eb;
+          border-radius: 18px;
+          box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.03);
+          overflow: hidden;
+          cursor: pointer;
+          display: flex;
+          flex-direction: column;
+          text-align: center;
+          font-family: inherit;
+          padding: 0;
+          transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+          min-height: 0;
+          height: 100%;
+        }
+        .soko-shop-card-dir:hover {
+          transform: translateY(-5px);
+          box-shadow: 0 8px 28px rgba(0,0,0,0.07), 0 16px 48px rgba(0,0,0,0.04);
+          border-color: ${T.green};
+        }
+        .soko-shop-card-dir:active { transform: scale(0.97); }
+        .soko-shop-card-dir-skel {
+          border-radius: 18px;
+          overflow: hidden;
+          border: 1px solid ${T.gray100};
+          background: #fff;
+        }
+        .sscd-cover {
+          position: relative;
+          width: 100%;
+          height: 90px;
+          flex-shrink: 0;
+          overflow: hidden;
+          background: ${T.gray100};
+        }
+        .sscd-cover-img {
+          width: 100%; height: 100%;
+          object-fit: cover; display: block;
+          transition: transform 0.3s ease;
+        }
+        .soko-shop-card-dir:hover .sscd-cover-img { transform: scale(1.05); }
+        .sscd-cover-blur {
+          width: 100%; height: 100%;
+          object-fit: cover;
+          filter: blur(8px) saturate(1.3) brightness(0.8);
+          transform: scale(1.15);
+          transition: transform 0.3s ease;
+        }
+        .soko-shop-card-dir:hover .sscd-cover-blur { transform: scale(1.18); }
+        .sscd-cover-overlay {
+          position: absolute; inset: 0;
+          background: rgba(6,30,18,0.25);
+        }
+        .sscd-cover-plug {
+          width: 100%; height: 100%;
+          background: linear-gradient(135deg, #1e293b, #475569 55%, ${T.amber}55);
+        }
+        .sscd-cover-fade {
+          position: absolute; bottom: 0; left: 0; right: 0; height: 40%;
+          background: linear-gradient(to top, rgba(0,0,0,0.35), transparent);
+        }
+        .sscd-badge {
+          position: absolute; top: 6px; left: 6px;
+          display: inline-flex; align-items: center; gap: 2px;
+          border-radius: 999px; padding: 2px 7px;
+          font-size: 9px; font-weight: 800; z-index: 2;
+          box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+        }
+        .sscd-badge-verified { background: rgba(255,255,255,0.95); color: #15803d; }
+        .sscd-logo-wrap {
+          display: flex; justify-content: center;
+          margin-top: -16px; position: relative; z-index: 2;
+        }
+        .sscd-logo {
+          width: 40px; height: 40px; border-radius: 50%;
+          border: 2.5px solid #fff; background: #fff;
+          overflow: hidden; display: flex; align-items: center;
+          justify-content: center;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        }
+        .sscd-logo-img { width: 100%; height: 100%; object-fit: cover; }
+        .sscd-logo-letter {
+          color: #fff; font-weight: 800; font-size: 14px;
+          background: linear-gradient(135deg, #334155, #1e293b);
+          width: 100%; height: 100%;
+          display: flex; align-items: center; justify-content: center;
+        }
+        .sscd-body {
+          padding: 5px 10px 0;
+          flex: 1;
+          display: flex; flex-direction: column; gap: 1px;
+          text-align: left;
+        }
+        .sscd-name {
+          font-size: 13px; font-weight: 800; color: ${T.gray900};
+          line-height: 1.2;
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .sscd-category {
+          font-size: 10px; color: ${T.gray500}; font-weight: 500;
+        }
+        .sscd-meta {
+          display: flex; align-items: center; gap: 6px;
+          font-size: 10px; color: ${T.gray600};
+          flex-wrap: wrap; margin-top: 3px;
+        }
+        .sscd-meta-group {
+          display: inline-flex; align-items: center; gap: 2px;
+        }
+        .sscd-meta-stars { display: inline-flex; align-items: center; gap: 1px; }
+        .sscd-meta-score { font-weight: 700; color: ${T.gray700}; }
+        .sscd-meta-ico { display: inline-flex; align-items: center; line-height: 1; }
+        .sscd-meta-num { font-weight: 600; }
+        .sscd-cta {
+          display: flex; align-items: center; justify-content: center;
+          gap: 4px; margin: 5px 10px 8px;
+          padding: 4px 0;
+          font-size: 10.5px; font-weight: 700; color: ${T.green};
+          border: 1.5px solid ${T.green};
+          border-radius: 999px;
+          background: transparent;
+          transition: background 0.2s, color 0.2s;
+        }
+        .soko-shop-card-dir:hover .sscd-cta { background: ${T.green}; color: #fff; }
+        .soko-shop-card-open {
+          margin-top: 16px;
+          border: 2px dashed ${T.gray300};
+          background: ${T.gray50};
+          box-shadow: none !important;
+          border-radius: 18px;
+          min-height: 90px;
+          justify-content: center;
+          align-items: center;
+          width: 100%;
+          cursor: pointer;
+          font-family: inherit;
+          transition: border-color 0.2s, background 0.2s;
+        }
+        .soko-shop-card-open:hover {
+          border-color: ${T.green};
+          background: ${T.greenL};
+        }
+        .sscd-open-inner { text-align: center; padding: 18px 20px; }
+        .sscd-open-icon {
+          width: 48px; height: 48px; border-radius: 50%;
+          background: ${T.amberL};
+          display: flex; align-items: center; justify-content: center;
+          margin: 0 auto 10px; color: ${T.amberD};
+        }
+        .sscd-open-title { font-size: 14px; font-weight: 800; color: ${T.gray800}; margin-bottom: 4px; }
+        .sscd-open-sub { font-size: 12px; color: ${T.gray600}; line-height: 1.4; }
+
+        .soko-shops-jobs-bridge {
+          display: flex; align-items: center; gap: 14px;
+          margin: 6px 0 14px; padding: 0 0;
+        }
+        .soko-sjb-line {
+          flex: 1; height: 1px;
+          background: linear-gradient(90deg, transparent, ${T.gray200} 30%, ${T.gray200} 70%, transparent);
+        }
+        .soko-sjb-badge {
+          display: inline-flex; align-items: center; gap: 5px;
+          padding: 6px 16px;
+          border-radius: 999px;
+          background: ${T.blueL};
+          color: ${T.blue};
+          font-size: 12px; font-weight: 700;
+          white-space: nowrap;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+          flex-shrink: 0;
+        }
+        .soko-sjb-icon { display: inline-flex; }
+
+        /* ── Job Cards ── */
+        .soko-work-card {
+          flex-shrink: 0;
+          width: 230px;
+          max-width: min(230px, 72vw);
+          border: 1px solid #e5e7eb;
+          border-radius: 14px;
+          overflow: hidden;
+          background: #fff;
+          cursor: pointer;
+          padding: 0;
+          text-align: left;
+          font-family: inherit;
+          display: flex;
+          flex-direction: column;
+          box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+          scroll-snap-align: start;
+          transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+        }
+        .soko-work-card:hover {
+          transform: translateY(-3px);
+          box-shadow: 0 6px 20px rgba(0,0,0,0.06), 0 12px 40px rgba(0,0,0,0.04);
+          border-color: ${T.blue};
+        }
+        .soko-work-card:active { transform: scale(0.98); }
+        .soko-wc-top {
+          position: relative; width: 100%; height: 92px; flex-shrink: 0;
+          overflow: hidden;
+        }
+        .soko-wc-img {
+          width: 100%; height: 100%;
+          object-fit: cover; display: block;
+          transition: transform 0.3s ease;
+        }
+        .soko-work-card:hover .soko-wc-img { transform: scale(1.05); }
+        .soko-wc-fallback {
+          width: 100%; height: 100%;
+          display: flex; align-items: center; justify-content: center;
+          opacity: 0.7;
+        }
+        .soko-wc-type {
+          position: absolute; bottom: 8px; left: 8px;
+          font-size: 9.5px; font-weight: 800;
+          padding: 3px 8px; border-radius: 999px;
+          background: rgba(255,255,255,0.92);
+          color: ${T.blue};
+          backdrop-filter: blur(4px);
+          box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+        }
+        .soko-wc-body {
+          padding: 10px 12px 12px;
+          display: flex; flex-direction: column; gap: 3px;
+          min-width: 0; flex: 1;
+        }
+        .soko-wc-title {
+          font-size: 13.5px; font-weight: 800; color: ${T.gray900}; line-height: 1.25;
+          overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+        }
+        .soko-wc-company {
+          font-size: 11.5px; font-weight: 600; color: ${T.gray600};
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .soko-wc-foot {
+          margin-top: auto; padding-top: 6px;
+          display: flex; align-items: center; justify-content: space-between; gap: 6px;
+        }
+        .soko-wc-salary {
+          font-size: 11px; font-weight: 700; color: ${T.green};
+          background: ${T.greenL}; padding: 2px 8px; border-radius: 999px;
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .soko-wc-loc {
+          font-size: 10.5px; font-weight: 600; color: ${T.gray500};
+          display: inline-flex; align-items: center; gap: 3px;
+          white-space: nowrap;
+        }
+        .soko-wc-apply-row {
+          margin-top: 6px; position: relative;
+        }
+        .soko-wc-apply-btn {
+          display: inline-flex; align-items: center; gap: 4px;
+          width: 100%; padding: 5px 0; border: none; border-radius: 8px;
+          background: ${T.blueL}; color: ${T.blue};
+          font-family: inherit; font-size: 11px; font-weight: 700;
+          cursor: pointer; transition: background 0.15s, transform 0.15s;
+          justify-content: center;
+        }
+        .soko-wc-apply-btn:hover { background: #d2e3fc; transform: scale(1.02); }
+        .soko-wc-apply-btn:active { transform: scale(0.97); }
+        .soko-wc-apply-ico { display: inline-flex; }
+        .soko-wc-apply-pop {
+          position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+          background: #1e293b; color: #fff; border-radius: 10px; padding: 10px 14px;
+          min-width: 180px; z-index: 20; text-align: center;
+          box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+        }
+        .soko-wc-apply-pop-arrow {
+          position: absolute; bottom: -5px; left: 50%; transform: translateX(-50%) rotate(45deg);
+          width: 10px; height: 10px; background: #1e293b;
+        }
+        .soko-wc-apply-pop-label {
+          font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+          color: #94a3b8; margin-bottom: 3px;
+        }
+        .soko-wc-apply-pop-value {
+          font-size: 13px; font-weight: 600; word-break: break-all; line-height: 1.4;
+        }
+        .soko-wc-apply-pop-copy {
+          margin-top: 8px; display: inline-flex; align-items: center; gap: 4px;
+          padding: 4px 12px; border: none; border-radius: 6px;
+          background: rgba(255,255,255,0.12); color: #fff;
+          font-family: inherit; font-size: 11px; font-weight: 700;
+          cursor: pointer; transition: background 0.15s;
+        }
+.soko-wc-apply-pop-copy:hover { background: rgba(255,255,255,0.2); }
+
+        /* ── Service Cards (premium) ── */
+        .soko-service-card {
+          flex-shrink: 0;
+          width: 220px;
+          max-width: min(220px, 70vw);
+          border: 1px solid #e5e7eb;
+          border-radius: 16px;
+          overflow: hidden;
+          background: #fff;
+          cursor: pointer;
+          padding: 0;
+          text-align: left;
+          font-family: inherit;
+          box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+          scroll-snap-align: start;
+          transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+          display: flex;
+          flex-direction: column;
+        }
+        .soko-service-card:hover {
+          transform: translateY(-4px);
+          box-shadow: 0 10px 28px rgba(0,0,0,0.07), 0 4px 12px rgba(0,0,0,0.03);
+          border-color: ${T.violet};
+        }
+        .soko-service-card:active { transform: scale(0.97); }
+        .soko-sc-top {
+          position: relative; width: 100%; height: 100px; flex-shrink: 0;
+          overflow: hidden; background: ${T.violetL};
+        }
+        .soko-sc-img {
+          width: 100%; height: 100%;
+          object-fit: cover; display: block;
+          transition: transform 0.35s ease;
+        }
+        .soko-service-card:hover .soko-sc-img { transform: scale(1.08); }
+        .soko-sc-fallback {
+          width: 100%; height: 100%;
+          display: flex; align-items: center; justify-content: center;
+          color: ${T.violet}; opacity: 0.6;
+        }
+        .soko-sc-overlay {
+          position: absolute; inset: 0;
+          background: linear-gradient(180deg, transparent 55%, rgba(0,0,0,0.35) 100%);
+          pointer-events: none;
+        }
+        .soko-sc-cat {
+          position: absolute; bottom: 8px; left: 8px;
+          font-size: 9.5px; font-weight: 800;
+          padding: 3px 9px; border-radius: 999px;
+          background: rgba(255,255,255,0.92);
+          color: ${T.violet};
+          backdrop-filter: blur(4px);
+          box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+          max-width: calc(100% - 16px);
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .soko-sc-body {
+          padding: 10px 12px 12px;
+          display: flex; flex-direction: column; gap: 4px;
+          min-width: 0; flex: 1;
+        }
+        .soko-sc-name {
+          font-size: 13.5px; font-weight: 800; color: ${T.gray900}; line-height: 1.25;
+          overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+        }
+        .soko-sc-meta-row {
+          display: flex; align-items: center; justify-content: space-between;
+          gap: 6px; margin-top: auto;
+        }
+        .soko-sc-loc {
+          display: inline-flex; align-items: center; gap: 3px;
+          font-size: 10.5px; font-weight: 600; color: ${T.gray500};
+        }
+        .soko-sc-rate {
+          font-size: 10.5px; font-weight: 800;
+          padding: 2px 8px; border-radius: 999px;
+          background: ${T.violetL};
+          color: ${T.violet};
+          white-space: nowrap;
+        }
+        .soko-sc-cta-row {
+          margin-top: 2px;
+        }
+        .soko-sc-cta-btn {
+          display: flex; align-items: center; justify-content: center; gap: 4px;
+          width: 100%; padding: 7px 0;
+          font-size: 11.5px; font-weight: 800;
+          border-radius: 999px;
+          background: ${T.violet};
+          color: #fff;
+          transition: opacity 0.2s;
+          letter-spacing: 0.1px;
+        }
+        .soko-sc-cta-btn:hover { opacity: 0.9; }
+
+        .soko-shops-view-all-btn {
+          display: flex; align-items: center; justify-content: center; gap: 6px;
+          margin-top: 16px; width: 100%; padding: 12px 0;
+          background: ${T.gray50}; border: 1.5px solid ${T.gray200};
+          border-radius: 999px; font-family: inherit;
+          font-size: 13px; font-weight: 700; color: ${T.gray700};
+          cursor: pointer; transition: background 0.2s, border-color 0.2s, color 0.2s;
+        }
+        .soko-shops-view-all-btn:hover {
+          background: ${T.greenL}; border-color: ${T.green}; color: ${T.green};
+        }
+
+        @media (max-width: 1024px) {
+          .soko-shops-grid { grid-template-columns: repeat(3, 1fr); }
+          .soko-shop-card-dir { min-height: auto; }
+          .sscd-cover { height: 80px; }
+        }
         @media (max-width: 768px) {
-          .soko-shops-jobs-section { padding: 16px 14px 12px !important; }
+          .soko-shops-grid { grid-template-columns: repeat(2, 1fr); }
+          .soko-shop-card-dir { min-height: auto; }
+        }
+        @media (max-width: 640px) {
+          .soko-shops-grid { grid-template-columns: repeat(2, 1fr); }
+          .sscd-cover { height: 75px; }
+          .sscd-logo { width: 38px; height: 38px; }
+          .sscd-logo-wrap { margin-top: -15px; }
+          .soko-shop-card-dir { min-height: auto; }
+        }
+        @media (max-width: 768px) {
+          .soko-shops-jobs-section { padding: 10px 14px 12px !important; }
           .soko-sjs-title { font-size: 16px !important; }
           .soko-sjs-rail {
             margin: 0 -14px;
@@ -3080,172 +4206,236 @@ function ShopsJobsServicesRow({ navigate, shops, jobs, services, loading }) {
         }
       `}</style>
 
-      <div style={{ maxWidth: 1400, margin: '0 auto' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
 
-        {/* ── Shops (cover + logo) ── */}
+        {/* ── Shops (directory-style cards) ── */}
         <div className="soko-sjs-block">
-          <div className="soko-sjs-head">
-            <h2 className="soko-sjs-title">Featured Shops</h2>
-            <button type="button" className="soko-sjs-link" onClick={() => navigate('/shops')}>
-              View all {Icon.chevR(14)}
-            </button>
-          </div>
-
+          <div className="soko-shops-head">
+            <div className="soko-shops-head-intro">
+              <p>Discover verified businesses and local shops ready to serve you.</p>
+              <div className="soko-shops-head-badges">
+                <span className="soko-shops-head-badge">✓ Verified Businesses</span>
+                <span className="soko-shops-head-badge">✓ Local Shops</span>
+                <span className="soko-shops-head-badge">✓ Fast Response</span>
+                <span className="soko-shops-head-badge">✓ Trusted Sellers</span>
+              </div>
+            </div>
+            <div className="soko-shops-head-title-row">
+              <h2 className="soko-shops-head-title">Trusted Shops</h2>
+              <button type="button" className="soko-shops-head-link" onClick={() => navigate('/shops')}>
+                View All Shops {Icon.chevR(14)}
+              </button>
+</div>
+</div>
           {loading ? (
-            <div className="soko-sjs-rail">
-              {[1, 2, 3, 4].map(i => (
-                <div key={i} style={{ flexShrink: 0, width: 200, borderRadius: 16, overflow: 'hidden', border: `1px solid ${T.gray100}` }}>
-                  <div className="skeleton" style={{ width: '100%', height: 96 }} />
-                  <div style={{ padding: '28px 12px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                    <div className="skeleton" style={{ height: 13, width: '70%', borderRadius: 4, margin: '0 auto' }} />
-                    <div className="skeleton" style={{ height: 11, width: '50%', borderRadius: 4, margin: '0 auto' }} />
+            <div className="soko-shops-grid">
+              {[1,2,3,4,5,6].map(i => (
+                <div key={i} className="soko-shop-card-dir-skel">
+                  <div className="skeleton" style={{ width:'100%', height:160, borderRadius:'20px 20px 0 0' }} />
+                  <div style={{ padding:'40px 14px 16px', display:'flex', flexDirection:'column', gap:8, alignItems:'center' }}>
+                    <div className="skeleton" style={{ height:14, width:'60%', borderRadius:4 }} />
+                    <div className="skeleton" style={{ height:11, width:'40%', borderRadius:4 }} />
+                    <div className="skeleton" style={{ height:11, width:'75%', borderRadius:4 }} />
                   </div>
                 </div>
               ))}
             </div>
           ) : shops.length > 0 ? (
-            <div ref={shopsRail} className="soko-sjs-rail">
-              {shops.map(s => (
-                <button
-                  key={s.id}
-                  type="button"
-                  className="soko-shop-card-home"
-                  onClick={() => navigate('/shop/' + s.slug)}
-                >
-                  {/* Cover photo */}
-                  <div style={{ position: 'relative', width: '100%', height: 96, flexShrink: 0, overflow: 'hidden', background: T.gray100 }}>
-                    {s.cover_url ? (
-                      <img
-                        src={s.cover_url}
-                        alt=""
-                        loading="lazy"
-                        style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-                        onError={e => { e.currentTarget.style.display = 'none' }}
-                      />
-                    ) : s.logo_url ? (
-                      <>
-                        <img
-                          src={s.logo_url}
-                          alt=""
-                          style={{
-                            width: '100%', height: '100%', objectFit: 'cover',
-                            filter: 'blur(8px) saturate(1.3) brightness(0.8)', transform: 'scale(1.15)',
-                          }}
-                        />
-                        <div style={{ position: 'absolute', inset: 0, background: 'rgba(6,30,18,0.25)' }} />
-                      </>
-                    ) : (
-                      <div style={{
-                        width: '100%', height: '100%',
-                        background: `linear-gradient(135deg, #1e293b 0%, #475569 55%, ${T.amber}55 100%)`,
-                      }} />
-                    )}
-                    <div style={{
-                      position: 'absolute', bottom: 0, left: 0, right: 0, height: 40,
-                      background: 'linear-gradient(to top, rgba(0,0,0,0.35), transparent)',
-                    }} />
-                    {s.is_verified && (
-                      <span style={{
-                        position: 'absolute', top: 8, left: 8,
-                        display: 'inline-flex', alignItems: 'center', gap: 3,
-                        background: 'rgba(255,255,255,0.95)', color: '#15803d',
-                        borderRadius: 999, padding: '3px 8px', fontSize: 10, fontWeight: 800,
-                        boxShadow: '0 1px 4px rgba(0,0,0,0.12)',
-                      }}>
-                        {Icon.verify(10)} Verified
-                      </span>
-                    )}
-                  </div>
+            <>
+              <div className="soko-shops-grid">
+                {shops.slice(0, shopCount).map(s => {
+                  const rating = Number(s.rating) || 0
+                  return (
+                    <button key={s.id} type="button" className="soko-shop-card-dir" onClick={() => navigate('/shop/' + s.slug)}>
+                      <div className="sscd-cover">
+                        {s.cover_url ? (
+                          <img src={s.cover_url} alt="" loading="lazy" className="sscd-cover-img"
+                            onError={e => { e.currentTarget.style.display = 'none' }} />
+                        ) : s.logo_url ? (
+                          <>
+                            <img src={s.logo_url} alt="" className="sscd-cover-blur" />
+                            <div className="sscd-cover-overlay" />
+                          </>
+                        ) : (
+                          <div className="sscd-cover-plug" />
+                        )}
+                        {s.is_verified && (
+                          <span className="sscd-badge sscd-badge-verified">
+                            {Icon.verify(11)} Verified
+                          </span>
+                        )}
+                        <div className="sscd-cover-fade" />
+                      </div>
 
-                  {/* Logo over cover */}
-                  <div style={{ display: 'flex', justifyContent: 'center', marginTop: -22, position: 'relative', zIndex: 2 }}>
-                    <div style={{
-                      width: 44, height: 44, borderRadius: '50%',
-                      border: '2.5px solid #fff',
-                      background: s.logo_url ? '#fff' : `linear-gradient(135deg, #334155, #1e293b)`,
-                      overflow: 'hidden',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: '#fff', fontWeight: 800, fontSize: 16,
-                      boxShadow: '0 2px 10px rgba(0,0,0,0.14)',
-                    }}>
-                      {s.logo_url
-                        ? <img src={s.logo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        : (s.name?.[0] || 'S').toUpperCase()}
-                    </div>
-                  </div>
+                      <div className="sscd-logo-wrap">
+                        <div className="sscd-logo">
+                          {s.logo_url
+                            ? <img src={s.logo_url} alt="" className="sscd-logo-img" />
+                            : <span className="sscd-logo-letter">{(s.name?.[0] || 'S').toUpperCase()}</span>}
+                        </div>
+                      </div>
 
-                  <div style={{ padding: '6px 12px 12px', display: 'flex', flexDirection: 'column', gap: 3, alignItems: 'center', textAlign: 'center', flex: 1 }}>
-                    <div style={{
-                      fontSize: 13.5, fontWeight: 800, color: T.gray900, lineHeight: 1.25,
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%',
-                    }}>
-                      {s.name}
-                    </div>
-                    <div style={{ fontSize: 11, color: T.gray600, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '100%' }}>
-                      {s.category || 'Shop'}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11.5, color: T.gray700, marginTop: 2 }}>
-                      {Icon.star(11)}
-                      <span style={{ fontWeight: 700 }}>{s.rating ? Number(s.rating).toFixed(1) : 'New'}</span>
-                      {s.review_count > 0 && <span style={{ color: T.gray500 }}>({s.review_count})</span>}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 3, fontSize: 11, color: T.gray500, marginTop: 1 }}>
-                      {Icon.pin(10)} {s.city || 'Malawi'}
-                      <span style={{ color: T.gray300 }}>·</span>
-                      {s.listing_count || 0} products
-                    </div>
-                  </div>
-                </button>
-              ))}
+                      <div className="sscd-body">
+                        <div className="sscd-name">{s.name}</div>
+                        <div className="sscd-category">{s.category || 'Shop'}</div>
 
-              <button
-                type="button"
-                className="soko-shop-card-home"
-                onClick={() => navigate('/shop-setup')}
-                style={{
-                  border: `2px dashed ${T.gray200}`,
-                  background: T.gray50,
-                  boxShadow: 'none',
-                  minHeight: 220,
-                  justifyContent: 'center',
-                  alignItems: 'center',
-                }}
-              >
-                <div style={{ textAlign: 'center', padding: 16 }}>
-                  <div style={{
-                    width: 42, height: 42, borderRadius: '50%', background: T.amberL,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    margin: '0 auto 10px', color: T.amberD,
-                  }}>
-                    {Icon.plus(18)}
-                  </div>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: T.gray800, marginBottom: 4 }}>Open a shop</div>
-                  <div style={{ fontSize: 11, color: T.gray600, lineHeight: 1.4 }}>Reach buyers nationwide</div>
+                        <div className="sscd-meta">
+                          <span className="sscd-meta-group">
+                            <span className="sscd-meta-stars">
+                              {([1,2,3,4,5]).map(i => <span key={i} style={{display:'inline-flex'}}>{Icon.star(8, i <= rating ? T.amber : (i - 0.5 <= rating ? T.amber : T.gray300))}</span>)}
+                            </span>
+                            <span className="sscd-meta-score">{rating ? rating.toFixed(1) : 'New'}</span>
+                          </span>
+                          <span className="sscd-meta-group">
+                            <span className="sscd-meta-ico" style={{ color: T.gray400 }}>{Icon.layers(10)}</span>
+                            <span className="sscd-meta-num">{s.listing_count || 0}</span>
+                          </span>
+                          <span className="sscd-meta-group">
+                            <span className="sscd-meta-ico" style={{ color: T.gray400 }}>{Icon.user(10)}</span>
+                            <span className="sscd-meta-num">{(s.follower_count||0) >= 1000 ? ((s.follower_count||0)/1000).toFixed(1).replace(/\.0$/,'')+'K' : s.follower_count||0}</span>
+                          </span>
+                          <span className="sscd-meta-group">
+                            <span className="sscd-meta-ico" style={{ color: T.gray400 }}>{Icon.pin(9)}</span>
+                            <span style={{ color: T.gray500 }}>{s.city || 'Malawi'}</span>
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="sscd-cta">
+                        Visit Shop {Icon.chevR(14)}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+
+              <button type="button" className="soko-shops-view-all-btn" onClick={() => navigate('/shops')}>
+                View All Shops {Icon.chevR(16)}
+              </button>
+            </>
+          ) : (
+            <div className="soko-shops-grid">
+              <button type="button" className="soko-shop-card-open" onClick={() => navigate('/shop-setup')}
+                style={{ gridColumn: '1 / -1', justifySelf: 'center', maxWidth: 280 }}>
+                <div className="sscd-open-inner" style={{ padding: '40px 24px' }}>
+                  <div className="sscd-open-icon">{Icon.plus(28)}</div>
+                  <div className="sscd-open-title">Open a shop</div>
+                  <div className="sscd-open-sub">Reach buyers nationwide</div>
                 </div>
               </button>
             </div>
-          ) : (
-            <EmptyMini text="No shops yet — open the first one." cta="Create My Shop" onClick={() => navigate('/shop-setup')} />
           )}
+        </div>
+
+        {/* ── Shops → Jobs Bridge ── */}
+        <div className="soko-shops-jobs-bridge">
+          <div className="soko-sjb-line" />
+          <div className="soko-sjb-badge">
+            <span className="soko-sjb-icon">{Icon.briefcase(14)}</span>
+            <span className="soko-sjb-label">Jobs</span>
+          </div>
+          <div className="soko-sjb-line" />
         </div>
 
         {/* ── Jobs ── */}
         <div className="soko-sjs-block">
           <div className="soko-sjs-head">
-            <h2 className="soko-sjs-title">Jobs</h2>
+            <div>
+              <h2 className="soko-sjs-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 8, background: T.blueL, color: T.blue }}>{Icon.briefcase(14)}</span>
+                Jobs
+                {jobs.length > 0 && (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: T.blue, borderRadius: 999, padding: '1px 8px', lineHeight: '18px' }}>
+                    {jobs.length}
+                  </span>
+                )}
+              </h2>
+              <p style={{ margin: '2px 0 0', fontSize: 12, color: T.gray500, fontWeight: 500, paddingLeft: 34 }}>Find your next opportunity</p>
+            </div>
             <button type="button" className="soko-sjs-link" onClick={() => navigate('/jobs')}>
               View all {Icon.chevR(14)}
             </button>
           </div>
+          {/* Job filters */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+            <div ref={jobCatRef} style={{ position: 'relative' }}>
+              <button type="button" onClick={() => { setJobCatOpen(v => !v); setJobTypeOpen(false); setJobSortOpen(false) }} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 999, padding: '7px 13px',
+                fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                background: jobCat !== 'All' ? '#e8f0fe' : '#fff', border: '1.5px solid #e2e8f0',
+                color: jobCat !== 'All' ? '#1A73E8' : '#475569', transition: 'all 0.15s', minHeight: 34,
+              }}>
+                {Icon.grid(12)} {jobCat === 'All' ? 'Category' : jobCat} <span style={{ transform: 'rotate(90deg)', display: 'inline-flex', marginLeft: 2 }}>{Icon.chevR(11)}</span>
+              </button>
+              {jobCatOpen && (
+                <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', zIndex: 20, minWidth: 180, overflow: 'hidden', padding: '4px', maxHeight: 260, overflowY: 'auto' }}>
+                  {JOB_CATEGORIES.map(c => (
+                    <button key={c} type="button" onClick={() => { setJobCat(c); setJobCatOpen(false) }} style={{
+                      display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '8px 12px',
+                      fontSize: 12, fontWeight: jobCat === c ? 700 : 500, color: jobCat === c ? '#1A73E8' : '#334155',
+                      cursor: 'pointer', fontFamily: 'inherit', borderRadius: 8,
+                    }}>
+                      {c === 'All' ? '📋 All Categories' : c}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div ref={jobTypeRef} style={{ position: 'relative' }}>
+              <button type="button" onClick={() => { setJobTypeOpen(v => !v); setJobCatOpen(false); setJobSortOpen(false) }} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 999, padding: '7px 13px',
+                fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                background: jobType !== 'All' ? '#e8f0fe' : '#fff', border: '1.5px solid #e2e8f0',
+                color: jobType !== 'All' ? '#1A73E8' : '#475569', transition: 'all 0.15s', minHeight: 34,
+              }}>
+                {Icon.briefcase(12)} {jobType === 'All' ? 'Job Type' : jobType} <span style={{ transform: 'rotate(90deg)', display: 'inline-flex', marginLeft: 2 }}>{Icon.chevR(11)}</span>
+              </button>
+              {jobTypeOpen && (
+                <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', zIndex: 20, minWidth: 160, overflow: 'hidden', padding: '4px' }}>
+                  {JOB_TYPES.map(t => (
+                    <button key={t} type="button" onClick={() => { setJobType(t); setJobTypeOpen(false) }} style={{
+                      display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '8px 12px',
+                      fontSize: 12, fontWeight: jobType === t ? 700 : 500, color: jobType === t ? '#1A73E8' : '#334155',
+                      cursor: 'pointer', fontFamily: 'inherit', borderRadius: 8,
+                    }}>
+                      {t === 'All' ? '📋 All Types' : t}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div ref={jobSortRef} style={{ position: 'relative' }}>
+              <button type="button" onClick={() => { setJobSortOpen(v => !v); setJobCatOpen(false); setJobTypeOpen(false) }} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 999, padding: '7px 13px',
+                fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
+                background: '#fff', border: '1.5px solid #e2e8f0', color: '#475569', transition: 'all 0.15s', minHeight: 34,
+              }}>
+                {Icon.clock(12)} {JOB_SORTS.find(s => s.k === jobSort)?.l || 'Newest'} <span style={{ transform: 'rotate(90deg)', display: 'inline-flex', marginLeft: 2 }}>{Icon.chevR(11)}</span>
+              </button>
+              {jobSortOpen && (
+                <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', zIndex: 20, minWidth: 140, overflow: 'hidden', padding: '4px' }}>
+                  {JOB_SORTS.map(s => (
+                    <button key={s.k} type="button" onClick={() => { setJobSort(s.k); setJobSortOpen(false) }} style={{
+                      display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '8px 12px',
+                      fontSize: 12, fontWeight: jobSort === s.k ? 700 : 500, color: jobSort === s.k ? '#1A73E8' : '#334155',
+                      cursor: 'pointer', fontFamily: 'inherit', borderRadius: 8,
+                    }}>
+                      {s.l}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
           {loading ? (
             <div className="soko-sjs-rail">
               {[1, 2, 3].map(i => (
-                <div key={i} className="skeleton" style={{ flexShrink: 0, width: 220, height: 160, borderRadius: 14 }} />
+                <div key={i} className="skeleton" style={{ flexShrink: 0, width: 230, height: 190, borderRadius: 14 }} />
               ))}
             </div>
-          ) : jobs.length > 0 ? (
+          ) : filteredJobs.length > 0 ? (
             <div ref={jobsRail} className="soko-sjs-rail">
-              {jobs.map(j => (
+              {filteredJobs.map(j => (
                 <HomeWorkCard
                   key={j.id}
                   title={j.title}
@@ -3255,7 +4445,8 @@ function ShopsJobsServicesRow({ navigate, shops, jobs, services, loading }) {
                   fallbackIcon={Icon.briefcase(28)}
                   accentBg={T.blueL}
                   accentFg={T.blue}
-                  onClick={() => navigate(`/jobs?job=${j.id}`)}
+                  onClick={() => onJobClick(j)}
+                  contact={j.contact}
                 />
               ))}
             </div>
@@ -3264,13 +4455,43 @@ function ShopsJobsServicesRow({ navigate, shops, jobs, services, loading }) {
           )}
         </div>
 
+        {/* ── Jobs → Services Bridge ── */}
+        <div className="soko-shops-jobs-bridge">
+          <div className="soko-sjb-line" />
+          <div className="soko-sjb-badge" style={{ background: T.violetL, color: T.violet }}>
+            <span className="soko-sjb-icon">{Icon.wrench(14)}</span>
+            <span className="soko-sjb-label">Services</span>
+          </div>
+          <div className="soko-sjb-line" />
+        </div>
+
         {/* ── Services ── */}
         <div className="soko-sjs-block">
-          <div className="soko-sjs-head">
-            <h2 className="soko-sjs-title">Services</h2>
-            <button type="button" className="soko-sjs-link" onClick={() => navigate('/services')}>
-              View all {Icon.chevR(14)}
-            </button>
+          <div className="soko-shops-head">
+            <div className="soko-shops-head-intro" style={{ background: 'linear-gradient(135deg, #f5f3ff, #ede9fe)' }}>
+              <p>Find skilled professionals and trusted service providers in your area.</p>
+              <div className="soko-shops-head-badges">
+                <span className="soko-shops-head-badge" style={{ color: '#6d28d9', background: 'rgba(109,40,217,0.08)' }}>✓ Verified Pros</span>
+                <span className="soko-shops-head-badge" style={{ color: '#6d28d9', background: 'rgba(109,40,217,0.08)' }}>✓ Local Experts</span>
+                <span className="soko-shops-head-badge" style={{ color: '#6d28d9', background: 'rgba(109,40,217,0.08)' }}>✓ Fast Booking</span>
+                <span className="soko-shops-head-badge" style={{ color: '#6d28d9', background: 'rgba(109,40,217,0.08)' }}>✓ Quality Work</span>
+              </div>
+            </div>
+            <div className="soko-shops-head-title-row" style={{ marginBottom: 10 }}>
+              <h2 className="soko-shops-head-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 8, background: T.violetL, color: T.violet }}>{Icon.wrench(14)}</span>
+                Services
+                {services.length > 0 && (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: T.violet, borderRadius: 999, padding: '1px 8px', lineHeight: '18px' }}>
+                    {services.length}
+                  </span>
+                )}
+              </h2>
+              <button type="button" className="soko-shops-head-link" style={{ color: T.violet }} onClick={() => navigate('/services')}>
+                Browse Services {Icon.chevR(14)}
+              </button>
+            </div>
+            <p style={{ margin: '-6px 0 8px', fontSize: 12, color: T.gray500, fontWeight: 500, paddingLeft: 0 }}>Professional services at your fingertips</p>
           </div>
           {loading ? (
             <div className="soko-sjs-rail">
@@ -3281,16 +4502,18 @@ function ShopsJobsServicesRow({ navigate, shops, jobs, services, loading }) {
           ) : services.length > 0 ? (
             <div ref={servicesRail} className="soko-sjs-rail">
               {services.map(s => (
-                <HomeWorkCard
+                <HomeServiceCard
                   key={s.id}
-                  title={s.name}
-                  sub={[s.category || 'Service', s.rate].filter(Boolean).join(' · ')}
+                  name={s.name}
+                  category={s.category || 'Service'}
+                  rate={s.rate}
                   meta={s.city || 'Malawi'}
                   image={(Array.isArray(s.media_urls) ? s.media_urls[0] : null) || null}
-                  fallbackIcon={Icon.wrench(28)}
-                  accentBg={T.violetL}
-                  accentFg={T.violet}
-                  onClick={() => navigate(`/services?service=${s.id}`)}
+                  providerId={s.provider_id}
+                  serviceId={s.id}
+                  navigate={navigate}
+                  currentUser={currentUser}
+                  onClick={() => onServiceClick(s)}
                 />
               ))}
             </div>
@@ -4308,6 +5531,7 @@ export default function Home() {
   const [notifCount, setNotifCount] = useState(0)
   const [unreadChats, setUnreadChats] = useState(0)
   const [search, setSearch] = useState('')
+  const [showUpload, setShowUpload] = useState(false)
   const [notifyOpen, setNotifyOpen] = useState(false)
   const [notifyQuery, setNotifyQuery] = useState('')
   const [imageSearchBusy, setImageSearchBusy] = useState(false)
@@ -4407,6 +5631,9 @@ export default function Home() {
   const [services, setServices] = useState([])
   const [requests, setRequests] = useState([])
   const [sectionsLoading, setSectionsLoading] = useState(true)
+  const [selectedService, setSelectedService] = useState(null)
+  const [selectedJob, setSelectedJob] = useState(null)
+  const [savedJobIds, setSavedJobIds] = useState([])
 
   // Boot GPS early (same reverse-geocode as Looking For page)
   useEffect(() => {
@@ -4481,6 +5708,7 @@ export default function Home() {
 
   function handleCreateStory() {
     if (!user) { navigate('/login'); return }
+    setShowUpload(true)
   }
 
   /** Map completed stages → progress % (auth 28, listings 68, sections 100) */
@@ -4674,12 +5902,17 @@ export default function Home() {
       (async () => {
         try {
           let shopsQuery = supabase.from('shops')
-            .select('id, name, slug, category, logo_url, cover_url, city, rating, review_count, listing_count, is_verified, follower_count')
+            .select('id, name, slug, category, logo_url, cover_url, city, rating, review_count, listing_count, is_verified, follower_count, created_at')
             .eq('is_active', true)
+            .gt('listing_count', 0)
           if (activeDistrict !== 'All Districts') shopsQuery = shopsQuery.eq('city', activeDistrict)
           const { data, error } = await shopsQuery
+            .order('is_verified', { ascending: false, nullsFirst: false })
+            .order('rating', { ascending: false, nullsFirst: false })
+            .order('listing_count', { ascending: false, nullsFirst: false })
             .order('follower_count', { ascending: false, nullsFirst: false })
-            .limit(8)
+            .order('created_at', { ascending: false, nullsFirst: false })
+            .limit(12)
           if (error) console.error('shops query error:', error)
           setShops(data || [])
         } catch (e) { console.error('shops catch:', e); setShops([]) }
@@ -4688,7 +5921,7 @@ export default function Home() {
         try {
           // Jobs use status 'active' (PostJobForm / Jobs index) — not 'published'
           const today = new Date().toISOString().split('T')[0]
-          const jobSelect = 'id, title, company, city, type, created_at, deadline, cover_image_url, logo_url, salary'
+          const jobSelect = 'id, title, company, city, type, category, created_at, deadline, cover_image_url, logo_url, salary, contact, overview, job_purpose, description, responsibilities, requirements, contact_name, contact_address, disclaimer, poster_id, address'
           let jobsQuery = supabase.from('jobs')
             .select(jobSelect)
             .eq('status', 'active')
@@ -4697,7 +5930,7 @@ export default function Home() {
           let { data, error } = await jobsQuery
             .order('created_at', { ascending: false })
             .limit(8)
-          if (error && /cover_image_url|logo_url|salary|column/i.test(error.message || '')) {
+          if (error && /cover_image_url|logo_url|salary|overview|job_purpose|description|responsibilities|requirements|contact_name|contact_address|disclaimer|poster_id|address|column/i.test(error.message || '')) {
             ;({ data, error } = await supabase.from('jobs')
               .select('id, title, company, city, type, created_at, deadline')
               .eq('status', 'active')
@@ -4714,7 +5947,7 @@ export default function Home() {
               .order('created_at', { ascending: false })
               .limit(8)
             if (!alt.error && alt.data?.length) data = alt.data
-            else if (alt.error && /cover_image_url|logo_url|salary|column/i.test(alt.error.message || '')) {
+            else if (alt.error && /cover_image_url|logo_url|salary|overview|job_purpose|description|responsibilities|requirements|contact_name|contact_address|disclaimer|poster_id|address|column/i.test(alt.error.message || '')) {
               const bare = await supabase.from('jobs')
                 .select('id, title, company, city, type, created_at, deadline')
                 .in('status', ['active', 'published'])
@@ -4732,15 +5965,15 @@ export default function Home() {
         try {
           // Services use status 'active' (ServiceForm / ServicesPage) — not 'published'
           let servicesQuery = supabase.from('services')
-            .select('id, name, category, city, created_at, media_urls, rate, rating, verified')
+            .select('id, name, category, city, created_at, media_urls, rate, rating, verified, provider_id, description, skills, contact, coverage, experience, jobs_done, available, views')
             .eq('status', 'active')
           if (activeDistrict !== 'All Districts') servicesQuery = servicesQuery.eq('city', activeDistrict)
           let { data, error } = await servicesQuery
             .order('created_at', { ascending: false })
             .limit(8)
-          if (error && /media_urls|rate|rating|verified|column/i.test(error.message || '')) {
+          if (error && /media_urls|rate|rating|verified|provider_id|description|skills|contact|coverage|experience|jobs_done|available|views|column/i.test(error.message || '')) {
             ;({ data, error } = await supabase.from('services')
-              .select('id, name, category, city, created_at, media_urls, rate')
+              .select('id, name, category, city, created_at, media_urls, rate, provider_id, description')
               .eq('status', 'active')
               .order('created_at', { ascending: false })
               .limit(8))
@@ -4766,19 +5999,63 @@ export default function Home() {
       })(),
       (async () => {
         try {
-          let { data, error } = await supabase.from('buyer_requests')
-            .select('id, title, description, category, city, cities, created_at, budget, offer_count, view_count, urgency, image_url, image_urls, expires_at, lat, lng, user_id')
-            .not('status', 'eq', 'fulfilled')
+          const CACHE_KEY = 'soko_lf_requests_v2'
+          const CACHE_TTL = 5 * 60 * 1000
+          const cached = (() => {
+            try {
+              const raw = sessionStorage.getItem(CACHE_KEY)
+              if (!raw) return null
+              const parsed = JSON.parse(raw)
+              if (Date.now() - parsed.ts < CACHE_TTL) return parsed.data
+            } catch {}
+            return null
+          })()
+          if (cached) { setRequests(cached); return }
+
+          const nowIso = new Date().toISOString()
+          const selectBase = 'id, title, description, category, city, cities, created_at, budget, offer_count, view_count, urgency, image_url, image_urls, expires_at, user_id, profiles:user_id(full_name,avatar_url,is_verified,created_at)'
+          let result
+          // Tier 1 — full filters with geo + featured
+          result = await supabase.from('buyer_requests')
+            .select(selectBase + ', lat, lng, is_featured')
+            .neq('status', 'fulfilled')
+            .eq('approved', true)
+            .eq('deleted', false)
+            .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
             .order('created_at', { ascending: false })
             .limit(40)
-          if (error && /lat|lng|column/i.test(error.message || '')) {
-            ;({ data } = await supabase.from('buyer_requests')
-              .select('id, title, description, category, city, cities, created_at, budget, offer_count, view_count, urgency, image_url, image_urls, expires_at, user_id, profiles:user_id(full_name,avatar_url,is_verified)')
+          // Tier 2 — without lat/lng/is_featured if those columns don't exist
+          if (result.error && /lat|lng|is_featured|column/i.test(result.error.message || '')) {
+            result = await supabase.from('buyer_requests')
+              .select(selectBase)
+              .neq('status', 'fulfilled')
+              .eq('approved', true)
+              .eq('deleted', false)
+              .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
+              .order('created_at', { ascending: false })
+              .limit(40)
+          }
+          // Tier 3 — without approved/deleted/expires_at if those don't exist
+          if (result.error && /approved|deleted|expires_at|column/i.test(result.error.message || '')) {
+            result = await supabase.from('buyer_requests')
+              .select(selectBase)
               .not('status', 'eq', 'fulfilled')
               .order('created_at', { ascending: false })
-              .limit(40))
+              .limit(40)
           }
-          setRequests(data || [])
+          // Tier 4 — without profiles.created_at if that column doesn't exist
+          const fallbackSelect = 'id, title, description, category, city, cities, created_at, budget, offer_count, view_count, urgency, image_url, image_urls, expires_at, user_id, profiles:user_id(full_name,avatar_url,is_verified)'
+          if (result.error && /created_at|column/i.test(result.error.message || '')) {
+            result = await supabase.from('buyer_requests')
+              .select(fallbackSelect)
+              .not('status', 'eq', 'fulfilled')
+              .order('created_at', { ascending: false })
+              .limit(40)
+          }
+          if (result.data) {
+            try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ data: result.data, ts: Date.now() })) } catch {}
+          }
+          setRequests(result.data || [])
         } catch { setRequests([]) }
       })(),
     ])
@@ -5019,11 +6296,12 @@ export default function Home() {
           userLng={userLng}
           activeDistrict={activeDistrict}
           viewerLocation={homeGpsLocation}
+          user={user}
         />
       </div>
 
       <div className={!sectionsLoading ? 'soko-swap-in' : undefined}>
-        <ShopsJobsServicesRow navigate={navigate} shops={shops} jobs={jobs} services={services} loading={sectionsLoading} />
+        <ShopsJobsServicesRow navigate={navigate} shops={shops} jobs={jobs} services={services} loading={sectionsLoading} currentUser={user} onServiceClick={setSelectedService} onJobClick={setSelectedJob} />
       </div>
 
       <div className="soko-settle soko-settle-d8">
@@ -5037,6 +6315,40 @@ export default function Home() {
       {/* -- Notify Me modal -- */}
       {notifyOpen && (
         <NotifyMeModal query={notifyQuery} user={user} onClose={() => setNotifyOpen(false)} />
+      )}
+
+      {/* -- Post status modal -- */}
+      {showUpload && (
+        <StatusUploadModal
+          user={user}
+          onClose={() => setShowUpload(false)}
+          onSuccess={() => {
+            setShowUpload(false)
+            fetchAllActiveStories(user?.id, 'All').then(setStories)
+          }}
+        />
+      )}
+
+      {selectedService && (
+        <ProviderModal
+          provider={selectedService}
+          currentUser={user}
+          onClose={() => setSelectedService(null)}
+        />
+      )}
+
+      {selectedJob && (
+        <JobModal
+          job={selectedJob}
+          savedIds={savedJobIds}
+          onToggleSave={(id) => {
+            setSavedJobIds(prev =>
+              prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+            )
+          }}
+          onClose={() => setSelectedJob(null)}
+          fullScreen={true}
+        />
       )}
 
     </div>

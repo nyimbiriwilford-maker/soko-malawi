@@ -4,6 +4,7 @@
  */
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
+import { Image as ImageIcon, Wrench, Briefcase, Search, ChevronRight } from 'lucide-react'
 import { T } from '../constants/tokens'
 import { MALAWI_DISTRICTS } from '../constants/malawiDistricts'
 import { supabase } from '../lib/supabase'
@@ -144,7 +145,9 @@ export default function SokoNav({
   const [distOpen, setDistOpen] = useState(false)
 const [districtSearch, setDistrictSearch] = useState('')
   const [avatarOpen, setAvatarOpen] = useState(false)
+  const [showPostMenu, setShowPostMenu] = useState(false)
   const [chatCount, setChatCount] = useState(0)
+  const postRef = useRef(null)
 
   useEffect(() => {
     let channel
@@ -184,6 +187,15 @@ const [districtSearch, setDistrictSearch] = useState('')
     }
   }, [])
 
+  useEffect(() => {
+    if (!showPostMenu) return
+    function onDown(e) {
+      if (postRef.current && !postRef.current.contains(e.target)) setShowPostMenu(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [showPostMenu])
+
   const district = activeDistrict || 'All Districts'
   const fileRef = useRef(null)
   const inputRef = useRef(null)
@@ -203,9 +215,15 @@ const filteredDistricts = districts.filter(d =>
   }
 
   function handleCta() {
-    if (onCta) onCta()
-    else navigate('/post')
+    setShowPostMenu(m => !m)
   }
+
+  const POST_ITEMS = [
+    { label: 'Listing', desc: 'Sell a product or item', path: '/post', icon: <ImageIcon size={20} strokeWidth={1.85} /> },
+    { label: 'Looking For', desc: 'Post what you need · get offers', path: '/looking-for', state: { openComposer: true }, icon: <Search size={20} strokeWidth={1.85} /> },
+    { label: 'Service', desc: 'Offer your skills', path: '/services?tab=post', icon: <Wrench size={20} strokeWidth={1.85} /> },
+    { label: 'Job', desc: 'Post a job opening', path: '/jobs?tab=post', icon: <Briefcase size={20} strokeWidth={1.85} /> },
+  ]
 
  function changeDistrict(d) {
   onDistrictChange?.(d)
@@ -332,10 +350,35 @@ const filteredDistricts = districts.filter(d =>
             )}
           </div>
           {!hideCta && (
-            <button type="button" onClick={handleCta}
-              style={{ height: 38, padding: '0 18px', fontSize: 13.5, fontWeight: 700, background: T.green, color: '#fff', border: 'none', borderRadius: 50, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', fontFamily: 'inherit' }}>
-              {Icon.plus(14)} {ctaLabel}
-            </button>
+            <div ref={postRef} style={{ position: 'relative' }}>
+              <button type="button" onClick={handleCta}
+                style={{ height: 38, padding: '0 18px', fontSize: 13.5, fontWeight: 700, background: T.green, color: '#fff', border: 'none', borderRadius: 50, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', fontFamily: 'inherit', transition: 'opacity 0.15s', opacity: showPostMenu ? 0.85 : 1 }}>
+                {Icon.plus(14)} Post Now
+              </button>
+              {showPostMenu && (
+                <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, background: T.white, borderRadius: 16, padding: '6px 0', boxShadow: T.shadowLg, minWidth: 240, border: `1px solid ${T.gray200}`, zIndex: 300, overflow: 'hidden' }}>
+                  <div style={{ padding: '10px 16px 6px' }}>
+                    <span style={{ fontSize: 10, fontWeight: 700, color: T.gray400, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Create</span>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: T.gray900, marginTop: 2 }}>What do you want to post?</div>
+                  </div>
+                  {POST_ITEMS.map((item, i) => (
+                    <button key={i} type="button" role="menuitem" onClick={() => { setShowPostMenu(false); navigate(item.path, item.state ? { state: item.state } : undefined) }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '10px 16px', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', transition: 'background 0.12s' }}
+                      onMouseEnter={e => e.currentTarget.style.background = T.gray100}
+                      onMouseLeave={e => e.currentTarget.style.background = 'none'}>
+                      <span style={{ width: 36, height: 36, borderRadius: 10, background: T.gray100, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: T.green }}>
+                        {item.icon}
+                      </span>
+                      <span style={{ flex: 1 }}>
+                        <strong style={{ fontSize: 14, fontWeight: 600, color: T.gray900, display: 'block' }}>{item.label}</strong>
+                        <span style={{ fontSize: 12, color: T.gray500, display: 'block', marginTop: 1 }}>{item.desc}</span>
+                      </span>
+                      <ChevronRight size={16} strokeWidth={2.2} style={{ color: T.gray400, flexShrink: 0 }} />
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           )}
           <div style={{ position: 'relative' }}>
             <button type="button" onClick={() => setAvatarOpen(o => !o)}

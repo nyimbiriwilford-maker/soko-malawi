@@ -141,6 +141,17 @@ function IconCopy({ size = 14 }) {
     </svg>
   )
 }
+function IconReplyArrow({ size = 12 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M9 17H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h11" />
+      <path d="M15 3l5 5-5 5" />
+    </svg>
+  )
+}
+function isMobileShareDevice() {
+  return /Android|iPhone|iPad|iPod/i.test(typeof navigator !== 'undefined' ? navigator.userAgent : '')
+}
 function IconPackage({ size = 22 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -422,6 +433,20 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
   const [replyCount, setReplyCount] = useState(0)
   const [showReplies, setShowReplies] = useState(false)
   const [repliesLoading, setRepliesLoading] = useState(false)
+  const [comments, setComments] = useState([])
+  const [commentCount, setCommentCount] = useState(0)
+  const [showComments, setShowComments] = useState(false)
+  const [commentsLoading, setCommentsLoading] = useState(false)
+  const [commentText, setCommentText] = useState('')
+  const [commentSending, setCommentSending] = useState(false)
+  const [replyToComment, setReplyToComment] = useState(null) // { id, name, rootId }
+  const [commentReactions, setCommentReactions] = useState({})
+  const [commentMediaFile, setCommentMediaFile] = useState(null)
+  const [commentMediaPreview, setCommentMediaPreview] = useState(null)
+  const [highlightCommentId, setHighlightCommentId] = useState(null)
+  const commentFileRef = useRef(null)
+  const commentItemRefs = useRef({})
+  const deepLinkHandledRef = useRef(false)
   const [toast, setToast] = useState('')
   const [muted, setMuted] = useState(false)
 
@@ -433,6 +458,9 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
   const activeBarRef = useRef(null)
   const rafRef = useRef(null)
   const loggedViewsRef = useRef(new Set())
+  const mainRef = useRef(null)
+
+  useEffect(() => { mainRef.current?.focus() }, [])
   /** Image / text status display time */
   const IMAGE_DURATION_MS = 7000
   /** Video: play full length (capped to status max — matches upload trim) */
@@ -561,11 +589,39 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
     }
   }, [story?.id, currentUserId])
 
-  // Reply count for this status
+  // Reply & comment counts for this status
   useEffect(() => {
     if (!story?.id) return
     loadReplyCount(story.id)
+    loadCommentCount(story.id)
   }, [story?.id])
+
+  // Deep-link: /story/:id?comment=:commentId → open comments & highlight
+  useEffect(() => {
+    if (!story?.id || deepLinkHandledRef.current) return
+    try {
+      const params = new URLSearchParams(window.location.search)
+      const commentId = params.get('comment')
+      if (!commentId) return
+      deepLinkHandledRef.current = true
+      setHighlightCommentId(commentId)
+      setPaused(true)
+      setShowComments(true)
+      loadComments()
+    } catch { /* ignore */ }
+  }, [story?.id])
+
+  // Scroll highlighted comment into view once loaded
+  useEffect(() => {
+    if (!showComments || !highlightCommentId || commentsLoading) return
+    const t = setTimeout(() => {
+      const el = commentItemRefs.current[highlightCommentId]
+      if (el?.scrollIntoView) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      }
+    }, 120)
+    return () => clearTimeout(t)
+  }, [showComments, highlightCommentId, commentsLoading, comments])
 
   // Reactions
   useEffect(() => {
@@ -787,15 +843,23 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
         setPaused(false)
       }, 900)
     }
-    navigator.clipboard?.writeText(shareUrl).then(done).catch(() => {
-      const el = document.createElement('textarea')
-      el.value = shareUrl
-      document.body.appendChild(el)
-      el.select()
-      document.execCommand('copy')
-      document.body.removeChild(el)
-      done()
-    })
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(shareUrl).then(done).catch(() => {
+        fallbackCopy(shareUrl, done)
+      })
+    } else {
+      fallbackCopy(shareUrl, done)
+    }
+  }
+
+  function fallbackCopy(text, cb) {
+    const el = document.createElement('textarea')
+    el.value = text
+    document.body.appendChild(el)
+    el.select()
+    document.execCommand('copy')
+    document.body.removeChild(el)
+    cb()
   }
 
   async function loadViewers() {
@@ -859,6 +923,15 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
       .ilike('body', `%[[status_reply:${statusId}]]%`)
       .limit(200)
     setReplyCount((data || []).length)
+  }
+
+  async function loadCommentCount(statusId) {
+    if (!statusId) return
+    const { count, error } = await supabase
+      .from('status_comments')
+      .select('id', { count: 'exact', head: true })
+      .eq('status_id', statusId)
+    if (!error && count != null) setCommentCount(count)
   }
 
   async function attachAuthors(rows) {
@@ -930,6 +1003,140 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
 
   function closeReplies() {
     setShowReplies(false)
+    setPaused(false)
+  }
+
+  async function loadComments() {
+    if (!story?.id) return
+    setCommentsLoading(true)
+    const { data, error } = await supabase
+      .from('status_comments')
+      .select('id, body, created_at, user_id, parent_id, media_urls')
+      .eq('status_id', story.id)
+      .order('created_at', { ascending: false })
+      .limit(120)
+    if (!error && data) {
+      const withAuthors = await attachCommentAuthors(data)
+      // Index by id for parent lookup + nested thread roots
+      const byId = {}
+      for (const c of withAuthors) byId[c.id] = c
+
+      function authorLabel(c) {
+        if (!c) return 'User'
+        if (c.user_id === currentUserId) return 'You'
+        return c.author?.full_name || 'User'
+      }
+
+      function findRootId(c) {
+        let cur = c
+        const seen = new Set()
+        while (cur?.parent_id && byId[cur.parent_id] && !seen.has(cur.id)) {
+          seen.add(cur.id)
+          cur = byId[cur.parent_id]
+        }
+        return cur?.id
+      }
+
+      const topLevel = []
+      const children = {} // rootId → flat reply list (any depth), oldest first
+      for (const c of withAuthors) {
+        // Top-level, or orphaned (parent missing) → show as root so nothing is lost
+        if (!c.parent_id || !byId[c.parent_id]) {
+          topLevel.push(c)
+          continue
+        }
+        const rootId = findRootId(c)
+        if (!rootId || rootId === c.id) continue
+        const parent = byId[c.parent_id]
+        const enriched = {
+          ...c,
+          replyToId: c.parent_id,
+          replyToName: authorLabel(parent),
+          rootId,
+        }
+        if (!children[rootId]) children[rootId] = []
+        children[rootId].push(enriched)
+      }
+      for (const pid in children) {
+        children[pid].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
+      }
+      const grouped = topLevel.map(c => ({ ...c, replies: children[c.id] || [] }))
+      setComments(grouped)
+      setCommentCount(data.length)
+      // Load reactions for all visible comments
+      const allIds = data.map(c => c.id)
+      if (allIds.length) {
+        supabase.from('status_comment_reactions')
+          .select('comment_id, reaction, user_id')
+          .in('comment_id', allIds)
+          .then(({ data: reactions }) => {
+            if (!reactions) return
+            const map = {}
+            for (const r of reactions) {
+              if (!map[r.comment_id]) map[r.comment_id] = { love: 0, myReaction: null }
+              map[r.comment_id].love++
+              if (r.user_id === currentUserId) map[r.comment_id].myReaction = r.reaction
+            }
+            setCommentReactions(map)
+          })
+      }
+    }
+    setCommentsLoading(false)
+  }
+
+  function commentLink(commentId) {
+    return `${window.location.origin}/story/${story.id}?comment=${commentId}`
+  }
+
+  async function shareOrCopyComment(commentId) {
+    const url = commentLink(commentId)
+    if (isMobileShareDevice() && typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ url, title: 'Comment on Soko Malawi' })
+      } catch { /* user cancelled */ }
+      return
+    }
+    if (navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(url)
+        showToast('Link copied')
+        return
+      } catch { /* fall through to fallback */ }
+    }
+    fallbackCopy(url, () => showToast('Link copied'))
+  }
+
+  function startReplyTo(target, rootId) {
+    const name = target.author?.full_name
+      || (target.user_id === currentUserId ? 'You' : 'User')
+    setReplyToComment(
+      replyToComment?.id === target.id
+        ? null
+        : { id: target.id, name, rootId: rootId || target.id }
+    )
+    setCommentText('')
+  }
+
+  async function attachCommentAuthors(rows) {
+    const ids = [...new Set((rows || []).map(r => r.user_id).filter(Boolean))]
+    if (!ids.length) return rows || []
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('id, full_name, avatar_url')
+      .in('id', ids)
+    const map = {}
+    for (const p of profiles || []) map[p.id] = p
+    return (rows || []).map(r => ({ ...r, author: map[r.user_id] || null }))
+  }
+
+  function openComments() {
+    setPaused(true)
+    setShowComments(true)
+    loadComments()
+  }
+
+  function closeComments() {
+    setShowComments(false)
     setPaused(false)
   }
 
@@ -1048,6 +1255,84 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
     }
 
     setReplySending(false)
+  }
+
+  async function uploadCommentMedia(file) {
+    const ext = file.name.split('.').pop()
+    const path = `${currentUserId}/comment_${Date.now()}.${ext}`
+    const { error } = await supabase.storage
+      .from('story-media')
+      .upload(path, file, { contentType: file.type, upsert: false })
+    if (error) return null
+    const { data } = supabase.storage.from('story-media').getPublicUrl(path)
+    return data.publicUrl
+  }
+
+  async function handleCommentSubmit() {
+    if ((!commentText.trim() && !commentMediaFile) || commentSending || !currentUserId || !story) return
+    const text = commentText.trim()
+    let mediaUrls = []
+    setCommentSending(true)
+    if (commentMediaFile) {
+      const url = await uploadCommentMedia(commentMediaFile)
+      if (url) mediaUrls = [url]
+    }
+    const payload = { status_id: story.id, user_id: currentUserId, body: text }
+    if (replyToComment) payload.parent_id = replyToComment.id
+    if (mediaUrls.length) payload.media_urls = mediaUrls
+    const { data: saved } = await supabase
+      .from('status_comments')
+      .insert(payload)
+      .select('id, body, created_at, user_id, parent_id, media_urls')
+      .maybeSingle()
+    if (saved) {
+      const withAuthor = {
+        ...saved,
+        author: { id: currentUserId, full_name: 'You', avatar_url: myAvatar },
+      }
+      if (replyToComment) {
+        const rootId = replyToComment.rootId || replyToComment.id
+        const enriched = {
+          ...withAuthor,
+          replyToId: replyToComment.id,
+          replyToName: replyToComment.name,
+          rootId,
+        }
+        setComments(prev => prev.map(c => {
+          if (c.id !== rootId) return c
+          return { ...c, replies: [...(c.replies || []), enriched] }
+        }))
+      } else {
+        setComments(prev => [{ ...withAuthor, replies: [] }, ...prev])
+      }
+      setCommentCount(c => c + 1)
+      setCommentText('')
+      setCommentMediaFile(null)
+      setCommentMediaPreview(null)
+      setReplyToComment(null)
+    } else {
+      showToast('Could not post comment')
+    }
+    setCommentSending(false)
+  }
+
+  async function handleCommentLove(commentId, currentlyLiked) {
+    if (!currentUserId) return
+    if (currentlyLiked) {
+      await supabase.from('status_comment_reactions')
+        .delete().eq('comment_id', commentId).eq('user_id', currentUserId)
+      setCommentReactions(prev => {
+        const cur = prev[commentId] || { love: 0, myReaction: null }
+        return { ...prev, [commentId]: { love: Math.max(0, cur.love - 1), myReaction: null } }
+      })
+    } else {
+      await supabase.from('status_comment_reactions')
+        .insert({ comment_id: commentId, user_id: currentUserId, reaction: 'love' })
+      setCommentReactions(prev => {
+        const cur = prev[commentId] || { love: 0, myReaction: null }
+        return { ...prev, [commentId]: { love: cur.love + 1, myReaction: 'love' } }
+      })
+    }
   }
 
   function onPointerDown() {
@@ -1207,7 +1492,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
           else if (e.key === 'ArrowRight') { clearTimeout(holdRef.current); advance() }
         }}
         tabIndex={0}
-        ref={el => el?.focus()}
+        ref={mainRef}
       >
           <div style={{
             position: 'relative',
@@ -1851,7 +2136,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                 <button
                   type="button"
                   className="sv-tap"
-                  onClick={openReplies}
+                  onClick={openComments}
                   aria-label="Comment"
                   style={{
                     display: 'flex', alignItems: 'center', gap: 5,
@@ -1861,7 +2146,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                 >
                   <MessageCircle size={19} />
                   <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>
-                    {fmtK(replyCount)}
+                    {fmtK(commentCount)}
                   </span>
                 </button>
 
@@ -1935,7 +2220,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                     value={replyText}
                     onChange={e => setReplyText(e.target.value)}
                     onFocus={() => setPaused(true)}
-                    onBlur={() => { if (!shareUrl && !showViewers && !showMenu && !showReplies) setPaused(false) }}
+                    onBlur={() => { if (!shareUrl && !showViewers && !showMenu && !showReplies && !showComments) setPaused(false) }}
                     onKeyDown={e => e.key === 'Enter' && handleReply()}
                     placeholder="Reply to status…"
                     maxLength={400}
@@ -1970,7 +2255,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
           {/* Toast — reply sent confirmation */}
           {toast && (
             <div style={{
-              position: 'absolute', left: '50%', bottom: 110, zIndex: 50,
+              position: 'absolute', left: '50%', bottom: 110, zIndex: 99999,
               transform: 'translateX(-50%)',
               background: '#0f172a', color: '#fff',
               borderRadius: 999, padding: '10px 18px',
@@ -2119,6 +2404,411 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                 >
                   <IconSend size={15} />
                 </button>
+              </div>
+            )}
+          </Sheet>
+        )}
+
+        {/* ── Comments sheet ── */}
+        {showComments && (
+          <Sheet onClose={closeComments} maxHeight="78vh">
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              marginBottom: 12,
+            }}>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <IconComment size={16} />
+                  {commentCount} {commentCount === 1 ? 'comment' : 'comments'}
+                </div>
+                <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, marginTop: 2 }}>
+                  {isOwn ? 'Comments on your status' : 'Comments on this status'}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeComments}
+                style={{
+                  width: 34, height: 34, borderRadius: '50%', border: 'none',
+                  background: '#f1f5f9', color: '#64748b', cursor: 'pointer',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <X size={15} />
+              </button>
+            </div>
+
+            <div className="sv-hide-scroll" style={{ overflowY: 'auto', maxHeight: '48vh', marginBottom: 10 }}>
+              {commentsLoading ? (
+                <div style={{ padding: 28, textAlign: 'center', color: '#94a3b8', fontSize: 13, fontWeight: 600 }}>
+                  Loading comments…
+                </div>
+              ) : comments.length === 0 ? (
+                <div style={{ padding: 32, textAlign: 'center' }}>
+                  <div style={{
+                    width: 52, height: 52, borderRadius: 16, margin: '0 auto 12px',
+                    background: '#f1f5f9',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <IconComment size={22} />
+                  </div>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: '#64748b' }}>No comments yet</div>
+                  <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4, fontWeight: 600 }}>
+                    Be the first to comment
+                  </div>
+                </div>
+              ) : comments.map(c => {
+                const cname = c.author?.full_name || (c.user_id === currentUserId ? 'You' : 'User')
+                const cavatar = c.author?.avatar_url
+                const cinitial = (cname[0] || 'U').toUpperCase()
+                const cr = commentReactions[c.id] || { love: 0, myReaction: null }
+                const isHighlighted = highlightCommentId === c.id
+                const isReplyingHere = replyToComment?.id === c.id
+                const desktopCopy = !isMobileShareDevice()
+                return (
+                  <div key={c.id} style={{ marginBottom: 4 }}>
+                    <div
+                      ref={el => { if (el) commentItemRefs.current[c.id] = el }}
+                      style={{
+                        display: 'flex', gap: 10, padding: '10px 8px',
+                        borderRadius: 12,
+                        border: isHighlighted ? `1.5px solid ${GREEN}` : '1.5px solid transparent',
+                        background: isHighlighted ? 'rgba(26,122,74,0.06)' : isReplyingHere ? 'rgba(26,122,74,0.04)' : 'transparent',
+                        transition: 'background 0.2s, border 0.2s',
+                      }}
+                    >
+                      <div style={{
+                        width: 38, height: 38, borderRadius: '50%', overflow: 'hidden', flexShrink: 0,
+                        background: `linear-gradient(135deg,${GREEN},#22c55e)`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 13, fontWeight: 700, color: '#fff',
+                      }}>
+                        {cavatar
+                          ? <img src={cavatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          : cinitial}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 3, flexWrap: 'wrap' }}>
+                          <span style={{ fontSize: 13, fontWeight: 800, color: '#0f172a' }}>{cname}</span>
+                          <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>
+                            {timeAgoFn(c.created_at)}
+                          </span>
+                        </div>
+                        <div style={{
+                          fontSize: 13, color: '#334155', lineHeight: 1.45, fontWeight: 500,
+                          wordBreak: 'break-word',
+                        }}>
+                          {c.body}
+                        </div>
+                        {c.media_urls?.length > 0 && (
+                          <div style={{ marginTop: 6, maxWidth: '100%', borderRadius: 8, overflow: 'hidden' }}>
+                            {c.media_urls.map((url, i) => (
+                              isVideoUrl(url) ? (
+                                <video key={i} src={url} controls style={{ width: '100%', maxHeight: 200, borderRadius: 8, objectFit: 'cover' }} />
+                              ) : (
+                                <img key={i} src={url} alt="" style={{ width: '100%', maxHeight: 200, borderRadius: 8, objectFit: 'cover' }} />
+                              )
+                            ))}
+                          </div>
+                        )}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 6, flexWrap: 'wrap' }}>
+                          <button
+                            type="button"
+                            onClick={() => handleCommentLove(c.id, cr.myReaction === 'love')}
+                            style={{
+                              display: 'flex', alignItems: 'center', gap: 3,
+                              background: 'none', border: 'none', padding: 0,
+                              cursor: 'pointer', fontFamily: 'inherit',
+                            }}
+                          >
+                            <IconHeart size={13} filled={cr.myReaction === 'love'} />
+                            {cr.love > 0 && (
+                              <span style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8' }}>{cr.love}</span>
+                            )}
+                          </button>
+                          {currentUserId && (
+                            <button
+                              type="button"
+                              onClick={() => startReplyTo(c, c.id)}
+                              style={{
+                                background: 'none', border: 'none', padding: 0,
+                                fontSize: 11, fontWeight: 800,
+                                color: isReplyingHere ? GREEN : '#94a3b8',
+                                cursor: 'pointer', fontFamily: 'inherit',
+                                display: 'inline-flex', alignItems: 'center', gap: 4,
+                              }}
+                            >
+                              <IconReplyArrow size={11} />
+                              {isReplyingHere ? 'Cancel' : 'Reply'}
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => shareOrCopyComment(c.id)}
+                            title={desktopCopy ? 'Copy link to this comment' : 'Share this comment'}
+                            style={{
+                              background: 'none', border: 'none', padding: 0,
+                              fontSize: 11, fontWeight: 800, color: '#94a3b8', cursor: 'pointer',
+                              fontFamily: 'inherit',
+                              display: 'inline-flex', alignItems: 'center', gap: 4,
+                            }}
+                          >
+                            {desktopCopy ? <IconCopy size={11} /> : <IconShare size={11} />}
+                            {desktopCopy ? 'Copy link' : 'Share'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Threaded replies — arrow shows who each person replied to */}
+                    {c.replies?.length > 0 && (
+                      <div style={{
+                        marginLeft: 22,
+                        borderLeft: '2px solid #d1fae5',
+                        paddingLeft: 0,
+                      }}>
+                        {c.replies.map((r, rIdx) => {
+                          const rname = r.author?.full_name || (r.user_id === currentUserId ? 'You' : 'User')
+                          const ravtar = r.author?.avatar_url
+                          const rinit = (rname[0] || 'U').toUpperCase()
+                          const rr = commentReactions[r.id] || { love: 0, myReaction: null }
+                          const replyTo = r.replyToName || cname
+                          const rHighlighted = highlightCommentId === r.id
+                          const rReplying = replyToComment?.id === r.id
+                          return (
+                            <div
+                              key={r.id}
+                              ref={el => { if (el) commentItemRefs.current[r.id] = el }}
+                              style={{
+                                display: 'flex', gap: 8, padding: '8px 8px 8px 12px',
+                                position: 'relative',
+                                borderRadius: 10,
+                                border: rHighlighted ? `1.5px solid ${GREEN}` : '1.5px solid transparent',
+                                background: rHighlighted ? 'rgba(26,122,74,0.06)' : rReplying ? 'rgba(26,122,74,0.04)' : 'transparent',
+                                transition: 'background 0.2s, border 0.2s',
+                              }}
+                            >
+                              {/* L-shaped thread connector into avatar */}
+                              <div
+                                aria-hidden
+                                style={{
+                                  position: 'absolute',
+                                  left: 0,
+                                  top: 0,
+                                  width: 12,
+                                  height: 22,
+                                  borderBottom: '2px solid #a7f3d0',
+                                  borderLeft: rIdx === 0 ? 'none' : 'none',
+                                  borderBottomLeftRadius: 0,
+                                  marginLeft: -2,
+                                }}
+                              />
+                              <div style={{
+                                width: 30, height: 30, borderRadius: '50%', overflow: 'hidden', flexShrink: 0,
+                                background: '#e2e8f0',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: 11, fontWeight: 700, color: '#475569',
+                              }}>
+                                {ravtar
+                                  ? <img src={ravtar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  : rinit}
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{
+                                  display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3, flexWrap: 'wrap',
+                                }}>
+                                  <span style={{ fontSize: 12, fontWeight: 800, color: '#0f172a' }}>{rname}</span>
+                                  <span
+                                    style={{
+                                      display: 'inline-flex', alignItems: 'center', gap: 3,
+                                      fontSize: 11, fontWeight: 700, color: GREEN,
+                                      background: 'rgba(26,122,74,0.08)',
+                                      borderRadius: 999, padding: '1px 8px 1px 6px',
+                                    }}
+                                    title={`Replied to ${replyTo}`}
+                                  >
+                                    <IconReplyArrow size={10} />
+                                    {replyTo}
+                                  </span>
+                                  <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 600 }}>
+                                    {timeAgoFn(r.created_at)}
+                                  </span>
+                                </div>
+                                <div style={{
+                                  fontSize: 12, color: '#334155', lineHeight: 1.4, fontWeight: 500,
+                                  wordBreak: 'break-word',
+                                }}>
+                                  {r.body}
+                                </div>
+                                {r.media_urls?.length > 0 && (
+                                  <div style={{ marginTop: 4, maxWidth: '100%', borderRadius: 6, overflow: 'hidden' }}>
+                                    {r.media_urls.map((url, i) => (
+                                      isVideoUrl(url) ? (
+                                        <video key={i} src={url} controls style={{ width: '100%', maxHeight: 160, borderRadius: 6, objectFit: 'cover' }} />
+                                      ) : (
+                                        <img key={i} src={url} alt="" style={{ width: '100%', maxHeight: 160, borderRadius: 6, objectFit: 'cover' }} />
+                                      )
+                                    ))}
+                                  </div>
+                                )}
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4, flexWrap: 'wrap' }}>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleCommentLove(r.id, rr.myReaction === 'love')}
+                                    style={{
+                                      display: 'flex', alignItems: 'center', gap: 3,
+                                      background: 'none', border: 'none', padding: 0,
+                                      cursor: 'pointer', fontFamily: 'inherit',
+                                    }}
+                                  >
+                                    <IconHeart size={12} filled={rr.myReaction === 'love'} />
+                                    {rr.love > 0 && (
+                                      <span style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8' }}>{rr.love}</span>
+                                    )}
+                                  </button>
+                                  {currentUserId && (
+                                    <button
+                                      type="button"
+                                      onClick={() => startReplyTo(r, c.id)}
+                                      style={{
+                                        background: 'none', border: 'none', padding: 0,
+                                        fontSize: 10, fontWeight: 800,
+                                        color: rReplying ? GREEN : '#94a3b8',
+                                        cursor: 'pointer', fontFamily: 'inherit',
+                                        display: 'inline-flex', alignItems: 'center', gap: 3,
+                                      }}
+                                    >
+                                      <IconReplyArrow size={10} />
+                                      {rReplying ? 'Cancel' : 'Reply'}
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => shareOrCopyComment(r.id)}
+                                    title={desktopCopy ? 'Copy link to this comment' : 'Share this comment'}
+                                    style={{
+                                      background: 'none', border: 'none', padding: 0,
+                                      fontSize: 10, fontWeight: 800, color: '#94a3b8', cursor: 'pointer',
+                                      fontFamily: 'inherit',
+                                      display: 'inline-flex', alignItems: 'center', gap: 3,
+                                    }}
+                                  >
+                                    {desktopCopy ? <IconCopy size={10} /> : <IconShare size={10} />}
+                                    {desktopCopy ? 'Copy link' : 'Share'}
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+
+            {currentUserId && (
+              <div>
+                {replyToComment && (
+                  <div style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                    padding: '6px 12px', marginBottom: 4,
+                    background: 'rgba(26,122,74,0.08)', borderRadius: 10,
+                    fontSize: 12, color: GREEN, fontWeight: 800,
+                  }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                      <IconReplyArrow size={12} />
+                      Replying to {replyToComment.name}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => { setReplyToComment(null); setCommentText('') }}
+                      style={{ background: 'none', border: 'none', padding: 0, color: '#94a3b8', cursor: 'pointer', fontSize: 13, fontFamily: 'inherit' }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                )}
+                {/* Media preview */}
+                {commentMediaPreview && (
+                  <div style={{
+                    position: 'relative', marginBottom: 6,
+                    borderRadius: 8, overflow: 'hidden', maxWidth: 120,
+                  }}>
+                    <img src={commentMediaPreview} alt="" style={{ width: '100%', height: 80, objectFit: 'cover', borderRadius: 8 }} />
+                    <button
+                      type="button"
+                      onClick={() => { setCommentMediaFile(null); setCommentMediaPreview(null) }}
+                      style={{
+                        position: 'absolute', top: 2, right: 2, width: 22, height: 22, borderRadius: '50%',
+                        background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        cursor: 'pointer', fontSize: 12, lineHeight: 1,
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 6,
+                  background: '#f8fafc', border: '1.5px solid #e2e8f0',
+                  borderRadius: 999, padding: '6px 8px 6px 12px',
+                }}>
+                  <input
+                    value={commentText}
+                    onChange={e => setCommentText(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && handleCommentSubmit()}
+                    placeholder={replyToComment ? `Reply to ${replyToComment.name}…` : 'Write a comment…'}
+                    maxLength={400}
+                    style={{
+                      flex: 1, border: 'none', outline: 'none', background: 'transparent',
+                      fontSize: 13, color: '#0f172a', fontFamily: 'inherit',
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => commentFileRef.current?.click()}
+                    style={{
+                      width: 30, height: 30, borderRadius: '50%', border: 'none',
+                      background: 'transparent', color: '#94a3b8', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 16, lineHeight: 1, flexShrink: 0,
+                    }}
+                    aria-label="Attach image"
+                  >
+                    🖼
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCommentSubmit}
+                    disabled={(!commentText.trim() && !commentMediaFile) || commentSending}
+                    style={{
+                      width: 36, height: 36, borderRadius: '50%', border: 'none',
+                      background: (commentText.trim() || commentMediaFile) ? GREEN : '#e2e8f0',
+                      color: (commentText.trim() || commentMediaFile) ? '#fff' : '#94a3b8',
+                      cursor: (commentText.trim() || commentMediaFile) ? 'pointer' : 'default',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <IconSend size={15} />
+                  </button>
+                </div>
+                <input
+                  ref={commentFileRef}
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'none' }}
+                  onChange={e => {
+                    const file = e.target.files?.[0]
+                    if (!file) return
+                    setCommentMediaFile(file)
+                    setCommentMediaPreview(URL.createObjectURL(file))
+                    e.target.value = ''
+                  }}
+                />
               </div>
             )}
           </Sheet>

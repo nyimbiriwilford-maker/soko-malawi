@@ -1,7 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { ChevronRight, Plus, MapPin, ShoppingBag, Store, Briefcase, Wrench } from 'lucide-react'
 import { STATUS_META } from '../constants/homeConstants'
-import StatusUploadModal from './StatusUploadModal'
 import { supabase } from '../lib/supabase'
 import { isStatusVideoUrl } from '../utils/statusVideo'
 
@@ -128,12 +127,13 @@ function StoryStatusRing({ items = [], size = 56, children }) {
   )
 }
 
-function StatusCategoryChips({ categories, active, onSelect }) {
+function StatusCategoryChips({ categories, active, onSelect, wrap }) {
   return (
     <div className="hs-chip-rail" style={{
       display: 'flex', gap: 8, overflowX: 'auto', overflowY: 'hidden',
       paddingBottom: 4, marginBottom: 0,
       scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch',
+      flexWrap: wrap ? 'wrap' : 'nowrap',
     }}>
       {categories.map(cat => {
         const isActive = cat.key === active
@@ -160,37 +160,130 @@ function StatusCategoryChips({ categories, active, onSelect }) {
   )
 }
 
+let activePreviewVideo = null
+
 function LazyMedia({ src, isVideo, style }) {
   const ref = useRef(null)
+  const videoRef = useRef(null)
+  const imgRef = useRef(null)
+  const retriesRef = useRef(0)
+  const timerRef = useRef(null)
   const [visible, setVisible] = useState(false)
+  const [imgLoaded, setImgLoaded] = useState(false)
+  const [imgFailed, setImgFailed] = useState(false)
+  const playedRef = useRef(false)
 
   useEffect(() => {
     const el = ref.current
     if (!el) return
     const observer = new IntersectionObserver(([entry]) => {
-      if (entry.isIntersecting) {
-        setVisible(true)
-        observer.disconnect()
-      }
-    }, { rootMargin: '200px' })
+      setVisible(entry.isIntersecting)
+    }, { rootMargin: '0px', threshold: 0.3 })
     observer.observe(el)
     return () => observer.disconnect()
   }, [])
 
-  if (!visible) return <div ref={ref} style={{ ...style, background: '#1a1a1a' }} />
+  useEffect(() => {
+    const v = videoRef.current
+    if (!v || !isVideo) return
+    if (visible && !playedRef.current) {
+      if (activePreviewVideo && activePreviewVideo !== v) {
+        activePreviewVideo.pause()
+        activePreviewVideo.currentTime = 0
+      }
+      activePreviewVideo = v
+      v.currentTime = 0
+      v.play().catch(() => {})
+    } else if (!visible) {
+      if (activePreviewVideo === v) {
+        activePreviewVideo = null
+      }
+      v.pause()
+      v.currentTime = 0
+      playedRef.current = false
+    }
+    return () => {
+      if (activePreviewVideo === v) activePreviewVideo = null
+    }
+  }, [visible, isVideo])
+
+  function handleEnded() {
+    playedRef.current = true
+    if (activePreviewVideo === videoRef.current) {
+      activePreviewVideo = null
+    }
+  }
+
+  function handleImgError() {
+    if (retriesRef.current < 2) {
+      retriesRef.current++
+      timerRef.current = setTimeout(() => {
+        if (imgRef.current) {
+          imgRef.current.src = ''
+          imgRef.current.src = src
+        }
+      }, 1000 * retriesRef.current)
+    } else {
+      setImgFailed(true)
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current)
+    }
+  }, [])
 
   if (isVideo) {
     return (
-      <div ref={ref} style={style}>
-        <video src={src} muted playsInline preload="metadata"
-          style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      <div ref={ref} style={{ ...style, position: 'relative' }}>
+        <video
+          ref={videoRef}
+          src={src}
+          muted
+          playsInline
+          preload="auto"
+          onEnded={handleEnded}
+          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+        />
       </div>
     )
   }
 
+  if (!visible) return <div ref={ref} style={{ ...style, background: '#1a1a1a' }} />
+
   return (
-    <div ref={ref} style={style}>
-      <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
+    <div ref={ref} style={{ ...style, position: 'relative', overflow: 'hidden' }}>
+      {!imgLoaded && !imgFailed && (
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: 'linear-gradient(110deg, #1a1a1a 30%, #2a2a2a 50%, #1a1a1a 70%)',
+          backgroundSize: '200% 100%',
+          animation: 'shimmer 1.2s ease-in-out infinite',
+        }} />
+      )}
+      {imgFailed ? (
+        <div style={{
+          position: 'absolute', inset: 0,
+          background: '#1a1a1a',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
+        </div>
+      ) : (
+        <img
+          ref={imgRef}
+          src={src}
+          alt=""
+          onLoad={() => setImgLoaded(true)}
+          onError={handleImgError}
+          style={{
+            width: '100%', height: '100%', objectFit: 'cover',
+            display: 'block', opacity: imgLoaded ? 1 : 0,
+            transition: 'opacity 0.2s ease',
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -279,8 +372,20 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
         }}
       >
         {media ? (
-          <LazyMedia src={media} isVideo={isVideo}
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+          <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+            <LazyMedia src={media} isVideo={isVideo}
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+            {isVideo && (
+              <div style={{
+                position: 'absolute', bottom: 8, right: 8, zIndex: 5,
+                width: 20, height: 20, borderRadius: '50%',
+                background: 'rgba(0,0,0,0.55)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="#fff"><polygon points="6,3 20,12 6,21" /></svg>
+              </div>
+            )}
+          </div>
         ) : avatar ? (
           <img src={avatar} alt=""
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
@@ -392,9 +497,21 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
         transition: 'transform 0.25s ease, box-shadow 0.25s ease',
       }}
     >
-      {media ? (
-        <LazyMedia src={media} isVideo={isVideo}
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+{media ? (
+          <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+            <LazyMedia src={media} isVideo={isVideo}
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+            {isVideo && (
+              <div style={{
+                position: 'absolute', bottom: 8, right: 8, zIndex: 5,
+                width: 20, height: 20, borderRadius: '50%',
+                background: 'rgba(0,0,0,0.55)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="#fff"><polygon points="6,3 20,12 6,21" /></svg>
+              </div>
+            )}
+          </div>
       ) : avatar ? (
         <img src={avatar} alt=""
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
@@ -523,7 +640,6 @@ function getInitCount(w) { return w >= 1024 ? 5 : 4 }
 
 export default function HomeStatusSection({ navigate, stories, loading, onCreateStory, currentUserId, currentUserProfile }) {
   const [viewedIds, setViewedIds] = useState(loadViewedStoryIds)
-  const [showUpload, setShowUpload] = useState(false)
   const [activeCategory, setActiveCategory] = useState('All')
   const [windowWidth, setWindowWidth] = useState(window.innerWidth)
   const [loadCount, setLoadCount] = useState(() => getInitCount(window.innerWidth))
@@ -543,6 +659,7 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
   }, [])
 
   const isMobile = windowWidth < 768
+  const chipWrap = windowWidth < 480
 
   useEffect(() => {
     let cancelled = false
@@ -675,6 +792,10 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
           0%, 100% { opacity: 1; transform: scale(1); }
           50% { opacity: 0.5; transform: scale(0.75); }
         }
+        @keyframes shimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
         @media (hover: hover) {
           .hs-story-btn:hover { transform: translateY(-6px) scale(1.02); box-shadow: 0 12px 30px rgba(0,0,0,0.15) !important; z-index: 50 !important; }
           .hs-story-btn img, .hs-story-btn video { transition: transform .35s ease, filter .35s ease; }
@@ -754,25 +875,41 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
                     </span>
                   )}
                 </div>
-                <button type="button"
-                  onClick={() => { if (rankedStories.length) openStoryGroup(rankedStories[0]) }}
-                  style={{
-                    border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit',
-                    display: 'inline-flex', alignItems: 'center', gap: 2,
-                    padding: '4px 8px', fontSize: 12, fontWeight: 700, color: G.green,
-                    borderRadius: 999, transition: 'background 0.25s ease',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  View All
-                  <ChevronRight size={13} />
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <button type="button"
+                    onClick={() => { if (!currentUserId) { navigate?.('/login'); return }; onCreateStory?.() }}
+                    style={{
+                      border: 'none', background: G.green, color: '#fff', cursor: 'pointer', fontFamily: 'inherit',
+                      display: 'inline-flex', alignItems: 'center', gap: 4,
+                      padding: '5px 12px', fontSize: 11, fontWeight: 800,
+                      borderRadius: 999, whiteSpace: 'nowrap',
+                      boxShadow: '0 2px 8px rgba(15,157,88,0.3)',
+                    }}
+                  >
+                    <Plus size={12} strokeWidth={3} />
+                    Post status
+                  </button>
+                  <button type="button"
+                    onClick={() => { if (rankedStories.length) openStoryGroup(rankedStories[0]) }}
+                    style={{
+                      border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit',
+                      display: 'inline-flex', alignItems: 'center', gap: 2,
+                      padding: '4px 8px', fontSize: 12, fontWeight: 700, color: G.green,
+                      borderRadius: 999, transition: 'background 0.25s ease',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    View All
+                    <ChevronRight size={13} />
+                  </button>
+                </div>
               </div>
 
               <StatusCategoryChips
                 categories={CATEGORIES}
                 active={activeCategory}
                 onSelect={setActiveCategory}
+                wrap={chipWrap}
               />
 
               {rankedStories.length > 0 ? (
@@ -788,7 +925,7 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
                     }}
                   >
                     <AddStatusCard
-                      onClick={() => setShowUpload(true)}
+                      onClick={() => onCreateStory?.()}
                       currentUserId={currentUserId}
                       navigate={navigate}
                       userProfile={currentUserProfile}
@@ -841,7 +978,7 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
                   </p>
                   {!loading && (
                     <button type="button"
-                      onClick={() => { if (!currentUserId) { navigate?.('/login'); return }; setShowUpload(true) }}
+                      onClick={() => { if (!currentUserId) { navigate?.('/login'); return }; onCreateStory?.() }}
                       style={{
                         border: 'none', background: G.green, color: '#fff', borderRadius: 10,
                         padding: '9px 16px', fontSize: 12, fontWeight: 800, cursor: 'pointer',
@@ -857,17 +994,6 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
           )}
         </div>
       </section>
-
-      {showUpload && (
-        <StatusUploadModal
-          user={{ id: currentUserId }}
-          onClose={() => setShowUpload(false)}
-          onSuccess={() => {
-            setShowUpload(false)
-            onCreateStory?.()
-          }}
-        />
-      )}
     </>
   )
 }

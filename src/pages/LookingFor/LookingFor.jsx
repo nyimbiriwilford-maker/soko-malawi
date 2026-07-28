@@ -1289,6 +1289,16 @@ const myAlertsRef = useRef([])
             width: auto !important;
             max-width: none !important;
           }
+          .lf-detail-thumbs { gap: 6px !important; padding: 0 0 2px !important; }
+          .lf-detail-thumb-btn { width: 52px !important; height: 52px !important; border-radius: 8px !important; }
+          .lf-detail-thumb-btn.is-active { border-width: 2.5px !important; }
+          .lf-detail-thumb-btn:hover { transform: scale(1.04); }
+          .lf-detail-main-photo { height: 180px !important; }
+        }
+        @media (max-width: 640px) {
+          .lf-detail-main-photo { height: clamp(160px, 35vw, 220px) !important; border-radius: 12px !important; }
+          .lf-detail-thumbs { gap: 6px !important; margin-top: 8px !important; }
+          .lf-detail-thumb-btn { width: 56px !important; height: 56px !important; border-radius: 10px !important; }
         }
       `}</style>
 
@@ -1516,8 +1526,8 @@ function DetailModal({ req, user, myListings, saved, onClose, onOffer, onSave, o
           {/* Photos */}
           {mainPhoto ? (
             <div style={{ marginBottom: 16 }}>
-              <div style={{
-                width: '100%', height: 220, borderRadius: 16, overflow: 'hidden',
+              <div className="lf-detail-main-photo" style={{
+                width: '100%', height: 'clamp(180px, 30vw, 280px)', borderRadius: 16, overflow: 'hidden',
                 background: C.bg, position: 'relative',
               }}>
                 <img
@@ -1537,22 +1547,30 @@ function DetailModal({ req, user, myListings, saved, onClose, onOffer, onSave, o
                 )}
               </div>
               {photos.length > 1 && (
-                <div style={{ display: 'flex', gap: 8, marginTop: 10, overflowX: 'auto' }}>
+                <ul className="lf-detail-thumbs" style={{
+                  display: 'flex', gap: 8, marginTop: 10, overflowX: 'auto',
+                  listStyle: 'none', padding: 0, margin: '10px 0 0', scrollSnapType: 'x mandatory',
+                  WebkitOverflowScrolling: 'touch',
+                }}>
                   {photos.map((url, i) => (
-                    <button
-                      key={url + i}
-                      type="button"
-                      onClick={() => setMainIdx(i)}
-                      style={{
-                        width: 64, height: 64, borderRadius: 10, overflow: 'hidden',
-                        border: i === mainIdx ? `2.5px solid ${C.green}` : `1.5px solid ${C.border}`,
-                        padding: 0, cursor: 'pointer', flexShrink: 0, background: C.bg,
-                      }}
-                    >
-                      <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    </button>
+                    <li key={url + i} style={{ flexShrink: 0, scrollSnapAlign: 'start' }}>
+                      <button
+                        type="button"
+                        onClick={() => setMainIdx(i)}
+                        className={`lf-detail-thumb-btn${i === mainIdx ? ' is-active' : ''}`}
+                        style={{
+                          width: 64, height: 64, borderRadius: 10, overflow: 'hidden',
+                          border: i === mainIdx ? `2.5px solid ${C.green}` : `1.5px solid ${C.border}`,
+                          padding: 0, cursor: 'pointer', display: 'block', background: C.bg,
+                          transition: 'border-color 0.15s, transform 0.15s',
+                        }}
+                      >
+                        <img src={url} alt="" loading="lazy"
+                          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                      </button>
+                    </li>
                   ))}
-                </div>
+                </ul>
               )}
             </div>
           ) : (
