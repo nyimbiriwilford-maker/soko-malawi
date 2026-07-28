@@ -127,13 +127,13 @@ function StoryStatusRing({ items = [], size = 56, children }) {
   )
 }
 
-function StatusCategoryChips({ categories, active, onSelect, wrap }) {
+function StatusCategoryChips({ categories, active, onSelect }) {
   return (
     <div className="hs-chip-rail" style={{
       display: 'flex', gap: 8, overflowX: 'auto', overflowY: 'hidden',
       paddingBottom: 4, marginBottom: 0,
       scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch',
-      flexWrap: wrap ? 'wrap' : 'nowrap',
+      flexWrap: 'nowrap',
     }}>
       {categories.map(cat => {
         const isActive = cat.key === active
@@ -659,7 +659,6 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
   }, [])
 
   const isMobile = windowWidth < 768
-  const chipWrap = windowWidth < 480
 
   useEffect(() => {
     let cancelled = false
@@ -784,6 +783,7 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
         .hs-rail::-webkit-scrollbar { display: none; }
         .hs-rail { -ms-overflow-style: none; scrollbar-width: none; position: relative; }
         .hs-rail { flex-wrap: nowrap !important; }
+        .hs-chip-rail::-webkit-scrollbar { display: none; }
 
         .hs-story-btn, .hs-add-btn { width: 220px; height: 300px; }
         .hs-add-btn { border-radius: 20px; }
@@ -876,19 +876,21 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
                   )}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <button type="button"
-                    onClick={() => { if (!currentUserId) { navigate?.('/login'); return }; onCreateStory?.() }}
-                    style={{
-                      border: 'none', background: G.green, color: '#fff', cursor: 'pointer', fontFamily: 'inherit',
-                      display: 'inline-flex', alignItems: 'center', gap: 4,
-                      padding: '5px 12px', fontSize: 11, fontWeight: 800,
-                      borderRadius: 999, whiteSpace: 'nowrap',
-                      boxShadow: '0 2px 8px rgba(15,157,88,0.3)',
-                    }}
-                  >
-                    <Plus size={12} strokeWidth={3} />
-                    Post status
-                  </button>
+{!isMobile && (
+                    <button type="button"
+                      onClick={() => { if (!currentUserId) { navigate?.('/login'); return }; onCreateStory?.() }}
+                      style={{
+                        border: 'none', background: G.green, color: '#fff', cursor: 'pointer', fontFamily: 'inherit',
+                        display: 'inline-flex', alignItems: 'center', gap: 4,
+                        padding: '5px 12px', fontSize: 11, fontWeight: 800,
+                        borderRadius: 999, whiteSpace: 'nowrap',
+                        boxShadow: '0 2px 8px rgba(15,157,88,0.3)',
+                      }}
+                    >
+                      <Plus size={12} strokeWidth={3} />
+                      Post status
+                    </button>
+                  )}
                   <button type="button"
                     onClick={() => { if (rankedStories.length) openStoryGroup(rankedStories[0]) }}
                     style={{
@@ -909,7 +911,6 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
                 categories={CATEGORIES}
                 active={activeCategory}
                 onSelect={setActiveCategory}
-                wrap={chipWrap}
               />
 
               {rankedStories.length > 0 ? (
