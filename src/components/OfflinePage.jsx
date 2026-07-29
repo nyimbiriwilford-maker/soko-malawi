@@ -35,35 +35,35 @@ export default function OfflinePage() {
   }
 
   return (
-    <div className="fixed inset-0 z-[9998] bg-[#f4f8f5] flex flex-col items-center justify-center px-6 text-center">
-      <div className="mb-5" style={{ fontFamily: "'Sora', 'Inter', system-ui, sans-serif", fontSize: 26, fontWeight: 800, color: '#1a7a4a', letterSpacing: '-0.5px', lineHeight: 1 }}>
+    <div className="fixed inset-0 z-[9998] bg-[#f4f8f5] flex flex-col items-center justify-center px-8 pb-[env(safe-area-inset-bottom,24px)] text-center">
+      <div className="mb-6" style={{ fontFamily: "'Sora', 'Inter', system-ui, sans-serif", fontSize: 26, fontWeight: 800, color: '#1a7a4a', letterSpacing: '-0.5px', lineHeight: 1 }}>
         Soko<span style={{ color: '#d4920a' }}>Mw</span>
       </div>
 
-      <div className="w-14 h-14 rounded-full bg-[#e6f7ee] flex items-center justify-center mb-5">
-        <WifiOff className="w-6 h-6 text-[#1a7a4a]" />
+      <div className="w-16 h-16 rounded-full bg-[#e6f7ee] flex items-center justify-center mb-5">
+        <WifiOff className="w-7 h-7 text-[#1a7a4a]" />
       </div>
 
-      <h1 className="text-lg font-bold text-[#0f1410] mb-1.5" style={{ fontFamily: "'Sora', 'DM Sans', system-ui, sans-serif", letterSpacing: '-0.3px' }}>
+      <h1 className="text-xl font-bold text-[#0f1410] mb-2" style={{ fontFamily: "'Sora', 'DM Sans', system-ui, sans-serif", letterSpacing: '-0.3px' }}>
         {reconnecting ? 'Reconnecting…' : "You're offline"}
       </h1>
-      <p className="text-sm text-[#637068] leading-relaxed mb-8 max-w-[270px]">
+      <p className="text-[15px] text-[#637068] leading-relaxed mb-10 max-w-[320px]">
         {reconnecting
           ? 'Hang tight while we check your connection.'
           : "Check your Wi-Fi or mobile data. We'll reconnect you automatically."}
       </p>
 
-      <div className="flex gap-3">
+      <div className="flex flex-col items-center gap-3 w-full max-w-[280px]">
         <button
           onClick={() => NM.forceCheck()}
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#1a7a4a] text-white text-sm font-semibold hover:bg-[#0d4a2c] transition-all active:scale-[0.97]"
+          className="flex items-center justify-center gap-2 w-full min-h-[48px] rounded-xl bg-[#1a7a4a] text-white text-[15px] font-semibold hover:bg-[#0d4a2c] transition-all active:scale-[0.97]"
         >
           <RefreshCw className="w-4 h-4" />
           Retry
         </button>
         <a
           href="/"
-          className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-[#d8e5dc] text-[#637068] text-sm font-medium hover:bg-white hover:text-[#0f1410] hover:border-[#b8cdc0] transition-all"
+          className="flex items-center justify-center gap-2 w-full min-h-[44px] rounded-xl border border-[#d8e5dc] text-[#637068] text-[15px] font-medium hover:bg-white hover:text-[#0f1410] hover:border-[#b8cdc0] transition-all"
         >
           <Home className="w-4 h-4" />
           Go Home
