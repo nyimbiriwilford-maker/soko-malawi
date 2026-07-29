@@ -22,10 +22,10 @@ const HEALTH_CHECK_URLS = [
 ].filter(Boolean)
 
 const ONLINE_POLL_INTERVAL_MS = 15000
-const OFFLINE_POLL_INTERVAL_MS = 3000
+const OFFLINE_POLL_INTERVAL_MS = 1000
 const CONSECUTIVE_SUCCESS_THRESHOLD = 1
 const CONSECUTIVE_FAILURE_THRESHOLD = 2
-const HEALTH_CHECK_TIMEOUT_MS = 5000
+const HEALTH_CHECK_TIMEOUT_MS = 3000
 
 class NetworkManager {
   constructor() {
@@ -149,6 +149,7 @@ class NetworkManager {
     if (this._pollTimer) {
       clearInterval(this._pollTimer)
     }
+    this._healthCheck()
     this._pollTimer = setInterval(() => this._healthCheck(), intervalMs)
   }
 
