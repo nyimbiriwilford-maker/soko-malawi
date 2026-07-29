@@ -46,6 +46,7 @@ class NetworkManager {
     this._consecutiveFailures = 0
     this._pollTimer = null
     this._queue = []
+    this._abortController = null
 
     this._handleBrowserOnline = this._handleBrowserOnline.bind(this)
     this._handleBrowserOffline = this._handleBrowserOffline.bind(this)
@@ -160,8 +161,7 @@ class NetworkManager {
     }
   }
 
-  _fetchWithTimeout(url) {
-    const controller = new AbortController()
+  _fetchWithTimeout(url, controller) {
     const timeout = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS)
     const sep = url.includes('?') ? '&' : '?'
     const bustUrl = `${url}${sep}_=${Date.now()}`
@@ -175,18 +175,25 @@ class NetworkManager {
   }
 
   async _healthCheck() {
-    if (this.isChecking) return
+    // Abort any in-flight check so we never wait for a stale probe.
+    if (this._abortController) {
+      this._abortController.abort()
+    }
+    const controller = new AbortController()
+    this._abortController = controller
+
     this.isChecking = true
     this._emit('checking')
 
     let alive = false
     const probes = HEALTH_CHECK_URLS.filter(Boolean).map(url =>
-      this._fetchWithTimeout(url).then(() => true, () => false)
+      this._fetchWithTimeout(url, controller).then(() => true, () => false)
     )
     if (probes.length > 0) {
       alive = await Promise.any(probes).catch(() => false)
     }
 
+    if (this._abortController === controller) this._abortController = null
     this.isChecking = false
 
     // Never declare online if the browser itself believes we're offline.
