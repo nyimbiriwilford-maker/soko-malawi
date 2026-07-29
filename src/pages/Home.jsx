@@ -29,6 +29,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { supabase }              from '../lib/supabase'
 import useSearchAnimation        from '../hooks/useSearchAnimation'
 import { useUserLocation }       from '../hooks/useUserLocation'
+import { useNetwork }            from '../context/NetworkContext'
 import ProviderModal              from './ProviderModal'
 import JobModal                   from './Jobs/JobModal'
 import './Jobs/Jobs.css'
@@ -153,8 +154,8 @@ function GlobalStyles() {
       @keyframes shimmer  { 0% { background-position:-600px 0; } 100% { background-position:600px 0; } }
       /* Professional progressive home load */
       @keyframes premiumShimmer {
-        0% { background-position: 100% 0; }
-        100% { background-position: -100% 0; }
+        0% { background-position: 200% 0; }
+        100% { background-position: -200% 0; }
       }
       @keyframes sokoSettle {
         from { opacity: 0; transform: translateY(8px); }
@@ -162,7 +163,21 @@ function GlobalStyles() {
       }
       @keyframes sokoProgressGlow {
         0%, 100% { opacity: 1; }
-        50% { opacity: 0.75; }
+        50% { opacity: 0.7; }
+      }
+      @keyframes sokoFadeIn {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+      }
+      @keyframes sokoImgReveal {
+        0% { opacity: 0; transform: scale(1.02); filter: blur(4px); }
+        100% { opacity: 1; transform: scale(1); filter: blur(0); }
+      }
+      .soko-img-reveal {
+        animation: sokoImgReveal 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+      }
+      .soko-fade-in {
+        animation: sokoFadeIn 0.4s ease both;
       }
       /* Slim top progress — YouTube/Linear style */
       .soko-loadbar {
@@ -178,16 +193,16 @@ function GlobalStyles() {
       .soko-loadbar-track {
         height: 100%;
         width: 100%;
-        background: rgba(0,0,0,0.05);
+        background: rgba(0,0,0,0.04);
       }
       .soko-loadbar-fill {
         height: 100%;
         border-radius: 0 2px 2px 0;
-        background: linear-gradient(90deg, ${T.gray800} 0%, ${T.amber} 100%);
-        box-shadow: 0 0 6px rgba(0,0,0,0.12);
+        background: linear-gradient(90deg, ${T.gray800} 0%, ${T.amber} 50%, #ffd666 100%);
+        box-shadow: 0 0 8px rgba(249,171,0,0.25), 0 0 2px rgba(0,0,0,0.08);
         transform-origin: left center;
-        transition: width 0.45s cubic-bezier(0.22, 1, 0.36, 1);
-        animation: sokoProgressGlow 1.4s ease-in-out infinite;
+        transition: width 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+        animation: sokoProgressGlow 1.6s ease-in-out infinite;
       }
       .soko-loadbar.is-done .soko-loadbar-fill {
         animation: none;
@@ -206,24 +221,14 @@ function GlobalStyles() {
       .soko-settle-d8 { animation-delay: 0.23s; }
       /* Content swap: skeleton → real data */
       .soko-swap-in {
-        animation: sokoSettle 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
-      }
-      /* Scroll-triggered fade-up for LookingForSection */
-      @keyframes lfFadeSlide {
-        from { opacity: 0; transform: translateY(14px); }
-        to   { opacity: 1; transform: translateY(0); }
-      }
-      .lf-fade-in {
-        animation: lfFadeSlide 0.45s cubic-bezier(0.22, 1, 0.36, 1) forwards;
-        will-change: opacity, transform;
+        animation: sokoSettle 0.38s cubic-bezier(0.22, 1, 0.36, 1) forwards;
       }
       @media (prefers-reduced-motion: reduce) {
-        .soko-settle, .soko-swap-in, .soko-loadbar-fill, .lf-fade-in {
+        .soko-settle, .soko-swap-in, .soko-loadbar-fill {
           animation: none !important;
           transition: none !important;
         }
         .soko-settle, .soko-swap-in { opacity: 1; transform: none; }
-        .lf-fade-in { opacity: 1; transform: none; }
         .soko-loadbar { transition: opacity 0.15s ease; }
       }
       @keyframes liveRing { 0%,100% { box-shadow:0 0 0 3px rgba(234,67,53,.25);} 50% { box-shadow:0 0 0 7px rgba(234,67,53,.06);} }
@@ -477,15 +482,15 @@ function GlobalStyles() {
       .soko-btn-outline:hover { background:rgba(255,255,255,.2); transform:translateY(-1px); }
 
       .skeleton {
-        background: linear-gradient(110deg, #e8ecf0 8%, #f6f7f9 18%, #e8ecf0 33%);
+        background: linear-gradient(110deg, #eef0f2 8%, #f8f9fa 18%, #eef0f2 33%);
         background-size: 200% 100%;
-        animation: premiumShimmer 1.55s ease-in-out infinite;
+        animation: premiumShimmer 1.4s cubic-bezier(0.45,0.05,0.25,1) infinite;
         border-radius: 12px;
       }
       .skeleton-soft {
-        background: linear-gradient(110deg, #eef2f0 8%, #f8faf9 18%, #eef2f0 33%);
+        background: linear-gradient(110deg, #f0f3f1 8%, #fafbfa 18%, #f0f3f1 33%);
         background-size: 200% 100%;
-        animation: premiumShimmer 1.7s ease-in-out infinite;
+        animation: premiumShimmer 1.6s cubic-bezier(0.45,0.05,0.25,1) infinite;
         border-radius: 14px;
       }
 
@@ -1200,7 +1205,7 @@ function FeaturedRevenueBanner({ navigate, user }) {
   const ctaGold = true
 
   return (
-    <section style={{ padding: '16px 20px 0' }} aria-label="Get featured pricing">
+    <section style={{ padding: '0 20px', background: '#fff' }} aria-label="Get featured pricing">
       <div style={{ maxWidth: 1400, margin: '0 auto' }}>
         <div className="soko-featured-banner" style={{
           background: 'linear-gradient(90deg, #fdf6e3, #fdf1d6, #fdf6e3)',
@@ -1564,6 +1569,7 @@ function LatestListingCard({ listing, delay = 0, onClick, user, navigate, saved,
             loading="lazy"
             decoding="async"
             onError={() => setImgErr(true)}
+            className="soko-img-reveal"
             style={{
               transform: hov ? 'scale(1.05)' : 'scale(1)',
               transition: 'transform 0.45s cubic-bezier(0.22,1,0.36,1)',
@@ -1726,29 +1732,25 @@ function LatestListingsSection({ listings, navigate, loading, user, savedIds, on
       <div style={{ maxWidth: 1400, margin: '0 auto', minWidth: 0 }}>
         <div className="soko-latest-head latest-animate-in" style={{
           display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
-          marginBottom: 24, flexWrap: 'wrap', gap: 12,
+          marginBottom: 28, flexWrap: 'wrap', gap: 12,
         }}>
           <div style={{ minWidth: 0, flex: '1 1 180px' }}>
-            <div className="soko-latest-badge" style={{
-              display: 'none', alignItems: 'center', gap: 4, marginBottom: 6,
-            }}>
-              <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#16A34A' }} />
-              <span style={{ fontSize: 9.5, fontWeight: 700, color: '#9CA3AF', letterSpacing: 0.6, textTransform: 'uppercase' }}>Updated daily</span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+              <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#16A34A', boxShadow: '0 0 6px rgba(22,163,74,0.5)' }} />
+              <span style={{ fontSize: 9.5, fontWeight: 600, color: T.gray500, letterSpacing: 0.5, textTransform: 'uppercase' }}>Updated daily</span>
+              <span style={{ width: 20, height: 1, background: T.gray300 }} />
             </div>
-            <h2 style={{ fontFamily: T.fontDisplay, fontSize: 'clamp(20px, 2.6vw, 27px)', fontWeight: 800, color: T.gray900, letterSpacing: '-0.6px', marginBottom: 5 }}>
-              Latest Listings
-            </h2>
-            <p style={{ fontSize: 13.5, color: T.gray600 }}>Fresh products added across Malawi</p>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+              <div style={{ width: 3, height: 28, borderRadius: 2, background: `linear-gradient(180deg, ${T.green}, ${T.greenD})`, flexShrink: 0, marginTop: 4 }} />
+              <div>
+                <h2 style={{ fontFamily: T.fontDisplay, fontSize: 'clamp(20px, 2.6vw, 27px)', fontWeight: 800, color: T.gray900, letterSpacing: '-0.6px', margin: 0 }}>
+                  Latest Listings
+                </h2>
+                <p style={{ fontSize: 13, color: T.gray500, marginTop: 4, marginBottom: 0 }}>Fresh products added across Malawi</p>
+              </div>
+            </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => navigate('/listings')}
-            className="soko-btn-dark soko-latest-viewall"
-            style={{ fontSize: 13.5, padding: '11px 22px', flexShrink: 0 }}
-          >
-            View All Listings {Icon.chevR(15)}
-          </button>
         </div>
 
         <div className="soko-latest-grid">
@@ -2152,6 +2154,20 @@ function RequestCard({ request: r, delay = 0, navigate }) {
   )
 }
 
+function simpleHash(s) {
+  let h = 0
+  for (let i = 0; i < s.length; i++) { h = ((h << 5) - h + s.charCodeAt(i)) | 0 }
+  return Math.abs(h)
+}
+
+function haversineKm(lat1, lon1, lat2, lon2) {
+  const R = 6371
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLon = (lon2 - lon1) * Math.PI / 180
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
 function LookingForSection({ navigate, requests, loading, userLat, userLng, activeDistrict, viewerLocation: viewerLocationProp, user }) {
   const [viewerLoc,    setViewerLoc]    = React.useState(viewerLocationProp || null)
   const [detectingGps, setDetectingGps] = React.useState(!viewerLocationProp)
@@ -2265,11 +2281,13 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
 
   const [lfCategory, setLfCategory] = React.useState('All')
   const [lfSort, setLfSort] = React.useState('recent')
+  const lfSessionSeed = React.useRef(Math.floor(Math.random() * 1000)).current
 
-  const MAX_CARDS_DESKTOP = 8
-  const MAX_CARDS_TABLET = 6
-  const MAX_CARDS_SMALL_TABLET = 4
-  const MAX_CARDS_MOBILE = 4
+  const LF_INITIAL_COUNT = 6
+  const LF_SHOW_MORE_CHUNK = 6
+
+  const impressionCounts = React.useRef({})
+  const countedImpression = React.useRef(new Set())
 
   const ranked = React.useMemo(() => {
     const now = Date.now()
@@ -2292,29 +2310,55 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
         : null)
     const byArea = sortRequestsByViewerLocation(open, loc, 'recent')
     const withDist = withDistanceToBuyer(byArea, loc)
-    const sorted = [...withDist].sort((a, b) => {
-      if (lfSort === 'budget') return (b.budget || 0) - (a.budget || 0)
-      if (lfSort === 'demand') return (b.offer_count ?? b.offerCount ?? 0) - (a.offer_count ?? a.offerCount ?? 0)
-      if (lfSort === 'urgent') return (b.urgency === 'urgent' ? 1 : 0) - (a.urgency === 'urgent' ? 1 : 0)
-      const aImg = (a.image_urls && Array.isArray(a.image_urls) && a.image_urls.length > 0) || a.image_url ? 1 : 0
-      const bImg = (b.image_urls && Array.isArray(b.image_urls) && b.image_urls.length > 0) || b.image_url ? 1 : 0
-      if (bImg !== aImg) return bImg - aImg
-      const sa = a._locScore || 0
-      const sb = b._locScore || 0
-      if (sb !== sa) return sb - sa
-      const da = a._distanceKm != null ? a._distanceKm : 1e9
-      const db = b._distanceKm != null ? b._distanceKm : 1e9
-      if (da !== db) return da - db
-      return new Date(b.created_at || 0) - new Date(a.created_at || 0)
+    const ic = impressionCounts.current
+    const tiebreakSeed = lfSessionSeed + Math.floor(now / (30 * 60 * 1000))
+
+    if (lfSort !== 'recent') {
+      const sorted = [...withDist].sort((a, b) => {
+        if (lfSort === 'budget') return (b.budget || 0) - (a.budget || 0)
+        if (lfSort === 'demand') return (b.offer_count ?? b.offerCount ?? 0) - (a.offer_count ?? a.offerCount ?? 0)
+        if (lfSort === 'urgent') return (b.urgency === 'urgent' ? 1 : 0) - (a.urgency === 'urgent' ? 1 : 0)
+        return 0
+      })
+      return sorted
+    }
+
+    const withScore = withDist.map(r => {
+      const isVerified = r.profiles?.is_verified || r.profiles?.verified || false
+      const locScore = r._locScore || 0
+      const ageH = r.created_at ? (now - new Date(r.created_at).getTime()) / 3600000 : 168
+      const exposure = (r.offer_count ?? r.offerCount ?? 0) + (r.view_count ?? 0) + (ic[r.id] || 0)
+      const score = (isVerified ? 40 : 0)
+        + (locScore / 100) * 25
+        + Math.max(0, 20 * (1 - Math.min(ageH, 168) / 168))
+        + Math.max(0, 15 * (1 - Math.min(exposure, 50) / 50))
+      const tiebreak = r.id ? simpleHash(r.id + tiebreakSeed) % 1e9 : 0
+      return { ...r, _fairScore: score, _tiebreak: tiebreak }
     })
-    const w = typeof window !== 'undefined' ? window.innerWidth : 1400
-    const maxCards = w >= 1024 ? MAX_CARDS_DESKTOP : w >= 768 ? MAX_CARDS_TABLET : w >= 640 ? MAX_CARDS_SMALL_TABLET : MAX_CARDS_MOBILE
-    return sorted.slice(0, maxCards)
+
+    withScore.sort((a, b) => {
+      if (a._fairScore !== b._fairScore) return b._fairScore - a._fairScore
+      return b._tiebreak - a._tiebreak
+    })
+    return withScore
   }, [requests, viewerLoc, userLat, userLng, activeDistrict, lfCategory, lfSort])
+
+  const [lfShowMore, setLfShowMore] = React.useState(0)
+  React.useEffect(() => { setLfShowMore(0) }, [lfCategory, lfSort])
+  const displayCount = LF_INITIAL_COUNT + lfShowMore
+  const hasMoreLf = ranked.length > displayCount
+  const shown = hasMoreLf ? ranked.slice(0, displayCount) : ranked
+
+  React.useEffect(() => {
+    const ic = impressionCounts.current
+    const counted = countedImpression.current
+    shown.forEach(r => {
+      if (!counted.has(r.id)) { counted.add(r.id); ic[r.id] = (ic[r.id] || 0) + 1 }
+    })
+  }, [displayCount])
 
   const filtered = ranked
   const placeLabel = viewerLoc?.district || viewerLoc?.city || viewerLoc?.label || (activeDistrict && activeDistrict !== 'All Districts' ? activeDistrict : null)
-  const nearCount = filtered.filter(r => (r._locScore || 0) >= 85).length
 
   const [lfNearby, setLfNearby] = React.useState('All')
   const [lfNearbyOpen, setLfNearbyOpen] = React.useState(false)
@@ -2324,7 +2368,6 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
   const lfCatRef = React.useRef(null)
   const lfSortRef = React.useRef(null)
 
-  const [lfVisible, setLfVisible] = React.useState(false)
   const [lfLightbox, setLfLightbox] = React.useState(null)
   const [lfLbIdx, setLfLbIdx] = React.useState(0)
   const [galleryZoomed, setGalleryZoomed] = React.useState(false)
@@ -2357,8 +2400,6 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
       }
     } catch (e) { if (e?.name !== 'AbortError') try { await navigator.clipboard?.writeText(url) } catch {} }
   }
-  const lfRef = React.useRef(null)
-
   React.useEffect(() => {
     function handleClick(e) {
       if (lfNearbyRef.current && !lfNearbyRef.current.contains(e.target)) setLfNearbyOpen(false)
@@ -2367,17 +2408,6 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
     }
     document.addEventListener('mousedown', handleClick)
     return () => document.removeEventListener('mousedown', handleClick)
-  }, [])
-
-  React.useEffect(() => {
-    const el = lfRef.current
-    if (!el) return
-    const io = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) { setLfVisible(true); io.disconnect() } },
-      { threshold: 0.08 }
-    )
-    io.observe(el)
-    return () => io.disconnect()
   }, [])
 
   React.useEffect(() => {
@@ -2431,12 +2461,11 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
   }
 
   return (
-    <section ref={lfRef} className={'soko-section-pad' + (lfVisible ? ' lf-fade-in' : '')} style={{
+    <section className="soko-section-pad" style={{
       padding: '12px 20px 32px', background: '#f8fafc',
     }}>
       <style>{`
         .lfr-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; padding:4px 0 16px; }
-        .lfr-grid > * { content-visibility:auto; contain-intrinsic-size:420px; }
         .lfr-card {
           background:#fff; border-radius:20px; border:1px solid #f1f5f9;
           box-shadow:0 1px 3px rgba(0,0,0,0.04),0 4px 16px rgba(0,0,0,0.04);
@@ -2505,18 +2534,13 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
           <div style={{ display:'inline-flex', alignItems:'center', gap:8, fontSize:13, fontWeight:800, color:'#166534', marginBottom:6 }}>
             <span style={{ fontSize:16 }}>🔥</span>
             <span>Looking For</span>
-            {filtered.length > 0 && (
-              <span style={{ fontSize:11, fontWeight:700, color:'#fff', background:'#dc2626', borderRadius:999, padding:'1px 9px', lineHeight:'20px' }}>
-                {filtered.length} Active{filtered.length === 1 ? '' : ''} Today
-              </span>
-            )}
           </div>
           <h2 style={{ fontFamily:'Sora, system-ui, sans-serif', fontSize:'clamp(18px, 2.2vw, 24px)', fontWeight:800, color:'#0f172a', letterSpacing:-0.4, margin:'0 0 2px', lineHeight:1.2 }}>
             Real buyers across Malawi looking for products and services
           </h2>
 
           {/* Filter row */}
-          <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:14, flexWrap:'wrap' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:14, flexWrap:'nowrap', overflowX:'auto', scrollbarWidth:'none', msOverflowStyle:'none', WebkitOverflowScrolling:'touch' }}>
             {/* Nearby filter */}
             <div ref={lfNearbyRef} style={{ position:'relative' }}>
               <button type="button" onClick={() => { setLfNearbyOpen(!lfNearbyOpen); setLfCatOpen(false); setLfSortOpen(false) }} style={{
@@ -2621,12 +2645,12 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
         {loading ? (
           <div className="lfr-grid">
             {[1,2,3,4,5,6,7,8].map(i => (
-              <div key={i} className="lfr-skel" style={{ aspectRatio:'3/4', minHeight:360 }} />
+              <div key={i} className="lfr-skel" style={{ aspectRatio:'1 / 1', minHeight:400 }} />
             ))}
           </div>
-        ) : filtered.length > 0 ? (
+        ) : shown.length > 0 ? (
           <div className="lfr-grid">
-              {filtered.map(r => {
+              {shown.map(r => {
                 const author = r.profiles || {}
                 const hasName = !!author.full_name
                 const aname = hasName ? author.full_name : 'Anonymous Buyer'
@@ -2673,20 +2697,20 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
                           {showImages.length === 1 ? (
                             <div style={{ flex:1, overflow:'hidden', borderRadius:14 }}
                               onClick={e => { e.stopPropagation(); setLfLightbox(r); setLfLbIdx(0) }}>
-                              <img src={showImages[0]} alt="" loading="lazy" className="lfr-img-cell"
+                              <img src={showImages[0]} alt="" loading="lazy" className="lfr-img-cell soko-img-reveal"
                                 style={{ width:'100%', height:'100%', objectFit:'cover' }} />
                             </div>
                           ) : showImages.length === 2 ? (
                             <div style={{ display:'flex', flexDirection:'column', gap:2, width:'100%', height:'100%' }}>
                               <div style={{ flex:'0 0 60%', overflow:'hidden', borderRadius:14 }}
                                 onClick={e => { e.stopPropagation(); setLfLightbox(r); setLfLbIdx(0) }}>
-                                <img src={showImages[0]} alt="" loading="lazy" className="lfr-img-cell"
+                                <img src={showImages[0]} alt="" loading="lazy" className="lfr-img-cell soko-img-reveal"
                                   style={{ width:'100%', height:'100%', objectFit:'cover' }} />
                               </div>
                               <div style={{ flex:1, display:'flex', gap:2 }}>
                                 <div style={{ flex:'0 0 50%', overflow:'hidden', borderRadius:14 }}
                                   onClick={e => { e.stopPropagation(); setLfLightbox(r); setLfLbIdx(1) }}>
-                                  <img src={showImages[1]} alt="" loading="lazy" className="lfr-img-cell"
+                                  <img src={showImages[1]} alt="" loading="lazy" className="lfr-img-cell soko-img-reveal"
                                     style={{ width:'100%', height:'100%', objectFit:'cover' }} />
                                 </div>
                               </div>
@@ -2695,14 +2719,14 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
                             <div style={{ display:'flex', flexDirection:'column', gap:2, width:'100%', height:'100%' }}>
                               <div style={{ flex:'0 0 55%', overflow:'hidden', borderRadius:14 }}
                                 onClick={e => { e.stopPropagation(); setLfLightbox(r); setLfLbIdx(0) }}>
-                                <img src={showImages[0]} alt="" loading="lazy" className="lfr-img-cell"
+                                <img src={showImages[0]} alt="" loading="lazy" className="lfr-img-cell soko-img-reveal"
                                   style={{ width:'100%', height:'100%', objectFit:'cover' }} />
                               </div>
                               <div style={{ flex:1, display:'flex', gap:2 }}>
                                 {[1,2].map(i => (
                                   <div key={i} style={{ flex:1, overflow:'hidden', borderRadius:14, position:'relative' }}
                                     onClick={e => { e.stopPropagation(); setLfLightbox(r); setLfLbIdx(i) }}>
-                                    <img src={showImages[i]} alt="" loading="lazy" className="lfr-img-cell"
+                                    <img src={showImages[i]} alt="" loading="lazy" className="lfr-img-cell soko-img-reveal"
                                       style={{ width:'100%', height:'100%', objectFit:'cover' }} />
                                     {i === 2 && extraCount > 0 && (
                                       <div style={{
@@ -2892,14 +2916,14 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
         )}
 
         {/* Demand footer */}
-        {filtered.length > 3 && (
+        {hasMoreLf && (
           <div style={{ textAlign:'center', marginTop:6 }}>
-            <button type="button" onClick={() => navigate('/looking-for')} style={{
+            <button type="button" onClick={() => setLfShowMore(prev => prev + LF_SHOW_MORE_CHUNK)} style={{
               display:'inline-flex', alignItems:'center', gap:5, background:'none', border:'none',
               padding:'8px 16px', fontSize:12.5, fontWeight:700, color:'#166534', cursor:'pointer',
               fontFamily:'inherit',
             }}>
-              Browse all {filtered.length} requests <ArrowRight size={13} />
+              Browse more ({ranked.length - displayCount} remaining) <ArrowRight size={13} />
             </button>
           </div>
         )}
@@ -3627,11 +3651,78 @@ function HomeServiceCard({
   )
 }
 
-function ShopsJobsServicesRow({ navigate, shops, jobs, services, loading, currentUser, onServiceClick, onJobClick }) {
+function ShopsJobsServicesRow({ navigate, shops, jobs, services, loading, currentUser, onServiceClick, onJobClick, userLat, userLng, activeDistrict }) {
   const shopsRail = useRef(null)
   const jobsRail = useRef(null)
   const servicesRail = useRef(null)
-  const [shopCount, setShopCount] = React.useState(8)
+
+  const SHOP_INITIAL_COUNT = 6
+  const SHOP_SHOW_MORE_CHUNK = 6
+  const [shopShowMore, setShopShowMore] = React.useState(0)
+  const shopImpressionCounts = React.useRef({})
+  const shopCountedImpressions = React.useRef(new Set())
+  const shopSessionSeed = React.useRef(Math.floor(Math.random() * 1000)).current
+
+  const rankedShops = React.useMemo(() => {
+    const now = Date.now()
+    const tiebreakSeed = shopSessionSeed + Math.floor(now / (60 * 60 * 1000))
+    const ic = shopImpressionCounts.current
+    const hasUserLoc = Number.isFinite(userLat) && Number.isFinite(userLng)
+
+    const withScore = (shops || []).map(s => {
+      const isVerified = s.is_verified || false
+      const rating = Number(s.rating) || 0
+      const listings = s.listing_count || 0
+      const followers = s.follower_count || 0
+      const impressions = ic[s.id] || 0
+
+      const updateTs = s.updated_at || s.created_at
+      const ageH = updateTs ? (now - new Date(updateTs).getTime()) / 3600000 : 9999
+
+      const exposure = listings + followers + impressions
+      const fairnessBoost = Math.max(0, 10 * (1 - Math.min(exposure, 30) / 30))
+
+      let distanceKm = null
+      let distanceScore = 0
+      if (hasUserLoc && Number.isFinite(s.lat) && Number.isFinite(s.lng)) {
+        distanceKm = haversineKm(userLat, userLng, s.lat, s.lng)
+        distanceScore = Math.max(0, 20 * (1 - Math.min(distanceKm, 100) / 100))
+      } else if (activeDistrict && activeDistrict !== 'All Districts' && s.city) {
+        distanceScore = s.city.toLowerCase() === activeDistrict.toLowerCase() ? 15 : 0
+      }
+
+      const activityScore = Math.max(0, 12 * (1 - Math.min(ageH, 720) / 720))
+        + Math.min(listings / 30 * 8, 8)
+
+      const score = (isVerified ? 35 : 0)
+        + distanceScore
+        + Math.min(rating / 5 * 20, 20)
+        + activityScore
+        + fairnessBoost
+
+      const tiebreak = s.id ? simpleHash(s.id + tiebreakSeed) % 1e9 : 0
+      return { ...s, _shopScore: score, _shopTiebreak: tiebreak, _distanceKm: distanceKm }
+    })
+
+    withScore.sort((a, b) => {
+      if (a._shopScore !== b._shopScore) return b._shopScore - a._shopScore
+      if (a._distanceKm != null && b._distanceKm != null && a._distanceKm !== b._distanceKm) return a._distanceKm - b._distanceKm
+      return b._shopTiebreak - a._shopTiebreak
+    })
+    return withScore
+  }, [shops, activeDistrict, shopSessionSeed, userLat, userLng])
+
+  const shopDisplayCount = SHOP_INITIAL_COUNT + shopShowMore
+  const hasMoreShops = rankedShops.length > shopDisplayCount
+  const shownShops = hasMoreShops ? rankedShops.slice(0, shopDisplayCount) : rankedShops
+
+  React.useEffect(() => {
+    const ic = shopImpressionCounts.current
+    const counted = shopCountedImpressions.current
+    shownShops.forEach(s => {
+      if (!counted.has(s.id)) { counted.add(s.id); ic[s.id] = (ic[s.id] || 0) + 1 }
+    })
+  }, [shopDisplayCount])
 
   const [jobCat, setJobCat] = React.useState('All')
   const [jobType, setJobType] = React.useState('All')
@@ -3656,16 +3747,6 @@ function ShopsJobsServicesRow({ navigate, shops, jobs, services, loading, curren
   }, [jobs, jobCat, jobType, jobSort])
 
   React.useEffect(() => {
-    function update() {
-      const w = window.innerWidth
-      setShopCount(w >= 1025 ? 8 : w >= 768 ? 6 : 4)
-    }
-    update()
-    window.addEventListener('resize', update)
-    return () => window.removeEventListener('resize', update)
-  }, [])
-
-  React.useEffect(() => {
     function handleClick(e) {
       if (jobCatRef.current && !jobCatRef.current.contains(e.target)) setJobCatOpen(false)
       if (jobTypeRef.current && !jobTypeRef.current.contains(e.target)) setJobTypeOpen(false)
@@ -3681,7 +3762,7 @@ function ShopsJobsServicesRow({ navigate, shops, jobs, services, loading, curren
         .soko-sjs-block { margin-bottom: 22px; }
         .soko-sjs-block:last-child { margin-bottom: 0; }
         .soko-sjs-head {
-          display: flex; align-items: center; justify-content: space-between;
+          display: flex; align-items: flex-end; justify-content: space-between;
           gap: 12px; margin-bottom: 12px;
         }
         .soko-sjs-title {
@@ -4243,13 +4324,13 @@ function ShopsJobsServicesRow({ navigate, shops, jobs, services, loading, curren
           ) : shops.length > 0 ? (
             <>
               <div className="soko-shops-grid">
-                {shops.slice(0, shopCount).map(s => {
+                {shownShops.map(s => {
                   const rating = Number(s.rating) || 0
                   return (
                     <button key={s.id} type="button" className="soko-shop-card-dir" onClick={() => navigate('/shop/' + s.slug)}>
                       <div className="sscd-cover">
                         {s.cover_url ? (
-                          <img src={s.cover_url} alt="" loading="lazy" className="sscd-cover-img"
+                          <img src={s.cover_url} alt="" loading="lazy" className="sscd-cover-img soko-img-reveal"
                             onError={e => { e.currentTarget.style.display = 'none' }} />
                         ) : s.logo_url ? (
                           <>
@@ -4309,9 +4390,16 @@ function ShopsJobsServicesRow({ navigate, shops, jobs, services, loading, curren
                 })}
               </div>
 
-              <button type="button" className="soko-shops-view-all-btn" onClick={() => navigate('/shops')}>
-                View All Shops {Icon.chevR(16)}
-              </button>
+              {hasMoreShops && (
+                <button type="button" className="soko-shops-view-all-btn" onClick={() => setShopShowMore(p => p + SHOP_SHOW_MORE_CHUNK)}>
+                  Browse more shops ({rankedShops.length - shopDisplayCount} remaining) {Icon.chevR(16)}
+                </button>
+              )}
+              {!hasMoreShops && rankedShops.length > 0 && (
+                <button type="button" className="soko-shops-view-all-btn" onClick={() => navigate('/shops')} style={{ borderColor: T.green, color: T.green }}>
+                  View All Shops {Icon.chevR(16)}
+                </button>
+              )}
             </>
           ) : (
             <div className="soko-shops-grid">
@@ -4350,14 +4438,14 @@ function ShopsJobsServicesRow({ navigate, shops, jobs, services, loading, curren
                   </span>
                 )}
               </h2>
-              <p style={{ margin: '2px 0 0', fontSize: 12, color: T.gray500, fontWeight: 500, paddingLeft: 34 }}>Find your next opportunity</p>
+              <p style={{ margin: '2px 0 0', fontSize: 12, color: T.gray500, fontWeight: 500, paddingLeft: 0 }}>Find your next opportunity</p>
             </div>
             <button type="button" className="soko-sjs-link" onClick={() => navigate('/jobs')}>
               View all {Icon.chevR(14)}
             </button>
           </div>
           {/* Job filters */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'nowrap', overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}>
             <div ref={jobCatRef} style={{ position: 'relative' }}>
               <button type="button" onClick={() => { setJobCatOpen(v => !v); setJobTypeOpen(false); setJobSortOpen(false) }} style={{
                 display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 999, padding: '7px 13px',
@@ -4468,15 +4556,7 @@ function ShopsJobsServicesRow({ navigate, shops, jobs, services, loading, curren
         {/* ── Services ── */}
         <div className="soko-sjs-block">
           <div className="soko-shops-head">
-            <div className="soko-shops-head-intro" style={{ background: 'linear-gradient(135deg, #f5f3ff, #ede9fe)' }}>
-              <p>Find skilled professionals and trusted service providers in your area.</p>
-              <div className="soko-shops-head-badges">
-                <span className="soko-shops-head-badge" style={{ color: '#6d28d9', background: 'rgba(109,40,217,0.08)' }}>✓ Verified Pros</span>
-                <span className="soko-shops-head-badge" style={{ color: '#6d28d9', background: 'rgba(109,40,217,0.08)' }}>✓ Local Experts</span>
-                <span className="soko-shops-head-badge" style={{ color: '#6d28d9', background: 'rgba(109,40,217,0.08)' }}>✓ Fast Booking</span>
-                <span className="soko-shops-head-badge" style={{ color: '#6d28d9', background: 'rgba(109,40,217,0.08)' }}>✓ Quality Work</span>
-              </div>
-            </div>
+
             <div className="soko-shops-head-title-row" style={{ marginBottom: 10 }}>
               <h2 className="soko-shops-head-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 8, background: T.violetL, color: T.violet }}>{Icon.wrench(14)}</span>
@@ -5005,6 +5085,11 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
           min-width: 0;
         }
         .hero-search-input::placeholder { color: #9CA3AF; }
+        .hero-entrance-badge { animation: heroFadeSlide 0.5s cubic-bezier(0.22,1,0.36,1) 0.05s both; }
+        .hero-entrance-title { animation: heroFadeSlide 0.5s cubic-bezier(0.22,1,0.36,1) 0.15s both; }
+        .hero-entrance-desc  { animation: heroFadeSlide 0.5s cubic-bezier(0.22,1,0.36,1) 0.25s both; }
+        .hero-entrance-search { animation: heroFadeSlide 0.55s cubic-bezier(0.22,1,0.36,1) 0.35s both; }
+        .hero-entrance-image { animation: heroScaleIn 0.6s cubic-bezier(0.22,1,0.36,1) 0.1s both; }
         .hero-dots {
           display: flex;
           align-items: center;
@@ -5074,7 +5159,7 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
       }}>
         <div className="hero-content">
           {slide.badge && (
-            <div style={{
+            <div className="hero-entrance-badge" style={{
               display: 'inline-flex', alignItems: 'center', gap: 4,
               fontSize: 10, fontWeight: 800, letterSpacing: 0.5,
               color: slide.accent, background: `${slide.accent}12`,
@@ -5085,7 +5170,7 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
               {slide.badge}
             </div>
           )}
-          <h1 style={{
+          <h1 className="hero-entrance-title" style={{
             margin: '0 0 10px',
             fontFamily: T.fontDisplay,
             fontSize: 'clamp(24px, 3.2vw, 36px)',
@@ -5097,7 +5182,7 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
           }}>
             {slide.title}
           </h1>
-          <p style={{
+          <p className="hero-entrance-desc" style={{
             margin: '0 0 20px',
             fontSize: 14.5,
             color: '#6B7280',
@@ -5108,7 +5193,7 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
           </p>
 
           {onSearch && (
-            <div ref={searchRef} style={{ maxWidth: 420, position: 'relative', zIndex: 100 }}>
+            <div ref={searchRef} className="hero-entrance-search" style={{ maxWidth: 420, position: 'relative', zIndex: 100 }}>
               <div className="hero-search">
                 <div style={{ display: 'flex', alignItems: 'center', height: '100%', borderRadius: 16, overflow: 'hidden', width: '100%' }}>
                   <input
@@ -5503,6 +5588,7 @@ function EarlyAccessStrip() {
 ───────────────────────────────────────────────────────────────────────────── */
 export default function Home() {
   const navigate = useNavigate()
+  const { isOffline } = useNetwork()
 
   // ── Auth & listings (preserved from prior version) ───────
   const [listings,   setListings]   = useState([])
@@ -5901,18 +5987,31 @@ export default function Home() {
     await Promise.all([
       (async () => {
         try {
+          const SHOP_SELECT = 'id, name, slug, category, logo_url, cover_url, city, rating, review_count, listing_count, is_verified, follower_count, created_at'
           let shopsQuery = supabase.from('shops')
-            .select('id, name, slug, category, logo_url, cover_url, city, rating, review_count, listing_count, is_verified, follower_count, created_at')
+            .select(SHOP_SELECT + ', lat, lng, updated_at')
             .eq('is_active', true)
             .gt('listing_count', 0)
           if (activeDistrict !== 'All Districts') shopsQuery = shopsQuery.eq('city', activeDistrict)
-          const { data, error } = await shopsQuery
+          let { data, error } = await shopsQuery
             .order('is_verified', { ascending: false, nullsFirst: false })
             .order('rating', { ascending: false, nullsFirst: false })
             .order('listing_count', { ascending: false, nullsFirst: false })
             .order('follower_count', { ascending: false, nullsFirst: false })
             .order('created_at', { ascending: false, nullsFirst: false })
             .limit(12)
+          if (error && /lat|lng|updated_at|column/i.test(error.message)) {
+            ;({ data, error } = await supabase.from('shops')
+              .select(SHOP_SELECT)
+              .eq('is_active', true)
+              .gt('listing_count', 0)
+              .order('is_verified', { ascending: false, nullsFirst: false })
+              .order('rating', { ascending: false, nullsFirst: false })
+              .order('listing_count', { ascending: false, nullsFirst: false })
+              .order('follower_count', { ascending: false, nullsFirst: false })
+              .order('created_at', { ascending: false, nullsFirst: false })
+              .limit(12))
+          }
           if (error) console.error('shops query error:', error)
           setShops(data || [])
         } catch (e) { console.error('shops catch:', e); setShops([]) }
@@ -6193,12 +6292,36 @@ export default function Home() {
         <CategoryGrid navigate={navigate} onCategoryChange={handleCategoryChange} />
       </div>
 
+      {/* — Categories → Featured transition — */}
+      <div className="bc-bridge" style={{
+        display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+        height:32, padding:'0 20px',
+        background:'#fff',
+      }}>
+        <div style={{
+          width:'100%', maxWidth:120, height:1, borderRadius:1,
+          background:'linear-gradient(90deg, transparent, #D1D5DB, transparent)',
+        }} />
+      </div>
+
       <div className="soko-settle soko-settle-d3">
         <FeaturedRevenueBanner navigate={navigate} user={user} />
       </div>
 
+      {/* — Featured → Stories transition — */}
+      <div className="bc-bridge" style={{
+        display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+        height:36, padding:'0 20px',
+        background:'linear-gradient(180deg, #FFFFFF 0%, #f8f9fa 100%)',
+      }}>
+        <div style={{
+          width:'100%', maxWidth:120, height:1, borderRadius:1,
+          background:'linear-gradient(90deg, transparent, #D1D5DB, transparent)',
+        }} />
+      </div>
+
       {/* Data sections: skeleton in place → content swap (no remount keys — those stacked thrash) */}
-      <div className={!storiesLoading ? 'soko-swap-in' : undefined}>
+      <div className={!storiesLoading ? 'soko-swap-in' : undefined} style={{ background: '#f8f9fa' }}>
         <HomeStatusSection
           navigate={navigate}
           stories={stories}
@@ -6287,21 +6410,23 @@ export default function Home() {
         }} />
       </div>
 
-      <div className={!sectionsLoading ? 'soko-swap-in' : undefined}>
-        <LookingForSection
-          navigate={navigate}
-          requests={requests}
-          loading={sectionsLoading}
-          userLat={userLat}
-          userLng={userLng}
-          activeDistrict={activeDistrict}
-          viewerLocation={homeGpsLocation}
-          user={user}
-        />
-      </div>
+      {!isOffline && (
+        <div className={!sectionsLoading ? 'soko-swap-in' : undefined}>
+          <LookingForSection
+            navigate={navigate}
+            requests={requests}
+            loading={sectionsLoading}
+            userLat={userLat}
+            userLng={userLng}
+            activeDistrict={activeDistrict}
+            viewerLocation={homeGpsLocation}
+            user={user}
+          />
+        </div>
+      )}
 
       <div className={!sectionsLoading ? 'soko-swap-in' : undefined}>
-        <ShopsJobsServicesRow navigate={navigate} shops={shops} jobs={jobs} services={services} loading={sectionsLoading} currentUser={user} onServiceClick={setSelectedService} onJobClick={setSelectedJob} />
+        <ShopsJobsServicesRow navigate={navigate} shops={shops} jobs={jobs} services={services} loading={sectionsLoading} currentUser={user} onServiceClick={setSelectedService} onJobClick={setSelectedJob} userLat={userLat} userLng={userLng} activeDistrict={activeDistrict} />
       </div>
 
       <div className="soko-settle soko-settle-d8">

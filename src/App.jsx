@@ -32,14 +32,17 @@ const SearchPage        = lazy(() => import('./pages/SearchPage'))
 const ExplorePage       = lazy(() => import('./pages/ExplorePage'))
 const ListingsPage      = lazy(() => import('./pages/ListingsPage'))
 
+import ErrorBoundary from './components/ErrorBoundary'
+import OfflinePage from './components/OfflinePage'
 import GlobalCallListener from './components/GlobalCallListener'
 import PersistentCallShell from './components/PersistentCallShell'
 import MiniCallBar from './components/MiniCallBar'
 import { CallProvider }   from './context/CallContext'
+import { NetworkProvider } from './context/NetworkContext'
 import { useGlobalPresence } from './hooks/usePresence'
 import { registerPushNotifications, listenForServiceWorkerMessages } from './lib/pushNotifications'
 
-// ── Spinner shown while lazy chunks download ──────────────
+// ── Branded page loader ────────────────────────────────────
 function PageLoader() {
   return (
     <div style={{
@@ -48,15 +51,24 @@ function PageLoader() {
     }}>
       <div style={{ textAlign: 'center' }}>
         <div style={{
-          width: 36, height: 36,
-          border: '3px solid #1a7a4a',
-          borderTopColor: '#5de89e',
-          borderRadius: '50%',
-          animation: 'spin 0.7s linear infinite',
-          margin: '0 auto 12px',
-        }} />
-        <style>{`@keyframes spin { to { transform: rotate(360deg) } }`}</style>
-        <p style={{ color: '#637068', fontSize: 13 }}>Loading…</p>
+          fontFamily: "'Sora', 'Inter', system-ui, sans-serif",
+          fontSize: 28, fontWeight: 800,
+          color: '#0F9D58', letterSpacing: '-0.5px', lineHeight: 1.1,
+          marginBottom: 28,
+        }}>
+          Soko<span style={{ color: '#F9AB00' }}>Mw</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
+          {[0, 1, 2].map(i => (
+            <div key={i} style={{
+              width: 6, height: 6, borderRadius: '50%',
+              background: i === 1 ? '#F9AB00' : '#0F9D58',
+              animation: 'sokoBounce 1.6s ease-in-out infinite',
+              animationDelay: `${i * 0.15}s`,
+            }} />
+          ))}
+        </div>
+        <style>{`@keyframes sokoBounce { 0%,100% { transform: translateY(0); opacity: 0.25; } 50% { transform: translateY(-5px); opacity: 1; } }`}</style>
       </div>
     </div>
   )
@@ -252,6 +264,8 @@ const [installPrompt, setInstallPrompt] = useState(null)
 
   return (
     <CallProvider>
+    <NetworkProvider>
+      <OfflinePage />
       {installPrompt && (
         <div style={{
           position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 9999,
@@ -283,6 +297,7 @@ const [installPrompt, setInstallPrompt] = useState(null)
         {authed && <PersistentCallShell />}
         {authed && <MiniCallBar />}
         <Suspense fallback={<PageLoader />}>
+          <ErrorBoundary>
           <Routes>
             {/* ── Auth routes ───────────────────────────── */}
             <Route path="/login"          element={!authed ? <Login /> : <Navigate to={isAdmin ? '/admin' : '/'} />} />
@@ -324,10 +339,12 @@ const [installPrompt, setInstallPrompt] = useState(null)
             <Route path="/listings"                element={authed ? <ListingsPage />   : <Navigate to="/login" />} />
             <Route path="*"                        element={<Navigate to="/" />} />
           </Routes>
+          </ErrorBoundary>
         </Suspense>
         {/* Single mobile bottom nav for the whole marketplace app */}
         <AppMobileBottomNav enabled={authed && !isAdmin && !isRecovery} />
       </BrowserRouter>
+    </NetworkProvider>
     </CallProvider>
   )
 }
