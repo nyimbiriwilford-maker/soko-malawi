@@ -1,9 +1,8 @@
 /**
  * NetworkManager — singleton
- * Runs a continuous background heartbeat against the app's own Supabase
- * backend (what the app actually needs to reach), falling back to well-known
- * cross-origin connectivity probes.  The service worker cannot intercept any
- * of these because they are all cross-origin.
+ * Runs a continuous background heartbeat against well-known cross-origin
+ * connectivity probes (gstatic, Apple captive portal).  The service worker
+ * cannot intercept any of these because they are all cross-origin.
  *
  * If the browser fires a native `offline` event, it is always trusted.
  * Health-check successes are discarded when `navigator.onLine === false`
@@ -11,15 +10,10 @@
  * cached DNS entry even when the real data path is down.
  */
 
-const SUPABASE_URL = typeof import.meta !== 'undefined'
-  ? (import.meta.env.VITE_SUPABASE_URL || '').replace(/\/+$/, '')
-  : null
-
 const HEALTH_CHECK_URLS = [
-  SUPABASE_URL,
   'https://www.gstatic.com/generate_204',
   'https://captive.apple.com/generate_204',
-].filter(Boolean)
+]
 
 const ONLINE_POLL_INTERVAL_MS = 15000
 const OFFLINE_POLL_INTERVAL_MS = 500
@@ -133,8 +127,8 @@ class NetworkManager {
     this.reconnecting = false
     this._consecutiveFailures = 0
     this.lastConnectionTime = Date.now()
-    this._restartPolling(ONLINE_POLL_INTERVAL_MS)
     if (wasOffline) {
+      this._restartPolling(ONLINE_POLL_INTERVAL_MS)
       this._emit('online')
       this._flushQueue()
     }
