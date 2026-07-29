@@ -4,17 +4,19 @@
  * against a cross-origin, no-cache endpoint that a service worker cannot
  * intercept, so DNS/connectivity failures are caught even when the browser
  * never fires a native 'offline' event.
+ *
+ * Uses a failure threshold so transient DNS blips (common on mobile) don't
+ * falsely declare offline, and falls back to a same-origin probe when the
+ * primary cross-origin endpoint is unreachable (some carriers block gstatic).
  */
 
-// Cross-origin, cache-proof connectivity probe (same technique Chromium/
-// Android use internally). Swap for your own backend host if you'd rather
-// test reachability to Supabase specifically, e.g.
-// `${import.meta.env.VITE_SUPABASE_URL}/auth/v1/health`
-const HEALTH_CHECK_URL = 'https://www.gstatic.com/generate_204'
+const CROSS_ORIGIN_URL = 'https://www.gstatic.com/generate_204'
+const FALLBACK_URL = '/'
 
-const ONLINE_POLL_INTERVAL_MS = 15000   // heartbeat while believed online
-const OFFLINE_POLL_INTERVAL_MS = 7000   // faster retry while offline
+const ONLINE_POLL_INTERVAL_MS = 15000
+const OFFLINE_POLL_INTERVAL_MS = 7000
 const CONSECUTIVE_SUCCESS_THRESHOLD = 2
+const CONSECUTIVE_FAILURE_THRESHOLD = 2
 const HEALTH_CHECK_TIMEOUT_MS = 5000
 
 class NetworkManager {
@@ -33,6 +35,7 @@ class NetworkManager {
     }
 
     this._consecutiveSuccesses = 0
+    this._consecutiveFailures = 0
     this._pollTimer = null
     this._queue = []
 
@@ -44,9 +47,6 @@ class NetworkManager {
       window.addEventListener('offline', this._handleBrowserOffline)
     }
 
-    // Always run the heartbeat, regardless of current believed state —
-    // this is the fix: we no longer wait for a browser 'offline' event
-    // before we start actively checking.
     this._startPolling()
   }
 
@@ -93,10 +93,10 @@ class NetworkManager {
   }
 
   _handleBrowserOnline() {
-    // Don't trust the browser event blindly — verify with a real request.
     this.reconnecting = true
     this._emit('reconnecting')
     this._consecutiveSuccesses = 0
+    this._consecutiveFailures = 0
     this._restartPolling(OFFLINE_POLL_INTERVAL_MS)
   }
 
@@ -122,6 +122,7 @@ class NetworkManager {
     this.isOnline = true
     this.isOffline = false
     this.reconnecting = false
+    this._consecutiveFailures = 0
     this.lastConnectionTime = Date.now()
     this._restartPolling(ONLINE_POLL_INTERVAL_MS)
     if (wasOffline) {
@@ -150,37 +151,51 @@ class NetworkManager {
     }
   }
 
+  _fetchWithTimeout(url, mode) {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS)
+    const bustUrl = `${url}${url.includes('?') ? '&' : '?'}_=${Date.now()}`
+
+    return fetch(bustUrl, {
+      method: 'GET',
+      mode,
+      cache: 'no-store',
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeout))
+  }
+
   async _healthCheck() {
     if (this.isChecking) return
     this.isChecking = true
     this._emit('checking')
 
-    const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS)
-    const bustUrl = `${HEALTH_CHECK_URL}${HEALTH_CHECK_URL.includes('?') ? '&' : '?'}_=${Date.now()}`
-
+    let alive = false
     try {
-      // no-cors: we can't read the response body/status cross-origin, but a
-      // resolved promise means the network path (DNS + TCP + TLS) is alive.
-      // A DNS failure or dead connection rejects the promise, which is all
-      // we need to detect.
-      await fetch(bustUrl, {
-        method: 'GET',
-        mode: 'no-cors',
-        cache: 'no-store',
-        signal: controller.signal,
-      })
-      clearTimeout(timeout)
-      this.isChecking = false
+      await this._fetchWithTimeout(CROSS_ORIGIN_URL, 'no-cors')
+      alive = true
+    } catch {
+      try {
+        await this._fetchWithTimeout(FALLBACK_URL, 'same-origin')
+        alive = true
+      } catch {
+        alive = false
+      }
+    }
 
+    this.isChecking = false
+
+    if (alive) {
       this._consecutiveSuccesses += 1
+      this._consecutiveFailures = 0
       if (this._consecutiveSuccesses >= CONSECUTIVE_SUCCESS_THRESHOLD) {
         this._goOnline()
       }
-    } catch (err) {
-      clearTimeout(timeout)
-      this.isChecking = false
-      this._goOffline()
+    } else {
+      this._consecutiveSuccesses = 0
+      this._consecutiveFailures += 1
+      if (this._consecutiveFailures >= CONSECUTIVE_FAILURE_THRESHOLD) {
+        this._goOffline()
+      }
     }
   }
 
@@ -200,6 +215,5 @@ class NetworkManager {
   }
 }
 
-// Singleton instance
 const instance = new NetworkManager()
 export default instance
