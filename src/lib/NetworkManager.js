@@ -180,15 +180,11 @@ class NetworkManager {
     this._emit('checking')
 
     let alive = false
-    for (const url of HEALTH_CHECK_URLS) {
-      if (!url) continue
-      try {
-        await this._fetchWithTimeout(url)
-        alive = true
-        break
-      } catch {
-        // try next endpoint
-      }
+    const probes = HEALTH_CHECK_URLS.filter(Boolean).map(url =>
+      this._fetchWithTimeout(url).then(() => true, () => false)
+    )
+    if (probes.length > 0) {
+      alive = await Promise.any(probes).catch(() => false)
     }
 
     this.isChecking = false
