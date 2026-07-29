@@ -1,26 +1,25 @@
 /**
  * NetworkManager — singleton
- * Runs a continuous background heartbeat (both online and offline states)
- * against cross-origin endpoints that a service worker cannot intercept,
- * so DNS/connectivity failures are caught even when the browser never
- * fires a native 'offline' event.
+ * Runs a continuous background heartbeat against the app's own Supabase
+ * backend (what the app actually needs to reach), falling back to well-known
+ * cross-origin connectivity probes.  The service worker cannot intercept any
+ * of these because they are all cross-origin.
  *
- * Tries multiple well-known connectivity-check URLs (used by Android,
- * ChromeOS, and Apple) so that a single blocked CDN doesn't cause a
- * false offline reading.  Never falls back to same-origin URLs because
- * the service worker would serve a cached response and lie that the
- * network is alive.
- *
- * Uses a failure threshold so transient DNS blips don't falsely declare
- * offline, and a success threshold so we don't declare online until the
- * connection is confirmed stable.
+ * If the browser fires a native `offline` event, it is always trusted.
+ * Health-check successes are discarded when `navigator.onLine === false`
+ * because on some mobile browsers a `no-cors` fetch can resolve against a
+ * cached DNS entry even when the real data path is down.
  */
 
+const SUPABASE_URL = typeof import.meta !== 'undefined'
+  ? (import.meta.env.VITE_SUPABASE_URL || '').replace(/\/+$/, '')
+  : null
+
 const HEALTH_CHECK_URLS = [
+  SUPABASE_URL,
   'https://www.gstatic.com/generate_204',
-  'https://connectivitycheck.gstatic.com/generate_204',
-  'https://clients3.google.com/generate_204',
-]
+  'https://captive.apple.com/generate_204',
+].filter(Boolean)
 
 const ONLINE_POLL_INTERVAL_MS = 15000
 const OFFLINE_POLL_INTERVAL_MS = 7000
@@ -160,14 +159,15 @@ class NetworkManager {
     }
   }
 
-  _fetchWithTimeout(url, mode) {
+  _fetchWithTimeout(url) {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS)
-    const bustUrl = `${url}${url.includes('?') ? '&' : '?'}_=${Date.now()}`
+    const sep = url.includes('?') ? '&' : '?'
+    const bustUrl = `${url}${sep}_=${Date.now()}`
 
     return fetch(bustUrl, {
-      method: 'GET',
-      mode,
+      method: 'HEAD',
+      mode: 'no-cors',
       cache: 'no-store',
       signal: controller.signal,
     }).finally(() => clearTimeout(timeout))
@@ -180,8 +180,9 @@ class NetworkManager {
 
     let alive = false
     for (const url of HEALTH_CHECK_URLS) {
+      if (!url) continue
       try {
-        await this._fetchWithTimeout(url, 'no-cors')
+        await this._fetchWithTimeout(url)
         alive = true
         break
       } catch {
@@ -191,12 +192,22 @@ class NetworkManager {
 
     this.isChecking = false
 
-    if (alive) {
+    // Never declare online if the browser itself believes we're offline.
+    // On some mobile browsers a `no-cors` fetch can resolve against a
+    // cached DNS entry even when the real data path is down.
+    const browserOffline = typeof navigator !== 'undefined' && navigator.onLine === false
+
+    if (alive && !browserOffline) {
       this._consecutiveSuccesses += 1
       this._consecutiveFailures = 0
       if (this._consecutiveSuccesses >= CONSECUTIVE_SUCCESS_THRESHOLD) {
         this._goOnline()
       }
+    } else if (browserOffline) {
+      // Browser says offline — don't trust the health check
+      this._consecutiveSuccesses = 0
+      this._consecutiveFailures = 0
+      this._goOffline()
     } else {
       this._consecutiveSuccesses = 0
       this._consecutiveFailures += 1
