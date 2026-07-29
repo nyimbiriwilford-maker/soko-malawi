@@ -1,17 +1,26 @@
 /**
  * NetworkManager — singleton
  * Runs a continuous background heartbeat (both online and offline states)
- * against a cross-origin, no-cache endpoint that a service worker cannot
- * intercept, so DNS/connectivity failures are caught even when the browser
- * never fires a native 'offline' event.
+ * against cross-origin endpoints that a service worker cannot intercept,
+ * so DNS/connectivity failures are caught even when the browser never
+ * fires a native 'offline' event.
  *
- * Uses a failure threshold so transient DNS blips (common on mobile) don't
- * falsely declare offline, and falls back to a same-origin probe when the
- * primary cross-origin endpoint is unreachable (some carriers block gstatic).
+ * Tries multiple well-known connectivity-check URLs (used by Android,
+ * ChromeOS, and Apple) so that a single blocked CDN doesn't cause a
+ * false offline reading.  Never falls back to same-origin URLs because
+ * the service worker would serve a cached response and lie that the
+ * network is alive.
+ *
+ * Uses a failure threshold so transient DNS blips don't falsely declare
+ * offline, and a success threshold so we don't declare online until the
+ * connection is confirmed stable.
  */
 
-const CROSS_ORIGIN_URL = 'https://www.gstatic.com/generate_204'
-const FALLBACK_URL = '/'
+const HEALTH_CHECK_URLS = [
+  'https://www.gstatic.com/generate_204',
+  'https://connectivitycheck.gstatic.com/generate_204',
+  'https://clients3.google.com/generate_204',
+]
 
 const ONLINE_POLL_INTERVAL_MS = 15000
 const OFFLINE_POLL_INTERVAL_MS = 7000
@@ -170,15 +179,13 @@ class NetworkManager {
     this._emit('checking')
 
     let alive = false
-    try {
-      await this._fetchWithTimeout(CROSS_ORIGIN_URL, 'no-cors')
-      alive = true
-    } catch {
+    for (const url of HEALTH_CHECK_URLS) {
       try {
-        await this._fetchWithTimeout(FALLBACK_URL, 'same-origin')
+        await this._fetchWithTimeout(url, 'no-cors')
         alive = true
+        break
       } catch {
-        alive = false
+        // try next endpoint
       }
     }
 
