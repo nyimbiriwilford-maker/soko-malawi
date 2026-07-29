@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from 'react'
+﻿import { useEffect, useState, useRef } from 'react'
 import { WifiOff, RefreshCw, Home } from 'lucide-react'
 import { useNetwork } from '../context/NetworkContext'
 import NM from '../lib/NetworkManager'
@@ -6,18 +6,22 @@ import NM from '../lib/NetworkManager'
 export default function OfflinePage() {
   const { isOffline, reconnecting } = useNetwork()
   const [showBackOnlineToast, setShowBackOnlineToast] = useState(false)
-  const [wasOffline, setWasOffline] = useState(false)
+  const wasOffline = useRef(false)
 
   useEffect(() => {
     if (isOffline) {
-      setWasOffline(true)
-    } else if (wasOffline) {
+      wasOffline.current = true
+    } else if (wasOffline.current) {
+      wasOffline.current = false
       setShowBackOnlineToast(true)
-      setWasOffline(false)
-      const t = setTimeout(() => setShowBackOnlineToast(false), 3000)
-      return () => clearTimeout(t)
     }
-  }, [isOffline, wasOffline])
+  }, [isOffline])
+
+  useEffect(() => {
+    if (!showBackOnlineToast) return
+    const t = setTimeout(() => setShowBackOnlineToast(false), 3000)
+    return () => clearTimeout(t)
+  }, [showBackOnlineToast])
 
   if (!isOffline && !showBackOnlineToast) return null
 
