@@ -33,6 +33,7 @@ import {
 import ChatCallHost, { CallHeaderButtons, HideDuringCall } from '../components/ChatCallHost'
 import CallMessageBubble from '../components/CallMessageBubble'
 import { maybePromptDealReady } from '../utils/dealNotificationFlow'
+import { sendChatMessage } from '../utils/sendMessageReply'
 import { notifyMissedCall, notifyCallDeclined } from '../utils/callNotifications'
 import {
   EMOJI_CATEGORIES,
@@ -1255,28 +1256,19 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
       haptic(6)
     }
 
-    // Insert; if new source columns aren't migrated yet, retry without them
-    let inserted = null
-    let error = null
-    {
-      const res = await supabase.from('messages').insert(msgData).select('*').single()
-      inserted = res.data
-      error = res.error
-    }
-    if (error && /chat_source|job_id|shop_id|request_id|column/i.test(error.message || '')) {
-      const legacy = { ...msgData }
-      delete legacy.chat_source
-      delete legacy.job_id
-      delete legacy.shop_id
-      delete legacy.request_id
-      // Keep listing_id / service_id which already exist
-      if (src === 'job' || src === 'shop' || src === 'request') {
-        // No FK available — still deliver as person-level message with body
-      }
-      const res2 = await supabase.from('messages').insert(legacy).select('*').single()
-      inserted = res2.data
-      error = res2.error
-    }
+    const contextTitle = listing?.title || service?.name || shop?.name || job?.title || request?.title || null
+
+    const { data: inserted, error } = await sendChatMessage({
+      toUserId: userId,
+      body: encodedBody,
+      mediaUrl,
+      mediaType: type,
+      chatSource: src,
+      contextId: ctx,
+      contextTitle,
+      extraFields: persistFields,
+      skipNotification: isCallEvent,
+    })
 
     if (error) {
       if (!isCallEvent) {
@@ -1297,71 +1289,27 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
       })
     }
 
-    window.dispatchEvent(new Event('soko:messages-updated'))
-
     if (isCallEvent) {
-      // call path previously cleared nothing special
-    }
-
-    const notifContextId = contextId || null
-    const callType = extraFields.call_type === 'video' ? 'video' : 'voice'
-    const contextTitle = listing?.title || service?.name || shop?.name || job?.title || request?.title || null
-    if (callNotify === 'missed_to_peer') {
-      await notifyMissedCall({
-        toUserId: userId,
-        callerId: user.id,
-        callType,
-        contextId: notifContextId,
-        messageId: inserted?.id || null,
-        listingTitle: contextTitle,
-      })
-    } else if (callNotify === 'declined_to_peer') {
-      await notifyCallDeclined({
-        toUserId: userId,
-        declinerId: user.id,
-        callType,
-        contextId: notifContextId,
-        messageId: inserted?.id || null,
-        listingTitle: contextTitle,
-      })
-    }
-
-    if (!extraFields.call_status) {
-      try {
-        const { data: myProf } = await supabase
-          .from('profiles').select('full_name').eq('id', user.id).single()
-        const senderName = myProf?.full_name || 'Someone'
-        let preview = trimmed
-        if (preview.includes('|||')) {
-          // eslint-disable-next-line no-control-regex
-          preview = preview.replace(/^\x02?\[/, '').split('|||')[0].trim()
-        }
-        if (!preview) {
-          preview = mediaUrl
-            ? (type === 'image' ? '📷 Photo'
-             : type === 'video' ? '🎥 Video'
-             : type === 'audio' ? '🎤 Voice note'
-             : '📎 File')
-            : 'Sent a message'
-        }
-        await supabase.from('notifications').insert({
-          user_id: userId,
-          type: 'new_message',
-          title: senderName,
-          body: preview.slice(0, 80),
-          message: preview.slice(0, 80),
-          data: {
-            sender_id: user.id,
-            sender_name: senderName,
-            context_id: notifContextId,
-            message_id: inserted?.id || null,
-            chat_source: src,
-            listing_title: contextTitle,
-          },
-          read: false,
+      const notifContextId = contextId || null
+      const callType = extraFields.call_type === 'video' ? 'video' : 'voice'
+      if (callNotify === 'missed_to_peer') {
+        await notifyMissedCall({
+          toUserId: userId,
+          callerId: user.id,
+          callType,
+          contextId: notifContextId,
+          messageId: inserted?.id || null,
+          listingTitle: contextTitle,
         })
-      } catch (notifErr) {
-        console.warn('Message notification error:', notifErr)
+      } else if (callNotify === 'declined_to_peer') {
+        await notifyCallDeclined({
+          toUserId: userId,
+          declinerId: user.id,
+          callType,
+          contextId: notifContextId,
+          messageId: inserted?.id || null,
+          listingTitle: contextTitle,
+        })
       }
     }
   }
