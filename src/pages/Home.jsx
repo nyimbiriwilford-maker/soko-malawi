@@ -6112,45 +6112,14 @@ export default function Home() {
           if (cached) { setRequests(cached); return }
 
           const nowIso = new Date().toISOString()
-          const selectBase = 'id, title, description, category, city, cities, created_at, budget, offer_count, view_count, urgency, image_url, image_urls, expires_at, user_id, profiles:user_id(full_name,avatar_url,is_verified,created_at)'
-          let result
-          // Tier 1 — full filters with geo + featured
-          result = await supabase.from('buyer_requests')
-            .select(selectBase + ', lat, lng, is_featured')
+          const selectBase = 'id, title, description, category, city, cities, created_at, budget, offer_count, view_count, urgency, image_url, image_urls, expires_at, user_id, profiles:user_id(full_name,avatar_url,is_verified)'
+          const { data: resultData, error } = await supabase.from('buyer_requests')
+            .select(selectBase)
             .neq('status', 'fulfilled')
-            .eq('approved', true)
-            .eq('deleted', false)
             .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
             .order('created_at', { ascending: false })
             .limit(40)
-          // Tier 2 — without lat/lng/is_featured if those columns don't exist
-          if (result.error && /lat|lng|is_featured|column/i.test(result.error.message || '')) {
-            result = await supabase.from('buyer_requests')
-              .select(selectBase)
-              .neq('status', 'fulfilled')
-              .eq('approved', true)
-              .eq('deleted', false)
-              .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
-              .order('created_at', { ascending: false })
-              .limit(40)
-          }
-          // Tier 3 — without approved/deleted/expires_at if those don't exist
-          if (result.error && /approved|deleted|expires_at|column/i.test(result.error.message || '')) {
-            result = await supabase.from('buyer_requests')
-              .select(selectBase)
-              .not('status', 'eq', 'fulfilled')
-              .order('created_at', { ascending: false })
-              .limit(40)
-          }
-          // Tier 4 — without profiles.created_at if that column doesn't exist
-          const fallbackSelect = 'id, title, description, category, city, cities, created_at, budget, offer_count, view_count, urgency, image_url, image_urls, expires_at, user_id, profiles:user_id(full_name,avatar_url,is_verified)'
-          if (result.error && /created_at|column/i.test(result.error.message || '')) {
-            result = await supabase.from('buyer_requests')
-              .select(fallbackSelect)
-              .not('status', 'eq', 'fulfilled')
-              .order('created_at', { ascending: false })
-              .limit(40)
-          }
+          const result = { data: resultData, error }
           if (result.data) {
             try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ data: result.data, ts: Date.now() })) } catch {}
           }

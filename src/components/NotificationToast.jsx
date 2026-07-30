@@ -66,12 +66,12 @@ export default function NotificationToast() {
 
   // Subscribe only after user is known
   useEffect(() => {
-    let channel = null
+    let cancelled = false
+    const channel = supabase.channel('notification-toast')
 
     supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return
+      if (!user || cancelled) return
 
-      channel = supabase.channel('notification-toast')
       channel.on(
         'postgres_changes',
         {
@@ -88,7 +88,8 @@ export default function NotificationToast() {
     })
 
     return () => {
-      if (channel) supabase.removeChannel(channel)
+      cancelled = true
+      supabase.removeChannel(channel)
     }
   }, [])
 

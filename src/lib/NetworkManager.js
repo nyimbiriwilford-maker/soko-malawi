@@ -1,25 +1,14 @@
 /**
  * NetworkManager — singleton
- * Runs a continuous background heartbeat against well-known cross-origin
- * connectivity probes (gstatic, Apple captive portal).  The service worker
- * cannot intercept any of these because they are all cross-origin.
- *
- * If the browser fires a native `offline` event, it is always trusted.
- * Health-check successes are discarded when `navigator.onLine === false`
- * because on some mobile browsers a `no-cors` fetch can resolve against a
- * cached DNS entry even when the real data path is down.
+ * Uses navigator.onLine + browser online/offline events — no network request.
  */
-
-const HEALTH_CHECK_URLS = [
-  'https://www.gstatic.com/generate_204',
-  'https://captive.apple.com/generate_204',
-]
 
 const ONLINE_POLL_INTERVAL_MS = 15000
 const OFFLINE_POLL_INTERVAL_MS = 500
-const CONSECUTIVE_SUCCESS_THRESHOLD = 1
-const CONSECUTIVE_FAILURE_THRESHOLD = 2
-const HEALTH_CHECK_TIMEOUT_MS = 2000
+const CONSECUTIVE_SUCCESS_THRESHOLD = 2
+const CONSECUTIVE_FAILURE_THRESHOLD = 1
+const CHECK_COOLDOWN_MS = 5000
+const MAX_CONSECUTIVE_FAILURES = 5
 
 class NetworkManager {
   constructor() {
@@ -28,6 +17,8 @@ class NetworkManager {
     this.isChecking = false
     this.reconnecting = false
     this.lastConnectionTime = this.isOnline ? Date.now() : null
+
+    this._lastCheckTime = 0
 
     this._listeners = {
       online: new Set(),
@@ -66,7 +57,7 @@ class NetworkManager {
   }
 
   forceCheck() {
-    return this._healthCheck()
+    return this._healthCheck(true)
   }
 
   enqueue(config) {
@@ -97,9 +88,9 @@ class NetworkManager {
 
   _handleBrowserOnline() {
     this.reconnecting = true
-    this._emit('reconnecting')
     this._consecutiveSuccesses = 0
     this._consecutiveFailures = 0
+    this._emit('reconnecting')
     this._restartPolling(OFFLINE_POLL_INTERVAL_MS)
   }
 
@@ -110,14 +101,22 @@ class NetworkManager {
   _goOffline() {
     this._consecutiveSuccesses = 0
     if (this.isOffline) {
-      this._restartPolling(OFFLINE_POLL_INTERVAL_MS)
+      if (this._consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+        this._stopPolling()
+      } else {
+        this._restartPolling(OFFLINE_POLL_INTERVAL_MS)
+      }
       return
     }
     this.isOnline = false
     this.isOffline = true
     this.reconnecting = false
     this._emit('offline')
-    this._restartPolling(OFFLINE_POLL_INTERVAL_MS)
+    if (this._consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+      this._stopPolling()
+    } else {
+      this._restartPolling(OFFLINE_POLL_INTERVAL_MS)
+    }
   }
 
   _goOnline() {
@@ -125,6 +124,7 @@ class NetworkManager {
     this.isOnline = true
     this.isOffline = false
     this.reconnecting = false
+    this._consecutiveSuccesses = 0
     this._consecutiveFailures = 0
     this.lastConnectionTime = Date.now()
     if (wasOffline) {
@@ -137,7 +137,17 @@ class NetworkManager {
   _startPolling() {
     const interval = this.isOffline ? OFFLINE_POLL_INTERVAL_MS : ONLINE_POLL_INTERVAL_MS
     this._healthCheck()
-    this._pollTimer = setInterval(() => this._healthCheck(), interval)
+    this._pollTimer = setInterval(() => {
+      if (this._shouldStopPolling()) {
+        this._stopPolling()
+        return
+      }
+      this._healthCheck()
+    }, interval)
+  }
+
+  _shouldStopPolling() {
+    return this._consecutiveFailures >= MAX_CONSECUTIVE_FAILURES && this.isOffline
   }
 
   _restartPolling(intervalMs) {
@@ -155,63 +165,45 @@ class NetworkManager {
     }
   }
 
-  _fetchWithTimeout(url, controller) {
-    const timeout = setTimeout(() => controller.abort(), HEALTH_CHECK_TIMEOUT_MS)
-    const sep = url.includes('?') ? '&' : '?'
-    const bustUrl = `${url}${sep}_=${Date.now()}`
+  async _healthCheck(force = false) {
+    if (this.isChecking) return
 
-    return fetch(bustUrl, {
-      method: 'HEAD',
-      mode: 'no-cors',
-      cache: 'no-store',
-      signal: controller.signal,
-    }).finally(() => clearTimeout(timeout))
-  }
+    const now = Date.now()
+    if (!force && (now - this._lastCheckTime < CHECK_COOLDOWN_MS)) return
 
-  async _healthCheck() {
-    // Abort any in-flight check so we never wait for a stale probe.
     if (this._abortController) {
       this._abortController.abort()
     }
-    const controller = new AbortController()
-    this._abortController = controller
 
+    this._lastCheckTime = now
     this.isChecking = true
     this._emit('checking')
 
-    let alive = false
-    const probes = HEALTH_CHECK_URLS.filter(Boolean).map(url =>
-      this._fetchWithTimeout(url, controller).then(() => true, () => false)
-    )
-    if (probes.length > 0) {
-      alive = await Promise.any(probes).catch(() => false)
-    }
+    try {
+      const alive = typeof navigator !== 'undefined' ? navigator.onLine : true
 
-    if (this._abortController === controller) this._abortController = null
-    this.isChecking = false
+      if (alive) {
+        this._consecutiveSuccesses += 1
+        this._consecutiveFailures = 0
+        if (this._consecutiveSuccesses >= CONSECUTIVE_SUCCESS_THRESHOLD) {
+          this._goOnline()
+        }
+      } else {
+        this._consecutiveSuccesses = 0
+        this._consecutiveFailures += 1
 
-    // Never declare online if the browser itself believes we're offline.
-    // On some mobile browsers a `no-cors` fetch can resolve against a
-    // cached DNS entry even when the real data path is down.
-    const browserOffline = typeof navigator !== 'undefined' && navigator.onLine === false
-
-    if (alive && !browserOffline) {
-      this._consecutiveSuccesses += 1
-      this._consecutiveFailures = 0
-      if (this._consecutiveSuccesses >= CONSECUTIVE_SUCCESS_THRESHOLD) {
-        this._goOnline()
+        if (this._consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+          if (!this.isOffline) {
+            this._goOffline()
+          } else {
+            this._stopPolling()
+          }
+        } else if (this._consecutiveFailures >= CONSECUTIVE_FAILURE_THRESHOLD) {
+          this._goOffline()
+        }
       }
-    } else if (browserOffline) {
-      // Browser says offline — don't trust the health check
-      this._consecutiveSuccesses = 0
-      this._consecutiveFailures = 0
-      this._goOffline()
-    } else {
-      this._consecutiveSuccesses = 0
-      this._consecutiveFailures += 1
-      if (this._consecutiveFailures >= CONSECUTIVE_FAILURE_THRESHOLD) {
-        this._goOffline()
-      }
+    } finally {
+      this.isChecking = false
     }
   }
 

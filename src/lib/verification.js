@@ -2779,8 +2779,7 @@ export async function adminListVerificationProfiles(filter = 'verified') {
 
   // 2) Approved requests + joined profile (same pattern as Admin loadVerifications)
   const reqJoins = [
-    'id, seller_id, status, reviewed_at, created_at, admin_note, rejection_reason, profiles!seller_id(id, full_name, avatar_url, city, phone, email, is_verified, verification_status, verified_at, rejection_reason, created_at)',
-    'id, seller_id, status, reviewed_at, created_at, admin_note, rejection_reason, profiles!seller_id(id, full_name, avatar_url, city, is_verified, verification_status, verified_at, created_at)',
+    'id, seller_id, status, reviewed_at, created_at, admin_note, rejection_reason, profiles!seller_id(id, full_name, avatar_url, city, phone, email, is_verified, verification_status, verified_at, rejection_reason)',
     'id, seller_id, status, reviewed_at, created_at, admin_note, profiles!seller_id(full_name, avatar_url, city, is_verified)',
     'id, seller_id, status, reviewed_at, created_at, profiles!seller_id(full_name, avatar_url, city)',
   ]
@@ -3771,7 +3770,7 @@ export async function getSellerProfileForVerification(userId) {
   try {
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, full_name, avatar_url, phone, city, email, location, address')
+      .select('id, full_name, avatar_url, phone, city, email')
       .eq('id', userId)
       .maybeSingle()
     if (!error && data) return data

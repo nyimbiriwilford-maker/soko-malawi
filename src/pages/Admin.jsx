@@ -274,11 +274,9 @@ async function loadVerifications() {
   let rows = []
   // Progressive selects — FK embed names differ by environment; never leave admin blank
   const attempts = [
-    { sel: '*, profiles!seller_id(full_name, avatar_url, city, phone, email, created_at)', order: 'created_at' },
+    { sel: '*, profiles!seller_id(full_name, avatar_url, city, phone, email)', order: 'created_at' },
     { sel: '*, profiles!seller_id(full_name, avatar_url, city)', order: 'created_at' },
-    { sel: '*, profiles!seller_id(full_name, avatar_url, city)', order: 'updated_at' },
     { sel: '*', order: 'created_at' },
-    { sel: '*', order: 'updated_at' },
     { sel: 'id, seller_id, status, payment_method, payment_ref, amount_due, amount_paid, currency, admin_note, additional_info_message, rejection_reason, submitted_at, reviewed_at, under_review_at, payment_confirmed_at, created_at, updated_at, meta, notes', order: 'created_at' },
   ]
   for (const a of attempts) {
