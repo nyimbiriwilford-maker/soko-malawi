@@ -126,7 +126,8 @@ export default function NotificationToast() {
   const toastRef = useRef(null)
   const inputRef = useRef(null)
 
-  const senderProfile = useSenderProfile(visible?.data?.sender_id)
+  const actorId = visible?.data?.sender_id || visible?.data?.caller_id || visible?.data?.decliner_id || visible?.data?.voucher_id || visible?.data?.viewer_id || visible?.data?.buyer_id || visible?.data?.seller_id || visible?.data?.user_id || null
+  const senderProfile = useSenderProfile(actorId)
 
   useEffect(() => {
     let cancelled = false
@@ -202,7 +203,7 @@ export default function NotificationToast() {
 
   const isMessage = visible?.type === 'new_message'
   const accent = getAccent(visible?.type)
-  const displayName = visible?.data?.sender_name || visible?.title || getTitle(visible?.type)
+  const displayName = visible?.data?.sender_name || visible?.data?.caller_name || visible?.data?.decliner_name || visible?.data?.voucher_name || visible?.data?.viewer_name || visible?.data?.buyer_name || visible?.data?.seller_name || visible?.title || getTitle(visible?.type)
 
   async function handleSendReply() {
     const text = replyText.trim()

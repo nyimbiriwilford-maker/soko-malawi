@@ -54,6 +54,8 @@ export default function GlobalCallListener() {
     registerMediaControls,
     remoteMediaStreamRef,
     localMediaStreamRef,
+    incomingActionsRef,
+    setIncomingCall,
   } = useCall()
 
   const myUserIdRef   = useRef(null)
@@ -183,6 +185,7 @@ export default function GlobalCallListener() {
       }
       setIncoming(nextIncoming)
       incomingRef.current = nextIncoming
+      setIncomingCall(payload)
       // Mark global stack busy so Chat does not also auto-answer from sessionStorage
       claimCallStack?.('global')
 
@@ -302,6 +305,11 @@ export default function GlobalCallListener() {
     localStreamRef.current = stream
     if (localMediaStreamRef) localMediaStreamRef.current = stream
     const myId = myUserIdRef.current
+
+    setIncoming(null)
+    incomingRef.current = null
+    callStateRef.current = 'in-call'
+    setCallState('in-call')
     setCallUiMode?.('full')
 
     const earlyBuffer = drainEarlyCandidates(callId) || []
@@ -364,10 +372,6 @@ export default function GlobalCallListener() {
 
     if (type === 'video') setIsVideo(true)
 
-    setIncoming(null)
-    incomingRef.current = null
-    callStateRef.current = 'in-call'
-    setCallState('in-call')
     durationRef.current = 0
     setDuration(0)
     clearInterval(timerRef.current)
@@ -549,6 +553,8 @@ async function handleSwitchCamera() {
     document.addEventListener('visibilitychange', onVis)
     return () => document.removeEventListener('visibilitychange', onVis)
   }, [callState, minimizeCall])
+
+  incomingActionsRef.current = { answer: handleAnswer, decline: handleDecline }
   function toggleMute() {
     localStreamRef.current?.getAudioTracks().forEach(t => { t.enabled = !t.enabled })
     setIsMuted(m => !m)
@@ -604,7 +610,7 @@ async function handleSwitchCamera() {
     return null
   }
 
-  if (!incoming) return null
+  if (!incoming || callUiMode === 'hidden') return null
 
   const initial = (incoming.callerName || incoming.fromUser)?.[0]?.toUpperCase() || '?'
   const name = incoming.callerName || 'Incoming call'

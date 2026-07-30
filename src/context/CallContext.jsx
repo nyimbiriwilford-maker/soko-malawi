@@ -72,6 +72,7 @@ export function CallProvider({ children }) {
   const iceOwnerRef         = useRef(null) // 'chat' | 'global' | null — single ICE owner
   const callStackOwnerRef   = useRef(null) // who owns the active media path
   const earlyIceRef         = useRef(new Map())
+  const incomingActionsRef  = useRef({ answer: null, decline: null })
 
   useEffect(() => {
     setupChannel()
@@ -527,6 +528,7 @@ export function CallProvider({ children }) {
       stopIceSubscription,
       cleanupIceCandidates,
       registerCallListener,
+      setIncomingCall,
       dismissIncoming,
       playRing,
       stopRing,
@@ -538,6 +540,7 @@ export function CallProvider({ children }) {
       claimCallStack,
       releaseCallStack,
       getCallStackOwner,
+      incomingActionsRef,
     }}>
       {children}
     </CallContext.Provider>

@@ -1,20 +1,25 @@
+import { useEffect, useState } from 'react'
+import { supabase } from '../lib/supabase'
 import { useCall } from '../context/CallContext'
+import { T } from '../constants/tokens'
+import { Phone, PhoneOff, Video } from 'lucide-react'
 
 const S = {
   overlay: {
     position: 'fixed',
     top: 16,
-    right: 16,
+    left: '50%',
+    transform: 'translateX(-50%)',
     zIndex: 9999,
-    animation: 'slideInFloating 0.35s cubic-bezier(0.16, 1, 0.3, 1)',
-    fontFamily: "'DM Sans', system-ui, sans-serif",
+    animation: 'floatFadeIn 0.25s ease-out',
+    fontFamily: T.font,
   },
   card: {
-    width: 320,
-    background: '#ffffff',
+    width: 'min(320px, calc(100vw - 32px))',
+    background: T.white,
     borderRadius: 16,
-    border: '1px solid #d8e5dc',
-    boxShadow: '0 12px 40px rgba(0,0,0,0.18), 0 4px 12px rgba(0,0,0,0.08)',
+    border: `1px solid ${T.gray200}`,
+    boxShadow: T.shadowMd,
     padding: 20,
     display: 'flex',
     flexDirection: 'column',
@@ -24,58 +29,91 @@ const S = {
   avatar: { width: 48, height: 48, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 },
   avatarPlaceholder: {
     width: 48, height: 48, borderRadius: '50%',
-    background: '#1a7a4a', color: '#fff',
+    background: `linear-gradient(135deg, ${T.green}, ${T.greenD})`,
+    color: '#fff',
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     fontSize: 20, fontWeight: 700, flexShrink: 0,
   },
   info: { display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 },
-  name: { fontSize: 15, fontWeight: 700, color: '#0f1410', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
-  type: { fontSize: 13, color: '#4a5e4d', display: 'flex', alignItems: 'center', gap: 6 },
-  actions: { display: 'flex', gap: 12 },
-  answerBtn: {
-    flex: 1, padding: '10px 0', background: '#1a7a4a', color: '#fff',
-    border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 700,
-    cursor: 'pointer', fontFamily: "'DM Sans', system-ui, sans-serif",
-  },
-  declineBtn: {
-    flex: 1, padding: '10px 0', background: '#dc2626', color: '#fff',
-    border: 'none', borderRadius: 12, fontSize: 14, fontWeight: 700,
-    cursor: 'pointer', fontFamily: "'DM Sans', system-ui, sans-serif",
+  name: { fontSize: 15, fontWeight: 700, color: T.gray900, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
+  type: { fontSize: 13, color: T.gray600, display: 'flex', alignItems: 'center', gap: 6 },
+  actions: { display: 'flex', gap: 32, justifyContent: 'center' },
+  btnBase: {
+    width: 52, height: 52, borderRadius: '50%', border: 'none',
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    cursor: 'pointer', flexShrink: 0,
   },
 }
 
 export default function FloatingIncomingCall() {
-  const { incomingCall, answerCall, declineCall, callUiMode } = useCall()
+  const { incomingCall, callUiMode, incomingActionsRef } = useCall()
+  const [remoteAvatar, setRemoteAvatar] = useState(null)
+
+  const fromUser = incomingCall?.fromUser
+
+  useEffect(() => {
+    if (!fromUser) { setRemoteAvatar(null); return }
+    let cancelled = false
+    supabase.from('profiles').select('avatar_url').eq('id', fromUser).maybeSingle()
+      .then(({ data }) => { if (!cancelled) setRemoteAvatar(data?.avatar_url || null) })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [fromUser])
 
   if (!incomingCall || callUiMode !== 'hidden') return null
 
-  const { callerName, callerAvatar, isVideo } = incomingCall
+  const callerName = incomingCall.fromName || incomingCall.callerName || 'Unknown'
+  const callType = incomingCall.callType || 'voice'
+  const isVideo = callType === 'video'
+  const avatarSrc = remoteAvatar
+
+  function handleAnswer() { incomingActionsRef.current?.answer?.() }
+  function handleDecline() { incomingActionsRef.current?.decline?.() }
 
   return (
     <div style={S.overlay} role="alert" aria-live="assertive">
       <div style={S.card}>
         <div style={S.row}>
-          {callerAvatar ? (
-            <img src={callerAvatar} alt="" style={S.avatar} />
+          {avatarSrc ? (
+            <img src={avatarSrc} alt="" style={S.avatar} />
           ) : (
             <div style={S.avatarPlaceholder}>
               {(callerName || '?')[0].toUpperCase()}
             </div>
           )}
           <div style={S.info}>
-            <div style={S.name}>{callerName || 'Unknown'}</div>
-            <div style={S.type}>{isVideo ? '📹 Video Call' : '📞 Voice Call'}</div>
+            <div style={S.name}>{callerName}</div>
+            <div style={S.type}>
+              {isVideo ? <Video size={14} strokeWidth={2.5} style={{ flexShrink: 0 }} /> : <Phone size={14} strokeWidth={2.5} style={{ flexShrink: 0 }} />}
+              {isVideo ? 'Incoming video call' : 'Incoming voice call'}
+            </div>
           </div>
         </div>
         <div style={S.actions}>
-          <button style={S.declineBtn} onClick={declineCall} aria-label="Decline call">Decline</button>
-          <button style={S.answerBtn} onClick={answerCall} aria-label="Answer call">Answer</button>
+          <button
+            onClick={handleDecline}
+            aria-label="Decline call"
+            style={{ ...S.btnBase, background: T.red, boxShadow: '0 4px 12px rgba(234,67,53,0.4)' }}
+          >
+            <PhoneOff size={20} strokeWidth={2.5} color="#fff" />
+          </button>
+          <button
+            onClick={handleAnswer}
+            aria-label={isVideo ? 'Answer video call' : 'Answer call'}
+            style={{ ...S.btnBase, background: T.green, boxShadow: '0 4px 16px rgba(15,157,88,0.4)', animation: 'callPulse 2s ease-in-out infinite' }}
+          >
+            {isVideo ? <Video size={22} strokeWidth={2.5} color="#fff" /> : <Phone size={22} strokeWidth={2.5} color="#fff" />}
+          </button>
         </div>
       </div>
       <style>{`
-        @keyframes slideInFloating {
-          from { transform: translateY(-120%); opacity: 0; }
-          to { transform: translateY(0); opacity: 1; }
+        @keyframes floatFadeIn {
+          from { opacity: 0; transform: translateX(-50%) translateY(-8px); }
+          to { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+        @keyframes callPulse {
+          0%, 100% { transform: scale(1); box-shadow: 0 4px 16px rgba(15,157,88,0.35); }
+          50% { transform: scale(1.04); box-shadow: 0 4px 24px rgba(15,157,88,0.55); }
         }
       `}</style>
     </div>
