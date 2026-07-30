@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
+import { uploadToR2, getR2Url, deleteFromR2 } from '../../lib/r2'
 import { JOB_TYPES, CITIES, CATEGORIES, EMPTY_JOB_FORM } from './jobsConstants'
 import { validateJobForm } from './jobsUtils'
 
@@ -57,14 +58,11 @@ export default function PostJobForm({ onSuccess }) {
     setUploading(true)
     const ext = file.name.split('.').pop()
     const path = `${folder}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-    const { error } = await supabase.storage
-      .from('job-assets')
-      .upload(path, file, { cacheControl: '3600', upsert: false })
+    const url = await uploadToR2(file, 'job-assets/' + path)
     setUploading(false)
 
-    if (!error) {
-      const { data: urlData } = supabase.storage.from('job-assets').getPublicUrl(path)
-      set(formField, urlData.publicUrl)
+    if (url) {
+      set(formField, url)
     }
   }
 

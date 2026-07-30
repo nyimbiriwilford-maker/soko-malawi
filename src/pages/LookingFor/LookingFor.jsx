@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { uploadToR2, getR2Url, deleteFromR2 } from '../../lib/r2'
 import RequestComposer from '../../components/LookingFor/RequestComposer'
 import { Toast, Spinner } from '../../components/LookingFor/Primitives'
 import { Icon, CatIcon } from '../../components/LookingFor/Icons'
@@ -462,18 +463,14 @@ const myAlertsRef = useRef([])
           const ext = img.file.name.split('.').pop().toLowerCase()
           const path = `${user.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
           console.log('Uploading:', path, img.file.type, img.file.size)
-          const { data: upData, error: upErr } = await supabase.storage
-            .from('buyer-requests')
-            .upload(path, img.file, { contentType: img.file.type, upsert: false })
-          if (upErr) {
-            console.error('Upload error:', upErr.message, upErr)
-            showToast(`Image upload failed: ${upErr.message}`, 'error')
+          const url = await uploadToR2(img.file, 'buyer-requests/' + path)
+          if (!url) {
+            showToast('Image upload failed', 'error')
             setPosting(false)
             return
           }
-          const { data: urlData } = supabase.storage.from('buyer-requests').getPublicUrl(path)
-          console.log('Uploaded URL:', urlData.publicUrl)
-          image_urls.push(urlData.publicUrl)
+          console.log('Uploaded URL:', url)
+          image_urls.push(url)
         } catch (e) {
           console.error('Upload exception:', e)
           showToast('Image upload error', 'error')

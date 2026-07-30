@@ -3,6 +3,7 @@
  * Fee, document types, payment methods come from verification_settings.
  */
 import { supabase } from './supabase'
+import { uploadToR2, getR2Url, deleteFromR2 } from './r2'
 
 /** Canonical pipeline statuses */
 export const VERIFICATION_STATUSES = Object.freeze({
@@ -567,10 +568,8 @@ export async function uploadVerificationDocument({
   const safeType = String(docType || 'other').replace(/[^a-z0-9_]/gi, '_')
   const path = `${userId}/${requestId || 'draft'}/${safeType}_${Date.now()}.${ext}`
 
-  const { error: upErr } = await supabase.storage
-    .from('verification-docs')
-    .upload(path, file, { upsert: false, contentType: file.type || undefined })
-  if (upErr) throw upErr
+  const url = await uploadToR2(file, 'verification-docs/' + path)
+  if (!url) throw new Error('Upload failed')
 
   const row = {
     user_id: userId,
@@ -589,7 +588,7 @@ export async function uploadVerificationDocument({
     .single()
   if (error) {
     // cleanup storage on DB failure
-    try { await supabase.storage.from('verification-docs').remove([path]) } catch { /* ignore */ }
+    try { await deleteFromR2('verification-docs/' + path) } catch { /* ignore */ }
     throw error
   }
   return data
@@ -599,7 +598,7 @@ export async function deleteVerificationDocument(doc) {
   if (!doc?.id) return
   if (doc.storage_path) {
     try {
-      await supabase.storage.from('verification-docs').remove([doc.storage_path])
+      await deleteFromR2('verification-docs/' + doc.storage_path)
     } catch { /* ignore */ }
   }
   await supabase.from('verification_documents').delete().eq('id', doc.id)
@@ -1298,10 +1297,8 @@ export async function uploadPaymentReceipt({ userId, paymentId, file }) {
   if (!userId || !file || !paymentId) throw new Error('Missing receipt upload args')
   const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
   const path = `${userId}/payments/${paymentId}/receipt_${Date.now()}.${ext}`
-  const { error: upErr } = await supabase.storage
-    .from('verification-docs')
-    .upload(path, file, { upsert: false, contentType: file.type || undefined })
-  if (upErr) throw upErr
+  const url = await uploadToR2(file, 'verification-docs/' + path)
+  if (!url) throw new Error('Upload failed')
   return { path, fileName: file.name }
 }
 

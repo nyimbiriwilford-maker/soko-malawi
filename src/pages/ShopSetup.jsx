@@ -1,6 +1,7 @@
 import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { uploadToR2, getR2Url, deleteFromR2 } from '../lib/r2'
 
 /* ── Design tokens (aligned with marketplace) ── */
 const T = {
@@ -692,10 +693,9 @@ export default function ShopSetup() {
   async function uploadImage(file, prefix) {
     const ext = file.name.split('.').pop()
     const path = `${prefix}/${crypto.randomUUID()}.${ext}`
-    const { error: upErr } = await supabase.storage.from('shop-images').upload(path, file)
-    if (upErr) throw upErr
-    const { data } = supabase.storage.from('shop-images').getPublicUrl(path)
-    return data.publicUrl
+    const url = await uploadToR2(file, 'shop-images/' + path)
+    if (!url) throw new Error('Upload failed')
+    return url
   }
 
   async function handleLaunch() {

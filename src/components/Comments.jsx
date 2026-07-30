@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
+import { uploadToR2, getR2Url, deleteFromR2 } from '../lib/r2'
 
 const GREEN = '#1a7a4a'
 
@@ -393,9 +394,9 @@ function CommentBox({ listingId, parentId, currentUser, onSubmit, placeholder, a
   async function uploadFile(file, type) {
   const ext = file.name.split('.').pop()
   const path = `${currentUser.id}/${type}_${Date.now()}.${ext}`
-  const { error } = await supabase.storage.from('comments').upload(path, file)
-  if (error) throw error
-  return supabase.storage.from('comments').getPublicUrl(path).data.publicUrl
+  const url = await uploadToR2(file, 'comments/' + path)
+  if (!url) throw new Error('Upload failed')
+  return url
 }
 
   async function handleSubmit() {

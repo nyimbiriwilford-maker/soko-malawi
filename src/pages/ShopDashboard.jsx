@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { uploadToR2, getR2Url, deleteFromR2 } from '../lib/r2'
 
 const T = {
   green: '#2e7d32',
@@ -268,10 +269,9 @@ export default function ShopDashboard() {
   async function uploadLogo(file) {
     const ext = file.name.split('.').pop()
     const path = `logos/${crypto.randomUUID()}.${ext}`
-    const { error: upErr } = await supabase.storage.from('shop-images').upload(path, file)
-    if (upErr) throw upErr
-    const { data } = supabase.storage.from('shop-images').getPublicUrl(path)
-    return data.publicUrl
+    const url = await uploadToR2(file, 'shop-images/' + path)
+    if (!url) throw new Error('Upload failed')
+    return url
   }
 
   async function handleSave() {

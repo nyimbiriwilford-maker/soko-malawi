@@ -21,6 +21,7 @@ import {
   File,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { uploadToR2, getR2Url, deleteFromR2 } from '../lib/r2'
 import { formatTime } from '../hooks/useWebRTC'
 import {
   watchUserOnline,
@@ -1379,10 +1380,9 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
     try {
       const ext = file.name?.split('.').pop() || 'bin'
       const path = `chat/${currentUser.id}/${type}_${Date.now()}.${ext}`
-      const { error: upErr } = await supabase.storage.from('listings').upload(path, file)
-      if (upErr) throw upErr
-      const { data } = supabase.storage.from('listings').getPublicUrl(path)
-      await sendMessage(caption, type, data.publicUrl)
+      const url = await uploadToR2(file, 'listings/' + path)
+      if (!url) throw new Error('Upload failed')
+      await sendMessage(caption, type, url)
     } catch (e) { alert('Upload failed: ' + e.message) }
     setUploading(false)
     setPreview(null)

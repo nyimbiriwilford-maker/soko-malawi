@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
+import { uploadToR2, getR2Url, deleteFromR2 } from '../lib/r2'
 import { SERVICE_CATS, CITIES, AVAILABILITY_OPTIONS, S } from './serviceData'
 
 export default function ServiceForm({ editingService, onSuccess, onCancel }) {
@@ -66,10 +67,9 @@ export default function ServiceForm({ editingService, onSuccess, onCancel }) {
     for (const file of mediaFiles) {
       const ext = file.name.split('.').pop()
       const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-      const { error } = await supabase.storage.from('service-media').upload(path, file)
-      if (!error) {
-        const { data: { publicUrl } } = supabase.storage.from('service-media').getPublicUrl(path)
-        urls.push(publicUrl)
+      const url = await uploadToR2(file, 'service-media/' + path)
+      if (url) {
+        urls.push(url)
       }
     }
     setUploadingMedia(false)

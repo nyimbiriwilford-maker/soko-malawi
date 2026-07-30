@@ -8,6 +8,7 @@ import {
   User, AlertCircle, Loader, Video, PlayCircle, Film,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { uploadToR2 } from '../lib/r2'
 import SokoNav from '../components/SokoNav'
 import {
   FEATURED_PRICE_MWK,
@@ -1148,15 +1149,12 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
       const { file, url: existingUrl } = ordered[i]
       if (!file) { urls.push(existingUrl); setUploadProgress({ current: i + 1, total: ordered.length }); continue }
       const ext  = file.name.split('.').pop().toLowerCase()
-      const path = `${user.id}/${listingId}/${Date.now()}-${i}.${ext}`
-      const { error } = await supabase.storage
-        .from('listing-images')
-        .upload(path, file, { cacheControl: '3600', upsert: false })
-      if (!error) {
-        const { data: { publicUrl } } = supabase.storage
-          .from('listing-images')
-          .getPublicUrl(path)
-        urls.push(publicUrl)
+      const path = `listing-images/${user.id}/${listingId}/${Date.now()}-${i}.${ext}`
+      try {
+        const url = await uploadToR2(file, path)
+        urls.push(url)
+      } catch (err) {
+        console.error('Image upload failed:', err)
       }
       setUploadProgress({ current: i + 1, total: ordered.length })
     }
@@ -1165,7 +1163,7 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
   }
 
   /* ── Upload all videos to Supabase Storage ── */
-  const uploadVideos = async (listingId) => {
+ const uploadVideos = async (listingId) => {
     if (videos.length === 0) return []
     const urls = []
     let failCount = 0
@@ -1174,18 +1172,13 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
       const { file, url: existingUrl } = videos[i]
       if (!file) { urls.push(existingUrl); setUploadProgress({ current: i + 1, total: videos.length }); continue }
       const ext  = file.name.split('.').pop().toLowerCase()
-      const path = `${user.id}/${listingId}/${Date.now()}-vid-${i}.${ext}`
-      const { error } = await supabase.storage
-        .from('listing-videos')
-        .upload(path, file, { cacheControl: '3600', upsert: false })
-      if (!error) {
-        const { data: { publicUrl } } = supabase.storage
-          .from('listing-videos')
-          .getPublicUrl(path)
-        urls.push(publicUrl)
-      } else {
+      const path = `listing-videos/${user.id}/${listingId}/${Date.now()}-vid-${i}.${ext}`
+      try {
+        const url = await uploadToR2(file, path)
+        urls.push(url)
+      } catch (err) {
         failCount++
-        console.error('Video upload failed:', error.message, error)
+        console.error('Video upload failed:', err)
       }
       setUploadProgress({ current: i + 1, total: videos.length })
     }
@@ -1195,7 +1188,6 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
     }
     return urls
   }
-
   /* ── Build the DB row (Phase 0.1)
       Never includes is_featured, featured, promoted_until, or promotion_type.
       Spotlight is only granted after free-feature RPC validation or payment confirm. ── */

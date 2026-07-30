@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useMemo } from 'react'
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { uploadToR2, getR2Url, deleteFromR2 } from '../lib/r2'
 import { isListingFeatured } from '../utils/homeUtils'
 import { featureExistingListing } from '../lib/featureListing'
 import { featuredPriceLabel, FEATURED_DURATION_DAYS } from '../constants/featuredPricing'
@@ -1232,9 +1233,8 @@ export default function Profile() {
     setUploadingAvatar(true)
     const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
     const path = user.id + '/avatar.' + ext
-    const { error: upErr } = await supabase.storage.from('avatars').upload(path, file, { upsert: true })
-    if (upErr) { setUploadingAvatar(false); alert('Upload failed: ' + upErr.message); return }
-    const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(path)
+    const publicUrl = await uploadToR2(file, 'avatars/' + path)
+    if (!publicUrl) { setUploadingAvatar(false); alert('Upload failed'); return }
     const url = publicUrl + (publicUrl.includes('?') ? '&' : '?') + 't=' + Date.now()
     const { error } = await supabase.from('profiles').upsert({ id: user.id, avatar_url: publicUrl })
     if (error) { setUploadingAvatar(false); alert('Could not save photo: ' + error.message); return }
@@ -1259,18 +1259,15 @@ export default function Profile() {
     const ext = (file.name.split('.').pop() || 'jpg').toLowerCase()
     const path = user.id + '/cover.' + ext
     // Prefer dedicated covers bucket; fall back to avatars if bucket missing
-    let bucket = 'covers'
-    let { error: upErr } = await supabase.storage.from(bucket).upload(path, file, { upsert: true })
-    if (upErr) {
-      bucket = 'avatars'
-      ;({ error: upErr } = await supabase.storage.from(bucket).upload(path, file, { upsert: true }))
+    let publicUrl = await uploadToR2(file, 'covers/' + path)
+    if (!publicUrl) {
+      publicUrl = await uploadToR2(file, 'avatars/' + path)
     }
-    if (upErr) {
+    if (!publicUrl) {
       setUploadingCover(false)
-      alert('Cover upload failed: ' + upErr.message)
+      alert('Cover upload failed')
       return
     }
-    const { data: { publicUrl } } = supabase.storage.from(bucket).getPublicUrl(path)
     const url = publicUrl + (publicUrl.includes('?') ? '&' : '?') + 't=' + Date.now()
     const { error } = await supabase.from('profiles').upsert({
       id: user.id,

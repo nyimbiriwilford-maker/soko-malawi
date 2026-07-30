@@ -17,6 +17,7 @@ import AdminVerificationDetail from '../components/AdminVerificationDetail'
 import AdminVerificationSettings from '../components/AdminVerificationSettings'
 import AdminVerifiedSellers from '../components/AdminVerifiedSellers'
 import AdminVerificationHub from '../components/AdminVerificationHub'
+import { uploadToR2, getR2Url, deleteFromR2 } from '../lib/r2'
 
 const TABS = ['Dashboard', 'Featured', 'Listings', 'Users', 'Verifications', 'Verify Settings', 'Shop Reports', 'Safety', 'Broadcast', 'Banners']
 
@@ -2342,16 +2343,9 @@ function BannerEditor({ banner, onSave, onCancel, saving }) {
       const name = `banner_${Date.now()}.webp`
       const path = `banner-images/${name}`
 
-      const { error: upErr } = await supabase.storage
-        .from('banners')
-        .upload(path, compressed, {
-          upsert: false,
-          cacheControl: '3600',
-          contentType: 'image/webp',
-        })
-
-      if (upErr) throw new Error(upErr.message)
-      set(targetField, supabase.storage.from('banners').getPublicUrl(path).data.publicUrl)
+      const url = await uploadToR2(compressed, 'banners/' + path)
+      if (!url) throw new Error('Upload failed')
+      set(targetField, url)
     } catch (err) {
       setUploadErrorFn(err.message)
     }

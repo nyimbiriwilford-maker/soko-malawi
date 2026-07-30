@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { X, MoreHorizontal, Heart, MessageCircle, Share2, MapPin, ChevronRight, VolumeX, Volume2, Eye, Send, Copy, Search } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { uploadToR2, getR2Url, deleteFromR2 } from '../lib/r2'
 import { STATUS_COLORS, STATUS_META } from '../constants/homeConstants'
 import {
   parseClipWindow,
@@ -1260,12 +1261,8 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
   async function uploadCommentMedia(file) {
     const ext = file.name.split('.').pop()
     const path = `${currentUserId}/comment_${Date.now()}.${ext}`
-    const { error } = await supabase.storage
-      .from('story-media')
-      .upload(path, file, { contentType: file.type, upsert: false })
-    if (error) return null
-    const { data } = supabase.storage.from('story-media').getPublicUrl(path)
-    return data.publicUrl
+    const url = await uploadToR2(file, 'story-media/' + path)
+    return url || null
   }
 
   async function handleCommentSubmit() {

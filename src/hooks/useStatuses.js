@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from '../lib/supabase'
+import { uploadToR2, getR2Url, deleteFromR2 } from '../lib/r2'
 
 const EXPIRY_OPTIONS = {
   availability:    24 * 60 * 60 * 1000,
@@ -31,12 +32,8 @@ export function useStatuses(userId) {
   async function uploadStoryMedia(userId, file) {
     const ext = file.name.split('.').pop()
     const path = `${userId}/${Date.now()}.${ext}`
-    const { error } = await supabase.storage
-      .from('story-media')
-      .upload(path, file, { contentType: file.type, upsert: false })
-    if (error) return null
-    const { data } = supabase.storage.from('story-media').getPublicUrl(path)
-    return data.publicUrl
+    const url = await uploadToR2(file, 'story-media/' + path)
+    return url || null
   }
 
   async function postStatus({
