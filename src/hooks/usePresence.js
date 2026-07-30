@@ -183,7 +183,7 @@ function broadcastActivity(event, active) {
   if (!globalChannel || !uid) return
   const flag = event === 'typing' ? 'typing' : 'recording'
   try {
-    globalChannel.send({
+    const _bcast = globalChannel.send({
       type: 'broadcast',
       event,
       payload: {
@@ -194,6 +194,7 @@ function broadcastActivity(event, active) {
         source: active ? (activityTarget.source || null) : null,
       },
     })
+    if (_bcast && typeof _bcast.catch === 'function') _bcast.catch(() => {})
   } catch { /* ignore */ }
 }
 

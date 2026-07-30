@@ -35,6 +35,8 @@ const ListingsPage      = lazy(() => import('./pages/ListingsPage'))
 import ErrorBoundary from './components/ErrorBoundary'
 import OfflinePage from './components/OfflinePage'
 import GlobalCallListener from './components/GlobalCallListener'
+import FloatingIncomingCall from './components/FloatingIncomingCall'
+import NotificationToast from './components/NotificationToast'
 import PersistentCallShell from './components/PersistentCallShell'
 import MiniCallBar from './components/MiniCallBar'
 import { CallProvider }   from './context/CallContext'
@@ -294,6 +296,8 @@ const [installPrompt, setInstallPrompt] = useState(null)
       )}
       <BrowserRouter>
         {authed && <GlobalCallListener />}
+{authed && <FloatingIncomingCall />}
+{authed && <NotificationToast />}
         {authed && <PersistentCallShell />}
         {authed && <MiniCallBar />}
         <Suspense fallback={<PageLoader />}>

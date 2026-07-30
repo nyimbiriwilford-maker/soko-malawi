@@ -5989,7 +5989,7 @@ export default function Home() {
         try {
           const SHOP_SELECT = 'id, name, slug, category, logo_url, cover_url, city, rating, review_count, listing_count, is_verified, follower_count, created_at'
           let shopsQuery = supabase.from('shops')
-            .select(SHOP_SELECT + ', lat, lng, updated_at')
+            .select(SHOP_SELECT + ', updated_at')
             .eq('is_active', true)
             .gt('listing_count', 0)
           if (activeDistrict !== 'All Districts') shopsQuery = shopsQuery.eq('city', activeDistrict)
