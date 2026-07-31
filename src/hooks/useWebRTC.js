@@ -12,6 +12,20 @@ if (import.meta.env.DEV) {
   window.setCallBudgetPref = setCallBudgetPref
 }
 
+// TEMP - [CallDebug] diagnostic logging (Task 12). Remove after NotReadableError is root-caused.
+function callDebugGetUserMedia(streamRef, constraints, label) {
+  const stream = streamRef?.current
+  const tracks = stream ? stream.getTracks() : []
+  const stack = new Error().stack
+  console.log('[CallDebug] getUserMedia', {
+    call: label,
+    constraints,
+    callerStack: stack ? stack.split('\n').slice(1, 4).map((l) => l.trim()) : null,
+    priorStreamHeld: tracks.some((t) => t.readyState === 'live'),
+    priorTracks: tracks.map((t) => ({ kind: t.kind, state: t.readyState })),
+  })
+}
+
 function generateCallId(uid1, uid2) {
   return [uid1, uid2].sort().join('-') + '-' + Date.now()
 }
@@ -217,6 +231,7 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
     callStateRef.current = 'calling'
     setCallState('calling')
 
+    callDebugGetUserMedia(localStreamRef, { audio: true, video: type === 'video' }, 'startCall')
     let gUMError = null
     const stream = await navigator.mediaDevices
       .getUserMedia({ audio: true, video: type === 'video' })
@@ -343,6 +358,7 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
 
     claimCallStack?.('chat')
 
+    callDebugGetUserMedia(localStreamRef, { audio: true, video: type === 'video' }, 'answerCall')
     let gUMError = null
     const stream = await navigator.mediaDevices
       .getUserMedia({ audio: true, video: type === 'video' })
@@ -598,6 +614,7 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
       localStreamRef.current.removeTrack(currentTrack)
       await new Promise((r) => setTimeout(r, 200))
 
+      callDebugGetUserMedia(localStreamRef, { audio: false, video: { deviceId: { exact: nextDevice.deviceId } } }, 'switchCamera')
       const newStream = await navigator.mediaDevices.getUserMedia({
         audio: false,
         video: { deviceId: { exact: nextDevice.deviceId } },

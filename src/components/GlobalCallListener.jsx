@@ -27,6 +27,20 @@ function stopRingtone() {
   }
 }
 
+// TEMP - [CallDebug] diagnostic logging (Task 12). Remove after NotReadableError is root-caused.
+function callDebugGetUserMedia(streamRef, constraints, label) {
+  const stream = streamRef?.current
+  const tracks = stream ? stream.getTracks() : []
+  const stack = new Error().stack
+  console.log('[CallDebug] getUserMedia', {
+    call: label,
+    constraints,
+    callerStack: stack ? stack.split('\n').slice(1, 4).map((l) => l.trim()) : null,
+    priorStreamHeld: tracks.some((t) => t.readyState === 'live'),
+    priorTracks: tracks.map((t) => ({ kind: t.kind, state: t.readyState })),
+  })
+}
+
 export default function GlobalCallListener() {
   const [incoming, setIncoming] = useState(null)
   const navigate = useNavigate()
@@ -383,6 +397,7 @@ export default function GlobalCallListener() {
     sessionStorage.removeItem('__pendingCall')
     sessionStorage.removeItem('__pendingCallId')
 
+    callDebugGetUserMedia(localStreamRef, { audio: true, video: type === 'video' }, 'answerWithOffer')
     let gUMError = null
     const stream = await navigator.mediaDevices
       .getUserMedia({ audio: true, video: type === 'video' })
@@ -583,6 +598,7 @@ async function handleSwitchCamera() {
       currentTrack?.stop()
       localStreamRef.current.removeTrack(currentTrack)
       await new Promise(r => setTimeout(r, 200))
+      callDebugGetUserMedia(localStreamRef, { audio: false, video: { deviceId: { exact: nextDevice.deviceId } } }, 'handleSwitchCamera')
       const newStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { deviceId: { exact: nextDevice.deviceId } } })
       const newTrack = newStream.getVideoTracks()[0]
       if (!newTrack) return
