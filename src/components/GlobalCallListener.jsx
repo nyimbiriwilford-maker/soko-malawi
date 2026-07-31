@@ -383,12 +383,17 @@ export default function GlobalCallListener() {
     sessionStorage.removeItem('__pendingCall')
     sessionStorage.removeItem('__pendingCallId')
 
+    let gUMError = null
     const stream = await navigator.mediaDevices
       .getUserMedia({ audio: true, video: type === 'video' })
-      .catch(() => null)
+      .catch((err) => {
+        gUMError = err
+        console.error('[getUserMedia]', err?.name, err?.message)
+        return null
+      })
 
     if (!stream) {
-      alert('Microphone/camera access denied')
+      alert(gUMError?.name ? `Camera/microphone error: ${gUMError.name}` : 'Microphone/camera access denied')
       await handleDecline()
       return
     }
@@ -585,7 +590,10 @@ async function handleSwitchCamera() {
       if (sender) await sender.replaceTrack(newTrack)
       localStreamRef.current.addTrack(newTrack)
       if (localVideoRef.current) { localVideoRef.current.srcObject = null; localVideoRef.current.srcObject = localStreamRef.current }
-    } catch (e) { alert('Camera switch failed: ' + e.message) }
+    } catch (e) {
+      console.error('switchCamera error:', e?.name, e?.message)
+      alert('Camera switch failed: ' + (e?.name ? `${e.name}: ` : '') + e?.message)
+    }
   }
 
   function cleanupCall() {

@@ -217,12 +217,17 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
     callStateRef.current = 'calling'
     setCallState('calling')
 
+    let gUMError = null
     const stream = await navigator.mediaDevices
       .getUserMedia({ audio: true, video: type === 'video' })
-      .catch(() => null)
+      .catch((err) => {
+        gUMError = err
+        console.error('[getUserMedia]', err?.name, err?.message)
+        return null
+      })
 
     if (!stream) {
-      alert('Microphone/camera access denied')
+      alert(gUMError?.name ? `Camera/microphone error: ${gUMError.name}` : 'Microphone/camera access denied')
       endCallLocally()
       return
     }
@@ -338,12 +343,17 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
 
     claimCallStack?.('chat')
 
+    let gUMError = null
     const stream = await navigator.mediaDevices
       .getUserMedia({ audio: true, video: type === 'video' })
-      .catch(() => null)
+      .catch((err) => {
+        gUMError = err
+        console.error('[getUserMedia]', err?.name, err?.message)
+        return null
+      })
 
     if (!stream) {
-      alert('Microphone/camera access denied')
+      alert(gUMError?.name ? `Camera/microphone error: ${gUMError.name}` : 'Microphone/camera access denied')
       await declineCall()
       return
     }
@@ -605,8 +615,8 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
       }
       setFacingMode((f) => (f === 'user' ? 'environment' : 'user'))
     } catch (e) {
-      console.error('switchCamera error:', e)
-      alert('Camera switch failed: ' + e.message)
+      console.error('switchCamera error:', e?.name, e?.message)
+      alert('Camera switch failed: ' + (e?.name ? `${e.name}: ` : '') + e?.message)
     }
   }
 

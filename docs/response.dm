@@ -1,28 +1,123 @@
-# Task 10 — Bump SW cache version v7 → v8
+# Task 11 — Surface the real getUserMedia error (diagnostic only)
 
-Status: DONE. One-line change to `public/sw.js:1`.
+Status: DONE. All getUserMedia call sites in the two files now log `error.name` + `error.message` and show the error name to the user. No permission-request logic, `CallBudgetSelector.jsx`, `callBitrateCap.js`, or `useCallDataBudget.js` touched.
 
-## Change
+## All getUserMedia call sites (surrounding code verbatim, pre-fix)
 
+### `src/hooks/useWebRTC.js` — 3 sites
+
+**1. `startCall(type)`** (caller path):
 ```js
-const CACHE = 'sokomw-v8'
+const stream = await navigator.mediaDevices
+  .getUserMedia({ audio: true, video: type === 'video' })
+  .catch(() => null)
+
+if (!stream) {
+  alert('Microphone/camera access denied')
+  endCallLocally()
+  return
+}
 ```
-No other caching logic, install/activate handlers, or fetch strategy touched.
 
-## Confirm: activate already drops old caches
-
-`public/sw.js:11-16` (unchanged):
+**2. `answerCall()`** (callee path):
 ```js
-self.addEventListener('activate', e => {
-  e.waitUntil(caches.keys().then(keys =>
-    Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
-  ))
-  self.clients.claim()
+const stream = await navigator.mediaDevices
+  .getUserMedia({ audio: true, video: type === 'video' })
+  .catch(() => null)
+
+if (!stream) {
+  alert('Microphone/camera access denied')
+  await declineCall()
+  return
+}
+```
+
+**3. `switchCamera()`**:
+```js
+const newStream = await navigator.mediaDevices.getUserMedia({
+  audio: false,
+  video: { deviceId: { exact: nextDevice.deviceId } },
 })
+...
+} catch (e) {
+  console.error('switchCamera error:', e)
+  alert('Camera switch failed: ' + e.message)
+}
 ```
-On activate it enumerates all caches, keeps only the one matching the current `CACHE` name, and deletes the rest — so the version bump alone is sufficient. Old clients (any cache named `sokomw-v7` or earlier) get cleaned up automatically on their next visit, and `self.skipWaiting()` (install handler, `:7`) + `self.clients.claim()` ensure the new worker takes over promptly.
+
+### `src/components/GlobalCallListener.jsx` — 2 sites
+
+**1. `answerWithOffer(src)`**:
+```js
+const stream = await navigator.mediaDevices
+  .getUserMedia({ audio: true, video: type === 'video' })
+  .catch(() => null)
+
+if (!stream) {
+  alert('Microphone/camera access denied')
+  await handleDecline()
+  return
+}
+```
+
+**2. `handleSwitchCamera()`**:
+```js
+const newStream = await navigator.mediaDevices.getUserMedia({
+  audio: false, video: { deviceId: { exact: nextDevice.deviceId } },
+})
+...
+} catch (e) { alert('Camera switch failed: ' + e.message) }
+```
+
+## How the catch currently produced "access denied"
+
+In all three call/answer sites the `getUserMedia` promise used `.catch(() => null)` — **the error object was discarded entirely** (no console log), and the `if (!stream)` guard then showed the **hardcoded generic string** `'Microphone/camera access denied'` regardless of `error.name`. So `NotAllowedError`, `NotReadableError`, `OverconstrainedError`, `NotFoundError`, etc. were all indistinguishable. The `switchCamera` sites were slightly better (they did surface `e.message`) but omitted `error.name`.
+
+## Fix — updated catch blocks (both call sites)
+
+Pattern applied to all three access-denied sites — capture the error, log `name` + `message`, and include the name in the alert (falling back to the generic text only if `name` is somehow absent):
+
+**`useWebRTC.js` `startCall`** (startCall):
+```js
+let gUMError = null
+const stream = await navigator.mediaDevices
+  .getUserMedia({ audio: true, video: type === 'video' })
+  .catch((err) => {
+    gUMError = err
+    console.error('[getUserMedia]', err?.name, err?.message)
+    return null
+  })
+
+if (!stream) {
+  alert(gUMError?.name ? `Camera/microphone error: ${gUMError.name}` : 'Microphone/camera access denied')
+  endCallLocally()
+  return
+}
+```
+
+**`useWebRTC.js` `answerCall`** (callee): identical block, but the failure branch is `await declineCall()`.
+
+**`GlobalCallListener.jsx` `answerWithOffer`**: identical block, failure branch is `await handleDecline()`.
+
+**`useWebRTC.js` `switchCamera`** catch:
+```js
+} catch (e) {
+  console.error('switchCamera error:', e?.name, e?.message)
+  alert('Camera switch failed: ' + (e?.name ? `${e.name}: ` : '') + e?.message)
+}
+```
+
+**`GlobalCallListener.jsx` `handleSwitchCamera`** catch: same enhanced log + alert.
+
+## What this surfaces for Ethel's case
+
+- `NotAllowedError` → a real permission denial (Chrome settings say Allow, so check for a second browser/OS-level block).
+- `NotReadableError` → device is already in use by another tab/app or locked by the OS.
+- `OverconstrainedError` → the requested `{audio:true, video:true}` combo or a device constraint is unsatisfiable.
+- `NotFoundError` → no camera/mic attached.
+Any of these now appear in both the console (`[getUserMedia] <name> <message>`) and the on-screen alert (`Camera/microphone error: <name>`).
 
 ## Verification
 
-- `npm run build` → passes (3.27s); `dist/sw.js` regenerated with `const CACHE = 'sokomw-v8'` confirmed.
-- This directly addresses the stale-bundle symptom reported in Task 9: a device previously holding `sokomw-v7` (whose `/index.html` cached shell pointed at older hashed chunks) will now drop that cache on activate and re-cache the fresh shell.
+- `npx eslint src/hooks/useWebRTC.js src/components/GlobalCallListener.jsx` → exactly the pre-existing baseline: 25 problems (23 errors, 2 warnings), none from these edits.
+- `npm run build` → passes (3.56s).
