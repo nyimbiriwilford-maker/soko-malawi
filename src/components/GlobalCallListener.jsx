@@ -217,6 +217,16 @@ export default function GlobalCallListener() {
         setTimeout(() => {
           answerWithOffer(nextIncoming).catch((e) => {
             console.error('[GlobalCallListener] delayed answer failed', e)
+            cleanupCall()
+            sessionStorage.setItem('__pendingCallId', nextIncoming.callId || '')
+            sessionStorage.setItem('__pendingCall', JSON.stringify({
+              fromUser: nextIncoming.fromUser,
+              callType: nextIncoming.callType,
+              offer: nextIncoming.offer,
+              callId: nextIncoming.callId,
+              callerName: nextIncoming.callerName,
+              chatId: nextIncoming.chatId,
+            }))
           })
         }, 0)
       }
@@ -225,6 +235,65 @@ export default function GlobalCallListener() {
 
     return unregister
   }, [])
+
+  // Mount-time restore: if we remount while a call ring is buffered (refresh /
+  // crash / HMR), reclaim the global stack instead of leaving __globalCallActive
+  // orphaned. If the flag is set but there is no pending offer, the call can't
+  // be resurrected (WebRTC state is gone) — clear the orphaned flag so it never
+  // blocks future SW navigation.
+  useEffect(() => {
+    const activeCallId = sessionStorage.getItem('__globalCallActive')
+    if (!activeCallId) return
+    const raw = sessionStorage.getItem('__pendingCall')
+    if (!raw) {
+      sessionStorage.removeItem('__globalCallActive')
+      return
+    }
+    let restored = null
+    try {
+      const pending = JSON.parse(raw)
+      const reclaimable = pending.offer && pending.fromUser &&
+        String(pending.callId) === String(activeCallId)
+      if (!reclaimable) {
+        sessionStorage.removeItem('__globalCallActive')
+        return
+      }
+      restored = {
+        fromUser: pending.fromUser,
+        callType: pending.callType,
+        offer: pending.offer,
+        callId: pending.callId,
+        callerName: pending.callerName,
+        chatId: pending.chatId,
+      }
+      callerNameRef.current = pending.callerName || pending.fromUser
+      // Claim + consume the pending offer synchronously so the chat stack's
+      // restorePendingCall (which only bails on getCallStackOwner() === 'global')
+      // cannot also claim this call.
+      claimCallStack?.('global')
+      sessionStorage.removeItem('__pendingCall')
+      sessionStorage.removeItem('__pendingCallId')
+      if (myUserIdRef.current) {
+        subscribeToIceCandidatesEarly(pending.callId, myUserIdRef.current)
+      } else {
+        supabase.auth.getUser().then(({ data: { user } }) => {
+          if (user) {
+            myUserIdRef.current = user.id
+            subscribeToIceCandidatesEarly(pending.callId, user.id)
+          }
+        })
+      }
+    } catch {
+      sessionStorage.removeItem('__globalCallActive')
+      return
+    }
+    // Defer UI state so the sync claim above wins the race with the chat stack.
+    setTimeout(() => {
+      incomingRef.current = restored
+      setIncoming(restored)
+      setIncomingCall?.(restored)
+    }, 0)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     incomingRef.current = incoming
@@ -267,7 +336,25 @@ export default function GlobalCallListener() {
       // Keep ringing / UI until offer arrives
       return
     }
-    await answerWithOffer(src)
+    try {
+      await answerWithOffer(src)
+    } catch (err) {
+      // The in-app answer failed after claiming the stack — tear everything
+      // down so __globalCallActive is cleared (unblocking SW navigation), then
+      // re-queue the offer so the chat stack / a fresh notification tap can
+      // still answer this call as a fallback.
+      console.error('[GlobalCallListener] answer failed:', err)
+      cleanupCall()
+      sessionStorage.setItem('__pendingCallId', src.callId || '')
+      sessionStorage.setItem('__pendingCall', JSON.stringify({
+        fromUser: src.fromUser,
+        callType: src.callType,
+        offer: src.offer,
+        callId: src.callId,
+        callerName: src.callerName,
+        chatId: src.chatId,
+      }))
+    }
   }
 
   async function answerWithOffer(src) {

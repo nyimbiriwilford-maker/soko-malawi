@@ -216,6 +216,13 @@ const [installPrompt, setInstallPrompt] = useState(null)
       },
       onAnswer: (fromUser, callId, chatId) => {
         stopRingtone()
+        // If GlobalCallListener is already answering this call in-app, don't
+        // steal it with a hard navigation (which would wipe its in-memory
+        // call-stack claim mid-answer).
+        const globalActive = sessionStorage.getItem('__globalCallActive')
+        if (globalActive && String(globalActive) === String(callId)) {
+          return
+        }
         // chatId is "callerId" or "callerId/listingId" (never the callee's self-chat)
         const cleaned = chatId
           ? String(chatId).replace(/^\/chat\//, '').replace(/^\//, '')

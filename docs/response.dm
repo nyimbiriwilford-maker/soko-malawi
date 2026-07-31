@@ -1,93 +1,78 @@
-# Task 5 — Post-refactor verification of the chat-stack cap path
+# Task 7 — Prevent the SW notification path from stealing calls from GlobalCallListener (fix direction #1)
 
-Status: All 4 checks verified line-by-line against current source. The chat-stack cap path is intact post-extraction.
+Status: DONE. Changes in `src/App.jsx` + `src/components/GlobalCallListener.jsx`. Budget/bitrate logic, `useWebRTC.js` chat behavior, and all UI copy untouched.
 
-## 1. `applyLowDataIfConfigured` still calls `startLowDataCap`, which applies the cap immediately
+## Step 1 — Verified synchronous claim before any await (quoted real code)
 
-Yes — both true, verified in source.
-
-`src/lib/callBitrateCap.js:35-42` (exact current code):
+`GlobalCallListener.jsx:360-382` (`answerWithOffer`):
 ```js
-export function startLowDataCap(pc, type) {
-  const pref = getCallBudgetPref(type === 'video' ? 'video' : 'voice')
-  if (!pref || !shouldAutoLowData(type, pref.preset)) return null
-  applyMaxBitrateToVideoSender(pc)          // <-- immediate, before the interval
-  return setInterval(() => {
-    applyMaxBitrateToVideoSender(pc)
-  }, 5000)
-}
+async function answerWithOffer(src) {
+  if (!src?.offer || !src.fromUser || !src.callId) { ... return }
+  stopRing()                 // :367 — sync
+  stopRingtone()             // :368 — sync
+  dismissIncoming()          // :369 — sync
+  setConnecting(false)       // :370 — sync
+  claimCallStack?.('global') // :371 — sync
+
+  const type   = src.callType || 'voice'
+  const callId = src.callId
+  const callerId = src.fromUser
+  const offer  = src.offer   // :373-376 — sync
+
+  callIdRef.current = callId   // :378 — sync
+  callerIdRef.current = callerId // :379 — sync
+  offerRef.current = offer     // :380 — sync
+  sessionStorage.setItem('__globalCallActive', callId) // :381 — sync
+  sessionStorage.removeItem('__pendingCall')           // :382 — sync
+  sessionStorage.removeItem('__pendingCallId')
+  ...
+  const stream = await navigator.mediaDevices.getUserMedia(...) // first await, :386
 ```
-The immediate call is line 38, before the `setInterval`. Not deferred to the first tick.
+**No `await` appears between the function entry and the `getUserMedia` at :386.** `claimCallStack('global')` + the `__globalCallActive` write + the `__pendingCall` clears all happen synchronously in the same tick. Confirmed by reading, not assumption.
 
-`src/hooks/useWebRTC.js:617-620` (exact current code of the wrapper):
+## Step 2 — App.jsx `onAnswer` guard (App.jsx:217-225)
+
 ```js
-function applyLowDataIfConfigured(pc, type) {
-  stopLowDataCap(lowDataIntervalRef.current)
-  lowDataIntervalRef.current = startLowDataCap(pc, type)
-}
-```
-
-## 2. Interval is exactly 5000ms
-
-`callBitrateCap.js:39-41` — `setInterval(..., 5000)`. Confirmed, not a larger value post-refactor.
-
-## 3. `lowDataIntervalRef` is not reset/cleared before it should be
-
-- Declared once: `useWebRTC.js:69` `const lowDataIntervalRef = useRef(null)`.
-- Written only in `applyLowDataIfConfigured` (`:619`).
-- Cleared only in teardown: `useWebRTC.js:470-471` inside `endCallLocally()`:
-  ```js
-  stopLowDataCap(lowDataIntervalRef.current)
-  lowDataIntervalRef.current = null
-  ```
-- `applyLowDataIfConfigured` is called **exactly once per call** — no repeated invocations that could stop-then-restart at the wrong time:
-  - `:242-244` caller path (inside `startCall(type)`): `const pc = buildPeerConnection('caller')` → `stream.getTracks().forEach(t => pc.addTrack(t, stream))` → `applyLowDataIfConfigured(pc, type)`.
-  - `:366-371` callee path (inside `answerCall()`): `const pc = buildPeerConnection('callee')` → `addTrack` loop → `applyLowDataIfConfigured(pc, type)`.
-  - `buildPeerConnection` itself is invoked only those two places (defined `:156`), so there is no hidden re-negotiation path re-entering the cap logic.
-
-## 4. Exact current code — call sites (for direct review)
-
-Caller, `startCall()`:
-```js
-242   const pc = buildPeerConnection('caller')
-243   stream.getTracks().forEach((t) => pc.addTrack(t, stream))
-244   applyLowDataIfConfigured(pc, type)
-```
-
-Callee, `answerCall()`:
-```js
-366   const pc = buildPeerConnection('callee')
-368   await pc.setRemoteDescription(new RTCSessionDescription(incomingOfferRef.current))
-370   stream.getTracks().forEach((t) => pc.addTrack(t, stream))
-371   applyLowDataIfConfigured(pc, type)
-```
-
-Cap application, `callBitrateCap.js:10-26`:
-```js
-export async function applyMaxBitrateToVideoSender(pc, maxBitrate = 40000) {
-  const sender = pc.getSenders().find((s) => s.track?.kind === 'video')
-  if (!sender) return false
-  try {
-    const params = sender.getParameters()
-    if (params.encodings?.length) {
-      params.encodings = params.encodings.map((enc) => ({ ...enc, maxBitrate }))
-    } else {
-      params.encodings = [{ maxBitrate }]
-    }
-    await sender.setParameters(params)
-    return true
-  } catch (e) {
-    console.warn('[CallDataBudget] setParameters failed:', e.message)
-    return false
+onAnswer: (fromUser, callId, chatId) => {
+  stopRingtone()
+  const globalActive = sessionStorage.getItem('__globalCallActive')
+  if (globalActive && String(globalActive) === String(callId)) {
+    return
   }
+  ... window.location.href = url ...
 }
 ```
+If GlobalCallListener is already handling this call in-app, the SW `ANSWER_CALL` handler bails instead of hard-navigating and wiping the in-memory stack claim. `String()` coercion is defensive for number-vs-string callIds.
 
-## Notes relevant to the elevated deltas (~70-75 / ~40-45 KB/s)
+## Step 3 — Mount-time restore for `__globalCallActive` (GlobalCallListener.jsx:244-296)
 
-The code path is intact, so the elevation is likely not a wiring regression. Two non-wiring factors worth checking before changing code:
+New effect runs on mount:
+- **Reclaimable** (`__globalCallActive` set + `__pendingCall` present with matching callId + real offer): synchronously re-claims `global`, consumes `__pendingCall`/`__pendingCallId` (so the chat stack's `restorePendingCall` — which only bails on `getCallStackOwner() === 'global'` — cannot steal it), starts the early-ICE buffer, and defers only the UI `setIncoming`/`setIncomingCall` via `setTimeout(0)` so the claim wins the effect race against `PersistentCallShell`'s restore effect (GlobalCallListener mounts before it at App level). The `setState` is deferred both for the race and to satisfy the `react-hooks/set-state-in-effect` lint rule.
+- **Orphaned** (flag set but no matching pending offer): the WebRTC session can't be resurrected (PC/streams are gone), so the flag is cleared — it can never stick around and block future SW navigation.
 
-1. **Timing vs. negotiation.** On both paths the cap is applied right after `addTrack`, before `createOffer`/`setLocalDescription`. Some browsers reset encoding params during negotiation; the 5s re-apply self-heals, so the flat band should appear within the first interval tick. If the manual test sampled only the very first seconds (or a short call), deltas measured in that window would read high.
-2. **`startLowDataCap` failure → silent fallthrough.** If `setParameters` throws on the immediate call (pre-negotiation `InvalidStateError` is browser-dependent), the code warns once (`callBitrateCap.js:23`) and the interval keeps retrying every 5s. Elevated readings across the whole call would only persist if every retry failed — worth checking the browser console for repeated `[CallDataBudget] setParameters failed:` lines rather than inferring from `bytesUsed` alone.
+## Step 4 — Reliable flag clearing in all teardown paths
 
-No code changes made — this task was verify-and-report only.
+`cleanupCall()` remains the single teardown and clears all three keys (`__globalCallActive`, `__pendingCall`, `__pendingCallId`) at :598-600 and `releaseCallStack('global')` at :619. Every teardown path routes through it or the manual cancel/decline branch (:149-152 which also clears all three):
+- cancel/decline/hangup branch → cleanupCall
+- ICE/connection `failed` → cleanupCall
+- `handleDecline` → cleanupCall · `handleHangUp` → cleanupCall
+- **new:** in-app answer failure → cleanupCall (see below)
+
+## New failure-path handling (the edge case the reviewer asked about)
+
+`handleAnswer` (GlobalCallListener.jsx:339-357) and the delayed-answer path (:218-231) now wrap `answerWithOffer` in try/catch. On failure after claiming:
+1. `cleanupCall()` runs → closes the pc, stops media, **clears `__globalCallActive`** (so the SW navigation guard stops blocking), releases the stack.
+2. The offer is **re-queued** to `__pendingCall`/`__pendingCallId` — so a fresh notification tap (or the chat stack, if the user lands on the chat page) can still answer as a fallback.
+
+## Verification
+
+- `npx eslint src/App.jsx src/components/GlobalCallListener.jsx`: GlobalCallListener back to exactly its 11 pre-existing issues (9 errors, 2 warnings) — my new set-state error + dep warning both removed. App.jsx: 3 pre-existing errors in untouched code (setSession-in-effect :129, fetchRole/setupPush hoisting :138-139); none from my `onAnswer` change.
+- `npm run build` → passes (5.79s).
+
+## Edge cases I'm not fully confident about
+
+1. **Failed in-app answer → fallback requires re-navigation.** The re-queued `__pendingCall` only helps if the user then taps the notification again (or is on the caller's chat page). If neither happens, the call just dies after the failure — but that's strictly better than a zombie call + blocked flag.
+2. **getUserMedia-denied path is NOT re-queued.** `answerWithOffer` returns early (`alert` + `handleDecline`) rather than throwing, so no fallback is offered — correct, since a chat restore would also be denied camera/mic.
+3. **Orphaned mid-call reload.** If the app reloads *mid-call* (call already answered, `__pendingCall` consumed), the mount restore can't resurrect the pc — it clears the flag and the call is dropped. Unavoidable without a full call-state store; documented as the "can't resurrect" case.
+4. **`__globalCallActive` set on a different call's reload.** If the flag points at a stale callId different from the new ring, the guard/restore both fall through to "orphaned" → flag cleared → SW navigation works normally for the new call.
+5. **Native notification vs in-app UI race** (user taps both almost simultaneously): whichever claims `global` first wins; the guard + synchronous claim make the reload-steal path effectively unreachable now, but a true concurrent tap is inherently race-y.
