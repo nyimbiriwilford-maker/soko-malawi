@@ -1,4 +1,4 @@
-const CACHE = 'sokomw-v7'
+const CACHE = 'sokomw-v8'
 const ASSETS = ['/', '/index.html']
 
 // ── Install & cache ──────────────────────────────────────

@@ -3,9 +3,10 @@
  * Does not own WebRTC (so calls survive leaving the chat page).
  */
 
-import { createContext, useContext, useEffect } from 'react'
+import { createContext, useContext, useEffect, useState } from 'react'
 import { Phone, Video } from 'lucide-react'
 import { useCall } from '../context/CallContext'
+import CallBudgetSelector from './CallBudgetSelector'
 
 const ChatCallContext = createContext(null)
 
@@ -48,6 +49,7 @@ export function CallHeaderButtons({ style = headerBtnStyle }) {
   const startCall = actions?.startCall
   const callState = actions?.callState || activeCall?.status || 'idle'
   const busy = callState !== 'idle'
+  const [pendingType, setPendingType] = useState(null)
 
   const base = {
     ...headerBtnStyle,
@@ -77,7 +79,7 @@ export function CallHeaderButtons({ style = headerBtnStyle }) {
       <button
         type="button"
         style={base}
-        onClick={() => startCall?.('voice')}
+        onClick={() => { if (startCall && !busy) setPendingType('voice') }}
         disabled={!startCall || busy}
         title="Voice call"
         aria-label="Start voice call"
@@ -87,13 +89,23 @@ export function CallHeaderButtons({ style = headerBtnStyle }) {
       <button
         type="button"
         style={base}
-        onClick={() => startCall?.('video')}
+        onClick={() => { if (startCall && !busy) setPendingType('video') }}
         disabled={!startCall || busy}
         title="Video call"
         aria-label="Start video call"
       >
         <Video size={17} strokeWidth={2.1} color="#0F9D58" aria-hidden />
       </button>
+      {pendingType && (
+        <CallBudgetSelector
+          callType={pendingType}
+          onConfirm={() => {
+            setPendingType(null)
+            startCall?.(pendingType)
+          }}
+          onCancel={() => setPendingType(null)}
+        />
+      )}
     </>
   )
 }
