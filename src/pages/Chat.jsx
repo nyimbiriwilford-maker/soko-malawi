@@ -2319,7 +2319,19 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
           </div>
         )}
 
-        {messages.map((msg, i) => {
+        {(() => {
+          const dateLabel = (dateStr) => {
+            const d = new Date(dateStr)
+            const now = new Date()
+            const dLocal = new Date(d.getFullYear(), d.getMonth(), d.getDate())
+            const nowLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+            const diffDays = Math.round((nowLocal - dLocal) / 86400000)
+            if (diffDays === 0) return 'Today'
+            if (diffDays === 1) return 'Yesterday'
+            return d.toLocaleDateString([], { day: 'numeric', month: 'short' })
+          }
+
+          return messages.map((msg, i) => {
           const isMine   = msg.from_user === currentUser?.id
           const showDate = i === 0 || new Date(msg.created_at).toDateString() !== new Date(messages[i - 1].created_at).toDateString()
           const nextSame = i < messages.length - 1 && messages[i + 1].from_user === msg.from_user
@@ -2357,14 +2369,8 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
           }
 
           return (
-            <div key={msg.id} id={`msg-${msg.id}`} className={swipeHintId === msg.id ? 'is-swipe-ready' : ''}>
-              {showDate && (
-                <div className="chat-date-chip">
-                  {new Date(msg.created_at).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}
-                </div>
-              )}
-
-              <div className={`msg-row ${isMine ? 'is-mine' : 'is-theirs'}${isLast ? ' is-group-end' : ''}${isFailed ? ' is-failed' : ''}`}>
+            <div key={msg.id} className={`msg-row ${isMine ? 'is-mine' : 'is-theirs'}${isLast ? ' is-group-end' : ''}${isFailed ? ' is-failed' : ''}${swipeHintId === msg.id ? ' is-swipe-ready' : ''}`} id={`msg-${msg.id}`}>
+              {showDate && <div className="chat-date-chip">{dateLabel(msg.created_at)}</div>}
                 {!isMine && (
                   <button
                     type="button"
@@ -2555,10 +2561,9 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
                 {isMine && (
                   <ChatAvatar url={myAvatar} initial={myInitial} size={28} isMine spacer={!isLast} />
                 )}
-              </div>
             </div>
           )
-        })}
+        })})()}
 
         {(otherTyping || otherRecording) && (
           <div

@@ -3,6 +3,14 @@ import { useCall } from '../context/CallContext'
 import { ICE_SERVERS } from '../lib/webrtc'
 import { supabase } from '../lib/supabase'
 import { buildReceiverChatId } from '../utils/callNotifications'
+import { useCallDataBudget } from './useCallDataBudget'
+import { setCallBudgetPref } from '../lib/callBudgetPrefs'
+import { startLowDataCap, stopLowDataCap } from '../lib/callBitrateCap'
+
+// TEMP - dev-only test hook, remove when budget UI ships
+if (import.meta.env.DEV) {
+  window.setCallBudgetPref = setCallBudgetPref
+}
 
 function generateCallId(uid1, uid2) {
   return [uid1, uid2].sort().join('-') + '-' + Date.now()
@@ -48,6 +56,7 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
   const [remoteStream, setRemoteStream] = useState(null)
 
   const { pcRef, localStreamRef, callIdRef, callerIdRef, callTimerRef } = useCall()
+  const { sampleUsage } = useCallDataBudget(pcRef)
   const remoteStreamRef   = useRef(null)
   const autoHangupRef     = useRef(null)
   const pendingCandidates = useRef([])
@@ -57,6 +66,7 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
   const remoteVideoRef    = useRef(null)
   const callStateRef      = useRef('idle')
   const callDurationRef   = useRef(0)
+  const lowDataIntervalRef = useRef(null)
 
   const userIdRef      = useRef(userId)
   const currentUserRef = useRef(currentUser)
@@ -81,6 +91,9 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
     callTimerRef.current = setInterval(() => {
       callDurationRef.current += 1
       setCallDuration(callDurationRef.current)
+      sampleUsage().then((bytesUsed) => {
+        console.log('[CallDataBudget] bytesUsed:', bytesUsed)
+      })
     }, 1000)
   }
 
@@ -228,6 +241,7 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
 
     const pc = buildPeerConnection('caller')
     stream.getTracks().forEach((t) => pc.addTrack(t, stream))
+    applyLowDataIfConfigured(pc, type)
 
     subscribeToIceCandidates(callId, cu.id, async (candidate) => {
       try {
@@ -354,6 +368,7 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
     await pc.setRemoteDescription(new RTCSessionDescription(incomingOfferRef.current))
 
     stream.getTracks().forEach((t) => pc.addTrack(t, stream))
+    applyLowDataIfConfigured(pc, type)
 
     for (const c of pendingCandidates.current) {
       try { await pc.addIceCandidate(new RTCIceCandidate(c)) } catch (_) {}
@@ -452,6 +467,8 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
     clearInterval(callTimerRef.current)
     clearTimeout(autoHangupRef.current)
     autoHangupRef.current = null
+    stopLowDataCap(lowDataIntervalRef.current)
+    lowDataIntervalRef.current = null
     stopIceSubscription('chat')
     if (callIdRef.current) cleanupIceCandidates(callIdRef.current)
     try { pcRef.current?.close() } catch (_) {}
@@ -591,6 +608,15 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
       console.error('switchCamera error:', e)
       alert('Camera switch failed: ' + e.message)
     }
+  }
+
+  /**
+   * Shared low-data cap wiring (see ../lib/callBitrateCap). Applies the cap and
+   * stores the repeating interval on a ref so it can be torn down.
+   */
+  function applyLowDataIfConfigured(pc, type) {
+    stopLowDataCap(lowDataIntervalRef.current)
+    lowDataIntervalRef.current = startLowDataCap(pc, type)
   }
 
   async function restorePendingCall(fromUserId) {

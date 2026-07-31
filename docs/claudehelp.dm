@@ -1,0 +1,6 @@
+Two post-4c manual tests on the chat stack (owner=chat, same path validated in Task 4b) show elevated bytesUsed deltas — ~70-75KB/s and ~40-45KB/s — instead of the previously-validated tight ~25-30KB/s band. This is after the callBitrateCap.js extraction. Please verify:
+
+Does applyLowDataIfConfigured (or its replacement call in useWebRTC.js) still call startLowDataCap — and does startLowDataCap still apply the cap immediately (not just on the first 5s interval tick)? Confirm by reading the actual code path line by line, not just describing intent.
+Confirm the interval is actually 5000ms and not something larger post-refactor.
+Confirm lowDataIntervalRef isn't accidentally being reset/cleared somewhere before it should be (e.g. if applyLowDataIfConfigured is called more than once per call and each call does stopLowDataCap then startLowDataCap, check nothing is calling it repeatedly at the wrong time).
+Report exact current code for startLowDataCap and the call site in useWebRTC.js so this can be reviewed directly instead of inferred from log output.

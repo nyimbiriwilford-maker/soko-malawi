@@ -4,6 +4,8 @@ import { supabase } from '../lib/supabase'
 import { useCall } from '../context/CallContext'
 import { ICE_SERVERS } from '../lib/webrtc'
 import { chatPathFromCallIds } from '../utils/callNotifications'
+import { useCallDataBudget } from '../hooks/useCallDataBudget'
+import { startLowDataCap, stopLowDataCap } from '../lib/callBitrateCap'
 import {
   CallShell,
   CallAvatar,
@@ -76,6 +78,8 @@ export default function GlobalCallListener() {
   const callStateRef      = useRef('idle')
   /** User tapped Answer before the SDP offer arrived (push-only). */
   const answerWhenReadyRef = useRef(false)
+  const lowDataIntervalRef = useRef(null)
+  const { sampleUsage } = useCallDataBudget(pcRef)
   const [callState, setCallState] = useState('idle') // 'ringing' | 'in-call' | 'connecting'
   const [duration, setDuration]   = useState(0)
   const [isMuted, setIsMuted]     = useState(false)
@@ -353,6 +357,8 @@ export default function GlobalCallListener() {
 
     await pc.setRemoteDescription(new RTCSessionDescription(offer))
     stream.getTracks().forEach((t) => pc.addTrack(t, stream))
+    stopLowDataCap(lowDataIntervalRef.current)
+    lowDataIntervalRef.current = startLowDataCap(pc, type)
 
     for (const c of [...earlyBuffer, ...pendingICE.current]) {
       try {
@@ -378,6 +384,9 @@ export default function GlobalCallListener() {
     timerRef.current = setInterval(() => {
       durationRef.current += 1
       setDuration(durationRef.current)
+      sampleUsage().then((bytesUsed) => {
+        console.log('[CallDataBudget][global] bytesUsed:', bytesUsed)
+      })
       publishActiveCall?.({
         source: 'global',
         status: 'in-call',
@@ -495,6 +504,8 @@ async function handleSwitchCamera() {
   function cleanupCall() {
     stopRing()
     clearInterval(timerRef.current)
+    stopLowDataCap(lowDataIntervalRef.current)
+    lowDataIntervalRef.current = null
     stopIceSubscription('global')
     if (callIdRef.current) cleanupIceCandidates(callIdRef.current)
     try { pcRef.current?.close() } catch (_) {}
