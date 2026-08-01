@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 import { buildReceiverChatId } from '../utils/callNotifications'
 import { useCallDataBudget } from './useCallDataBudget'
 import { setCallBudgetPref } from '../lib/callBudgetPrefs'
-import { startLowDataCap, stopLowDataCap } from '../lib/callBitrateCap'
+import { stopLowDataCap } from '../lib/callBitrateCap'
 
 // TEMP - dev-only test hook, remove when budget UI ships
 if (import.meta.env.DEV) {
@@ -638,12 +638,14 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
   }
 
   /**
-   * Shared low-data cap wiring (see ../lib/callBitrateCap). Applies the cap and
-   * stores the repeating interval on a ref so it can be torn down.
+   * Shared low-data cap wiring (see ../lib/callBitrateCap). The fixed 40 kbit/s
+   * auto-cap this previously applied for low/medium video budgets is replaced by
+   * the adaptive quality steps in PersistentCallShell.jsx (Phase 4). The cap
+   * interval is still torn down here so endCallLocally() stays consistent.
    */
-  function applyLowDataIfConfigured(pc, type) {
+  function applyLowDataIfConfigured() {
     stopLowDataCap(lowDataIntervalRef.current)
-    lowDataIntervalRef.current = startLowDataCap(pc, type)
+    lowDataIntervalRef.current = null
   }
 
   async function restorePendingCall(fromUserId) {

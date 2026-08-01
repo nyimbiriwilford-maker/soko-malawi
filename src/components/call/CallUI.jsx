@@ -19,6 +19,7 @@ import {
   Circle,
   Minimize2,
 } from 'lucide-react'
+import CallDataMeter from '../CallDataMeter'
 
 export const CALL_GREEN = '#0F9D58'
 export const CALL_GREEN_SOFT = '#22a05e'
@@ -369,6 +370,157 @@ function useStableMediaRef(videoRef) {
   }, [])
 }
 
+const BUDGET_TOASTS = {
+  half: {
+    text: 'Half your data budget used',
+    bg: 'rgba(15, 157, 88, 0.16)',
+    border: 'rgba(15, 157, 88, 0.45)',
+    color: '#a7f3d0',
+  },
+  low: {
+    text: 'Running low on data',
+    bg: 'rgba(249, 171, 0, 0.18)',
+    border: 'rgba(249, 171, 0, 0.55)',
+    color: '#ffe08a',
+  },
+  critical: {
+    text: 'Almost out of data — consider ending soon',
+    bg: 'rgba(249, 115, 22, 0.2)',
+    border: 'rgba(249, 115, 22, 0.6)',
+    color: '#fed7aa',
+  },
+  quality: {
+    text: 'Video quality reduced to save data',
+    bg: 'rgba(59, 130, 246, 0.18)',
+    border: 'rgba(59, 130, 246, 0.5)',
+    color: '#bfdbfe',
+  },
+}
+
+/** Subtle in-call toast for progressive budget warnings / quality steps. */
+export function BudgetToast({ level, style }) {
+  const toast = BUDGET_TOASTS[level] || BUDGET_TOASTS.half
+  return (
+    <div
+      role="status"
+      style={{
+        position: 'fixed',
+        left: 0,
+        right: 0,
+        bottom: 132,
+        zIndex: 3100,
+        display: 'flex',
+        justifyContent: 'center',
+        padding: '0 20px',
+        pointerEvents: 'none',
+        ...(style || {}),
+      }}
+    >
+      <div
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 8,
+          background: toast.bg,
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          border: `1px solid ${toast.border}`,
+          borderRadius: 999,
+          padding: '10px 18px',
+          color: toast.color,
+          fontSize: 13,
+          fontWeight: 650,
+          letterSpacing: '0.01em',
+          boxShadow: '0 8px 28px rgba(0,0,0,0.4)',
+          animation: 'budgetToastIn 0.3s ease',
+          maxWidth: '100%',
+          textAlign: 'center',
+        }}
+      >
+        {toast.text}
+      </div>
+    </div>
+  )
+}
+
+const budgetModalBtn = {
+  display: 'block',
+  width: '100%',
+  border: 'none',
+  borderRadius: 12,
+  padding: '14px 0',
+  fontSize: 15,
+  fontWeight: 700,
+  cursor: 'pointer',
+  fontFamily: 'inherit',
+  transition: 'transform 0.15s ease, background 0.2s ease',
+}
+
+const budgetModalGhostBtn = {
+  ...budgetModalBtn,
+  background: 'rgba(255,255,255,0.12)',
+  color: '#fff',
+  border: '1px solid rgba(255,255,255,0.18)',
+}
+
+/** Full data-budget-exhausted modal with the four in-call choices. */
+export function BudgetExhaustedModal({ onAction }) {
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        zIndex: 3100,
+        background: 'rgba(0,0,0,0.68)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 20,
+        fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
+      }}
+      onClick={() => onAction('continue')}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Data budget reached"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          width: 'min(360px, 100%)',
+          background: '#161b17',
+          border: '1px solid #2a342c',
+          borderRadius: 18,
+          padding: 22,
+          boxShadow: '0 24px 60px rgba(0,0,0,0.55)',
+          animation: 'budgetModalIn 0.25s ease',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+          <CallIcon name="alert" size={18} color={CALL_RED} />
+          <div style={{ color: '#fff', fontSize: 18, fontWeight: 800 }}>Data budget reached</div>
+        </div>
+        <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, lineHeight: 1.45, margin: '0 0 18px' }}>
+          You've used up your call data budget. Choose how to continue.
+        </p>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <button type="button" onClick={() => onAction('continue')} style={{ ...budgetModalBtn, background: CALL_GREEN, color: '#fff' }}>
+            Continue Call
+          </button>
+          <button type="button" onClick={() => onAction('reduceVideo')} style={budgetModalGhostBtn}>
+            Reduce Video Quality
+          </button>
+          <button type="button" onClick={() => onAction('audioOnly')} style={budgetModalGhostBtn}>
+            Switch to Audio Only
+          </button>
+          <button type="button" onClick={() => onAction('endCall')} style={{ ...budgetModalBtn, background: CALL_RED, color: '#fff' }}>
+            End Call
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /** Fullscreen in-call chrome (shared layout) */
 export function InCallStage({
   isVideo,
@@ -380,6 +532,8 @@ export function InCallStage({
   localVideoRef,
   warning,
   controls,
+  bytesUsed,
+  budgetMb,
   zIndex = 3000,
 }) {
   // Stable callback refs — inline parent callbacks remount media every second
@@ -520,6 +674,13 @@ export function InCallStage({
           </div>
         ) : null}
         <CallStatusPill live>{durationLabel}</CallStatusPill>
+        {bytesUsed !== undefined && (
+          <CallDataMeter
+            bytesUsed={bytesUsed}
+            budgetMb={budgetMb || 0}
+            callType={isVideo ? 'video' : 'voice'}
+          />
+        )}
       </div>
 
       <div style={{
@@ -564,6 +725,14 @@ export const CALL_KEYFRAMES = `
   }
   @keyframes callSpin {
     to { transform: rotate(360deg); }
+  }
+  @keyframes budgetToastIn {
+    from { opacity: 0; transform: translateY(10px) scale(0.96); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes budgetModalIn {
+    from { opacity: 0; transform: translateY(12px) scale(0.97); }
+    to { opacity: 1; transform: translateY(0) scale(1); }
   }
   .call-spin { animation: callSpin 0.85s linear infinite; }
 `

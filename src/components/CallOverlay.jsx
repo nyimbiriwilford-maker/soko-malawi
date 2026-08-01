@@ -11,6 +11,8 @@ import {
   CallIcon,
   InCallStage,
   InCallControls,
+  BudgetToast,
+  BudgetExhaustedModal,
   CALL_KEYFRAMES,
 } from './call/CallUI'
 
@@ -32,6 +34,11 @@ export default function CallOverlay({
   toggleCam,
   switchCamera,
   formatTime,
+  bytesUsed,
+  budgetMb,
+  budgetWarning,
+  onBudgetAction,
+  qualityToast,
 }) {
   if (callState === 'idle') return null
 
@@ -111,32 +118,45 @@ export default function CallOverlay({
 
   if (callState === 'in-call') {
     return (
-      <InCallStage
-        zIndex={3000}
-        isVideo={isVideo}
-        name={name}
-        avatarUrl={otherAvatar}
-        avatarInitial={otherInitial}
-        durationLabel={formatTime(callDuration)}
-        remoteVideoRef={remoteVideoRef}
-        localVideoRef={localVideoRef}
-        warning="Tap Browse to use the app while staying on the call"
-        controls={(
-          <InCallControls
-            isVideo={isVideo}
-            isMuted={isMuted}
-            isCamOff={isCamOff}
-            onMute={toggleMute}
-            onCam={toggleCam}
-            onHangUp={hangUp}
-            onFlip={switchCamera}
-            onMinimize={typeof window !== 'undefined' ? () => {
-              // Prefer context minimize when available via custom event
-              window.dispatchEvent(new CustomEvent('sokomw-minimize-call'))
-            } : undefined}
-          />
+      <>
+        <InCallStage
+          zIndex={3000}
+          isVideo={isVideo}
+          name={name}
+          avatarUrl={otherAvatar}
+          avatarInitial={otherInitial}
+          durationLabel={formatTime(callDuration)}
+          remoteVideoRef={remoteVideoRef}
+          localVideoRef={localVideoRef}
+          bytesUsed={bytesUsed}
+          budgetMb={budgetMb}
+          warning="Tap Browse to use the app while staying on the call"
+          controls={(
+            <InCallControls
+              isVideo={isVideo}
+              isMuted={isMuted}
+              isCamOff={isCamOff}
+              onMute={toggleMute}
+              onCam={toggleCam}
+              onHangUp={hangUp}
+              onFlip={switchCamera}
+              onMinimize={typeof window !== 'undefined' ? () => {
+                // Prefer context minimize when available via custom event
+                window.dispatchEvent(new CustomEvent('sokomw-minimize-call'))
+              } : undefined}
+            />
+          )}
+        />
+        {budgetWarning && budgetWarning.level !== 'exhausted' && (
+          <BudgetToast level={budgetWarning.level} />
         )}
-      />
+        {qualityToast && (
+          <BudgetToast level="quality" style={{ bottom: 196 }} />
+        )}
+        {budgetWarning && budgetWarning.level === 'exhausted' && (
+          <BudgetExhaustedModal onAction={onBudgetAction} />
+        )}
+      </>
     )
   }
 
