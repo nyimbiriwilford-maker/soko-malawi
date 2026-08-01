@@ -7,6 +7,7 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import { Phone, Video } from 'lucide-react'
 import { useCall } from '../context/CallContext'
 import CallBudgetSelector from './CallBudgetSelector'
+import CallDataMeter from './CallDataMeter'
 
 const ChatCallContext = createContext(null)
 
@@ -33,6 +34,14 @@ const headerBtnStyle = {
   cursor: 'pointer',
   flexShrink: 0,
   transition: 'background 0.15s ease, transform 0.12s ease, opacity 0.15s ease',
+}
+
+const callMeterStyle = {
+  position: 'fixed',
+  top: 12,
+  left: '50%',
+  transform: 'translateX(-50%)',
+  zIndex: 4000,
 }
 
 /** Hide children while a call is ringing / active full-screen */
@@ -174,6 +183,10 @@ export default function ChatCallHost({
     }
   }, [callUiMode, activeCall?.status])
 
+  const callState = actions?.callState || activeCall?.status || 'idle'
+  const bytesUsed = actions?.bytesUsed ?? activeCall?.bytesUsed ?? 0
+  const budgetMb = actions?.budgetMb ?? activeCall?.budgetMb ?? 0
+
   const value = {
     callState: actions?.callState || 'idle',
     startCall: actions?.startCall,
@@ -185,6 +198,14 @@ export default function ChatCallHost({
   return (
     <ChatCallContext.Provider value={value}>
       {children}
+      {callState !== 'idle' && (
+        <CallDataMeter
+          bytesUsed={bytesUsed}
+          budgetMb={budgetMb}
+          style={callMeterStyle}
+        />
+      )}
     </ChatCallContext.Provider>
   )
 }
+

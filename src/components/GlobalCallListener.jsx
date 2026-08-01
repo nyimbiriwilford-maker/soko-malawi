@@ -397,15 +397,28 @@ export default function GlobalCallListener() {
     sessionStorage.removeItem('__pendingCall')
     sessionStorage.removeItem('__pendingCallId')
 
-    callDebugGetUserMedia(localStreamRef, { audio: true, video: type === 'video' }, 'answerWithOffer')
+    const constraints = { audio: true, video: type === 'video' }
+    callDebugGetUserMedia(localStreamRef, constraints, 'answerWithOffer')
     let gUMError = null
-    const stream = await navigator.mediaDevices
-      .getUserMedia({ audio: true, video: type === 'video' })
+    let stream = await navigator.mediaDevices
+      .getUserMedia(constraints)
       .catch((err) => {
         gUMError = err
         console.error('[getUserMedia]', err?.name, err?.message)
         return null
       })
+
+    if (!stream && gUMError?.name === 'NotReadableError') {
+      await new Promise((r) => setTimeout(r, 1000))
+      callDebugGetUserMedia(localStreamRef, constraints, 'answerWithOffer:retry')
+      stream = await navigator.mediaDevices
+        .getUserMedia(constraints)
+        .catch((err) => {
+          gUMError = err
+          console.error('[getUserMedia retry]', err?.name, err?.message)
+          return null
+        })
+    }
 
     if (!stream) {
       alert(gUMError?.name ? `Camera/microphone error: ${gUMError.name}` : 'Microphone/camera access denied')
@@ -785,3 +798,4 @@ async function handleSwitchCamera() {
     </CallShell>
   )
 }
+
