@@ -13,6 +13,7 @@ import {
   InCallControls,
   BudgetToast,
   BudgetExhaustedModal,
+  CallSummaryScreen,
   CALL_KEYFRAMES,
 } from './call/CallUI'
 
@@ -39,7 +40,13 @@ export default function CallOverlay({
   budgetWarning,
   onBudgetAction,
   qualityToast,
+  callSummary,
+  onDismissSummary,
 }) {
+  if (callSummary) {
+    return <CallSummaryScreen summary={callSummary} onDone={onDismissSummary} />
+  }
+
   if (callState === 'idle') return null
 
   const isVideo = callType === 'video'

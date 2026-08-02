@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useCall } from '../context/CallContext'
 import { ICE_SERVERS } from '../lib/webrtc'
 import { supabase } from '../lib/supabase'
@@ -28,6 +28,47 @@ function callDebugGetUserMedia(streamRef, constraints, label) {
 
 function generateCallId(uid1, uid2) {
   return [uid1, uid2].sort().join('-') + '-' + Date.now()
+}
+
+/**
+ * Acquire call media with a 1s NotReadableError retry (mirrors GlobalCallListener)
+ * and an audio-only fallback when the camera is unavailable on video calls.
+ * @returns {Promise<{ stream: MediaStream|null, audioOnly: boolean, lastError: Error|null }>}
+ */
+async function acquireCallMedia(type) {
+  const video = type === 'video'
+  let lastError = null
+  let stream = await navigator.mediaDevices
+    .getUserMedia({ audio: true, video })
+    .catch((err) => {
+      lastError = err
+      console.error('[getUserMedia]', err?.name, err?.message)
+      return null
+    })
+
+  if (!stream && lastError?.name === 'NotReadableError') {
+    await new Promise((r) => setTimeout(r, 1000))
+    stream = await navigator.mediaDevices
+      .getUserMedia({ audio: true, video })
+      .catch((err) => {
+        lastError = err
+        console.error('[getUserMedia retry]', err?.name, err?.message)
+        return null
+      })
+  }
+
+  if (!stream && video) {
+    const audioOnly = await navigator.mediaDevices
+      .getUserMedia({ audio: true, video: false })
+      .catch((err) => {
+        lastError = err
+        console.error('[getUserMedia audio-only fallback]', err?.name, err?.message)
+        return null
+      })
+    if (audioOnly) return { stream: audioOnly, audioOnly: true, lastError }
+  }
+
+  return { stream, audioOnly: false, lastError }
 }
 
 function sameCallId(a, b) {
@@ -68,6 +109,7 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
   const [isCamOff, setIsCamOff]         = useState(false)
   const [facingMode, setFacingMode]     = useState('user')
   const [remoteStream, setRemoteStream] = useState(null)
+  const [mediaNotice, setMediaNotice]   = useState(null)
 
   const { pcRef, localStreamRef, callIdRef, callerIdRef, callTimerRef } = useCall()
   const { sampleUsage } = useCallDataBudget(pcRef)
@@ -86,6 +128,13 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
   const currentUserRef = useRef(currentUser)
   userIdRef.current      = userId
   currentUserRef.current = currentUser
+
+  // Non-blocking camera-unavailable notice, auto-dismisses
+  useEffect(() => {
+    if (!mediaNotice) return undefined
+    const t = setTimeout(() => setMediaNotice(null), 4000)
+    return () => clearTimeout(t)
+  }, [mediaNotice])
 
   function updateCallType(type) {
     setCallType(type)
@@ -151,7 +200,9 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
       el.srcObject = remoteStream
     }
     if (el.paused) {
-      el.play().catch(() => {})
+      el.play().catch((err) => {
+        if (err.name !== 'AbortError') console.warn('[play]', err.name, err.message)
+      })
     }
   }
 
@@ -163,7 +214,9 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
       el.srcObject = stream
     }
     if (el.paused) {
-      el.play().catch(() => {})
+      el.play().catch((err) => {
+        if (err.name !== 'AbortError') console.warn('[play]', err.name, err.message)
+      })
     }
   }
 
@@ -232,26 +285,22 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
     setCallState('calling')
 
     callDebugGetUserMedia(localStreamRef, { audio: true, video: type === 'video' }, 'startCall')
-    let gUMError = null
-    const stream = await navigator.mediaDevices
-      .getUserMedia({ audio: true, video: type === 'video' })
-      .catch((err) => {
-        gUMError = err
-        console.error('[getUserMedia]', err?.name, err?.message)
-        return null
-      })
+    const { stream, audioOnly, lastError } = await acquireCallMedia(type)
 
     if (!stream) {
-      alert(gUMError?.name ? `Camera/microphone error: ${gUMError.name}` : 'Microphone/camera access denied')
+      alert(lastError?.name ? `Camera/microphone error: ${lastError.name}` : 'Microphone/camera access denied')
       endCallLocally()
       return
     }
+    if (audioOnly) setMediaNotice('Camera unavailable — continuing with audio only')
 
     localStreamRef.current = stream
     if (localMediaStreamRef) localMediaStreamRef.current = stream
     if (localVideoRef.current) {
       localVideoRef.current.srcObject = stream
-      localVideoRef.current.play().catch(() => {})
+      localVideoRef.current.play().catch((err) => {
+        if (err.name !== 'AbortError') console.warn('[play]', err.name, err.message)
+      })
     }
 
     const callId = generateCallId(cu.id, target)
@@ -328,6 +377,16 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
     callStateRef.current = 'ringing'
     setCallState('ringing')
 
+    // Persist the offer so a missed ring broadcast can be recovered
+    supabase.from('call_offers').insert({
+      call_id: callId,
+      caller_id: cu.id,
+      callee_id: target,
+      offer_json: JSON.stringify(pc.localDescription.toJSON()),
+    }).then(({ error }) => {
+      if (error) console.error('[call_offers] insert error:', error)
+    })
+
     await ctxSendSignal(target, 'ring', {
       offer: pc.localDescription.toJSON(),
       callType: type,
@@ -359,26 +418,22 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
     claimCallStack?.('chat')
 
     callDebugGetUserMedia(localStreamRef, { audio: true, video: type === 'video' }, 'answerCall')
-    let gUMError = null
-    const stream = await navigator.mediaDevices
-      .getUserMedia({ audio: true, video: type === 'video' })
-      .catch((err) => {
-        gUMError = err
-        console.error('[getUserMedia]', err?.name, err?.message)
-        return null
-      })
+    const { stream, audioOnly, lastError } = await acquireCallMedia(type)
 
     if (!stream) {
-      alert(gUMError?.name ? `Camera/microphone error: ${gUMError.name}` : 'Microphone/camera access denied')
+      alert(lastError?.name ? `Camera/microphone error: ${lastError.name}` : 'Microphone/camera access denied')
       await declineCall()
       return
     }
+    if (audioOnly) setMediaNotice('Camera unavailable — continuing with audio only')
 
     localStreamRef.current = stream
     if (localMediaStreamRef) localMediaStreamRef.current = stream
     if (localVideoRef.current) {
       localVideoRef.current.srcObject = stream
-      localVideoRef.current.play().catch(() => {})
+      localVideoRef.current.play().catch((err) => {
+        if (err.name !== 'AbortError') console.warn('[play]', err.name, err.message)
+      })
     }
 
     const callId = callIdRef.current
@@ -485,6 +540,17 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
     endCallLocally()
   }
 
+  // The caller owns the call_offers row — delete it when the call ends.
+  // The callee (callerIdRef set) is blocked by RLS and skips this entirely.
+  function deleteCallOfferIfCaller() {
+    const callId = callIdRef.current
+    if (!callId || callerIdRef.current) return
+    supabase.from('call_offers').delete().eq('call_id', callId)
+      .then(({ error }) => {
+        if (error) console.error('[call_offers] delete error:', error)
+      })
+  }
+
   function endCallLocally() {
     ctxStopRing()
     stopRingback()
@@ -497,6 +563,7 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
     lowDataIntervalRef.current = null
     stopIceSubscription('chat')
     if (callIdRef.current) cleanupIceCandidates(callIdRef.current)
+    deleteCallOfferIfCaller()
     try { pcRef.current?.close() } catch (_) {}
     pcRef.current = null
     localStreamRef.current?.getTracks().forEach((t) => t.stop())
@@ -553,6 +620,7 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
               try { await pcRef.current?.addIceCandidate(new RTCIceCandidate(c)) } catch (_) {}
             }
             pendingCandidates.current = []
+            deleteCallOfferIfCaller()
             ctxStopRing()
             stopRingback()
             clearTimeout(autoHangupRef.current)
@@ -718,7 +786,7 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
 
   return {
     callState, callType, callDuration, isMuted, isCamOff, remoteStream,
-    localVideoRef, remoteVideoRef, facingMode,
+    localVideoRef, remoteVideoRef, facingMode, mediaNotice,
     startCall, answerCall, declineCall, hangUp, endCallLocally,
     toggleMute, toggleCam, switchCamera, setupCallListener,
     assignRemoteStream, assignLocalStream, restorePendingCall,

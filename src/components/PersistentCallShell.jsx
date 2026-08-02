@@ -51,6 +51,7 @@ export default function PersistentCallShell() {
     remoteStream,
     localVideoRef,
     remoteVideoRef,
+    mediaNotice,
     startCall,
     answerCall,
     declineCall,
@@ -307,6 +308,36 @@ export default function PersistentCallShell() {
           callSummary={callSummary}
           onDismissSummary={() => setCallSummary(null)}
         />
+      )}
+      {mediaNotice && (
+        <div style={{
+          position: 'fixed',
+          left: 0,
+          right: 0,
+          bottom: 150,
+          zIndex: 9500,
+          display: 'flex',
+          justifyContent: 'center',
+          padding: '0 20px',
+          pointerEvents: 'none',
+        }}>
+          <div style={{
+            background: 'rgba(249, 171, 0, 0.16)',
+            border: '1px solid rgba(249, 171, 0, 0.5)',
+            color: '#ffe08a',
+            borderRadius: 999,
+            padding: '10px 18px',
+            fontSize: 13,
+            fontWeight: 650,
+            backdropFilter: 'blur(12px)',
+            WebkitBackdropFilter: 'blur(12px)',
+            boxShadow: '0 8px 28px rgba(0,0,0,0.4)',
+            textAlign: 'center',
+            maxWidth: '100%',
+          }}>
+            {mediaNotice}
+          </div>
+        </div>
       )}
     </>
   )

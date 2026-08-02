@@ -93,6 +93,9 @@ export default function GlobalCallListener() {
   /** User tapped Answer before the SDP offer arrived (push-only). */
   const answerWhenReadyRef = useRef(false)
   const lowDataIntervalRef = useRef(null)
+  const offerRecoveryTimerRef = useRef(null)
+  const offerGiveUpTimerRef = useRef(null)
+  const callErrorTimerRef = useRef(null)
   const { sampleUsage } = useCallDataBudget(pcRef)
   const [callState, setCallState] = useState('idle') // 'ringing' | 'in-call' | 'connecting'
   const [duration, setDuration]   = useState(0)
@@ -101,6 +104,7 @@ export default function GlobalCallListener() {
   const [isCamOff, setIsCamOff]       = useState(false)
   const [remoteStream, setRemoteStream] = useState(null)
   const [connecting, setConnecting] = useState(false)
+  const [callError, setCallError] = useState(null)
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) myUserIdRef.current = user.id
@@ -124,6 +128,9 @@ export default function GlobalCallListener() {
       // Stop the window._ringtoneAudio played by App.jsx SW handler — we'll use CallContext ring
       stopRingtone()
       playRing()
+      // If the realtime ring (with the SDP offer) never arrives, recover the
+      // offer from call_offers after a short delay, else give up after 30s.
+      armOfferRecovery({ callId, fromUser, callType, chatId, callerName })
     }
 
     window.addEventListener('sw-incoming-call', handleSwIncoming)
@@ -318,7 +325,7 @@ export default function GlobalCallListener() {
     const el = remoteVideoRef.current
     if (!el) return
     if (el.srcObject !== remoteStream) el.srcObject = remoteStream
-    if (el.paused) el.play().catch(() => {})
+    if (el.paused) el.play().catch((err) => { if (err.name !== 'AbortError') console.warn('[play]', err.name, err.message) })
   }, [remoteStream])
 
   useEffect(() => {
@@ -328,7 +335,7 @@ export default function GlobalCallListener() {
       const stream = localStreamRef.current
       if (!el || !stream) return
       if (el.srcObject !== stream) el.srcObject = stream
-      if (el.paused) el.play().catch(() => {})
+      if (el.paused) el.play().catch((err) => { if (err.name !== 'AbortError') console.warn('[play]', err.name, err.message) })
     })
   }, [callState, isVideo])
 
@@ -348,6 +355,7 @@ export default function GlobalCallListener() {
       setConnecting(true)
       stopRingtone()
       // Keep ringing / UI until offer arrives
+      armOfferRecovery(src)
       return
     }
     try {
@@ -560,7 +568,7 @@ export default function GlobalCallListener() {
         if (!el || !stream) return
         el.classList?.add?.('call-remote-pip-source')
         if (el.srcObject !== stream) el.srcObject = stream
-        if (el.paused) el.play().catch(() => {})
+        if (el.paused) el.play().catch((err) => { if (err.name !== 'AbortError') console.warn('[play]', err.name, err.message) })
       })
     })
   }
@@ -626,6 +634,8 @@ async function handleSwitchCamera() {
   }
 
   function cleanupCall() {
+    clearTimeout(offerRecoveryTimerRef.current)
+    clearTimeout(offerGiveUpTimerRef.current)
     stopRing()
     clearInterval(timerRef.current)
     stopLowDataCap(lowDataIntervalRef.current)
@@ -660,6 +670,101 @@ async function handleSwitchCamera() {
     setActiveCall?.(null)
     clearActiveCall?.()
     releaseCallStack?.('global')
+  }
+
+  /** Fetch a persisted offer for a callId from the call_offers table. */
+  async function fetchCallOffer(callId) {
+    try {
+      const { data, error } = await supabase
+        .from('call_offers')
+        .select('offer_json')
+        .eq('call_id', callId)
+        .maybeSingle()
+      if (error) {
+        console.error('[call_offers] fetch error:', error)
+        return null
+      }
+      if (!data?.offer_json) return null
+      try {
+        return typeof data.offer_json === 'string' ? JSON.parse(data.offer_json) : data.offer_json
+      } catch {
+        return null
+      }
+    } catch (e) {
+      console.error('[call_offers] fetch error:', e)
+      return null
+    }
+  }
+
+  function showCallError(message) {
+    setCallError(message)
+    clearTimeout(callErrorTimerRef.current)
+    callErrorTimerRef.current = setTimeout(() => setCallError(null), 5000)
+  }
+
+  /**
+   * Recover a call whose offer never arrived:
+   * - 4s in: if still waiting, fetch the offer from call_offers; if found, show
+   *   the incoming UI (and auto-answer if the user already tapped Answer).
+   * - 30s in: if still no offer, decline the call and show "Call could not connect".
+   */
+  function armOfferRecovery(callInfo) {
+    if (!callInfo?.callId) return
+    const callId = callInfo.callId
+    clearTimeout(offerRecoveryTimerRef.current)
+    clearTimeout(offerGiveUpTimerRef.current)
+
+    offerRecoveryTimerRef.current = setTimeout(async () => {
+      const stillWaiting =
+        swPendingRef.current?.callId === callId ||
+        (answerWhenReadyRef.current && incomingRef.current?.callId === callId)
+      if (!stillWaiting) return
+      const offer = await fetchCallOffer(callId)
+      if (!offer) return // give-up timer handles expiry
+      console.log('[call_offers] recovered offer for', callId)
+
+      const src = {
+        fromUser: swPendingRef.current?.fromUser || incomingRef.current?.fromUser || callInfo.fromUser,
+        callType: swPendingRef.current?.callType || incomingRef.current?.callType || callInfo.callType,
+        chatId: swPendingRef.current?.chatId || incomingRef.current?.chatId || callInfo.chatId,
+        callerName: swPendingRef.current?.callerName || incomingRef.current?.callerName || callInfo.callerName,
+        callId,
+        offer,
+      }
+      const autoAnswer = answerWhenReadyRef.current
+      swPendingRef.current = null
+      answerWhenReadyRef.current = false
+      setConnecting(false)
+      incomingRef.current = src
+      setIncoming(src)
+      setIncomingCall?.(src)
+      clearTimeout(offerGiveUpTimerRef.current)
+      if (autoAnswer) {
+        answerWithOffer(src).catch((err) => {
+          console.error('[GlobalCallListener] recovered-offer answer failed:', err)
+          cleanupCall()
+        })
+      }
+    }, 4000)
+
+    offerGiveUpTimerRef.current = setTimeout(() => {
+      const stillWaiting =
+        swPendingRef.current?.callId === callId ||
+        (answerWhenReadyRef.current && incomingRef.current?.callId === callId)
+      if (!stillWaiting) return
+      console.warn('[GlobalCallListener] no offer after 30s — cannot connect', callId)
+      // Ensure the decline can reach the caller even in the push-only case
+      incomingRef.current = {
+        ...(incomingRef.current || {}),
+        fromUser: incomingRef.current?.fromUser || swPendingRef.current?.fromUser || callInfo.fromUser,
+        callId: incomingRef.current?.callId || callId,
+      }
+      swPendingRef.current = null
+      answerWhenReadyRef.current = false
+      setConnecting(false)
+      handleDecline()
+      showCallError('Call could not connect')
+    }, 30000)
   }
 
   // Auto-minimize when navigating away during a global in-call session
@@ -699,60 +804,95 @@ async function handleSwitchCamera() {
     return `${String(Math.floor(s / 60)).padStart(2,'0')}:${String(s % 60).padStart(2,'0')}`
   }
 
+  const callErrorToast = callError ? (
+    <div style={{
+      position: 'fixed',
+      left: 0,
+      right: 0,
+      bottom: 140,
+      zIndex: 9200,
+      display: 'flex',
+      justifyContent: 'center',
+      padding: '0 20px',
+      pointerEvents: 'none',
+    }}>
+      <div style={{
+        background: 'rgba(239,68,68,0.16)',
+        border: '1px solid rgba(239,68,68,0.5)',
+        color: '#fecaca',
+        borderRadius: 999,
+        padding: '10px 18px',
+        fontSize: 13,
+        fontWeight: 650,
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        boxShadow: '0 8px 28px rgba(0,0,0,0.4)',
+        textAlign: 'center',
+        maxWidth: '100%',
+      }}>
+        {callError}
+      </div>
+    </div>
+  ) : null
+
   if (callState === 'in-call' && callUiMode !== 'mini') {
     const displayName = callerNameRef.current || 'Caller'
     const initial = String(displayName)[0]?.toUpperCase() || '?'
     return (
-      <InCallStage
-        zIndex={9000}
-        isVideo={isVideo}
-        name={displayName}
-        avatarInitial={initial}
-        durationLabel={fmt(duration)}
-        remoteVideoRef={remoteVideoRef}
-        localVideoRef={localVideoRef}
-        warning="You can browse the app — tap the green bar to return"
-        controls={(
-          <InCallControls
-            isVideo={isVideo}
-            isMuted={isMuted}
-            isCamOff={isCamOff}
-            onMute={() => {
-              localStreamRef.current?.getAudioTracks().forEach((t) => { t.enabled = !t.enabled })
-              setIsMuted((m) => {
-                publishActiveCall?.({ isMuted: !m })
-                return !m
-              })
-            }}
-            onCam={() => {
-              localStreamRef.current?.getVideoTracks().forEach((t) => { t.enabled = !t.enabled })
-              setIsCamOff((c) => {
-                publishActiveCall?.({ isCamOff: !c })
-                return !c
-              })
-            }}
-            onHangUp={handleHangUp}
-            onFlip={handleSwitchCamera}
-            onMinimize={() => minimizeCall?.()}
-          />
-        )}
-      />
+      <>
+        <InCallStage
+          zIndex={9000}
+          isVideo={isVideo}
+          name={displayName}
+          avatarInitial={initial}
+          durationLabel={fmt(duration)}
+          remoteVideoRef={remoteVideoRef}
+          localVideoRef={localVideoRef}
+          warning="You can browse the app — tap the green bar to return"
+          controls={(
+            <InCallControls
+              isVideo={isVideo}
+              isMuted={isMuted}
+              isCamOff={isCamOff}
+              onMute={() => {
+                localStreamRef.current?.getAudioTracks().forEach((t) => { t.enabled = !t.enabled })
+                setIsMuted((m) => {
+                  publishActiveCall?.({ isMuted: !m })
+                  return !m
+                })
+              }}
+              onCam={() => {
+                localStreamRef.current?.getVideoTracks().forEach((t) => { t.enabled = !t.enabled })
+                setIsCamOff((c) => {
+                  publishActiveCall?.({ isCamOff: !c })
+                  return !c
+                })
+              }}
+              onHangUp={handleHangUp}
+              onFlip={handleSwitchCamera}
+              onMinimize={() => minimizeCall?.()}
+            />
+          )}
+        />
+        {callErrorToast}
+      </>
     )
   }
 
   // In-call but mini — media continues; MiniCallBar handles controls
   if (callState === 'in-call' && callUiMode === 'mini') {
-    return null
+    return callErrorToast
   }
 
-  if (!incoming || callUiMode === 'hidden') return null
+  if (!incoming || callUiMode === 'hidden') return callErrorToast
 
   const initial = (incoming.callerName || incoming.fromUser)?.[0]?.toUpperCase() || '?'
   const name = incoming.callerName || 'Incoming call'
   const video = incoming.callType === 'video'
 
   return (
-    <CallShell zIndex={9000}>
+    <>
+      <CallShell zIndex={9000}>
       <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 4 }}>
         <CallTypeBadge isVideo={video} />
       </div>
@@ -795,7 +935,9 @@ async function handleSwitchCamera() {
         </CallControlBtn>
       </div>
       <style>{CALL_KEYFRAMES}</style>
-    </CallShell>
+      </CallShell>
+      {callErrorToast}
+    </>
   )
 }
 
