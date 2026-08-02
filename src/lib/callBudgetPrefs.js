@@ -71,3 +71,36 @@ export function estimateDuration(callType, mb, lowDataMode) {
 export function shouldAutoLowData(callType, preset) {
   return callType === 'video' && (preset === 'low' || preset === 'medium')
 }
+
+const CALL_USAGE_LOG_KEY = 'soko_call_usage_log'
+const CALL_USAGE_LOG_MAX = 10
+
+/**
+ * Read the recorded usage log (oldest first).
+ * @returns {Array<{ callType: 'voice'|'video', bytesUsed: number, durationSec: number }>}
+ */
+export function getCallUsageLog() {
+  try {
+    const raw = localStorage.getItem(CALL_USAGE_LOG_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Record data used by a finished call, for future budget recommendations.
+ * @param {'voice'|'video'} callType
+ * @param {number} bytesUsed
+ * @param {number} durationSec
+ */
+export function saveCallUsageRecord(callType, bytesUsed, durationSec) {
+  const log = getCallUsageLog()
+  log.push({ callType, bytesUsed, durationSec })
+  const trimmed = log.length > CALL_USAGE_LOG_MAX
+    ? log.slice(log.length - CALL_USAGE_LOG_MAX)
+    : log
+  localStorage.setItem(CALL_USAGE_LOG_KEY, JSON.stringify(trimmed))
+}

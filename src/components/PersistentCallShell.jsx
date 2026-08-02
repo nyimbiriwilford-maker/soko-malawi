@@ -3,13 +3,13 @@
  * Stays mounted while a call is active so media survives route changes.
  */
 
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useCall } from '../context/CallContext'
 import { useWebRTC, formatTime } from '../hooks/useWebRTC'
 import { useCallDataBudget } from '../hooks/useCallDataBudget'
 import useCallBudgetManager from '../hooks/useCallBudgetManager'
-import { getCallBudgetPref } from '../lib/callBudgetPrefs'
+import { getCallBudgetPref, saveCallUsageRecord } from '../lib/callBudgetPrefs'
 import CallOverlay from './CallOverlay'
 
 export default function PersistentCallShell() {
@@ -102,6 +102,25 @@ export default function PersistentCallShell() {
     boundChat,
     stickyRef,
   })
+
+  const [callSummary, setCallSummary] = useState(null)
+  const [prevCallState, setPrevCallState] = useState(callState)
+
+  if (callState !== prevCallState) {
+    setPrevCallState(callState)
+    if (callState === 'idle') {
+      setCallSummary({ duration: callDuration, bytesUsed, budgetMb, callType })
+    } else {
+      setCallSummary(null)
+    }
+  }
+
+  // Record data usage for future budget recommendations (effect, not render)
+  useEffect(() => {
+    if (callState === 'idle' && callSummary) {
+      saveCallUsageRecord(callSummary.callType, callSummary.bytesUsed, callSummary.duration)
+    }
+  }, [callState, callSummary])
 
   // Expose startCall to chat header buttons (ref always fresh; version only on callState)
   const chatCallActionsRefLocal = useRef({ startCall, callState, hangUp, formatTime })
@@ -253,9 +272,10 @@ export default function PersistentCallShell() {
 
   // Don't show chat overlay if global stack owns the call
   const owner = getCallStackOwner?.()
-  const allowOverlay = showFull && owner !== 'global'
+  const showIdleContent = callSummary || callState !== 'idle'
+  const allowOverlay = (callSummary || showFull) && owner !== 'global'
 
-  if (!chat && callState === 'idle') return null
+  if (!chat && !showIdleContent) return null
 
   return (
     <>
@@ -287,6 +307,8 @@ export default function PersistentCallShell() {
           budgetWarning={budgetWarning}
           onBudgetAction={handleBudgetAction}
           qualityToast={qualityToast}
+          callSummary={callSummary}
+          onDismissSummary={() => setCallSummary(null)}
         />
       )}
     </>

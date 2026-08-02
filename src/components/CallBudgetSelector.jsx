@@ -1,11 +1,12 @@
 import { useState } from 'react'
-import { Check, Video, Phone } from 'lucide-react'
+import { Check, Video, Phone, Sparkles } from 'lucide-react'
 import {
   BUDGET_PRESETS,
   getCallBudgetPref,
   setCallBudgetPref,
   estimateDuration,
   shouldAutoLowData,
+  getCallUsageLog,
 } from '../lib/callBudgetPrefs'
 
 const KEYS = ['low', 'medium', 'high']
@@ -83,6 +84,22 @@ const optionsWrapStyle = {
   flexDirection: 'column',
   gap: 12,
   marginBottom: 18,
+}
+
+const recChipStyle = {
+  display: 'flex',
+  alignItems: 'center',
+  alignSelf: 'flex-start',
+  gap: 8,
+  background: 'rgba(15, 157, 88, 0.10)',
+  border: '1px solid rgba(15, 157, 88, 0.35)',
+  borderRadius: 999,
+  padding: '7px 13px',
+  marginBottom: 16,
+  color: PALETTE.green,
+  fontSize: 12.5,
+  fontWeight: 600,
+  lineHeight: 1.35,
 }
 
 const cardBase = {
@@ -265,6 +282,25 @@ export default function CallBudgetSelector({ callType, onConfirm, onCancel }) {
     savedIsCustom && saved ? saved.mb : 30
   )
 
+  const [recommendation] = useState(() => {
+    const matching = getCallUsageLog()
+      .filter((r) => r && r.callType === callType)
+      .slice(-3)
+    if (matching.length < 3) return null
+    let totalBytes = 0
+    let totalSec = 0
+    for (const r of matching) {
+      totalBytes += Number(r.bytesUsed) || 0
+      totalSec += Number(r.durationSec) || 0
+    }
+    if (totalSec <= 0) return null
+    const avgMbPerMin = (totalBytes / totalSec) * (60 / (1024 * 1024))
+    const avgCallMb = avgMbPerMin * (totalSec / matching.length / 60)
+    return avgCallMb <= BUDGET_PRESETS[callType].low
+      ? 'Your recent calls suggest Economy is enough'
+      : 'Based on your recent calls, Balanced suits you'
+  })
+
   const isCustom = selectedKey === 'custom'
   const validCustom = Number.isFinite(customMb) && customMb > 0
   const canSave = !isCustom || validCustom
@@ -324,6 +360,13 @@ export default function CallBudgetSelector({ callType, onConfirm, onCancel }) {
           Pick how much data to set aside. Each option shows how long it lasts
           on video and voice calls.
         </div>
+
+        {recommendation && (
+          <div style={recChipStyle} role="status" aria-live="polite">
+            <Sparkles size={13} strokeWidth={2.5} aria-hidden />
+            {recommendation}
+          </div>
+        )}
 
         <div style={optionsWrapStyle} role="radiogroup" aria-label="Budget options">
           {KEYS.map((key) => {
