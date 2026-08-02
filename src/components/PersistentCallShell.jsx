@@ -26,7 +26,6 @@ export default function PersistentCallShell() {
     registerMediaControls,
     setChatCallActions,
     remoteMediaStreamRef,
-    localStreamRef,
     getCallStackOwner,
     pcRef,
   } = useCall()
@@ -52,6 +51,7 @@ export default function PersistentCallShell() {
     localVideoRef,
     remoteVideoRef,
     mediaNotice,
+    switching,
     startCall,
     answerCall,
     declineCall,
@@ -59,6 +59,7 @@ export default function PersistentCallShell() {
     toggleMute,
     toggleCam,
     switchCamera,
+    switchCallType,
     setupCallListener,
     assignRemoteStream,
     assignLocalStream,
@@ -86,25 +87,25 @@ export default function PersistentCallShell() {
     return () => clearInterval(intervalId)
   }, [callState])
 
-  const budgetMb = useMemo(
+  const prefBudgetMb = useMemo(
     () => getCallBudgetPref(callType)?.mb || 0,
     [callType]
   )
 
-  const { budgetWarning, qualityToast, handleBudgetAction } = useCallBudgetManager({
+  const { budgetWarning, qualityToast, handleBudgetAction, liveBudgetMb, isBudgetExtended } = useCallBudgetManager({
     bytesUsed,
-    budgetMb,
+    budgetMb: prefBudgetMb,
     callType,
     callState,
     pcRef,
-    localStreamRef,
     hangUp,
     clearActiveCall,
-    toggleCam,
-    isCamOff,
     boundChat,
     stickyRef,
   })
+
+  // Mutable budget — the manager can grow it mid-call via extend actions
+  const budgetMb = liveBudgetMb
 
   const [callSummary, setCallSummary] = useState(null)
   const [prevCallState, setPrevCallState] = useState(callState)
@@ -112,7 +113,12 @@ export default function PersistentCallShell() {
   if (callState !== prevCallState) {
     setPrevCallState(callState)
     if (callState === 'idle') {
-      setCallSummary({ duration: callDuration, bytesUsed, budgetMb, callType })
+      // Summary only for budgeted calls — standard calls (budgetMb 0) get none
+      setCallSummary(
+        budgetMb > 0
+          ? { duration: callDuration, bytesUsed, budgetMb, callType, wasExtended: isBudgetExtended() }
+          : null
+      )
     } else {
       setCallSummary(null)
     }
@@ -299,6 +305,8 @@ export default function PersistentCallShell() {
           toggleMute={toggleMute}
           toggleCam={toggleCam}
           switchCamera={switchCamera}
+          switchCallType={switchCallType}
+          switching={switching}
           formatTime={formatTime}
           bytesUsed={bytesUsed}
           budgetMb={budgetMb}

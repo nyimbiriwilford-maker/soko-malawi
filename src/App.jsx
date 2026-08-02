@@ -31,6 +31,7 @@ const ShopsPage         = lazy(() => import('./pages/ShopsPage'))
 const SearchPage        = lazy(() => import('./pages/SearchPage'))
 const ExplorePage       = lazy(() => import('./pages/ExplorePage'))
 const ListingsPage      = lazy(() => import('./pages/ListingsPage'))
+const CallBudgetPage    = lazy(() => import('./pages/CallBudget'))
 
 import ErrorBoundary from './components/ErrorBoundary'
 import OfflinePage from './components/OfflinePage'
@@ -89,6 +90,7 @@ function AppMobileBottomNav({ enabled }) {
     p.startsWith('/admin') ||
     p.startsWith('/onboarding') ||
     p.startsWith('/verify-payment') ||
+    p.startsWith('/call-budget') ||
     p.startsWith('/chat/')
   ) {
     return null
@@ -348,6 +350,7 @@ const [installPrompt, setInstallPrompt] = useState(null)
             <Route path="/search"                  element={authed ? <SearchPage />     : <Navigate to="/login" />} />
 <Route path="/explore"                 element={authed ? <ExplorePage />    : <Navigate to="/login" />} />
             <Route path="/listings"                element={authed ? <ListingsPage />   : <Navigate to="/login" />} />
+            <Route path="/call-budget"             element={authed ? <CallBudgetPage /> : <Navigate to="/login" />} />
             <Route path="*"                        element={<Navigate to="/" />} />
           </Routes>
           </ErrorBoundary>

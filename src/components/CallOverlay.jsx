@@ -12,7 +12,8 @@ import {
   InCallStage,
   InCallControls,
   BudgetToast,
-  BudgetExhaustedModal,
+  BudgetExtendPanel,
+  BudgetCountdownToast,
   CallSummaryScreen,
   CALL_KEYFRAMES,
 } from './call/CallUI'
@@ -34,6 +35,8 @@ export default function CallOverlay({
   toggleMute,
   toggleCam,
   switchCamera,
+  switchCallType,
+  switching,
   formatTime,
   bytesUsed,
   budgetMb,
@@ -147,6 +150,8 @@ export default function CallOverlay({
               onCam={toggleCam}
               onHangUp={hangUp}
               onFlip={switchCamera}
+              onSwitchType={switchCallType}
+              switching={switching}
               onMinimize={typeof window !== 'undefined' ? () => {
                 // Prefer context minimize when available via custom event
                 window.dispatchEvent(new CustomEvent('sokomw-minimize-call'))
@@ -154,14 +159,20 @@ export default function CallOverlay({
             />
           )}
         />
-        {budgetWarning && budgetWarning.level !== 'exhausted' && (
-          <BudgetToast level={budgetWarning.level} />
+        {budgetWarning && budgetWarning.level === 'low' && (
+          <BudgetToast level="low" />
+        )}
+        {budgetWarning && budgetWarning.level === 'panel' && (
+          <BudgetExtendPanel onExtend={(mb) => onBudgetAction('extend', mb)} />
+        )}
+        {budgetWarning && budgetWarning.level === 'countdown' && (
+          <BudgetCountdownToast
+            seconds={budgetWarning.seconds}
+            onExtend={() => onBudgetAction('extend', 10)}
+          />
         )}
         {qualityToast && (
           <BudgetToast level="quality" style={{ bottom: 196 }} />
-        )}
-        {budgetWarning && budgetWarning.level === 'exhausted' && (
-          <BudgetExhaustedModal onAction={onBudgetAction} />
         )}
       </>
     )

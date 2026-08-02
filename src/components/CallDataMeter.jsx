@@ -1,9 +1,11 @@
 /**
  * CallDataMeter — user-friendly Call Budget Assistant pill for the in-call UI.
- * Speaks plain language: remaining budget ("28.4 MB remaining") and estimated
- * time left ("~12 min left"). Never shows raw bytes or networking jargon.
- * Read-only; fed the running `bytesUsed` total, the user's `budgetMb`, and
- * `callType` (picks the right consumption rate for the estimate). No enforcement.
+ * Shows only three things: remaining budget ("18.4 MB remaining"), a progress
+ * bar (green → amber at 75% → red at 90%), and estimated time left ("~14 min
+ * left"). Renders nothing when no budget is set (standard call). Never shows
+ * raw bytes or networking jargon. Read-only; fed the running `bytesUsed`
+ * total, the user's `budgetMb`, and `callType` (picks the right consumption
+ * rate for the estimate). No enforcement.
  */
 import { memo } from 'react'
 import { Gauge } from 'lucide-react'
@@ -36,13 +38,6 @@ function formatRemainingTime(seconds) {
   const hrs = Math.floor(mins / 60)
   const rem = mins % 60
   return rem > 0 ? `~${hrs} hr ${rem} min` : `~${hrs} hr`
-}
-
-/** Friendly data figure — MB only, never KB/bytes. */
-function formatFriendlyMb(mb) {
-  if (mb <= 0) return '0 MB'
-  if (mb < 0.1) return '0.1 MB'
-  return `${mb.toFixed(1)} MB`
 }
 
 const pillStyle = {
@@ -108,62 +103,46 @@ function CallDataMeter({
   callType = 'voice',
   style,
 }) {
-  const used = Number.isFinite(bytesUsed) && bytesUsed > 0 ? bytesUsed : 0
   const hasBudget = Number.isFinite(budgetMb) && budgetMb > 0
+  if (!hasBudget) return null
 
-  let label
-  let timeLabel = null
-  let pct = 0
-  let status = 'ok'
-  let reached
-
-  if (hasBudget) {
-    const budgetBytes = budgetMb * MB
-    const ratio = Math.min(1, used / budgetBytes)
-    const remainingMb = Math.max(0, budgetMb - used / MB)
-    reached = remainingMb < 0.1
-    status = reached ? 'danger' : statusFor(ratio)
-
-    if (reached) {
-      label = 'Budget reached'
-    } else {
-      label = `${remainingMb.toFixed(1)} MB remaining`
-      const pref = getCallBudgetPref(callType)
-      const lowDataMode = pref ? shouldAutoLowData(callType, pref.preset) : false
-      const remainingSeconds = estimateDuration(callType, remainingMb, lowDataMode)
-      timeLabel = `${formatRemainingTime(remainingSeconds)} left`
-    }
-    pct = Math.min(100, Math.max(0, ratio * 100))
-  } else {
-    label = `You've used ${formatFriendlyMb(used / MB)}`
-  }
-
+  const used = Number.isFinite(bytesUsed) && bytesUsed > 0 ? bytesUsed : 0
+  const budgetBytes = budgetMb * MB
+  const ratio = Math.min(1, used / budgetBytes)
+  const remainingMb = Math.max(0, budgetMb - used / MB)
+  const reached = remainingMb < 0.1
+  const status = reached ? 'danger' : statusFor(ratio)
   const color = COLORS[status]
+  const pct = Math.min(100, Math.max(0, ratio * 100))
+
+  const label = reached ? 'Budget reached' : `${remainingMb.toFixed(1)} MB remaining`
+  const pref = getCallBudgetPref(callType)
+  const lowDataMode = pref ? shouldAutoLowData(callType, pref.preset) : false
+  const remainingSeconds = estimateDuration(callType, remainingMb, lowDataMode)
+  const timeLabel = `${formatRemainingTime(remainingSeconds)} left`
 
   return (
     <div
       style={{ ...pillStyle, ...(style || {}) }}
       title={label}
-      aria-label={hasBudget ? `${label}${timeLabel ? `, ${timeLabel}` : ''}` : label}
+      aria-label={`${label}, ${timeLabel}`}
     >
       <div style={rowStyle}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
           <Gauge size={15} strokeWidth={2.2} color={color} aria-hidden />
           <span style={labelStyle}>{label}</span>
         </span>
-        {timeLabel ? <span style={timeStyle}>{timeLabel}</span> : null}
+        <span style={timeStyle}>{timeLabel}</span>
       </div>
-      {hasBudget && (
-        <span
-          style={trackStyle}
-          role="progressbar"
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-valuenow={Math.round(pct)}
-        >
-          <span style={{ ...fillStyle, width: `${pct}%`, background: color }} />
-        </span>
-      )}
+      <span
+        style={trackStyle}
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(pct)}
+      >
+        <span style={{ ...fillStyle, width: `${pct}%`, background: color }} />
+      </span>
     </div>
   )
 }

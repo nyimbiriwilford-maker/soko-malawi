@@ -291,6 +291,8 @@ export function InCallControls({
   onHangUp,
   onFlip,
   onMinimize,
+  onSwitchType,
+  switching = false,
 }) {
   return (
     <div
@@ -298,9 +300,9 @@ export function InCallControls({
         display: 'flex',
         alignItems: 'flex-end',
         justifyContent: 'center',
-        gap: 14,
+        gap: 10,
         width: '100%',
-        maxWidth: 400,
+        maxWidth: 500,
         padding: '0 12px',
         boxSizing: 'border-box',
       }}
@@ -333,6 +335,18 @@ export function InCallControls({
           ariaLabel={isCamOff ? 'Turn camera on' : 'Turn camera off'}
         >
           <CallIcon name={isCamOff ? 'videoOff' : 'video'} size={22} color="#fff" />
+        </CallControlBtn>
+      )}
+
+      {onSwitchType && (
+        <CallControlBtn
+          label={switching ? 'Switching…' : (isVideo ? 'Switch to Audio' : 'Switch to Video')}
+          variant="glass"
+          disabled={switching}
+          onClick={onSwitchType}
+          ariaLabel={switching ? 'Switching call type' : (isVideo ? 'Switch to audio only' : 'Switch to video')}
+        >
+          <CallIcon name={switching ? 'loader' : (isVideo ? 'phone' : 'video')} size={22} color="#fff" />
         </CallControlBtn>
       )}
 
@@ -372,23 +386,11 @@ function useStableMediaRef(videoRef) {
 }
 
 const BUDGET_TOASTS = {
-  half: {
-    text: 'Half your data budget used',
-    bg: 'rgba(15, 157, 88, 0.16)',
-    border: 'rgba(15, 157, 88, 0.45)',
-    color: '#a7f3d0',
-  },
   low: {
     text: 'Running low on data',
     bg: 'rgba(249, 171, 0, 0.18)',
     border: 'rgba(249, 171, 0, 0.55)',
     color: '#ffe08a',
-  },
-  critical: {
-    text: 'Almost out of data — consider ending soon',
-    bg: 'rgba(249, 115, 22, 0.2)',
-    border: 'rgba(249, 115, 22, 0.6)',
-    color: '#fed7aa',
   },
   quality: {
     text: 'Video quality reduced to save data',
@@ -398,9 +400,9 @@ const BUDGET_TOASTS = {
   },
 }
 
-/** Subtle in-call toast for progressive budget warnings / quality steps. */
+/** Subtle in-call toast for the low-budget warning / quality steps. */
 export function BudgetToast({ level, style }) {
-  const toast = BUDGET_TOASTS[level] || BUDGET_TOASTS.half
+  const toast = BUDGET_TOASTS[level] || BUDGET_TOASTS.low
   return (
     <div
       role="status"
@@ -444,79 +446,132 @@ export function BudgetToast({ level, style }) {
   )
 }
 
-const budgetModalBtn = {
-  display: 'block',
-  width: '100%',
-  border: 'none',
-  borderRadius: 12,
-  padding: '14px 0',
-  fontSize: 15,
-  fontWeight: 700,
+const extendBtnStyle = {
+  flex: 1,
+  background: 'rgba(15, 157, 88, 0.16)',
+  border: '1px solid rgba(15, 157, 88, 0.5)',
+  borderRadius: 10,
+  padding: '10px 0',
+  color: '#a7f3d0',
+  fontSize: 14,
+  fontWeight: 800,
   cursor: 'pointer',
   fontFamily: 'inherit',
   transition: 'transform 0.15s ease, background 0.2s ease',
 }
 
-const budgetModalGhostBtn = {
-  ...budgetModalBtn,
-  background: 'rgba(255,255,255,0.12)',
-  color: '#fff',
-  border: '1px solid rgba(255,255,255,0.18)',
-}
-
-/** Full data-budget-exhausted modal with the four in-call choices. */
-export function BudgetExhaustedModal({ onAction }) {
+/** Non-blocking in-call panel shown at 90%: quick budget extensions. */
+export function BudgetExtendPanel({ onExtend }) {
   return (
     <div
+      role="status"
       style={{
         position: 'fixed',
-        inset: 0,
+        left: 0,
+        right: 0,
+        bottom: 132,
         zIndex: 3100,
-        background: 'rgba(0,0,0,0.68)',
         display: 'flex',
-        alignItems: 'center',
         justifyContent: 'center',
-        padding: 20,
-        fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, sans-serif',
+        padding: '0 20px',
       }}
-      onClick={() => onAction('continue')}
     >
       <div
-        role="dialog"
-        aria-modal="true"
-        aria-label="Data budget reached"
-        onClick={(e) => e.stopPropagation()}
         style={{
-          width: 'min(360px, 100%)',
+          width: 'min(340px, 100%)',
+          boxSizing: 'border-box',
           background: '#161b17',
           border: '1px solid #2a342c',
-          borderRadius: 18,
-          padding: 22,
-          boxShadow: '0 24px 60px rgba(0,0,0,0.55)',
-          animation: 'budgetModalIn 0.25s ease',
+          borderRadius: 16,
+          padding: '12px 14px',
+          boxShadow: '0 12px 40px rgba(0,0,0,0.5)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          textAlign: 'center',
+          animation: 'budgetToastIn 0.3s ease',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-          <CallIcon name="alert" size={18} color={CALL_RED} />
-          <div style={{ color: '#fff', fontSize: 18, fontWeight: 800 }}>Data budget reached</div>
+        <div style={{ color: '#ffe08a', fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
+          Running low on data — extend?
         </div>
-        <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: 13, lineHeight: 1.45, margin: '0 0 18px' }}>
-          You've used up your call data budget. Choose how to continue.
-        </p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <button type="button" className="call-btn" onClick={() => onAction('continue')} style={{ ...budgetModalBtn, background: CALL_GREEN, color: '#fff' }}>
-            Continue Call
-          </button>
-          <button type="button" className="call-btn" onClick={() => onAction('reduceVideo')} style={budgetModalGhostBtn}>
-            Reduce Video Quality
-          </button>
-          <button type="button" className="call-btn" onClick={() => onAction('audioOnly')} style={budgetModalGhostBtn}>
-            Switch to Audio Only
-          </button>
-          <button type="button" className="call-btn" onClick={() => onAction('endCall')} style={{ ...budgetModalBtn, background: CALL_RED, color: '#fff' }}>
-            End Call
-          </button>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+          {[5, 10, 20].map((mb) => (
+            <button
+              key={mb}
+              type="button"
+              className="call-btn"
+              onClick={() => onExtend(mb)}
+              aria-label={`Extend call budget by ${mb} MB`}
+              style={extendBtnStyle}
+            >
+              +{mb} MB
+            </button>
+          ))}
         </div>
+      </div>
+    </div>
+  )
+}
+
+/** Countdown toast shown at 98% with the +10 MB escape button. */
+export function BudgetCountdownToast({ seconds, onExtend }) {
+  return (
+    <div
+      role="alert"
+      style={{
+        position: 'fixed',
+        left: 0,
+        right: 0,
+        bottom: 132,
+        zIndex: 3100,
+        display: 'flex',
+        justifyContent: 'center',
+        padding: '0 20px',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 12,
+          background: 'rgba(239, 68, 68, 0.16)',
+          border: '1px solid rgba(239, 68, 68, 0.55)',
+          borderRadius: 999,
+          padding: '8px 10px 8px 18px',
+          color: '#fecaca',
+          fontSize: 13,
+          fontWeight: 700,
+          boxShadow: '0 8px 28px rgba(0,0,0,0.4)',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+          maxWidth: '100%',
+          animation: 'budgetToastIn 0.3s ease',
+        }}
+      >
+        <span style={{ fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+          Call ends in {seconds}...
+        </span>
+        <button
+          type="button"
+          className="call-btn"
+          onClick={onExtend}
+          aria-label="Extend call budget by 10 MB"
+          style={{
+            background: CALL_RED,
+            border: 'none',
+            borderRadius: 999,
+            padding: '7px 14px',
+            color: '#fff',
+            fontSize: 12,
+            fontWeight: 800,
+            cursor: 'pointer',
+            fontFamily: 'inherit',
+            whiteSpace: 'nowrap',
+            transition: 'transform 0.15s ease',
+          }}
+        >
+          Extend +10 MB
+        </button>
       </div>
     </div>
   )
@@ -704,11 +759,6 @@ export function InCallStage({
 
 const MB = 1024 * 1024
 
-const NORMAL_RATES = {
-  video: 265000,
-  voice: 10500,
-}
-
 function formatDataMb(mb) {
   if (!Number.isFinite(mb) || mb <= 0) return '0 MB'
   if (mb < 0.1) return '0.1 MB'
@@ -722,21 +772,6 @@ function friendlyDuration(seconds) {
   const r = s % 60
   if (m === 0) return `${r} sec`
   return r > 0 ? `${m} min ${r} sec` : `${m} min`
-}
-
-function usageLabel(callType, bytesUsed, durationSec) {
-  const rate = NORMAL_RATES[callType] || NORMAL_RATES.video
-  if (!durationSec || durationSec <= 0 || !bytesUsed || bytesUsed <= 0) return 'Light usage'
-  const ratio = bytesUsed / durationSec / rate
-  if (ratio < 0.35) return 'Light usage'
-  if (ratio < 0.7) return 'Moderate usage'
-  return 'Heavy usage'
-}
-
-const USAGE_COLOR = {
-  'Light usage': '#34D399',
-  'Moderate usage': CALL_AMBER,
-  'Heavy usage': CALL_RED,
 }
 
 const summaryRowStyle = {
@@ -759,7 +794,7 @@ const summaryValueStyle = {
   fontVariantNumeric: 'tabular-nums',
 }
 
-/** Full-screen Call Summary shown after a call ends. */
+/** Full-screen Call Summary shown after a budgeted call ends. */
 export function CallSummaryScreen({ summary, onDone }) {
   const [canDone, setCanDone] = useState(false)
   const [lockSecs, setLockSecs] = useState(3)
@@ -777,15 +812,14 @@ export function CallSummaryScreen({ summary, onDone }) {
     duration = 0,
     bytesUsed = 0,
     budgetMb = null,
-    callType = 'voice',
+    wasExtended = false,
   } = summary || {}
   const usedMb = Number.isFinite(bytesUsed) && bytesUsed > 0 ? bytesUsed / MB : 0
   const hasBudget = Number.isFinite(budgetMb) && budgetMb > 0
-  const ratio = hasBudget ? Math.min(1, usedMb / budgetMb) : 0
   const remainingMb = hasBudget ? Math.max(0, budgetMb - usedMb) : 0
-  const reached = hasBudget && remainingMb < 0.1
-  const barColor = reached || ratio >= 0.9 ? CALL_RED : ratio >= 0.75 ? CALL_AMBER : '#34D399'
-  const usage = usageLabel(callType, usedMb > 0 ? bytesUsed : 0, duration)
+
+  // Summary is only captured for budgeted calls; stay defensive anyway
+  if (!hasBudget) return null
 
   return (
     <CallShell zIndex={3000}>
@@ -819,36 +853,18 @@ export function CallSummaryScreen({ summary, onDone }) {
           WebkitBackdropFilter: 'blur(12px)',
         }}>
           <div style={summaryRowStyle}>
-            <span style={summaryLabelStyle}>Data used</span>
-            <span style={summaryValueStyle}>{formatDataMb(usedMb)} used</span>
+            <span style={summaryLabelStyle}>Budget used</span>
+            <span style={summaryValueStyle}>{formatDataMb(usedMb)} of {formatDataMb(budgetMb)} used</span>
           </div>
-          {hasBudget && (
-            <>
-              <div style={{
-                margin: '12px 0',
-                height: 6,
-                borderRadius: 3,
-                background: 'rgba(255,255,255,0.16)',
-                overflow: 'hidden',
-              }}>
-                <div style={{
-                  height: '100%',
-                  width: `${ratio * 100}%`,
-                  background: barColor,
-                  borderRadius: 3,
-                  transition: 'width 0.4s ease, background 0.4s ease',
-                }} />
-              </div>
-              <div style={summaryRowStyle}>
-                <span style={summaryLabelStyle}>Remaining</span>
-                <span style={summaryValueStyle}>{formatDataMb(remainingMb)} remaining</span>
-              </div>
-            </>
+          <div style={{ ...summaryRowStyle, marginTop: 12 }}>
+            <span style={summaryLabelStyle}>Remaining</span>
+            <span style={summaryValueStyle}>{formatDataMb(remainingMb)} remaining</span>
+          </div>
+          {wasExtended && (
+            <div style={{ ...summaryRowStyle, marginTop: 12 }}>
+              <span style={summaryLabelStyle}>Budget extended once during this call</span>
+            </div>
           )}
-          <div style={{ ...summaryRowStyle, marginTop: hasBudget ? 12 : 0 }}>
-            <span style={summaryLabelStyle}>Usage</span>
-            <span style={{ ...summaryValueStyle, color: USAGE_COLOR[usage] || '#fff' }}>{usage}</span>
-          </div>
         </div>
 
         <button
