@@ -5,6 +5,7 @@
  * Read-only; fed the running `bytesUsed` total, the user's `budgetMb`, and
  * `callType` (picks the right consumption rate for the estimate). No enforcement.
  */
+import { memo } from 'react'
 import { Gauge } from 'lucide-react'
 import {
   getCallBudgetPref,
@@ -68,6 +69,7 @@ const rowStyle = {
   alignItems: 'center',
   justifyContent: 'space-between',
   gap: 12,
+  flexWrap: 'wrap',
 }
 
 const labelStyle = {
@@ -75,7 +77,6 @@ const labelStyle = {
   fontWeight: 700,
   color: '#fff',
   letterSpacing: '0.01em',
-  whiteSpace: 'nowrap',
 }
 
 const timeStyle = {
@@ -101,7 +102,7 @@ const fillStyle = {
   transition: 'width 0.4s ease, background 0.4s ease',
 }
 
-export default function CallDataMeter({
+function CallDataMeter({
   bytesUsed = 0,
   budgetMb = null,
   callType = 'voice',
@@ -166,3 +167,5 @@ export default function CallDataMeter({
     </div>
   )
 }
+
+export default memo(CallDataMeter)

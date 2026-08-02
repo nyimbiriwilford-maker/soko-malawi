@@ -3,7 +3,7 @@
  * Stays mounted while a call is active so media survives route changes.
  */
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useCall } from '../context/CallContext'
 import { useWebRTC, formatTime } from '../hooks/useWebRTC'
@@ -26,7 +26,6 @@ export default function PersistentCallShell() {
     registerMediaControls,
     setChatCallActions,
     remoteMediaStreamRef,
-    localMediaStreamRef,
     localStreamRef,
     getCallStackOwner,
     pcRef,
@@ -86,7 +85,10 @@ export default function PersistentCallShell() {
     return () => clearInterval(intervalId)
   }, [callState])
 
-  const budgetMb = getCallBudgetPref(callType)?.mb || 0
+  const budgetMb = useMemo(
+    () => getCallBudgetPref(callType)?.mb || 0,
+    [callType]
+  )
 
   const { budgetWarning, qualityToast, handleBudgetAction } = useCallBudgetManager({
     bytesUsed,
@@ -168,12 +170,7 @@ export default function PersistentCallShell() {
 
   // Publish active call for MiniCallBar + register controls
   useEffect(() => {
-    if (callState === 'idle') {
-      if (getCallStackOwner?.() === 'chat' || !getCallStackOwner?.()) {
-        // only clear if we were the chat stack
-      }
-      return
-    }
+    if (callState === 'idle') return
 
     const chatPath = userId
       ? (listingId && listingId !== 'undefined'
@@ -199,7 +196,7 @@ export default function PersistentCallShell() {
     callState, callType, callDuration, isMuted, isCamOff,
     userId, listingId, chat?.otherName, chat?.otherAvatar, chat?.otherInitial,
     location.pathname,
-  ]) // eslint-disable-line react-hooks/exhaustive-deps
+  ])
 
   // UI mode + media controls — do not re-register every duration second
   useEffect(() => {

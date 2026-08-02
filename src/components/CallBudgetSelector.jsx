@@ -97,7 +97,7 @@ const recChipStyle = {
   padding: '7px 13px',
   marginBottom: 16,
   color: PALETTE.green,
-  fontSize: 12.5,
+  fontSize: 13,
   fontWeight: 600,
   lineHeight: 1.35,
 }
@@ -170,7 +170,7 @@ const statItem = {
   alignItems: 'center',
   gap: 5,
   color: PALETTE.textDim,
-  fontSize: 12.5,
+  fontSize: 13,
   fontWeight: 600,
   whiteSpace: 'nowrap',
 }
@@ -226,7 +226,7 @@ const saveBtnStyle = {
   cursor: 'pointer',
   fontFamily: 'inherit',
   opacity: 1,
-  transition: 'opacity 0.2s ease',
+  transition: 'opacity 0.2s ease, transform 0.15s ease',
 }
 
 const saveBtnDisabledStyle = {
@@ -246,12 +246,13 @@ const skipBtnStyle = {
   fontWeight: 600,
   cursor: 'pointer',
   fontFamily: 'inherit',
+  transition: 'transform 0.15s ease',
 }
 
 const skipHintStyle = {
   marginTop: 12,
   color: PALETTE.textDim,
-  fontSize: 11.5,
+  fontSize: 12,
   lineHeight: 1.45,
 }
 
@@ -266,6 +267,8 @@ const KEYFRAMES = `
     100% { transform: scale(1); opacity: 1; }
   }
   .budget-check-pop { animation: budgetPop 0.25s ease forwards; }
+  .budget-card:active { transform: scale(0.985); }
+  .budget-btn:active { transform: scale(0.98); }
 `
 
 export default function CallBudgetSelector({ callType, onConfirm, onCancel }) {
@@ -377,6 +380,7 @@ export default function CallBudgetSelector({ callType, onConfirm, onCancel }) {
               <button
                 key={key}
                 type="button"
+                className="budget-card"
                 role="radio"
                 aria-checked={selected}
                 onClick={() => setSelectedKey(key)}
@@ -403,6 +407,7 @@ export default function CallBudgetSelector({ callType, onConfirm, onCancel }) {
           })}
 
           <div
+            className="budget-card"
             role="radio"
             aria-checked={isCustom}
             tabIndex={0}
@@ -452,13 +457,14 @@ export default function CallBudgetSelector({ callType, onConfirm, onCancel }) {
         <div style={btnRowStyle}>
           <button
             type="button"
+            className="budget-btn"
             onClick={handleSave}
             disabled={!canSave}
             style={canSave ? saveBtnStyle : saveBtnDisabledStyle}
           >
             Save & call
           </button>
-          <button type="button" onClick={() => onConfirm?.(null)} style={skipBtnStyle}>
+          <button type="button" className="budget-btn" onClick={() => onConfirm?.(null)} style={skipBtnStyle}>
             Cancel / Skip
           </button>
         </div>

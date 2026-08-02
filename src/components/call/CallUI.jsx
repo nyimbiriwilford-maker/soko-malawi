@@ -3,7 +3,7 @@
  * Used by CallOverlay, GlobalCallListener, ChatCallHost.
  */
 
-import { useCallback, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Phone,
   PhoneOff,
@@ -119,6 +119,7 @@ export function CallControlBtn({
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, minWidth: 64 }}>
       <button
         type="button"
+        className="call-ctrl"
         onClick={onClick}
         disabled={disabled}
         aria-label={ariaLabel || label}
@@ -503,16 +504,16 @@ export function BudgetExhaustedModal({ onAction }) {
           You've used up your call data budget. Choose how to continue.
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-          <button type="button" onClick={() => onAction('continue')} style={{ ...budgetModalBtn, background: CALL_GREEN, color: '#fff' }}>
+          <button type="button" className="call-btn" onClick={() => onAction('continue')} style={{ ...budgetModalBtn, background: CALL_GREEN, color: '#fff' }}>
             Continue Call
           </button>
-          <button type="button" onClick={() => onAction('reduceVideo')} style={budgetModalGhostBtn}>
+          <button type="button" className="call-btn" onClick={() => onAction('reduceVideo')} style={budgetModalGhostBtn}>
             Reduce Video Quality
           </button>
-          <button type="button" onClick={() => onAction('audioOnly')} style={budgetModalGhostBtn}>
+          <button type="button" className="call-btn" onClick={() => onAction('audioOnly')} style={budgetModalGhostBtn}>
             Switch to Audio Only
           </button>
-          <button type="button" onClick={() => onAction('endCall')} style={{ ...budgetModalBtn, background: CALL_RED, color: '#fff' }}>
+          <button type="button" className="call-btn" onClick={() => onAction('endCall')} style={{ ...budgetModalBtn, background: CALL_RED, color: '#fff' }}>
             End Call
           </button>
         </div>
@@ -701,6 +702,187 @@ export function InCallStage({
   )
 }
 
+const MB = 1024 * 1024
+
+const NORMAL_RATES = {
+  video: 265000,
+  voice: 10500,
+}
+
+function formatDataMb(mb) {
+  if (!Number.isFinite(mb) || mb <= 0) return '0 MB'
+  if (mb < 0.1) return '0.1 MB'
+  if (mb >= 100) return `${Math.round(mb)} MB`
+  return `${mb.toFixed(1)} MB`
+}
+
+function friendlyDuration(seconds) {
+  const s = Math.max(0, Math.round(Number(seconds) || 0))
+  const m = Math.floor(s / 60)
+  const r = s % 60
+  if (m === 0) return `${r} sec`
+  return r > 0 ? `${m} min ${r} sec` : `${m} min`
+}
+
+function usageLabel(callType, bytesUsed, durationSec) {
+  const rate = NORMAL_RATES[callType] || NORMAL_RATES.video
+  if (!durationSec || durationSec <= 0 || !bytesUsed || bytesUsed <= 0) return 'Light usage'
+  const ratio = bytesUsed / durationSec / rate
+  if (ratio < 0.35) return 'Light usage'
+  if (ratio < 0.7) return 'Moderate usage'
+  return 'Heavy usage'
+}
+
+const USAGE_COLOR = {
+  'Light usage': '#34D399',
+  'Moderate usage': CALL_AMBER,
+  'Heavy usage': CALL_RED,
+}
+
+const summaryRowStyle = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 12,
+}
+
+const summaryLabelStyle = {
+  fontSize: 13,
+  fontWeight: 600,
+  color: 'rgba(255,255,255,0.55)',
+}
+
+const summaryValueStyle = {
+  fontSize: 15,
+  fontWeight: 800,
+  color: '#fff',
+  fontVariantNumeric: 'tabular-nums',
+}
+
+/** Full-screen Call Summary shown after a call ends. */
+export function CallSummaryScreen({ summary, onDone }) {
+  const [canDone, setCanDone] = useState(false)
+  const [lockSecs, setLockSecs] = useState(3)
+
+  useEffect(() => {
+    const done = setTimeout(() => setCanDone(true), 3000)
+    const ticker = setInterval(() => setLockSecs((s) => Math.max(0, s - 1)), 1000)
+    return () => {
+      clearTimeout(done)
+      clearInterval(ticker)
+    }
+  }, [])
+
+  const {
+    duration = 0,
+    bytesUsed = 0,
+    budgetMb = null,
+    callType = 'voice',
+  } = summary || {}
+  const usedMb = Number.isFinite(bytesUsed) && bytesUsed > 0 ? bytesUsed / MB : 0
+  const hasBudget = Number.isFinite(budgetMb) && budgetMb > 0
+  const ratio = hasBudget ? Math.min(1, usedMb / budgetMb) : 0
+  const remainingMb = hasBudget ? Math.max(0, budgetMb - usedMb) : 0
+  const reached = hasBudget && remainingMb < 0.1
+  const barColor = reached || ratio >= 0.9 ? CALL_RED : ratio >= 0.75 ? CALL_AMBER : '#34D399'
+  const usage = usageLabel(callType, usedMb > 0 ? bytesUsed : 0, duration)
+
+  return (
+    <CallShell zIndex={3000}>
+      <div style={{ animation: 'budgetModalIn 0.3s ease' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 4 }}>
+          <div style={{
+            width: 88,
+            height: 88,
+            borderRadius: '50%',
+            background: 'rgba(239,68,68,0.14)',
+            border: '1px solid rgba(239,68,68,0.4)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            boxShadow: '0 12px 36px rgba(0,0,0,0.45)',
+          }}>
+            <CallIcon name="phoneOff" size={36} color={CALL_RED} />
+          </div>
+        </div>
+        <CallTitle>Call ended</CallTitle>
+        <CallSubtitle>Call lasted {friendlyDuration(duration)}</CallSubtitle>
+
+        <div style={{
+          background: 'rgba(255,255,255,0.06)',
+          border: '1px solid rgba(255,255,255,0.12)',
+          borderRadius: 16,
+          padding: '14px 18px',
+          margin: '20px 0 18px',
+          textAlign: 'left',
+          backdropFilter: 'blur(12px)',
+          WebkitBackdropFilter: 'blur(12px)',
+        }}>
+          <div style={summaryRowStyle}>
+            <span style={summaryLabelStyle}>Data used</span>
+            <span style={summaryValueStyle}>{formatDataMb(usedMb)} used</span>
+          </div>
+          {hasBudget && (
+            <>
+              <div style={{
+                margin: '12px 0',
+                height: 6,
+                borderRadius: 3,
+                background: 'rgba(255,255,255,0.16)',
+                overflow: 'hidden',
+              }}>
+                <div style={{
+                  height: '100%',
+                  width: `${ratio * 100}%`,
+                  background: barColor,
+                  borderRadius: 3,
+                  transition: 'width 0.4s ease, background 0.4s ease',
+                }} />
+              </div>
+              <div style={summaryRowStyle}>
+                <span style={summaryLabelStyle}>Remaining</span>
+                <span style={summaryValueStyle}>{formatDataMb(remainingMb)} remaining</span>
+              </div>
+            </>
+          )}
+          <div style={{ ...summaryRowStyle, marginTop: hasBudget ? 12 : 0 }}>
+            <span style={summaryLabelStyle}>Usage</span>
+            <span style={{ ...summaryValueStyle, color: USAGE_COLOR[usage] || '#fff' }}>{usage}</span>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          className="call-btn"
+          onClick={onDone}
+          disabled={!canDone}
+          style={{
+            width: '100%',
+            border: 'none',
+            borderRadius: 14,
+            padding: '15px 0',
+            fontSize: 16,
+            fontWeight: 800,
+            fontFamily: 'inherit',
+            cursor: canDone ? 'pointer' : 'not-allowed',
+            background: canDone ? CALL_GREEN : 'rgba(255,255,255,0.14)',
+            color: '#fff',
+            opacity: canDone ? 1 : 0.7,
+            transition: 'background 0.2s ease, opacity 0.2s ease, transform 0.15s ease',
+          }}
+        >
+          Done
+        </button>
+        {!canDone && (
+          <p style={{ margin: '10px 0 0', fontSize: 12, color: 'rgba(255,255,255,0.45)', fontWeight: 600 }}>
+            Done unlocks in {lockSecs}s
+          </p>
+        )}
+      </div>
+    </CallShell>
+  )
+}
+
 const rippleStyle = {
   position: 'absolute',
   inset: -10,
@@ -735,4 +917,6 @@ export const CALL_KEYFRAMES = `
     to { opacity: 1; transform: translateY(0) scale(1); }
   }
   .call-spin { animation: callSpin 0.85s linear infinite; }
+  .call-ctrl:active { transform: scale(0.92); }
+  .call-btn:active { transform: scale(0.97); }
 `
