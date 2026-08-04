@@ -1335,3 +1335,162 @@
   border-radius: 0 8px 8px 0;
   margin-bottom: 12px;
 }
+
+/* ─── Job Alerts ──────────────────────────────────────────── */
+.ja-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 18px;
+  margin: 14px;
+  box-shadow: var(--shadow-sm);
+}
+.ja-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.ja-title { font-size: 17px; font-weight: 800; color: var(--text-primary); letter-spacing: -0.3px; }
+.ja-sub { font-size: 12.5px; color: var(--text-muted); margin-top: 3px; line-height: 1.5; }
+
+.ja-input-row { display: flex; gap: 8px; margin-top: 14px; }
+.ja-input {
+  flex: 1;
+  min-width: 0;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  font-size: 13.5px;
+  background: #fff;
+  color: var(--text-primary);
+  outline: none;
+}
+.ja-input:focus { border-color: var(--green); }
+.ja-add-btn {
+  flex-shrink: 0;
+  border: none;
+  background: var(--green);
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+  padding: 0 16px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.ja-add-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.ja-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; align-items: center; }
+.ja-empty-hint { font-size: 12.5px; color: var(--text-muted); }
+.ja-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: var(--green-bg);
+  color: var(--green);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 5px 8px 5px 11px;
+  border-radius: 999px;
+}
+.ja-chip-x {
+  background: none;
+  border: none;
+  color: var(--green);
+  font-size: 10px;
+  line-height: 1;
+  padding: 1px;
+  cursor: pointer;
+  opacity: 0.7;
+}
+.ja-chip-x:hover { opacity: 1; }
+.ja-chip-x:disabled { cursor: not-allowed; opacity: 0.4; }
+
+.ja-error {
+  margin-top: 12px;
+  font-size: 12.5px;
+  color: var(--red);
+  background: var(--red-bg);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-weight: 600;
+}
+.ja-saved {
+  margin-top: 12px;
+  font-size: 12.5px;
+  color: var(--green);
+  background: var(--green-bg);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-weight: 700;
+}
+.ja-save-btn {
+  margin-top: 14px;
+  width: 100%;
+  background: var(--green);
+  color: #fff;
+  border: none;
+  font-weight: 700;
+  font-size: 14px;
+  padding: 11px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.ja-save-btn:hover { background: var(--green-dark, #14623d); }
+.ja-save-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.ja-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 22px 10px;
+}
+
+/* ── AI "Generate from text" ────────────────────────────── */
+.post-form-ai { margin-top: 18px; }
+.post-form-ai-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1.5px dashed var(--green);
+  background: var(--green-bg-soft);
+  color: var(--green);
+  font-weight: 700;
+  font-size: 14px;
+  border-radius: var(--radius-md);
+  padding: 13px 15px;
+  cursor: pointer;
+  font-family: var(--font);
+}
+.post-form-ai-toggle:hover { background: var(--green-bg); }
+.post-form-ai-panel {
+  margin-top: 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-md);
+  background: #fafcfb;
+  padding: 14px;
+}
+.job-ai-gen-btn {
+  margin-top: 10px;
+  background: linear-gradient(135deg, var(--green), var(--green-light));
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  padding: 11px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  cursor: pointer;
+  font-family: var(--font);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  box-shadow: 0 3px 12px rgba(26,122,74,0.28);
+  transition: transform 0.15s, box-shadow 0.2s;
+}
+.job-ai-gen-btn:hover:not(:disabled) { transform: translateY(-1px); }
+.job-ai-gen-btn:disabled { opacity: 0.65; cursor: not-allowed; }
+.job-ai-gen-btn .spinner {
+  width: 14px; height: 14px;
+  border: 2px solid rgba(255,255,255,0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  flex-shrink: 0;
+}

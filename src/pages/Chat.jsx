@@ -18,10 +18,10 @@ import {
   SmilePlus,
   Camera,
   Music,
-  File,
+  File as FileIcon2,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { uploadToR2, getR2Url, deleteFromR2 } from '../lib/r2'
+import { uploadToR2 } from '../lib/r2'
 import { formatTime } from '../hooks/useWebRTC'
 import {
   watchUserOnline,
@@ -33,7 +33,6 @@ import {
 import ChatCallHost, { CallHeaderButtons, HideDuringCall } from '../components/ChatCallHost'
 import CallMessageBubble from '../components/CallMessageBubble'
 import { maybePromptDealReady } from '../utils/dealNotificationFlow'
-import { sendChatMessage } from '../utils/sendMessageReply'
 import { notifyMissedCall, notifyCallDeclined } from '../utils/callNotifications'
 import {
   EMOJI_CATEGORIES,
@@ -63,14 +62,14 @@ function encodeReply(body, replyTo) {
 }
 
 function decodeReply(body) {
-  if (!body) return { body, replyPreview: null, replyToId: null, isStatusReply: false, statusCaption: null, statusProduct: null }
+  if (!body) return { body, replyPreview: null, replyToId: null }
   // New format: \x02[preview|||id]\x03body
   // eslint-disable-next-line no-control-regex
   const match = body.match(/^\x02\[(.+?)\|\|\|([^\]]+)\]\x03(.*)$/s)
-  if (match) return { body: match[3], replyPreview: match[1], replyToId: match[2], isStatusReply: false, statusCaption: null, statusProduct: null }
+  if (match) return { body: match[3], replyPreview: match[1], replyToId: match[2] }
   // Fallback for old corrupted messages: preview|||uuid]body
   const fallback = body.match(/^(.+?)\|\|\|([a-f0-9-]{36})\](.*)$/s)
-  if (fallback) return { body: fallback[3], replyPreview: fallback[1], replyToId: fallback[2], isStatusReply: false, statusCaption: null, statusProduct: null }
+  if (fallback) return { body: fallback[3], replyPreview: fallback[1], replyToId: fallback[2] }
 
   // Status-viewer replies: [[status_reply:uuid]]\nuser text\n\n— replied on your status...
   const statusMatch = String(body).match(/^\[\[status_reply:([a-f0-9-]+)\]\]\s*([\s\S]*)$/i)
@@ -79,29 +78,16 @@ function decodeReply(body) {
     const parts = rest.split(/\n*— replied on your status\s*/i)
     const userText = (parts[0] || '').trim()
     const meta = (parts[1] || '').trim()
-    const metaLines = meta.split('\n').map(l => l.trim()).filter(Boolean)
-    const statusLine = metaLines.find(l => /^Status:/i.test(l)) || ''
-    const productLine = metaLines.find(l => /^(Product|Listing):/i.test(l)) || ''
-    const statusCaption = statusLine
-      .replace(/^Status:\s*/i, '')
-      .replace(/^[“"']|[”"']$/g, '')
-      .trim()
-    const statusProduct = productLine
-      .replace(/^(Product|Listing):\s*/i, '')
-      .trim()
-    const captionLabel = statusCaption || statusProduct || 'View status'
-    const preview = `Status · ${captionLabel.slice(0, 72)}`
+    const statusLine = meta.split('\n').find(l => /^Status:/i.test(l)) || 'your status'
+    const preview = `Status reply · ${statusLine.replace(/^Status:\s*/i, '').replace(/[“”"]/g, '').slice(0, 48)}`
     return {
-      body: userText || '',
+      body: userText || rest.trim(),
       replyPreview: preview,
       replyToId: statusMatch[1],
-      isStatusReply: true,
-      statusCaption: statusCaption || null,
-      statusProduct: statusProduct || null,
     }
   }
 
-  return { body, replyPreview: null, replyToId: null, isStatusReply: false, statusCaption: null, statusProduct: null }
+  return { body, replyPreview: null, replyToId: null }
 }
 
 function fileLabelFromUrl(url) {
@@ -319,33 +305,6 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
   }
 
   // ── Effects ──────────────────────────────────────────────────────────────
-
-  // Keep the thread fitted to the *visible* viewport on mobile when the
-  // soft keyboard / browser chrome resizes the visual viewport.
-  useEffect(() => {
-    if (typeof window === 'undefined') return undefined
-    const root = document.documentElement
-    const apply = () => {
-      const vv = window.visualViewport
-      const h = vv ? Math.round(vv.height) : window.innerHeight
-      root.style.setProperty('--chat-vvh', `${h}px`)
-      // Offset for visualViewport.offsetTop when the page is scrolled under the keyboard
-      root.style.setProperty('--chat-vv-top', `${vv ? Math.round(vv.offsetTop) : 0}px`)
-    }
-    apply()
-    const vv = window.visualViewport
-    vv?.addEventListener('resize', apply)
-    vv?.addEventListener('scroll', apply)
-    window.addEventListener('resize', apply)
-    return () => {
-      vv?.removeEventListener('resize', apply)
-      vv?.removeEventListener('scroll', apply)
-      window.removeEventListener('resize', apply)
-      root.style.removeProperty('--chat-vvh')
-      root.style.removeProperty('--chat-vv-top')
-    }
-  }, [])
-
   useEffect(() => {
     init()
     return () => {
@@ -1193,6 +1152,7 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
 
   // ── sendMessage — optimistic UI + reply encoded in body ─────────────────
   async function sendMessage(body, type = 'text', mediaUrl = null, extraFields = {}, opts = {}) {
+    console.log('SM_ENTRY', { body, type, mediaUrl, trimmed: body.trim() })
     const trimmed = body.trim()
     if (!trimmed && !mediaUrl && !extraFields.call_status) return
 
@@ -1256,19 +1216,28 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
       haptic(6)
     }
 
-    const contextTitle = listing?.title || service?.name || shop?.name || job?.title || request?.title || null
-
-    const { data: inserted, error } = await sendChatMessage({
-      toUserId: userId,
-      body: encodedBody,
-      mediaUrl,
-      mediaType: type,
-      chatSource: src,
-      contextId: ctx,
-      contextTitle,
-      extraFields: persistFields,
-      skipNotification: isCallEvent,
-    })
+    // Insert; if new source columns aren't migrated yet, retry without them
+    let inserted = null
+    let error = null
+    {
+      const res = await supabase.from('messages').insert(msgData).select('*').single()
+      inserted = res.data
+      error = res.error
+    }
+    if (error && /chat_source|job_id|shop_id|request_id|column/i.test(error.message || '')) {
+      const legacy = { ...msgData }
+      delete legacy.chat_source
+      delete legacy.job_id
+      delete legacy.shop_id
+      delete legacy.request_id
+      // Keep listing_id / service_id which already exist
+      if (src === 'job' || src === 'shop' || src === 'request') {
+        // No FK available — still deliver as person-level message with body
+      }
+      const res2 = await supabase.from('messages').insert(legacy).select('*').single()
+      inserted = res2.data
+      error = res2.error
+    }
 
     if (error) {
       if (!isCallEvent) {
@@ -1289,27 +1258,71 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
       })
     }
 
+    window.dispatchEvent(new Event('soko:messages-updated'))
+
     if (isCallEvent) {
-      const notifContextId = contextId || null
-      const callType = extraFields.call_type === 'video' ? 'video' : 'voice'
-      if (callNotify === 'missed_to_peer') {
-        await notifyMissedCall({
-          toUserId: userId,
-          callerId: user.id,
-          callType,
-          contextId: notifContextId,
-          messageId: inserted?.id || null,
-          listingTitle: contextTitle,
+      // call path previously cleared nothing special
+    }
+
+    const notifContextId = contextId || null
+    const callType = extraFields.call_type === 'video' ? 'video' : 'voice'
+    const contextTitle = listing?.title || service?.name || shop?.name || job?.title || request?.title || null
+    if (callNotify === 'missed_to_peer') {
+      await notifyMissedCall({
+        toUserId: userId,
+        callerId: user.id,
+        callType,
+        contextId: notifContextId,
+        messageId: inserted?.id || null,
+        listingTitle: contextTitle,
+      })
+    } else if (callNotify === 'declined_to_peer') {
+      await notifyCallDeclined({
+        toUserId: userId,
+        declinerId: user.id,
+        callType,
+        contextId: notifContextId,
+        messageId: inserted?.id || null,
+        listingTitle: contextTitle,
+      })
+    }
+
+    if (!extraFields.call_status) {
+      try {
+        const { data: myProf } = await supabase
+          .from('profiles').select('full_name').eq('id', user.id).single()
+        const senderName = myProf?.full_name || 'Someone'
+        let preview = trimmed
+        if (preview.includes('|||')) {
+          // eslint-disable-next-line no-control-regex
+          preview = preview.replace(/^\x02?\[/, '').split('|||')[0].trim()
+        }
+        if (!preview) {
+          preview = mediaUrl
+            ? (type === 'image' ? '📷 Photo'
+             : type === 'video' ? '🎥 Video'
+             : type === 'audio' ? '🎤 Voice note'
+             : '📎 File')
+            : 'Sent a message'
+        }
+        await supabase.from('notifications').insert({
+          user_id: userId,
+          type: 'new_message',
+          title: senderName,
+          body: preview.slice(0, 80),
+          message: preview.slice(0, 80),
+          data: {
+            sender_id: user.id,
+            sender_name: senderName,
+            context_id: notifContextId,
+            message_id: inserted?.id || null,
+            chat_source: src,
+            listing_title: contextTitle,
+          },
+          read: false,
         })
-      } else if (callNotify === 'declined_to_peer') {
-        await notifyCallDeclined({
-          toUserId: userId,
-          declinerId: user.id,
-          callType,
-          contextId: notifContextId,
-          messageId: inserted?.id || null,
-          listingTitle: contextTitle,
-        })
+      } catch (notifErr) {
+        console.warn('Message notification error:', notifErr)
       }
     }
   }
@@ -1323,18 +1336,25 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
     })
   }
 
-  async function uploadAndSend(file, type, caption = '') {
-    setUploading(true)
-    try {
-      const ext = file.name?.split('.').pop() || 'bin'
-      const path = `chat/${currentUser.id}/${type}_${Date.now()}.${ext}`
-      const url = await uploadToR2(file, 'listings/' + path)
-      if (!url) throw new Error('Upload failed')
-      await sendMessage(caption, type, url)
-    } catch (e) { alert('Upload failed: ' + e.message) }
-    setUploading(false)
-    setPreview(null)
+async function uploadAndSend(file, type, caption = '') {
+  console.log('UAS_START', { type, fileType: file?.type, fileSize: file?.size })
+  setUploading(true)
+  try {
+    const ext = file.name?.split('.').pop() || 'bin'
+    const rawName = (file.name || type).replace(/\.[^/.]+$/, '')
+    const safeName = rawName.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40)
+    const path = `chat/${currentUser.id}/${safeName}_${Date.now()}.${ext}`
+    const url = await uploadToR2(file, path)
+    console.log('UAS_R2_URL', url, typeof url)
+    console.log('UAS_CALLING_SEND', { caption, type, url })
+    await sendMessage(caption, type, url)
+  } catch (e) {
+    console.log('CHAT_UPLOAD_FULL_ERROR', e)
+    alert('Upload failed: ' + e.message)
   }
+  setUploading(false)
+  setPreview(null)
+}
 
   function pickFile(accept, type, opts = {}) {
     const input = document.createElement('input')
@@ -1380,11 +1400,18 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
       chunksRef.current = []
       mr.ondataavailable = e => chunksRef.current.push(e.data)
       mr.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop()); audioCtx.close()
-        cancelAnimationFrame(animFrameRef.current)
-        setRecordingIndicator(false, target)
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
-        await uploadAndSend(new File([blob], `voice_${Date.now()}.webm`, { type: 'audio/webm' }), 'audio', '')
+        try {
+          stream.getTracks().forEach(t => t.stop()); audioCtx.close()
+          cancelAnimationFrame(animFrameRef.current)
+          setRecordingIndicator(false, target)
+          const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
+          const voiceFile = new File([blob], `voice_${Date.now()}.webm`, { type: 'audio/webm' })
+          console.log('CHAT_VOICE_FILE', { type: voiceFile.type, size: voiceFile.size, name: voiceFile.name })
+          await uploadAndSend(voiceFile, 'audio', '')
+        } catch (e) {
+          console.log('VOICE_RECORD_ERROR', e)
+          alert('Voice note failed: ' + e.message)
+        }
       }
       mr.start(); mediaRecorderRef.current = mr
       setRecording(true); setRecordingTime(0)
@@ -1469,15 +1496,24 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
   const myInitial    = myName[0].toUpperCase()
 
   // ── Render helpers ───────────────────────────────────────────────────────
+  function audioLabelFromUrl(url) {
+    const base = (url || '').split('/').pop() || ''
+    const clean = base.split('?')[0]
+    if (/^voice_/i.test(clean)) return 'Voice note'
+    const ext = clean.split('.').pop()
+    return ext ? ext.toUpperCase() : 'Audio'
+  }
+
   function renderVoiceNote(msg) {
     const { id, media_url: url } = msg
+    const isVoiceNote = /^voice_/i.test((url || '').split('/').pop().split('?')[0])
     const isMine    = msg.from_user === currentUser?.id
     const progress  = audioProgress[id] || 0
     const duration  = audioDuration[id] || 0
     const isPlaying = playingId === id
     const bars = 28
     return (
-      <div className="voice-note">
+      <div className={`voice-note ${isVoiceNote ? 'is-voice' : 'is-file-audio'}`}>
         <audio
           ref={el => {
             if (el) {
@@ -1512,8 +1548,8 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
                   style={{
                     height: `${h}px`,
                     background: filled
-                      ? (isMine ? '#7ef0b0' : '#1a7a4a')
-                      : (isMine ? 'rgba(255,255,255,0.28)' : '#c5d9cc'),
+                      ? (isMine ? (isVoiceNote ? '#7ef0b0' : '#ffd27e') : (isVoiceNote ? '#1a7a4a' : '#c9820a'))
+                      : (isMine ? 'rgba(255,255,255,0.28)' : (isVoiceNote ? '#c5d9cc' : '#e8d2a8')),
                   }}
                   onClick={() => {
                     const a = audioRefs.current[id]
@@ -1531,7 +1567,14 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
                   ? formatTime(Math.floor(duration))
                   : '0:00'}
             </span>
-            <span>Voice</span>
+            <span className="voice-type-label">
+              {isVoiceNote ? (
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" style={{ marginRight: 3, verticalAlign: -1 }}><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg>
+              ) : (
+                <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" style={{ marginRight: 3, verticalAlign: -1 }}><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+              )}
+              {audioLabelFromUrl(url)}
+            </span>
           </div>
         </div>
       </div>
@@ -1567,14 +1610,19 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
     }
     if (type === 'video') {
       return (
-        <div className="media-video-wrap">
+        <div
+          className="media-video-wrap"
+          onClick={e => { e.stopPropagation(); setLightbox({ url, type: 'video', caption: caption || '' }) }}
+        >
           <video
             src={url}
-            controls
             playsInline
             preload="metadata"
-            onClick={e => e.stopPropagation()}
+            muted
           />
+          <div className="media-video-play-hint" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+          </div>
         </div>
       )
     }
@@ -1585,7 +1633,7 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
       : lower.match(/\.(mp3|wav|m4a|ogg|webm)$/) ? Music
       : lower.match(/\.(png|jpe?g|gif|webp|heic)$/) ? ImageIcon
       : lower.match(/\.(mp4|mov|avi|mkv)$/) ? Video
-      : File
+      : FileIcon2
     return (
       <a href={url} target="_blank" rel="noreferrer" className="media-file" download>
         <div className="media-file-icon">
@@ -1836,23 +1884,6 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
         @keyframes onlinePulse{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,0.5)}50%{box-shadow:0 0 0 4px rgba(34,197,94,0)}}
         .emoji-btn:hover{transform:scale(1.25);transition:transform 0.1s}
         @media (min-width: 900px) { .chat-back-btn { display: none !important; } }
-        @media (max-width: 899px) {
-          .chat-page.chat-thread {
-            height: var(--chat-vvh, 100%) !important;
-            max-height: var(--chat-vvh, 100%) !important;
-          }
-          .chat-top-actions { gap: 3px !important; }
-          .chat-top-actions .chat-icon-btn,
-          .chat-top-actions button { width: 34px !important; height: 34px !important; }
-          /* Free header space: search lives in ⋮ menu on phones */
-          .chat-search-toggle { display: none !important; }
-        }
-        @media (min-width: 900px) {
-          .chat-menu-search { display: none !important; }
-        }
-        @media (max-width: 360px) {
-          .chat-top-actions .chat-icon-btn:not([aria-label="Chat options"]) { width: 32px !important; height: 32px !important; }
-        }
       `}</style>
 
       {/* ── Top bar ── */}
@@ -1884,13 +1915,13 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
               {otherRecording ? (
                 <span style={{ color: '#dc2626', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
                   <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#ef4444', display: 'inline-block', animation: 'pulse 1s infinite' }} />
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 'min(160px, 38vw)' }}>
-                    {otherName.split(' ')[0]} is recording…
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>
+                    {otherName.split(' ')[0]} is recording audio…
                   </span>
                 </span>
               ) : otherTyping ? (
                 <span style={{ color: '#1a7a4a', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 'min(140px, 34vw)' }}>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>
                     {otherName.split(' ')[0]} is typing
                   </span>
                   <span style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
@@ -1913,8 +1944,8 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
           </button>
         </div>
 
-        <div className="chat-top-actions" style={S.topActions}>
-          <button type="button" className="chat-icon-btn chat-search-toggle" onClick={() => setChatSearch(s => s === null ? '' : null)} title="Search" aria-label="Search messages">
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <button type="button" className="chat-icon-btn" onClick={() => setChatSearch(s => s === null ? '' : null)} title="Search" aria-label="Search messages">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
               <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
             </svg>
@@ -1968,16 +1999,6 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
                     }}
                   >
                     <span className="chat-action-ico">👤</span> View profile
-                  </button>
-                  <button
-                    type="button"
-                    className="chat-menu-search"
-                    onClick={() => {
-                      setShowChatMenu(false)
-                      setChatSearch(s => s === null ? '' : s)
-                    }}
-                  >
-                    <span className="chat-action-ico">🔍</span> Search messages
                   </button>
                   <button
                     type="button"
@@ -2319,19 +2340,7 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
           </div>
         )}
 
-        {(() => {
-          const dateLabel = (dateStr) => {
-            const d = new Date(dateStr)
-            const now = new Date()
-            const dLocal = new Date(d.getFullYear(), d.getMonth(), d.getDate())
-            const nowLocal = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-            const diffDays = Math.round((nowLocal - dLocal) / 86400000)
-            if (diffDays === 0) return 'Today'
-            if (diffDays === 1) return 'Yesterday'
-            return d.toLocaleDateString([], { day: 'numeric', month: 'short' })
-          }
-
-          return messages.map((msg, i) => {
+        {messages.map((msg, i) => {
           const isMine   = msg.from_user === currentUser?.id
           const showDate = i === 0 || new Date(msg.created_at).toDateString() !== new Date(messages[i - 1].created_at).toDateString()
           const nextSame = i < messages.length - 1 && messages[i + 1].from_user === msg.from_user
@@ -2369,8 +2378,14 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
           }
 
           return (
-            <div key={msg.id} className={`msg-row ${isMine ? 'is-mine' : 'is-theirs'}${isLast ? ' is-group-end' : ''}${isFailed ? ' is-failed' : ''}${swipeHintId === msg.id ? ' is-swipe-ready' : ''}`} id={`msg-${msg.id}`}>
-              {showDate && <div className="chat-date-chip">{dateLabel(msg.created_at)}</div>}
+            <div key={msg.id} id={`msg-${msg.id}`} className={swipeHintId === msg.id ? 'is-swipe-ready' : ''}>
+              {showDate && (
+                <div className="chat-date-chip">
+                  {new Date(msg.created_at).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}
+                </div>
+              )}
+
+              <div className={`msg-row ${isMine ? 'is-mine' : 'is-theirs'}${isLast ? ' is-group-end' : ''}${isFailed ? ' is-failed' : ''}`}>
                 {!isMine && (
                   <button
                     type="button"
@@ -2400,14 +2415,11 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
                 <div className="msg-stack">
                   {decoded.replyPreview && (
                     <div
-                      className={decoded.isStatusReply ? 'msg-status-quote' : 'msg-reply-quote'}
-                      role="button"
-                      tabIndex={0}
-                      title={decoded.isStatusReply ? 'Open the status that was replied to' : 'Go to message'}
+                      className="msg-reply-quote"
+                      style={{ cursor: 'pointer' }}
                       onClick={() => {
-                        // Status-viewer replies: open the actual status that was replied to
-                        if (decoded.isStatusReply && decoded.replyToId) {
-                          navigate(`/status/${decoded.replyToId}`)
+                        if (decoded.replyPreview?.startsWith('Status reply')) {
+                          navigate(`/status?status=${decoded.replyToId}`)
                           return
                         }
                         const el = document.getElementById(`msg-${decoded.replyToId}`)
@@ -2416,43 +2428,8 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
                           highlightMsg(el)
                         }
                       }}
-                      onKeyDown={e => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault()
-                          e.currentTarget.click()
-                        }
-                      }}
                     >
-                      {decoded.isStatusReply ? (
-                        <>
-                          <div className="msg-status-quote-top">
-                            <span className="msg-status-quote-badge" aria-hidden>
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
-                                <circle cx="12" cy="12" r="9" />
-                                <circle cx="12" cy="12" r="3.5" fill="currentColor" stroke="none" />
-                              </svg>
-                            </span>
-                            <span className="msg-status-quote-label">Replied to status</span>
-                            <span className="msg-status-quote-hint">Tap to open</span>
-                          </div>
-                          {decoded.statusCaption ? (
-                            <div className="msg-status-quote-caption">
-                              “{decoded.statusCaption}”
-                            </div>
-                          ) : (
-                            <div className="msg-status-quote-caption is-empty">
-                              Status update
-                            </div>
-                          )}
-                          {decoded.statusProduct && (
-                            <div className="msg-status-quote-product">
-                              {decoded.statusProduct}
-                            </div>
-                          )}
-                        </>
-                      ) : (
-                        <>↩ {decoded.replyPreview}</>
-                      )}
+                      ↩ {decoded.replyPreview}
                     </div>
                   )}
 
@@ -2561,9 +2538,10 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
                 {isMine && (
                   <ChatAvatar url={myAvatar} initial={myInitial} size={28} isMine spacer={!isLast} />
                 )}
+              </div>
             </div>
           )
-        })})()}
+        })}
 
         {(otherTyping || otherRecording) && (
           <div
@@ -2617,9 +2595,7 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
         <button
           type="button"
           className={`chat-scroll-fab${unreadBelow > 0 ? ' has-unread' : ''}`}
-          style={{
-            bottom: `calc(${recording ? 84 : (replyTo ? 136 : 84)}px + env(safe-area-inset-bottom, 0px))`,
-          }}
+          style={{ bottom: recording ? 84 : (replyTo ? 136 : 84) }}
           onClick={() => scrollToBottom(true)}
           aria-label={unreadBelow > 0 ? `${unreadBelow} new messages` : 'Scroll to bottom'}
         >
@@ -3087,15 +3063,14 @@ const S = {
   page: { display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, position: 'relative', overflow: 'hidden' },
   loadCenter: { display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: 0 },
   spinner: { width: 28, height: 28, border: '3px solid #e0ebe3', borderTopColor: '#1a7a4a', borderRadius: '50%', animation: 'spin 0.8s linear infinite' },
-  topbar: { display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between', flexShrink: 0, padding: '10px 12px', background: '#fff', borderBottom: '1px solid #e8ede9', zIndex: 10, minWidth: 0 },
-  topInfo: { display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, overflow: 'hidden' },
+  topbar: { display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between', flexShrink: 0, padding: '10px 12px', background: '#fff', borderBottom: '1px solid #e8ede9', zIndex: 10 },
+  topInfo: { display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 },
   onlineDot: { position: 'absolute', bottom: 1, right: 1, width: 11, height: 11, borderRadius: '50%', transition: 'background 0.3s' },
-  topStatus: { fontSize: 12, marginTop: 2, display: 'flex', alignItems: 'center', minWidth: 0, overflow: 'hidden' },
+  topStatus: { fontSize: 12, marginTop: 2, display: 'flex', alignItems: 'center' },
   callBtn: { background: '#f3f7f4', border: 'none', borderRadius: 12, width: 38, height: 38, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 },
   ctxTitle: { fontSize: 13, fontWeight: 650, color: '#0f1410', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
   ctxSub: { fontSize: 11, color: '#1a7a4a', fontWeight: 650 },
   recordingBar: { display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 },
   cancelRecBtn: { background: '#fef0f0', border: 'none', borderRadius: '50%', width: 38, height: 38, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   inputBar: { display: 'flex', alignItems: 'flex-end', gap: 6, flexShrink: 0, zIndex: 5, padding: '6px 10px 10px', background: '#fff', borderTop: '1px solid #e8ede9' },
-  topActions: { display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 },
 }

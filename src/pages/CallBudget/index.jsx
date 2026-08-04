@@ -1,6 +1,15 @@
 import { useState } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { ArrowLeft, Check, Video, Phone } from 'lucide-react'
+import {
+  ArrowLeft,
+  Check,
+  Video,
+  Phone,
+  Leaf,
+  Gauge,
+  Crown,
+  SlidersHorizontal,
+} from 'lucide-react'
 import {
   BUDGET_PRESETS,
   getCallBudgetPref,
@@ -25,6 +34,33 @@ const QUALITIES = [
   { id: 'high', label: 'High Quality', detail: 'no cap' },
 ]
 
+const TIERS = {
+  low: {
+    name: NAMES.low,
+    icon: Leaf,
+    color: '#34D399',
+    tint: 'rgba(52, 211, 153, 0.15)',
+  },
+  medium: {
+    name: NAMES.medium,
+    icon: Gauge,
+    color: '#60A5FA',
+    tint: 'rgba(96, 165, 250, 0.15)',
+  },
+  high: {
+    name: NAMES.high,
+    icon: Crown,
+    color: '#C084FC',
+    tint: 'rgba(192, 132, 252, 0.15)',
+  },
+}
+
+const CUSTOM_TIER = {
+  icon: SlidersHorizontal,
+  color: '#F9AB00',
+  tint: 'rgba(249, 171, 0, 0.12)',
+}
+
 const PALETTE = {
   page: '#0d1210',
   surface: '#161b17',
@@ -33,6 +69,7 @@ const PALETTE = {
   text: '#e8efe9',
   textDim: '#93a39a',
   green: '#0F9D58',
+  greenTint: 'rgba(15, 157, 88, 0.14)',
   yellow: '#F9AB00',
 }
 
@@ -41,6 +78,12 @@ const KEYFRAMES = `
     from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: translateY(0); }
   }
+  @keyframes budgetStartPulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(15, 157, 88, 0.45); }
+    50% { box-shadow: 0 0 0 9px rgba(15, 157, 88, 0); }
+  }
+  .budget-start-pulse { animation: budgetStartPulse 1.8s ease-in-out infinite; }
+  .budget-start-pulse:active { animation: none; }
 `
 
 /** Friendly duration label, e.g. "~45 min", "~1 hr 5 min". */
@@ -61,19 +104,26 @@ function customVideoSeconds(mb, qualityId) {
   return estimateDuration('video', mb, false)
 }
 
-const headerStyle = {
+const stickyHeaderStyle = {
+  position: 'sticky',
+  top: 0,
+  zIndex: 5,
   display: 'flex',
   alignItems: 'center',
   gap: 14,
-  marginBottom: 6,
+  background: 'rgba(13, 18, 16, 0.92)',
+  backdropFilter: 'blur(12px)',
+  WebkitBackdropFilter: 'blur(12px)',
+  borderBottom: '1px solid rgba(42, 52, 44, 0.6)',
+  padding: '12px 18px',
 }
 
 const backBtnStyle = {
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
-  width: 38,
-  height: 38,
+  width: 44,
+  height: 44,
   borderRadius: '50%',
   background: PALETTE.surfaceRaised,
   border: `1px solid ${PALETTE.border}`,
@@ -85,16 +135,32 @@ const backBtnStyle = {
 
 const pageTitleStyle = {
   color: PALETTE.text,
-  fontSize: 22,
+  fontSize: 20,
   fontWeight: 800,
   lineHeight: 1.2,
 }
 
-const subtitleStyle = {
+const headerSubStyle = {
   color: PALETTE.textDim,
-  fontSize: 13,
-  lineHeight: 1.5,
-  marginBottom: 22,
+  fontSize: 12,
+  fontWeight: 600,
+  textTransform: 'capitalize',
+  lineHeight: 1.3,
+}
+
+const contentStyle = {
+  flex: 1,
+  padding: '20px 18px 8px',
+  animation: 'budgetPageFadeUp 0.25s ease',
+}
+
+const sectionLabelStyle = {
+  color: PALETTE.textDim,
+  fontSize: 12,
+  fontWeight: 700,
+  textTransform: 'uppercase',
+  letterSpacing: '0.06em',
+  margin: '0 0 10px',
 }
 
 const cardBase = {
@@ -106,8 +172,8 @@ const cardBase = {
   textAlign: 'left',
   background: PALETTE.surfaceRaised,
   border: `1px solid ${PALETTE.border}`,
-  borderRadius: 14,
-  padding: '14px 16px',
+  borderRadius: 16,
+  padding: '16px',
   cursor: 'pointer',
   color: PALETTE.text,
   fontFamily: 'inherit',
@@ -116,20 +182,25 @@ const cardBase = {
 
 const cardSelected = {
   borderColor: PALETTE.green,
-  background: 'rgba(15, 157, 88, 0.14)',
+  background: PALETTE.greenTint,
   boxShadow: '0 0 0 1px rgba(15,157,88,0.4), 0 10px 30px rgba(0,0,0,0.35)',
+  transform: 'scale(1.01)',
 }
 
-const cardTop = {
-  display: 'flex',
+const tierIconStyle = {
+  display: 'inline-flex',
   alignItems: 'center',
-  justifyContent: 'space-between',
-  width: '100%',
+  justifyContent: 'center',
+  width: 44,
+  height: 44,
+  borderRadius: 14,
+  flexShrink: 0,
 }
 
 const cardName = {
   fontSize: 16,
   fontWeight: 800,
+  color: PALETTE.text,
 }
 
 const checkBadge = {
@@ -144,6 +215,21 @@ const checkBadge = {
   flexShrink: 0,
 }
 
+const mbBadge = {
+  fontSize: 15,
+  fontWeight: 800,
+  color: PALETTE.yellow,
+  fontVariantNumeric: 'tabular-nums',
+  whiteSpace: 'nowrap',
+}
+
+const descStyle = {
+  fontSize: 12,
+  color: PALETTE.textDim,
+  marginTop: 2,
+  lineHeight: 1.45,
+}
+
 const statsRow = {
   display: 'flex',
   alignItems: 'center',
@@ -152,59 +238,62 @@ const statsRow = {
   flexWrap: 'wrap',
 }
 
-const mbBadge = {
-  fontSize: 20,
-  fontWeight: 800,
-  color: PALETTE.yellow,
-  fontVariantNumeric: 'tabular-nums',
-}
-
 const statItem = {
   display: 'inline-flex',
   alignItems: 'center',
   gap: 5,
   color: PALETTE.textDim,
-  fontSize: 13,
+  fontSize: 12,
   fontWeight: 600,
   whiteSpace: 'nowrap',
 }
 
-const descStyle = {
-  fontSize: 12,
-  color: PALETTE.textDim,
-  marginTop: 8,
-  lineHeight: 1.45,
-}
-
-const customInputRow = {
+const customSliderWrap = {
   display: 'flex',
   alignItems: 'center',
-  gap: 10,
-  marginTop: 12,
+  gap: 12,
+  marginTop: 14,
+}
+
+const sliderStyle = {
+  flex: 1,
+  minWidth: 0,
+  height: 4,
+  accentColor: PALETTE.green,
+  cursor: 'pointer',
 }
 
 const customInputStyle = {
-  flex: 1,
-  minWidth: 0,
+  width: 64,
+  boxSizing: 'border-box',
+  textAlign: 'center',
   background: PALETTE.surface,
   border: `1px solid ${PALETTE.green}`,
   borderRadius: 10,
-  padding: '10px 12px',
+  padding: '9px 6px',
   color: PALETTE.text,
-  fontSize: 16,
+  fontSize: 15,
   fontWeight: 700,
   fontFamily: 'inherit',
   outline: 'none',
 }
 
 const customUnitStyle = {
-  fontSize: 13,
+  fontSize: 12,
   fontWeight: 700,
   color: PALETTE.textDim,
 }
 
+const sliderHints = {
+  display: 'flex',
+  justifyContent: 'space-between',
+  fontSize: 10,
+  color: PALETTE.textDim,
+  marginTop: 2,
+}
+
 const qualityLabelStyle = {
-  marginTop: 14,
+  marginTop: 16,
   color: PALETTE.textDim,
   fontSize: 12,
   fontWeight: 700,
@@ -223,11 +312,13 @@ const qualityBtnBase = {
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'center',
+  justifyContent: 'center',
   gap: 2,
+  minHeight: 46,
   background: PALETTE.surface,
   border: `1px solid ${PALETTE.border}`,
-  borderRadius: 10,
-  padding: '9px 6px',
+  borderRadius: 999,
+  padding: '8px 6px',
   color: PALETTE.textDim,
   cursor: 'pointer',
   fontFamily: 'inherit',
@@ -255,24 +346,28 @@ const qualityDetailStyle = {
 const footerStyle = {
   position: 'sticky',
   bottom: 0,
-  background: PALETTE.page,
-  padding: '16px 0 8px',
+  zIndex: 5,
+  background: 'rgba(13, 18, 16, 0.95)',
+  backdropFilter: 'blur(12px)',
+  WebkitBackdropFilter: 'blur(12px)',
+  borderTop: '1px solid rgba(42, 52, 44, 0.6)',
+  padding: '14px 18px calc(14px + env(safe-area-inset-bottom, 0px))',
   marginTop: 'auto',
 }
 
 const startBtnStyle = {
   width: '100%',
+  minHeight: 52,
   background: PALETTE.green,
   color: '#ffffff',
   border: 'none',
   borderRadius: 14,
-  padding: '15px 0',
-  fontSize: 16,
+  padding: '0 18px',
+  fontSize: 15,
   fontWeight: 800,
   cursor: 'pointer',
   fontFamily: 'inherit',
-  opacity: 1,
-  transition: 'opacity 0.2s ease, transform 0.15s ease',
+  transition: 'opacity 0.2s ease, transform 0.15s ease, background 0.2s ease',
 }
 
 const startBtnDisabledStyle = {
@@ -286,7 +381,6 @@ export default function CallBudgetPage() {
   const location = useLocation()
   const state = location.state || {}
   const callType = state.callType === 'voice' ? 'voice' : 'video'
-  const onStart = state.onStart || state.returnStartCall || null
 
   const saved = getCallBudgetPref(callType)
   const savedIsCustom = saved && saved.preset === 'custom'
@@ -333,19 +427,29 @@ export default function CallBudgetPage() {
         mb: BUDGET_PRESETS[callType][selectedKey],
       })
     }
-    onStart?.()
+    // Only auto-start when this flow began from a chat (soko_pending_call set).
+    const pending = sessionStorage.getItem('soko_pending_call')
+    sessionStorage.removeItem('soko_pending_call')
+    if (pending) {
+      sessionStorage.setItem('soko_start_call_on_return', callType)
+    }
     navigate(-1)
   }
 
-  function renderCheck(selected) {
-    return selected ? (
-      <span style={checkBadge} aria-hidden>
-        <Check size={13} strokeWidth={3} />
-      </span>
-    ) : null
+  function startSummary() {
+    if (isCustom) {
+      if (!validCustom) return 'Start call'
+      const d = customD
+      const est = callType === 'voice' ? formatDuration(d.audio) : formatDuration(d.video)
+      return `Start call · Custom · ${est}`
+    }
+    const d = presetDurations(selectedKey)
+    const est = callType === 'voice' ? formatDuration(d.audio) : formatDuration(d.video)
+    return `Start call · ${NAMES[selectedKey]} · ${est}`
   }
 
   const customD = isCustom ? customDurations() : null
+  const sliderValue = Number.isFinite(customMb) ? Math.min(200, Math.max(1, customMb)) : 1
 
   return (
     <div
@@ -357,34 +461,31 @@ export default function CallBudgetPage() {
         fontFamily: "'Sora', 'Inter', system-ui, sans-serif",
       }}
     >
-      <div style={{ flex: 1, padding: '20px 18px 0', animation: 'budgetPageFadeUp 0.25s ease' }}>
-        <div style={headerStyle}>
-          <button
-            type="button"
-            onClick={() => navigate(-1)}
-            aria-label="Go back"
-            style={backBtnStyle}
-          >
-            <ArrowLeft size={19} strokeWidth={2.2} aria-hidden />
-          </button>
-          <div>
-            <div style={pageTitleStyle}>Call data budget</div>
-            <div style={{ color: PALETTE.textDim, fontSize: 13, fontWeight: 600, textTransform: 'capitalize' }}>
-              {callType} call
-            </div>
-          </div>
+      <div style={stickyHeaderStyle}>
+        <button
+          type="button"
+          onClick={() => navigate(-1)}
+          aria-label="Go back"
+          style={backBtnStyle}
+        >
+          <ArrowLeft size={19} strokeWidth={2.2} aria-hidden />
+        </button>
+        <div>
+          <div style={pageTitleStyle}>Call Budget</div>
+          <div style={headerSubStyle}>{callType} call</div>
         </div>
+      </div>
 
-        <div style={subtitleStyle}>
-          Pick how much data to set aside. Each option shows how long it lasts
-          on video and voice calls.
-        </div>
+      <div style={contentStyle}>
+        <div style={sectionLabelStyle}>Pick a budget</div>
 
         <div role="radiogroup" aria-label="Budget options" style={{ display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 12 }}>
           {KEYS.map((key) => {
             const mb = BUDGET_PRESETS[callType][key]
             const d = presetDurations(key)
             const selected = key === selectedKey
+            const tier = TIERS[key]
+            const Icon = tier.icon
             return (
               <button
                 key={key}
@@ -394,22 +495,35 @@ export default function CallBudgetPage() {
                 onClick={() => setSelectedKey(key)}
                 style={selected ? { ...cardBase, ...cardSelected } : cardBase}
               >
-                <div style={cardTop}>
-                  <span style={cardName}>{NAMES[key]}</span>
-                  {renderCheck(selected)}
-                </div>
-                <div style={statsRow}>
-                  <span style={mbBadge}>{mb} MB</span>
-                  <span style={statItem}>
-                    <Video size={13} color={PALETTE.textDim} aria-hidden />
-                    {formatDuration(d.video)}
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, width: '100%' }}>
+                  <span style={{ ...tierIconStyle, background: tier.tint, color: tier.color }}>
+                    <Icon size={22} strokeWidth={2.2} aria-hidden />
                   </span>
-                  <span style={statItem}>
-                    <Phone size={13} color={PALETTE.textDim} aria-hidden />
-                    {formatDuration(d.audio)}
-                  </span>
+                  <div style={{ minWidth: 0, flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                      <span style={cardName}>{tier.name}</span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                        {selected && (
+                          <span style={checkBadge} aria-hidden>
+                            <Check size={13} strokeWidth={3} />
+                          </span>
+                        )}
+                        <span style={mbBadge}>{mb} MB</span>
+                      </span>
+                    </div>
+                    <div style={descStyle}>{DESCRIPTIONS[key]}</div>
+                    <div style={statsRow}>
+                      <span style={statItem}>
+                        <Video size={13} color={PALETTE.textDim} aria-hidden />
+                        {formatDuration(d.video)}
+                      </span>
+                      <span style={statItem}>
+                        <Phone size={13} color={PALETTE.textDim} aria-hidden />
+                        {formatDuration(d.audio)}
+                      </span>
+                    </div>
+                  </div>
                 </div>
-                <div style={descStyle}>{DESCRIPTIONS[key]}</div>
               </button>
             )
           })}
@@ -424,64 +538,92 @@ export default function CallBudgetPage() {
             }}
             style={isCustom ? { ...cardBase, ...cardSelected } : cardBase}
           >
-            <div style={cardTop}>
-              <span style={cardName}>Custom</span>
-              {renderCheck(isCustom)}
-            </div>
-            <div style={statsRow}>
-              <span style={mbBadge}>{validCustom ? customMb : '—'} MB</span>
-            </div>
-            <div style={descStyle}>{DESCRIPTIONS.custom}</div>
-
-            {isCustom && (
-              <>
-                <div style={customInputRow} onClick={(e) => e.stopPropagation()}>
-                  <input
-                    type="number"
-                    min="1"
-                    value={Number.isFinite(customMb) ? customMb : ''}
-                    onChange={(e) => setCustomMb(Number(e.target.value))}
-                    aria-label="Custom budget in megabytes"
-                    style={customInputStyle}
-                    placeholder="e.g. 20"
-                  />
-                  <span style={customUnitStyle}>MB</span>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, width: '100%' }}>
+              <span style={{ ...tierIconStyle, background: CUSTOM_TIER.tint, color: CUSTOM_TIER.color }}>
+                <CUSTOM_TIER.icon size={22} strokeWidth={2.2} aria-hidden />
+              </span>
+              <div style={{ minWidth: 0, flex: 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <span style={cardName}>Custom</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                    {isCustom && (
+                      <span style={checkBadge} aria-hidden>
+                        <Check size={13} strokeWidth={3} />
+                      </span>
+                    )}
+                    <span style={mbBadge}>{validCustom ? customMb : '—'} MB</span>
+                  </span>
                 </div>
+                <div style={descStyle}>{DESCRIPTIONS.custom}</div>
 
-                <div style={qualityLabelStyle}>Video quality</div>
-                <div role="radiogroup" aria-label="Video quality" style={qualityRowStyle}>
-                  {QUALITIES.map((q) => {
-                    const selected = q.id === quality
-                    return (
-                      <button
-                        key={q.id}
-                        type="button"
-                        role="radio"
-                        aria-checked={selected}
-                        onClick={() => setQuality(q.id)}
-                        style={selected ? { ...qualityBtnBase, ...qualityBtnSelected } : qualityBtnBase}
-                      >
-                        <span style={qualityNameStyle}>{q.label}</span>
-                        <span style={qualityDetailStyle}>{q.detail}</span>
-                      </button>
-                    )
-                  })}
-                </div>
+                {isCustom && (
+                  <div onClick={(e) => e.stopPropagation()}>
+                    <div style={customSliderWrap}>
+                      <input
+                        type="range"
+                        min="1"
+                        max="200"
+                        step="1"
+                        value={sliderValue}
+                        onChange={(e) => setCustomMb(Number(e.target.value))}
+                        aria-label="Custom budget in megabytes"
+                        style={sliderStyle}
+                      />
+                      <input
+                        type="number"
+                        min="1"
+                        max="200"
+                        value={Number.isFinite(customMb) ? customMb : ''}
+                        onChange={(e) => setCustomMb(Number(e.target.value))}
+                        aria-label="Custom budget amount in megabytes"
+                        style={customInputStyle}
+                      />
+                      <span style={customUnitStyle}>MB</span>
+                    </div>
+                    <div style={sliderHints}>
+                      <span>1 MB</span>
+                      <span>200 MB</span>
+                    </div>
 
-                {customD && (
-                  <div style={statsRow}>
-                    <span style={statItem}>
-                      <Video size={13} color={PALETTE.textDim} aria-hidden />
-                      {formatDuration(customD.video)}
-                    </span>
-                    <span style={statItem}>
-                      <Phone size={13} color={PALETTE.textDim} aria-hidden />
-                      {formatDuration(customD.audio)}
-                    </span>
+                    <div style={qualityLabelStyle}>Video quality</div>
+                    <div role="radiogroup" aria-label="Video quality" style={qualityRowStyle}>
+                      {QUALITIES.map((q) => {
+                        const selected = q.id === quality
+                        return (
+                          <button
+                            key={q.id}
+                            type="button"
+                            role="radio"
+                            aria-checked={selected}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setQuality(q.id)
+                            }}
+                            style={selected ? { ...qualityBtnBase, ...qualityBtnSelected } : qualityBtnBase}
+                          >
+                            <span style={qualityNameStyle}>{q.label}</span>
+                            <span style={qualityDetailStyle}>{q.detail}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
+
+                    {customD && (
+                      <div style={statsRow}>
+                        <span style={statItem}>
+                          <Video size={13} color={PALETTE.textDim} aria-hidden />
+                          {formatDuration(customD.video)}
+                        </span>
+                        <span style={statItem}>
+                          <Phone size={13} color={PALETTE.textDim} aria-hidden />
+                          {formatDuration(customD.audio)}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 )}
-              </>
-            )}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -491,9 +633,10 @@ export default function CallBudgetPage() {
           type="button"
           onClick={handleStart}
           disabled={!canStart}
+          className={canStart ? 'budget-start-pulse' : undefined}
           style={canStart ? startBtnStyle : startBtnDisabledStyle}
         >
-          Start {callType} call
+          {startSummary()}
         </button>
         <div style={{ textAlign: 'center', color: PALETTE.textDim, fontSize: 11, marginTop: 10 }}>
           Data is only used while the call is active.

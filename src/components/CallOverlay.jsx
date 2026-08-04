@@ -172,7 +172,7 @@ export default function CallOverlay({
           />
         )}
         {qualityToast && (
-          <BudgetToast level="quality" style={{ bottom: 196 }} />
+          <BudgetToast level="quality" />
         )}
       </>
     )

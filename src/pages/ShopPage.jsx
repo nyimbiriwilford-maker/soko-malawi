@@ -181,7 +181,7 @@ const css = `
     height: clamp(200px, 26vw, 340px);
     min-height: 200px;
     max-height: 340px;
-    border-radius: 16px;
+    border-radius: 22px;
     overflow: hidden;
     background: var(--theme-cover);
     box-shadow: ${T.shadow};
@@ -190,9 +190,11 @@ const css = `
     width: 100%; height: 100%; object-fit: cover; object-position: center;
     display: block;
   }
+  /* Bottom-gradient scrim over the cover image — always visible so the
+     banner reads as designed, subtle enough not to muddy the photo. */
   .sp-cover-theme-glow {
     position: absolute; inset: 0; pointer-events: none;
-    background: linear-gradient(to top, rgba(0,0,0,.18) 0%, transparent 45%);
+    background: linear-gradient(to top, rgba(0,0,0,.5) 0%, transparent 60%);
   }
 
   /* ── SHOP HEADER CARD ── */
@@ -942,19 +944,15 @@ const css = `
       height: clamp(160px, 42vw, 220px);
       min-height: 160px;
       max-height: 220px;
-      border-radius: 12px;
+      border-radius: 16px;
     }
-    /* Cover edit always visible on touch (no hover) */
+    /* Cover edit pill always visible on touch (no hover) */
     .sp-cover-overlay {
       opacity: 1 !important;
-      background: linear-gradient(to top, rgba(0,0,0,.55) 0%, transparent 60%) !important;
-      align-items: flex-end !important;
-      justify-content: flex-end !important;
-      padding: 10px !important;
-      border-radius: 12px !important;
+      bottom: 10px; right: 10px;
     }
     .sp-cover-overlay-btn {
-      padding: 8px 12px; font-size: 12px; border-radius: 10px;
+      padding: 8px 14px; font-size: 12px; border-radius: 999px;
       min-height: 36px;
     }
     .sp-logo-overlay {
@@ -1223,16 +1221,18 @@ const css = `
   }
 
   .sp-cover-overlay {
-    position: absolute; inset: 0;
-    background: rgba(0,0,0,0.45);
+    position: absolute; bottom: 14px; right: 14px;
     display: flex; align-items: center; justify-content: center;
-    opacity: 0; transition: opacity 0.2s; cursor: pointer; border-radius: 16px;
+    opacity: 0; transition: opacity 0.2s; cursor: pointer; z-index: 2;
   }
   .sp-cover-wrap:hover .sp-cover-overlay { opacity: 1; }
+  .sp-cover-overlay:focus-within { opacity: 1; }
   .sp-cover-overlay-btn {
-    background: rgba(255,255,255,0.92); border: none; border-radius: 10px;
-    padding: 9px 18px; font-size: 13px; font-weight: 700; cursor: pointer;
+    background: rgba(255,255,255,0.92); border: none; border-radius: 999px;
+    padding: 9px 16px; font-size: 13px; font-weight: 700; cursor: pointer;
     display: flex; align-items: center; gap: 7px; color: #0d1b0e;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.22);
+    backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
   }
   .sp-logo-overlay {
     position: absolute; inset: 0; border-radius: 16px;
@@ -1883,10 +1883,12 @@ export default function ShopPage() {
 
   async function handleCoverChange(e) {
     const file = e.target.files?.[0]
-    if (!file) return
+    if (!file || !currentUserId) return
     try {
       const ext = file.name.split('.').pop()
-      const path = `covers/${crypto.randomUUID()}.${ext}`
+      // shop-images RLS write policy requires the first path segment to equal
+      // auth.uid() (see 20260713_008_storage.sql) — store under <uid>/covers/…
+      const path = `${currentUserId}/covers/${crypto.randomUUID()}.${ext}`
       const { error: upErr } = await supabase.storage.from('shop-images').upload(path, file)
       if (upErr) throw upErr
       const { data } = supabase.storage.from('shop-images').getPublicUrl(path)
@@ -1900,10 +1902,11 @@ export default function ShopPage() {
 
   async function handleLogoChange(e) {
     const file = e.target.files?.[0]
-    if (!file) return
+    if (!file || !currentUserId) return
     try {
       const ext = file.name.split('.').pop()
-      const path = `logos/${crypto.randomUUID()}.${ext}`
+      // Same <uid>/ prefix as covers — matches the shop-images RLS write policy.
+      const path = `${currentUserId}/logos/${crypto.randomUUID()}.${ext}`
       const { error: upErr } = await supabase.storage.from('shop-images').upload(path, file)
       if (upErr) throw upErr
       const { data } = supabase.storage.from('shop-images').getPublicUrl(path)
@@ -2000,7 +2003,8 @@ export default function ShopPage() {
       let logo_url = shop.logo_url
       if (editLogoFile) {
         const ext = editLogoFile.name.split('.').pop()
-        const path = `logos/${crypto.randomUUID()}.${ext}`
+        // Same <uid>/ prefix as the main logo/cover handlers (shop-images RLS).
+        const path = `${currentUserId}/logos/${crypto.randomUUID()}.${ext}`
         const { error: upErr } = await supabase.storage.from('shop-images').upload(path, editLogoFile)
         if (upErr) throw upErr
         const { data } = supabase.storage.from('shop-images').getPublicUrl(path)
@@ -2477,7 +2481,7 @@ if (!shop) {
           {isOwner && (
             <div className="sp-cover-overlay" onClick={() => coverInputRef.current?.click()}>
               <button type="button" className="sp-cover-overlay-btn">
-                📷 {shop.cover_url ? 'Change Cover Photo' : 'Add Cover Photo'}
+                📷 {shop.cover_url ? 'Change Cover' : 'Add Cover'}
               </button>
               <input ref={coverInputRef} type="file" accept="image/*" hidden onChange={handleCoverChange} />
             </div>

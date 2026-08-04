@@ -104,8 +104,11 @@ export default function PersistentCallShell() {
     stickyRef,
   })
 
-  // Mutable budget — the manager can grow it mid-call via extend actions
-  const budgetMb = liveBudgetMb
+  // Mutable budget — the manager can grow it mid-call via extend actions. Its
+  // live value only seeds once a call session is in-call, so until then it is
+  // still the app-mount default (0). Fall back to the saved pref so the meter
+  // and summary always see the budget.
+  const budgetMb = liveBudgetMb > 0 ? liveBudgetMb : prefBudgetMb
 
   const [callSummary, setCallSummary] = useState(null)
   const [prevCallState, setPrevCallState] = useState(callState)

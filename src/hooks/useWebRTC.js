@@ -71,6 +71,20 @@ async function acquireCallMedia(type) {
   return { stream, audioOnly: false, lastError }
 }
 
+/** Best-effort camera track for the receiving side of a video switch. */
+async function acquireSwitchVideoTrack() {
+  try {
+    const vid = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+    const track = vid.getVideoTracks()[0]
+    if (!track) return null
+    track.enabled = true
+    return track
+  } catch (err) {
+    console.error('[switchToVideo] peer-requested camera error:', err?.name, err?.message)
+    return null
+  }
+}
+
 function sameCallId(a, b) {
   if (!a || !b) return true // tolerate missing ids from older clients
   return String(a) === String(b)
@@ -110,6 +124,7 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
   const [facingMode, setFacingMode]     = useState('user')
   const [remoteStream, setRemoteStream] = useState(null)
   const [mediaNotice, setMediaNotice]   = useState(null)
+  const [switching, setSwitching]       = useState(false)
 
   const { pcRef, localStreamRef, callIdRef, callerIdRef, callTimerRef } = useCall()
   const { sampleUsage } = useCallDataBudget(pcRef)
@@ -123,6 +138,9 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
   const callStateRef      = useRef('idle')
   const callDurationRef   = useRef(0)
   const lowDataIntervalRef = useRef(null)
+  const switchingRef      = useRef(false)
+  const switchPendingRef  = useRef(null)
+  const switchTimeoutRef  = useRef(null)
 
   const userIdRef      = useRef(userId)
   const currentUserRef = useRef(currentUser)
@@ -645,6 +663,85 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
         return true
       }
 
+      // Peer switched call type mid-call — apply the new offer, answer, and
+      // mirror the media change locally so both ends end up on the same type.
+      if (_event === 'renegotiate') {
+        if (!pcRef.current) return false
+        if (!sameCallId(payload.callId, myCallId)) return false
+        const pc = pcRef.current
+        const hasVideo = /m=video/.test(payload.offer?.sdp || '')
+        pc.setRemoteDescription(new RTCSessionDescription(payload.offer))
+          .then(async () => {
+            if (hasVideo) {
+              // Peer wants video — best-effort enable our own camera too
+              const track = await acquireSwitchVideoTrack()
+              const sender = pc.getSenders().find((s) => s.track?.kind === 'video')
+              if (track && sender) {
+                await sender.replaceTrack(track)
+              } else if (track) {
+                pc.addTrack(track, localStreamRef.current)
+              }
+              if (track) {
+                localStreamRef.current?.addTrack(track)
+                setIsCamOff(false)
+              }
+            } else {
+              // Peer went audio-only — drop our local video as well
+              const sender = pc.getSenders().find((s) => s.track?.kind === 'video')
+              if (sender) {
+                try { pc.removeTrack(sender) } catch { /* removeTrack may throw when the PC is closing */ }
+                sender.track?.stop()
+              }
+              const ls = localStreamRef.current
+              if (ls) {
+                ls.getVideoTracks().forEach((t) => {
+                  try { ls.removeTrack(t) } catch { /* track may already be gone */ }
+                  t.stop()
+                })
+              }
+            }
+            updateCallType(hasVideo ? 'video' : 'voice')
+            const replyTarget = callerIdRef.current || userIdRef.current
+            if (replyTarget) {
+              const answer = await pc.createAnswer()
+              await pc.setLocalDescription(answer)
+              await ctxSendSignal(replyTarget, 'renegotiate_answer', {
+                answer: pc.localDescription.toJSON(),
+                callId: payload.callId,
+              })
+            }
+          })
+          .catch((err) => console.error('[renegotiate] setRemoteDescription error:', err))
+        return true
+      }
+
+      // Answer to our own renegotiation — finalize the type switch.
+      if (_event === 'renegotiate_answer') {
+        if (!pcRef.current) return false
+        if (!sameCallId(payload.callId, myCallId)) return false
+        const pc = pcRef.current
+        if (pc.signalingState !== 'have-local-offer') return false
+        pc.setRemoteDescription(new RTCSessionDescription(payload.answer))
+          .then(() => {
+            const pending = switchPendingRef.current
+            if (pending?.target) {
+              updateCallType(pending.target)
+              if (pending.target === 'video') setIsCamOff(false)
+            }
+            switchPendingRef.current = null
+            clearTimeout(switchTimeoutRef.current)
+            switchingRef.current = false
+            setSwitching(false)
+          })
+          .catch((err) => {
+            console.error('[renegotiate_answer] setRemoteDescription error:', err)
+            switchPendingRef.current = null
+            switchingRef.current = false
+            setSwitching(false)
+          })
+        return true
+      }
+
       return false
     })
 
@@ -714,6 +811,89 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
   function applyLowDataIfConfigured() {
     stopLowDataCap(lowDataIntervalRef.current)
     lowDataIntervalRef.current = null
+  }
+
+  /**
+   * Switch the live call between audio and video without dropping it.
+   * - To audio: stop + remove the local video track, renegotiate audio-only.
+   * - To video: acquire the camera, replace/add the video track, renegotiate
+   *   video+audio. Camera failure shows a toast and stays on audio.
+   * The peer answers via 'renegotiate' -> 'renegotiate_answer'; the switching
+   * state clears when the answer arrives (or after a 6s safety timeout).
+   */
+  async function switchCallType() {
+    if (callStateRef.current !== 'in-call') return
+    if (switchingRef.current) return
+    const pc = pcRef.current
+    const callId = callIdRef.current
+    const target = callerIdRef.current || userIdRef.current
+    if (!pc || !callId || !target) return
+
+    const goingVideo = callTypeRef.current !== 'video'
+    switchingRef.current = true
+    setSwitching(true)
+
+    try {
+      if (goingVideo) {
+        let videoTrack = null
+        try {
+          const vid = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+          videoTrack = vid.getVideoTracks()[0]
+        } catch (err) {
+          console.error('[switchToVideo] camera error:', err?.name, err?.message)
+          setMediaNotice('Camera unavailable — staying on audio')
+          return
+        }
+        const sender = pc.getSenders().find((s) => s.track?.kind === 'video')
+        if (sender) {
+          await sender.replaceTrack(videoTrack)
+        } else {
+          pc.addTrack(videoTrack, localStreamRef.current)
+        }
+        localStreamRef.current?.addTrack(videoTrack)
+        videoTrack.enabled = true
+        setIsCamOff(false)
+        updateCallType('video')
+        if (localVideoRef.current && localStreamRef.current) {
+          localVideoRef.current.srcObject = localStreamRef.current
+        }
+      } else {
+        // Switch to audio — stop + remove the local video track
+        const sender = pc.getSenders().find((s) => s.track?.kind === 'video')
+        if (sender) {
+          try { pc.removeTrack(sender) } catch { /* removeTrack may throw when the PC is closing */ }
+          sender.track?.stop()
+        }
+        const ls = localStreamRef.current
+        if (ls) {
+          ls.getVideoTracks().forEach((t) => {
+            try { ls.removeTrack(t) } catch { /* track may already be gone */ }
+            t.stop()
+          })
+        }
+        updateCallType('voice')
+      }
+
+      const offer = await pc.createOffer()
+      await pc.setLocalDescription(offer)
+      await ctxSendSignal(target, 'renegotiate', {
+        offer: pc.localDescription.toJSON(),
+        callId,
+      })
+
+      switchPendingRef.current = { target: callTypeRef.current, callId }
+      clearTimeout(switchTimeoutRef.current)
+      switchTimeoutRef.current = setTimeout(() => {
+        switchingRef.current = false
+        setSwitching(false)
+        switchPendingRef.current = null
+      }, 6000)
+    } catch (err) {
+      console.error('[switchCallType] error:', err)
+      switchingRef.current = false
+      setSwitching(false)
+      switchPendingRef.current = null
+    }
   }
 
   async function restorePendingCall(fromUserId) {
@@ -786,9 +966,9 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
 
   return {
     callState, callType, callDuration, isMuted, isCamOff, remoteStream,
-    localVideoRef, remoteVideoRef, facingMode, mediaNotice,
+    localVideoRef, remoteVideoRef, facingMode, mediaNotice, switching,
     startCall, answerCall, declineCall, hangUp, endCallLocally,
-    toggleMute, toggleCam, switchCamera, setupCallListener,
+    toggleMute, toggleCam, switchCamera, switchCallType, setupCallListener,
     assignRemoteStream, assignLocalStream, restorePendingCall,
   }
 }

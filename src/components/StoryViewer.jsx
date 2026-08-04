@@ -1,14 +1,6 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { X, MoreHorizontal, Heart, MessageCircle, Share2, MapPin, ChevronRight, VolumeX, Volume2, Eye, Send, Copy, Search } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { uploadToR2, getR2Url, deleteFromR2 } from '../lib/r2'
-import { STATUS_COLORS, STATUS_META } from '../constants/homeConstants'
-import {
-  parseClipWindow,
-  mediaUrlBase,
-  isStatusVideoUrl,
-} from '../utils/statusVideo'
 
 /**
  * Status / story viewer — product-first layout (reference design).
@@ -142,17 +134,6 @@ function IconCopy({ size = 14 }) {
     </svg>
   )
 }
-function IconReplyArrow({ size = 12 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M9 17H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h11" />
-      <path d="M15 3l5 5-5 5" />
-    </svg>
-  )
-}
-function isMobileShareDevice() {
-  return /Android|iPhone|iPad|iPod/i.test(typeof navigator !== 'undefined' ? navigator.userAgent : '')
-}
 function IconPackage({ size = 22 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.35)" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -224,13 +205,11 @@ function isRemoteMediaUrl(url) {
   if (!url || typeof url !== 'string') return false
   if (isColorUrl(url)) return false
   if (url.startsWith('blob:') || url.startsWith('data:')) return true
-  // Allow status clip fragments: https://.../vid.webm#t=5,20
-  const base = mediaUrlBase(url)
-  return /^https?:\/\//i.test(base) || base.startsWith('/')
+  return /^https?:\/\//i.test(url) || url.startsWith('/')
 }
 
 function isVideoUrl(url) {
-  return isStatusVideoUrl(url)
+  return !!url?.match(/\.(mp4|mov|webm|m4v)(\?|$)/i)
 }
 
 /**
@@ -239,18 +218,16 @@ function isVideoUrl(url) {
  */
 async function downloadMediaFully(url, onProgress) {
   if (!url) throw new Error('No media url')
-  // Clip fragments (#t=) are playback hints only — fetch/cache the bare file URL
-  const fetchUrl = mediaUrlBase(url) || url
-  if (fetchUrl.startsWith('blob:') || fetchUrl.startsWith('data:')) {
+  if (url.startsWith('blob:') || url.startsWith('data:')) {
     onProgress?.(100)
-    return { blobUrl: fetchUrl, kind: isVideoUrl(url) ? 'video' : 'image' }
+    return { blobUrl: url, kind: isVideoUrl(url) ? 'video' : 'image' }
   }
-  if (mediaBlobCache.has(fetchUrl)) {
+  if (mediaBlobCache.has(url)) {
     onProgress?.(100)
-    return mediaBlobCache.get(fetchUrl)
+    return mediaBlobCache.get(url)
   }
-  if (mediaInflight.has(fetchUrl)) {
-    const cached = await mediaInflight.get(fetchUrl)
+  if (mediaInflight.has(url)) {
+    const cached = await mediaInflight.get(url)
     onProgress?.(100)
     return cached
   }
@@ -261,7 +238,7 @@ async function downloadMediaFully(url, onProgress) {
 
     // Prefer full fetch with byte progress (CORS required)
     try {
-      const res = await fetch(fetchUrl, { mode: 'cors', credentials: 'omit', cache: 'force-cache' })
+      const res = await fetch(url, { mode: 'cors', credentials: 'omit', cache: 'force-cache' })
       if (!res.ok) throw new Error(`Download failed (${res.status})`)
 
       const total = Number(res.headers.get('content-length')) || 0
@@ -406,10 +383,6 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
   const [mediaIdx, setMediaIdx] = useState(0)
   const [progress, setProgress] = useState(0)
   const [paused, setPaused] = useState(false)
-  const [closing, setClosing] = useState(false)
-  const touchStartRef = useRef(null)
-  const [showMarketplace, setShowMarketplace] = useState(true)
-  const marketplaceTimerRef = useRef(null)
   const [localStories, setLocalStories] = useState(stories || [])
   const [replyText, setReplyText] = useState('')
   const [replySending, setReplySending] = useState(false)
@@ -434,20 +407,6 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
   const [replyCount, setReplyCount] = useState(0)
   const [showReplies, setShowReplies] = useState(false)
   const [repliesLoading, setRepliesLoading] = useState(false)
-  const [comments, setComments] = useState([])
-  const [commentCount, setCommentCount] = useState(0)
-  const [showComments, setShowComments] = useState(false)
-  const [commentsLoading, setCommentsLoading] = useState(false)
-  const [commentText, setCommentText] = useState('')
-  const [commentSending, setCommentSending] = useState(false)
-  const [replyToComment, setReplyToComment] = useState(null) // { id, name, rootId }
-  const [commentReactions, setCommentReactions] = useState({})
-  const [commentMediaFile, setCommentMediaFile] = useState(null)
-  const [commentMediaPreview, setCommentMediaPreview] = useState(null)
-  const [highlightCommentId, setHighlightCommentId] = useState(null)
-  const commentFileRef = useRef(null)
-  const commentItemRefs = useRef({})
-  const deepLinkHandledRef = useRef(false)
   const [toast, setToast] = useState('')
   const [muted, setMuted] = useState(false)
 
@@ -459,9 +418,6 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
   const activeBarRef = useRef(null)
   const rafRef = useRef(null)
   const loggedViewsRef = useRef(new Set())
-  const mainRef = useRef(null)
-
-  useEffect(() => { mainRef.current?.focus() }, [])
   /** Image / text status display time */
   const IMAGE_DURATION_MS = 7000
   /** Video: play full length (capped to status max — matches upload trim) */
@@ -499,18 +455,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
     setReplies([])
     setReplyCount(0)
     setMuted(false)
-    setShowMarketplace(true)
   }, [story?.id])
-
-  // ── Auto-hide marketplace card after 4s ─────────────────────────────────────
-  const hasTaggedEntity = story?.tagged || story?._taggedEntity
-  useEffect(() => {
-    if (!hasTaggedEntity || paused || showViewers || shareUrl || showMenu || showReplies) return
-    clearTimeout(marketplaceTimerRef.current)
-    setShowMarketplace(true)
-    marketplaceTimerRef.current = setTimeout(() => setShowMarketplace(false), 4000)
-    return () => clearTimeout(marketplaceTimerRef.current)
-  }, [story?.id, mediaIdx, hasTaggedEntity, paused, showViewers, shareUrl, showMenu, showReplies])
 
   // ── Stream media right away (no download % UI) ─────────────────────────────
   useEffect(() => {
@@ -540,13 +485,9 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
     setMediaError(null)
     setProgress(0)
 
-    // Prefer cached blob if we already have it; otherwise stream remote URL.
-    // Preserve #t=... clip window so the video "knows" it's trimmed.
-    // Cache stores blob URLs without fragment; reattach it for playback.
-    const clipFrag = remote.includes('#t=') ? remote.slice(remote.indexOf('#')) : ''
+    // Prefer cached blob if we already have it; otherwise stream remote URL
     const cached = mediaBlobCache.get(remote)
-    let src = cached?.blobUrl || remote
-    if (clipFrag && src.indexOf('#') === -1) src += clipFrag
+    const src = cached?.blobUrl || remote
     setMediaSrc(src)
     // Images can show as soon as src is set; videos wait for canplay (handled by element)
     if (kind === 'image') {
@@ -590,39 +531,11 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
     }
   }, [story?.id, currentUserId])
 
-  // Reply & comment counts for this status
+  // Reply count for this status
   useEffect(() => {
     if (!story?.id) return
     loadReplyCount(story.id)
-    loadCommentCount(story.id)
   }, [story?.id])
-
-  // Deep-link: /story/:id?comment=:commentId → open comments & highlight
-  useEffect(() => {
-    if (!story?.id || deepLinkHandledRef.current) return
-    try {
-      const params = new URLSearchParams(window.location.search)
-      const commentId = params.get('comment')
-      if (!commentId) return
-      deepLinkHandledRef.current = true
-      setHighlightCommentId(commentId)
-      setPaused(true)
-      setShowComments(true)
-      loadComments()
-    } catch { /* ignore */ }
-  }, [story?.id])
-
-  // Scroll highlighted comment into view once loaded
-  useEffect(() => {
-    if (!showComments || !highlightCommentId || commentsLoading) return
-    const t = setTimeout(() => {
-      const el = commentItemRefs.current[highlightCommentId]
-      if (el?.scrollIntoView) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'center' })
-      }
-    }, 120)
-    return () => clearTimeout(t)
-  }, [showComments, highlightCommentId, commentsLoading, comments])
 
   // Reactions
   useEffect(() => {
@@ -655,15 +568,10 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
       const start = Date.now()
       let done = false
 
-      // Detect meta-trim clip window (#t=start,end) so progress uses clip range
-      const clip = parseClipWindow(mediaSrc || v.currentSrc || '')
-      const clipStart = clip?.start ?? 0
-      const clipDur = clip?.duration ?? (Number.isFinite(v.duration) && v.duration > 0 ? v.duration : VIDEO_FALLBACK_MS / 1000)
-
       function tick() {
         if (done) return
-        const elapsed = v.currentTime - clipStart
-        const p = Math.min(100, (elapsed / clipDur) * 100)
+        const dur = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : VIDEO_FALLBACK_MS / 1000
+        const p = Math.min(100, (v.currentTime / dur) * 100)
         if (activeBarRef.current) activeBarRef.current.style.width = `${p}%`
 
         if (Date.now() - start >= VIDEO_MAX_MS) {
@@ -757,7 +665,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
       let { data } = await supabase
         .from('user_statuses')
         .select(`id, content, status_type, expires_at, created_at, media_urls, tagged_listing_id, tagged_kind, tagged_ref_id, user_id, location_hint,
-          profiles:user_id ( id, full_name, avatar_url, city, is_verified ),
+          profiles:user_id ( id, full_name, avatar_url, city ),
           tagged:tagged_listing_id ( id, title, price, images, category, description, city, district )`)
         .eq('user_id', nextStory.user_id)
         .gt('expires_at', new Date().toISOString())
@@ -767,10 +675,6 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
           const { hydrateStatusTags } = await import('../hooks/useStatuses')
           data = await hydrateStatusTags(data)
         } catch { /* ignore */ }
-        // Normalize profiles join (Supabase may return array)
-        for (const s of data) {
-          if (Array.isArray(s.profiles)) s.profiles = s.profiles[0] || null
-        }
         setLocalStories([...localStories.slice(0, nextIdx), ...data, ...localStories.slice(nextIdx + 1)])
       }
     }
@@ -844,23 +748,15 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
         setPaused(false)
       }, 900)
     }
-    if (navigator.clipboard) {
-      navigator.clipboard.writeText(shareUrl).then(done).catch(() => {
-        fallbackCopy(shareUrl, done)
-      })
-    } else {
-      fallbackCopy(shareUrl, done)
-    }
-  }
-
-  function fallbackCopy(text, cb) {
-    const el = document.createElement('textarea')
-    el.value = text
-    document.body.appendChild(el)
-    el.select()
-    document.execCommand('copy')
-    document.body.removeChild(el)
-    cb()
+    navigator.clipboard?.writeText(shareUrl).then(done).catch(() => {
+      const el = document.createElement('textarea')
+      el.value = shareUrl
+      document.body.appendChild(el)
+      el.select()
+      document.execCommand('copy')
+      document.body.removeChild(el)
+      done()
+    })
   }
 
   async function loadViewers() {
@@ -924,15 +820,6 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
       .ilike('body', `%[[status_reply:${statusId}]]%`)
       .limit(200)
     setReplyCount((data || []).length)
-  }
-
-  async function loadCommentCount(statusId) {
-    if (!statusId) return
-    const { count, error } = await supabase
-      .from('status_comments')
-      .select('id', { count: 'exact', head: true })
-      .eq('status_id', statusId)
-    if (!error && count != null) setCommentCount(count)
   }
 
   async function attachAuthors(rows) {
@@ -1007,140 +894,6 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
     setPaused(false)
   }
 
-  async function loadComments() {
-    if (!story?.id) return
-    setCommentsLoading(true)
-    const { data, error } = await supabase
-      .from('status_comments')
-      .select('id, body, created_at, user_id, parent_id, media_urls')
-      .eq('status_id', story.id)
-      .order('created_at', { ascending: false })
-      .limit(120)
-    if (!error && data) {
-      const withAuthors = await attachCommentAuthors(data)
-      // Index by id for parent lookup + nested thread roots
-      const byId = {}
-      for (const c of withAuthors) byId[c.id] = c
-
-      function authorLabel(c) {
-        if (!c) return 'User'
-        if (c.user_id === currentUserId) return 'You'
-        return c.author?.full_name || 'User'
-      }
-
-      function findRootId(c) {
-        let cur = c
-        const seen = new Set()
-        while (cur?.parent_id && byId[cur.parent_id] && !seen.has(cur.id)) {
-          seen.add(cur.id)
-          cur = byId[cur.parent_id]
-        }
-        return cur?.id
-      }
-
-      const topLevel = []
-      const children = {} // rootId → flat reply list (any depth), oldest first
-      for (const c of withAuthors) {
-        // Top-level, or orphaned (parent missing) → show as root so nothing is lost
-        if (!c.parent_id || !byId[c.parent_id]) {
-          topLevel.push(c)
-          continue
-        }
-        const rootId = findRootId(c)
-        if (!rootId || rootId === c.id) continue
-        const parent = byId[c.parent_id]
-        const enriched = {
-          ...c,
-          replyToId: c.parent_id,
-          replyToName: authorLabel(parent),
-          rootId,
-        }
-        if (!children[rootId]) children[rootId] = []
-        children[rootId].push(enriched)
-      }
-      for (const pid in children) {
-        children[pid].sort((a, b) => new Date(a.created_at) - new Date(b.created_at))
-      }
-      const grouped = topLevel.map(c => ({ ...c, replies: children[c.id] || [] }))
-      setComments(grouped)
-      setCommentCount(data.length)
-      // Load reactions for all visible comments
-      const allIds = data.map(c => c.id)
-      if (allIds.length) {
-        supabase.from('status_comment_reactions')
-          .select('comment_id, reaction, user_id')
-          .in('comment_id', allIds)
-          .then(({ data: reactions }) => {
-            if (!reactions) return
-            const map = {}
-            for (const r of reactions) {
-              if (!map[r.comment_id]) map[r.comment_id] = { love: 0, myReaction: null }
-              map[r.comment_id].love++
-              if (r.user_id === currentUserId) map[r.comment_id].myReaction = r.reaction
-            }
-            setCommentReactions(map)
-          })
-      }
-    }
-    setCommentsLoading(false)
-  }
-
-  function commentLink(commentId) {
-    return `${window.location.origin}/story/${story.id}?comment=${commentId}`
-  }
-
-  async function shareOrCopyComment(commentId) {
-    const url = commentLink(commentId)
-    if (isMobileShareDevice() && typeof navigator.share === 'function') {
-      try {
-        await navigator.share({ url, title: 'Comment on Soko Malawi' })
-      } catch { /* user cancelled */ }
-      return
-    }
-    if (navigator.clipboard) {
-      try {
-        await navigator.clipboard.writeText(url)
-        showToast('Link copied')
-        return
-      } catch { /* fall through to fallback */ }
-    }
-    fallbackCopy(url, () => showToast('Link copied'))
-  }
-
-  function startReplyTo(target, rootId) {
-    const name = target.author?.full_name
-      || (target.user_id === currentUserId ? 'You' : 'User')
-    setReplyToComment(
-      replyToComment?.id === target.id
-        ? null
-        : { id: target.id, name, rootId: rootId || target.id }
-    )
-    setCommentText('')
-  }
-
-  async function attachCommentAuthors(rows) {
-    const ids = [...new Set((rows || []).map(r => r.user_id).filter(Boolean))]
-    if (!ids.length) return rows || []
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('id, full_name, avatar_url')
-      .in('id', ids)
-    const map = {}
-    for (const p of profiles || []) map[p.id] = p
-    return (rows || []).map(r => ({ ...r, author: map[r.user_id] || null }))
-  }
-
-  function openComments() {
-    setPaused(true)
-    setShowComments(true)
-    loadComments()
-  }
-
-  function closeComments() {
-    setShowComments(false)
-    setPaused(false)
-  }
-
   /**
    * Auto-send reply to seller with status identity.
    * Does NOT open chat — stays on the status viewer.
@@ -1155,16 +908,10 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
     const text = replyText.trim()
     setReplySending(true)
 
-    // Keep a clear status caption in the chat body so replies are easy to identify
-    let statusSnippet = (story.content || '').replace(/\s+/g, ' ').trim().slice(0, 100)
-    if (!statusSnippet) {
-      const firstMedia = Array.isArray(story.media_urls) ? story.media_urls[0] : null
-      const isVideo = firstMedia && /\.(mp4|webm|mov)(\?|$)/i.test(String(firstMedia))
-      statusSnippet = isVideo ? 'Video status' : firstMedia ? 'Photo status' : 'Status update'
-    }
+    const statusSnippet = (story.content || '').replace(/\s+/g, ' ').trim().slice(0, 80)
     const productLine = story.tagged?.title
-      ? `Product: ${story.tagged.title}`
-      : null
+      ? `\nProduct: ${story.tagged.title}`
+      : (story.tagged_listing_id ? `\nListing: ${story.tagged_listing_id}` : '')
 
     // Marker lets us find replies later; body is readable in chat for the seller
     const marker = `[[status_reply:${story.id}]]`
@@ -1173,8 +920,8 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
       text,
       '',
       '— replied on your status',
-      `Status: “${statusSnippet}${statusSnippet.length >= 100 ? '…' : ''}”`,
-      productLine || null,
+      statusSnippet ? `Status: “${statusSnippet}${statusSnippet.length >= 80 ? '…' : ''}”` : null,
+      productLine.trim() || null,
     ].filter(Boolean).join('\n')
 
     let messageId = null
@@ -1258,97 +1005,13 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
     setReplySending(false)
   }
 
-  async function uploadCommentMedia(file) {
-    const ext = file.name.split('.').pop()
-    const path = `${currentUserId}/comment_${Date.now()}.${ext}`
-    const url = await uploadToR2(file, 'story-media/' + path)
-    return url || null
-  }
-
-  async function handleCommentSubmit() {
-    if ((!commentText.trim() && !commentMediaFile) || commentSending || !currentUserId || !story) return
-    const text = commentText.trim()
-    let mediaUrls = []
-    setCommentSending(true)
-    if (commentMediaFile) {
-      const url = await uploadCommentMedia(commentMediaFile)
-      if (url) mediaUrls = [url]
-    }
-    const payload = { status_id: story.id, user_id: currentUserId, body: text }
-    if (replyToComment) payload.parent_id = replyToComment.id
-    if (mediaUrls.length) payload.media_urls = mediaUrls
-    const { data: saved } = await supabase
-      .from('status_comments')
-      .insert(payload)
-      .select('id, body, created_at, user_id, parent_id, media_urls')
-      .maybeSingle()
-    if (saved) {
-      const withAuthor = {
-        ...saved,
-        author: { id: currentUserId, full_name: 'You', avatar_url: myAvatar },
-      }
-      if (replyToComment) {
-        const rootId = replyToComment.rootId || replyToComment.id
-        const enriched = {
-          ...withAuthor,
-          replyToId: replyToComment.id,
-          replyToName: replyToComment.name,
-          rootId,
-        }
-        setComments(prev => prev.map(c => {
-          if (c.id !== rootId) return c
-          return { ...c, replies: [...(c.replies || []), enriched] }
-        }))
-      } else {
-        setComments(prev => [{ ...withAuthor, replies: [] }, ...prev])
-      }
-      setCommentCount(c => c + 1)
-      setCommentText('')
-      setCommentMediaFile(null)
-      setCommentMediaPreview(null)
-      setReplyToComment(null)
-    } else {
-      showToast('Could not post comment')
-    }
-    setCommentSending(false)
-  }
-
-  async function handleCommentLove(commentId, currentlyLiked) {
-    if (!currentUserId) return
-    if (currentlyLiked) {
-      await supabase.from('status_comment_reactions')
-        .delete().eq('comment_id', commentId).eq('user_id', currentUserId)
-      setCommentReactions(prev => {
-        const cur = prev[commentId] || { love: 0, myReaction: null }
-        return { ...prev, [commentId]: { love: Math.max(0, cur.love - 1), myReaction: null } }
-      })
-    } else {
-      await supabase.from('status_comment_reactions')
-        .insert({ comment_id: commentId, user_id: currentUserId, reaction: 'love' })
-      setCommentReactions(prev => {
-        const cur = prev[commentId] || { love: 0, myReaction: null }
-        return { ...prev, [commentId]: { love: cur.love + 1, myReaction: 'love' } }
-      })
-    }
-  }
-
   function onPointerDown() {
     clearTimeout(holdRef.current)
     holdRef.current = setTimeout(() => setPaused(true), 140)
   }
   function onPointerUp() {
     clearTimeout(holdRef.current)
-    if (!showViewers && !shareUrl && !showMenu && !showReplies) {
-      setPaused(false)
-      setShowMarketplace(true)
-      clearTimeout(marketplaceTimerRef.current)
-      marketplaceTimerRef.current = setTimeout(() => setShowMarketplace(false), 4000)
-    }
-  }
-
-  function handleClose() {
-    setClosing(true)
-    setTimeout(() => onClose?.(), 280)
+    if (!showViewers && !shareUrl && !showMenu && !showReplies) setPaused(false)
   }
 
   if (!story) return null
@@ -1405,13 +1068,13 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
     : (!isTextOnlyStage && story.content
       ? String(story.content).replace(/\s+/g, ' ').trim().slice(0, 90)
       : null)
-  const kindMeta = taggedKind ? STATUS_META[taggedKind] : null
-  const kindLabel = kindMeta?.label
-    || (story.status_type === 'promo' || story.status_type === 'promotion' ? STATUS_META.promotion.label : null)
-    || null
-  const kindColor = kindMeta?.color
-    || (kindLabel ? STATUS_COLORS.promotion : null)
-    || null
+  const kindLabel = ({
+    listing: 'Product',
+    job: 'Job',
+    service: 'Service',
+    shop: 'Shop',
+    request: 'Looking for',
+  })[taggedKind] || 'Tagged'
 
   // Progress bars: one per media item in this user's current story group,
   // or fall back to per-story-in-user-group
@@ -1450,14 +1113,6 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
           0% { background-position: -200% 0; }
           100% { background-position: 200% 0; }
         }
-        @keyframes svOpen {
-          from { opacity: 0; transform: scale(0.96); }
-          to { opacity: 1; transform: scale(1); }
-        }
-        @keyframes svClose {
-          from { opacity: 1; transform: scale(1); }
-          to { opacity: 0; transform: scale(0.92) translateY(40px); }
-        }
         .sv-tap:active { opacity: 0.85; }
         .sv-hide-scroll::-webkit-scrollbar { display: none; }
         #sv-reply-input::placeholder { color: rgba(255,255,255,0.65); }
@@ -1466,45 +1121,27 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
       <div
         style={{
           position: 'fixed', inset: 0, zIndex: 998,
-          background: '#0d0d0d',
+          background: '#000',
           fontFamily: "'DM Sans', system-ui, sans-serif",
           userSelect: 'none',
           display: 'flex',
-          alignItems: 'center',
           justifyContent: 'center',
-          animation: closing ? 'svClose 0.28s ease forwards' : 'svOpen 0.25s ease',
         }}
         onPointerDown={onPointerDown}
         onPointerUp={onPointerUp}
-        onTouchStart={e => { touchStartRef.current = { y: e.touches[0].clientY, x: e.touches[0].clientX } }}
-        onTouchMove={e => {
-          if (!touchStartRef.current) return
-          const dy = e.touches[0].clientY - touchStartRef.current.y
-          if (dy > 80) { touchStartRef.current = null; handleClose() }
-        }}
-        onTouchEnd={() => { touchStartRef.current = null }}
-        onKeyDown={e => {
-          if (e.key === 'Escape') handleClose()
-          else if (e.key === 'ArrowLeft') { clearTimeout(holdRef.current); goBack() }
-          else if (e.key === 'ArrowRight') { clearTimeout(holdRef.current); advance() }
-        }}
-        tabIndex={0}
-        ref={mainRef}
       >
-          <div style={{
-            position: 'relative',
-            width: '100%',
-            maxWidth: 'min(520px, 100vw)',
-            height: '100%',
-            maxHeight: '100vh',
-            background: '#0d0d0d',
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-            borderRadius: 0,
-          }}>
-            {/* ════════ MEDIA STAGE ════════ */}
-            <div style={{ position: 'relative', flex: 1, minHeight: 0, background: '#0d0d0d' }}>
+        <div style={{
+          position: 'relative',
+          width: '100%',
+          maxWidth: 430,
+          height: '100%',
+          background: '#000',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}>
+          {/* ════════ MEDIA STAGE ════════ */}
+          <div style={{ position: 'relative', flex: 1, minHeight: 0, background: '#0a0a0a' }}>
             {/* Skeleton shimmer while media is still buffering — avoids the blank/black gap */}
             {media0 && !mediaReady && !showLoadError && (
               <div style={{
@@ -1570,7 +1207,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                 }}
                 style={{
                   width: '100%', height: '100%', objectFit: 'contain', display: 'block',
-                  background: '#0d0d0d',
+                  background: '#000',
                 }}
               />
             )}
@@ -1655,21 +1292,20 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
             {/* ── Progress bars ── */}
             <div style={{
               position: 'absolute', top: 0, left: 0, right: 0, zIndex: 30,
-              display: 'flex', gap: 2,
-              padding: '8px 10px 0',
-              paddingTop: 'max(8px, env(safe-area-inset-top, 8px))',
+              display: 'flex', gap: 3,
+              padding: '10px 12px 0',
+              paddingTop: 'max(10px, env(safe-area-inset-top, 10px))',
             }}>
               {Array.from({ length: barCount }).map((_, i) => (
                 <div key={i} style={{
-                  flex: 1, height: 2, borderRadius: 99,
-                  background: 'rgba(255,255,255,0.25)', overflow: 'hidden',
+                  flex: 1, height: 2.5, borderRadius: 99,
+                  background: 'rgba(255,255,255,0.28)', overflow: 'hidden',
                 }}>
                   <div
                     ref={i === barActive ? activeBarRef : null}
                     style={{
                       height: '100%', borderRadius: 99, background: '#fff',
                       width: i < barActive ? '100%' : i === barActive ? `${progress}%` : '0%',
-                      transition: 'width 0.1s linear',
                     }}
                   />
                 </div>
@@ -1679,9 +1315,9 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
             {/* ── Header ── */}
             <div style={{
               position: 'absolute', top: 0, left: 0, right: 0, zIndex: 30,
-              display: 'flex', alignItems: 'center', gap: 8,
-              padding: '14px 12px 0',
-              paddingTop: 'max(18px, calc(env(safe-area-inset-top, 8px) + 10px))',
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '18px 12px 0',
+              paddingTop: 'max(22px, calc(env(safe-area-inset-top, 8px) + 14px))',
             }}>
               <button
                 type="button"
@@ -1693,19 +1329,19 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                   navigate(`/profile/${story.user_id}`)
                 }}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
+                  display: 'flex', alignItems: 'center', gap: 9,
                   background: 'none', border: 'none', padding: 0,
                   cursor: 'pointer', flex: 1, minWidth: 0, textAlign: 'left',
                 }}
               >
                 <div style={{
-                  width: 42, height: 42, borderRadius: '50%', flexShrink: 0,
-                  border: '2px solid rgba(255,255,255,0.9)',
+                  width: 38, height: 38, borderRadius: '50%', flexShrink: 0,
+                  border: '2px solid rgba(255,255,255,0.95)',
                   overflow: 'hidden',
                   background: `linear-gradient(135deg,${GREEN},#22c55e)`,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 15, fontWeight: 800, color: '#fff',
-                  boxShadow: '0 2px 10px rgba(0,0,0,0.4)',
+                  fontSize: 14, fontWeight: 800, color: '#fff',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.35)',
                 }}>
                   {avatar
                     ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -1714,8 +1350,8 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                 <div style={{ minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
                     <span style={{
-                      fontSize: 15, fontWeight: 800, color: '#fff',
-                      textShadow: '0 1px 6px rgba(0,0,0,0.6)',
+                      fontSize: 14, fontWeight: 800, color: '#fff',
+                      textShadow: '0 1px 4px rgba(0,0,0,0.5)',
                       overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
                       maxWidth: 160,
                     }}>
@@ -1724,26 +1360,15 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                     <IconVerified size={14} />
                   </div>
                   <div style={{
-                    fontSize: 11, color: 'rgba(255,255,255,0.65)', fontWeight: 500,
-                    marginTop: 1, textShadow: '0 1px 4px rgba(0,0,0,0.5)',
-                    display: 'flex', alignItems: 'center', gap: 6,
+                    fontSize: 11, color: 'rgba(255,255,255,0.7)', fontWeight: 600,
+                    marginTop: 1, textShadow: '0 1px 3px rgba(0,0,0,0.45)',
                   }}>
-                    <span>{createdAgo}</span>
-                    {kindLabel && (
-                      <span style={{
-                        fontSize: 9, fontWeight: 800,
-                        color: '#fff', borderRadius: 4,
-                        padding: '1px 6px', lineHeight: 1.6,
-                        background: kindColor || '#666',
-                      }}>
-                        {kindLabel}
-                      </span>
-                    )}
+                    {createdAgo}
                   </div>
                 </div>
               </button>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
                 <button
                   type="button"
                   className="sv-tap"
@@ -1754,31 +1379,19 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                     setPaused(true)
                   }}
                   aria-label="More"
-                  style={{
-                    ...iconBtnStyle,
-                    width: 40, height: 40,
-                    background: 'rgba(0,0,0,0.3)',
-                    backdropFilter: 'blur(6px)',
-                    borderRadius: '50%',
-                  }}
+                  style={iconBtnStyle}
                 >
-                  <MoreHorizontal size={18} />
+                  <IconMore />
                 </button>
                 <button
                   type="button"
                   className="sv-tap"
                   onPointerDown={e => e.stopPropagation()}
-                  onPointerUp={e => { e.stopPropagation(); handleClose() }}
+                  onPointerUp={e => { e.stopPropagation(); onClose?.() }}
                   aria-label="Close"
-                  style={{
-                    ...iconBtnStyle,
-                    width: 40, height: 40,
-                    background: 'rgba(0,0,0,0.3)',
-                    backdropFilter: 'blur(6px)',
-                    borderRadius: '50%',
-                  }}
+                  style={iconBtnStyle}
                 >
-                  <X size={18} />
+                  <IconClose />
                 </button>
               </div>
             </div>
@@ -1809,7 +1422,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
             {/* FEATURED badge */}
             {isFeatured && (
               <div style={{
-                position: 'absolute', left: 14, top: 68, zIndex: 20,
+                position: 'absolute', left: 14, top: 78, zIndex: 20,
                 background: GOLD_BTN, color: '#1a1a1a',
                 borderRadius: 999, padding: '6px 11px',
                 fontSize: 10, fontWeight: 900, letterSpacing: 0.6,
@@ -1824,7 +1437,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
             {/* media counter */}
             {mediaCount > 1 && (
               <div style={{
-                position: 'absolute', right: 14, top: 68, zIndex: 20,
+                position: 'absolute', right: 14, top: 78, zIndex: 20,
                 background: 'rgba(0,0,0,0.55)', color: '#fff',
                 borderRadius: 999, padding: '5px 10px',
                 fontSize: 11, fontWeight: 800,
@@ -1837,16 +1450,16 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
 
             {/* Mute / unmute toggle — only for video */}
             {mediaKind === 'video' && showMedia && (
-                <button
-                  type="button"
-                  className="sv-tap"
-                  onPointerDown={e => e.stopPropagation()}
-                  onPointerUp={e => { e.stopPropagation(); setMuted(m => !m) }}
-                  aria-label={muted ? 'Unmute video' : 'Mute video'}
-                  style={{
-                    position: 'absolute',
-                    right: 14,
-                    top: mediaCount > 1 ? 104 : 68,
+              <button
+                type="button"
+                className="sv-tap"
+                onPointerDown={e => e.stopPropagation()}
+                onPointerUp={e => { e.stopPropagation(); setMuted(m => !m) }}
+                aria-label={muted ? 'Unmute video' : 'Mute video'}
+                style={{
+                  position: 'absolute',
+                  right: 14,
+                  top: mediaCount > 1 ? 116 : 78,
                   zIndex: 20,
                   width: 34, height: 34, borderRadius: '50%',
                   background: 'rgba(0,0,0,0.55)', color: '#fff',
@@ -1978,7 +1591,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                 setPaused(false)
                 goBack()
               }}
-              style={{ position: 'absolute', left: 0, top: 60, bottom: 0, width: '32%', zIndex: 12 }}
+              style={{ position: 'absolute', left: 0, top: 70, bottom: 0, width: '32%', zIndex: 12 }}
             />
             <div
               onPointerUp={e => {
@@ -1987,163 +1600,142 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                 setPaused(false)
                 advance()
               }}
-              style={{ position: 'absolute', right: 0, top: 60, bottom: 0, width: '32%', zIndex: 12 }}
+              style={{ position: 'absolute', right: 0, top: 70, bottom: 0, width: '32%', zIndex: 12 }}
             />
 
-            {/* ════════ FLOATING BOTTOM CHROME — overlaid on media ════════ */}
+            {/* ════════ FLOATING BOTTOM CHROME — overlaid on media, WhatsApp/IG style ════════ */}
             <div
               onPointerDown={e => e.stopPropagation()}
               onPointerUp={e => e.stopPropagation()}
               style={{
                 position: 'absolute', left: 0, right: 0, bottom: 0, zIndex: 25,
-                background: 'linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.5) 35%, rgba(0,0,0,0.1) 75%, transparent 100%)',
-                padding: '16px 12px calc(8px + env(safe-area-inset-bottom, 0px))',
+                background: 'linear-gradient(to top, rgba(0,0,0,0.82) 0%, rgba(0,0,0,0.6) 40%, rgba(0,0,0,0.15) 80%, transparent 100%)',
+                padding: '30px 14px calc(12px + env(safe-area-inset-bottom, 0px))',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: 8,
+                gap: 10,
               }}
             >
-              {/* Tagged product / entity card — auto-hides after 4s */}
+              {/* Tagged product / entity card — now stacks naturally above the actions below */}
               {tagged && mediaReady && !mediaError && (
-                <div style={{
-                  opacity: showMarketplace ? 1 : 0,
-                  transform: showMarketplace ? 'translateY(0)' : 'translateY(8px)',
-                  transition: 'opacity 0.35s ease, transform 0.35s ease',
-                  pointerEvents: showMarketplace ? 'auto' : 'none',
-                }}>
-                  <button
-                    type="button"
-                    className="sv-tap"
-                    onClick={openTaggedEntity}
-                    style={{
-                      width: '100%',
-                      background: 'rgba(255,255,255,0.08)',
-                      backdropFilter: 'blur(16px)',
-                      WebkitBackdropFilter: 'blur(16px)',
-                      border: '1px solid rgba(255,255,255,0.15)',
-                      borderRadius: 12,
-                      padding: '6px 8px',
-                      textAlign: 'left',
-                      cursor: 'pointer',
-                      fontFamily: 'inherit',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                    }}
-                  >
-                    <div style={{
-                      width: 36, height: 36, borderRadius: 8, flexShrink: 0,
-                      overflow: 'hidden',
-                      background: 'rgba(255,255,255,0.06)',
-                      border: '1px solid rgba(255,255,255,0.1)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      {entityLogo || productImage ? (
-                        <img
-                          src={entityLogo || productImage}
-                          alt=""
-                          style={{
-                            width: '100%', height: '100%',
-                            objectFit: (taggedKind === 'shop' || taggedKind === 'job') ? 'contain' : 'cover',
-                            background: (taggedKind === 'shop' || taggedKind === 'job') ? '#fff' : 'transparent',
-                            padding: (taggedKind === 'shop' || taggedKind === 'job') ? 3 : 0,
-                            boxSizing: 'border-box',
-                          }}
-                        />
-                      ) : (
-                        <IconPackage size={16} />
-                      )}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="sv-tap"
+                  onClick={openTaggedEntity}
+                  style={{
+                    width: '100%',
+                    background: 'rgba(255,255,255,0.14)',
+                    backdropFilter: 'blur(8px)',
+                    border: '1.5px solid rgba(255,255,255,0.25)',
+                    borderRadius: 14,
+                    padding: '8px 10px',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    fontFamily: 'inherit',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 10,
+                  }}
+                >
+                  <div style={{
+                    width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+                    overflow: 'hidden',
+                    background: 'rgba(255,255,255,0.1)',
+                    border: '1px solid rgba(255,255,255,0.14)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {entityLogo || productImage ? (
+                      <img
+                        src={entityLogo || productImage}
+                        alt=""
+                        style={{
+                          width: '100%', height: '100%',
+                          objectFit: (taggedKind === 'shop' || taggedKind === 'job') ? 'contain' : 'cover',
+                          background: (taggedKind === 'shop' || taggedKind === 'job') ? '#fff' : 'transparent',
+                          padding: (taggedKind === 'shop' || taggedKind === 'job') ? 3 : 0,
+                          boxSizing: 'border-box',
+                        }}
+                      />
+                    ) : (
+                      <IconPackage size={18} />
+                    )}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
+                      <span style={{
+                        fontSize: 13.5, fontWeight: 800, color: '#fff',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        textShadow: '0 1px 4px rgba(0,0,0,0.5)',
+                      }}>
+                        {productTitle}
+                      </span>
+                      {productPrice && (
                         <span style={{
-                          fontSize: 12.5, fontWeight: 800, color: '#fff',
-                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                          textShadow: '0 1px 4px rgba(0,0,0,0.4)',
+                          fontSize: 13, fontWeight: 900, color: GOLD,
+                          textShadow: '0 1px 4px rgba(0,0,0,0.5)', flexShrink: 0,
                         }}>
-                          {productTitle}
+                          {typeof productPrice === 'string' && !/^(MK|mk)/.test(productPrice) && Number.isFinite(Number(productPrice))
+                            ? formatPrice(productPrice)
+                            : productPrice}
                         </span>
-                        {productPrice && (
-                          <span style={{
-                            fontSize: 12, fontWeight: 900, color: GOLD,
-                            textShadow: '0 1px 4px rgba(0,0,0,0.4)', flexShrink: 0,
-                          }}>
-                            {typeof productPrice === 'string' && !/^(MK|mk)/.test(productPrice) && Number.isFinite(Number(productPrice))
-                              ? formatPrice(productPrice)
-                              : productPrice}
-                          </span>
-                        )}
-                      </div>
-                      {productCity && (
-                        <div style={{
-                          display: 'flex', alignItems: 'center', gap: 3,
-                          fontSize: 10, color: 'rgba(255,255,255,0.6)', fontWeight: 500, marginTop: 1,
-                        }}>
-                          <MapPin size={8} />
-                          {productCity}
-                        </div>
                       )}
                     </div>
-                    <ChevronRight size={14} color="rgba(255,255,255,0.5)" />
-                  </button>
-                </div>
+                    <div style={{
+                      display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap',
+                      fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 600, marginTop: 1,
+                    }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#4ade80' }}>
+                        <IconCheck size={9} />
+                        Verified
+                      </span>
+                      {productCity && (
+                        <>
+                          <span style={{ opacity: 0.4 }}>·</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                            <IconMapPin size={9} />
+                            {productCity}
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <IconChevronRight size={16} color="rgba(255,255,255,0.6)" />
+                </button>
               )}
 
-              {/* Action bar */}
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 16, padding: '2px 0',
-              }}>
-                {!isOwn ? (
-                  <button
-                    type="button"
-                    className="sv-tap"
-                    onClick={handleLove}
-                    disabled={reacting}
-                    aria-label="Like"
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 5,
-                      background: 'none', border: 'none', padding: 0,
-                      cursor: 'pointer', fontFamily: 'inherit',
-                    }}
-                  >
-                    <IconHeart size={19} filled={myReaction === 'love'} />
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>
-                      {fmtK(loveCount)}
-                    </span>
-                  </button>
-                ) : (
-                  <button
-                    type="button"
-                    className="sv-tap"
-                    onClick={openViewers}
-                    aria-label="View analytics"
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 5,
-                      background: 'none', border: 'none', padding: 0,
-                      cursor: 'pointer', fontFamily: 'inherit',
-                    }}
-                  >
-                    <Eye size={19} />
-                    <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>
-                      {fmtK(viewCount)}
-                    </span>
-                  </button>
-                )}
+              {/* Engagement */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 18, padding: '0 2px' }}>
+                <button
+                  type="button"
+                  className="sv-tap"
+                  onClick={handleLove}
+                  disabled={reacting || isOwn}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 6,
+                    background: 'none', border: 'none', padding: 0,
+                    cursor: isOwn ? 'default' : 'pointer', fontFamily: 'inherit',
+                  }}
+                >
+                  <IconHeart size={20} filled={myReaction === 'love'} />
+                  <span style={{ fontSize: 14, fontWeight: 800, color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>
+                    {fmtK(loveCount)}
+                  </span>
+                </button>
 
                 <button
                   type="button"
                   className="sv-tap"
-                  onClick={openComments}
-                  aria-label="Comment"
+                  onClick={openReplies}
+                  aria-label="View replies"
                   style={{
-                    display: 'flex', alignItems: 'center', gap: 5,
+                    display: 'flex', alignItems: 'center', gap: 6,
                     background: 'none', border: 'none', padding: 0,
                     cursor: 'pointer', fontFamily: 'inherit',
                   }}
                 >
-                  <MessageCircle size={19} />
-                  <span style={{ fontSize: 13, fontWeight: 700, color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>
-                    {fmtK(commentCount)}
+                  <IconComment size={19} color="#fff" />
+                  <span style={{ fontSize: 14, fontWeight: 800, color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>
+                    {fmtK(replyCount)}
                   </span>
                 </button>
 
@@ -2151,62 +1743,80 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                   type="button"
                   className="sv-tap"
                   onClick={openShare}
-                  aria-label="Share"
                   style={{
-                    display: 'flex', alignItems: 'center', gap: 5,
+                    display: 'flex', alignItems: 'center', gap: 6,
                     background: 'none', border: 'none', padding: 0,
-                    cursor: 'pointer', fontFamily: 'inherit',
+                    cursor: 'pointer', fontFamily: 'inherit', marginLeft: 'auto',
                   }}
                 >
-                  <Share2 size={17} />
-                  <span style={{ fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.8)', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>Share</span>
+                  <IconShare size={18} color="#fff" />
+                  <span style={{ fontSize: 13, fontWeight: 700, color: 'rgba(255,255,255,0.85)', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>Share</span>
                 </button>
+              </div>
 
-                {/* Spacer */}
-                <div style={{ flex: 1 }} />
-
-                {/* Message / View product CTA */}
-                {!isOwn ? (
+              {/* CTAs */}
+              {!isOwn ? (
+                <div style={{ display: 'flex', gap: 10 }}>
                   <button
                     type="button"
                     className="sv-tap"
                     onClick={goChat}
-                    aria-label="Message seller"
                     style={{
-                      display: 'flex', alignItems: 'center', gap: 5,
+                      flex: 1,
                       background: GREEN,
                       border: 'none',
                       borderRadius: 999,
-                      padding: '7px 14px',
-                      fontSize: 12.5, fontWeight: 800, color: '#fff',
+                      padding: '12px 12px',
+                      fontSize: 14, fontWeight: 800, color: '#fff',
                       cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
+                      boxShadow: '0 3px 12px rgba(26,122,74,0.3)',
                       fontFamily: 'inherit',
-                      boxShadow: '0 2px 10px rgba(26,122,74,0.3)',
                     }}
                   >
-                    <Send size={13} />
-                    Message
+                    <IconMessage size={15} />
+                    Message Seller
                   </button>
-                ) : null}
-              </div>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="sv-tap"
+                  onClick={openViewers}
+                  style={{
+                    width: '100%',
+                    background: 'rgba(255,255,255,0.14)',
+                    border: '1.5px solid rgba(255,255,255,0.3)',
+                    backdropFilter: 'blur(8px)',
+                    borderRadius: 999,
+                    padding: '11px',
+                    fontSize: 13, fontWeight: 800, color: '#fff',
+                    cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    fontFamily: 'inherit',
+                  }}
+                >
+                  <IconEye size={15} />
+                  {fmtK(viewCount)} {viewCount === 1 ? 'view' : 'views'} · See who viewed
+                </button>
+              )}
 
               {/* Reply bar */}
               {!isOwn && (
                 <div style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  background: 'rgba(255,255,255,0.06)',
-                  backdropFilter: 'blur(12px)',
-                  WebkitBackdropFilter: 'blur(12px)',
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  background: 'rgba(255,255,255,0.14)',
+                  backdropFilter: 'blur(8px)',
                   borderRadius: 999,
-                  padding: '4px 6px 4px 4px',
-                  border: '1px solid rgba(255,255,255,0.1)',
+                  padding: '6px 8px 6px 6px',
+                  border: '1.5px solid rgba(255,255,255,0.25)',
                 }}>
                   <div style={{
-                    width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
+                    width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
                     overflow: 'hidden',
                     background: `linear-gradient(135deg,${GREEN},#22c55e)`,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 10, fontWeight: 800, color: '#fff',
+                    fontSize: 11, fontWeight: 800, color: '#fff',
                   }}>
                     {myAvatar
                       ? <img src={myAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -2217,13 +1827,13 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                     value={replyText}
                     onChange={e => setReplyText(e.target.value)}
                     onFocus={() => setPaused(true)}
-                    onBlur={() => { if (!shareUrl && !showViewers && !showMenu && !showReplies && !showComments) setPaused(false) }}
+                    onBlur={() => { if (!shareUrl && !showViewers && !showMenu && !showReplies) setPaused(false) }}
                     onKeyDown={e => e.key === 'Enter' && handleReply()}
                     placeholder="Reply to status…"
                     maxLength={400}
                     style={{
                       flex: 1, border: 'none', outline: 'none', background: 'transparent',
-                      fontSize: 13, color: '#fff', fontFamily: 'inherit', minWidth: 0,
+                      fontSize: 14, color: '#fff', fontFamily: 'inherit', minWidth: 0,
                     }}
                   />
                   <button
@@ -2233,16 +1843,16 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                     disabled={!replyText.trim() || replySending}
                     aria-label="Send reply"
                     style={{
-                      width: 30, height: 30, borderRadius: '50%', border: 'none',
+                      width: 34, height: 34, borderRadius: '50%', border: 'none',
                       background: replyText.trim() ? GREEN : 'transparent',
-                      color: replyText.trim() ? '#fff' : 'rgba(255,255,255,0.4)',
+                      color: replyText.trim() ? '#fff' : 'rgba(255,255,255,0.5)',
                       cursor: replyText.trim() && !replySending ? 'pointer' : 'default',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       transition: 'all 0.15s',
                       opacity: replySending ? 0.7 : 1,
                     }}
                   >
-                    <Send size={13} />
+                    <IconSend size={17} />
                   </button>
                 </div>
               )}
@@ -2252,7 +1862,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
           {/* Toast — reply sent confirmation */}
           {toast && (
             <div style={{
-              position: 'absolute', left: '50%', bottom: 110, zIndex: 99999,
+              position: 'absolute', left: '50%', bottom: 110, zIndex: 50,
               transform: 'translateX(-50%)',
               background: '#0f172a', color: '#fff',
               borderRadius: 999, padding: '10px 18px',
@@ -2290,7 +1900,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}
               >
-                <X size={15} />
+                <IconClose size={15} />
               </button>
             </div>
 
@@ -2406,411 +2016,6 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
           </Sheet>
         )}
 
-        {/* ── Comments sheet ── */}
-        {showComments && (
-          <Sheet onClose={closeComments} maxHeight="78vh">
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              marginBottom: 12,
-            }}>
-              <div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <IconComment size={16} />
-                  {commentCount} {commentCount === 1 ? 'comment' : 'comments'}
-                </div>
-                <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, marginTop: 2 }}>
-                  {isOwn ? 'Comments on your status' : 'Comments on this status'}
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={closeComments}
-                style={{
-                  width: 34, height: 34, borderRadius: '50%', border: 'none',
-                  background: '#f1f5f9', color: '#64748b', cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}
-              >
-                <X size={15} />
-              </button>
-            </div>
-
-            <div className="sv-hide-scroll" style={{ overflowY: 'auto', maxHeight: '48vh', marginBottom: 10 }}>
-              {commentsLoading ? (
-                <div style={{ padding: 28, textAlign: 'center', color: '#94a3b8', fontSize: 13, fontWeight: 600 }}>
-                  Loading comments…
-                </div>
-              ) : comments.length === 0 ? (
-                <div style={{ padding: 32, textAlign: 'center' }}>
-                  <div style={{
-                    width: 52, height: 52, borderRadius: 16, margin: '0 auto 12px',
-                    background: '#f1f5f9',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <IconComment size={22} />
-                  </div>
-                  <div style={{ fontSize: 14, fontWeight: 800, color: '#64748b' }}>No comments yet</div>
-                  <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4, fontWeight: 600 }}>
-                    Be the first to comment
-                  </div>
-                </div>
-              ) : comments.map(c => {
-                const cname = c.author?.full_name || (c.user_id === currentUserId ? 'You' : 'User')
-                const cavatar = c.author?.avatar_url
-                const cinitial = (cname[0] || 'U').toUpperCase()
-                const cr = commentReactions[c.id] || { love: 0, myReaction: null }
-                const isHighlighted = highlightCommentId === c.id
-                const isReplyingHere = replyToComment?.id === c.id
-                const desktopCopy = !isMobileShareDevice()
-                return (
-                  <div key={c.id} style={{ marginBottom: 4 }}>
-                    <div
-                      ref={el => { if (el) commentItemRefs.current[c.id] = el }}
-                      style={{
-                        display: 'flex', gap: 10, padding: '10px 8px',
-                        borderRadius: 12,
-                        border: isHighlighted ? `1.5px solid ${GREEN}` : '1.5px solid transparent',
-                        background: isHighlighted ? 'rgba(26,122,74,0.06)' : isReplyingHere ? 'rgba(26,122,74,0.04)' : 'transparent',
-                        transition: 'background 0.2s, border 0.2s',
-                      }}
-                    >
-                      <div style={{
-                        width: 38, height: 38, borderRadius: '50%', overflow: 'hidden', flexShrink: 0,
-                        background: `linear-gradient(135deg,${GREEN},#22c55e)`,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: 13, fontWeight: 700, color: '#fff',
-                      }}>
-                        {cavatar
-                          ? <img src={cavatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                          : cinitial}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 3, flexWrap: 'wrap' }}>
-                          <span style={{ fontSize: 13, fontWeight: 800, color: '#0f172a' }}>{cname}</span>
-                          <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>
-                            {timeAgoFn(c.created_at)}
-                          </span>
-                        </div>
-                        <div style={{
-                          fontSize: 13, color: '#334155', lineHeight: 1.45, fontWeight: 500,
-                          wordBreak: 'break-word',
-                        }}>
-                          {c.body}
-                        </div>
-                        {c.media_urls?.length > 0 && (
-                          <div style={{ marginTop: 6, maxWidth: '100%', borderRadius: 8, overflow: 'hidden' }}>
-                            {c.media_urls.map((url, i) => (
-                              isVideoUrl(url) ? (
-                                <video key={i} src={url} controls style={{ width: '100%', maxHeight: 200, borderRadius: 8, objectFit: 'cover' }} />
-                              ) : (
-                                <img key={i} src={url} alt="" style={{ width: '100%', maxHeight: 200, borderRadius: 8, objectFit: 'cover' }} />
-                              )
-                            ))}
-                          </div>
-                        )}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 6, flexWrap: 'wrap' }}>
-                          <button
-                            type="button"
-                            onClick={() => handleCommentLove(c.id, cr.myReaction === 'love')}
-                            style={{
-                              display: 'flex', alignItems: 'center', gap: 3,
-                              background: 'none', border: 'none', padding: 0,
-                              cursor: 'pointer', fontFamily: 'inherit',
-                            }}
-                          >
-                            <IconHeart size={13} filled={cr.myReaction === 'love'} />
-                            {cr.love > 0 && (
-                              <span style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8' }}>{cr.love}</span>
-                            )}
-                          </button>
-                          {currentUserId && (
-                            <button
-                              type="button"
-                              onClick={() => startReplyTo(c, c.id)}
-                              style={{
-                                background: 'none', border: 'none', padding: 0,
-                                fontSize: 11, fontWeight: 800,
-                                color: isReplyingHere ? GREEN : '#94a3b8',
-                                cursor: 'pointer', fontFamily: 'inherit',
-                                display: 'inline-flex', alignItems: 'center', gap: 4,
-                              }}
-                            >
-                              <IconReplyArrow size={11} />
-                              {isReplyingHere ? 'Cancel' : 'Reply'}
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => shareOrCopyComment(c.id)}
-                            title={desktopCopy ? 'Copy link to this comment' : 'Share this comment'}
-                            style={{
-                              background: 'none', border: 'none', padding: 0,
-                              fontSize: 11, fontWeight: 800, color: '#94a3b8', cursor: 'pointer',
-                              fontFamily: 'inherit',
-                              display: 'inline-flex', alignItems: 'center', gap: 4,
-                            }}
-                          >
-                            {desktopCopy ? <IconCopy size={11} /> : <IconShare size={11} />}
-                            {desktopCopy ? 'Copy link' : 'Share'}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Threaded replies — arrow shows who each person replied to */}
-                    {c.replies?.length > 0 && (
-                      <div style={{
-                        marginLeft: 22,
-                        borderLeft: '2px solid #d1fae5',
-                        paddingLeft: 0,
-                      }}>
-                        {c.replies.map((r, rIdx) => {
-                          const rname = r.author?.full_name || (r.user_id === currentUserId ? 'You' : 'User')
-                          const ravtar = r.author?.avatar_url
-                          const rinit = (rname[0] || 'U').toUpperCase()
-                          const rr = commentReactions[r.id] || { love: 0, myReaction: null }
-                          const replyTo = r.replyToName || cname
-                          const rHighlighted = highlightCommentId === r.id
-                          const rReplying = replyToComment?.id === r.id
-                          return (
-                            <div
-                              key={r.id}
-                              ref={el => { if (el) commentItemRefs.current[r.id] = el }}
-                              style={{
-                                display: 'flex', gap: 8, padding: '8px 8px 8px 12px',
-                                position: 'relative',
-                                borderRadius: 10,
-                                border: rHighlighted ? `1.5px solid ${GREEN}` : '1.5px solid transparent',
-                                background: rHighlighted ? 'rgba(26,122,74,0.06)' : rReplying ? 'rgba(26,122,74,0.04)' : 'transparent',
-                                transition: 'background 0.2s, border 0.2s',
-                              }}
-                            >
-                              {/* L-shaped thread connector into avatar */}
-                              <div
-                                aria-hidden
-                                style={{
-                                  position: 'absolute',
-                                  left: 0,
-                                  top: 0,
-                                  width: 12,
-                                  height: 22,
-                                  borderBottom: '2px solid #a7f3d0',
-                                  borderLeft: rIdx === 0 ? 'none' : 'none',
-                                  borderBottomLeftRadius: 0,
-                                  marginLeft: -2,
-                                }}
-                              />
-                              <div style={{
-                                width: 30, height: 30, borderRadius: '50%', overflow: 'hidden', flexShrink: 0,
-                                background: '#e2e8f0',
-                                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                fontSize: 11, fontWeight: 700, color: '#475569',
-                              }}>
-                                {ravtar
-                                  ? <img src={ravtar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                  : rinit}
-                              </div>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{
-                                  display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3, flexWrap: 'wrap',
-                                }}>
-                                  <span style={{ fontSize: 12, fontWeight: 800, color: '#0f172a' }}>{rname}</span>
-                                  <span
-                                    style={{
-                                      display: 'inline-flex', alignItems: 'center', gap: 3,
-                                      fontSize: 11, fontWeight: 700, color: GREEN,
-                                      background: 'rgba(26,122,74,0.08)',
-                                      borderRadius: 999, padding: '1px 8px 1px 6px',
-                                    }}
-                                    title={`Replied to ${replyTo}`}
-                                  >
-                                    <IconReplyArrow size={10} />
-                                    {replyTo}
-                                  </span>
-                                  <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 600 }}>
-                                    {timeAgoFn(r.created_at)}
-                                  </span>
-                                </div>
-                                <div style={{
-                                  fontSize: 12, color: '#334155', lineHeight: 1.4, fontWeight: 500,
-                                  wordBreak: 'break-word',
-                                }}>
-                                  {r.body}
-                                </div>
-                                {r.media_urls?.length > 0 && (
-                                  <div style={{ marginTop: 4, maxWidth: '100%', borderRadius: 6, overflow: 'hidden' }}>
-                                    {r.media_urls.map((url, i) => (
-                                      isVideoUrl(url) ? (
-                                        <video key={i} src={url} controls style={{ width: '100%', maxHeight: 160, borderRadius: 6, objectFit: 'cover' }} />
-                                      ) : (
-                                        <img key={i} src={url} alt="" style={{ width: '100%', maxHeight: 160, borderRadius: 6, objectFit: 'cover' }} />
-                                      )
-                                    ))}
-                                  </div>
-                                )}
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4, flexWrap: 'wrap' }}>
-                                  <button
-                                    type="button"
-                                    onClick={() => handleCommentLove(r.id, rr.myReaction === 'love')}
-                                    style={{
-                                      display: 'flex', alignItems: 'center', gap: 3,
-                                      background: 'none', border: 'none', padding: 0,
-                                      cursor: 'pointer', fontFamily: 'inherit',
-                                    }}
-                                  >
-                                    <IconHeart size={12} filled={rr.myReaction === 'love'} />
-                                    {rr.love > 0 && (
-                                      <span style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8' }}>{rr.love}</span>
-                                    )}
-                                  </button>
-                                  {currentUserId && (
-                                    <button
-                                      type="button"
-                                      onClick={() => startReplyTo(r, c.id)}
-                                      style={{
-                                        background: 'none', border: 'none', padding: 0,
-                                        fontSize: 10, fontWeight: 800,
-                                        color: rReplying ? GREEN : '#94a3b8',
-                                        cursor: 'pointer', fontFamily: 'inherit',
-                                        display: 'inline-flex', alignItems: 'center', gap: 3,
-                                      }}
-                                    >
-                                      <IconReplyArrow size={10} />
-                                      {rReplying ? 'Cancel' : 'Reply'}
-                                    </button>
-                                  )}
-                                  <button
-                                    type="button"
-                                    onClick={() => shareOrCopyComment(r.id)}
-                                    title={desktopCopy ? 'Copy link to this comment' : 'Share this comment'}
-                                    style={{
-                                      background: 'none', border: 'none', padding: 0,
-                                      fontSize: 10, fontWeight: 800, color: '#94a3b8', cursor: 'pointer',
-                                      fontFamily: 'inherit',
-                                      display: 'inline-flex', alignItems: 'center', gap: 3,
-                                    }}
-                                  >
-                                    {desktopCopy ? <IconCopy size={10} /> : <IconShare size={10} />}
-                                    {desktopCopy ? 'Copy link' : 'Share'}
-                                  </button>
-                                </div>
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-
-            {currentUserId && (
-              <div>
-                {replyToComment && (
-                  <div style={{
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                    padding: '6px 12px', marginBottom: 4,
-                    background: 'rgba(26,122,74,0.08)', borderRadius: 10,
-                    fontSize: 12, color: GREEN, fontWeight: 800,
-                  }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                      <IconReplyArrow size={12} />
-                      Replying to {replyToComment.name}
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => { setReplyToComment(null); setCommentText('') }}
-                      style={{ background: 'none', border: 'none', padding: 0, color: '#94a3b8', cursor: 'pointer', fontSize: 13, fontFamily: 'inherit' }}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                )}
-                {/* Media preview */}
-                {commentMediaPreview && (
-                  <div style={{
-                    position: 'relative', marginBottom: 6,
-                    borderRadius: 8, overflow: 'hidden', maxWidth: 120,
-                  }}>
-                    <img src={commentMediaPreview} alt="" style={{ width: '100%', height: 80, objectFit: 'cover', borderRadius: 8 }} />
-                    <button
-                      type="button"
-                      onClick={() => { setCommentMediaFile(null); setCommentMediaPreview(null) }}
-                      style={{
-                        position: 'absolute', top: 2, right: 2, width: 22, height: 22, borderRadius: '50%',
-                        background: 'rgba(0,0,0,0.6)', color: '#fff', border: 'none',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        cursor: 'pointer', fontSize: 12, lineHeight: 1,
-                      }}
-                    >
-                      ×
-                    </button>
-                  </div>
-                )}
-                <div style={{
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  background: '#f8fafc', border: '1.5px solid #e2e8f0',
-                  borderRadius: 999, padding: '6px 8px 6px 12px',
-                }}>
-                  <input
-                    value={commentText}
-                    onChange={e => setCommentText(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleCommentSubmit()}
-                    placeholder={replyToComment ? `Reply to ${replyToComment.name}…` : 'Write a comment…'}
-                    maxLength={400}
-                    style={{
-                      flex: 1, border: 'none', outline: 'none', background: 'transparent',
-                      fontSize: 13, color: '#0f172a', fontFamily: 'inherit',
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => commentFileRef.current?.click()}
-                    style={{
-                      width: 30, height: 30, borderRadius: '50%', border: 'none',
-                      background: 'transparent', color: '#94a3b8', cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 16, lineHeight: 1, flexShrink: 0,
-                    }}
-                    aria-label="Attach image"
-                  >
-                    🖼
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleCommentSubmit}
-                    disabled={(!commentText.trim() && !commentMediaFile) || commentSending}
-                    style={{
-                      width: 36, height: 36, borderRadius: '50%', border: 'none',
-                      background: (commentText.trim() || commentMediaFile) ? GREEN : '#e2e8f0',
-                      color: (commentText.trim() || commentMediaFile) ? '#fff' : '#94a3b8',
-                      cursor: (commentText.trim() || commentMediaFile) ? 'pointer' : 'default',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      flexShrink: 0,
-                    }}
-                  >
-                    <IconSend size={15} />
-                  </button>
-                </div>
-                <input
-                  ref={commentFileRef}
-                  type="file"
-                  accept="image/*"
-                  style={{ display: 'none' }}
-                  onChange={e => {
-                    const file = e.target.files?.[0]
-                    if (!file) return
-                    setCommentMediaFile(file)
-                    setCommentMediaPreview(URL.createObjectURL(file))
-                    e.target.value = ''
-                  }}
-                />
-              </div>
-            )}
-          </Sheet>
-        )}
-
         {/* ── Share sheet ── */}
         {shareUrl && (
           <Sheet onClose={() => { setShareUrl(null); setPaused(false) }}>
@@ -2820,7 +2025,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                 background: 'rgba(26,122,74,0.12)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
               }}>
-                <Share2 size={16} />
+                <IconShare size={16} />
               </div>
               <div>
                 <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>Share status</div>
@@ -2864,11 +2069,11 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
             }}>
               <div>
                 <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Eye size={16} />
-              {viewCount} {viewCount === 1 ? 'view' : 'views'}
-            </div>
-            <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, marginTop: 2 }}>
-              People who viewed this status
+                  <IconEye size={16} />
+                  {viewCount} {viewCount === 1 ? 'view' : 'views'}
+                </div>
+                <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, marginTop: 2 }}>
+                  People who viewed this status
                 </div>
               </div>
               <button
@@ -2880,7 +2085,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                 }}
               >
-                <X size={15} />
+                <IconClose size={15} />
               </button>
             </div>
 
@@ -2889,7 +2094,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
               background: '#f8fafc', border: '1.5px solid #e2e8f0',
               borderRadius: 999, padding: '9px 14px', marginBottom: 10,
             }}>
-              <span style={{ color: '#94a3b8', display: 'flex' }}><Search size={14} /></span>
+              <span style={{ color: '#94a3b8', display: 'flex' }}><IconSearch size={14} /></span>
               <input
                 value={viewerSearch}
                 onChange={e => setViewerSearch(e.target.value)}

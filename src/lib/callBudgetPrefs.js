@@ -63,13 +63,15 @@ export function estimateDuration(callType, mb, lowDataMode) {
 
 /**
  * Whether a preset should automatically reduce video quality.
- * Low/Medium auto-reduce video; High and all voice stay uncapped.
- * @param {'voice'|'video'} callType
- * @param {'low'|'medium'|'high'|'custom'} preset
- * @returns {boolean}
+ * Previously low/medium video presets ran under a fixed 40 kbit/s cap
+ * (measured ~28 KB/s). That fixed cap was removed and replaced by adaptive
+ * quality steps that engage only as the budget depletes, so no preset
+ * auto-reduces at call start anymore — estimates must use the measured
+ * normal video rate (~265 KB/s) or they are wildly optimistic.
+ * @returns {boolean} always false — no preset auto-reduces quality
  */
-export function shouldAutoLowData(callType, preset) {
-  return callType === 'video' && (preset === 'low' || preset === 'medium')
+export function shouldAutoLowData() {
+  return false
 }
 
 const CALL_USAGE_LOG_KEY = 'soko_call_usage_log'

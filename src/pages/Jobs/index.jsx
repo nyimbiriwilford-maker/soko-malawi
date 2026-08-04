@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { JOB_TYPES, CITIES, CATEGORIES } from './jobsConstants'
@@ -6,6 +6,7 @@ import JobCard from './JobCard'
 import JobModal from './JobModal'
 import PostJobForm from './PostJobForm'
 import MyJobs from './MyJobs'
+import JobAlerts from './JobAlerts'
 import SokoNav from '../../components/SokoNav'
 import './Jobs.css'
 
@@ -81,6 +82,18 @@ export default function Jobs() {
     setJobs(data || [])
     setLoading(false)
   }
+
+  // Open a specific job modal when arriving via a job_match notification
+  // (/jobs?job_id=…). Runs once after the list has loaded.
+  const openedJobRef = useRef(false)
+  useEffect(() => {
+    if (openedJobRef.current) return
+    const jobId = new URLSearchParams(window.location.search).get('job_id')
+    if (!jobId) return
+    openedJobRef.current = true
+    const target = jobs.find(j => j.id === jobId)
+    if (target) setTimeout(() => setSelectedJob(target), 0)
+  }, [jobs])
 
   async function loadSavedFromDB(uid) {
     const { data } = await supabase
@@ -339,10 +352,13 @@ export default function Jobs() {
 
       {/* ── MY LISTINGS TAB ── */}
       {tab === 'mine' && (
-        <MyJobs
-          currentUser={currentUser}
-          onViewJob={setSelectedJob}
-        />
+        <>
+          <JobAlerts currentUser={currentUser} />
+          <MyJobs
+            currentUser={currentUser}
+            onViewJob={setSelectedJob}
+          />
+        </>
       )}
 
       {/* ── Job Detail Modal ── */}

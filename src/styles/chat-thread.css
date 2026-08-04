@@ -533,6 +533,23 @@
   background: #0f1410;
   max-width: 280px;
   line-height: 0;
+  cursor: pointer;
+}
+
+.chat-thread .media-video-play-hint {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
 }
 
 .chat-thread .media-video-wrap video {
@@ -640,8 +657,20 @@
   color: #fff;
 }
 
+.chat-thread .voice-note.is-file-audio .msg-bubble.is-mine .voice-play,
+.chat-thread .msg-bubble.is-mine .voice-note.is-file-audio .voice-play {
+  background: rgba(255, 210, 126, 0.35);
+  color: #fff;
+}
+
 .chat-thread .msg-bubble.is-theirs .voice-play {
-  background: var(--chat-green);
+  background: var(--chat-green);   /* #1a7a4a */
+  color: #fff;
+}
+
+.chat-thread .voice-note.is-file-audio .msg-bubble.is-theirs .voice-play,
+.chat-thread .msg-bubble.is-theirs .voice-note.is-file-audio .voice-play {
+  background: #c9820a;
   color: #fff;
 }
 
@@ -670,6 +699,11 @@
   justify-content: space-between;
   font-size: 10px;
   font-weight: 600;
+}
+
+.chat-thread .voice-type-label {
+  display: inline-flex;
+  align-items: center;
 }
 
 .chat-thread .msg-bubble.is-mine .voice-times {

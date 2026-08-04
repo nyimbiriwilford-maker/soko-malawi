@@ -99,7 +99,11 @@ export default function useCallBudgetManager({
   // Budget lifecycle: 80% toast → 90% extend panel → 98% countdown → 100% hangup.
   // A new RTCPeerConnection means a new call, so reset the fired flags then.
   useEffect(() => {
-    if (callState !== 'in-call' || budgetBytes <= 0) return
+    if (callState !== 'in-call') return
+    // Seed the live budget from the saved pref on each new connection. This
+    // reset branch must run even while liveBudgetMb is still 0 (its app-mount
+    // default) — budgetBytes derives from liveBudgetMb, so gating on it here
+    // would self-block the seed and disable all enforcement below.
     if (budgetSessionRef.current !== pcRef.current) {
       budgetSessionRef.current = pcRef.current
       lowToastFiredRef.current = false
@@ -110,6 +114,8 @@ export default function useCallBudgetManager({
       setCountdown(10)
       return
     }
+    // Standard (unmetered) call — no budget to enforce.
+    if (budgetBytes <= 0) return
     const ratio = bytesUsed / budgetBytes
     if (ratio >= 1) {
       if (stageRef.current !== null) setStage(null)
@@ -131,7 +137,7 @@ export default function useCallBudgetManager({
       lowToastFiredRef.current = true
       if (stageRef.current === null) setStage('toast')
     }
-  }, [bytesUsed, callState, budgetBytes]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [bytesUsed, callState, budgetBytes, budgetMb]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // 80% toast auto-dismisses; the panel and countdown persist until acted on
   useEffect(() => {

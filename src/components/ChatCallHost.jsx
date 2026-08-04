@@ -3,9 +3,9 @@
  * Does not own WebRTC (so calls survive leaving the chat page).
  */
 
-import { createContext, useContext, useEffect, useRef, useState } from 'react'
-import { Phone, Video, CheckCircle2, SlidersHorizontal } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { Phone, Video, ShieldCheck, SlidersHorizontal } from 'lucide-react'
+import { useNavigate, useLocation, useParams } from 'react-router-dom'
 import { useCall } from '../context/CallContext'
 import { getCallBudgetPref, estimateDuration, shouldAutoLowData } from '../lib/callBudgetPrefs'
 
@@ -36,58 +36,157 @@ const headerBtnStyle = {
   transition: 'background 0.15s ease, transform 0.12s ease, opacity 0.15s ease',
 }
 
-const DIALOG_PALETTE = {
-  backdrop: 'rgba(9, 12, 10, 0.72)',
-  surface: '#161b17',
-  surfaceRaised: '#1e2520',
-  border: '#2a342c',
-  text: '#e8efe9',
-  textDim: '#93a39a',
-  green: '#0F9D58',
-}
-
-const DIALOG_KEYFRAMES = `
-  @keyframes callStartFadeUp {
-    from { opacity: 0; transform: translateY(12px) scale(0.98); }
+const DIALOG_STYLES = `
+  @keyframes callSheetUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+  @keyframes callSheetPop {
+    from { opacity: 0; transform: translateY(16px) scale(0.97); }
     to { opacity: 1; transform: translateY(0) scale(1); }
   }
+  .call-sheet-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 9500;
+    background: rgba(9, 12, 10, 0.72);
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    font-family: 'Sora', 'Inter', system-ui, sans-serif;
+  }
+  .call-sheet {
+    width: 100%;
+    max-width: 560px;
+    box-sizing: border-box;
+    background: #161b17;
+    border: 1px solid #2a342c;
+    border-bottom: none;
+    border-radius: 24px 24px 0 0;
+    padding: 12px 20px calc(20px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -24px 60px rgba(0, 0, 0, 0.6);
+    animation: callSheetUp 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .call-sheet-handle {
+    display: block;
+    width: 40px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.16);
+    margin: 0 auto 14px;
+  }
+  .call-sheet-title {
+    color: #e8efe9;
+    font-size: 20px;
+    font-weight: 800;
+    margin-bottom: 4px;
+  }
+  .call-sheet-subtitle {
+    color: #93a39a;
+    font-size: 13px;
+    line-height: 1.4;
+    margin-bottom: 18px;
+  }
+  .call-sheet-options {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .call-sheet-option {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    box-sizing: border-box;
+    text-align: left;
+    background: #1e2520;
+    border: 1px solid #2a342c;
+    border-radius: 16px;
+    padding: 14px;
+    cursor: pointer;
+    color: #e8efe9;
+    font-family: inherit;
+    transition: border-color 0.2s ease, background 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+  }
+  .call-sheet-option:hover { border-color: #3a4a3f; }
+  .call-sheet-option:active { transform: scale(0.985); }
+  .call-sheet-option-last {
+    border-color: rgba(15, 157, 88, 0.55);
+    background: rgba(15, 157, 88, 0.12);
+  }
+  .call-sheet-option-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.06);
+    color: #e8efe9;
+    flex-shrink: 0;
+  }
+  .call-sheet-icon-green {
+    background: rgba(15, 157, 88, 0.16);
+    color: #4ade80;
+  }
+  .call-sheet-option-body {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .call-sheet-option-title {
+    font-size: 15px;
+    font-weight: 800;
+    color: #e8efe9;
+    line-height: 1.3;
+  }
+  .call-sheet-option-sub {
+    font-size: 12px;
+    color: #93a39a;
+    line-height: 1.4;
+  }
+  .call-sheet-chip {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    background: rgba(15, 157, 88, 0.16);
+    border: 1px solid rgba(15, 157, 88, 0.4);
+    border-radius: 999px;
+    padding: 6px 10px;
+    color: #a7f3d0;
+    font-size: 11px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+  .call-sheet-cancel {
+    width: 100%;
+    height: 48px;
+    margin-top: 16px;
+    background: transparent;
+    color: #93a39a;
+    border: 1px solid #2a342c;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    font-family: inherit;
+    transition: color 0.2s ease, border-color 0.2s ease;
+  }
+  .call-sheet-cancel:active { transform: scale(0.98); }
+  @media (min-width: 640px) {
+    .call-sheet-overlay { align-items: center; padding: 20px; }
+    .call-sheet {
+      max-width: 400px;
+      border-radius: 24px;
+      border-bottom: 1px solid #2a342c;
+      padding: 12px 22px 20px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+      animation: callSheetPop 0.25s ease;
+    }
+  }
 `
-
-const dialogCardBase = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 6,
-  width: '100%',
-  boxSizing: 'border-box',
-  textAlign: 'left',
-  background: DIALOG_PALETTE.surfaceRaised,
-  border: `1px solid ${DIALOG_PALETTE.border}`,
-  borderRadius: 14,
-  padding: '14px 16px',
-  cursor: 'pointer',
-  color: DIALOG_PALETTE.text,
-  fontFamily: 'inherit',
-  transition: 'border-color 0.2s ease, background 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease',
-}
-
-const dialogCardTop = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  width: '100%',
-  gap: 10,
-}
-
-const dialogCardName = {
-  fontSize: 15,
-  fontWeight: 800,
-}
-
-const dialogCardSub = {
-  fontSize: 12,
-  color: DIALOG_PALETTE.textDim,
-  lineHeight: 1.45,
-}
 
 const PRESET_NAMES = { low: 'Economy', medium: 'Balanced', high: 'Premium', custom: 'Custom' }
 
@@ -136,98 +235,71 @@ function CallStartDialog({ callType, onLastBudget, onStandard, onSetBudget, onCl
     : null
 
   return (
-    <div
-      style={{
-        position: 'fixed',
-        inset: 0,
-        zIndex: 9500,
-        background: DIALOG_PALETTE.backdrop,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        padding: 20,
-        fontFamily: "'Sora', 'Inter', system-ui, sans-serif",
-      }}
-      onClick={onClose}
-    >
+    <div className="call-sheet-overlay" role="presentation" onClick={onClose}>
       <div
+        className="call-sheet"
         role="dialog"
         aria-modal="true"
         aria-label={`Start ${callType} call`}
         onClick={(e) => e.stopPropagation()}
-        style={{
-          width: 'min(360px, 100%)',
-          background: DIALOG_PALETTE.surface,
-          border: `1px solid ${DIALOG_PALETTE.border}`,
-          borderRadius: 18,
-          padding: 22,
-          boxShadow: '0 24px 60px rgba(0,0,0,0.55)',
-          animation: 'callStartFadeUp 0.25s ease',
-        }}
       >
-        <div style={{ color: DIALOG_PALETTE.text, fontSize: 18, fontWeight: 800, marginBottom: 4 }}>
-          Start {callType} call
-        </div>
-        <div style={{ color: DIALOG_PALETTE.textDim, fontSize: 13, marginBottom: 18 }}>
-          Choose how to start this call.
-        </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <span className="call-sheet-handle" aria-hidden />
+        <div className="call-sheet-title">Start {callType} call</div>
+        <div className="call-sheet-subtitle">Choose how to start this call.</div>
+
+        <div className="call-sheet-options">
           {saved && (
             <button
               type="button"
+              className="call-sheet-option call-sheet-option-last"
               onClick={onLastBudget}
               aria-label="Continue with last budget"
-              style={{
-                ...dialogCardBase,
-                borderColor: DIALOG_PALETTE.green,
-                background: 'rgba(15, 157, 88, 0.10)',
-              }}
             >
-              <div style={dialogCardTop}>
-                <span style={dialogCardName}>Continue with Last Budget</span>
-                <CheckCircle2 size={20} color={DIALOG_PALETTE.green} aria-hidden />
-              </div>
-              <div style={dialogCardSub}>
-                {savedName} · {savedDuration}
-              </div>
+              <span className="call-sheet-option-icon call-sheet-icon-green">
+                <ShieldCheck size={20} strokeWidth={2.2} aria-hidden />
+              </span>
+              <span className="call-sheet-option-body">
+                <span className="call-sheet-option-title">Continue with Last Budget</span>
+                <span className="call-sheet-option-sub">Resume with your saved data plan</span>
+              </span>
+              <span className="call-sheet-chip">{savedName} · {savedDuration}</span>
             </button>
           )}
-          <button type="button" onClick={onStandard} aria-label="Standard call with no data monitoring" style={dialogCardBase}>
-            <div style={dialogCardTop}>
-              <span style={dialogCardName}>Standard Call</span>
-              <Phone size={18} color={DIALOG_PALETTE.green} aria-hidden />
-            </div>
-            <div style={dialogCardSub}>No data monitoring</div>
+          <button
+            type="button"
+            className="call-sheet-option"
+            onClick={onStandard}
+            aria-label="Standard call with no data monitoring"
+          >
+            <span className="call-sheet-option-icon">
+              <Phone size={20} strokeWidth={2.2} aria-hidden />
+            </span>
+            <span className="call-sheet-option-body">
+              <span className="call-sheet-option-title">Standard Call</span>
+              <span className="call-sheet-option-sub">No data monitoring</span>
+            </span>
           </button>
-          <button type="button" onClick={onSetBudget} aria-label="Set a call data budget" style={dialogCardBase}>
-            <div style={dialogCardTop}>
-              <span style={dialogCardName}>Set Call Budget</span>
-              <SlidersHorizontal size={18} color={DIALOG_PALETTE.green} aria-hidden />
-            </div>
-            <div style={dialogCardSub}>Choose how much data to use</div>
+          <button
+            type="button"
+            className="call-sheet-option"
+            onClick={onSetBudget}
+            aria-label="Set a call data budget"
+          >
+            <span className="call-sheet-option-icon">
+              <SlidersHorizontal size={20} strokeWidth={2.2} aria-hidden />
+            </span>
+            <span className="call-sheet-option-body">
+              <span className="call-sheet-option-title">Set Call Budget</span>
+              <span className="call-sheet-option-sub">Choose how much data to use</span>
+            </span>
           </button>
         </div>
-        <button
-          type="button"
-          onClick={onClose}
-          style={{
-            marginTop: 16,
-            width: '100%',
-            background: 'transparent',
-            color: DIALOG_PALETTE.textDim,
-            border: `1px solid ${DIALOG_PALETTE.border}`,
-            borderRadius: 12,
-            padding: '12px 0',
-            fontSize: 14,
-            fontWeight: 600,
-            cursor: 'pointer',
-            fontFamily: 'inherit',
-          }}
-        >
+
+        <button type="button" className="call-sheet-cancel" onClick={onClose}>
           Cancel
         </button>
       </div>
-      <style>{DIALOG_KEYFRAMES}</style>
+      <style>{DIALOG_STYLES}</style>
     </div>
   )
 }
@@ -242,6 +314,8 @@ export function HideDuringCall({ children }) {
 /** Voice + video call buttons for the chat top bar */
 export function CallHeaderButtons({ style = headerBtnStyle }) {
   const navigate = useNavigate()
+  const location = useLocation()
+  const params = useParams() || {}
   const actions = usePersistentCallActions()
   const { activeCall, callUiMode, expandCall } = useCall() || {}
   const startCall = actions?.startCall
@@ -249,6 +323,25 @@ export function CallHeaderButtons({ style = headerBtnStyle }) {
   const busy = callState !== 'idle'
   const [pendingType, setPendingType] = useState(null)
   const noBudgetTypeRef = useRef(null)
+
+  // The current chat id, e.g. "user123" or "user123/listing5".
+  const chatId = params.listingId && params.listingId !== 'undefined'
+    ? `${params.userId}/${params.listingId}`
+    : (params.userId || '')
+
+  // After returning from /call-budget with START CALL tapped, start the call
+  // immediately. sessionStorage is the bridge (navigate state must stay
+  // serializable — no functions). useLayoutEffect fires before the first
+  // paint, so the chat UI never visibly flashes. The dialog was already
+  // dismissed in onSetBudget, so nothing to close here.
+  useLayoutEffect(() => {
+    const type = sessionStorage.getItem('soko_start_call_on_return')
+    if (!type) return
+    const start = actions?.startCall
+    if (!start) return // actions not published yet — retry when they arrive
+    sessionStorage.removeItem('soko_start_call_on_return')
+    start(type)
+  }, [location.pathname, actions])
 
   // A "Standard Call" temporarily parks the saved budget. Restore it as soon
   // as the call ends, and heal any stale parked budget from an interrupted
@@ -326,15 +419,18 @@ export function CallHeaderButtons({ style = headerBtnStyle }) {
           }}
           onStandard={() => startNoBudgetCall(pendingType)}
           onSetBudget={() => {
+            sessionStorage.setItem(
+              'soko_pending_call',
+              JSON.stringify({ callType: pendingType, chatId })
+            )
             setPendingType(null)
             navigate('/call-budget', {
-              state: {
-                callType: pendingType,
-                onStart: () => startCall?.(pendingType),
-              },
+              state: { callType: pendingType },
             })
           }}
-          onClose={() => setPendingType(null)}
+          onClose={() => {
+            setPendingType(null)
+          }}
         />
       )}
     </>

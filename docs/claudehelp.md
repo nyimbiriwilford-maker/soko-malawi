@@ -1,0 +1,1 @@
+Run npx eslint on all changed files (git diff --name-only) and npm run build one more time as a final check before deploy. Report pass/fail only.

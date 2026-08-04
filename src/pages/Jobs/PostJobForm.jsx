@@ -1,8 +1,56 @@
 import { useState, useRef } from 'react'
 import { supabase } from '../../lib/supabase'
 import { uploadToR2, getR2Url, deleteFromR2 } from '../../lib/r2'
+import { invokeApi } from '../../lib/apiServer'
 import { JOB_TYPES, CITIES, CATEGORIES, EMPTY_JOB_FORM } from './jobsConstants'
 import { validateJobForm } from './jobsUtils'
+
+async function runJobAiFollowUps(jobId, fields) {
+  try {
+    const { data: tags, error: tagError } = await invokeApi('tag-job', {
+      body: {
+        title: fields.title || '',
+        overview: fields.overview || '',
+        description: fields.description || '',
+        requirements: fields.requirements || '',
+      },
+    })
+    if (tagError || !tags) {
+      console.warn('[job-ai] tag-job skipped:', tagError?.message || 'no tags returned')
+      return
+    }
+    await supabase
+      .from('jobs')
+      .update({
+        required_skills: Array.isArray(tags.required_skills) ? tags.required_skills : [],
+        sector: tags.sector || null,
+        experience_level: tags.experience_level || null,
+      })
+      .eq('id', jobId)
+      .eq('poster_id', fields.poster_id)
+
+    invokeApi('match-job-alerts', { body: { job_id: jobId } })
+      .then(r => { if (r.error) console.warn('[job-ai] match-job-alerts warn:', r.error.message) })
+      .catch(err => console.warn('[job-ai] match-job-alerts failed:', err.message))
+  } catch (err) {
+    console.warn('[job-ai] background tagging failed (job still posted):', err.message)
+  }
+}
+
+const JOB_FORM_KEYS = Object.keys(EMPTY_JOB_FORM)
+
+// Only keep keys that exist in EMPTY_JOB_FORM and coerce all values to strings,
+// so an unexpected Gemini shape can never break the form.
+function pickJobFields(data) {
+  const out = {}
+  if (!data || typeof data !== 'object') return out
+  for (const k of JOB_FORM_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(data, k)) {
+      out[k] = String(data[k] ?? '')
+    }
+  }
+  return out
+}
 
 function ImageUploadField({ label, hint, value, preview, onFileChange, onRemove, uploading, accept = 'image/*', icon = '🖼️', fieldName }) {
   const inputRef = useRef()
@@ -37,6 +85,12 @@ export default function PostJobForm({ onSuccess }) {
   const [postError, setPostError] = useState('')
   const [success, setSuccess] = useState(false)
 
+  // AI "generate from text" state
+  const [aiOpen, setAiOpen] = useState(false)
+  const [aiText, setAiText] = useState('')
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiError, setAiError] = useState('')
+
   // Logo state
   const [logoPreview, setLogoPreview] = useState(null)
   const [logoUploading, setLogoUploading] = useState(false)
@@ -48,6 +102,31 @@ export default function PostJobForm({ onSuccess }) {
   function set(field, value) {
     setForm(f => ({ ...f, [field]: value }))
     if (errors[field]) setErrors(e => ({ ...e, [field]: '' }))
+  }
+
+  async function handleGenerate() {
+    setAiError('')
+    if (!aiText.trim()) { setAiError('Paste some raw job text first.'); return }
+
+    const hasContent = Object.keys(form).some(k => typeof form[k] === 'string' && form[k].trim())
+    if (hasContent && !window.confirm('This will replace your current draft with the generated job. Continue?')) return
+
+    setAiBusy(true)
+    try {
+      const { data, error } = await invokeApi('generate-job-ad', {
+        body: { rawText: aiText.trim() },
+      })
+      if (error) throw new Error(error.message || 'Failed to generate the job.')
+      const picked = pickJobFields(data)
+      if (Object.keys(picked).length === 0) throw new Error('No usable fields were generated.')
+      setForm({ ...EMPTY_JOB_FORM, ...picked })
+      setErrors({})
+    } catch (err) {
+      console.error('[job-ai] generate failed:', err)
+      setAiError(err.message || 'Failed to generate the job. Please try again.')
+    } finally {
+      setAiBusy(false)
+    }
   }
 
   async function uploadImage(file, folder, setUploading, setPreview, formField) {
@@ -88,7 +167,7 @@ export default function PostJobForm({ onSuccess }) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setPostError('You must be signed in to post a job.'); setPosting(false); return }
 
-    const { error } = await supabase.from('jobs').insert({
+    const { data: newJob, error } = await supabase.from('jobs').insert({
       poster_id:       user.id,
       title:           form.title.trim(),
       company:         form.company.trim(),
@@ -110,10 +189,22 @@ export default function PostJobForm({ onSuccess }) {
       deadline:        form.deadline || null,
       disclaimer:      form.disclaimer.trim() || null,
       status:          'active'
-    })
+    }).select('id').single()
 
     setPosting(false)
     if (error) { setPostError(error.message); return }
+
+    // Non-blocking AI follow-up: tag the job, then fire-and-forget CV matching.
+    // The job is already live — a slow or failed tag must never block posting.
+    if (newJob?.id) {
+      runJobAiFollowUps(newJob.id, {
+        poster_id:   user.id,
+        title:       form.title,
+        overview:    form.overview,
+        description: form.description,
+        requirements: form.requirements,
+      })
+    }
 
     setSuccess(true)
     setForm(EMPTY_JOB_FORM)
@@ -130,6 +221,37 @@ export default function PostJobForm({ onSuccess }) {
       <div className="post-form-card">
         <div className="post-form-title">📢 Post a Job</div>
         <div className="post-form-sub">Reach thousands of job seekers across Malawi — it's free.</div>
+
+        {/* ── AI Generate from text ── */}
+        <div className="post-form-ai">
+          <button
+            type="button"
+            className="post-form-ai-toggle"
+            onClick={() => setAiOpen(o => !o)}
+          >
+            <span>✨ Generate from text</span>
+            <span>{aiOpen ? '▾' : '▸'}</span>
+          </button>
+          {aiOpen && (
+            <div className="post-form-ai-panel">
+              <p className="form-hint">
+                Paste raw text (an advert, email or notes) and we'll structure it into the form below.
+                Review and edit it, then click Post like normal — nothing is submitted automatically.
+              </p>
+              <textarea
+                className="form-textarea"
+                rows={4}
+                placeholder="Paste job text here…"
+                value={aiText}
+                onChange={e => setAiText(e.target.value)}
+              />
+              {aiError && <p className="form-char-count" style={{ color: 'var(--red)' }}>⚠ {aiError}</p>}
+              <button type="button" className="job-ai-gen-btn" onClick={handleGenerate} disabled={aiBusy}>
+                {aiBusy ? <><span className="spinner" /> Generating…</> : '✨ Generate'}
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* ── SECTION 1: Organisation ── */}
         <div className="form-section-title">Organisation</div>

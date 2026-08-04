@@ -96,6 +96,9 @@ export default function GlobalCallListener() {
   const offerRecoveryTimerRef = useRef(null)
   const offerGiveUpTimerRef = useRef(null)
   const callErrorTimerRef = useRef(null)
+  const switchingRef = useRef(false)
+  const switchTimeoutRef = useRef(null)
+  const isVideoRef = useRef(false)
   const { sampleUsage } = useCallDataBudget(pcRef)
   const [callState, setCallState] = useState('idle') // 'ringing' | 'in-call' | 'connecting'
   const [duration, setDuration]   = useState(0)
@@ -105,6 +108,8 @@ export default function GlobalCallListener() {
   const [remoteStream, setRemoteStream] = useState(null)
   const [connecting, setConnecting] = useState(false)
   const [callError, setCallError] = useState(null)
+  const [switching, setSwitching] = useState(false)
+  const [notice, setNotice] = useState(null)
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) myUserIdRef.current = user.id
@@ -175,6 +180,20 @@ export default function GlobalCallListener() {
         if (isInCall) {
           cleanupCall()
         }
+        return true
+      }
+
+      if (payload._event === 'renegotiate') {
+        if (callStateRef.current !== 'in-call' || !pcRef.current) return false
+        if (String(payload.callId) !== String(callIdRef.current)) return false
+        handleIncomingRenegotiate(payload.offer, payload.callId)
+        return true
+      }
+
+      if (payload._event === 'renegotiate_answer') {
+        if (callStateRef.current !== 'in-call' || !pcRef.current) return false
+        if (String(payload.callId) !== String(callIdRef.current)) return false
+        handleIncomingRenegotiateAnswer(payload.answer, payload.callId)
         return true
       }
 
@@ -338,6 +357,17 @@ export default function GlobalCallListener() {
       if (el.paused) el.play().catch((err) => { if (err.name !== 'AbortError') console.warn('[play]', err.name, err.message) })
     })
   }, [callState, isVideo])
+
+  useEffect(() => {
+    isVideoRef.current = isVideo
+  }, [isVideo])
+
+  // Non-blocking camera-unavailable notice, auto-dismisses
+  useEffect(() => {
+    if (!notice) return undefined
+    const t = setTimeout(() => setNotice(null), 4000)
+    return () => clearTimeout(t)
+  }, [notice])
 
   function handleDismiss() {
     stopRing()
@@ -672,6 +702,162 @@ async function handleSwitchCamera() {
     releaseCallStack?.('global')
   }
 
+  /** Switch the live call between audio and video without dropping it. */
+  async function handleSwitchCallType() {
+    if (callStateRef.current !== 'in-call') return
+    if (switchingRef.current) return
+    const pc = pcRef.current
+    const callId = callIdRef.current
+    const target = callerIdRef.current
+    if (!pc || !callId || !target) return
+
+    const goingVideo = !isVideoRef.current
+    switchingRef.current = true
+    setSwitching(true)
+
+    try {
+      if (goingVideo) {
+        let videoTrack = null
+        try {
+          const vid = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+          videoTrack = vid.getVideoTracks()[0]
+        } catch (err) {
+          console.error('[switchToVideo] camera error:', err?.name, err?.message)
+          setNotice('Camera unavailable — staying on audio')
+          return
+        }
+        const sender = pc.getSenders().find((s) => s.track?.kind === 'video')
+        if (sender) {
+          await sender.replaceTrack(videoTrack)
+        } else {
+          pc.addTrack(videoTrack, localStreamRef.current)
+        }
+        localStreamRef.current?.addTrack(videoTrack)
+        videoTrack.enabled = true
+        setIsCamOff(false)
+        setIsVideo(true)
+        isVideoRef.current = true
+        stopLowDataCap(lowDataIntervalRef.current)
+        lowDataIntervalRef.current = startLowDataCap(pc, 'video')
+        publishActiveCall?.({ callType: 'video', isCamOff: false })
+      } else {
+        // Switch to audio — stop + remove the local video track
+        const sender = pc.getSenders().find((s) => s.track?.kind === 'video')
+        if (sender) {
+          try { pc.removeTrack(sender) } catch { /* removeTrack may throw when the PC is closing */ }
+          sender.track?.stop()
+        }
+        const ls = localStreamRef.current
+        if (ls) {
+          ls.getVideoTracks().forEach((t) => {
+            try { ls.removeTrack(t) } catch { /* track may already be gone */ }
+            t.stop()
+          })
+        }
+        setIsVideo(false)
+        isVideoRef.current = false
+        stopLowDataCap(lowDataIntervalRef.current)
+        lowDataIntervalRef.current = startLowDataCap(pc, 'voice')
+        publishActiveCall?.({ callType: 'voice' })
+      }
+
+      const offer = await pc.createOffer()
+      await pc.setLocalDescription(offer)
+      await sendSignal(target, 'renegotiate', {
+        offer: pc.localDescription.toJSON(),
+        callId,
+      })
+
+      clearTimeout(switchTimeoutRef.current)
+      switchTimeoutRef.current = setTimeout(() => {
+        switchingRef.current = false
+        setSwitching(false)
+      }, 6000)
+    } catch (err) {
+      console.error('[GlobalCallListener] switch call type error:', err)
+      switchingRef.current = false
+      setSwitching(false)
+    }
+  }
+
+  /** Peer switched type — apply offer, mirror media locally, answer. */
+  async function handleIncomingRenegotiate(offer, callId) {
+    const pc = pcRef.current
+    if (!pc) return
+    try {
+      const hasVideo = /m=video/.test(offer?.sdp || '')
+      await pc.setRemoteDescription(new RTCSessionDescription(offer))
+      if (hasVideo) {
+        // Peer wants video — best-effort enable our own camera too
+        let track = null
+        try {
+          const vid = await navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+          track = vid.getVideoTracks()[0]
+        } catch (err) {
+          console.error('[switchToVideo] peer-requested camera error:', err?.name, err?.message)
+        }
+        const sender = pc.getSenders().find((s) => s.track?.kind === 'video')
+        if (track && sender) {
+          await sender.replaceTrack(track)
+        } else if (track) {
+          pc.addTrack(track, localStreamRef.current)
+        }
+        if (track) {
+          localStreamRef.current?.addTrack(track)
+          track.enabled = true
+          setIsCamOff(false)
+        }
+        setIsVideo(true)
+        isVideoRef.current = true
+      } else {
+        // Peer went audio-only — drop our local video as well
+        const sender = pc.getSenders().find((s) => s.track?.kind === 'video')
+        if (sender) {
+          try { pc.removeTrack(sender) } catch { /* removeTrack may throw when the PC is closing */ }
+          sender.track?.stop()
+        }
+        const ls = localStreamRef.current
+        if (ls) {
+          ls.getVideoTracks().forEach((t) => {
+            try { ls.removeTrack(t) } catch { /* track may already be gone */ }
+            t.stop()
+          })
+        }
+        setIsVideo(false)
+        isVideoRef.current = false
+      }
+      stopLowDataCap(lowDataIntervalRef.current)
+      lowDataIntervalRef.current = startLowDataCap(pc, hasVideo ? 'video' : 'voice')
+      publishActiveCall?.({ callType: hasVideo ? 'video' : 'voice' })
+
+      if (callerIdRef.current) {
+        const answer = await pc.createAnswer()
+        await pc.setLocalDescription(answer)
+        await sendSignal(callerIdRef.current, 'renegotiate_answer', {
+          answer: pc.localDescription.toJSON(),
+          callId,
+        })
+      }
+    } catch (err) {
+      console.error('[GlobalCallListener] renegotiate error:', err)
+    }
+  }
+
+  /** Answer to our own renegotiation — finalize the type switch. */
+  async function handleIncomingRenegotiateAnswer(answer) {
+    const pc = pcRef.current
+    if (!pc || pc.signalingState !== 'have-local-offer') return
+    try {
+      await pc.setRemoteDescription(new RTCSessionDescription(answer))
+    } catch (err) {
+      console.error('[GlobalCallListener] renegotiate_answer error:', err)
+    } finally {
+      switchingRef.current = false
+      setSwitching(false)
+      clearTimeout(switchTimeoutRef.current)
+    }
+  }
+
   /** Fetch a persisted offer for a callId from the call_offers table. */
   async function fetchCallOffer(callId) {
     try {
@@ -870,11 +1056,43 @@ async function handleSwitchCamera() {
               }}
               onHangUp={handleHangUp}
               onFlip={handleSwitchCamera}
+              onSwitchType={handleSwitchCallType}
+              switching={switching}
               onMinimize={() => minimizeCall?.()}
             />
           )}
         />
         {callErrorToast}
+        {notice && (
+          <div style={{
+            position: 'fixed',
+            left: 0,
+            right: 0,
+            bottom: 150,
+            zIndex: 9500,
+            display: 'flex',
+            justifyContent: 'center',
+            padding: '0 20px',
+            pointerEvents: 'none',
+          }}>
+            <div style={{
+              background: 'rgba(249, 171, 0, 0.16)',
+              border: '1px solid rgba(249, 171, 0, 0.5)',
+              color: '#ffe08a',
+              borderRadius: 999,
+              padding: '10px 18px',
+              fontSize: 13,
+              fontWeight: 650,
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
+              boxShadow: '0 8px 28px rgba(0,0,0,0.4)',
+              textAlign: 'center',
+              maxWidth: '100%',
+            }}>
+              {notice}
+            </div>
+          </div>
+        )}
       </>
     )
   }

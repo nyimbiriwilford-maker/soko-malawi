@@ -6,8 +6,11 @@
  * raw bytes or networking jargon. Read-only; fed the running `bytesUsed`
  * total, the user's `budgetMb`, and `callType` (picks the right consumption
  * rate for the estimate). No enforcement.
+ *
+ * Glass pill floats top-center. Fades out after 3s of no change and comes
+ * back on tap (or whenever the budget figures change).
  */
-import { memo } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import { Gauge } from 'lucide-react'
 import {
   getCallBudgetPref,
@@ -16,6 +19,7 @@ import {
 } from '../lib/callBudgetPrefs'
 
 const MB = 1024 * 1024
+const HIDE_DELAY = 3000
 
 const COLORS = {
   ok: '#34D399',
@@ -40,23 +44,32 @@ function formatRemainingTime(seconds) {
   return rem > 0 ? `~${hrs} hr ${rem} min` : `~${hrs} hr`
 }
 
+const wrapStyle = {
+  position: 'relative',
+  display: 'flex',
+  justifyContent: 'center',
+  width: '100%',
+  maxWidth: 230,
+  boxSizing: 'border-box',
+  flexShrink: 0,
+}
+
 const pillStyle = {
   display: 'flex',
   flexDirection: 'column',
-  gap: 8,
-  background: 'rgba(0, 0, 0, 0.55)',
+  gap: 7,
+  background: 'rgba(10, 18, 13, 0.5)',
   border: '1px solid rgba(255, 255, 255, 0.14)',
-  borderRadius: 16,
-  padding: '10px 16px',
+  borderRadius: 999,
+  padding: '9px 16px',
   width: '100%',
-  maxWidth: 244,
   boxSizing: 'border-box',
-  backdropFilter: 'blur(10px)',
-  WebkitBackdropFilter: 'blur(10px)',
+  backdropFilter: 'blur(14px)',
+  WebkitBackdropFilter: 'blur(14px)',
   boxShadow: '0 6px 24px rgba(0, 0, 0, 0.35)',
   pointerEvents: 'none',
-  flexShrink: 0,
   textAlign: 'left',
+  transition: 'opacity 0.35s ease, transform 0.35s ease',
 }
 
 const rowStyle = {
@@ -68,14 +81,14 @@ const rowStyle = {
 }
 
 const labelStyle = {
-  fontSize: 14,
+  fontSize: 13,
   fontWeight: 700,
   color: '#fff',
   letterSpacing: '0.01em',
 }
 
 const timeStyle = {
-  fontSize: 12,
+  fontSize: 11.5,
   fontWeight: 600,
   color: 'rgba(255, 255, 255, 0.62)',
   fontVariantNumeric: 'tabular-nums',
@@ -83,17 +96,18 @@ const timeStyle = {
 }
 
 const trackStyle = {
+  display: 'block',
   width: '100%',
-  height: 6,
-  borderRadius: 3,
-  background: 'rgba(255, 255, 255, 0.2)',
+  height: 4,
+  borderRadius: 2,
+  background: 'rgba(255, 255, 255, 0.18)',
   overflow: 'hidden',
 }
 
 const fillStyle = {
   display: 'block',
   height: '100%',
-  borderRadius: 3,
+  borderRadius: 2,
   transition: 'width 0.4s ease, background 0.4s ease',
 }
 
@@ -104,6 +118,38 @@ function CallDataMeter({
   style,
 }) {
   const hasBudget = Number.isFinite(budgetMb) && budgetMb > 0
+  const [visible, setVisible] = useState(true)
+  const hideTimer = useRef(null)
+
+  // Bring the pill back and restart the 3s fade whenever the figures change.
+  useEffect(() => {
+    if (!hasBudget) return undefined
+    const show = setTimeout(() => {
+      setVisible(true)
+      hideTimer.current = setTimeout(() => setVisible(false), HIDE_DELAY)
+    }, 0)
+    return () => {
+      clearTimeout(show)
+      if (hideTimer.current) {
+        clearTimeout(hideTimer.current)
+        hideTimer.current = null
+      }
+    }
+  }, [bytesUsed, budgetMb, hasBudget])
+
+  useEffect(
+    () => () => {
+      if (hideTimer.current) clearTimeout(hideTimer.current)
+    },
+    []
+  )
+
+  function showAndSchedule() {
+    setVisible(true)
+    if (hideTimer.current) clearTimeout(hideTimer.current)
+    hideTimer.current = setTimeout(() => setVisible(false), HIDE_DELAY)
+  }
+
   if (!hasBudget) return null
 
   const used = Number.isFinite(bytesUsed) && bytesUsed > 0 ? bytesUsed : 0
@@ -122,27 +168,49 @@ function CallDataMeter({
   const timeLabel = `${formatRemainingTime(remainingSeconds)} left`
 
   return (
-    <div
-      style={{ ...pillStyle, ...(style || {}) }}
-      title={label}
-      aria-label={`${label}, ${timeLabel}`}
-    >
-      <div style={rowStyle}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-          <Gauge size={15} strokeWidth={2.2} color={color} aria-hidden />
-          <span style={labelStyle}>{label}</span>
-        </span>
-        <span style={timeStyle}>{timeLabel}</span>
-      </div>
-      <span
-        style={trackStyle}
-        role="progressbar"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(pct)}
+    <div style={{ ...wrapStyle, ...(style || {}) }}>
+      <button
+        type="button"
+        aria-label="Show call data usage"
+        onClick={showAndSchedule}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 56,
+          background: 'transparent',
+          border: 'none',
+          padding: 0,
+          cursor: 'pointer',
+        }}
+      />
+      <div
+        style={{
+          ...pillStyle,
+          opacity: visible ? 1 : 0,
+          transform: visible ? 'translateY(0)' : 'translateY(-8px)',
+        }}
+        title={label}
+        aria-label={`${label}, ${timeLabel}`}
       >
-        <span style={{ ...fillStyle, width: `${pct}%`, background: color }} />
-      </span>
+        <div style={rowStyle}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            <Gauge size={14} strokeWidth={2.2} color={color} aria-hidden />
+            <span style={labelStyle}>{label}</span>
+          </span>
+          <span style={timeStyle}>{timeLabel}</span>
+        </div>
+        <span
+          style={trackStyle}
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(pct)}
+        >
+          <span style={{ ...fillStyle, width: `${pct}%`, background: color }} />
+        </span>
+      </div>
     </div>
   )
 }
