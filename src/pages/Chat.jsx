@@ -305,6 +305,33 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
   }
 
   // ── Effects ──────────────────────────────────────────────────────────────
+
+  // Keep the thread fitted to the *visible* viewport on mobile when the
+  // soft keyboard / browser chrome resizes the visual viewport.
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined
+    const root = document.documentElement
+    const apply = () => {
+      const vv = window.visualViewport
+      const h = vv ? Math.round(vv.height) : window.innerHeight
+      root.style.setProperty('--chat-vvh', `${h}px`)
+      // Offset for visualViewport.offsetTop when the page is scrolled under the keyboard
+      root.style.setProperty('--chat-vv-top', `${vv ? Math.round(vv.offsetTop) : 0}px`)
+    }
+    apply()
+    const vv = window.visualViewport
+    vv?.addEventListener('resize', apply)
+    vv?.addEventListener('scroll', apply)
+    window.addEventListener('resize', apply)
+    return () => {
+      vv?.removeEventListener('resize', apply)
+      vv?.removeEventListener('scroll', apply)
+      window.removeEventListener('resize', apply)
+      root.style.removeProperty('--chat-vvh')
+      root.style.removeProperty('--chat-vv-top')
+    }
+  }, [])
+
   useEffect(() => {
     init()
     return () => {
@@ -1884,6 +1911,23 @@ async function uploadAndSend(file, type, caption = '') {
         @keyframes onlinePulse{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,0.5)}50%{box-shadow:0 0 0 4px rgba(34,197,94,0)}}
         .emoji-btn:hover{transform:scale(1.25);transition:transform 0.1s}
         @media (min-width: 900px) { .chat-back-btn { display: none !important; } }
+        @media (max-width: 899px) {
+          .chat-page.chat-thread {
+            height: var(--chat-vvh, 100%) !important;
+            max-height: var(--chat-vvh, 100%) !important;
+          }
+          .chat-top-actions { gap: 3px !important; }
+          .chat-top-actions .chat-icon-btn,
+          .chat-top-actions button { width: 34px !important; height: 34px !important; }
+          /* Free header space: search lives in ⋮ menu on phones */
+          .chat-search-toggle { display: none !important; }
+        }
+        @media (min-width: 900px) {
+          .chat-menu-search { display: none !important; }
+        }
+        @media (max-width: 360px) {
+          .chat-top-actions .chat-icon-btn:not([aria-label="Chat options"]) { width: 32px !important; height: 32px !important; }
+        }
       `}</style>
 
       {/* ── Top bar ── */}
@@ -1915,13 +1959,13 @@ async function uploadAndSend(file, type, caption = '') {
               {otherRecording ? (
                 <span style={{ color: '#dc2626', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
                   <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#ef4444', display: 'inline-block', animation: 'pulse 1s infinite' }} />
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 'min(160px, 38vw)' }}>
                     {otherName.split(' ')[0]} is recording audio…
                   </span>
                 </span>
               ) : otherTyping ? (
                 <span style={{ color: '#1a7a4a', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 140 }}>
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 'min(140px, 34vw)' }}>
                     {otherName.split(' ')[0]} is typing
                   </span>
                   <span style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
@@ -1944,8 +1988,8 @@ async function uploadAndSend(file, type, caption = '') {
           </button>
         </div>
 
-        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-          <button type="button" className="chat-icon-btn" onClick={() => setChatSearch(s => s === null ? '' : null)} title="Search" aria-label="Search messages">
+        <div className="chat-top-actions" style={S.topActions}>
+          <button type="button" className="chat-icon-btn chat-search-toggle" onClick={() => setChatSearch(s => s === null ? '' : null)} title="Search" aria-label="Search messages">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
               <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
             </svg>
@@ -3073,4 +3117,5 @@ const S = {
   recordingBar: { display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 },
   cancelRecBtn: { background: '#fef0f0', border: 'none', borderRadius: '50%', width: 38, height: 38, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   inputBar: { display: 'flex', alignItems: 'flex-end', gap: 6, flexShrink: 0, zIndex: 5, padding: '6px 10px 10px', background: '#fff', borderTop: '1px solid #e8ede9' },
+  topActions: { display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 },
 }
