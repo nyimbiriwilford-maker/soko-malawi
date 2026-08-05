@@ -196,13 +196,14 @@ export default function Chat() {
   const chatSourceRef = useRef(chatSource)
   const [loading, setLoading]             = useState(true)
   const [uploading, setUploading]         = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
   const [recording, setRecording]         = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
   const [waveHeights, setWaveHeights]     = useState(Array(40).fill(2))
   const [playingId, setPlayingId]         = useState(null)
   const [audioProgress, setAudioProgress] = useState({})
   const [audioDuration, setAudioDuration] = useState({})
-  const [preview, setPreview]             = useState(null)
+  const [preview, setPreview]             = useState([])
   const [showEmoji, setShowEmoji]         = useState(false)
   const [emojiTab, setEmojiTab]           = useState(DEFAULT_EMOJI_TAB)
   const [otherOnline, setOtherOnline]     = useState(false)
@@ -1363,15 +1364,24 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
     })
   }
 
+async function uploadQueue(items) {
+  for (const item of items) {
+    await uploadAndSend(item.file, item.type, item.caption)
+  }
+  setPreview([])
+  setUploadProgress(0)
+}
+
 async function uploadAndSend(file, type, caption = '') {
   console.log('UAS_START', { type, fileType: file?.type, fileSize: file?.size })
   setUploading(true)
+  setUploadProgress(0)
   try {
     const ext = file.name?.split('.').pop() || 'bin'
     const rawName = (file.name || type).replace(/\.[^/.]+$/, '')
     const safeName = rawName.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40)
     const path = `chat/${currentUser.id}/${safeName}_${Date.now()}.${ext}`
-    const url = await uploadToR2(file, path)
+    const url = await uploadToR2(file, path, pct => setUploadProgress(pct))
     console.log('UAS_R2_URL', url, typeof url)
     console.log('UAS_CALLING_SEND', { caption, type, url })
     await sendMessage(caption, type, url)
@@ -1380,7 +1390,6 @@ async function uploadAndSend(file, type, caption = '') {
     alert('Upload failed: ' + e.message)
   }
   setUploading(false)
-  setPreview(null)
 }
 
   function pickFile(accept, type, opts = {}) {
@@ -1388,16 +1397,21 @@ async function uploadAndSend(file, type, caption = '') {
     input.type = 'file'
     input.accept = accept
     if (opts.capture) input.setAttribute('capture', opts.capture)
+    // Allow multiple only for image and generic file types
+    if (type === 'image' || type === 'file') input.multiple = true
     input.onchange = e => {
-      const file = e.target.files[0]; if (!file) return
-      // If user picked a generic file that is really image/video/audio, prefer that type
-      let resolved = type
-      if (type === 'file' && file.type) {
-        if (file.type.startsWith('image/')) resolved = 'image'
-        else if (file.type.startsWith('video/')) resolved = 'video'
-        else if (file.type.startsWith('audio/')) resolved = 'audio'
-      }
-      setPreview({ file, url: URL.createObjectURL(file), type: resolved, caption: '' })
+      const files = Array.from(e.target.files)
+      if (!files.length) return
+      const items = files.map(file => {
+        let resolved = type
+        if (type === 'file' && file.type) {
+          if (file.type.startsWith('image/')) resolved = 'image'
+          else if (file.type.startsWith('video/')) resolved = 'video'
+          else if (file.type.startsWith('audio/')) resolved = 'audio'
+        }
+        return { file, url: URL.createObjectURL(file), type: resolved, caption: '' }
+      })
+      setPreview(items)
     }
     input.click()
   }
@@ -1602,6 +1616,17 @@ async function uploadAndSend(file, type, caption = '') {
               )}
               {audioLabelFromUrl(url)}
             </span>
+            <a
+              href={url}
+              download
+              target="_blank"
+              rel="noreferrer"
+              className="voice-download"
+              onClick={e => e.stopPropagation()}
+              aria-label="Download"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            </a>
           </div>
         </div>
       </div>
@@ -2619,12 +2644,20 @@ async function uploadAndSend(file, type, caption = '') {
         {uploading && (
           <div className="msg-row is-mine is-group-end">
             <div className="msg-stack">
-              <div className="msg-bubble is-mine" style={{ padding: '12px 16px' }}>
-                <div style={{ display: 'flex', gap: 5, alignItems: 'center' }}>
-                  {[0, 0.2, 0.4].map((d, i) => (
-                    <div key={i} style={{ width: 7, height: 7, borderRadius: '50%', background: 'rgba(255,255,255,0.85)', animation: `pulse 1s ${d}s infinite` }} />
-                  ))}
-                  <span style={{ fontSize: 12, opacity: 0.85, marginLeft: 4 }}>Uploading…</span>
+              <div className="msg-bubble is-mine" style={{ padding: '10px 14px', minWidth: 160 }}>
+                <div style={{ fontSize: 11, opacity: 0.8, marginBottom: 6 }}>
+                  Uploading… {uploadProgress > 0 ? `${uploadProgress}%` : ''}
+                </div>
+                <div style={{ height: 4, borderRadius: 2, background: 'rgba(255,255,255,0.2)', overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%',
+                    borderRadius: 2,
+                    background: '#fff',
+                    width: `${uploadProgress || 0}%`,
+                    transition: 'width 0.2s ease',
+                    minWidth: uploadProgress > 0 ? 0 : '100%',
+                    animation: uploadProgress === 0 ? 'pulse 1s infinite' : 'none'
+                  }} />
                 </div>
               </div>
             </div>
@@ -2805,7 +2838,7 @@ async function uploadAndSend(file, type, caption = '') {
               </svg>
             </button>
             <div className="chat-lightbox-actions" style={{ display: 'flex', gap: 8 }}>
-              <a href={lightbox.url} target="_blank" rel="noreferrer" download title="Open original">
+              <a href={lightbox.url} target="_blank" rel="noreferrer" download={(lightbox.url || '').split('/').pop().split('?')[0] || 'media'} title="Download">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
                   <path d="M12 5v10M8 11l4 4 4-4"/><path d="M5 19h14"/>
                 </svg>
@@ -2822,49 +2855,44 @@ async function uploadAndSend(file, type, caption = '') {
       )}
 
       {/* ── Preview modal ── */}
-      {preview && (
-        <div className="chat-preview-overlay" onClick={() => !uploading && setPreview(null)}>
+      {preview.length > 0 && (
+        <div className="chat-preview-overlay" onClick={() => !uploading && setPreview([])}>
           <div className="chat-preview-card" onClick={e => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <span style={{ fontSize: 16, fontWeight: 800, color: '#0f1410', letterSpacing: '-0.02em' }}>
-                {preview.type === 'image' ? 'Send photo' : preview.type === 'video' ? 'Send video' : 'Send file'}
+                {preview[0]?.type === 'image' ? 'Send photos' : preview[0]?.type === 'video' ? 'Send video' : preview[0]?.type === 'audio' ? 'Send audio' : 'Send files'}
               </span>
               <button
                 type="button"
                 className="chat-icon-btn"
                 style={{ width: 34, height: 34 }}
-                onClick={() => setPreview(null)}
+                onClick={() => setPreview([])}
                 aria-label="Cancel"
               >
                 ✕
               </button>
             </div>
-            <div className="chat-preview-media">
-              {preview.type === 'image' && <img src={preview.url} alt="" />}
-              {preview.type === 'video' && <video src={preview.url} controls />}
-              {preview.type === 'audio' && (
-                <div style={{ textAlign: 'center', padding: 20, color: '#fff' }}>
-                  <div style={{ fontSize: 40, marginBottom: 10 }}>🎵</div>
-                  <audio src={preview.url} controls style={{ width: '100%' }} />
+            <div className="chat-preview-media chat-preview-grid">
+              {preview.map((p, i) => (
+                <div key={i} className="chat-preview-item">
+                  {p.type === 'image' && <img src={p.url} alt="" />}
+                  {p.type === 'video' && <video src={p.url} controls />}
+                  {p.type === 'audio' && <audio src={p.url} controls style={{ width: '100%' }} />}
+                  {p.type === 'file' && <div style={{ padding: 12, textAlign: 'center' }}>📎 {p.file?.name || 'File'}</div>}
+                  <button className="chat-preview-remove" onClick={() => setPreview(ps => ps.filter((_, j) => j !== i))} aria-label="Remove">✕</button>
                 </div>
-              )}
-              {preview.type === 'file' && (
-                <div style={{ textAlign: 'center', padding: 28, color: '#fff' }}>
-                  <div style={{ fontSize: 36 }}>📎</div>
-                  <div style={{ marginTop: 8, fontSize: 13, opacity: 0.85 }}>{preview.file?.name || 'File'}</div>
-                </div>
-              )}
+              ))}
             </div>
             <input
               placeholder="Add a caption (optional)…"
-              value={preview.caption}
-              onChange={e => setPreview(p => ({ ...p, caption: e.target.value }))}
-              onKeyDown={e => { if (e.key === 'Enter') uploadAndSend(preview.file, preview.type, preview.caption) }}
+              value={preview[0]?.caption || ''}
+              onChange={e => setPreview(ps => ps.map((p, i) => i === 0 ? { ...p, caption: e.target.value } : p))}
+              onKeyDown={e => { if (e.key === 'Enter') uploadQueue(preview) }}
             />
             <button
               type="button"
               className="chat-preview-send"
-              onClick={() => uploadAndSend(preview.file, preview.type, preview.caption)}
+              onClick={() => uploadQueue(preview)}
               disabled={uploading}
             >
               {uploading ? (

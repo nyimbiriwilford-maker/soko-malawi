@@ -102,26 +102,30 @@ async function compressImage(file, maxWidth = 1200, quality = 0.78) {
 }
 
 // Upload a file to R2
-export async function uploadToR2(file, path) {
+export async function uploadToR2(file, path, onProgress = null) {
   if (file.type.startsWith('image/')) {
     file = await compressImage(file)
     path = path.replace(/\.\w+$/, '.webp')
   }
   const { url, datetime, authorization } = await getSignedHeaders('PUT', path, file.type);
 
-  const res = await fetch(url, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': file.type,
-      'x-amz-date': datetime,
-      Authorization: authorization,
-      'x-amz-content-sha256': 'UNSIGNED-PAYLOAD',
-    },
-    body: file,
-  });
-
-  if (!res.ok) throw new Error(`R2 upload failed: ${res.status}`);
-  return getR2Url(path);
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest()
+    xhr.open('PUT', url)
+    xhr.setRequestHeader('Content-Type', file.type)
+    xhr.setRequestHeader('x-amz-date', datetime)
+    xhr.setRequestHeader('Authorization', authorization)
+    xhr.setRequestHeader('x-amz-content-sha256', 'UNSIGNED-PAYLOAD')
+    xhr.upload.onprogress = e => {
+      if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100))
+    }
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) resolve(getR2Url(path))
+      else reject(new Error(`R2 upload failed: ${xhr.status}`))
+    }
+    xhr.onerror = () => reject(new Error('R2 upload failed: network error'))
+    xhr.send(file)
+  })
 }
 
 // Delete a file from R2
