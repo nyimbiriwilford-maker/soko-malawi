@@ -1,31 +1,28 @@
-# Chat video bubble — tap-to-fullscreen + play hint (applied)
+# CSP: add R2 domains (applied)
 
-## Changes
+## CSP location
+Checked in this order:
+1. `vercel.json` — **headers present here** (Content-Security-Policy at line 35). ◀ adopted
+2. `index.html` — no `<meta http-equiv="Content-Security-Policy">` tag present.
+3. `vite.config.js` — no headers/CSP config present.
 
-### `src/pages/Chat.jsx` — `renderMedia` video branch (lines 1611–1628)
-Replaced the inline `controls` video with a tappable poster-style card that opens the existing lightbox:
-```jsx
-if (type === 'video') {
-  return (
-    <div
-      className="media-video-wrap"
-      onClick={e => { e.stopPropagation(); setLightbox({ url, type: 'video', caption: caption || '' }) }}
-    >
-      <video src={url} playsInline preload="metadata" muted />
-      <div className="media-video-play-hint" aria-hidden="true">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
-      </div>
-    </div>
-  )
-}
+## Change
+Updated only the `Content-Security-Policy` value in `vercel.json`.
+
+### Before
 ```
-- Native controls removed; video is `muted` (plays as a preview/thumbnail on some browsers) and tapping the wrapper opens the fullscreen lightbox (`<video controls autoPlay>` + close/download/caption) that already exists.
-- `caption` **is in scope**: it's the second param of `renderMedia(msg, caption)` (Chat.jsx:1584), same as the image branch uses.
+default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' blob: https://*.supabase.co; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://challenges.cloudflare.com https://api.africastalking.com https://api.brevo.com https://api.bigdatacloud.net; frame-src https://challenges.cloudflare.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+```
 
-### `src/styles/chat-thread.css` (after `.media-video-wrap` @ lines 529–536)
-- Added `cursor: pointer` to `.media-video-wrap`.
-- Added `.media-video-play-hint` — centered 48px circular semi-transparent play button, `pointer-events: none` so taps pass to the wrapper.
+### After
+```
+default-src 'self'; script-src 'self' 'unsafe-inline' https://challenges.cloudflare.com https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https: https://*.r2.dev; media-src 'self' blob: https://*.supabase.co https://pub-67bc811f19044f60bd6fb142f7280dcf.r2.dev https://*.r2.dev; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://challenges.cloudflare.com https://api.africastalking.com https://api.brevo.com https://api.bigdatacloud.net https://*.r2.cloudflarestorage.com https://*.r2.dev; frame-src https://challenges.cloudflare.com; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+```
+
+## What changed (diff summary)
+- `media-src` → added `https://pub-67bc811f19044f60bd6fb142f7280dcf.r2.dev` and `https://*.r2.dev`
+- `connect-src` → added `https://*.r2.cloudflarestorage.com` and `https://*.r2.dev`
+- `img-src` → added `https://*.r2.dev` (explicit; the existing `https:` wildcard already allowed it, added explicitly for mobile listing images)
 
 ## Verification
-- `npx eslint src/pages/Chat.jsx`: 13 problems (9 errors, 4 warnings) — identical to the pre-existing baseline; no new errors.
-- `npm run build`: **passes** (3.63s).
+- `npm run build`: **passes** (5.08s, 2103 modules transformed).
