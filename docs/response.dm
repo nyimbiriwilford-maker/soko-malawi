@@ -1,41 +1,76 @@
-# Chat: multi-file + download buttons + upload progress bar (applied)
+# Phase 3 — ImageGroupingService integration (applied)
 
-## FIX 1 — Multi-file selection (images & documents only)
+Task source: `docs/claudehelp.md`. Two targeted fixes, no styling changes.
 
-### `src/pages/Chat.jsx`
-- **State**: `const [preview, setPreview] = useState([])` (was `null`).
-- **`pickFile`** (line ~1386): now sets `input.multiple = true` when `type === 'image' || type === 'file'`; maps `Array.from(e.target.files)` into `items` (each `{ file, url, type: resolved, caption: '' }`) and calls `setPreview(items)`. Video/audio/camera stay single.
-- **`uploadQueue(items)`** (added above `uploadAndSend`): loops `await uploadAndSend(item.file, item.type, item.caption)`, then `setPreview([])` + `setUploadProgress(0)`.
-- **`uploadAndSend`**: removed trailing `setPreview(null)` so remaining queue items aren't wiped mid-loop.
-- **Preview modal**:
-  - Gate: `{preview.length > 0 && (`; overlay close → `setPreview([])`; cancel button → `setPreview([])`.
-  - Header title uses `preview[0]?.type`.
-  - Media display → `chat-preview-grid` with `preview.map((p, i) => ...)` rendering each item plus a `.chat-preview-remove` ✕ button (`ps.filter((_, j) => j !== i)`).
-  - Caption input edits index 0: `setPreview(ps => ps.map((p, i) => i === 0 ? { ...p, caption: e.target.value } : p))`; Enter + Send button call `uploadQueue(preview)`.
+## Investigation findings
 
-### `src/styles/chat-thread.css`
-- Added `.chat-preview-grid`, `.chat-preview-item`, `.chat-preview-item img/video`, `.chat-preview-remove` (flex wrap grid, 120px thumbs, scrollable, remove badge) at end of file.
+1. **Variable name — FIX B was a no-op.** There is no `groupedImages` anywhere in `Chat.jsx`. The `useMemo` at (old) line 1368 assigned `groupedMessages`, and the render loop at line 2442 iterates `groupedMessages` (all five references: declaration + `groupedMessages.map`, `groupedMessages[i-1]` ×2, `groupedMessages[i+1]`). Same variable, consistent. Nothing to rename.
 
-## FIX 2 — Download button on audio bubbles + better filenames
+2. **Realtime INSERT handler** (`setupRealtimeChannel`, ~line 638-646): yes, it appends via a functional update:
+   ```js
+   setMessages(prev => {
+     const withoutTemp = prev.filter(m => { ... temp-matching ... })
+     if (withoutTemp.find(m => m.id === msg.id)) return withoutTemp
+     return [...withoutTemp, msg]
+   })
+   ```
+   It also strips the optimistic `temp_` row before appending, and dedupes by id.
 
-### `src/pages/Chat.jsx`
-- **`renderVoiceNote`**: added a third element inside `.voice-times` — an `<a>` with `href={url}`, `download`, `target="_blank"`, `rel="noreferrer"`, `className="voice-download"`, `onClick={e => e.stopPropagation()}`, download SVG icon.
-- **Lightbox** toolbar link: `download={(lightbox.url || '').split('/').pop().split('?')[0] || 'media'}` so the downloaded file keeps the R2 filename (e.g. `photo_..._<ts>.jpg`) instead of the raw URL slug.
+## FIX A — Wire appendMessage for realtime grouping
 
-### `src/styles/chat-thread.css`
-- Added `.chat-thread .voice-download` (inline-flex, opacity 0.5 → 1 on hover) after the `.voice-times` rules.
+Changes in `src/pages/Chat.jsx`:
 
-## FIX 3 — Real byte-progress upload bar
+1. **New state** (line 180):
+   ```js
+   const [groupedMessages, setGroupedMessages] = useState([])
+   ```
+2. **Removed the `useMemo`** that derived `groupedMessages` from `messages`; also dropped `useMemo` from the React import (line 1) — it was the only usage in this file.
+3. **Initial load** — in `loadMessages` success path (`setMessages(data)` at line 1183):
+   ```js
+   setMessages(data)
+   setGroupedMessages(imageGroupingService.groupMessages(data))
+   ```
+4. **Realtime INSERT** (line 647) — now appends incrementally:
+   ```js
+   setGroupedMessages(prev => imageGroupingService.appendMessage(prev, msg))
+   ```
+5. **Realtime UPDATE** (lines 652-660) — rebuild from the full updated list (rare):
+   ```js
+   setMessages(prev => {
+     const next = prev.map(m => (m.id === msg.id ? { ...m, ...msg, _status: undefined } : m))
+     setGroupedMessages(imageGroupingService.groupMessages(next))
+     return next
+   })
+   ```
+6. **Realtime DELETE** (lines 661-669) — rebuild from the full remaining list (rare):
+   ```js
+   setMessages(prev => {
+     const next = prev.filter(m => m.id !== old.id)
+     setGroupedMessages(imageGroupingService.groupMessages(next))
+     return next
+   })
+   ```
 
-### `src/lib/r2.js`
-- `uploadToR2(file, path, onProgress = null)`.
-- Replaced the `fetch` PUT with an `XMLHttpRequest` PUT that wires `xhr.upload.onprogress` → `onProgress(Math.round((e.loaded / e.total) * 100))` (only when `e.lengthComputable`); `xhr.onload` resolves `getR2Url(path)` on 2xx, rejects on other status; `xhr.onerror` rejects. Headers unchanged (Content-Type, x-amz-date, Authorization, UNSIGNED-PAYLOAD).
+## Post-fix confirmations
 
-### `src/pages/Chat.jsx`
-- Added `const [uploadProgress, setUploadProgress] = useState(0)` next to `uploading`.
-- `uploadAndSend`: `setUploadProgress(0)` on start; `uploadToR2(file, path, pct => setUploadProgress(pct))`.
-- Ghost "Uploading…" bubble replaced with a progress-bar version: `Uploading… {uploadProgress}%` label + a 4px white bar whose `width` is `${uploadProgress || 0}%` (pulsing fill while at 0%).
+- `appendMessage` is now called on **every** realtime INSERT (single place: `Chat.jsx:647`).
+- `groupMessages` is called only on **initial load** (`loadMessages`) and on **UPDATE / DELETE** — never on a plain new message.
+- **ESLint** `npx eslint src/pages/Chat.jsx`: **13 problems (9 errors, 4 warnings)** — identical to the pre-existing baseline (13/9/4). All are pre-existing (unused `CHAT_SOURCES`, `prefillMessage`, `isMsgHiddenForMe`, `e`; `no-useless-assignment`; `react-hooks/set-state-in-effect` ×4; `exhaustive-deps` ×3). No errors reference the grouping changes.
+- **Build** `npm run build`: **passes** (`✓ built in 3.94s`).
+- **grep** `groupedImages\|groupedMessages` in `src/pages/Chat.jsx`:
+  ```
+  180:   const [groupedMessages, setGroupedMessages] = useState([])
+  2448:         {groupedMessages.map((msg, i) => {
+  2450:           const showDate = i === 0 || new Date(msg.created_at).toDateString() !== new Date(groupedMessages[i - 1].created_at).toDateString()
+  2451:           const nextSame = i < groupedMessages.length - 1 && groupedMessages[i + 1].from_user === msg.from_user
+  2452:           const prevSame = i > 0 && groupedMessages[i - 1].from_user === msg.from_user && !showDate
+  ```
+  No `groupedImages` remains.
 
-## Verification
-- `npx eslint src/pages/Chat.jsx src/lib/r2.js`: **13 problems (9 errors, 4 warnings)** — identical to the pre-existing baseline; no new issues introduced (all reported items are in unrelated pre-existing code, e.g. unused `CHAT_SOURCES`, set-state-in-effect).
-- `npm run build`: **passes** (3.70s, 2103 modules transformed).
+## Behavioural notes (kept within the requested design)
+
+- **Optimistic sends**: a just-sent bubble appears once the realtime INSERT echo fires (the `temp_` row is removed and the real row appended to `groupedMessages`). It is no longer instant via the memo, but remains immediate on the realtime round-trip. No double-add: the optimistic `temp_` is never written to `groupedMessages`, and the echo is the single writer for sends.
+- **Local mutations** that only update `messages` directly (`deleteMessageForMe`'s localStorage fallback, and the 15s expired-message purge interval) now reflect in `groupedMessages` only via a subsequent realtime event. The main delete/edit/disappear paths all write through to the DB, so their realtime UPDATE triggers the rebuild.
+- **StrictMode**: the nested `setGroupedMessages` inside the UPDATE/DELETE updaters runs twice in dev, but `groupMessages` is pure/idempotent, so this is harmless.
+
+`dist/index.html` and other build artifacts are touched by the build; commit only if intended.

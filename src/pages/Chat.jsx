@@ -21,6 +21,7 @@ import {
   File as FileIcon2,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import imageGroupingService from '../lib/imageGroupingService'
 import { uploadToR2 } from '../lib/r2'
 import { formatTime } from '../hooks/useWebRTC'
 import {
@@ -176,6 +177,7 @@ export default function Chat() {
 
   // ── State ────────────────────────────────────────────────────────────────
   const [messages, setMessages]           = useState([])
+  const [groupedMessages, setGroupedMessages] = useState([])
   const prefillMessage = useRef(location.state?.prefillMessage || '')
   const isFromRequest = useRef(!!(location.state?.prefillMessage || location.state?.isRequest || location.state?.source === 'request'))
   const [isRequestChat, setIsRequestChat] = useState(isFromRequest.current)
@@ -642,6 +644,7 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
           if (withoutTemp.find(m => m.id === msg.id)) return withoutTemp
           return [...withoutTemp, msg]
         })
+        setGroupedMessages(prev => imageGroupingService.appendMessage(prev, msg))
         if (msg.from_user === userId) {
           supabase.from('messages').update({ read: true }).eq('id', msg.id).then(() => {})
         }
@@ -649,12 +652,20 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
       .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'messages' }, payload => {
         const msg = payload.new
         if (!isRelevantMessage(msg, myId, source, ctxId)) return
-        setMessages(prev => prev.map(m => (m.id === msg.id ? { ...m, ...msg, _status: undefined } : m)))
+        setMessages(prev => {
+          const next = prev.map(m => (m.id === msg.id ? { ...m, ...msg, _status: undefined } : m))
+          setGroupedMessages(imageGroupingService.groupMessages(next))
+          return next
+        })
       })
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'messages' }, payload => {
         const old = payload.old
         if (!old?.id) return
-        setMessages(prev => prev.filter(m => m.id !== old.id))
+        setMessages(prev => {
+          const next = prev.filter(m => m.id !== old.id)
+          setGroupedMessages(imageGroupingService.groupMessages(next))
+          return next
+        })
       })
       .on('broadcast', { event: 'reaction' }, ({ payload }) => {
         if (!payload?.messageId || !payload?.emoji || !payload?.userId) return
@@ -1170,6 +1181,7 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
         return true
       })
       setMessages(data)
+      setGroupedMessages(imageGroupingService.groupMessages(data))
       if (!isFromRequest.current && data?.some(m =>
         m.chat_source === 'request' || m.body?.includes('I can help with your request') || m.body?.includes('I saw your request for')
       )) {
@@ -1364,7 +1376,7 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
     })
   }
 
-async function uploadQueue(items) {
+  async function uploadQueue(items) {
   for (const item of items) {
     await uploadAndSend(item.file, item.type, item.caption)
   }
@@ -1645,6 +1657,30 @@ async function uploadAndSend(file, type, caption = '') {
     const { media_type: type, media_url: url } = msg
     if (!url) return null
     if (type === 'image') {
+      if (msg._isGroup) {
+        return (
+          <div
+            className="chat-img-group"
+            data-count={Math.min(msg._imageGroup.length, 4)}
+          >
+            {msg._imageGroup.map((m, idx) => (
+              <button
+                key={m.id || idx}
+                type="button"
+                className="chat-img-thumb-wrap"
+                onClick={e => {
+                  e.stopPropagation()
+                  setLightbox({ url: m.media_url, type: 'image', caption: m.body || '' })
+                }}
+                onPointerDown={e => e.stopPropagation()}
+                aria-label="Open image"
+              >
+                <img src={m.media_url} alt={m.body || 'Shared image'} loading="lazy" />
+              </button>
+            ))}
+          </div>
+        )
+      }
       return (
         <button
           type="button"
@@ -2409,11 +2445,11 @@ async function uploadAndSend(file, type, caption = '') {
           </div>
         )}
 
-        {messages.map((msg, i) => {
+        {groupedMessages.map((msg, i) => {
           const isMine   = msg.from_user === currentUser?.id
-          const showDate = i === 0 || new Date(msg.created_at).toDateString() !== new Date(messages[i - 1].created_at).toDateString()
-          const nextSame = i < messages.length - 1 && messages[i + 1].from_user === msg.from_user
-          const prevSame = i > 0 && messages[i - 1].from_user === msg.from_user && !showDate
+          const showDate = i === 0 || new Date(msg.created_at).toDateString() !== new Date(groupedMessages[i - 1].created_at).toDateString()
+          const nextSame = i < groupedMessages.length - 1 && groupedMessages[i + 1].from_user === msg.from_user
+          const prevSame = i > 0 && groupedMessages[i - 1].from_user === msg.from_user && !showDate
           const isLast   = !nextSame
           const deletedEveryone = isMsgDeletedEveryone(msg)
           const decoded  = decodeReply(msg.body)
