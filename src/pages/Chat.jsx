@@ -1602,7 +1602,7 @@ async function uploadAndSend(file, type, caption = '') {
   }
 
   // ── Audio playback ───────────────────────────────────────────────────────
-  function toggleAudio(id) {
+  const toggleAudio = useCallback(function toggleAudio(id) {
     const audio = audioRefs.current[id]; if (!audio) return
     if (playingId === id) { audio.pause(); setPlayingId(null) }
     else {
@@ -1614,7 +1614,7 @@ async function uploadAndSend(file, type, caption = '') {
       audio.onloadedmetadata = () =>
         setAudioDuration(d => ({ ...d, [id]: audio.duration }))
     }
-  }
+  }, [playingId])
 
   function handleKey(e) {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(newMsg) }
@@ -1649,7 +1649,7 @@ async function uploadAndSend(file, type, caption = '') {
     return ext ? ext.toUpperCase() : 'Audio'
   }
 
-  function renderVoiceNote(msg) {
+  const renderVoiceNote = useCallback(function renderVoiceNote(msg) {
     const { id, media_url: url } = msg
     const isVoiceNote = /^voice_/i.test((url || '').split('/').pop().split('?')[0])
     const isMine    = msg.from_user === currentUser?.id
@@ -1735,7 +1735,7 @@ async function uploadAndSend(file, type, caption = '') {
         </div>
       </div>
     )
-  }
+  }, [playingId, audioProgress, audioDuration, audioRefs, currentUser, toggleAudio])
 
   const renderMedia = useCallback(function renderMedia(msg, caption) {
     if (msg.call_type) {
@@ -1854,7 +1854,7 @@ async function uploadAndSend(file, type, caption = '') {
         </svg>
       </a>
     )
-  }, [lightbox, setLightbox, playingId, audioProgress, audioDuration, audioRefs, currentUser, setGroupedMessages, pendingGroupIdRef])
+  }, [setLightbox, currentUser, renderVoiceNote])
 
   const callHostProps = {
     userId,
