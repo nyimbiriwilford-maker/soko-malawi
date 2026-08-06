@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import ChatSidebar from '../components/ChatSidebar'
+import { parseOfferMessage, formatOfferAmount } from '../utils/offerMessage'
 
 // Some reply-to-image sends appear to save the body as a bare message id
 // with no `\x02[preview|||id]\x03body` wrapper at all — this matches that
@@ -41,9 +42,14 @@ function decodeReply(body) {
 }
 
 // Best-effort detection of an offer message so it can be highlighted.
-// Adjust this pattern if your offer messages are formatted differently.
-function parseOffer(body) {
+// Handles both legacy text offers ("Offer: MWK 12,000") and the structured
+// JSON offer payload (media_type 'offer').
+function parseOffer(body, mediaType) {
   if (!body) return null
+  if (mediaType === 'offer') {
+    const parsed = parseOfferMessage(body)
+    return parsed.ok ? `Offer: ${formatOfferAmount(parsed.offer)}` : null
+  }
   const m = body.match(/offer[:\s]*mwk\s*([\d,]+)/i)
   return m ? `Offer: MWK ${m[1]}` : null
 }
@@ -280,7 +286,7 @@ export default function ChatList() {
       const decoded = decodeReply(c.lastMsg.body || '')
       const isRequest = c.isRequestCtx || (!c.isService && REQUEST_TEXT_RE.test(decoded.body || ''))
       const requestTitle = isRequest ? extractRequestTitle(decoded.body) : null
-      const offerText = parseOffer(decoded.body)
+      const offerText = parseOffer(decoded.body, c.lastMsg?.media_type)
 
       return {
         ...c,
@@ -381,6 +387,10 @@ export default function ChatList() {
     if (msg.media_type === 'image') return prefix + '📷 Photo'
     if (msg.media_type === 'video') return prefix + '🎥 Video'
     if (msg.media_type === 'audio') return prefix + '🎤 Voice note'
+    if (msg.media_type === 'offer') {
+      const parsed = parseOfferMessage(msg.body)
+      return prefix + (parsed.ok ? `💰 ${formatOfferAmount(parsed.offer)}` : '💰 Price offer')
+    }
 
     // ── Clean body text ────────────────────────────────────
     if (!msg.body) return prefix + '📎 Attachment'

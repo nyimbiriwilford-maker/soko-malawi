@@ -748,6 +748,329 @@
   cursor: pointer;
 }
 
+/* ── Price offer card ───────────────────────────────────── */
+.chat-thread .msg-bubble.offer-bubble {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  overflow: visible;
+}
+
+.chat-thread .msg-bubble.offer-bubble .offer-card {
+  background: #fff;
+  border: 1px solid #dce8e0;
+  border-radius: 14px;
+  padding: 12px 14px 10px;
+  min-width: 210px;
+  max-width: 240px;
+  box-shadow: var(--chat-shadow);
+}
+
+.chat-thread .msg-bubble.offer-bubble.is-mine .offer-card {
+  background: linear-gradient(160deg, #f0fdf4, #e8f8ee);
+  border-color: #c5e6d2;
+}
+
+.chat-thread .offer-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.chat-thread .offer-card-tag {
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.03em;
+  color: #1a7a4a;
+  text-transform: uppercase;
+}
+
+.chat-thread .offer-card-status {
+  font-size: 10px;
+  font-weight: 750;
+  text-transform: capitalize;
+  color: #b45309;
+  background: #fff7e6;
+  border: 1px solid #fde8c8;
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+.chat-thread .offer-card-status.is-accepted {
+  color: #15803d;
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+
+.chat-thread .offer-card-status.is-declined {
+  color: #b91c1c;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.chat-thread .offer-card-status.is-countered {
+  color: #1d4ed8;
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.chat-thread .offer-card-status.is-superseded {
+  color: #64748b;
+  background: #f1f5f9;
+  border-color: #e2e8f0;
+}
+
+.chat-thread .offer-card-amount {
+  font-size: 22px;
+  font-weight: 800;
+  color: #0f1410;
+  letter-spacing: -0.02em;
+  margin: 6px 0 2px;
+}
+
+.chat-thread .offer-card-note {
+  font-size: 12.5px;
+  color: #5c6b62;
+  line-height: 1.45;
+  margin: 4px 0 8px;
+}
+
+.chat-thread .offer-card-meta {
+  font-size: 11px;
+  color: #94a9a0;
+  border-top: 1px solid #eef3ef;
+  padding-top: 8px;
+  margin-top: 2px;
+}
+
+.chat-thread .offer-card-parent {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: #1d4ed8;
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  padding: 2px 8px;
+  margin: 2px 0 6px;
+}
+
+.chat-thread .offer-card-parent.is-down {
+  color: #15803d;
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+}
+
+/* Negotiation flow stepper (Phase 3) */
+.chat-thread .offer-stepper {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin: 8px 0 2px;
+}
+
+.chat-thread .offer-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+  background: #f1f5f9;
+  color: #64748b;
+  border: 1px solid #e2e8f0;
+}
+
+.chat-thread .offer-step.has-connector {
+  position: relative;
+  margin-left: 14px;
+}
+
+.chat-thread .offer-step.has-connector::before {
+  content: '';
+  position: absolute;
+  right: 100%;
+  top: 50%;
+  width: 14px;
+  height: 2px;
+  background: #dbe3eb;
+  transform: translateY(-50%);
+}
+
+.chat-thread .offer-step.is-current {
+  background: #1a7a4a;
+  border-color: #1a7a4a;
+  color: #fff;
+}
+
+.chat-thread .offer-step.is-past {
+  background: #fff;
+  border-color: #b8c9bf;
+  color: #4b7059;
+}
+
+.chat-thread .offer-step.is-future {
+  background: #f8fafc;
+  border-color: #dbe3eb;
+  color: #94a3b8;
+}
+
+.chat-thread .offer-card-statusline {
+  font-size: 11.5px;
+  font-weight: 650;
+  margin-top: 6px;
+}
+
+.chat-thread .offer-card-statusline.is-pending {
+  color: #b45309;
+}
+
+.chat-thread .offer-card-statusline.is-accepted {
+  color: #15803d;
+}
+
+.chat-thread .offer-card-statusline.is-declined {
+  color: #b91c1c;
+}
+
+.chat-thread .offer-card-statusline.is-countered {
+  color: #1d4ed8;
+}
+
+.chat-thread .offer-card-statusline.is-superseded {
+  color: #64748b;
+}
+
+/* Offer response actions (Phase 2) — recipient only */
+.chat-thread .offer-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+  border-top: 1px solid #eef3ef;
+  padding-top: 10px;
+}
+
+.chat-thread .offer-card-actions button {
+  flex: 1 1 auto;
+  min-width: 84px;
+  min-height: 38px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+  font-size: 12.5px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: transform 0.05s ease, opacity 0.12s ease, background 0.12s ease;
+  touch-action: manipulation;
+}
+
+.chat-thread .offer-card-actions button:active {
+  transform: scale(0.97);
+}
+
+.chat-thread .offer-btn-accept {
+  color: #fff;
+  background: #16a34a;
+}
+
+.chat-thread .offer-btn-accept:active {
+  background: #15803d;
+}
+
+.chat-thread .offer-btn-decline {
+  color: #b91c1c;
+  background: #fef2f2;
+  border-color: #fecaca !important;
+}
+
+.chat-thread .offer-btn-decline.is-confirming {
+  color: #fff;
+  background: #dc2626;
+  border-color: #dc2626 !important;
+}
+
+.chat-thread .offer-btn-counter {
+  color: #1d4ed8;
+  background: #eff6ff;
+  border-color: #bfdbfe !important;
+}
+
+.chat-thread .offer-btn-cancel {
+  color: #5c6b62;
+  background: #f3f4f6;
+  border-color: #e5e7eb !important;
+}
+
+/* Phase 4 — buyer offer management (Edit / Withdraw / Duplicate) */
+.chat-thread .offer-card-actions.is-manage button {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 8px 10px;
+}
+
+.chat-thread .offer-btn-edit {
+  color: #1a7a4a;
+  background: #ecfdf5;
+  border-color: #a7f3d0 !important;
+}
+
+.chat-thread .offer-btn-withdraw {
+  color: #b45309;
+  background: #fffbeb;
+  border-color: #fde68a !important;
+}
+
+.chat-thread .offer-btn-withdraw.is-confirming {
+  color: #fff;
+  background: #d97706;
+  border-color: #d97706 !important;
+}
+
+.chat-thread .offer-btn-dup {
+  color: #7c3aed;
+  background: #f5f3ff;
+  border-color: #ddd6fe !important;
+}
+
+/* Withdrawn / expired (read-only) status colors */
+.chat-thread .offer-card-status.is-withdrawn {
+  color: #b45309;
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.chat-thread .offer-card-status.is-expired {
+  color: #64748b;
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.chat-thread .offer-card-statusline.is-withdrawn {
+  color: #b45309;
+}
+
+.chat-thread .offer-card-statusline.is-expired {
+  color: #64748b;
+}
+
+.chat-thread .msg-bubble.offer-bubble .msg-meta-row {
+  padding: 4px 2px 0;
+}
+
+.chat-thread .msg-bubble.offer-bubble.is-mine .msg-meta {
+  color: #6c8b78;
+}
+
+.chat-thread .msg-bubble.offer-bubble.is-theirs .msg-meta {
+  color: #8aa094;
+}
+
 /* Typing indicator */
 .chat-thread .typing-row {
   animation: chatFadeIn 0.15s ease;
@@ -854,7 +1177,8 @@
 }
 
 .chat-thread .chat-attach-btn,
-.chat-thread .chat-emoji-btn {
+.chat-thread .chat-emoji-btn,
+.chat-thread .chat-offer-btn {
   width: 36px;
   height: 36px;
   border: none;
@@ -871,7 +1195,9 @@
 
 .chat-thread .chat-attach-btn:hover,
 .chat-thread .chat-emoji-btn:hover,
-.chat-thread .chat-emoji-btn.is-on {
+.chat-thread .chat-offer-btn:hover,
+.chat-thread .chat-emoji-btn.is-on,
+.chat-thread .chat-offer-btn.is-on {
   background: #e8f5ee;
   color: var(--chat-green);
 }
@@ -1815,6 +2141,11 @@
     max-width: min(88%, 300px);
   }
 
+  .chat-thread .msg-bubble.offer-bubble .offer-card {
+    min-width: 0;
+    max-width: min(84vw, 260px);
+  }
+
   /* Composer: 16px prevents iOS focus zoom; keep bar sticky at bottom */
   .chat-thread .chat-input-bar {
     flex-shrink: 0;
@@ -1834,7 +2165,8 @@
   }
 
   .chat-thread .chat-attach-btn,
-  .chat-thread .chat-emoji-btn {
+  .chat-thread .chat-emoji-btn,
+  .chat-thread .chat-offer-btn {
     width: 34px;
     height: 34px;
   }
@@ -2199,6 +2531,182 @@
   border-radius: 4px;
   background: #cfd9d2;
   margin: 2px auto 12px;
+}
+
+/* ── Price offer bottom sheet ───────────────────────────── */
+.chat-thread .offer-sheet-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 4px 12px;
+}
+
+.chat-thread .offer-sheet-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: #e8f5ee;
+  color: #1a7a4a;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.chat-thread .offer-sheet-title {
+  font-size: 15px;
+  font-weight: 800;
+  color: #0f1410;
+  letter-spacing: -0.02em;
+}
+
+.chat-thread .offer-sheet-sub {
+  font-size: 12px;
+  color: #7b8c82;
+  margin-top: 1px;
+}
+
+.chat-thread .offer-sheet-listing {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #fff;
+  border: 1px solid var(--chat-line);
+  border-radius: 14px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.chat-thread .offer-sheet-listing-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f1410;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-thread .offer-sheet-listing-price {
+  font-size: 11.5px;
+  color: #1a7a4a;
+  font-weight: 700;
+  margin-top: 2px;
+}
+
+.chat-thread .offer-sheet-field {
+  background: #fff;
+  border: 1px solid var(--chat-line);
+  border-radius: 14px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.chat-thread .offer-sheet-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #94a9a0;
+  margin-bottom: 6px;
+}
+
+.chat-thread .offer-sheet-amount-wrap {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.chat-thread .offer-sheet-currency {
+  font-size: 15px;
+  font-weight: 800;
+  color: #1a7a4a;
+}
+
+.chat-thread .offer-sheet-amount {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font-size: 26px;
+  font-weight: 800;
+  color: #0f1410;
+  font-family: inherit;
+  min-width: 0;
+  padding: 0;
+}
+
+.chat-thread .offer-sheet-amount::placeholder {
+  color: #c2d0c7;
+}
+
+.chat-thread .offer-sheet-note {
+  width: 100%;
+  border: none;
+  outline: none;
+  background: transparent;
+  resize: none;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.45;
+  color: #0f1410;
+  padding: 0;
+}
+
+.chat-thread .offer-sheet-note::placeholder {
+  color: #b6c4bb;
+}
+
+.chat-thread .offer-sheet-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.chat-thread .offer-sheet-cancel {
+  flex: 1;
+  border: 1.5px solid var(--chat-line);
+  background: #fff;
+  color: #5c6b62;
+  border-radius: 14px;
+  padding: 13px;
+  font-size: 14px;
+  font-weight: 750;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.chat-thread .offer-sheet-cancel:hover {
+  background: #f4f8f5;
+}
+
+.chat-thread .offer-sheet-send {
+  flex: 1.4;
+  border: none;
+  background: linear-gradient(135deg, #1a7a4a, #22a05e);
+  color: #fff;
+  border-radius: 14px;
+  padding: 13px;
+  font-size: 14px;
+  font-weight: 800;
+  font-family: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  box-shadow: 0 4px 14px rgba(26, 122, 74, 0.3);
+  transition: opacity 0.12s, transform 0.1s;
+}
+
+.chat-thread .offer-sheet-send:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+.chat-thread .offer-sheet-send:not(:disabled):active {
+  transform: scale(0.98);
 }
 
 .chat-rx-row {

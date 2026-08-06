@@ -13,6 +13,7 @@ import {
 } from '../utils/chatSources'
 import SafeAvatar from '../components/SafeAvatar'
 import { watchUserOnline, activityTargetsChat } from '../hooks/usePresence'
+import { parseOfferMessage, formatOfferAmount } from '../utils/offerMessage'
 
 // Some reply-to-image sends appear to save the body as a bare message id
 // with no `\x02[preview|||id]\x03body` wrapper at all — this matches that
@@ -52,9 +53,14 @@ function decodeReply(body) {
 }
 
 // Best-effort detection of an offer message so it can be highlighted.
-// Adjust this pattern if your offer messages are formatted differently.
-function parseOffer(body) {
+// Handles both legacy text offers ("Offer: MWK 12,000") and the structured
+// JSON offer payload (media_type 'offer').
+function parseOffer(body, mediaType) {
   if (!body) return null
+  if (mediaType === 'offer') {
+    const parsed = parseOfferMessage(body)
+    return parsed.ok ? `Offer: ${formatOfferAmount(parsed.offer)}` : null
+  }
   const m = body.match(/offer[:\s]*mwk\s*([\d,]+)/i)
   return m ? `Offer: MWK ${m[1]}` : null
 }
@@ -571,7 +577,7 @@ export default function ChatListPanel() {
       const requestEntity = c.source === 'request' ? requestsMap[c.contextId] : null
       const requestTitle = requestEntity?.title
         || (isRequest ? extractRequestTitle(decoded.body) : null)
-      const offerText = parseOffer(decoded.body)
+      const offerText = parseOffer(decoded.body, c.lastMsg?.media_type)
       const meta = sourceMeta(c.source)
 
       return {
@@ -697,6 +703,11 @@ export default function ChatListPanel() {
 
     if (msg.media_type === 'deal_request') {
       return iconRow(TagIcon, prefix + 'Deal request')
+    }
+
+    if (msg.media_type === 'offer') {
+      const parsed = parseOfferMessage(msg.body)
+      return iconRow(TagIcon, prefix + (parsed.ok ? `Price offer: ${formatOfferAmount(parsed.offer)}` : 'Price offer'))
     }
 
     if (msg.call_type) {

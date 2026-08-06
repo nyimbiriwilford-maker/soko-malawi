@@ -1,4 +1,4 @@
-﻿import { useCallback, useEffect, useRef, useState } from 'react'
+﻿import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import {
   resolveChatSource,
@@ -18,7 +18,17 @@ import {
   Camera,
   Music,
   File as FileIcon2,
+  CircleDollarSign,
 } from 'lucide-react'
+import {
+  buildOfferPayload,
+  parseOfferMessage,
+  formatOfferAmount,
+  OFFER_STATUS,
+  isOfferExpired,
+  offerStatusLabel,
+  offerStatusText,
+} from '../utils/offerMessage'
 import { supabase } from '../lib/supabase'
 // ── Image grouping ──────────────────────────────────────────────────────────
 // Messages are grouped by ImageGroupingService (src/lib/imageGroupingService.js).
@@ -217,6 +227,13 @@ export default function Chat() {
   const [audioDuration, setAudioDuration] = useState({})
   const [preview, setPreview]             = useState([])
   const [showEmoji, setShowEmoji]         = useState(false)
+  const [showOffer, setShowOffer]         = useState(false)
+  const [offerAmount, setOfferAmount]     = useState('')
+  const [offerNote, setOfferNote]         = useState('')
+  const [counterParent, setCounterParent] = useState(null)
+  const [editOfferMsg, setEditOfferMsg]   = useState(null)
+  const [withdrawConfirmId, setWithdrawConfirmId] = useState(null)
+  const [declineConfirmId, setDeclineConfirmId] = useState(null)
   const [recentEmojis, setRecentEmojis]   = useState(loadRecentEmojis)
   // Recent is the default tab, but fall back to the first real category when
   // the user has no recent history yet.
@@ -255,6 +272,64 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
   const isServiceChatRef   = useRef(false)
   const chatContextRef     = useRef({ source: chatSource, contextId })
   const currentUserRef     = useRef(null)
+
+  // Phase 3 — Negotiation chains. Builds a per-thread index of offers keyed by
+  // offer_id (falling back to message id for legacy payloads), wires parent→child
+  // links, and annotates each offer with its position in the root→active chain so
+  // cards can render a flow stepper and "only one active offer" semantics.
+  const offerFlowMap = useMemo(() => {
+    const byId = new Map()
+    ;(Array.isArray(messages) ? messages : []).forEach(m => {
+      if (m.media_type !== 'offer') return
+      const p = parseOfferMessage(m.body)
+      if (!p.ok) return
+      const oid = p.offer.offer_id || String(m.id)
+      if (!byId.has(oid)) byId.set(oid, { msg: m, offer: p.offer, oid, children: [] })
+    })
+    byId.forEach(node => {
+      const pid = node.offer.parent_offer_id
+      const parent = pid && byId.get(pid)
+      if (parent) parent.children.push(node.oid)
+    })
+    byId.forEach(node => {
+      node.children.sort((a, b) => {
+        const ma = byId.get(a)?.msg?.created_at || ''
+        const mb = byId.get(b)?.msg?.created_at || ''
+        return ma.localeCompare(mb) || String(a).localeCompare(String(b))
+      })
+    })
+    const flowMap = new Map()
+    const seen = new Set()
+    byId.forEach(start => {
+      if (seen.has(start.oid)) return
+      let root = start
+      while (root.offer.parent_offer_id && byId.get(root.offer.parent_offer_id)) {
+        root = byId.get(root.offer.parent_offer_id)
+      }
+      const chain = []
+      let cur = root
+      while (cur) {
+        chain.push(cur.oid)
+        cur = cur.children.length ? byId.get(cur.children[0]) : null
+      }
+      const total = chain.length
+      chain.forEach((oid, i) => {
+        seen.add(oid)
+        const n = byId.get(oid)
+        flowMap.set(oid, {
+          index: i + 1,
+          total,
+          parentIndex: i > 0 ? i : 0,
+          hasChild: i < total - 1,
+          chain,
+          active: i === total - 1 && n.offer.status === OFFER_STATUS.pending,
+          ended: i === total - 1
+            && (n.offer.status === OFFER_STATUS.accepted || n.offer.status === OFFER_STATUS.declined),
+        })
+      })
+    })
+    return flowMap
+  }, [messages])
 
   useEffect(() => {
     chatSourceRef.current = chatSource
@@ -750,11 +825,17 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
   }
 
   async function copyMessage(msg) {
-    const text = decodeReply(msg.body || '').body
+    let text = decodeReply(msg.body || '').body
       || (msg.media_type === 'image' ? msg.media_url || 'Photo'
         : msg.media_type === 'video' ? msg.media_url || 'Video'
         : msg.media_type === 'audio' ? 'Voice note'
         : msg.media_url || '')
+    if (msg.media_type === 'offer') {
+      const parsed = parseOfferMessage(msg.body)
+      text = parsed.ok
+        ? `Price offer: ${formatOfferAmount(parsed.offer)}${parsed.offer.note ? ` — ${parsed.offer.note}` : ''}`
+        : 'Price offer'
+    }
     try {
       await navigator.clipboard.writeText(text)
       showToast('Copied')
@@ -1429,10 +1510,11 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
           },
           read: false,
         })
-      } catch (notifErr) {
-        console.warn('Message notification error:', notifErr)
+} catch (notifErr) {
+          console.warn('Message notification error:', notifErr)
+        }
       }
-    }
+    return inserted ?? null
   }
 
   function retryMessage(msg) {
@@ -1571,6 +1653,247 @@ async function uploadAndSend(file, type, caption = '') {
       setPreview(items)
     }
     input.click()
+  }
+
+  function sendOffer() {
+    const amount = Number(String(offerAmount || '').replace(/[^\d.]/g, ''))
+    if (!Number.isFinite(amount) || amount <= 0) {
+      showToast('Enter a valid amount')
+      return
+    }
+    const note = offerNote.trim()
+    const prevParsed = counterParent ? parseOfferMessage(counterParent.body) : null
+
+    // ── Mode 1: EDIT — update the same message, status stays pending ──
+    if (editOfferMsg) {
+      const parsed = parseOfferMessage(editOfferMsg.body)
+      if (!parsed || !parsed.ok) {
+        showToast('Could not read this offer')
+        return
+      }
+      if (parsed.offer.status !== OFFER_STATUS.pending || isOfferExpired(parsed.offer)) {
+        showToast('This offer can no longer be edited')
+        return
+      }
+      const updated = {
+        ...parsed.offer,
+        amount,
+        note,
+        // preserve offer_id / parent_offer_id / created_at (chain + expiry history)
+      }
+      applyOfferUpdate(editOfferMsg.id, JSON.stringify(updated))
+      supabase
+        .from('messages')
+        .update({ body: JSON.stringify(updated), edited_at: new Date().toISOString() })
+        .eq('id', editOfferMsg.id)
+        .then(res => { if (res.error) console.warn('Offer edit failed:', res.error.message) })
+      closeOfferSheet()
+      return
+    }
+
+    // ── Mode 2: COUNTER — new offer linked to the active offer ──
+    if (counterParent) {
+      if (!prevParsed || !prevParsed.ok) {
+        showToast('Could not read the previous offer')
+        return
+      }
+      // Only the single active (pending) offer may be countered — superseded /
+      // responded offers are locked. Guards against double-sends / stale state.
+      if (prevParsed.offer.status !== OFFER_STATUS.pending || isOfferExpired(prevParsed.offer)) {
+        showToast('This offer is no longer active')
+        return
+      }
+      // Counter offer: a NEW offer with its own offer_id, linked to the previous
+      // offer's offer_id via parent_offer_id (Phase 3 negotiation chain). Old
+      // payloads lacking offer_id fall back to the parent message id.
+      const parentOid = prevParsed.offer.offer_id || String(counterParent.id)
+      const payload = buildOfferPayload({
+        amount,
+        note,
+        listingId: prevParsed.offer.listing_id || listing?.id,
+        parentOfferId: parentOid,
+      })
+      sendOfferMessage(payload)
+      // Phase 3 — supersede the parent immediately (only one active offer). The
+      // child offer_id is known client-side, so the backlink is written
+      // synchronously; the realtime UPDATE echoes it to both sides.
+      const updated = {
+        ...prevParsed.offer,
+        status: OFFER_STATUS.superseded,
+        responded_by: currentUser?.id || null,
+        responded_at: new Date().toISOString(),
+        counter_offer_id: payload.offer_id,
+      }
+      applyOfferUpdate(counterParent.id, JSON.stringify(updated))
+      supabase
+        .from('messages')
+        .update({ body: JSON.stringify(updated) })
+        .eq('id', counterParent.id)
+        .then(res => { if (res.error) console.warn('Offer supersede update failed:', res.error.message) })
+      closeOfferSheet()
+      return
+    }
+
+    // ── Mode 3: NEW OFFER (including Duplicate) ──
+    const payload = buildOfferPayload({ amount, note, listingId: listing?.id })
+    sendOfferMessage(payload)
+    closeOfferSheet()
+  }
+
+  /** Send the offer through the standard message pipeline (optimistic bubble etc.). */
+  function sendOfferMessage(payload) {
+    sendMessage(
+      JSON.stringify(payload),
+      'offer',
+      null,
+      { listing_id: payload.listing_id || listing?.id || null },
+      { replyTo: null }
+    )
+  }
+
+  function closeOfferSheet() {
+    setShowOffer(false)
+    setOfferAmount('')
+    setOfferNote('')
+    setCounterParent(null)
+    setEditOfferMsg(null)
+    setWithdrawConfirmId(null)
+  }
+
+  /** Phase 4 — prefill the sheet to EDIT an existing pending offer (no new message). */
+  function openEditOffer(msg) {
+    const parsed = parseOfferMessage(msg.body)
+    if (!parsed || !parsed.ok) return
+    if (parsed.offer.status !== OFFER_STATUS.pending || isOfferExpired(parsed.offer)) return
+    setEditOfferMsg(msg)
+    setCounterParent(null)
+    setOfferAmount(String(parsed.offer.amount))
+    setOfferNote(parsed.offer.note || '')
+    setShowOffer(true)
+  }
+
+  /** Phase 4 — duplicate a previous offer into a brand-new pending offer. */
+  function duplicateOffer(msg) {
+    const parsed = parseOfferMessage(msg.body)
+    if (!parsed || !parsed.ok) return
+    setEditOfferMsg(null)
+    setCounterParent(null)
+    setOfferAmount(String(parsed.offer.amount))
+    setOfferNote(parsed.offer.note || '')
+    setShowOffer(true)
+  }
+
+  /** Phase 4 — two-step Withdraw: first tap arms, second tap persists. */
+  function onWithdrawClick(msg) {
+    if (withdrawConfirmId === msg.id) {
+      withdrawOffer(msg)
+    } else {
+      setWithdrawConfirmId(msg.id)
+    }
+  }
+
+  /** Phase 4 — withdraw the buyer's own pending offer (terminal, read-only). */
+  async function withdrawOffer(msg) {
+    if (!currentUser?.id) return
+    if (msg.from_user !== currentUser.id) {
+      showToast('Only the sender can withdraw this offer')
+      return
+    }
+    const parsed = parseOfferMessage(msg.body)
+    if (!parsed.ok) {
+      showToast('Could not read this offer')
+      return
+    }
+    if (parsed.offer.status !== OFFER_STATUS.pending || isOfferExpired(parsed.offer)) {
+      showToast('This offer can no longer be withdrawn')
+      return
+    }
+    const updated = {
+      ...parsed.offer,
+      status: OFFER_STATUS.withdrawn,
+      responded_by: currentUser.id,
+      responded_at: new Date().toISOString(),
+    }
+    applyOfferUpdate(msg.id, JSON.stringify(updated))
+    const { error } = await supabase
+      .from('messages')
+      .update({ body: JSON.stringify(updated) })
+      .eq('id', msg.id)
+    if (error) {
+      console.warn('Offer withdraw failed:', error.message)
+      showToast('Could not withdraw offer — try again')
+      loadMessages(currentUser.id, chatSourceRef.current, contextId)
+      return
+    }
+    setWithdrawConfirmId(null)
+    showToast('Offer withdrawn')
+  }
+
+
+  /**
+   * Optimistically apply an offer body update to both the raw list and the render
+   * grouping, mirroring the realtime UPDATE handler so the card refreshes
+   * immediately and converges once the DB update is echoed back.
+   */
+  function applyOfferUpdate(msgId, bodyJson) {
+    setMessages(prev => {
+      const next = prev.map(m => (m.id === msgId ? { ...m, body: bodyJson } : m))
+      const forGrouping = next.filter(m => !(m.deleted_at && m.media_type === 'image' && !m.media_url))
+      setGroupedMessages(imageGroupingService.groupMessages(forGrouping))
+      return next
+    })
+  }
+
+  /**
+   * Phase 2 — Accept / Decline. Only the offer's recipient can respond, and only
+   * while the offer is pending (prevents multiple responses). Decline requires an
+   * explicit confirm step handled by the UI (declineConfirmId).
+   */
+  async function respondToOffer(msg, action) {
+    if (!currentUser?.id) return
+    if (msg.from_user === currentUser.id) {
+      showToast('Only the offered party can respond')
+      return
+    }
+    const parsed = parseOfferMessage(msg.body)
+    if (!parsed.ok) {
+      showToast('Could not read this offer')
+      return
+    }
+    if (parsed.offer.status !== OFFER_STATUS.pending) {
+      showToast('This offer has already been responded to')
+      return
+    }
+    const updated = {
+      ...parsed.offer,
+      status: action,
+      responded_by: currentUser.id,
+      responded_at: new Date().toISOString(),
+    }
+    applyOfferUpdate(msg.id, JSON.stringify(updated))
+    const { error } = await supabase
+      .from('messages')
+      .update({ body: JSON.stringify(updated) })
+      .eq('id', msg.id)
+    if (error) {
+      console.warn('Offer response failed:', error.message)
+      showToast('Could not update offer — try again')
+      loadMessages(currentUser.id, chatSourceRef.current, contextId)
+      return
+    }
+    setDeclineConfirmId(null)
+    showToast(action === OFFER_STATUS.accepted ? 'Offer accepted' : 'Offer declined')
+  }
+
+  /** Prefill the existing offer sheet with the previous offer for a counter offer. */
+  function openCounterOffer(msg) {
+    const parsed = parseOfferMessage(msg.body)
+    if (!parsed || !parsed.ok) return
+    setEditOfferMsg(null)
+    setCounterParent(msg)
+    setOfferAmount(String(parsed.offer.amount))
+    setOfferNote(parsed.offer.note || '')
+    setShowOffer(true)
   }
 
   function insertEmoji(emoji) {
@@ -2667,6 +2990,20 @@ async function uploadAndSend(file, type, caption = '') {
           const hasText  = !deletedEveryone && !!(decoded.body && !msg.call_type)
           const mediaOnly = hasMedia && !hasText && msg.media_type === 'image' && !msg.call_type
           const isDeal   = !deletedEveryone && msg.media_type === 'deal_request'
+          const parsedOffer = msg.media_type === 'offer' && !deletedEveryone ? parseOfferMessage(msg.body) : null
+          const isOffer  = !!(parsedOffer && parsedOffer.ok)
+          const offer    = parsedOffer?.ok ? parsedOffer.offer : null
+          // Phase 4 — expired pending offers are read-only (display status only)
+          const offerExpired = isOfferExpired(offer)
+          const effStatus = offerExpired ? OFFER_STATUS.expired : (offer && offer.status) || OFFER_STATUS.pending
+          // Phase 2 — only the recipient can respond, and only while still pending
+          // (expired offers are locked → read-only)
+          const canRespond = !!(isOffer && offer && !offerExpired && effStatus === OFFER_STATUS.pending
+            && msg.from_user !== currentUser?.id)
+          // Phase 3 — position within the negotiation chain (root → active offer)
+          const flow = isOffer && offer
+            ? offerFlowMap.get(offer.offer_id || String(msg.id)) || null
+            : null
           const msgRx    = reactions[msg.id] || {}
           const rxEntries = Object.entries(msgRx).filter(([, users]) => users?.length)
           const isFailed = msg._status === 'failed'
@@ -2760,7 +3097,181 @@ async function uploadAndSend(file, type, caption = '') {
                     </div>
                   )}
 
-                  {!isDeal && (
+                  {isOffer && (
+                    <div
+                      id={`msg-bubble-${msg.id}`}
+                      className={[
+                        'msg-bubble',
+                        'offer-bubble',
+                        isMine ? 'is-mine' : 'is-theirs',
+                        isSending ? 'is-sending' : '',
+                        isFailed ? 'is-failed-bubble' : '',
+                        actionMsg?.id === msg.id ? 'is-selected' : '',
+                        radiusClass,
+                      ].filter(Boolean).join(' ')}
+                      onPointerDown={e => !deletedEveryone && onBubblePointerDown(e, msg)}
+                      onPointerMove={e => !deletedEveryone && onBubblePointerMove(e, msg)}
+                      onPointerUp={e => !deletedEveryone && onBubblePointerUp(e, msg)}
+                      onPointerCancel={() => onBubblePointerCancel(msg)}
+                      onContextMenu={e => { e.preventDefault(); if (!deletedEveryone) openActions(msg) }}
+                      onClick={() => {
+                        if (isFailed) retryMessage(msg)
+                      }}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={e => {
+                        if ((e.key === 'Enter' || e.key === ' ') && !deletedEveryone) {
+                          e.preventDefault(); openActions(msg)
+                        }
+                      }}
+                    >
+                      {swipeHintId === msg.id && !deletedEveryone && (
+                        <span className={`swipe-reply-hint ${isMine ? 'is-mine' : ''}`} aria-hidden>
+                          ↩
+                        </span>
+                      )}
+                      <div className="offer-card">
+                        <div className="offer-card-head">
+                          <span className="offer-card-tag">💰 Price offer</span>
+                          <span className={`offer-card-status is-${effStatus}`}>
+                            {offerStatusLabel(effStatus)}
+                          </span>
+                        </div>
+                        <div className="offer-card-amount">{formatOfferAmount(offer)}</div>
+                        {offer.note && <div className="offer-card-note">{offer.note}</div>}
+                        {flow && flow.total > 1 && (
+                          <div className="offer-stepper" aria-label={`Negotiation offer ${flow.index} of ${flow.total}`}>
+                            {flow.chain.map((oid, i) => (
+                              <span
+                                key={oid}
+                                className={[
+                                  'offer-step',
+                                  i > 0 ? 'has-connector' : '',
+                                  i + 1 < flow.index ? 'is-past' : '',
+                                  i + 1 === flow.index ? 'is-current' : '',
+                                  i + 1 > flow.index ? 'is-future' : '',
+                                ].filter(Boolean).join(' ')}
+                              >
+                                {i + 1}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        {flow && flow.parentIndex > 0 && (
+                          <div className="offer-card-parent">↩ counter to offer {flow.parentIndex}</div>
+                        )}
+                        {flow && flow.hasChild && (
+                          <div className="offer-card-parent is-down">↓ continued by offer {flow.index + 1}</div>
+                        )}
+                        <div className="offer-card-meta">
+                          {isMine ? 'You sent an offer' : 'New price offer'}
+                          {offer.listing_id ? ' · on a listing' : ''}
+                        </div>
+                        <div className={`offer-card-statusline is-${effStatus}`}>
+                          {offerStatusText({ ...offer, status: effStatus }, currentUser?.id, isMine)}
+                        </div>
+                        {isMine && !deletedEveryone && (
+                          <div className="offer-card-actions is-manage">
+                            {!offerExpired && offer.status === OFFER_STATUS.pending && (
+                              <>
+                                <button
+                                  type="button"
+                                  className="offer-btn-edit"
+                                  onClick={() => openEditOffer(msg)}
+                                >
+                                  Edit
+                                </button>
+                                {withdrawConfirmId === msg.id ? (
+                                  <>
+                                    <button
+                                      type="button"
+                                      className="offer-btn-withdraw is-confirming"
+                                      onClick={() => withdrawOffer(msg)}
+                                    >
+                                      Confirm withdraw
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="offer-btn-cancel"
+                                      onClick={() => setWithdrawConfirmId(null)}
+                                    >
+                                      Cancel
+                                    </button>
+                                  </>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="offer-btn-withdraw"
+                                    onClick={() => onWithdrawClick(msg)}
+                                  >
+                                    Withdraw
+                                  </button>
+                                )}
+                              </>
+                            )}
+                            <button
+                              type="button"
+                              className="offer-btn-dup"
+                              onClick={() => duplicateOffer(msg)}
+                            >
+                              Duplicate
+                            </button>
+                          </div>
+                        )}
+                        {canRespond && (
+                          <div className="offer-card-actions">
+                            <button
+                              type="button"
+                              className="offer-btn-accept"
+                              onClick={() => respondToOffer(msg, OFFER_STATUS.accepted)}
+                            >
+                              Accept
+                            </button>
+                            {declineConfirmId === msg.id ? (
+                              <>
+                                <button
+                                  type="button"
+                                  className="offer-btn-decline is-confirming"
+                                  onClick={() => respondToOffer(msg, OFFER_STATUS.declined)}
+                                >
+                                  Confirm decline
+                                </button>
+                                <button
+                                  type="button"
+                                  className="offer-btn-cancel"
+                                  onClick={() => setDeclineConfirmId(null)}
+                                >
+                                  Cancel
+                                </button>
+                              </>
+                            ) : (
+                              <button
+                                type="button"
+                                className="offer-btn-decline"
+                                onClick={() => setDeclineConfirmId(msg.id)}
+                              >
+                                Decline
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              className="offer-btn-counter"
+                              onClick={() => openCounterOffer(msg)}
+                            >
+                              Counter offer
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <div className="msg-meta-row">
+                        {isEdited && <span className="msg-edited">edited</span>}
+                        {expireLabel && <span className="msg-expire">{expireLabel}</span>}
+                        <MsgMeta msg={msg} isMine={isMine} />
+                      </div>
+                    </div>
+                  )}
+
+                  {!isDeal && !isOffer && (
                     <div
                       id={`msg-bubble-${msg.id}`}
                       className={[
@@ -2973,6 +3484,7 @@ async function uploadAndSend(file, type, caption = '') {
                   )}
                   {actionMsg.from_user === currentUser?.id
                     && !actionMsg.call_type
+                    && actionMsg.media_type !== 'offer'
                     && !(actionMsg.media_url && actionMsg.media_type && actionMsg.media_type !== 'text') && (
                     <button type="button" onClick={() => startEditMessage(actionMsg)}>
                       <span className="chat-action-ico">✏️</span> Edit message
@@ -3135,6 +3647,77 @@ async function uploadAndSend(file, type, caption = '') {
             <button type="button" className="chat-action-cancel" onClick={() => { setEditingMsg(null); setEditDraft('') }}>
               Cancel
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Price offer bottom sheet ── */}
+      {showOffer && (
+        <div className="chat-action-scrim" onClick={closeOfferSheet} role="presentation">
+          <div className="chat-action-sheet" onClick={e => e.stopPropagation()} role="dialog" aria-label={editOfferMsg ? 'Edit offer' : counterParent ? 'Counter offer' : 'Make an offer'}>
+            <div className="chat-action-handle" />
+            <div className="offer-sheet-head">
+              <span className="offer-sheet-icon"><CircleDollarSign size={18} strokeWidth={2} /></span>
+              <div>
+                <div className="offer-sheet-title">{editOfferMsg ? 'Edit offer' : counterParent ? 'Counter offer' : 'Make an offer'}</div>
+                <div className="offer-sheet-sub">
+                  {editOfferMsg ? "Update your offer" : counterParent ? "Send your counter offer to the other party" : "Send the price you're willing to pay"}
+                </div>
+              </div>
+            </div>
+
+            {listing && (
+              <div className="offer-sheet-listing">
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="offer-sheet-listing-title">{listing.title}</div>
+                  <div className="offer-sheet-listing-price">
+                    Listed at MWK {Number(listing.price || 0).toLocaleString()}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <div className="offer-sheet-field">
+              <label className="offer-sheet-label">Your offer</label>
+              <div className="offer-sheet-amount-wrap">
+                <span className="offer-sheet-currency">MWK</span>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  className="offer-sheet-amount"
+                  placeholder="0"
+                  value={offerAmount}
+                  onChange={e => setOfferAmount(e.target.value.replace(/[^\d.,]/g, ''))}
+                  autoFocus
+                />
+              </div>
+            </div>
+
+            <div className="offer-sheet-field">
+              <label className="offer-sheet-label">Note (optional)</label>
+              <textarea
+                className="offer-sheet-note"
+                rows={2}
+                placeholder="e.g. Ready to buy today — can pick up this weekend."
+                value={offerNote}
+                onChange={e => setOfferNote(e.target.value)}
+              />
+            </div>
+
+            <div className="offer-sheet-actions">
+              <button type="button" className="offer-sheet-cancel" onClick={closeOfferSheet}>
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="offer-sheet-send"
+                disabled={!Number(String(offerAmount).replace(/[^\d.]/g, ''))}
+                onClick={sendOffer}
+              >
+                <CircleDollarSign size={16} strokeWidth={2} />
+                {editOfferMsg ? 'Save changes' : counterParent ? 'Send counter offer' : 'Send offer'}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -3420,6 +4003,16 @@ async function uploadAndSend(file, type, caption = '') {
             aria-label="Attach file"
           >
             <Paperclip size={20} strokeWidth={2} />
+          </button>
+
+          <button
+            type="button"
+            className={`chat-offer-btn${showOffer ? ' is-on' : ''}`}
+            onClick={e => { e.stopPropagation(); setCounterParent(null); setEditOfferMsg(null); setShowOffer(v => !v); setShowAttach(false); setShowEmoji(false) }}
+            title="Make a price offer"
+            aria-label="Make a price offer"
+          >
+            <CircleDollarSign size={20} strokeWidth={2} />
           </button>
 
           <div className="chat-composer">
