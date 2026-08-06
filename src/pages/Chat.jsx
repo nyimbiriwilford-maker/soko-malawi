@@ -199,7 +199,6 @@ export default function Chat() {
   const [loading, setLoading]             = useState(true)
   const [uploading, setUploading]         = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
-  const [imageUploadProgresses, setImageUploadProgresses] = useState({})
   const pendingGroupIdRef = useRef(null)
   const [recording, setRecording]         = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
@@ -644,7 +643,9 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
             return true
           })
           const next = [...withoutTemp, msg]
-          setGroupedMessages(imageGroupingService.groupMessages(next))
+          if (!pendingGroupIdRef.current) {
+            setGroupedMessages(imageGroupingService.groupMessages(next))
+          }
           return next
         })
         if (msg.from_user === userId) {
@@ -1387,7 +1388,6 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
     const path = `chat/${currentUser.id}/${safeName}_${Date.now()}_${index}.${ext}`
 
     const url = await uploadToR2(file, path, pct => {
-      setImageUploadProgresses(prev => ({ ...prev, [index]: pct }))
       // Also update the pending group bubble's per-image progress
       setGroupedMessages(prev => prev.map(m => {
         if (m.id !== pendingId) return m
@@ -1436,7 +1436,6 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
         _imageGroup: pendingImgs,
       }
       setGroupedMessages(prev => [...prev, pendingGroup])
-      setImageUploadProgresses(Object.fromEntries(pendingImgs.map((_, i) => [i, 0])))
       setUploading(true)
 
       // Upload all in parallel
@@ -1447,7 +1446,7 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
       // Remove pending group regardless of outcome — realtime echoes will fill in successful ones
       setGroupedMessages(prev => prev.filter(m => m.id !== pendingId))
       pendingGroupIdRef.current = null
-      setImageUploadProgresses({})
+      setGroupedMessages(imageGroupingService.groupMessages(messages))
       setUploading(false)
       setPreview([])
       setUploadProgress(0)
