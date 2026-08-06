@@ -1,26 +1,20 @@
-Two quick fixes before Phase 6. No other changes.
+Phase 6 — Real-time update optimisation. No styling changes.
 
-FIX 1 — Remove unused imageUploadProgresses state (lint error):
-Find: const [imageUploadProgresses, setImageUploadProgresses] = useState({})
-Replace with: (delete the line entirely)
+Objective: when a new message arrives via realtime INSERT, append it intelligently instead of rebuilding the whole grouped message list. Preserve scroll position, prevent flickering, minimise re-renders.
 
-Then find every call to setImageUploadProgresses in the file and delete those lines too (there should be 2-3: one in uploadQueue setting initial zeros, one in uploadSingleImage updating per-index, one in uploadQueue resetting to {}). Progress is already tracked in the pending group's _imageGroup[i]._uploadProgress — this state is redundant.
+═══════════════════════════════════
+CURRENT STATE (confirm before fixing)
+═══════════════════════════════════
 
-FIX 2 — Prevent pending group from blinking off on first realtime echo:
-In the realtime INSERT handler (setupRealtimeChannel), find the setMessages block that rebuilds groupedMessages:
+Show the full realtime INSERT handler in setupRealtimeChannel as it stands after Phase 5 fixes — specifically the setMessages block and what it does to groupedMessages.
 
-setMessages(prev => {
-  const withoutTemp = prev.filter(m => {
-    if (String(m.id).startsWith('temp_') && m.from_user === msg.from_user && m.media_type === msg.media_type) return false
-    if (m.id === msg.id) return false
-    return true
-  })
-  const next = [...withoutTemp, msg]
-  setGroupedMessages(imageGroupingService.groupMessages(next))
-  return next
-})
+═══════════════════════════════════
+FIX — Optimised realtime INSERT
+═══════════════════════════════════
 
-Replace with:
+The INSERT handler currently does a full imageGroupingService.groupMessages(next) rebuild on every incoming message. Replace it with an incremental appendMessage call for the common case, falling back to full rebuild only when necessary.
+
+In the realtime INSERT handler, replace the full setMessages block with:
 
 setMessages(prev => {
   const withoutTemp = prev.filter(m => {
@@ -29,24 +23,60 @@ setMessages(prev => {
     return true
   })
   const next = [...withoutTemp, msg]
+
   if (!pendingGroupIdRef.current) {
-    setGroupedMessages(imageGroupingService.groupMessages(next))
+    // Incremental append — fast path for the common case
+    // appendMessage handles grouping rules (same sender, within 60s, image type)
+    setGroupedMessages(prev => imageGroupingService.appendMessage(prev, { ...msg, _status: undefined }))
   }
+
   return next
 })
 
-This skips the groupedMessages rebuild while a multi-image upload is in flight — the pending group stays visible with its per-image progress bars. Once all uploads finish, uploadQueue removes the pending group and clears pendingGroupIdRef.current, after which the next realtime echo triggers a normal rebuild. Add one final rebuild after the pending group is removed in uploadQueue:
+Also: the temp_ optimistic bubble was already appended to groupedMessages in sendMessage. The appendMessage call above adds the real message. But the temp_ row is still in groupedMessages (it was appended as an optimistic bubble). We need to strip it before appending the real message.
 
-Find in uploadQueue (the multi-image path), after:
-setGroupedMessages(prev => prev.filter(m => m.id !== pendingId))
-pendingGroupIdRef.current = null
+Replace the setGroupedMessages line above with:
 
-Add immediately after those two lines:
-setGroupedMessages(imageGroupingService.groupMessages(messages))
+setGroupedMessages(prev => {
+  const withoutOptimistic = prev.filter(m =>
+    !(String(m.id).startsWith('temp_') &&
+      m.from_user === msg.from_user &&
+      m.media_type === msg.media_type)
+  )
+  return imageGroupingService.appendMessage(withoutOptimistic, { ...msg, _status: undefined })
+})
 
-Note: `messages` here refers to the React state variable — confirm it is in scope inside uploadQueue (it should be via closure). If ESLint warns about it as a dependency, that is acceptable and pre-existing.
+This means:
+- Common case (new message, no multi-upload in flight): strip optimistic temp, append real message incrementally — O(1) instead of O(n)
+- Multi-upload in flight (pendingGroupIdRef.current set): skip groupedMessages update entirely — pending group stays visible
+- UPDATE/DELETE: still do full rebuild (rare, correct)
 
-Run npx eslint src/pages/Chat.jsx and npm run build. Confirm:
-- Lint error count is back to 13 (9 errors, 4 warnings)
-- Build passes
-- grep for imageUploadProgresses returns no results in Chat.jsx
+═══════════════════════════════════
+SCROLL POSITION PRESERVATION
+═══════════════════════════════════
+
+Show the current scroll-to-bottom logic in Chat.jsx — how and when it scrolls after new messages arrive (look for scrollIntoView, scrollTop, nearBottomRef, or similar). 
+
+If scroll-to-bottom only fires when nearBottomRef.current is true (user is near bottom), confirm this is already the case — appendMessage does not change scroll behaviour since it only updates state, not the DOM directly. If scroll fires unconditionally on every message, that is the flickering source and needs to be guarded by nearBottomRef.
+
+Report what you find and whether scroll already respects nearBottomRef before applying any scroll changes.
+
+═══════════════════════════════════
+RE-RENDER MINIMISATION
+═══════════════════════════════════
+
+Wrap the renderMedia function in useCallback so it does not recreate on every render:
+
+Find: function renderMedia(msg, caption) {
+Replace: const renderMedia = useCallback(function renderMedia(msg, caption) {
+
+Find the closing } of renderMedia (the function ends before the next top-level function) and add after it:
+, [lightbox, setLightbox, playingId, audioProgress, audioDuration, audioRefs, currentUser, setGroupedMessages, pendingGroupIdRef])
+
+Note: if useCallback is not already imported from React, add it to the React import.
+
+Run npx eslint src/pages/Chat.jsx and npm run build. Report both. Confirm:
+- grep -n "groupMessages\|appendMessage" src/pages/Chat.jsx — show all call sites
+- INSERT handler now uses appendMessage (not groupMessages)
+- UPDATE and DELETE still use groupMessages
+- Build passes, lint no new errors

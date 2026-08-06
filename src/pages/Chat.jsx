@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState } from 'react'
+﻿import { useCallback, useEffect, useRef, useState } from 'react'
 import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import {
   resolveChatSource,
@@ -643,9 +643,20 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
             return true
           })
           const next = [...withoutTemp, msg]
+
           if (!pendingGroupIdRef.current) {
-            setGroupedMessages(imageGroupingService.groupMessages(next))
+            // Incremental append — fast path for the common case
+            // appendMessage handles grouping rules (same sender, within 60s, image type)
+            setGroupedMessages(prev => {
+              const withoutOptimistic = prev.filter(m =>
+                !(String(m.id).startsWith('temp_') &&
+                  m.from_user === msg.from_user &&
+                  m.media_type === msg.media_type)
+              )
+              return imageGroupingService.appendMessage(withoutOptimistic, { ...msg, _status: undefined })
+            })
           }
+
           return next
         })
         if (msg.from_user === userId) {
@@ -1726,7 +1737,7 @@ async function uploadAndSend(file, type, caption = '') {
     )
   }
 
-  function renderMedia(msg, caption) {
+  const renderMedia = useCallback(function renderMedia(msg, caption) {
     if (msg.call_type) {
       return (
         <CallMessageBubble
@@ -1843,7 +1854,7 @@ async function uploadAndSend(file, type, caption = '') {
         </svg>
       </a>
     )
-  }
+  }, [lightbox, setLightbox, playingId, audioProgress, audioDuration, audioRefs, currentUser, setGroupedMessages, pendingGroupIdRef])
 
   const callHostProps = {
     userId,
