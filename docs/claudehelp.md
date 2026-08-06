@@ -1,74 +1,80 @@
-Improve the SokoMw chat emoji picker by adding a "Recently Used Emojis" memory feature while preserving the existing emoji picker architecture.
+Fix the mobile emoji picker layout issue in SokoMw Chat.jsx.
 
-Scope:
-- Keep changes focused on the existing chat composer emoji system.
-- Do not break current emoji insertion, cursor handling, mobile layout, or desktop behavior.
+Current issue:
+On mobile, the emoji picker opens but the top/recent emoji section and bottom emoji category selection area are hidden or overlapped. The emoji grid is consuming the available height and covering other picker sections.
 
-Feature:
-Add a persistent memory of the user's recently used emojis.
+Investigate:
+- src/pages/Chat.jsx emoji picker structure
+- src/styles/chat-thread.css responsive emoji picker rules
+- flex height calculations
+- overflow behavior
+- z-index stacking
+- grid scrolling behavior
 
-Requirements:
+Implement a proper mobile emoji picker layout:
 
-1. Recent emoji tracking:
-- Every time a user selects an emoji, record it as recently used.
-- Store the most recent emojis in order.
-- Avoid duplicates:
-  - If an emoji is selected again, move it to the front instead of creating a duplicate.
-- Keep a reasonable limit (for example 20-30 emojis).
-- Preserve the existing emoji insertion flow.
+Required structure:
 
-2. Storage:
-- Use localStorage for persistence.
-- Recent emojis should remain available after:
-  - refreshing the page
-  - closing and reopening the browser
-  - returning to the chat later
-- Use a dedicated storage key (example: soko_recent_emojis).
-- Handle invalid or corrupted localStorage data safely.
+Emoji Picker Container
+----------------------
+Header
+- Emoji title
+- Current category
+- Close button
 
-3. Emoji picker UI:
-- Add a "Recent" section/tab at the beginning of the emoji categories.
-- Show recently used emojis first when available.
-- If the user has no history yet:
-  - show a clean empty state
-  - fall back to the default emoji category.
-- Keep the current category system working.
+Recent/Frequent Emoji Section
+- Always visible when available
+- Fixed height
+- Does not get pushed away by the grid
 
-4. Mobile experience:
-- Recent emojis should use the same touch-friendly sizing already implemented.
-- Ensure the recent section does not break the mobile scroll behavior.
-- Keep the picker height stable.
-- Maintain the close button and existing dismissal behavior.
+Emoji Grid Section
+- Takes remaining available space
+- Scrolls internally only
+- Must NOT overlap other sections
 
-5. Performance:
-- Do not write to localStorage on every render.
-- Only update storage when an emoji is selected.
-- Use state/ref appropriately to avoid unnecessary re-renders.
-- Do not affect typing performance.
+Category Selector
+- Always visible at the bottom
+- Fixed height
+- Above the composer input
+- Must never be hidden
 
-6. UX behavior:
-Example flow:
+Use proper flex layout:
 
-User opens emoji picker
-↓
-Recent tab appears first
-↓
-User sees their commonly used emojis
-↓
-User taps emoji
-↓
-Emoji inserts at cursor position
-↓
-Emoji moves to front of recent list
-↓
-User continues typing immediately
+picker:
+display:flex;
+flex-direction:column;
 
-7. Verification:
-After implementation:
-- Explain the root cause/approach.
-- List files changed.
-- Confirm mobile and desktop behavior.
-- Confirm localStorage persistence works.
-- Run npm build.
+header:
+flex:none;
 
-The final experience should feel similar to WhatsApp, Telegram, or Messenger where users quickly access emojis they frequently use.
+recent row:
+flex:none;
+
+emoji grid:
+flex:1;
+min-height:0;
+overflow-y:auto;
+
+category navigation:
+flex:none;
+
+
+Mobile requirements:
+- Picker must fit inside viewport.
+- Do not allow content to go behind composer.
+- Do not use absolute positioning that causes sections to overlap.
+- Maintain the existing emoji insertion and cursor logic.
+- Keep desktop unchanged.
+
+Also check:
+- z-index of picker
+- bottom positioning above composer
+- max-height calculations
+- overflow:hidden causing clipping
+
+After fixing:
+Explain:
+1. Root cause of the overlap.
+2. CSS/layout changes made.
+3. How the picker now allocates height between header, recent emojis, grid, and categories.
+4. Run npm build.
