@@ -1,65 +1,65 @@
-# Chat composer — seamless typing + emoji insertion
+# Mobile emoji picker — always visible, usable, easy to dismiss
 
-Task source: `docs/claudehelp.md`. Root cause identified first; changes confined to
-`src/pages/Chat.jsx` (composer + emoji picker). No other files changed.
+Task source: `docs/claudehelp.md`. Scope: `src/pages/Chat.jsx` (picker header/close
+button) + `src/styles/chat-thread.css` (mobile responsive rules). Desktop
+appearance unchanged.
 
-## Architecture traced (unchanged)
-- `newMsg` is the single source of truth; the composer `<textarea>` is fully
-  controlled (`value={newMsg}`, `onChange` → `handleTyping` which sets state + typing
-  indicator). Cursor is held by the browser during normal typing.
-- Emoji picker: `showEmoji` state; panel rendered at `Chat.jsx:3191`; Esc closes
-  (`:387`), outside-mousedown closes (`:446-452`), inner clicks are contained
-  (`onClick` stopPropagation on the panel), tabs/frequent/grid buttons call
-  `insertEmoji(emoji)`.
+## Root cause — why emojis were hidden / hard to select on mobile
 
-## Root causes — why typing was interrupted after selecting an emoji
-1. **Fragile cursor restoration via `setTimeout(0)`** (old `insertEmoji`).
-   It force-called `inputRef.current.focus()` + `setSelectionRange(...)` in a
-   `setTimeout(0)` that races with React's commit of the new controlled value. The
-   textarea had been blurred by the emoji button click, and the caret restore often
-   fired before React wrote `value`, so the caret landed at the end (or was dropped),
-   and focus bounced → typing after an insert started from the wrong place.
-2. **Double state write.** `insertEmoji` called `setNewMsg(next)` *and*
-   `handleTyping(next)` (which sets `newMsg` again) — two writes of the same value,
-   plus a second typing-indicator side effect.
-3. **Selection not honored.** It only used `selectionStart`; an existing selection was
-   not replaced (end was always treated as `=== start`).
-4. **Autosize only on keystrokes.** Height grew in `onChange` only; programmatic emoji
-   inserts left the textarea undersized.
-5. **Emoji toggle stole focus** on desktop (button focus), dropping the caret context.
+1. **Cramped, tiny targets.** The grid used `repeat(8, 1fr)` (7 on mobile) with a
+   `2px` gap, `7px 4px` button padding and a `22px` emoji font — cells were so small
+   that on a phone they were difficult to tap accurately.
+2. **Grid could not shrink → emojis clipped.** The panel is a flex column capped by
+   `max-height: min(48vh, 340px)`, but the grid had no `flex`/`min-height: 0`, so when
+   the panel height cap kicked in the grid overflowed past the rounded panel and got
+   cut off by the panel's `overflow: hidden` instead of scrolling internally.
+3. **Text-selection on swipe.** Nothing disabled `user-select` or `-webkit-touch-callout`
+   inside the scrollable grid, so swipe-scrolling selected emoji text and felt broken.
+4. **No visible dismiss control on mobile.** Only Escape (desktop) and outside-tap
+   (a `document` `mousedown` handler) existed — mobile users had no obvious close
+   affordance.
+5. **Keyboard/viewport pressure.** The picker is anchored above the composer inside the
+   `100dvh` thread column, so short viewports (keyboard open) could push it off-screen
+   because the whole panel was bounded only by the base `48vh/340px` cap.
 
-## Changes (`src/pages/Chat.jsx`)
-1. **Commit-time caret restore.** Added `pendingEmojiCursorRef` and a
-   `useEffect([newMsg])` that — only when the ref is set — re-focuses the textarea,
-   places the caret exactly after the inserted emoji, and syncs autosize height.
-   This runs *after* React has committed the value, so it can never race the DOM.
-2. **Rewrote `insertEmoji`:** reads live `selectionStart`/`selectionEnd` from the DOM,
-   replaces the selection (`slice(0,pos) + emoji + slice(end)`), records the target
-   caret position (`pos + emoji.length`, correct for UTF-16/surrogate-pair emoji),
-   and updates state through the single `handleTyping` path.
-3. **Kept textarea focus when toggling the picker** (desktop): `onMouseDown`
-   `preventDefault()` on the emoji toggle button so it never steals focus.
-4. The picker stays open across inserts (inner clicks contained), so multiple emojis
-   can be inserted consecutively; Esc and outside-click close still work; draft text
-   is preserved because it lives in `newMsg` state.
+## Changes
 
-## Why typing is now seamless (WhatsApp-style)
-- Normal typing: unchanged, browser owns the caret (no refocus).
-- Open picker: text preserved, caret position retained, focus not stolen.
-- Select emoji: inserted exactly at the caret (or replacing the selection), caret
-  restored immediately after it, textarea focused → keep typing instantly.
-- Move caret anywhere → next insert lands there; repeat for consecutive emojis.
+### `src/pages/Chat.jsx` — `emoji-picker-head` (line ~3212)
+- Added a visible close (✕) button, `.emoji-picker-close`, that calls
+  `setShowEmoji(false)` — a clear dismissal path for touch. Wrapped with the category
+  label in a `.emoji-picker-head-actions` row.
+- All other dismissal paths already exist and are unchanged: emoji toggle button
+  toggles the panel (`:3397`), Escape closes (`:389`), outside-mousedown closes
+  (`:448-454`), and the panel's `stopPropagation` keeps emoji taps from closing it.
 
-## Performance / UX notes
-- No new renders on typing (the effect is a no-op when the cursor ref is null).
-- Removed the double `setNewMsg` (fewer writes).
-- Autosize now also correct after programmatic inserts.
-- Undo/redo: a fully controlled textarea already loses intra-field undo history on
-  programmatic value writes; preserving it would require `document.execCommand('insertText')`,
-  which conflicts with the existing controlled-value architecture, so the architecture
-  was intentionally preserved (undo within a keystroke-typed segment still works).
+### `src/styles/chat-thread.css`
+- New base styles for `.emoji-picker-head-actions` / `.emoji-picker-close`
+  (blur-friendly neutral circle, hover/active states). A `@media (min-width: 900px)`
+  rule hides the close button so the **desktop header renders exactly as before**.
+- Inside the existing `@media (max-width: 899px)` block, reworked the picker:
+  - Panel: `bottom: 66px` (still just above the composer), `max-height: min(50vh, 380px)`,
+    `touch-action: pan-y` so it tracks the keyboard-resized viewport and stays on-screen.
+  - Close button: enlarged to a 32px touch-friendly circle.
+  - Grid: `repeat(6, 1fr)` + `gap: 4px` for comfortably larger cells; `flex: 1 1 auto;
+    min-height: 0; max-height: min(44vh, 230px)` so the grid **scrolls internally**
+    whenever the panel is height-capped (no more clipped emojis); `-webkit-overflow-
+    scrolling: touch`, `overscroll-behavior-y: contain`, `user-select: none` (and
+    `-webkit-user-select`) and `touch-action: pan-y` so swipes scroll instead of
+    selecting text.
+  - Emoji buttons: `font-size: 24px`, `min-height: 44px` (and `42px` min-size for the
+    frequent row) — proper touch targets without shrinking the glyphs.
+
+## Why it now feels like a modern chat app
+- Fully visible on mobile: panel is viewport-bounded and the grid scrolls internally.
+- Not hidden behind keyboard/composer: anchored above the composer inside the
+  keyboard-resized thread column.
+- Easy to dismiss: visible ✕, toggle again, outside tap, and Escape.
+- Touch-friendly: 44px targets, no text selection while scrolling, and emoji insertion
+  still goes through the existing commit-time caret-restore path (`insertEmoji` →
+  `pendingEmojiCursorRef`), so drafts are kept and typing continues instantly.
+- Desktop untouched: same layout and header as before (close button hidden ≥ 900px).
 
 ## Verification
 - `npx eslint src/pages/Chat.jsx` → **12 problems (8 errors, 4 warnings)** — identical
   pre-existing baseline; none reference the edited lines.
-- `npm run build` → **passes** (`✓ built in 3.98s`).
+- `npm run build` → **passes** (`✓ built in 3.86s`).

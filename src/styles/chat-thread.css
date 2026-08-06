@@ -1320,6 +1320,44 @@
   border-radius: 999px;
 }
 
+.chat-thread .emoji-picker-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.chat-thread .emoji-picker-close {
+  appearance: none;
+  border: none;
+  background: #f3f7f4;
+  color: #5c6b62;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  line-height: 1;
+  transition: background 0.12s, transform 0.1s;
+  font-family: inherit;
+  flex-shrink: 0;
+}
+
+.chat-thread .emoji-picker-close:hover {
+  background: #e4ece6;
+}
+
+.chat-thread .emoji-picker-close:active {
+  transform: scale(0.94);
+}
+
+/* Desktop header stays exactly as before — close button only surfaces on mobile */
+@media (min-width: 900px) {
+  .chat-thread .emoji-picker-close { display: none; }
+}
+
 .chat-thread .emoji-frequent {
   display: flex;
   gap: 2px;
@@ -1806,16 +1844,47 @@
 
   /* Emoji / attach menus stay inside the thread height */
   .chat-thread .emoji-picker-panel {
-    bottom: 62px;
+    bottom: 66px;
     left: 6px;
     right: 6px;
     max-width: none;
-    max-height: min(48vh, 340px);
+    max-height: min(50vh, 380px);
+    touch-action: pan-y;
   }
 
+  /* Visible touch-friendly dismiss button */
+  .chat-thread .emoji-picker-close {
+    width: 32px;
+    height: 32px;
+    background: #eef3f0;
+    color: #44554b;
+  }
+
+  /* Grid: wider touch targets, momentum scroll, no accidental text selection */
   .chat-thread .emoji-grid {
-    max-height: min(28vh, 180px);
-    grid-template-columns: repeat(7, 1fr);
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: min(44vh, 230px);
+    grid-template-columns: repeat(6, 1fr);
+    gap: 4px;
+    padding: 8px 8px 10px;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-y: contain;
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: pan-y;
+  }
+
+  .chat-thread .emoji-btn {
+    font-size: 24px;
+    min-height: 44px;
+    padding: 6px 2px;
+  }
+
+  .chat-thread .emoji-btn-freq {
+    font-size: 22px;
+    min-width: 42px;
+    min-height: 42px;
   }
 
   .chat-thread .attach-menu {

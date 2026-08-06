@@ -3214,9 +3214,20 @@ async function uploadAndSend(file, type, caption = '') {
               <SmilePlus size={15} strokeWidth={2.2} />
               <span>Emoji</span>
             </div>
-            <span className="emoji-picker-cat-label">
-              {EMOJI_BY_ID[emojiTab]?.label || 'Smileys'}
-            </span>
+            <div className="emoji-picker-head-actions">
+              <span className="emoji-picker-cat-label">
+                {EMOJI_BY_ID[emojiTab]?.label || 'Smileys'}
+              </span>
+              <button
+                type="button"
+                className="emoji-picker-close"
+                onClick={() => setShowEmoji(false)}
+                aria-label="Close emoji picker"
+                title="Close"
+              >
+                ✕
+              </button>
+            </div>
           </div>
 
           <div className="emoji-frequent">
