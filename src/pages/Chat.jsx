@@ -1772,17 +1772,6 @@ async function uploadAndSend(file, type, caption = '') {
     setShowOffer(true)
   }
 
-  /** Phase 4 — duplicate a previous offer into a brand-new pending offer. */
-  function duplicateOffer(msg) {
-    const parsed = parseOfferMessage(msg.body)
-    if (!parsed || !parsed.ok) return
-    setEditOfferMsg(null)
-    setCounterParent(null)
-    setOfferAmount(String(parsed.offer.amount))
-    setOfferNote(parsed.offer.note || '')
-    setShowOffer(true)
-  }
-
   /** Phase 4 — two-step Withdraw: first tap arms, second tap persists. */
   function onWithdrawClick(msg) {
     if (withdrawConfirmId === msg.id) {
@@ -3130,7 +3119,7 @@ async function uploadAndSend(file, type, caption = '') {
                           ↩
                         </span>
                       )}
-                      <div className="offer-card">
+                      <div className={`offer-card is-${effStatus}`}>
                         <div className="offer-card-head">
                           <span className="offer-card-tag">💰 Price offer</span>
                           <span className={`offer-card-status is-${effStatus}`}>
@@ -3209,13 +3198,6 @@ async function uploadAndSend(file, type, caption = '') {
                                 )}
                               </>
                             )}
-                            <button
-                              type="button"
-                              className="offer-btn-dup"
-                              onClick={() => duplicateOffer(msg)}
-                            >
-                              Duplicate
-                            </button>
                           </div>
                         )}
                         {canRespond && (

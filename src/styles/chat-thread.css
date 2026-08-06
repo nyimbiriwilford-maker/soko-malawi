@@ -761,7 +761,7 @@
   background: #fff;
   border: 1px solid #dce8e0;
   border-radius: 14px;
-  padding: 12px 14px 10px;
+  padding: 9px 12px 7px;
   min-width: 210px;
   max-width: 240px;
   box-shadow: var(--chat-shadow);
@@ -770,6 +770,17 @@
 .chat-thread .msg-bubble.offer-bubble.is-mine .offer-card {
   background: linear-gradient(160deg, #f0fdf4, #e8f8ee);
   border-color: #c5e6d2;
+}
+
+/* The whole card tints to signal an accepted / declined offer. */
+.chat-thread .msg-bubble.offer-bubble .offer-card.is-accepted {
+  background: linear-gradient(135deg, #ecfdf5, #d1fae5);
+  border-color: #86efac;
+}
+
+.chat-thread .msg-bubble.offer-bubble .offer-card.is-declined {
+  background: linear-gradient(135deg, #fef2f2, #fee2e2);
+  border-color: #fca5a5;
 }
 
 .chat-thread .offer-card-head {
@@ -828,21 +839,21 @@
   font-weight: 800;
   color: #0f1410;
   letter-spacing: -0.02em;
-  margin: 6px 0 2px;
+  margin: 4px 0 0;
 }
 
 .chat-thread .offer-card-note {
   font-size: 12.5px;
   color: #5c6b62;
-  line-height: 1.45;
-  margin: 4px 0 8px;
+  line-height: 1.4;
+  margin: 3px 0 6px;
 }
 
 .chat-thread .offer-card-meta {
   font-size: 11px;
   color: #94a9a0;
   border-top: 1px solid #eef3ef;
-  padding-top: 8px;
+  padding-top: 6px;
   margin-top: 2px;
 }
 
@@ -870,7 +881,7 @@
   display: flex;
   align-items: center;
   gap: 0;
-  margin: 8px 0 2px;
+  margin: 6px 0 2px;
 }
 
 .chat-thread .offer-step {
@@ -924,7 +935,7 @@
 .chat-thread .offer-card-statusline {
   font-size: 11.5px;
   font-weight: 650;
-  margin-top: 6px;
+  margin-top: 4px;
 }
 
 .chat-thread .offer-card-statusline.is-pending {
@@ -952,15 +963,15 @@
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-top: 10px;
+  margin-top: 7px;
   border-top: 1px solid #eef3ef;
-  padding-top: 10px;
+  padding-top: 7px;
 }
 
 .chat-thread .offer-card-actions button {
   flex: 1 1 auto;
   min-width: 84px;
-  min-height: 38px;
+  min-height: 30px;
   border-radius: 10px;
   border: 1px solid transparent;
   font-size: 12.5px;
@@ -1030,12 +1041,6 @@
   color: #fff;
   background: #d97706;
   border-color: #d97706 !important;
-}
-
-.chat-thread .offer-btn-dup {
-  color: #7c3aed;
-  background: #f5f3ff;
-  border-color: #ddd6fe !important;
 }
 
 /* Withdrawn / expired (read-only) status colors */
