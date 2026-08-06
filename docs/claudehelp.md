@@ -1,70 +1,81 @@
-Phase 7 — Edge case handling. No styling changes.
-
-Objective: ensure image grouping stays correct under all failure and edge conditions.
+Phase 8 — Clean up and refactor. Objective: remove obsolete code, simplify chat architecture, improve readability. No behaviour or styling changes.
 
 ═══════════════════════════════════
 INVESTIGATION FIRST
 ═══════════════════════════════════
 
-Show:
-1. How loadMessages handles pagination/infinite scroll — does it append older messages to the front of the messages array, or replace the whole array? Show the relevant code.
-2. Is there any offline detection or sync logic in Chat.jsx — any navigator.onLine check, online/offline event listeners, or queue for messages sent while offline?
-3. How does the delete-message flow work — specifically deleteMessageForMe and the server-side delete (deleteMessageForEveryone or similar). Does it update messages state directly, or only via realtime DELETE echo?
-4. How does failed upload retry work currently — is there a retry button on failed bubbles? Show the _status: 'failed' bubble rendering and any retry handler.
+Run these greps in src/pages/Chat.jsx and report every match:
+
+1. grep -n "chat-img\|chatImgGroup\|imageGroup\|img-group\|imgGroup" src/pages/Chat.jsx
+   (find any old image grouping remnants)
+
+2. grep -n "_isGroup\|_imageGroup\|_isPending\|_uploading\|_uploadProgress\|_localIndex" src/pages/Chat.jsx
+   (confirm these are only used in renderMedia and the upload flow — not scattered elsewhere)
+
+3. grep -n "groupMessages\|appendMessage" src/pages/Chat.jsx
+   (confirm all call sites are the ones we placed deliberately in Phases 3-7)
+
+4. grep -n "TODO\|FIXME\|HACK\|XXX" src/pages/Chat.jsx
+   (find any leftover notes including the Phase 7 pagination TODO)
+
+5. Show the full import block at the top of Chat.jsx (lines 1-30) — check for any imports that are now unused after the refactor (e.g. anything that was used in old grouping logic, any removed components).
+
+6. Show the full import block of src/lib/imageGroupingService.js — confirm defaultService / createImageGroupingService / ImageGroupingService class are all still needed by their callers.
 
 ═══════════════════════════════════
-FIXES
+FIXES (apply after investigation confirms)
 ═══════════════════════════════════
 
-FIX A — Out-of-order and paginated messages (prepend older messages):
+FIX A — Remove any dead imports from Chat.jsx that are no longer used after Phases 3-7.
 
-When loadMessages appends older messages to the FRONT of the array (pagination/infinite scroll), groupedMessages must be rebuilt from the full combined array, not just appended. Find where older messages are prepended to messages state and ensure groupedMessages is rebuilt:
+FIX B — Add a clear section comment above the groupedMessages state and the imageGroupingService import so future developers understand the architecture at a glance:
 
-After any setMessages call that prepends older messages (not the initial load, not realtime appends — only the pagination prepend), add:
-setGroupedMessages(prev => imageGroupingService.groupMessages([...olderMessages, ...currentMessages]))
+Find: import imageGroupingService from '../lib/imageGroupingService'
+Add directly above it:
+// ── Image grouping ──────────────────────────────────────────────────────────
+// Messages are grouped by ImageGroupingService (src/lib/imageGroupingService.js).
+// groupedMessages is the render source; messages is the raw DB-row source.
+// INSERT  → appendMessage (O(1) incremental)
+// UPDATE/DELETE/load → groupMessages (full rebuild, rare)
+// Multi-image uploads → pending group shown immediately, rebuilt after all uploads settle
+// ─────────────────────────────────────────────────────────────────────────────
 
-If no pagination exists yet, add a comment: // TODO Phase 7: rebuild groupedMessages when older messages are prepended
+FIX C — Add a clear comment at the top of src/lib/imageGroupingService.js explaining its role:
 
-FIX B — Duplicate realtime events:
+Find the very first line of imageGroupingService.js (const DEFAULT_OPTIONS...) and add above it:
+/**
+ * ImageGroupingService
+ *
+ * Groups consecutive image messages from the same sender sent within
+ * a configurable time window (default 60 s) into a single _isGroup bubble.
+ *
+ * Rules:
+ *  - Only consecutive images are grouped (a text message breaks the group)
+ *  - Max group size: 9 (groups larger than 9 are split automatically)
+ *  - Groups are sender-scoped (never mix messages from different users)
+ *
+ * Public API used by Chat.jsx:
+ *  - imageGroupingService.groupMessages(messages)  → full rebuild from raw rows
+ *  - imageGroupingService.appendMessage(grouped, msg) → O(1) incremental append
+ *
+ * Do not add UI logic here. This module is pure data transformation.
+ */
 
-The INSERT handler already deduplicates by id (if (m.id === msg.id) return false in the messages filter). Confirm appendMessage in imageGroupingService.js also handles duplicates safely — it calls appendMessage which adds to the end, so a duplicate id would create a second bubble.
+FIX D — Simplify the Chat.jsx TODO comment added in Phase 7 to be more concise:
+Find:
+// TODO Phase 7: rebuild groupedMessages when older messages are prepended
+// (no pagination yet — loadMessages replaces the whole array; if older messages
+// are later prepended, use: setGroupedMessages(imageGroupingService.groupMessages([...olderMessages, ...currentMessages])))
 
-Add deduplication to the groupedMessages INSERT path. In the realtime INSERT handler, inside the setGroupedMessages updater, add a duplicate check before calling appendMessage:
+Replace with:
+// TODO: when pagination is added, rebuild groupedMessages after prepending older messages:
+// setGroupedMessages(imageGroupingService.groupMessages([...olderMessages, ...currentMessages]))
 
-setGroupedMessages(prev => {
-  // Deduplicate: if this message id already exists in grouped, skip
-  const alreadyExists = prev.some(m => {
-    if (m._isGroup) return m._imageGroup?.some(img => img.id === msg.id)
-    return m.id === msg.id
-  })
-  if (alreadyExists) return prev
-
-  const withoutOptimistic = prev.filter(m =>
-    !(String(m.id).startsWith('temp_') &&
-      m.from_user === msg.from_user &&
-      m.media_type === msg.media_type)
-  )
-  return imageGroupingService.appendMessage(withoutOptimistic, { ...msg, _status: undefined })
-})
-
-FIX C — Failed upload retry:
-
-Show the _status: 'failed' bubble rendering code. If there is already a retry button that calls sendMessage again, confirm it also works for image types (media_url is preserved in _retry). If the retry path calls uploadAndSend again (re-uploads the file), that is correct — confirm _retry stores the original file reference.
-
-If no retry exists for image uploads specifically, add a note that _retry.file may be stale (object URLs are revoked after preview closes) — do not attempt to fix file re-upload in this phase, just document it.
-
-FIX D — Delete handling for grouped images:
-
-The realtime DELETE handler already calls imageGroupingService.groupMessages(next) on the remaining messages — this correctly removes deleted images from groups and reflows the layout. Confirm this is the case by showing the DELETE handler.
-
-If a deleted image was part of a group and the group now has only 1 image remaining, groupMessages will return it as a single bubble (asGroup returns asBubble for length===1). Confirm asGroup handles this correctly by checking imageGroupingService.js line for asGroup.
-
-FIX E — App restart / session restore:
-
-loadMessages runs on mount and calls imageGroupingService.groupMessages(data) — this already reconstructs grouping from scratch on every app start. Confirm this is the case (it should be from Phase 3). No fix needed if confirmed.
+FIX E — In imageGroupingService.js, confirm the export at the bottom is correct and clean:
+Show the last 10 lines of imageGroupingService.js. If defaultService is exported before createImageGroupingService is defined (hoisting issue), fix the order. Also confirm Chat.jsx imports the default export (imageGroupingService) and not the named class directly.
 
 Run npx eslint src/pages/Chat.jsx src/lib/imageGroupingService.js and npm run build. Report:
-- All findings from the investigation
-- Which fixes were applied vs confirmed-already-working
-- Lint and build results
-- Any edge case that cannot be handled without schema changes or new infrastructure
+- Every dead import removed (if any)
+- Lint result (target: 13 problems, no new issues)
+- Build result
+- Confirm imageGroupingService.js exports are clean and in correct order
