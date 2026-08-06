@@ -122,6 +122,7 @@ export default function NotificationToast() {
   const [replySent, setReplySent] = useState(false)
   const [interacting, setInteracting] = useState(false)
   const [replyExpanded, setReplyExpanded] = useState(false)
+  const [show, setShow] = useState(false)
   const timerRef = useRef(null)
   const toastRef = useRef(null)
   const inputRef = useRef(null)
@@ -159,10 +160,7 @@ export default function NotificationToast() {
 
   const dismiss = useCallback(() => {
     clearTimeout(timerRef.current)
-    if (toastRef.current) {
-      toastRef.current.style.opacity = '0'
-      toastRef.current.style.transform = 'translateX(-50%) translateY(-16px)'
-    }
+    setShow(false)
     setTimeout(() => { setVisible(null); setReplyText(''); setReplySent(false); setInteracting(false); setReplyExpanded(false) }, 200)
   }, [])
 
@@ -182,6 +180,7 @@ export default function NotificationToast() {
     const next = queue[0]
     setQueue((prev) => prev.slice(1))
     setVisible(next)
+    setShow(true)
     setReplyText('')
     setReplySent(false)
     setInteracting(false)
@@ -246,7 +245,7 @@ export default function NotificationToast() {
     navigate('/notifications')
   }
 
-  if (!visible) return null
+  if (!visible && !show) return null
 
   return (
     <div style={{ position: 'fixed', top: 16, left: '50%', transform: 'translateX(-50%)', zIndex: 9998, maxWidth: 380, width: 'calc(100% - 32px)', fontFamily: T.font, animation: 'toastWrapperEnter 0.25s ease-out' }}>
@@ -262,6 +261,8 @@ export default function NotificationToast() {
           boxShadow: T.shadowMd, overflow: 'hidden', cursor: replySent ? 'default' : 'pointer',
           transition: 'opacity 0.2s ease-in, transform 0.2s ease-in',
           animation: 'toastSlideIn 0.25s ease-out',
+          opacity: show ? 1 : 0,
+          transform: show ? 'scale(1)' : 'scale(0.96)',
         }}
       >
         <div style={{ padding: '14px 16px', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
