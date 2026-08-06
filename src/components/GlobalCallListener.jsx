@@ -92,6 +92,8 @@ export default function GlobalCallListener() {
   const callStateRef      = useRef('idle')
   /** User tapped Answer before the SDP offer arrived (push-only). */
   const answerWhenReadyRef = useRef(false)
+  /** User committed to answer — from tap until the call is in-call or fully torn down. */
+  const answerCommittedRef = useRef(false)
   const lowDataIntervalRef = useRef(null)
   const offerRecoveryTimerRef = useRef(null)
   const offerGiveUpTimerRef = useRef(null)
@@ -120,6 +122,11 @@ export default function GlobalCallListener() {
   useEffect(() => {
     function handleSwIncoming(e) {
       const { callId, fromUser, chatId, callType, callerName } = e.detail
+
+      // Already connected, or the user has committed to answering this call —
+      // never re-ring or re-surface the incoming UI for a duplicate SW event.
+      if (callStateRef.current === 'in-call') return
+      if (answerCommittedRef.current) return
 
       // Start buffering ICE early
       if (myUserIdRef.current) {
@@ -166,6 +173,7 @@ export default function GlobalCallListener() {
           dismissIncoming()
           swPendingRef.current = null
           answerWhenReadyRef.current = false
+          answerCommittedRef.current = false
           setConnecting(false)
           incomingRef.current = null
           setIncoming(null)
@@ -198,6 +206,51 @@ export default function GlobalCallListener() {
       }
 
       if (payload._event !== 'ring') return false
+
+      // ── Answered/active call is the single source of truth ──
+      // Once the user has committed to answer (or the call is connected), a ring
+      // must NEVER re-surface the incoming popup. If this ring happens to carry
+      // the SDP offer the committed answer was waiting for, complete the answer
+      // directly instead of ringing again.
+      if (callStateRef.current === 'in-call') {
+        swPendingRef.current = null
+        return true
+      }
+      if (answerCommittedRef.current) {
+        const swMetaForCommit = swPendingRef.current?.callId === payload.callId
+          ? swPendingRef.current : null
+        if (answerWhenReadyRef.current && payload.offer) {
+          swPendingRef.current = null
+          answerWhenReadyRef.current = false
+          setConnecting(false)
+          const commitIncoming = {
+            fromUser: payload.fromUser,
+            callType: payload.callType,
+            offer: payload.offer,
+            callId: payload.callId,
+            callerName: payload.fromName || swMetaForCommit?.callerName || payload.fromUser,
+            chatId: payload.chatId || swMetaForCommit?.chatId || null,
+          }
+          setTimeout(() => {
+            answerWithOffer(commitIncoming).catch((e) => {
+              console.error('[GlobalCallListener] delayed answer failed', e)
+              cleanupCall()
+              sessionStorage.setItem('__pendingCallId', commitIncoming.callId || '')
+              sessionStorage.setItem('__pendingCall', JSON.stringify({
+                fromUser: commitIncoming.fromUser,
+                callType: commitIncoming.callType,
+                offer: commitIncoming.offer,
+                callId: commitIncoming.callId,
+                callerName: commitIncoming.callerName,
+                chatId: commitIncoming.chatId,
+              }))
+            })
+          }, 0)
+        } else {
+          swPendingRef.current = null
+        }
+        return true
+      }
 
       if (myUserIdRef.current) {
         subscribeToIceCandidatesEarly(payload.callId, myUserIdRef.current)
@@ -250,26 +303,6 @@ export default function GlobalCallListener() {
       // Ring already playing from SW push — don't restart it
       if (!swMeta) playRing()
 
-      // User already tapped Answer while waiting for SDP offer
-      if (answerWhenReadyRef.current && payload.offer) {
-        answerWhenReadyRef.current = false
-        setConnecting(false)
-        setTimeout(() => {
-          answerWithOffer(nextIncoming).catch((e) => {
-            console.error('[GlobalCallListener] delayed answer failed', e)
-            cleanupCall()
-            sessionStorage.setItem('__pendingCallId', nextIncoming.callId || '')
-            sessionStorage.setItem('__pendingCall', JSON.stringify({
-              fromUser: nextIncoming.fromUser,
-              callType: nextIncoming.callType,
-              offer: nextIncoming.offer,
-              callId: nextIncoming.callId,
-              callerName: nextIncoming.callerName,
-              chatId: nextIncoming.chatId,
-            }))
-          })
-        }, 0)
-      }
       return true
     })
 
@@ -379,6 +412,7 @@ export default function GlobalCallListener() {
   async function handleAnswer() {
     if (!incoming && !incomingRef.current) return
     const src = incoming || incomingRef.current
+    answerCommittedRef.current = true
     if (!src?.offer) {
       // Wait for realtime ring SDP — do not navigate with offer:null
       answerWhenReadyRef.current = true
@@ -414,6 +448,7 @@ export default function GlobalCallListener() {
     if (!src?.offer || !src.fromUser || !src.callId) {
       console.error('[GlobalCallListener] answerWithOffer missing offer/fromUser/callId')
       setConnecting(false)
+      answerCommittedRef.current = false
       dismissIncoming()
       return
     }
@@ -689,6 +724,7 @@ async function handleSwitchCamera() {
     pendingICE.current = []
     incomingRef.current = null
     answerWhenReadyRef.current = false
+    answerCommittedRef.current = false
     setIncoming(null)
     callStateRef.current = 'idle'
     setCallState('idle')
@@ -925,13 +961,15 @@ async function handleSwitchCamera() {
       setConnecting(false)
       incomingRef.current = src
       setIncoming(src)
-      setIncomingCall?.(src)
       clearTimeout(offerGiveUpTimerRef.current)
       if (autoAnswer) {
+        // User already tapped Answer — complete the call without re-showing the popup.
         answerWithOffer(src).catch((err) => {
           console.error('[GlobalCallListener] recovered-offer answer failed:', err)
           cleanupCall()
         })
+      } else {
+        setIncomingCall?.(src)
       }
     }, 4000)
 

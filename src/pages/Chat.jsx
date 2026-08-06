@@ -3016,50 +3016,62 @@ async function uploadAndSend(file, type, caption = '') {
       {/* ── Per-image action sheet ── */}
       {imageActionMsg && (
         <div className="chat-action-overlay" onClick={() => setImageActionMsg(null)}>
-          <div className="chat-action-sheet" onClick={e => e.stopPropagation()}>
-            <div className="chat-action-title">Image</div>
-            <button
-              className="chat-action-btn"
-              onClick={() => {
-                setImageActionMsg(null)
-                setLightbox({ url: imageActionMsg.media_url, type: 'image', caption: '' })
-              }}
-            >
-              View
-            </button>
-            <a
-              className="chat-action-btn"
-              href={imageActionMsg.media_url}
-              download
-              target="_blank"
-              rel="noreferrer"
-              onClick={() => setImageActionMsg(null)}
-            >
-              Download
-            </a>
-            <button
-              className="chat-action-btn chat-action-btn--danger"
-              onClick={() => {
-                const img = imageActionMsg
-                setImageActionMsg(null)
-                deleteMessageForMe(img)
-              }}
-            >
-              Delete for me
-            </button>
-            {imageActionMsg.from_user === currentUser?.id && (
+          <div className="chat-action-sheet chat-image-sheet" onClick={e => e.stopPropagation()}>
+            <div className="chat-action-handle" />
+            <div className="chat-image-head">
+              <img className="chat-image-thumb" src={imageActionMsg.media_url} alt="" />
+              <div className="chat-image-head-txt">
+                <div className="chat-action-title">Image</div>
+                <div className="chat-image-sub">Choose an action for this image</div>
+              </div>
+            </div>
+            <div className="chat-image-actions">
               <button
+                type="button"
+                className="chat-action-btn"
+                onClick={() => {
+                  setImageActionMsg(null)
+                  setLightbox({ url: imageActionMsg.media_url, type: 'image', caption: '' })
+                }}
+              >
+                <span className="chat-action-ico" aria-hidden="true">👁️</span> View
+              </button>
+              <a
+                className="chat-action-btn"
+                href={imageActionMsg.media_url}
+                download
+                target="_blank"
+                rel="noreferrer"
+                onClick={() => setImageActionMsg(null)}
+              >
+                <span className="chat-action-ico" aria-hidden="true">⬇️</span> Download
+              </a>
+              <button
+                type="button"
                 className="chat-action-btn chat-action-btn--danger"
                 onClick={() => {
                   const img = imageActionMsg
                   setImageActionMsg(null)
-                  deleteMessageForEveryone(img)
+                  deleteMessageForMe(img)
                 }}
               >
-                Delete for everyone
+                <span className="chat-action-ico" aria-hidden="true">🗑️</span> Delete for me
               </button>
-            )}
-            <button className="chat-action-btn chat-action-btn--cancel" onClick={() => setImageActionMsg(null)}>
+              {imageActionMsg.from_user === currentUser?.id && (
+                <button
+                  type="button"
+                  className="chat-action-btn chat-action-btn--danger"
+                  onClick={() => {
+                    const img = imageActionMsg
+                    setImageActionMsg(null)
+                    deleteMessageForEveryone(img)
+                  }}
+                >
+                  <span className="chat-action-ico" aria-hidden="true">👥</span> Delete for everyone
+                </button>
+              )}
+            </div>
+            <button type="button" className="chat-action-btn chat-action-btn--cancel" onClick={() => setImageActionMsg(null)}>
               Cancel
             </button>
           </div>

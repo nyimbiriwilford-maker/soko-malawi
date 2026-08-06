@@ -185,10 +185,17 @@ export default function NotificationToast() {
     setReplySent(false)
     setInteracting(false)
     setReplyExpanded(false)
+  }, [queue, visible])
+
+  // Auto-dismiss timer — keyed ONLY on `visible` so the pump effect's own state
+  // writes (queue/visible changes) can never trigger a cleanup that clears the
+  // currently-visible toast's timer.
+  useEffect(() => {
+    if (!visible) return
     clearTimeout(timerRef.current)
     timerRef.current = setTimeout(dismiss, AUTO_DISMISS_MS)
     return () => clearTimeout(timerRef.current)
-  }, [queue, visible, dismiss])
+  }, [visible, dismiss])
 
   useEffect(() => () => clearTimeout(timerRef.current), [])
 
