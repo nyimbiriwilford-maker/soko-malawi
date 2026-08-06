@@ -3,6 +3,13 @@
  */
 export const EMOJI_CATEGORIES = [
   {
+    id: 'recent',
+    label: 'Recent',
+    icon: '\u{1F552}',
+    // Placeholder — the chat composer supplies the actual list (localStorage-backed).
+    emojis: [],
+  },
+  {
     id: 'smileys',
     label: 'Smileys',
     icon: '\u{1F60A}',
@@ -228,6 +235,37 @@ export const EMOJI_CATEGORIES = [
 
 export const EMOJI_BY_ID = Object.fromEntries(EMOJI_CATEGORIES.map((c) => [c.id, c]))
 export const DEFAULT_EMOJI_TAB = EMOJI_CATEGORIES[0]?.id || 'smileys'
+
+/** Dedicated key + cap for the persistent "recently used" emoji memory. */
+export const RECENT_EMOJI_KEY = 'soko_recent_emojis'
+export const RECENT_EMOJI_LIMIT = 30
+
+function sanitizeEmojiList(raw) {
+  if (!Array.isArray(raw)) return []
+  return raw.filter(e => typeof e === 'string' && e.trim())
+}
+
+/** Safe read — corrupted/unavailable localStorage degrades to an empty list. */
+export function loadRecentEmojis() {
+  if (typeof window === 'undefined') return []
+  try {
+    const stored = window.localStorage.getItem(RECENT_EMOJI_KEY)
+    if (!stored) return []
+    return sanitizeEmojiList(JSON.parse(stored)).slice(0, RECENT_EMOJI_LIMIT)
+  } catch {
+    return []
+  }
+}
+
+/** Safe write — never throws, dedupes, caps at the limit, newest first. */
+export function saveRecentEmojis(list) {
+  if (typeof window === 'undefined') return
+  try {
+    window.localStorage.setItem(RECENT_EMOJI_KEY, JSON.stringify(sanitizeEmojiList(list).slice(0, RECENT_EMOJI_LIMIT)))
+  } catch {
+    // Storage full/unavailable — recent memory is a nicety, never fatal.
+  }
+}
 
 /** Quick-insert row shown at top of picker */
 export const EMOJI_FREQUENT = [

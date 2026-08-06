@@ -1,53 +1,74 @@
-Improve the mobile emoji picker experience in the SokoMw chat composer.
+Improve the SokoMw chat emoji picker by adding a "Recently Used Emojis" memory feature while preserving the existing emoji picker architecture.
 
-Current issue:
-On mobile view, the emoji picker panel is not displayed properly. Emojis are hidden, clipped, or difficult to select. The user also needs a clear way to dismiss the emoji picker.
+Scope:
+- Keep changes focused on the existing chat composer emoji system.
+- Do not break current emoji insertion, cursor handling, mobile layout, or desktop behavior.
 
-Investigate the current emoji picker implementation in src/pages/Chat.jsx and fix the responsive behavior without breaking desktop functionality.
+Feature:
+Add a persistent memory of the user's recently used emojis.
 
 Requirements:
 
-1. Mobile emoji picker layout:
-- The emoji picker must be fully visible on mobile screens.
-- It must not overflow outside the viewport.
-- It must not be hidden behind the keyboard, bottom navigation, or message composer.
-- It should adapt properly to different mobile screen sizes.
-- Ensure emojis have proper spacing, size, and touch-friendly buttons.
-- The emoji grid should scroll internally if there are many emojis.
-- Avoid shrinking emojis until they become difficult to tap.
+1. Recent emoji tracking:
+- Every time a user selects an emoji, record it as recently used.
+- Store the most recent emojis in order.
+- Avoid duplicates:
+  - If an emoji is selected again, move it to the front instead of creating a duplicate.
+- Keep a reasonable limit (for example 20-30 emojis).
+- Preserve the existing emoji insertion flow.
 
-2. Proper dismissal options:
-Provide clear ways to close the emoji picker:
-- Add a visible close button (X) on mobile.
-- Tapping outside the emoji picker closes it.
-- Pressing the emoji toggle button again closes it.
-- Pressing Escape closes it where supported.
-- Do not accidentally close it when selecting emojis.
+2. Storage:
+- Use localStorage for persistence.
+- Recent emojis should remain available after:
+  - refreshing the page
+  - closing and reopening the browser
+  - returning to the chat later
+- Use a dedicated storage key (example: soko_recent_emojis).
+- Handle invalid or corrupted localStorage data safely.
 
-3. Mobile positioning:
-- Position the emoji picker relative to the chat composer.
-- Ensure it appears above the input area like modern chat apps (WhatsApp/Telegram style).
-- Keep it inside safe screen boundaries.
-- Handle mobile keyboard opening correctly.
-- Prevent the picker from being pushed off-screen.
+3. Emoji picker UI:
+- Add a "Recent" section/tab at the beginning of the emoji categories.
+- Show recently used emojis first when available.
+- If the user has no history yet:
+  - show a clean empty state
+  - fall back to the default emoji category.
+- Keep the current category system working.
 
-4. Touch experience:
-- Emoji buttons should have adequate touch size.
-- Prevent accidental text selection while scrolling emojis.
-- Ensure selecting an emoji:
-  - inserts it correctly at cursor position
-  - keeps the draft message
-  - allows continuing typing immediately.
+4. Mobile experience:
+- Recent emojis should use the same touch-friendly sizing already implemented.
+- Ensure the recent section does not break the mobile scroll behavior.
+- Keep the picker height stable.
+- Maintain the close button and existing dismissal behavior.
 
-5. Responsive behavior:
-Desktop behavior must remain unchanged.
-Use responsive CSS/classes or existing styling approach.
-Do not create a separate mobile-only implementation unless necessary.
+5. Performance:
+- Do not write to localStorage on every render.
+- Only update storage when an emoji is selected.
+- Use state/ref appropriately to avoid unnecessary re-renders.
+- Do not affect typing performance.
 
-After completing:
-- Explain the root cause of mobile emoji display issues.
+6. UX behavior:
+Example flow:
+
+User opens emoji picker
+↓
+Recent tab appears first
+↓
+User sees their commonly used emojis
+↓
+User taps emoji
+↓
+Emoji inserts at cursor position
+↓
+Emoji moves to front of recent list
+↓
+User continues typing immediately
+
+7. Verification:
+After implementation:
+- Explain the root cause/approach.
 - List files changed.
-- Explain the responsive solution implemented.
-- Verify with npm build.
+- Confirm mobile and desktop behavior.
+- Confirm localStorage persistence works.
+- Run npm build.
 
-The final result should feel like a professional mobile chat app where the emoji picker is always visible, usable, and easy to dismiss.
+The final experience should feel similar to WhatsApp, Telegram, or Messenger where users quickly access emojis they frequently use.

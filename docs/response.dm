@@ -1,65 +1,60 @@
-# Mobile emoji picker — always visible, usable, easy to dismiss
+# Chat emoji picker — recently used emojis memory
 
-Task source: `docs/claudehelp.md`. Scope: `src/pages/Chat.jsx` (picker header/close
-button) + `src/styles/chat-thread.css` (mobile responsive rules). Desktop
-appearance unchanged.
+Task source: `docs/claudehelp.md`. Scope: `src/constants/emojiCatalog.js` +
+`src/pages/Chat.jsx` + `src/styles/chat-thread.css`. Existing emoji insertion,
+cursor handling, mobile layout and desktop behavior are unchanged — persistence is
+layered on top of the current architecture.
 
-## Root cause — why emojis were hidden / hard to select on mobile
-
-1. **Cramped, tiny targets.** The grid used `repeat(8, 1fr)` (7 on mobile) with a
-   `2px` gap, `7px 4px` button padding and a `22px` emoji font — cells were so small
-   that on a phone they were difficult to tap accurately.
-2. **Grid could not shrink → emojis clipped.** The panel is a flex column capped by
-   `max-height: min(48vh, 340px)`, but the grid had no `flex`/`min-height: 0`, so when
-   the panel height cap kicked in the grid overflowed past the rounded panel and got
-   cut off by the panel's `overflow: hidden` instead of scrolling internally.
-3. **Text-selection on swipe.** Nothing disabled `user-select` or `-webkit-touch-callout`
-   inside the scrollable grid, so swipe-scrolling selected emoji text and felt broken.
-4. **No visible dismiss control on mobile.** Only Escape (desktop) and outside-tap
-   (a `document` `mousedown` handler) existed — mobile users had no obvious close
-   affordance.
-5. **Keyboard/viewport pressure.** The picker is anchored above the composer inside the
-   `100dvh` thread column, so short viewports (keyboard open) could push it off-screen
-   because the whole panel was bounded only by the base `48vh/340px` cap.
+## Approach / root cause framing
+The picker already renders categories from a static `EMOJI_CATEGORIES` catalog and a
+Quick-insert row (`EMOJI_FREQUENT`). The cleanest fit was to insert a new `recent`
+category at index 0 and, because the recent list must be reactive to user selections,
+drive just that one grid from React state (loaded once from localStorage) instead of
+the static catalog entry. This preserved the existing insertion flow exactly.
 
 ## Changes
 
-### `src/pages/Chat.jsx` — `emoji-picker-head` (line ~3212)
-- Added a visible close (✕) button, `.emoji-picker-close`, that calls
-  `setShowEmoji(false)` — a clear dismissal path for touch. Wrapped with the category
-  label in a `.emoji-picker-head-actions` row.
-- All other dismissal paths already exist and are unchanged: emoji toggle button
-  toggles the panel (`:3397`), Escape closes (`:389`), outside-mousedown closes
-  (`:448-454`), and the panel's `stopPropagation` keeps emoji taps from closing it.
+### `src/constants/emojiCatalog.js`
+- Added a `recent` category (label "Recent", 🕘 icon) at the **front** of
+  `EMOJI_CATEGORIES` (placeholder empty `emojis`; `DEFAULT_EMOJI_TAB` now resolves to
+  `recent` automatically, so the Recent tab shows first).
+- Added `RECENT_EMOJI_KEY = 'soko_recent_emojis'` and `RECENT_EMOJI_LIMIT = 30`.
+- Added `loadRecentEmojis()` — safely degrades to `[]` on corrupted/unavailable
+  localStorage (validates the parsed array, filters non-string entries, caps it).
+- Added `saveRecentEmojis(list)` — never throws, dedupes, caps at 30, newest first.
+
+### `src/pages/Chat.jsx`
+- Imported the new helpers.
+- `recentEmojis` state initialized via `loadRecentEmojis`.
+- `emojiTab` initialized to `recent` when there is history, otherwise falls back to the
+  first real category (`smileys`) — satisfying the "no history → empty state + default
+  category" rule.
+- `insertEmoji()` (line ~1569) now also updates the recent list via a **functional**
+  `setRecentEmojis` update: `[emoji, ...prev.filter(e => e !== emoji)].slice(0, LIMIT)`
+  — moves to front, drops duplicates, caps at 30, and writes to localStorage only here
+  (on selection, never on render). The caret-restore / typing path is untouched.
+- Recent grid renders `recentEmojis` (with a clean empty state when empty); all other
+  categories render exactly as before.
 
 ### `src/styles/chat-thread.css`
-- New base styles for `.emoji-picker-head-actions` / `.emoji-picker-close`
-  (blur-friendly neutral circle, hover/active states). A `@media (min-width: 900px)`
-  rule hides the close button so the **desktop header renders exactly as before**.
-- Inside the existing `@media (max-width: 899px)` block, reworked the picker:
-  - Panel: `bottom: 66px` (still just above the composer), `max-height: min(50vh, 380px)`,
-    `touch-action: pan-y` so it tracks the keyboard-resized viewport and stays on-screen.
-  - Close button: enlarged to a 32px touch-friendly circle.
-  - Grid: `repeat(6, 1fr)` + `gap: 4px` for comfortably larger cells; `flex: 1 1 auto;
-    min-height: 0; max-height: min(44vh, 230px)` so the grid **scrolls internally**
-    whenever the panel is height-capped (no more clipped emojis); `-webkit-overflow-
-    scrolling: touch`, `overscroll-behavior-y: contain`, `user-select: none` (and
-    `-webkit-user-select`) and `touch-action: pan-y` so swipes scroll instead of
-    selecting text.
-  - Emoji buttons: `font-size: 24px`, `min-height: 44px` (and `42px` min-size for the
-    frequent row) — proper touch targets without shrinking the glyphs.
+- Added `.emoji-recent-empty` / `.emoji-recent-empty-icon` for the no-history state
+  (spans the full grid, subtle centered copy). The recent grid reuses the existing
+  `.emoji-grid` so mobile sizing/scroll and the close button are unchanged.
 
-## Why it now feels like a modern chat app
-- Fully visible on mobile: panel is viewport-bounded and the grid scrolls internally.
-- Not hidden behind keyboard/composer: anchored above the composer inside the
-  keyboard-resized thread column.
-- Easy to dismiss: visible ✕, toggle again, outside tap, and Escape.
-- Touch-friendly: 44px targets, no text selection while scrolling, and emoji insertion
-  still goes through the existing commit-time caret-restore path (`insertEmoji` →
-  `pendingEmojiCursorRef`), so drafts are kept and typing continues instantly.
-- Desktop untouched: same layout and header as before (close button hidden ≥ 900px).
+## Behavior (target UX)
+- Open picker → Recent tab appears first with commonly used emojis.
+- Tap emoji → inserts at cursor, moves to front of recents (deduped), persisted.
+- Continue typing immediately (existing commit-time caret restore).
+- No history → clean empty state, defaults to Smileys.
+- Persist across refresh, browser reopen, and returning to chat later.
+
+## Performance
+- localStorage written only inside `insertEmoji` (per selection), not per render.
+- Read once at mount for state; lightweight, no render cost.
+- Object identity of `recentEmojis` changes only on selection → no typing impact.
 
 ## Verification
 - `npx eslint src/pages/Chat.jsx` → **12 problems (8 errors, 4 warnings)** — identical
   pre-existing baseline; none reference the edited lines.
-- `npm run build` → **passes** (`✓ built in 3.86s`).
+- `npx eslint src/constants/emojiCatalog.js` → clean.
+- `npm run build` → **passes** (`✓ built in 3.43s`).

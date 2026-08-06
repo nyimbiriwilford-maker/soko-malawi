@@ -46,6 +46,9 @@ import {
   EMOJI_BY_ID,
   DEFAULT_EMOJI_TAB,
   EMOJI_FREQUENT,
+  loadRecentEmojis,
+  saveRecentEmojis,
+  RECENT_EMOJI_LIMIT,
 } from '../constants/emojiCatalog'
 import '../styles/chat-thread.css'
 
@@ -214,7 +217,11 @@ export default function Chat() {
   const [audioDuration, setAudioDuration] = useState({})
   const [preview, setPreview]             = useState([])
   const [showEmoji, setShowEmoji]         = useState(false)
-  const [emojiTab, setEmojiTab]           = useState(DEFAULT_EMOJI_TAB)
+  const [recentEmojis, setRecentEmojis]   = useState(loadRecentEmojis)
+  // Recent is the default tab, but fall back to the first real category when
+  // the user has no recent history yet.
+  const [emojiTab, setEmojiTab]           = useState(() =>
+    loadRecentEmojis().length ? 'recent' : (EMOJI_CATEGORIES.find(c => c.id !== 'recent')?.id || DEFAULT_EMOJI_TAB))
   const [otherOnline, setOtherOnline]     = useState(false)
   const [otherLastSeen, setOtherLastSeen] = useState(null)
   const [otherTyping, setOtherTyping]     = useState(false)
@@ -1576,6 +1583,12 @@ async function uploadAndSend(file, type, caption = '') {
     pendingEmojiCursorRef.current = pos + emoji.length
     // Single state path — handleTyping owns setNewMsg (and typing indicator).
     handleTyping(next)
+    // Record emoji as recently used: move to front, drop duplicates, cap the list.
+    setRecentEmojis(prev => {
+      const updated = [emoji, ...prev.filter(e => e !== emoji)].slice(0, RECENT_EMOJI_LIMIT)
+      saveRecentEmojis(updated)
+      return updated
+    })
   }
 
   // After a programmatic emoji insert, React has committed the new value. Re-focus
@@ -3245,16 +3258,36 @@ async function uploadAndSend(file, type, caption = '') {
           </div>
 
           <div className="emoji-grid">
-            {(EMOJI_BY_ID[emojiTab]?.emojis || []).map((emoji, i) => (
-              <button
-                key={`${emojiTab}-${i}-${emoji}`}
-                type="button"
-                className="emoji-btn"
-                onClick={() => insertEmoji(emoji)}
-              >
-                {emoji}
-              </button>
-            ))}
+            {emojiTab === 'recent' ? (
+              recentEmojis.length ? (
+                recentEmojis.map((emoji, i) => (
+                  <button
+                    key={`recent-${i}-${emoji}`}
+                    type="button"
+                    className="emoji-btn"
+                    onClick={() => insertEmoji(emoji)}
+                  >
+                    {emoji}
+                  </button>
+                ))
+              ) : (
+                <div className="emoji-recent-empty">
+                  <span className="emoji-recent-empty-icon">🕘</span>
+                  <span>No recent emojis yet — emojis you use will appear here.</span>
+                </div>
+              )
+            ) : (
+              (EMOJI_BY_ID[emojiTab]?.emojis || []).map((emoji, i) => (
+                <button
+                  key={`${emojiTab}-${i}-${emoji}`}
+                  type="button"
+                  className="emoji-btn"
+                  onClick={() => insertEmoji(emoji)}
+                >
+                  {emoji}
+                </button>
+              ))
+            )}
           </div>
 
           <div className="emoji-tabs">
