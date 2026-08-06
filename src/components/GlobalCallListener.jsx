@@ -384,6 +384,7 @@ export default function GlobalCallListener() {
       answerWhenReadyRef.current = true
       setConnecting(true)
       stopRingtone()
+      dismissIncoming()
       // Keep ringing / UI until offer arrives
       armOfferRecovery(src)
       return
@@ -413,6 +414,7 @@ export default function GlobalCallListener() {
     if (!src?.offer || !src.fromUser || !src.callId) {
       console.error('[GlobalCallListener] answerWithOffer missing offer/fromUser/callId')
       setConnecting(false)
+      dismissIncoming()
       return
     }
 

@@ -48,6 +48,7 @@ const S = {
 export default function FloatingIncomingCall() {
   const { incomingCall, callUiMode, incomingActionsRef } = useCall()
   const [remoteAvatar, setRemoteAvatar] = useState(null)
+  const [connecting, setConnecting] = useState(false)
 
   const fromUser = incomingCall?.fromUser
 
@@ -67,7 +68,7 @@ export default function FloatingIncomingCall() {
   const isVideo = callType === 'video'
   const avatarSrc = remoteAvatar
 
-  function handleAnswer() { incomingActionsRef.current?.answer?.() }
+  function handleAnswer() { setConnecting(true); incomingActionsRef.current?.answer?.() }
   function handleDecline() { incomingActionsRef.current?.decline?.() }
 
   return (
@@ -98,8 +99,9 @@ export default function FloatingIncomingCall() {
             <PhoneOff size={20} strokeWidth={2.5} color="#fff" />
           </button>
           <button
-            onClick={handleAnswer}
-            aria-label={isVideo ? 'Answer video call' : 'Answer call'}
+onClick={handleAnswer}
+        disabled={connecting}
+        aria-label={isVideo ? 'Answer video call' : 'Answer call'}
             style={{ ...S.btnBase, background: T.green, boxShadow: '0 4px 16px rgba(15,157,88,0.4)', animation: 'callPulse 2s ease-in-out infinite' }}
           >
             {isVideo ? <Video size={22} strokeWidth={2.5} color="#fff" /> : <Phone size={22} strokeWidth={2.5} color="#fff" />}
