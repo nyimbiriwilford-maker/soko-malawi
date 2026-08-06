@@ -1,16 +1,46 @@
-Investigate and permanently fix two issues in the SokoMw project by identifying the root cause before making changes.
+Investigate and permanently improve the chat message composer to provide a modern, seamless typing and emoji experience. Do not implement quick hacks—identify the root cause first and preserve the existing architecture.
 
-1. Notification Popup:
-- The notification popup does not disappear after a few seconds as expected.
-- Trace the entire notification lifecycle (creation, state management, rendering, auto-dismiss timer, cleanup, subscriptions).
-- Check for duplicate listeners, missing cleanup, stale timers, React StrictMode double execution, duplicate realtime subscriptions, or notification queue issues.
-- Ensure each notification appears once, auto-dismisses after the configured duration, is removed from state, and all timers/listeners are properly cleaned up.
+Current issue:
+Typing becomes difficult when inserting emojis. The flow between typing, opening the emoji picker, selecting emojis, and continuing to type is not smooth.
 
-2. Incoming Video Call Popup:
-- When an incoming video call is answered, the video call starts correctly, but another incoming call popup immediately appears.
-- Trace the complete call flow from incoming event to connected state.
-- Investigate all call-related contexts, hooks, providers, realtime subscriptions, websocket listeners, and state transitions.
-- Check for duplicate event listeners, multiple subscriptions, race conditions, incomingCall state not being cleared, call status not updating, or answered calls still being treated as ringing.
-- Once a call is accepted, immediately clear the incoming popup state and prevent any further incoming popup while the call is connecting or connected. Implement a proper call state machine if necessary so the active call is the single source of truth.
+Requirements:
 
-Search the entire codebase for all related notification and video call logic, identify the actual root causes, implement clean production-ready fixes (not hacks or temporary workarounds), remove duplicate listeners if found, and provide a report explaining the root causes, files modified, and why the fixes are permanent.
+1. Investigate the current implementation:
+   - Trace the entire message composer lifecycle.
+   - Inspect the textarea/input, emoji picker, keyboard handling, cursor management, focus handling, and message state.
+   - Identify why typing is interrupted after selecting emojis.
+   - Check for unnecessary re-renders, component remounts, focus loss, controlled/uncontrolled input issues, stale refs, or cursor position resets.
+
+2. Implement a professional messaging experience:
+   - User types normally.
+   - User opens the emoji picker without losing the current text.
+   - Selecting an emoji inserts it exactly at the current cursor position (not always at the end).
+   - After emoji insertion, the input immediately regains focus.
+   - The cursor is placed directly after the inserted emoji.
+   - The user can continue typing naturally without clicking the input again.
+   - Multiple emojis can be inserted consecutively.
+   - User can move the cursor anywhere in the text and insert emojis at that location.
+   - Existing text must never be overwritten.
+   - Preserve undo/redo behavior where possible.
+
+3. UX improvements:
+   - Emoji picker should not close unexpectedly while selecting emojis.
+   - Clicking outside closes the picker.
+   - Pressing Esc closes the picker.
+   - Maintain smooth scrolling and input height.
+   - Preserve draft text while the picker is open.
+   - Ensure mobile and desktop behavior are both smooth.
+
+4. Performance:
+   - Prevent unnecessary re-renders while typing.
+   - Avoid losing cursor position after state updates.
+   - Keep typing responsive even with long messages.
+
+5. After implementation, provide:
+   - Root cause(s).
+   - Files modified.
+   - Why typing was interrupted.
+   - Why the new implementation is permanent.
+   - Any performance or UX improvements made.
+
+The final result should feel like WhatsApp, Telegram, Messenger, or Discord: users should be able to type, insert emojis anywhere in the message, continue typing immediately, and never lose focus or cursor position.

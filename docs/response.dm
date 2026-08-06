@@ -1,67 +1,65 @@
-# Permanent fixes: notification auto-dismiss + incoming call popup reappearing
+# Chat composer — seamless typing + emoji insertion
 
-Task source: `docs/claudehelp.md`. Root causes identified first, then permanent fixes. Files changed:
-- `src/components/NotificationToast.jsx`
-- `src/components/GlobalCallListener.jsx`
+Task source: `docs/claudehelp.md`. Root cause identified first; changes confined to
+`src/pages/Chat.jsx` (composer + emoji picker). No other files changed.
 
-No other files changed.
+## Architecture traced (unchanged)
+- `newMsg` is the single source of truth; the composer `<textarea>` is fully
+  controlled (`value={newMsg}`, `onChange` → `handleTyping` which sets state + typing
+  indicator). Cursor is held by the browser during normal typing.
+- Emoji picker: `showEmoji` state; panel rendered at `Chat.jsx:3191`; Esc closes
+  (`:387`), outside-mousedown closes (`:446-452`), inner clicks are contained
+  (`onClick` stopPropagation on the panel), tabs/frequent/grid buttons call
+  `insertEmoji(emoji)`.
 
----
+## Root causes — why typing was interrupted after selecting an emoji
+1. **Fragile cursor restoration via `setTimeout(0)`** (old `insertEmoji`).
+   It force-called `inputRef.current.focus()` + `setSelectionRange(...)` in a
+   `setTimeout(0)` that races with React's commit of the new controlled value. The
+   textarea had been blurred by the emoji button click, and the caret restore often
+   fired before React wrote `value`, so the caret landed at the end (or was dropped),
+   and focus bounced → typing after an insert started from the wrong place.
+2. **Double state write.** `insertEmoji` called `setNewMsg(next)` *and*
+   `handleTyping(next)` (which sets `newMsg` again) — two writes of the same value,
+   plus a second typing-indicator side effect.
+3. **Selection not honored.** It only used `selectionStart`; an existing selection was
+   not replaced (end was always treated as `=== start`).
+4. **Autosize only on keystrokes.** Height grew in `onChange` only; programmatic emoji
+   inserts left the textarea undersized.
+5. **Emoji toggle stole focus** on desktop (button focus), dropping the caret context.
 
-## Bug 1 — Notification popup never auto-dismisses
+## Changes (`src/pages/Chat.jsx`)
+1. **Commit-time caret restore.** Added `pendingEmojiCursorRef` and a
+   `useEffect([newMsg])` that — only when the ref is set — re-focuses the textarea,
+   places the caret exactly after the inserted emoji, and syncs autosize height.
+   This runs *after* React has committed the value, so it can never race the DOM.
+2. **Rewrote `insertEmoji`:** reads live `selectionStart`/`selectionEnd` from the DOM,
+   replaces the selection (`slice(0,pos) + emoji + slice(end)`), records the target
+   caret position (`pos + emoji.length`, correct for UTF-16/surrogate-pair emoji),
+   and updates state through the single `handleTyping` path.
+3. **Kept textarea focus when toggling the picker** (desktop): `onMouseDown`
+   `preventDefault()` on the emoji toggle button so it never steals focus.
+4. The picker stays open across inserts (inner clicks contained), so multiple emojis
+   can be inserted consecutively; Esc and outside-click close still work; draft text
+   is preserved because it lives in `newMsg` state.
 
-### Root cause
-`src/components/NotificationToast.jsx` (old lines 178-191) started the 6s auto-dismiss timer **inside the queue-pump effect**, and that effect returned a cleanup of `() => clearTimeout(timerRef.current)` with deps `[queue, visible]`.
+## Why typing is now seamless (WhatsApp-style)
+- Normal typing: unchanged, browser owns the caret (no refocus).
+- Open picker: text preserved, caret position retained, focus not stolen.
+- Select emoji: inserted exactly at the caret (or replacing the selection), caret
+  restored immediately after it, textarea focused → keep typing instantly.
+- Move caret anywhere → next insert lands there; repeat for consecutive emojis.
 
-Sequence:
-1. Render: `queue=[N]`, `visible=null`. Effect runs → `setQueue([])`, `setVisible(N)`, `setShow(true)`, and starts `timerRef = T1 (6s)`. Returns cleanup C1.
-2. Those state writes re-render with `queue=[]`, `visible=N`. React then runs C1 → **`clearTimeout(T1)`** — the just-created timer is destroyed.
-3. The effect re-runs → early-returns (`visible` set) → no timer is ever restarted.
-
-Result: the toast mounts but its auto-dismiss timer is always cleared one tick later, so it stays on screen indefinitely. (Not caused by StrictMode/duplicate listeners — the component is mounted once at `App.jsx:309`, the channel is guarded by `channelRef`, and the `sw-incoming-call`/realtime paths were verified clean. It was purely the self-clearing timer.)
-
-### Fix (permanent)
-Split timer ownership from the pump effect:
-- Pump effect now only advances the queue (`setQueue`/`setVisible`/`setShow`) — it starts no timer and returns no cleanup.
-- New dedicated effect keyed **only on `[visible, dismiss]`** starts the 6s timer when a toast becomes visible and clears it when `visible` changes/unmounts. Queue changes can no longer clear the active toast's timer.
-
-Behavior now: each notification appears once → auto-dismisses after 6s → removed from state → next queued notification shows with its own fresh timer. Mouse-hover pause, quick-reply input pause, and send-success dismissal (`clearTimer`/`startTimer`/`handleSendReply`) still work because they share `timerRef`.
-
-## Bug 2 — Incoming call popup reappears right after answering
-
-### Root cause
-There was no "answered/active call = single source of truth" guard. After the user tapped Answer, several paths could re-surface the incoming popup (via `setIncomingCall`/`setIncoming`/`playRing`), so the call would start correctly yet the ring UI popped again:
-
-1. `GlobalCallListener` ring handler unconditionally called `setIncomingCall(payload)` and `playRing()` for any `ring` event — including a ring that arrived for a call the user had already committed to answering (realtime re-delivery, or the realtime ring arriving after a push-only answer tap). The old "user already tapped answer" block then re-answered with `setTimeout(0)`, producing a popup flash or a lingering ring.
-2. `armOfferRecovery` (push-only recovery) called `setIncomingCall(src)` **before** auto-answering when the user had already tapped Answer → popup flashed back.
-3. The SW `sw-incoming-call` handler re-armed ring/recovery for a call that was already answered/active.
-
-Verified: single mount (`App.jsx:307-310`), single broadcast channel (`CallContext.setupChannel` guarded by `channelRef`), single ring listener (useWebRTC defers with `return false`), and the App.jsx SW `INCOMING_CALL` 35s dedupe all work — the leak was these unguarded `setIncomingCall` re-surfaces.
-
-### Fix (permanent)
-Added a commit-state flag `answerCommittedRef` (set in `handleAnswer`, cleared in `cleanupCall`, the remote cancel/hangup path, and `answerWithOffer`'s early guard) and used it everywhere as the gate:
-
-- **Ring handler** (`payload._event === 'ring'`): if `callStateRef === 'in-call'` → return `true` (fully ignore). If `answerCommittedRef` → never re-show the popup or re-ring; if this ring carries the awaited SDP offer (`answerWhenReadyRef && payload.offer`) the committed answer is **completed directly** (`answerWithOffer`) without any popup; otherwise the ring is swallowed.
-- **`handleSwIncoming`**: bails immediately when in-call or committed — duplicate SW events can no longer re-arm ring/recovery.
-- **`armOfferRecovery`**: when auto-answering (`answerWhenReadyRef`), skips `setIncomingCall` entirely (no popup flash); the popup is only surfaced when the user has not yet answered.
-- **`handleAnswer`**: sets `answerCommittedRef = true` before branching (both offer-present and offer-missing paths).
-
-Because the flag survives the getUserMedia await and the "waiting for offer" window, no code path can re-surface the incoming UI between tap-answer and connected, and the active call is the single source of truth until `cleanupCall()` resets everything.
-
----
+## Performance / UX notes
+- No new renders on typing (the effect is a no-op when the cursor ref is null).
+- Removed the double `setNewMsg` (fewer writes).
+- Autosize now also correct after programmatic inserts.
+- Undo/redo: a fully controlled textarea already loses intra-field undo history on
+  programmatic value writes; preserving it would require `document.execCommand('insertText')`,
+  which conflicts with the existing controlled-value architecture, so the architecture
+  was intentionally preserved (undo within a keystroke-typed segment still works).
 
 ## Verification
-- `npx eslint src/components/GlobalCallListener.jsx src/components/NotificationToast.jsx`
-  - GlobalCallListener: **11 problems (9 errors, 2 warnings)** — all pre-existing baseline (unused vars `handleDismiss`, `openCallerChat`, `toggleMute`, `_`/`no-empty` catches, 2 `exhaustive-deps`). No new issues from these edits.
-  - NotificationToast: **2 problems (2 errors)** — pre-existing (`no-empty` catch; the pump effect's `set-state-in-effect`, which was already flagged at old line 181).
-- `npm run build` → **passes** (`✓ built in 3.49s`).
-
-## Files modified
-| File | Change |
-| --- | --- |
-| `src/components/NotificationToast.jsx` | Split auto-dismiss timer into a `[visible]`-keyed effect; pump effect no longer owns/clears the timer |
-| `src/components/GlobalCallListener.jsx` | Added `answerCommittedRef`; gated ring handler, `handleSwIncoming`, `armOfferRecovery`, `handleAnswer`, `cleanupCall`, remote-cancel, and `answerWithOffer` guard |
-
-## Why these fixes are permanent
-- The notification timer is now owned by an effect whose only dependency is the visible toast itself — nothing else can cancel it, and cleanup is automatic on replace/unmount.
-- The call incoming state is now suppressed by an explicit answered/active state machine gate that spans the entire answer lifecycle (tap → offer wait → getUserMedia → connected → teardown), so duplicates/races/re-deliveries can no longer resurrect the ring popup regardless of ordering.
+- `npx eslint src/pages/Chat.jsx` → **12 problems (8 errors, 4 warnings)** — identical
+  pre-existing baseline; none reference the edited lines.
+- `npm run build` → **passes** (`✓ built in 3.98s`).

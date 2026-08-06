@@ -288,6 +288,8 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
   const animFrameRef       = useRef(null)
   const audioRefs          = useRef({})
   const inputRef           = useRef(null)
+  /** Cursor position to restore after a programmatic emoji insert (commit-time). */
+  const pendingEmojiCursorRef = useRef(null)
   const channelRef         = useRef(null)
   const presenceChannelRef = useRef(null)
   const typingTimeoutRef   = useRef(null)
@@ -1565,15 +1567,32 @@ async function uploadAndSend(file, type, caption = '') {
   }
 
   function insertEmoji(emoji) {
-    const pos = inputRef.current?.selectionStart ?? newMsg.length
-    const next = newMsg.slice(0, pos) + emoji + newMsg.slice(pos)
-    setNewMsg(next)
+    const el = inputRef.current
+    // Read the live cursor from the DOM — fall back to the end only if unavailable.
+    const pos = el && typeof el.selectionStart === 'number' ? el.selectionStart : newMsg.length
+    const end = el && typeof el.selectionEnd === 'number' ? el.selectionEnd : pos
+    const next = newMsg.slice(0, pos) + emoji + newMsg.slice(end)
+    // Restore the caret right after the inserted emoji, once the new value is committed.
+    pendingEmojiCursorRef.current = pos + emoji.length
+    // Single state path — handleTyping owns setNewMsg (and typing indicator).
     handleTyping(next)
-    setTimeout(() => {
-      inputRef.current?.focus()
-      inputRef.current?.setSelectionRange(pos + emoji.length, pos + emoji.length)
-    }, 0)
   }
+
+  // After a programmatic emoji insert, React has committed the new value. Re-focus
+  // the textarea and place the caret directly after the emoji so the user can keep
+  // typing immediately (and insert more emojis consecutively).
+  useEffect(() => {
+    const at = pendingEmojiCursorRef.current
+    if (at == null) return
+    pendingEmojiCursorRef.current = null
+    const el = inputRef.current
+    if (!el) return
+    el.focus()
+    el.setSelectionRange(at, at)
+    // Keep autosize in sync for programmatic inserts (onChange only handles typing).
+    el.style.height = 'auto'
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px'
+  }, [newMsg])
 
   // ── Voice recording ──────────────────────────────────────────────────────
   async function startRecording() {
@@ -3376,6 +3395,7 @@ async function uploadAndSend(file, type, caption = '') {
               type="button"
               className={`chat-emoji-btn${showEmoji ? ' is-on' : ''}`}
               onClick={e => { e.stopPropagation(); setShowEmoji(v => !v); setShowAttach(false) }}
+              onMouseDown={e => e.preventDefault()}
               title="Emoji"
               aria-label="Emoji"
             >
