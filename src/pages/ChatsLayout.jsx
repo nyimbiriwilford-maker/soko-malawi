@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import ChatListPanel from './ChatListPanel'
 import Chat from './Chat'
@@ -20,6 +21,19 @@ export default function ChatsLayout() {
   const { userId } = useParams()
   const navigate = useNavigate()
   const hasThread = !!userId
+
+  // When returning to the chat list from a thread, the mobile browser may
+  // leave a residual document scroll position (from the on-screen keyboard
+  // pushing the page up). The shell is position:fixed + overflow:hidden, so
+  // that stale scrollY can't be visually scrolled away — and it makes the
+  // inner list scroller's upward overscroll chain to the blocked document,
+  // which swallows the scroll-up gesture. Reset it whenever the list shows.
+  useEffect(() => {
+    if (hasThread) return
+    window.scrollTo(0, 0)
+    document.documentElement.scrollTop = 0
+    document.body.scrollTop = 0
+  }, [hasThread])
 
   return (
     <div 

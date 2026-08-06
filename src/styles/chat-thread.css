@@ -783,6 +783,70 @@
   border-color: #fca5a5;
 }
 
+/* Phase 7 — product context block on the offer card */
+.chat-thread .offer-card-product {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: #f5faf7;
+  border: 1px solid #e2efe7;
+  border-radius: 10px;
+  padding: 6px 8px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+  font: inherit;
+  color: inherit;
+}
+
+.chat-thread .offer-card-product:active {
+  background: #ecf5f0;
+  border-color: #c9e0d2;
+}
+
+.chat-thread .offer-card-product-thumb {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: #eef3ef;
+}
+
+.chat-thread .offer-card-product-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #14332a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.chat-thread .offer-card-product-arrow {
+  color: #94a9a0;
+  font-size: 16px;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.chat-thread .offer-card-product.is-unavailable {
+  cursor: default;
+  background: #f4f6f5;
+  border-color: #e3e7e4;
+  color: #9aa6a0;
+  font-size: 12px;
+  font-style: italic;
+}
+
+.chat-thread .offer-card-product.is-unavailable:active {
+  background: #f4f6f5;
+  border-color: #e3e7e4;
+}
+
 .chat-thread .offer-card-head {
   display: flex;
   align-items: center;

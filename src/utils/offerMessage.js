@@ -41,12 +41,50 @@ export function offerStatusLabel(status) {
 // from the same created_at + wall clock.
 export const OFFER_EXPIRY_MS = 72 * 60 * 60 * 1000
 
-/** A pending offer is expired once its created_at is older than OFFER_EXPIRY_MS. */
+// Phase 9 — the sender picks how long a pending offer stays active.
+// `hours: 0` means "Never" (persisted as expires_in_hours: 0 so it is distinct from
+// legacy payloads that omit the field entirely and keep the default window).
+export const OFFER_EXPIRY_OPTIONS = [
+  { key: '24h',   label: '24 hours', hours: 24 },
+  { key: '3d',    label: '3 days',   hours: 72 },
+  { key: '7d',    label: '7 days',   hours: 168 },
+  { key: 'never', label: 'Never',    hours: 0 },
+]
+export const OFFER_DEFAULT_EXPIRY_HOURS = 72
+
+/**
+ * Milliseconds a pending offer stays active.
+ *  - expires_in_hours set (> 0) → that many hours
+ *  - expires_in_hours === 0        → never expires
+ *  - field absent (legacy)         → Phase-4 default (72 h)
+ */
+export function offerExpiryMs(offer) {
+  if (!offer) return OFFER_EXPIRY_MS
+  const raw = offer.expires_in_hours
+  if (raw == null) return OFFER_EXPIRY_MS
+  const hrs = Number(raw)
+  if (!Number.isFinite(hrs) || hrs <= 0) return 0
+  return hrs * 60 * 60 * 1000
+}
+
+/** Absolute expiry timestamp (ISO) for a pending offer, or null if it never expires. */
+export function offerExpiresAt(offer) {
+  if (!offer || !offer.created_at) return null
+  const ms = offerExpiryMs(offer)
+  if (ms <= 0) return null
+  const t = new Date(offer.created_at).getTime()
+  if (!Number.isFinite(t)) return null
+  return new Date(t + ms).toISOString()
+}
+
+/** A pending offer is expired once its created_at is older than its chosen window. */
 export function isOfferExpired(offer, now = Date.now()) {
   if (!offer || offer.status !== OFFER_STATUS.pending || !offer.created_at) return false
+  const ms = offerExpiryMs(offer)
+  if (ms <= 0) return false
   const t = new Date(offer.created_at).getTime()
   if (!Number.isFinite(t)) return false
-  return now - t > OFFER_EXPIRY_MS
+  return now - t > ms
 }
 
 /** Stable, unique offer id. Client-generated so child offers can backlink before the
@@ -69,7 +107,7 @@ function isValidAmount(v) {
  * Unknown/custom fields are NOT included here; senders may add their own and they
  * will be ignored by the parser (forward compatibility).
  */
-export function buildOfferPayload({ amount, note = '', listingId = null, parentOfferId = null }) {
+export function buildOfferPayload({ amount, note = '', listingId = null, parentOfferId = null, expiresInHours }) {
   return {
     type: OFFER_TYPE,
     offer_id: generateOfferId(),
@@ -79,6 +117,8 @@ export function buildOfferPayload({ amount, note = '', listingId = null, parentO
     note: note || '',
     status: 'pending',
     parent_offer_id: parentOfferId || null,
+    // Phase 9 — the sender's chosen expiry. Absent (undefined) keeps the default window.
+    expires_in_hours: Number.isFinite(expiresInHours) ? expiresInHours : undefined,
     created_at: new Date().toISOString(),
     version: OFFER_VERSION,
   }
@@ -134,6 +174,13 @@ export function parseOfferMessage(body) {
       responded_by: str(parsed.responded_by),
       responded_at: str(parsed.responded_at),
       counter_offer_id: str(parsed.counter_offer_id),
+      // Phase 9 — chosen expiry (hours). 0 = never; absent/legacy = default window.
+      expires_in_hours: (() => {
+        const raw = parsed.expires_in_hours
+        if (raw == null) return null
+        const n = Number(raw)
+        return Number.isFinite(n) ? n : null
+      })(),
       version,
     },
   }

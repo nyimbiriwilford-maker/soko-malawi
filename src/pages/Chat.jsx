@@ -28,6 +28,9 @@ import {
   isOfferExpired,
   offerStatusLabel,
   offerStatusText,
+  OFFER_EXPIRY_OPTIONS,
+  OFFER_DEFAULT_EXPIRY_HOURS,
+  offerExpiresAt,
 } from '../utils/offerMessage'
 import { supabase } from '../lib/supabase'
 // ── Image grouping ──────────────────────────────────────────────────────────
@@ -232,8 +235,12 @@ export default function Chat() {
   const [offerNote, setOfferNote]         = useState('')
   const [counterParent, setCounterParent] = useState(null)
   const [editOfferMsg, setEditOfferMsg]   = useState(null)
+  const [offerExpiryHours, setOfferExpiryHours] = useState(OFFER_DEFAULT_EXPIRY_HOURS)
   const [withdrawConfirmId, setWithdrawConfirmId] = useState(null)
   const [declineConfirmId, setDeclineConfirmId] = useState(null)
+  // Phase 7 — product context. Offer listing_id → { status:'ok', listing } | { status:'unavailable' }
+  const [offerListings, setOfferListings] = useState({})
+  const offerListingsFetchedRef = useRef({})
   const [recentEmojis, setRecentEmojis]   = useState(loadRecentEmojis)
   // Recent is the default tab, but fall back to the first real category when
   // the user has no recent history yet.
@@ -329,6 +336,40 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
       })
     })
     return flowMap
+  }, [messages])
+
+  // Phase 7 — fetch the listing behind every offer so the card can show the product
+  // being negotiated. A listing that no longer exists (or can't be read) renders as
+  // "Listing unavailable" instead of breaking the card.
+  useEffect(() => {
+    const ids = new Set()
+    ;(Array.isArray(messages) ? messages : []).forEach(m => {
+      if (m.media_type !== 'offer') return
+      const p = parseOfferMessage(m.body)
+      if (p.ok && p.offer.listing_id) ids.add(p.offer.listing_id)
+    })
+    const toFetch = [...ids].filter(id => !offerListingsFetchedRef.current[id])
+    if (!toFetch.length) return
+    toFetch.forEach(id => { offerListingsFetchedRef.current[id] = true })
+    let cancelled = false
+    ;(async () => {
+      const { data, error } = await supabase
+        .from('listings')
+        .select('id, title, images, price, status, deleted_at')
+        .in('id', toFetch)
+      if (cancelled) return
+      setOfferListings(prev => {
+        const next = { ...prev }
+        if (!error && Array.isArray(data) && data.length) {
+          data.forEach(l => { next[l.id] = { status: 'ok', listing: l } })
+        }
+        toFetch.forEach(id => {
+          if (!next[id]) next[id] = { status: 'unavailable' }
+        })
+        return next
+      })
+    })()
+    return () => { cancelled = true }
   }, [messages])
 
   useEffect(() => {
@@ -1679,6 +1720,8 @@ async function uploadAndSend(file, type, caption = '') {
         ...parsed.offer,
         amount,
         note,
+        // Phase 9 — sender may change the expiry window while editing
+        expires_in_hours: offerExpiryHours,
         // preserve offer_id / parent_offer_id / created_at (chain + expiry history)
       }
       applyOfferUpdate(editOfferMsg.id, JSON.stringify(updated))
@@ -1712,6 +1755,7 @@ async function uploadAndSend(file, type, caption = '') {
         note,
         listingId: prevParsed.offer.listing_id || listing?.id,
         parentOfferId: parentOid,
+        expiresInHours: offerExpiryHours,
       })
       sendOfferMessage(payload)
       // Phase 3 — supersede the parent immediately (only one active offer). The
@@ -1735,7 +1779,7 @@ async function uploadAndSend(file, type, caption = '') {
     }
 
     // ── Mode 3: NEW OFFER (including Duplicate) ──
-    const payload = buildOfferPayload({ amount, note, listingId: listing?.id })
+    const payload = buildOfferPayload({ amount, note, listingId: listing?.id, expiresInHours: offerExpiryHours })
     sendOfferMessage(payload)
     closeOfferSheet()
   }
@@ -1757,6 +1801,7 @@ async function uploadAndSend(file, type, caption = '') {
     setOfferNote('')
     setCounterParent(null)
     setEditOfferMsg(null)
+    setOfferExpiryHours(OFFER_DEFAULT_EXPIRY_HOURS)
     setWithdrawConfirmId(null)
   }
 
@@ -1769,6 +1814,9 @@ async function uploadAndSend(file, type, caption = '') {
     setCounterParent(null)
     setOfferAmount(String(parsed.offer.amount))
     setOfferNote(parsed.offer.note || '')
+    setOfferExpiryHours(Number.isFinite(parsed.offer.expires_in_hours)
+      ? parsed.offer.expires_in_hours
+      : OFFER_DEFAULT_EXPIRY_HOURS)
     setShowOffer(true)
   }
 
@@ -1882,6 +1930,9 @@ async function uploadAndSend(file, type, caption = '') {
     setCounterParent(msg)
     setOfferAmount(String(parsed.offer.amount))
     setOfferNote(parsed.offer.note || '')
+    setOfferExpiryHours(Number.isFinite(parsed.offer.expires_in_hours)
+      ? parsed.offer.expires_in_hours
+      : OFFER_DEFAULT_EXPIRY_HOURS)
     setShowOffer(true)
   }
 
@@ -2993,6 +3044,15 @@ async function uploadAndSend(file, type, caption = '') {
           const flow = isOffer && offer
             ? offerFlowMap.get(offer.offer_id || String(msg.id)) || null
             : null
+          // Phase 7 — product context. The listing behind the offer (if loaded/available)
+          const offerProduct = (() => {
+            if (!isOffer || !offer || !offer.listing_id) return null
+            const entry = offerListings[offer.listing_id]
+            if (entry?.status === 'ok' && entry.listing) return entry.listing
+            if (offer.listing_id === listing?.id && listing) return listing
+            if (entry?.status === 'unavailable') return { unavailable: true }
+            return null
+          })()
           const msgRx    = reactions[msg.id] || {}
           const rxEntries = Object.entries(msgRx).filter(([, users]) => users?.length)
           const isFailed = msg._status === 'failed'
@@ -3120,6 +3180,28 @@ async function uploadAndSend(file, type, caption = '') {
                         </span>
                       )}
                       <div className={`offer-card is-${effStatus}`}>
+                        {offerProduct && (offerProduct.unavailable
+                          ? (
+                            <div className="offer-card-product is-unavailable">
+                              Listing unavailable
+                            </div>
+                          )
+                          : (
+                            <button
+                              type="button"
+                              className="offer-card-product"
+                              onClick={e => { e.stopPropagation(); navigate(`/listing/${offer.listing_id}`) }}
+                            >
+                              {offerProduct.images?.[0] && (
+                                <img className="offer-card-product-thumb" src={offerProduct.images[0]} alt="" loading="lazy" />
+                              )}
+                              <span className="offer-card-product-title">
+                                {offerProduct.title || 'Product'}
+                              </span>
+                              <span className="offer-card-product-arrow" aria-hidden>›</span>
+                            </button>
+                          )
+                        )}
                         <div className="offer-card-head">
                           <span className="offer-card-tag">💰 Price offer</span>
                           <span className={`offer-card-status is-${effStatus}`}>

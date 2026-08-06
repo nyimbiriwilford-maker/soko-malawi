@@ -143,6 +143,7 @@ html:has(.chats-shell) {
   /* List view: keep room for fixed bottom nav under the scroll area */
   .chats-shell .chat-list-panel .chat-list-scroll {
     padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+    overscroll-behavior-y: contain;
   }
 
   .chats-shell .chat-brand-row {
