@@ -637,14 +637,14 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
         if (!isRelevantMessage(msg, myId, source, ctxId)) return
         setMessages(prev => {
           const withoutTemp = prev.filter(m => {
-            if (!String(m.id).startsWith('temp_')) return true
-            if (m.from_user !== msg.from_user || m.to_user !== msg.to_user) return true
-            return !(m.body === msg.body && m.media_url === msg.media_url)
+            if (String(m.id).startsWith('temp_') && m.from_user === msg.from_user && m.media_type === msg.media_type) return false
+            if (m.id === msg.id) return false
+            return true
           })
-          if (withoutTemp.find(m => m.id === msg.id)) return withoutTemp
-          return [...withoutTemp, msg]
+          const next = [...withoutTemp, msg]
+          setGroupedMessages(imageGroupingService.groupMessages(next))
+          return next
         })
-        setGroupedMessages(prev => imageGroupingService.appendMessage(prev, msg))
         if (msg.from_user === userId) {
           supabase.from('messages').update({ read: true }).eq('id', msg.id).then(() => {})
         }
@@ -1247,6 +1247,7 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
         const without = opts.replaceTempId ? prev.filter(m => m.id !== opts.replaceTempId) : prev
         return [...without, optimistic]
       })
+      setGroupedMessages(prev => imageGroupingService.appendMessage(prev, optimistic))
       nearBottomRef.current = true
       setNewMsg('')
       setReplyTo(null)
@@ -1658,26 +1659,37 @@ async function uploadAndSend(file, type, caption = '') {
     if (!url) return null
     if (type === 'image') {
       if (msg._isGroup) {
+        const imgs = msg._imageGroup
+        const total = imgs.length
+        const visible = imgs.slice(0, 9)
+        const overflow = total - 9
+
+        const getLayout = (n) => {
+          if (n === 1) return 'layout-1'
+          if (n === 2) return 'layout-2'
+          if (n === 3) return 'layout-3'
+          if (n === 4) return 'layout-4'
+          return 'layout-grid'
+        }
+
         return (
-          <div
-            className="chat-img-group"
-            data-count={Math.min(msg._imageGroup.length, 4)}
-          >
-            {msg._imageGroup.map((m, idx) => (
-              <button
-                key={m.id || idx}
-                type="button"
-                className="chat-img-thumb-wrap"
-                onClick={e => {
-                  e.stopPropagation()
-                  setLightbox({ url: m.media_url, type: 'image', caption: m.body || '' })
-                }}
-                onPointerDown={e => e.stopPropagation()}
-                aria-label="Open image"
-              >
-                <img src={m.media_url} alt={m.body || 'Shared image'} loading="lazy" />
-              </button>
-            ))}
+          <div className={`chat-img-group ${getLayout(visible.length)}`}>
+            {visible.map((img, idx) => {
+              const isLast = idx === visible.length - 1
+              const showOverflow = isLast && overflow > 0
+              return (
+                <div
+                  key={img.id}
+                  className="chat-img-thumb"
+                  onClick={e => { e.stopPropagation(); setLightbox({ url: img.media_url, type: 'image', caption: '' }) }}
+                >
+                  <img src={img.media_url} alt="" loading="lazy" draggable={false} />
+                  {showOverflow && (
+                    <div className="chat-img-overflow">+{overflow}</div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         )
       }

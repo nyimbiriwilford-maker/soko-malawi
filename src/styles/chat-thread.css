@@ -2288,3 +2288,85 @@
 .chat-thread .chat-img-thumb-wrap:hover img {
   opacity: 0.9;
 }
+
+/* ── Image group layouts ── */
+.chat-thread .chat-img-group {
+  display: grid;
+  gap: 3px;
+  border-radius: 14px;
+  overflow: hidden;
+  max-width: 280px;
+  cursor: pointer;
+}
+
+/* 1 image — full width */
+.chat-thread .chat-img-group.layout-1 {
+  grid-template-columns: 1fr;
+}
+.chat-thread .chat-img-group.layout-1 .chat-img-thumb img {
+  max-height: 280px;
+}
+
+/* 2 images — equal columns */
+.chat-thread .chat-img-group.layout-2 {
+  grid-template-columns: 1fr 1fr;
+}
+
+/* 3 images — large left, two stacked right */
+.chat-thread .chat-img-group.layout-3 {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+.chat-thread .chat-img-group.layout-3 .chat-img-thumb:first-child {
+  grid-row: 1 / 3;
+}
+
+/* 4 images — 2x2 grid */
+.chat-thread .chat-img-group.layout-4 {
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+}
+
+/* 5-9 images — balanced responsive grid */
+.chat-thread .chat-img-group.layout-grid {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+/* All thumbnails */
+.chat-thread .chat-img-thumb {
+  position: relative;
+  overflow: hidden;
+  background: #111;
+  aspect-ratio: 1;
+}
+.chat-thread .chat-img-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  transition: opacity 0.2s;
+}
+.chat-thread .chat-img-thumb:hover img {
+  opacity: 0.88;
+}
+
+/* Overflow badge (+X) */
+.chat-thread .chat-img-overflow {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  color: #fff;
+  font-size: 22px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  letter-spacing: -0.5px;
+}
+
+/* Mobile */
+@media (max-width: 899px) {
+  .chat-thread .chat-img-group {
+    max-width: min(72vw, 280px);
+  }
+}

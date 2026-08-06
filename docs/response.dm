@@ -1,76 +1,61 @@
-# Phase 3 — ImageGroupingService integration (applied)
+# Optimistic send fix + Phase 4 image group layouts (applied)
 
-Task source: `docs/claudehelp.md`. Two targeted fixes, no styling changes.
+Task source: `docs/claudehelp.md`.
 
-## Investigation findings
+## Part 1 — Optimistic send fix
 
-1. **Variable name — FIX B was a no-op.** There is no `groupedImages` anywhere in `Chat.jsx`. The `useMemo` at (old) line 1368 assigned `groupedMessages`, and the render loop at line 2442 iterates `groupedMessages` (all five references: declaration + `groupedMessages.map`, `groupedMessages[i-1]` ×2, `groupedMessages[i+1]`). Same variable, consistent. Nothing to rename.
+Two edits in `src/pages/Chat.jsx`:
 
-2. **Realtime INSERT handler** (`setupRealtimeChannel`, ~line 638-646): yes, it appends via a functional update:
+1. **`sendMessage` optimistic bubble** (`Chat.jsx:1246-1250`). Immediately after the optimistic `setMessages`, added:
+   ```js
+   setGroupedMessages(prev => imageGroupingService.appendMessage(prev, optimistic))
+   ```
+   So a just-sent bubble now appears in the grouped list instantly (as before), not after the realtime round-trip.
+
+2. **Realtime INSERT handler** (`Chat.jsx:638-647`). Replaced the previous `setMessages` + `setGroupedMessages(prev => appendMessage(prev, msg))` with the combined rebuild approach (as specified — `tempId` isn't in scope in the handler):
    ```js
    setMessages(prev => {
-     const withoutTemp = prev.filter(m => { ... temp-matching ... })
-     if (withoutTemp.find(m => m.id === msg.id)) return withoutTemp
-     return [...withoutTemp, msg]
-   })
-   ```
-   It also strips the optimistic `temp_` row before appending, and dedupes by id.
-
-## FIX A — Wire appendMessage for realtime grouping
-
-Changes in `src/pages/Chat.jsx`:
-
-1. **New state** (line 180):
-   ```js
-   const [groupedMessages, setGroupedMessages] = useState([])
-   ```
-2. **Removed the `useMemo`** that derived `groupedMessages` from `messages`; also dropped `useMemo` from the React import (line 1) — it was the only usage in this file.
-3. **Initial load** — in `loadMessages` success path (`setMessages(data)` at line 1183):
-   ```js
-   setMessages(data)
-   setGroupedMessages(imageGroupingService.groupMessages(data))
-   ```
-4. **Realtime INSERT** (line 647) — now appends incrementally:
-   ```js
-   setGroupedMessages(prev => imageGroupingService.appendMessage(prev, msg))
-   ```
-5. **Realtime UPDATE** (lines 652-660) — rebuild from the full updated list (rare):
-   ```js
-   setMessages(prev => {
-     const next = prev.map(m => (m.id === msg.id ? { ...m, ...msg, _status: undefined } : m))
+     const withoutTemp = prev.filter(m => {
+       if (String(m.id).startsWith('temp_') && m.from_user === msg.from_user && m.media_type === msg.media_type) return false
+       if (m.id === msg.id) return false
+       return true
+     })
+     const next = [...withoutTemp, msg]
      setGroupedMessages(imageGroupingService.groupMessages(next))
      return next
    })
    ```
-6. **Realtime DELETE** (lines 661-669) — rebuild from the full remaining list (rare):
-   ```js
-   setMessages(prev => {
-     const next = prev.filter(m => m.id !== old.id)
-     setGroupedMessages(imageGroupingService.groupMessages(next))
-     return next
-   })
-   ```
+   INSERT now rebuilds grouped (like UPDATE/DELETE) — fine because the optimistic path gives instant feedback; `groupMessages` runs once per message, not continuously.
 
-## Post-fix confirmations
+   Note: the new temp-strip predicate is looser than the old one (drops *any* same-sender/same-media-type `temp_` row). This is per spec. It means if two of the same media type are in flight together, the first realtime echo may briefly remove both temps from `messages`; the still-pending one reappears when its own echo arrives.
 
-- `appendMessage` is now called on **every** realtime INSERT (single place: `Chat.jsx:647`).
-- `groupMessages` is called only on **initial load** (`loadMessages`) and on **UPDATE / DELETE** — never on a plain new message.
-- **ESLint** `npx eslint src/pages/Chat.jsx`: **13 problems (9 errors, 4 warnings)** — identical to the pre-existing baseline (13/9/4). All are pre-existing (unused `CHAT_SOURCES`, `prefillMessage`, `isMsgHiddenForMe`, `e`; `no-useless-assignment`; `react-hooks/set-state-in-effect` ×4; `exhaustive-deps` ×3). No errors reference the grouping changes.
-- **Build** `npm run build`: **passes** (`✓ built in 3.94s`).
-- **grep** `groupedImages\|groupedMessages` in `src/pages/Chat.jsx`:
-  ```
-  180:   const [groupedMessages, setGroupedMessages] = useState([])
-  2448:         {groupedMessages.map((msg, i) => {
-  2450:           const showDate = i === 0 || new Date(msg.created_at).toDateString() !== new Date(groupedMessages[i - 1].created_at).toDateString()
-  2451:           const nextSame = i < groupedMessages.length - 1 && groupedMessages[i + 1].from_user === msg.from_user
-  2452:           const prevSame = i > 0 && groupedMessages[i - 1].from_user === msg.from_user && !showDate
-  ```
-  No `groupedImages` remains.
+Build after Part 1: **passes** (`✓ built in 3.99s`).
 
-## Behavioural notes (kept within the requested design)
+## Part 2 — Phase 4 image group layouts
 
-- **Optimistic sends**: a just-sent bubble appears once the realtime INSERT echo fires (the `temp_` row is removed and the real row appended to `groupedMessages`). It is no longer instant via the memo, but remains immediate on the realtime round-trip. No double-add: the optimistic `temp_` is never written to `groupedMessages`, and the echo is the single writer for sends.
-- **Local mutations** that only update `messages` directly (`deleteMessageForMe`'s localStorage fallback, and the 15s expired-message purge interval) now reflect in `groupedMessages` only via a subsequent realtime event. The main delete/edit/disappear paths all write through to the DB, so their realtime UPDATE triggers the rebuild.
-- **StrictMode**: the nested `setGroupedMessages` inside the UPDATE/DELETE updaters runs twice in dev, but `groupMessages` is pure/idempotent, so this is harmless.
+1. **`src/pages/Chat.jsx`** — `renderMedia`'s `_isGroup` branch (`Chat.jsx:1661-1703`) replaced exactly as specified:
+   - `visible = imgs.slice(0, 9)`, `overflow = total - 9`.
+   - `getLayout(n)`: 1→`layout-1`, 2→`layout-2`, 3→`layout-3`, 4→`layout-4`, else→`layout-grid`.
+   - Each thumb is a `div.chat-img-thumb` wrapping `<img draggable={false}>`; on the last thumb when `overflow > 0` a `.chat-img-overflow` badge shows `+{overflow}`.
+   - Thumb click opens the lightbox (`setLightbox({ url: img.media_url, type: 'image', caption: '' })`).
+   - Removed the old `chat-img-thumb-wrap`/`data-count` markup.
 
-`dist/index.html` and other build artifacts are touched by the build; commit only if intended.
+2. **`src/styles/chat-thread.css`** — appended the full layout block at the end of the file (`.chat-img-group` grid + `layout-1..4`, `.layout-grid`, `.chat-img-thumb`/`img`, `.chat-img-overflow`, mobile `@media (max-width: 899px)`).
+
+## Verification
+
+- `npx eslint src/pages/Chat.jsx`: **13 problems (9 errors, 4 warnings)** — identical to the pre-existing baseline; no errors reference the grouping or new layout code.
+- `npm run build`: **passes** (`✓ built in 4.61s`).
+- Layout confirmation (by `visible.length`, which drives `getLayout`):
+  - 1 image → `layout-1` (single full-width thumb, max-height 280px).
+  - 2 images → `layout-2` (side-by-side equal columns).
+  - 3 images → `layout-3` (first thumb spans grid-row 1/3, two stacked right).
+  - 4 images → `layout-4` (2×2).
+  - 5–9 images → `layout-grid` (3-column grid).
+  - 10+ images → **caveat below**.
+
+## Caveat: the +N overflow badge
+
+`ImageGroupingService` caps every group at `maxGroupSize: 9` (`chunk(..., 9)` in both `groupMessages` and `appendMessage`), so `_imageGroup.length` can never exceed 9 with the current default options. That means `overflow = total - 9` is always ≤ 0 and `showOverflow` is effectively always false with the current service config — 10 images render as two separate groups (`layout-grid` of 9 + `layout-1` of 1), not as "9 thumbnails + `+1`".
+
+The JSX/CSS implement the specified behavior verbatim; to actually trigger the `+N` badge you'd need to either raise `maxGroupSize` (>9) in the service call used by Chat.jsx, or lower the visible/overflow threshold (e.g., `slice(0, 4)` / `overflow = total - 4`). Left as-is per the spec — flagging so it can be decided deliberately.
