@@ -1,58 +1,32 @@
-# Phase 8 — Clean up and refactor (applied)
+# Per-image deletion integration with image groups — implementation
 
-Task source: `docs/claudehelp.md`. No behaviour or styling changes.
+Task source: `docs/claudehelp.md` (Phase). All changes in `src/pages/Chat.jsx`.
 
-## Investigation results (all greps in `src/pages/Chat.jsx`)
+## FIX A — Per-image long-press in group thumbnails
+- Chat.jsx:231 — added state `const [imageActionMsg, setImageActionMsg] = useState(null)` next to `actionMsg`.
+- Chat.jsx:299 — added ref `const thumbPressTimer = useRef(null)` next to `longPressRef`.
+- Chat.jsx:1817-1856 (renderMedia `_isGroup` branch) — thumbnail wrapper now has `onPointerDown` (420 ms timer → `setImageActionMsg(img)`), `onPointerUp`/`onPointerCancel`/`onPointerMove` (clear timer), and `onContextMenu` (preventDefault + stopPropagation → `setImageActionMsg(img)`). `_uploading` thumbs skip all of these. Click-to-lightbox preserved.
+  - Deviation from task spec: removed unused `e` params on `onPointerUp`/`onPointerCancel`/`onPointerMove` (`() => ...`). The spec's `e =>` variants tripped `no-unused-vars`; `e` was not referenced inside. Behavior identical.
 
-1. **Old grouping remnants** — `chat-img|chatImgGroup|imageGroup|img-group|imgGroup`:
-   All 21 matches are the *current* render/flow classes (`chat-img-group`, `chat-img-thumb`, `chat-img-upload-progress/-bar/-pct`, `chat-img-overflow`) plus the `imageGroupingService` import and the `appendMessage`/`groupMessages` call sites. **No obsolete `chatImgGroup`/`imgGroup`/camelCase remnants.**
+## FIX B — Per-image action sheet
+- Chat.jsx:3017-3066 — added separate sheet `{imageActionMsg && (...)}` directly after the message action-sheet block.
+  - Buttons: View (opens lightbox), Download (`<a href download target=_blank>`), Delete for me → `deleteMessageForMe(img)`, Delete for everyone (only when `imageActionMsg.from_user === currentUser?.id`) → `deleteMessageForEveryone(img)`, Cancel.
+  - Fixed the spec's malformed anchor (missing opening `<a` tag) — wrote a valid `<a>`.
+  - Note: `chat-action-overlay` has no CSS rule (only the shared `chat-action-sheet` is styled in `src/styles/chat-thread.css:2088`). Task said "no styling changes unless specified", and this exact class was specified, so I left CSS untouched. `chat-action-sheet`/`chat-action-btn` visual treatment will render via the sheet's shared styles.
 
-2. **Grouping fields** — `_isGroup|_imageGroup|_isPending|_uploading|_uploadProgress|_localIndex` (12 matches): strictly confined to
-   - the multi-image upload flow (`uploadSingleImage` progress updates, `uploadQueue` pending-group construction, and the final `groupMessages(messages)` rebuild),
-   - the realtime INSERT dedupe (`m._isGroup` / `m._imageGroup`),
-   - `renderMedia`'s `_isGroup` branch (layout + progress overlays).
-   Not scattered elsewhere. ✓
+## FIX C — Stop soft-delete from visually splitting image groups
+Soft-deleted image rows (`media_type==='image' && !media_url && deleted_at`) are filtered out of the array passed to `groupMessages`, in all 3 rebuild sites:
+- Chat.jsx:686-687 — realtime UPDATE handler (`forGrouping` filter).
+- Chat.jsx:696-697 — realtime DELETE handler.
+- Chat.jsx:1239-1240 — `loadMessages` initial load.
 
-3. **`groupMessages`/`appendMessage` call sites** — all deliberately placed in Phases 3-7:
-   - `loadMessages` → `groupMessages(data)` (initial load, line 1211)
-   - realtime INSERT → `appendMessage` after dedupe + optimistic-strip (lines 653-668)
-   - realtime UPDATE (678) / DELETE (687) → `groupMessages` full rebuild
-   - `sendMessage` optimistic → `appendMessage` (1274)
-   - `uploadQueue` multi-image settle → `groupMessages(messages)` (1470)
-   ✓ No stray call sites.
-
-4. **TODO/FIXME/HACK/XXX** — only the Phase 7 pagination TODO (now simplified, see FIX D).
-
-5. **Chat.jsx import block (lines 1-44)** — full audit of every import:
-   - `CHAT_SOURCES` was the **only dead import** (unused; it was a pre-existing lint error at `8:3`). All others (`Paperclip`, `conversationKey`, `markChatDeleted`, `EMOJI_CATEGORIES`, `EMOJI_FREQUENT`, `notifyMissedCall`, `notifyCallDeclined`, `CallHeaderButtons`, `HideDuringCall`, `FileText`, `Music`, `Camera`, etc.) are referenced. → removed in FIX A.
-
-6. **`imageGroupingService.js` exports** — `defaultService`, `createImageGroupingService`, `ImageGroupingService` all still needed: Chat.jsx uses the **default export** (`import imageGroupingService from '../lib/imageGroupingService'`, line 24) and only that; `createImageGroupingService`/`ImageGroupingService` remain exported for future options/custom configs. No caller uses the named class directly. Exports order fixed in FIX E.
-
-## Fixes applied
-
-- **FIX A** — Removed the dead `CHAT_SOURCES` import from the `../utils/chatSources` destructure in Chat.jsx. (`CHAT_SOURCES` is still exported/used by `ChatListPanel.jsx`, so the source module was untouched.)
-- **FIX B** — Added the architecture section comment directly above the `imageGroupingService` import in Chat.jsx (render source vs raw source, INSERT/UPDATE/DELETE/load strategy, multi-image pending-group flow).
-- **FIX C** — Added the module-doc JSDoc header to `src/lib/imageGroupingService.js` (rules, public API, "pure data transformation" note).
-- **FIX D** — Simplified the Phase 7 TODO to:
-  ```js
-  // TODO: when pagination is added, rebuild groupedMessages after prepending older messages:
-  // setGroupedMessages(imageGroupingService.groupMessages([...olderMessages, ...currentMessages]))
-  ```
-- **FIX E** — Reordered the bottom of `imageGroupingService.js` so `createImageGroupingService` is declared before `defaultService` (function-declaration hoisting made the original order work, but this is cleaner). Confirmed Chat.jsx imports the **default export**.
+## FIX D — Optimistic groupedMessages rebuild on delete
+- Chat.jsx:774-789 (`deleteMessageForMe`) — after `setMessages` filter, rebuilds `groupedMessages`: removes `id` from any `_imageGroup`; drops empty groups; converts a 1-left group to a single bubble (`_isGroup:false`); rekeys group `id` to the new first image.
+- Chat.jsx:822-838 (`deleteMessageForEveryone`) — same rebuild applied after the local soft-delete `setMessages` map (keeps non-group bubbles as-is, only filters `_imageGroup`).
 
 ## Verification
-
-- `npx eslint src/pages/Chat.jsx src/lib/imageGroupingService.js`: **12 problems (8 errors, 4 warnings)** — **improved from the 13/9/4 baseline**: removing the dead `CHAT_SOURCES` import eliminated its `no-unused-vars` error. No new issues introduced; `imageGroupingService.js` remains lint-clean.
-- `npm run build`: **passes** (`✓ built in 3.98s`).
-- Final `imageGroupingService.js` tail (clean order):
-  ```js
-  export function createImageGroupingService(options = {}) {
-    return new ImageGroupingService(options)
-  }
-
-  export const defaultService = createImageGroupingService()
-
-  export default defaultService
-  ```
-
-`dist/` build artifacts are touched by the build; commit only if intended.
+- `npx eslint src/pages/Chat.jsx` — **12 problems (8 errors, 4 warnings)** = the pre-existing baseline; **no new errors** introduced by this change (the 8 errors are pre-existing setState-in-effect / unused-var / useless-assignment in the file).
+- `npm run build` — **passes** (`✓ built in 3.41s`).
+- `grep -n "imageActionMsg"` — 10 references: state decl (:231), thumbnail long-press/context set (:1827), sheet render (:3017) + its handlers (:3025, :3032, :3043, :3050, :3054), Cancel (:3062), overlay close (:3018).
+- `grep -n "forGrouping"` — **3 occurrences** as required: UPDATE (:686), DELETE (:696), loadMessages (:1239).
+- `thumbPressTimer` — declared (:299), used in thumbnail handlers (:1827, :1831-1833).

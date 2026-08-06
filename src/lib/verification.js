@@ -1498,7 +1498,7 @@ export async function getAdminSellerProfile(sellerId, { request = null } = {}) {
   let shops = []
   try {
     const shopSelects = [
-      'id, name, slug, logo_url, city, phone, email, whatsapp, is_verified, created_at, address, location',
+      'id, name, slug, logo_url, city, phone, email, whatsapp, is_verified, created_at, address',
       'id, name, slug, logo_url, city, phone, is_verified, created_at',
       'id, name, slug, logo_url, city, is_verified, created_at',
       'id, name, slug, logo_url, city, created_at',

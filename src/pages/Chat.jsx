@@ -228,6 +228,7 @@ const [searchIdx, setSearchIdx]         = useState(0)
 const [lightbox, setLightbox]           = useState(null) // { url, type, caption }
 const [showAttach, setShowAttach]       = useState(false)
 const [actionMsg, setActionMsg]         = useState(null) // message under action sheet
+const [imageActionMsg, setImageActionMsg] = useState(null) // individual image under action sheet
 const [toast, setToast]                 = useState(null)
 const [reactions, setReactions]         = useState({})
 const [unreadBelow, setUnreadBelow]     = useState(0)
@@ -295,6 +296,7 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
   const offlineApplyRef    = useRef(null)
   const emojiPickerRef     = useRef(null)
   const longPressRef       = useRef(null)
+  const thumbPressTimer    = useRef(null)
   const longPressFiredRef  = useRef(false)
   const swipeRef           = useRef({ id: null, x: 0, dx: 0, active: false })
   const lastTapRef         = useRef({ id: null, t: 0 })
@@ -681,7 +683,8 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
         if (!isRelevantMessage(msg, myId, source, ctxId)) return
         setMessages(prev => {
           const next = prev.map(m => (m.id === msg.id ? { ...m, ...msg, _status: undefined } : m))
-          setGroupedMessages(imageGroupingService.groupMessages(next))
+          const forGrouping = next.filter(m => !(m.deleted_at && m.media_type === 'image' && !m.media_url))
+          setGroupedMessages(imageGroupingService.groupMessages(forGrouping))
           return next
         })
       })
@@ -690,7 +693,8 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
         if (!old?.id) return
         setMessages(prev => {
           const next = prev.filter(m => m.id !== old.id)
-          setGroupedMessages(imageGroupingService.groupMessages(next))
+          const forGrouping = next.filter(m => !(m.deleted_at && m.media_type === 'image' && !m.media_url))
+          setGroupedMessages(imageGroupingService.groupMessages(forGrouping))
           return next
         })
       })
@@ -769,6 +773,18 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
     const myId = currentUserRef.current.id
     const id = msg.id
     setMessages(prev => prev.filter(m => m.id !== id))
+    setGroupedMessages(prev => {
+      const next = prev
+        .map(m => {
+          if (!m._isGroup) return m.id === id ? null : m
+          const newGroup = m._imageGroup.filter(img => img.id !== id)
+          if (!newGroup.length) return null
+          if (newGroup.length === 1) return { ...newGroup[0], _isGroup: false, _imageGroup: undefined }
+          return { ...m, _imageGroup: newGroup, id: newGroup[0].id }
+        })
+        .filter(Boolean)
+      return next
+    })
     setActionMsg(null)
     setActionMode('main')
     if (String(id).startsWith('temp_')) return
@@ -805,6 +821,18 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
     setMessages(prev => prev.map(m => m.id === id
       ? { ...m, deleted_at: new Date().toISOString(), deleted_by: currentUserRef.current.id, body: '', media_url: null }
       : m))
+    setGroupedMessages(prev => {
+      const next = prev
+        .map(m => {
+          if (!m._isGroup) return m
+          const newGroup = m._imageGroup.filter(img => img.id !== id)
+          if (!newGroup.length) return null
+          if (newGroup.length === 1) return { ...newGroup[0], _isGroup: false, _imageGroup: undefined }
+          return { ...m, _imageGroup: newGroup, id: newGroup[0].id }
+        })
+        .filter(Boolean)
+      return next
+    })
     setActionMsg(null)
     setActionMode('main')
     if (String(id).startsWith('temp_')) return
@@ -1208,7 +1236,8 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
         return true
       })
       setMessages(data)
-      setGroupedMessages(imageGroupingService.groupMessages(data))
+      const forGrouping = data.filter(m => !(m.deleted_at && m.media_type === 'image' && !m.media_url))
+      setGroupedMessages(imageGroupingService.groupMessages(forGrouping))
       // TODO: when pagination is added, rebuild groupedMessages after prepending older messages:
       // setGroupedMessages(imageGroupingService.groupMessages([...olderMessages, ...currentMessages]))
       if (!isFromRequest.current && data?.some(m =>
@@ -1791,6 +1820,22 @@ async function uploadAndSend(file, type, caption = '') {
                     if (img._uploading) return
                     e.stopPropagation()
                     setLightbox({ url: img.media_url, type: 'image', caption: '' })
+                  }}
+                  onPointerDown={e => {
+                    if (img._uploading) return
+                    e.stopPropagation()
+                    thumbPressTimer.current = setTimeout(() => {
+                      setImageActionMsg(img)
+                    }, 420)
+                  }}
+                  onPointerUp={() => { clearTimeout(thumbPressTimer.current) }}
+                  onPointerCancel={() => { clearTimeout(thumbPressTimer.current) }}
+                  onPointerMove={() => { clearTimeout(thumbPressTimer.current) }}
+                  onContextMenu={e => {
+                    if (img._uploading) return
+                    e.preventDefault()
+                    e.stopPropagation()
+                    setImageActionMsg(img)
                   }}
                 >
                   <img src={img.media_url} alt="" loading="lazy" draggable={false} />
@@ -2964,6 +3009,59 @@ async function uploadAndSend(file, type, caption = '') {
                 <button type="button" className="chat-action-cancel" onClick={() => setActionMode('main')}>Back</button>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Per-image action sheet ── */}
+      {imageActionMsg && (
+        <div className="chat-action-overlay" onClick={() => setImageActionMsg(null)}>
+          <div className="chat-action-sheet" onClick={e => e.stopPropagation()}>
+            <div className="chat-action-title">Image</div>
+            <button
+              className="chat-action-btn"
+              onClick={() => {
+                setImageActionMsg(null)
+                setLightbox({ url: imageActionMsg.media_url, type: 'image', caption: '' })
+              }}
+            >
+              View
+            </button>
+            <a
+              className="chat-action-btn"
+              href={imageActionMsg.media_url}
+              download
+              target="_blank"
+              rel="noreferrer"
+              onClick={() => setImageActionMsg(null)}
+            >
+              Download
+            </a>
+            <button
+              className="chat-action-btn chat-action-btn--danger"
+              onClick={() => {
+                const img = imageActionMsg
+                setImageActionMsg(null)
+                deleteMessageForMe(img)
+              }}
+            >
+              Delete for me
+            </button>
+            {imageActionMsg.from_user === currentUser?.id && (
+              <button
+                className="chat-action-btn chat-action-btn--danger"
+                onClick={() => {
+                  const img = imageActionMsg
+                  setImageActionMsg(null)
+                  deleteMessageForEveryone(img)
+                }}
+              >
+                Delete for everyone
+              </button>
+            )}
+            <button className="chat-action-btn chat-action-btn--cancel" onClick={() => setImageActionMsg(null)}>
+              Cancel
+            </button>
           </div>
         </div>
       )}
