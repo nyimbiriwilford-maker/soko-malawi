@@ -1,61 +1,67 @@
-# Optimistic send fix + Phase 4 image group layouts (applied)
+# Phase 5 — Multi-image upload behaviour (applied)
 
 Task source: `docs/claudehelp.md`.
 
-## Part 1 — Optimistic send fix
+## Investigation findings
 
-Two edits in `src/pages/Chat.jsx`:
-
-1. **`sendMessage` optimistic bubble** (`Chat.jsx:1246-1250`). Immediately after the optimistic `setMessages`, added:
+1. **`uploadQueue`** (`src/pages/Chat.jsx`):
    ```js
-   setGroupedMessages(prev => imageGroupingService.appendMessage(prev, optimistic))
+   async function uploadQueue(items) {
+   for (const item of items) {
+     await uploadAndSend(item.file, item.type, item.caption)
+   }
+   setPreview([])
+   setUploadProgress(0)
+   }
    ```
-   So a just-sent bubble now appears in the grouped list instantly (as before), not after the realtime round-trip.
+   Sequential — each file uploaded+sent one at a time; images appeared as they finished, then merged.
 
-2. **Realtime INSERT handler** (`Chat.jsx:638-647`). Replaced the previous `setMessages` + `setGroupedMessages(prev => appendMessage(prev, msg))` with the combined rebuild approach (as specified — `tempId` isn't in scope in the handler):
+2. **`uploadAndSend`** (unchanged by this task): sets `uploading`, `setUploadProgress(0)`, builds R2 path `chat/{uid}/{safeName}_{Date.now()}.{ext}`, calls `uploadToR2(file, path, pct => setUploadProgress(pct))`, then `sendMessage(caption, type, url)`, `alert` on error, `setUploading(false)`.
+
+3. **Preview send call** — the modal's send button calls `uploadQueue(preview)` (`onClick={() => uploadQueue(preview)}`, Enter key too). `items` is the `preview` state array; each item is `{ file, url, type, caption }` built in `pickFile` (`file`, a `URL.createObjectURL(file)` as `url`, resolved `type`, `caption`). So items have `.file`, `.type`, `.caption`, `.url` — matching what the new code reads.
+
+4. **`uploadToR2`** (`src/lib/r2.js:105`) — signature **confirmed**: `export async function uploadToR2(file, path, onProgress = null)`. Fires `onProgress` (0-100) from `xhr.upload.onprogress`. It also compresses images to WebP and rewrites the path extension to `.webp`.
+
+## Applied changes
+
+### `src/pages/Chat.jsx`
+
+1. **New state** (after `uploadProgress`):
    ```js
-   setMessages(prev => {
-     const withoutTemp = prev.filter(m => {
-       if (String(m.id).startsWith('temp_') && m.from_user === msg.from_user && m.media_type === msg.media_type) return false
-       if (m.id === msg.id) return false
-       return true
-     })
-     const next = [...withoutTemp, msg]
-     setGroupedMessages(imageGroupingService.groupMessages(next))
-     return next
-   })
+   const [imageUploadProgresses, setImageUploadProgresses] = useState({})
+   const pendingGroupIdRef = useRef(null)
    ```
-   INSERT now rebuilds grouped (like UPDATE/DELETE) — fine because the optimistic path gives instant feedback; `groupMessages` runs once per message, not continuously.
 
-   Note: the new temp-strip predicate is looser than the old one (drops *any* same-sender/same-media-type `temp_` row). This is per spec. It means if two of the same media type are in flight together, the first realtime echo may briefly remove both temps from `messages`; the still-pending one reappears when its own echo arrives.
+2. **`uploadQueue` replaced** exactly per spec:
+   - Multi-image (len > 1, all `type === 'image'`): builds a single optimistic `pending_group_*` entry in `groupedMessages` with all thumbs at final positions (`_uploading: true`, `_uploadProgress: 0`, `media_url` = object URL), sets `uploading`, then uploads **all in parallel** via `Promise.allSettled(items.map((it,i) => uploadSingleImage(it,i,pendingId)))`.
+   - On settle: removes the pending group, resets progress/`uploading`/`preview`, and `alert`s a count of failed uploads (others already sent).
+   - Otherwise (single image, video, audio, file): unchanged sequential loop through `uploadAndSend`.
 
-Build after Part 1: **passes** (`✓ built in 3.99s`).
+3. **`uploadSingleImage` added** directly above `uploadQueue`: builds a per-index R2 path, streams progress into `imageUploadProgresses[index]` *and* into the pending group's `_imageGroup[i]._uploadProgress` (live bar), then `sendMessage(item.caption || '', 'image', url)` and marks that thumb done (`_uploading:false, _uploadProgress:100`).
 
-## Part 2 — Phase 4 image group layouts
+4. **`renderMedia` `_isGroup` thumbs**: `chat-img-thumb` now adds `is-uploading` when `img._uploading`; clicks are ignored while uploading; an overlay shows `.chat-img-upload-bar` (`width: _uploadProgress%`) + percentage text; the `+N` overflow badge is suppressed on uploading thumbs.
 
-1. **`src/pages/Chat.jsx`** — `renderMedia`'s `_isGroup` branch (`Chat.jsx:1661-1703`) replaced exactly as specified:
-   - `visible = imgs.slice(0, 9)`, `overflow = total - 9`.
-   - `getLayout(n)`: 1→`layout-1`, 2→`layout-2`, 3→`layout-3`, 4→`layout-4`, else→`layout-grid`.
-   - Each thumb is a `div.chat-img-thumb` wrapping `<img draggable={false}>`; on the last thumb when `overflow > 0` a `.chat-img-overflow` badge shows `+{overflow}`.
-   - Thumb click opens the lightbox (`setLightbox({ url: img.media_url, type: 'image', caption: '' })`).
-   - Removed the old `chat-img-thumb-wrap`/`data-count` markup.
+### `src/styles/chat-thread.css`
 
-2. **`src/styles/chat-thread.css`** — appended the full layout block at the end of the file (`.chat-img-group` grid + `layout-1..4`, `.layout-grid`, `.chat-img-thumb`/`img`, `.chat-img-overflow`, mobile `@media (max-width: 899px)`).
+Added the per-image upload overlay block after `.chat-img-overflow`: `.is-uploading img { opacity: .5 }`, `.chat-img-upload-progress`, `.chat-img-upload-bar`, `.chat-img-upload-pct`.
 
 ## Verification
 
-- `npx eslint src/pages/Chat.jsx`: **13 problems (9 errors, 4 warnings)** — identical to the pre-existing baseline; no errors reference the grouping or new layout code.
-- `npm run build`: **passes** (`✓ built in 4.61s`).
-- Layout confirmation (by `visible.length`, which drives `getLayout`):
-  - 1 image → `layout-1` (single full-width thumb, max-height 280px).
-  - 2 images → `layout-2` (side-by-side equal columns).
-  - 3 images → `layout-3` (first thumb spans grid-row 1/3, two stacked right).
-  - 4 images → `layout-4` (2×2).
-  - 5–9 images → `layout-grid` (3-column grid).
-  - 10+ images → **caveat below**.
+- `npm run build`: **passes** (`✓ built in 3.65s`).
+- `npx eslint src/pages/Chat.jsx`: **14 problems (10 errors, 4 warnings)** — 13/9/4 pre-existing plus **one new error**:
+  ```
+  202:10 error 'imageUploadProgresses' is assigned a value but never used  no-unused-vars
+  ```
+  This state is write-only by design of the spec: progress is written into `imageUploadProgresses` but the render reads `img._uploadProgress` from the pending group instead. Harmless, but it's a new lint error. If you want it gone, either drop `imageUploadProgresses` (read progress only from the group) or use it as the pct source in the overlay.
+- Confirmation vs the listed behaviours:
+  - 3 images → `isMultiImage` true → one pending group → `layout-3` with dimmed thumbs + progress bars. ✓
+  - Each thumb's bar fills independently (`index`-scoped progress). ✓
+  - On completion the pending group is removed and the real grouped bubbles arrive via the realtime INSERT rebuild (each `sendMessage` optimistic also appends, so there's no gap). ✓
+  - Single image / voice note / video / file → `isMultiImage` false → unchanged sequential path. ✓
 
-## Caveat: the +N overflow badge
+## Caveats (behavioural notes, not code deviations)
 
-`ImageGroupingService` caps every group at `maxGroupSize: 9` (`chunk(..., 9)` in both `groupMessages` and `appendMessage`), so `_imageGroup.length` can never exceed 9 with the current default options. That means `overflow = total - 9` is always ≤ 0 and `showOverflow` is effectively always false with the current service config — 10 images render as two separate groups (`layout-grid` of 9 + `layout-1` of 1), not as "9 thumbnails + `+1`".
+- **Pending group vs realtime rebuild**: the realtime INSERT handler rebuilds `groupedMessages` from the `messages` state, which never contained the `pending_group_*` entry. So as soon as the *first* upload's echo arrives, the pending group is dropped and any still-uploading thumbs revert to their individual optimistic bubbles (they reappear in the trailing group as their `sendMessage` completes, since consecutive same-sender images re-join via `appendMessage`). Net effect is correct final grouping, but the per-image overlay for not-yet-uploaded images can blink off after the first echo. If you want the pending group to persist until ALL uploads finish, the INSERT rebuild would need to preserve/merge pending groups (e.g., skip rebuild while `pendingGroupIdRef.current` is set, then rebuild once after removal).
+- `imageUploadProgresses` is currently write-only (see lint note above).
 
-The JSX/CSS implement the specified behavior verbatim; to actually trigger the `+N` badge you'd need to either raise `maxGroupSize` (>9) in the service call used by Chat.jsx, or lower the visible/overflow threshold (e.g., `slice(0, 4)` / `overflow = total - 4`). Left as-is per the spec — flagging so it can be decided deliberately.
+`dist/` build artifacts are touched by the build; commit only if intended.

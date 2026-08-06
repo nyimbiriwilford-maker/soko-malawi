@@ -199,6 +199,8 @@ export default function Chat() {
   const [loading, setLoading]             = useState(true)
   const [uploading, setUploading]         = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
+  const [imageUploadProgresses, setImageUploadProgresses] = useState({})
+  const pendingGroupIdRef = useRef(null)
   const [recording, setRecording]         = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
   const [waveHeights, setWaveHeights]     = useState(Array(40).fill(2))
@@ -1377,13 +1379,92 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
     })
   }
 
-  async function uploadQueue(items) {
-  for (const item of items) {
-    await uploadAndSend(item.file, item.type, item.caption)
+  async function uploadSingleImage(item, index, pendingId) {
+    const file = item.file
+    const ext = file.name?.split('.').pop() || 'bin'
+    const rawName = (file.name || 'image').replace(/\.[^/.]+$/, '')
+    const safeName = rawName.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 40)
+    const path = `chat/${currentUser.id}/${safeName}_${Date.now()}_${index}.${ext}`
+
+    const url = await uploadToR2(file, path, pct => {
+      setImageUploadProgresses(prev => ({ ...prev, [index]: pct }))
+      // Also update the pending group bubble's per-image progress
+      setGroupedMessages(prev => prev.map(m => {
+        if (m.id !== pendingId) return m
+        const newGroup = m._imageGroup.map((img, i) =>
+          i === index ? { ...img, _uploadProgress: pct } : img
+        )
+        return { ...m, _imageGroup: newGroup }
+      }))
+    })
+
+    await sendMessage(item.caption || '', 'image', url)
+    // Mark this image as done in the pending group
+    setGroupedMessages(prev => prev.map(m => {
+      if (m.id !== pendingId) return m
+      const newGroup = m._imageGroup.map((img, i) =>
+        i === index ? { ...img, _uploading: false, _uploadProgress: 100 } : img
+      )
+      return { ...m, _imageGroup: newGroup }
+    }))
   }
-  setPreview([])
-  setUploadProgress(0)
-}
+
+  async function uploadQueue(items) {
+    if (!items.length) return
+
+    const isMultiImage = items.length > 1 && items.every(it => it.type === 'image')
+
+    if (isMultiImage) {
+      // Build an optimistic pending group with all images at their final positions
+      const pendingId = `pending_group_${Date.now()}`
+      pendingGroupIdRef.current = pendingId
+      const pendingImgs = items.map((it, i) => ({
+        id: `${pendingId}_${i}`,
+        from_user: currentUser?.id,
+        created_at: new Date().toISOString(),
+        media_type: 'image',
+        media_url: it.url,           // object URL for immediate preview
+        _uploading: true,
+        _uploadProgress: 0,
+        _localIndex: i,
+      }))
+      const pendingGroup = {
+        ...pendingImgs[0],
+        id: pendingId,
+        _isGroup: true,
+        _isPending: true,
+        _imageGroup: pendingImgs,
+      }
+      setGroupedMessages(prev => [...prev, pendingGroup])
+      setImageUploadProgresses(Object.fromEntries(pendingImgs.map((_, i) => [i, 0])))
+      setUploading(true)
+
+      // Upload all in parallel
+      const results = await Promise.allSettled(
+        items.map((item, i) => uploadSingleImage(item, i, pendingId))
+      )
+
+      // Remove pending group regardless of outcome — realtime echoes will fill in successful ones
+      setGroupedMessages(prev => prev.filter(m => m.id !== pendingId))
+      pendingGroupIdRef.current = null
+      setImageUploadProgresses({})
+      setUploading(false)
+      setPreview([])
+      setUploadProgress(0)
+
+      // For failed ones, show an alert
+      const failed = results.filter(r => r.status === 'rejected').length
+      if (failed > 0) alert(`${failed} image${failed > 1 ? 's' : ''} failed to upload. Others were sent.`)
+
+    } else {
+      // Single file or non-image — use existing sequential path
+      for (const item of items) {
+        await uploadAndSend(item.file, item.type, item.caption)
+      }
+      setPreview([])
+      setUploadProgress(0)
+    }
+  }
 
 async function uploadAndSend(file, type, caption = '') {
   console.log('UAS_START', { type, fileType: file?.type, fileSize: file?.size })
@@ -1680,11 +1761,26 @@ async function uploadAndSend(file, type, caption = '') {
               return (
                 <div
                   key={img.id}
-                  className="chat-img-thumb"
-                  onClick={e => { e.stopPropagation(); setLightbox({ url: img.media_url, type: 'image', caption: '' }) }}
+                  className={`chat-img-thumb${img._uploading ? ' is-uploading' : ''}`}
+                  onClick={e => {
+                    if (img._uploading) return
+                    e.stopPropagation()
+                    setLightbox({ url: img.media_url, type: 'image', caption: '' })
+                  }}
                 >
                   <img src={img.media_url} alt="" loading="lazy" draggable={false} />
-                  {showOverflow && (
+                  {img._uploading && (
+                    <div className="chat-img-upload-progress">
+                      <div
+                        className="chat-img-upload-bar"
+                        style={{ width: `${img._uploadProgress || 0}%` }}
+                      />
+                      <span className="chat-img-upload-pct">
+                        {img._uploadProgress > 0 ? `${img._uploadProgress}%` : ''}
+                      </span>
+                    </div>
+                  )}
+                  {showOverflow && !img._uploading && (
                     <div className="chat-img-overflow">+{overflow}</div>
                   )}
                 </div>
