@@ -648,6 +648,13 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
             // Incremental append — fast path for the common case
             // appendMessage handles grouping rules (same sender, within 60s, image type)
             setGroupedMessages(prev => {
+              // Deduplicate: if this message id already exists in grouped, skip
+              const alreadyExists = prev.some(m => {
+                if (m._isGroup) return m._imageGroup?.some(img => img.id === msg.id)
+                return m.id === msg.id
+              })
+              if (alreadyExists) return prev
+
               const withoutOptimistic = prev.filter(m =>
                 !(String(m.id).startsWith('temp_') &&
                   m.from_user === msg.from_user &&
@@ -1196,6 +1203,9 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
       })
       setMessages(data)
       setGroupedMessages(imageGroupingService.groupMessages(data))
+      // TODO Phase 7: rebuild groupedMessages when older messages are prepended
+      // (no pagination yet — loadMessages replaces the whole array; if older messages
+      // are later prepended, use: setGroupedMessages(imageGroupingService.groupMessages([...olderMessages, ...currentMessages])))
       if (!isFromRequest.current && data?.some(m =>
         m.chat_source === 'request' || m.body?.includes('I can help with your request') || m.body?.includes('I saw your request for')
       )) {
