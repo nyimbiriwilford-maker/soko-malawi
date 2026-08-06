@@ -22,6 +22,30 @@ export default function ChatsLayout() {
   const navigate = useNavigate()
   const hasThread = !!userId
 
+  // Pin the list shell to the *visible* viewport on mobile when the soft
+  // keyboard / browser chrome resizes it — same visualViewport fix as the
+  // chat thread (which uses the separate --chat-vvh / --chat-vv-top vars).
+  useEffect(() => {
+    const root = document.documentElement
+    function apply() {
+      const vv = window.visualViewport
+      const h = vv ? Math.round(vv.height) : window.innerHeight
+      const top = vv ? Math.round(vv.offsetTop) : 0
+      root.style.setProperty('--chats-vvh', `${h}px`)
+      root.style.setProperty('--chats-vv-top', `${top}px`)
+    }
+    apply()
+    const vv = window.visualViewport
+    vv?.addEventListener('resize', apply)
+    vv?.addEventListener('scroll', apply)
+    return () => {
+      vv?.removeEventListener('resize', apply)
+      vv?.removeEventListener('scroll', apply)
+      root.style.removeProperty('--chats-vvh')
+      root.style.removeProperty('--chats-vv-top')
+    }
+  }, [])
+
   // When returning to the chat list from a thread, the mobile browser may
   // leave a residual document scroll position (from the on-screen keyboard
   // pushing the page up). The shell is position:fixed + overflow:hidden, so

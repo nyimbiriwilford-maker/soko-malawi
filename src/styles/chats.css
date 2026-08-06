@@ -84,27 +84,26 @@ html:has(.chats-shell) {
 @media (max-width: 899px) {
   /* Pin chats UI to the visible viewport so it isn't
      pushed/clipped by body padding or browser chrome.
-     --chat-vvh is set by Chat.jsx from visualViewport when a thread is open. */
+     --chats-vvh / --chats-vv-top are set by ChatsLayout.jsx from
+     visualViewport (list + thread share this shell). */
   .chats-shell {
     position: fixed;
-    top: var(--chat-vv-top, 0px);
+    top: var(--chats-vv-top, 0px);
     left: 0;
     right: 0;
     bottom: auto;
     width: 100%;
-    height: var(--chat-vvh, 100dvh);
-    max-height: var(--chat-vvh, 100dvh);
+    height: var(--chats-vvh, 100dvh);
+    max-height: var(--chats-vvh, 100dvh);
     z-index: 40;
     background: #f4f8f5;
   }
 
-  /* Fallback when visualViewport vars are unset (chat list only) */
+  /* Fallback when visualViewport vars are unset */
   .chats-shell[data-has-thread='false'] {
-    height: 100vh;
-    max-height: 100vh;
-    height: 100dvh;
-    max-height: 100dvh;
-    top: 0;
+    top: var(--chats-vv-top, 0px);
+    height: var(--chats-vvh, 100dvh);
+    max-height: var(--chats-vvh, 100dvh);
   }
 
   /* Hide left sidebar completely on mobile */
