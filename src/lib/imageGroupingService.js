@@ -1,3 +1,20 @@
+/**
+ * ImageGroupingService
+ *
+ * Groups consecutive image messages from the same sender sent within
+ * a configurable time window (default 60 s) into a single _isGroup bubble.
+ *
+ * Rules:
+ *  - Only consecutive images are grouped (a text message breaks the group)
+ *  - Max group size: 9 (groups larger than 9 are split automatically)
+ *  - Groups are sender-scoped (never mix messages from different users)
+ *
+ * Public API used by Chat.jsx:
+ *  - imageGroupingService.groupMessages(messages)  → full rebuild from raw rows
+ *  - imageGroupingService.appendMessage(grouped, msg) → O(1) incremental append
+ *
+ * Do not add UI logic here. This module is pure data transformation.
+ */
 const DEFAULT_OPTIONS = {
   maxGroupSize: 9,
   windowMs: 60000,
@@ -120,10 +137,10 @@ export class ImageGroupingService {
   }
 }
 
-export const defaultService = createImageGroupingService()
-
 export function createImageGroupingService(options = {}) {
   return new ImageGroupingService(options)
 }
+
+export const defaultService = createImageGroupingService()
 
 export default defaultService

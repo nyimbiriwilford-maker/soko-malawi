@@ -5,7 +5,6 @@ import {
   messageContextFields,
   sourceMeta,
   sourceHref,
-  CHAT_SOURCES,
   conversationKey,
   markChatDeleted,
 } from '../utils/chatSources'
@@ -21,6 +20,13 @@ import {
   File as FileIcon2,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+// ── Image grouping ──────────────────────────────────────────────────────────
+// Messages are grouped by ImageGroupingService (src/lib/imageGroupingService.js).
+// groupedMessages is the render source; messages is the raw DB-row source.
+// INSERT  → appendMessage (O(1) incremental)
+// UPDATE/DELETE/load → groupMessages (full rebuild, rare)
+// Multi-image uploads → pending group shown immediately, rebuilt after all uploads settle
+// ─────────────────────────────────────────────────────────────────────────────
 import imageGroupingService from '../lib/imageGroupingService'
 import { uploadToR2 } from '../lib/r2'
 import { formatTime } from '../hooks/useWebRTC'
@@ -1203,9 +1209,8 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
       })
       setMessages(data)
       setGroupedMessages(imageGroupingService.groupMessages(data))
-      // TODO Phase 7: rebuild groupedMessages when older messages are prepended
-      // (no pagination yet — loadMessages replaces the whole array; if older messages
-      // are later prepended, use: setGroupedMessages(imageGroupingService.groupMessages([...olderMessages, ...currentMessages])))
+      // TODO: when pagination is added, rebuild groupedMessages after prepending older messages:
+      // setGroupedMessages(imageGroupingService.groupMessages([...olderMessages, ...currentMessages]))
       if (!isFromRequest.current && data?.some(m =>
         m.chat_source === 'request' || m.body?.includes('I can help with your request') || m.body?.includes('I saw your request for')
       )) {
