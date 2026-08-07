@@ -1,41 +1,35 @@
-# Chat media placeholder: fix grouped images + remove debug logs
+# Chat media placeholder: blurred preview instead of opaque
 
 Task source: `docs/claudehelp.md`.
 
-## Task 1 — Console output
-Requires running the app in a browser (Supabase real-time INSERT) — not capturable from this shell. Expected pattern for the fix to be correct:
-- `[media-debug]` (removed now, but it logged before change): `_pendingLoad: true` on new incoming media.
-- `[renderMedia]` (removed now): previously showed `_pendingLoad: undefined` for **grouped** bubbles because `asGroup` spread only the anchor `group[0]` — the confirmed root cause fixed in Task 2.
-
-## Task 2 — asGroup fix applied
-`src/lib/imageGroupingService.js:130–134`:
-```js
-asGroup(group) {
-  if (group.length === 1) return this.asBubble(group[0])
-  const anyPending = group.some(m => m._pendingLoad)
-  return { ...group[0], _imageGroup: group, _isGroup: true, _pendingLoad: anyPending }
-}
+## Task 1 + 2 — Blurred `<img>` added to both image and video placeholders
+In `renderMedia` (`Chat.jsx`), the `_pendingLoad` placeholder now renders a blurred preview layer above the icon/text:
+```jsx
+<div className="chat-media-placeholder" onClick={/* tap-to-load handler unchanged */}>
+  <img
+    src={msg.media_url}
+    className="chat-media-placeholder-blur"
+    draggable={false}
+    alt=""
+  />
+  <div className="chat-media-placeholder-inner">
+    {isVideo ? <Video size={28} strokeWidth={2} /> : <ImageIcon size={28} strokeWidth={2} />}
+    <span>Tap to load {isVideo ? 'video' : 'photo'}</span>
+  </div>
+</div>
 ```
-Now if any member of the group is pending, the whole group bubble carries `_pendingLoad: true` → the placeholder shows for grouped incoming media.
+Both image and video branches share this single placeholder. For video, `msg.media_url` points to the video file so the `<img>` blur won't render a frame — it stays transparent and the dark base + overlay icon show instead (as specified).
 
-## Task 3 — Tap clears all group members
-`Chat.jsx` renderMedia `_pendingLoad` onClick now:
-```js
-const idsToClear = msg._isGroup
-  ? new Set((msg._imageGroup || []).map(m => m.id))
-  : new Set([msg.id])
-```
-- `setMessages` clears every member by id.
-- `setGroupedMessages` clears matching top-level messages AND, for a group bubble, clears `_pendingLoad` on the bubble plus `_pendingLoad: false` on each matched member inside `_imageGroup`.
+## Task 3 — CSS updated (`chat-thread.css`)
+- `.chat-media-placeholder`: now `position: relative; overflow: hidden; background: #000`, removed solid bubble-color background.
+- `.chat-media-placeholder-blur` (new): absolutely positioned, `inset: 0`, `object-fit: cover`, `filter: blur(18px)`, `transform: scale(1.1)` (kills edge halos), `opacity: 0.6`.
+- `.chat-media-placeholder-inner`: now `position: relative; z-index: 1; color: #fff`.
+- `.chat-media-placeholder-inner svg`: `opacity: 0.9`.
 
-## Task 4 — Logs removed
-- `[media-debug]` INSERT-handler log — removed.
-- `[renderMedia]` top-of-function log — removed.
-Verified via grep: zero occurrences left in `Chat.jsx`.
+## Do-not-touch compliance
+`_pendingLoad` logic, onClick tap-to-load handler, and emoji/input-bar changes untouched.
 
 ## Deliverable
-1. Console output: requires live browser test (unavailable in this shell); root cause confirmed via code path.
-2. `asGroup` fix: ✓ applied (`imageGroupingService.js`).
-3. Grouped tap clears all members: ✓ applied (`Chat.jsx` onClick).
-4. Both logs removed: ✓ confirmed.
-5. Build: `npm run build` → `✓ built in 6.08s`. Passes.
+1. Blurred `<img class="chat-media-placeholder-blur">` added to placeholder (covers image + video): ✓
+2. CSS blur-layer styles updated: ✓
+3. Build: `npm run build` → `✓ built in 2.94s`. Passes.

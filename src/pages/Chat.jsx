@@ -2247,6 +2247,12 @@ async function uploadAndSend(file, type, caption = '') {
             )
           }}
         >
+          <img
+            src={msg.media_url}
+            className="chat-media-placeholder-blur"
+            draggable={false}
+            alt=""
+          />
           <div className="chat-media-placeholder-inner">
             {isVideo ? <Video size={28} strokeWidth={2} /> : <ImageIcon size={28} strokeWidth={2} />}
             <span>Tap to load {isVideo ? 'video' : 'photo'}</span>

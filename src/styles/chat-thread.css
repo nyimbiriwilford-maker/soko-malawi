@@ -563,28 +563,43 @@
 .chat-thread .chat-media-placeholder {
   width: 100%;
   aspect-ratio: 4/3;
-  background: var(--chat-bubble-in, #f0f0f0);
   border-radius: 10px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   min-height: 120px;
+  position: relative;
+  overflow: hidden;
+  background: #000;
+}
+
+.chat-thread .chat-media-placeholder-blur {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(18px);
+  transform: scale(1.1);
+  opacity: 0.6;
 }
 
 .chat-thread .chat-media-placeholder-inner {
+  position: relative;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 6px;
-  color: var(--text-2, #888);
+  color: #fff;
   font-size: 13px;
 }
 
 .chat-thread .chat-media-placeholder-inner svg {
   width: 32px;
   height: 32px;
-  opacity: 0.5;
+  opacity: 0.9;
 }
 
 .chat-thread .msg-bubble.is-mine .chat-media-placeholder {
