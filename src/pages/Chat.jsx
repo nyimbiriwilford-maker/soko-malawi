@@ -58,7 +58,6 @@ import {
   EMOJI_CATEGORIES,
   EMOJI_BY_ID,
   DEFAULT_EMOJI_TAB,
-  EMOJI_FREQUENT,
   loadRecentEmojis,
   saveRecentEmojis,
   RECENT_EMOJI_LIMIT,
@@ -242,10 +241,7 @@ export default function Chat() {
   const [offerListings, setOfferListings] = useState({})
   const offerListingsFetchedRef = useRef({})
   const [recentEmojis, setRecentEmojis]   = useState(loadRecentEmojis)
-  // Recent is the default tab, but fall back to the first real category when
-  // the user has no recent history yet.
-  const [emojiTab, setEmojiTab]           = useState(() =>
-    loadRecentEmojis().length ? 'recent' : (EMOJI_CATEGORIES.find(c => c.id !== 'recent')?.id || DEFAULT_EMOJI_TAB))
+  const [emojiTab, setEmojiTab]           = useState(DEFAULT_EMOJI_TAB)
   const [otherOnline, setOtherOnline]     = useState(false)
   const [otherLastSeen, setOtherLastSeen] = useState(null)
   const [otherTyping, setOtherTyping]     = useState(false)
@@ -3890,51 +3886,35 @@ async function uploadAndSend(file, type, caption = '') {
             </div>
           </div>
 
-          <div className="emoji-frequent">
-            {EMOJI_FREQUENT.map((emoji, i) => (
-              <button
-                key={`freq-${i}-${emoji}`}
-                type="button"
-                className="emoji-btn emoji-btn-freq"
-                onClick={() => insertEmoji(emoji)}
-                title="Quick insert"
-              >
-                {emoji}
-              </button>
-            ))}
-          </div>
-
-          <div className="emoji-grid">
-            {emojiTab === 'recent' ? (
-              recentEmojis.length ? (
-                recentEmojis.map((emoji, i) => (
-                  <button
-                    key={`recent-${i}-${emoji}`}
-                    type="button"
-                    className="emoji-btn"
-                    onClick={() => insertEmoji(emoji)}
-                  >
-                    {emoji}
-                  </button>
-                ))
-              ) : (
-                <div className="emoji-recent-empty">
-                  <span className="emoji-recent-empty-icon">🕘</span>
-                  <span>No recent emojis yet — emojis you use will appear here.</span>
-                </div>
-              )
-            ) : (
-              (EMOJI_BY_ID[emojiTab]?.emojis || []).map((emoji, i) => (
+          <div className="emoji-recent-strip">
+            {recentEmojis.length > 0 ? (
+              recentEmojis.map((emoji, i) => (
                 <button
-                  key={`${emojiTab}-${i}-${emoji}`}
+                  key={`recent-${i}-${emoji}`}
                   type="button"
-                  className="emoji-btn"
+                  className="emoji-btn emoji-btn-freq"
                   onClick={() => insertEmoji(emoji)}
+                  title={emoji}
                 >
                   {emoji}
                 </button>
               ))
+            ) : (
+              <span className="emoji-recent-strip-empty">🕘 Your recent emojis will appear here</span>
             )}
+          </div>
+
+          <div className="emoji-grid">
+            {(EMOJI_BY_ID[emojiTab]?.emojis || []).map((emoji, i) => (
+              <button
+                key={`${emojiTab}-${i}-${emoji}`}
+                type="button"
+                className="emoji-btn"
+                onClick={() => insertEmoji(emoji)}
+              >
+                {emoji}
+              </button>
+            ))}
           </div>
 
           <div className="emoji-tabs">

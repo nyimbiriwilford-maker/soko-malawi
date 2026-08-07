@@ -3,13 +3,6 @@
  */
 export const EMOJI_CATEGORIES = [
   {
-    id: 'recent',
-    label: 'Recent',
-    icon: '\u{1F552}',
-    // Placeholder — the chat composer supplies the actual list (localStorage-backed).
-    emojis: [],
-  },
-  {
     id: 'smileys',
     label: 'Smileys',
     icon: '\u{1F60A}',

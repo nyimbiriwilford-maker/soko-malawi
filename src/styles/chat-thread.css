@@ -1754,7 +1754,7 @@
   .chat-thread .emoji-picker-close { display: none; }
 }
 
-.chat-thread .emoji-frequent {
+.chat-thread .emoji-recent-strip {
   display: flex;
   flex: none;
   gap: 2px;
@@ -1764,8 +1764,18 @@
   border-bottom: 1px solid #f3f7f4;
 }
 
-.chat-thread .emoji-frequent::-webkit-scrollbar {
+.chat-thread .emoji-recent-strip::-webkit-scrollbar {
   display: none;
+}
+
+.chat-thread .emoji-recent-strip-empty {
+  font-size: 11px;
+  color: #8a9a90;
+  padding: 6px 10px;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .chat-thread .emoji-grid {
@@ -2276,8 +2286,8 @@
     left: 6px;
     right: 6px;
     max-width: none;
-    height: min(50dvh, 380px);
-    max-height: min(50dvh, 380px);
+    height: min(72dvh, 520px);
+    max-height: min(72dvh, 520px);
     touch-action: pan-y;
   }
 

@@ -1,55 +1,43 @@
-# Fix: chat list (conversations panel) cannot scroll on mobile
+# Fix: emoji picker on mobile — height + Recent tab relocation
 
 Task source: `docs/claudehelp.md`.
 
-## What was done
+## FIX 1 — Increase picker height on mobile
+`src/styles/chat-thread.css` (mobile `@media` block, `.chat-thread .emoji-picker-panel`):
+- `height: min(72dvh, 520px);` (was `min(50dvh, 380px)`)
+- `max-height: min(72dvh, 520px);`
 
-### 1. `src/pages/ChatsLayout.jsx`
-- Added a visualViewport-tracking `useEffect` as the **first hook** in the component (before the existing scroll-reset effect and before any return). It sets `--chats-vvh` (visual viewport height) and `--chats-vv-top` (keyboard/browser-chrome offset) on `document.documentElement`, re-applies on `visualViewport` resize/scroll, and cleans up listeners + removes the vars on unmount.
-- `useEffect` was already imported; no import change needed.
+## FIX 2 — Remove Recent from category tabs, make top strip show recents
 
-### 2. `src/styles/chats.css`
-- Main mobile `.chats-shell` rule (`@media max-width: 899px`):
-  - `top: var(--chats-vv-top, 0px)`
-  - `height: var(--chats-vvh, 100dvh)`
-  - `max-height: var(--chats-vvh, 100dvh)`
-  - (was `--chat-vv-top` / `--chat-vvh`, the thread-owned vars)
-- List fallback `.chats-shell[data-has-thread='false']` rule: same three properties switched to the new `--chats-vvh` / `--chats-vv-top` vars (previously hard `100vh`/`100dvh`/`top:0`).
-- Updated the comment above the mobile rule to reflect that the shell vars are set by ChatsLayout.jsx.
+**Step A** — `src/constants/emojiCatalog.js`: deleted the `{ id: 'recent', ... }` entry from `EMOJI_CATEGORIES`; the array now starts with `smileys`. `DEFAULT_EMOJI_TAB = EMOJI_CATEGORIES[0]?.id` now resolves to `'smileys'` automatically (no change needed).
 
-**Variable separation respected:** the thread keeps `--chat-vvh` / `--chat-vv-top` (set by Chat.jsx, applied to `.chat-page.chat-thread` at Chat.jsx:2549–2551); the list shell uses the separate `--chats-vvh` / `--chats-vv-top` (set by ChatsLayout.jsx). No mixing.
+**Step B** — `src/pages/Chat.jsx`: replaced the `.emoji-frequent` quick-insert block with a `.emoji-recent-strip` that renders `recentEmojis` (localStorage-backed), or a `.emoji-recent-strip-empty` placeholder (🕘 "Your recent emojis will appear here") when none exist.
 
-## Results
+**Step C** — `src/pages/Chat.jsx`: removed the `emojiTab === 'recent'` branch from `.emoji-grid`; the grid now only renders `(EMOJI_BY_ID[emojiTab]?.emojis || [])`.
 
-### 5. `npx eslint src/pages/ChatsLayout.jsx`
-```
-(no output — passes with zero errors/warnings)
-```
+**Step D** — No change needed: header label already falls back to `'Smileys'` via `EMOJI_BY_ID[emojiTab]?.label || 'Smileys'`.
 
-### 5. `npm run build`
-```
-vite v8.0.14 building client environment for production...
-✓ 2105 modules transformed.
-✓ built in 3.58s
-```
-Success. ChatsLayout chunk emitted (`dist/assets/ChatsLayout-*.js/.css`).
+**Step E** — `src/styles/chat-thread.css`: renamed `.chat-thread .emoji-frequent` → `.chat-thread .emoji-recent-strip` (and its `::-webkit-scrollbar` rule), kept all properties; added the new `.chat-thread .emoji-recent-strip-empty` rule.
 
-### 6. grep matches: `chats-vvh\|chats-vv-top`
+**Step F** — Removed the now-unused `EMOJI_FREQUENT` import from the `emojiCatalog` import list in Chat.jsx.
 
-`src/pages/ChatsLayout.jsx`:
-- 34: `root.style.setProperty('--chats-vvh', ...)`
-- 35: `root.style.setProperty('--chats-vv-top', ...)`
-- 44: `root.style.removeProperty('--chats-vvh')`
-- 45: `root.style.removeProperty('--chats-vv-top')`
+**Necessary follow-up (not in the task but required for correctness):** the `emojiTab` initial state in Chat.jsx used to default to `'recent'` (when recent history existed). With `recent` no longer a category, that would leave the grid empty and no active tab. Changed `Chat.jsx:247` to `useState(DEFAULT_EMOJI_TAB)`.
 
-`src/styles/chats.css`:
-- 87: comment (vars set by ChatsLayout.jsx)
-- 91: `top: var(--chats-vv-top, 0px);`
-- 96: `height: var(--chats-vvh, 100dvh);`
-- 97: `max-height: var(--chats-vvh, 100dvh);`
-- 104: `top: var(--chats-vv-top, 0px);`
-- 105: `height: var(--chats-vvh, 100dvh);`
-- 106: `max-height: var(--chats-vvh, 100dvh);`
+## VERIFICATION
 
-## Root cause addressed
-On mobile the shell was fixed at `100dvh`, which can exceed the *visible* viewport while the on-screen keyboard / browser chrome is shown (and never corrected), clipping the list so it could not scroll the tail. The thread already handled this via `--chat-vvh`; the list now gets the same visualViewport-driven height correction through `--chats-vvh`, so the `.chat-list-scroll` container always fits the visible viewport and scrolls properly.
+### Lint
+`npx eslint src/pages/Chat.jsx src/constants/emojiCatalog.js` → 10 errors / 4 warnings. **All pre-existing and unrelated** to the emoji work (e.g. `OFFER_EXPIRY_OPTIONS`/`offerExpiresAt`/`prefillMessage`/`isMsgHiddenForMe` unused vars, `react-hooks/set-state-in-effect` in DM/reaction/search effects). Confirmed identical by running eslint against the pre-change working tree (git stash round-trip). No emoji-picker errors.
+
+### Build
+`npm run build` → `✓ built in 3.75s` (2105 modules transformed). Success.
+
+### Confirms
+1. `recent` in emojiCatalog.js → only `RECENT_EMOJI_KEY` / `'soko_recent_emojis'` / "recently used" comment strings. **Not present in EMOJI_CATEGORIES.**
+2. `emoji-frequent|EMOJI_FREQUENT` → zero matches in `src/pages/Chat.jsx` and `src/styles/chat-thread.css`. (The now-dead `export const EMOJI_FREQUENT` data still exists in emojiCatalog.js, intentionally left — unused, harmless.)
+3. `emoji-recent-strip` → present in both files:
+   - `Chat.jsx:3889` (`<div className="emoji-recent-strip">`), `3903` (`.emoji-recent-strip-empty`)
+   - `chat-thread.css:1757, 1767, 1771`
+
+## Result
+- Mobile picker sheet is now up to `72dvh` / `520px` tall (was 50dvh/380px).
+- Recent emojis live in a dedicated top strip (always visible above the grid), and the bottom tab band only shows real categories (Smileys first). The empty-state only appears in the strip when there's no recent history.
