@@ -2286,9 +2286,22 @@
     left: 6px;
     right: 6px;
     max-width: none;
-    height: min(72dvh, 520px);
-    max-height: min(72dvh, 520px);
+    height: min(82dvh, 600px);
+    max-height: min(82dvh, 600px);
     touch-action: pan-y;
+  }
+
+  /* Shrink the picker header to free vertical space for the grid */
+  .chat-thread .emoji-picker-head {
+    padding: 6px 10px;
+    min-height: 0;
+  }
+
+  /* Compact recent strip */
+  .chat-thread .emoji-recent-strip {
+    min-height: 36px;
+    max-height: 48px;
+    padding: 2px 6px;
   }
 
   /* Visible touch-friendly dismiss button */
@@ -2316,15 +2329,26 @@
   }
 
   .chat-thread .emoji-btn {
-    font-size: 24px;
-    min-height: 44px;
-    padding: 6px 2px;
+    font-size: 22px;
+    min-height: 38px;
+    padding: 4px 2px;
   }
 
   .chat-thread .emoji-btn-freq {
     font-size: 22px;
     min-width: 42px;
     min-height: 42px;
+  }
+
+  /* Compact category tab row */
+  .chat-thread .emoji-tabs {
+    min-height: 0;
+    height: 38px;
+  }
+
+  .chat-thread .emoji-tab {
+    height: 38px;
+    min-width: 32px;
   }
 
   .chat-thread .attach-menu {
