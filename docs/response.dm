@@ -1,50 +1,61 @@
-# Emoji picker: recent-emojis strip → Recent section in grid
+# Emoji picker: Recent as a first-class tab
 
 Task source: `docs/claudehelp.md`. Implemented + verified.
 
-## Change
-Removed the standalone fixed "recent emojis" strip and rendering "Recent" as the **first section inside the scrollable emoji grid**.
+## 1. `emojiCatalog.js` — `recent` added as FIRST category
 
-### 1. Old recent strip removed
-- **JSX**: `Chat.jsx` — removed the `<div className="ep-recent">` block (recent `ep-btn` tiles + the `ep-recent-empty` hint). It sat **between** `.ep-header` and `.ep-grid`, reserving a fixed `min-height: 48px` row. Replaced with nothing at that position.
-- **CSS** (`chat-thread.css`): removed `.ep-recent`, `.ep-recent-empty`, and the dark-mode `.ep-recent` override. The picker's usable scroll area now starts directly below `.ep-header`.
+Added as the first entry in `EMOJI_CATEGORIES` (`emojiCatalog.js:4–8`), same shape as the others:
 
-### 2. New "Recent" section added (inside `.ep-grid`, before category tiles)
-`Chat.jsx` — `.ep-grid` now renders, conditionally:
+```js
+{
+  id: 'recent',
+  label: 'Recent',
+  icon: '\u{1F551}',   // 🕑 clock
+  emojis: [],
+}
+```
+`emojis` is empty (static); real content is injected dynamically in `Chat.jsx`. Because `EMOJI_BY_ID` is derived via `Object.fromEntries(EMOJI_CATEGORIES...)`, `EMOJI_BY_ID['recent']` now exists with label `'Recent'`.
+
+## 2. `DEFAULT_EMOJI_TAB` resolves to `'recent'` — no code change needed
+
+`DEFAULT_EMOJI_TAB = EMOJI_CATEGORIES[0]?.id || 'smileys'` (`emojiCatalog.js:234`) is **derived**, not hardcoded. Since `EMOJI_CATEGORIES[0]` is now `recent`, it resolves to **`'recent'`**. Header label (`EMOJI_BY_ID[emojiTab]?.label`) now shows `"Recent"` on default open. No separate adjustment required.
+
+## 3. `Chat.jsx` — tab-gated grid, unconditional block removed
+
+- Imported `EMOJI_FREQUENT` (`Chat.jsx:61`).
+- Removed the old unconditional `{recentEmojis.length > 0 && (<>... <div className="ep-section">Recent</div> ...)}` block entirely (`Chat.jsx:3919–3926` replaced).
+- Tile source is now tab-gated (`Chat.jsx:3920–3923`):
 
 ```jsx
-{recentEmojis.length > 0 && (
-  <>
-    <div className="ep-section">Recent</div>
-    {recentEmojis.map((em, i) => (
-      <button key={i} type="button" className="ep-btn" onClick={() => insertEmoji(em)}>{em}</button>
-    ))}
-  </>
-)}
-{(EMOJI_BY_ID[emojiTab]?.emojis || []).map((em, i) => (
+{(emojiTab === 'recent'
+  ? (recentEmojis.length > 0 ? recentEmojis : EMOJI_FREQUENT)
+  : (EMOJI_BY_ID[emojiTab]?.emojis || [])
+).map((em, i) => (
   <button key={i} type="button" className="ep-btn" onClick={() => insertEmoji(em)}>{em}</button>
 ))}
 ```
+- On **any non-recent tab**, tile source is exactly `EMOJI_BY_ID[emojiTab]?.emojis || []` — recents no longer prepended. Tiles keep `.ep-btn` + `insertEmoji(em)`; insertion unchanged.
 
-- Tiles reuse the exact same `.ep-btn` class / `insertEmoji(em)` as the category tiles (identical size, `repeat(8, 1fr)` grid cell).
-- Header uses one new minimal `.ep-section` rule (`chat-thread.css`): `grid-column: 1 / -1` (spans all 8 columns), tightened uppercase label — styled in the picker's existing muted/tab language, not a one-off.
-- **Empty case**: `recentEmojis.length > 0 &&` guard means no header/tiles render when there are no recents (no empty header).
+## 4. Recent renders as a normal tab
 
-> Note: the picker is **tab-based** — it renders only the active category's emojis (`EMOJI_BY_ID[emojiTab]`), and there was **no pre-existing per-category "section header + tile-grid" pattern** in the code to copy exactly. The grid is `repeat(8,1fr)` over `.ep-grid` (`Chat.jsx:3927` / `chat-thread.css`). The "Recent" tiles therefore reuse the identical tile pattern (`ep-btn` in the same grid), and `.ep-section` is the light header matching `.ep-tab` (inactive muted) / `.ep-header-label` styling. This satisfies "same tile size/grid" as the task requires; the only new CSS is the single spanning header rule.
+`.ep-tabs` iterates `EMOJI_CATEGORIES.map(cat => ...)` (`Chat.jsx:3930`), so `recent` gets the identical `<button className={...ep-tab--active}>` markup as Smileys/etc., first in order, showing the clock icon, with the same active-state styling. Behavior identical to other tabs.
 
-### 3. insertEmoji tap behavior — unchanged
-Recent and category tiles both call `insertEmoji(em)` (`Chat.jsx:~3928`), the same handler as before. No change to insertion logic, `RECENT_EMOJI_LIMIT` (30), `recentEmojis` state, or localStorage.
+## 5. Ordering: most-recently-used first
 
-### 4. Fixed-height reservation removed
-All of `.ep-recent` / `.ep-recent-empty` (the `min-height: 48px` strip + hint) CSS and JSX deleted, so the scroll area begins right below `.ep-header`.
+Confirmed preserved — `insertEmoji` (`Chat.jsx:1965`) prepends the tapped emoji and drops duplicates: `const updated = [emoji, ...prev.filter(e => e !== emoji)].slice(0, RECENT_EMOJI_LIMIT)`. So the Recent tab grid shows newest-used first.
 
-### 5. Untouched
-- Pick orphan/height fallback `--ep-locked-height` / `52vh`: untouched.
-- `.ep-header`, keyboard-swap button, `.ep-close`: untouched.
-- All prior mobile-lift fixes: untouched.
-- `.ep-grid`, `.ep-tabs`, `.ep-btn` styles: untouched.
+## 6. Empty-state / switchover
 
-## Verification
-- `npx eslint src/pages/Chat.jsx` → **14 problems (10 errors, 4 warnings)** — unchanged pre-existing baseline, **0 new**.
-- `npm run build` → `✓ built in 3.10s`. Passes.
-- No remaining references to `ep-recent` / `ep-recent-empty` anywhere; only the new `.ep-section`.
+- Empty recents + picker opens (defaults to `recent` tab) → grid uses **`EMOJI_FREQUENT`** (curated 16-emoji list, `emojiCatalog.js`), not a blank grid.
+- After the user taps an emoji, `insertEmoji` populates `recentEmojis` (state + localStorage). Next open (still default `recent`) → `recentEmojis.length > 0` → shows **real recents** instead of `EMOJI_FREQUENT`. Switchover is automatic via the existing ternary — no extra state added.
+
+## 7. Untouched
+`--ep-locked-height`, `.ep-header`, keyboard-swap button, mobile-lift fixes, and all other categories' static `emojis` arrays — unchanged.
+
+## Verification results
+- **`EMOJI_CATEGORIES[0]` is `'recent'`**; `DEFAULT_EMOJI_TAB` = `'recent'`. ✓
+- **Old unconditional recent-section fully removed** (not bypassed): no `ep-section`, `ep-recent`, or stray Recent-header code remains in `src` (grep = none). The dead `.ep-section` CSS was also removed. ✓
+- **Recents appear only on the `recent` tab**; other tabs show only their own `EMOJI_BY_ID[emojiTab].emojis`. ✓
+- **Empty-state fallback to `EMOJI_FREQUENT` + automatic switch to real recents after first use** confirmed (ternary branch, no extra state). ✓
+- `npx eslint src/pages/Chat.jsx src/constants/emojiCatalog.js` → **14 problems (10 errors, 4 warnings)** — unchanged baseline, **0 new**.
+- `npm run build` → `✓ built in 3.35s`. Passes.

@@ -3,6 +3,12 @@
  */
 export const EMOJI_CATEGORIES = [
   {
+    id: 'recent',
+    label: 'Recent',
+    icon: '\u{1F551}',
+    emojis: [],
+  },
+  {
     id: 'smileys',
     label: 'Smileys',
     icon: '\u{1F60A}',

@@ -58,6 +58,7 @@ import { notifyMissedCall, notifyCallDeclined } from '../utils/callNotifications
 import {
   EMOJI_CATEGORIES,
   EMOJI_BY_ID,
+  EMOJI_FREQUENT,
   DEFAULT_EMOJI_TAB,
   loadRecentEmojis,
   saveRecentEmojis,
@@ -3916,15 +3917,10 @@ async function uploadAndSend(file, type, caption = '') {
 
           {/* Emoji grid */}
           <div className="ep-grid">
-            {recentEmojis.length > 0 && (
-              <>
-                <div className="ep-section">Recent</div>
-                {recentEmojis.map((em, i) => (
-                  <button key={i} type="button" className="ep-btn" onClick={() => insertEmoji(em)}>{em}</button>
-                ))}
-              </>
-            )}
-            {(EMOJI_BY_ID[emojiTab]?.emojis || []).map((em, i) => (
+            {(emojiTab === 'recent'
+              ? (recentEmojis.length > 0 ? recentEmojis : EMOJI_FREQUENT)
+              : (EMOJI_BY_ID[emojiTab]?.emojis || [])
+            ).map((em, i) => (
               <button key={i} type="button" className="ep-btn" onClick={() => insertEmoji(em)}>{em}</button>
             ))}
           </div>
