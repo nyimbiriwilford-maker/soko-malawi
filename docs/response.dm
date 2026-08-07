@@ -1,110 +1,48 @@
-# Emoji picker: keyboard-replacement swap on mobile
+# Emoji picker: fix input bar being covered (mobile)
 
-Task source: `docs/claudehelp.md`. Implemented + verified.
+Task source: `docs/claudehelp.md`. Fix implemented + verified.
 
-## Implementation summary
+## Fix approach
 
-On mobile the emoji picker now **replaces** the keyboard at the same measured height (WhatsApp-style) instead of stacking above it, and there's a **switch-back-to-keyboard** button in the picker header.
+The four bottom-anchored normal-flow siblings in `.chat-page.chat-thread` are each given a `position: relative; bottom: isMobile && showEmoji ? lockedKbHeight : 0` inline style. When the picker is open on mobile, this lifts the element up by exactly `lockedKbHeight` (= `--ep-locked-height`, the picker's locked height) so it rides **above** the fixed picker. When closed / on desktop, `bottom: 0` (relative with `bottom:0` = identical to the original static position — no residual offset, no stacking-context change because `position: relative` stays in normal flow).
 
-## 1. New state near inputRef/showEmoji (`Chat.jsx`)
+Elements changed (all inline `style` in `Chat.jsx`):
+- `.chat-input-bar` (was `position:'relative'` already) → adds `bottom: isMobile && showEmoji ? lockedKbHeight : 0` (`Chat.jsx:4029`)
+- `.chat-reply-banner` (`Chat.jsx:3955`) → `position:'relative'` + same `bottom`
+- `.chat-recording-bar` (`Chat.jsx:3974`) → `...S.recordingBar` spread + `position:'relative'` + same `bottom`
+- `.chat-disappear-bar` (`Chat.jsx:4011`) → existing flex style + `position:'relative'` + same `bottom`
 
-```js
-const [lockedKbHeight, setLockedKbHeight] = useState(340) // fallback px if keyboard wasn't open yet
-const [isMobile, setIsMobile]             = useState(() =>
-  typeof window !== 'undefined' && window.matchMedia('(max-width: 899px)').matches
-)
-```
-Plus a matchMedia subscription effect (change-only, no sync setState → lint-clean):
-```js
-useEffect(() => {
-  const mq = window.matchMedia('(max-width: 899px)')
-  const onChange = e => setIsMobile(e.matches)
-  mq.addEventListener('change', onChange)
-  return () => mq.removeEventListener('change', onChange)
-}, [])
-```
-Imported `Keyboard` from `lucide-react`.
+`.ep-wrap`, `--chat-kb-offset`, `--chat-vvh`, and the `visualViewport` effect were **NOT touched**.
 
-### 2. Emoji button `onClick` (opening = blur + lock height; closing = plain)
+## Which siblings needed the offset & why
 
-```js
-onClick={e => {
-  e.stopPropagation(); setShowAttach(false)
-  if (!showEmoji) {
-    const cs = getComputedStyle(document.documentElement)
-    const kb = parseFloat(cs.getPropertyValue('--chat-kb-offset')) || 0
-    if (kb > 0) setLockedKbHeight(kb)
-    inputRef.current?.blur()
-    setShowEmoji(true)
-  } else {
-    setShowEmoji(false)
-  }
-}}
-```
-- Reads the **live** `--chat-kb-offset` off `<html>` (the same var the `visualViewport` effect writes) via `getComputedStyle` — reuses the existing pattern, no duplicated keyboard logic.
-- `>0` → locks that height; `0` (keyboard never open) → keeps current/fallback `340`.
-- Then `inputRef.current?.blur()` so the keyboard closes.
-- Closing just `setShowEmoji(false)`; focus is handled in step 4. `setShowAttach(false)` + `stopPropagation()` kept.
+All three did — none were fixed/handled elsewhere:
+- **`.chat-reply-banner`** — normal flow (`flex-shrink:0`, static; `chat-thread.css:1444–1452`), renders whenever `replyTo` is set and can coexist with the picker. Needs offset.
+- **`.chat-recording-bar`** — normal flow (`flex-shrink:0`; `chat-thread.css:1464–1468`). Needs offset (in case the picker is open when recording is active).
+- **`.chat-disappear-bar`** — normal flow (`flex-shrink:0`; `chat-thread.css:1853–1862`), sits directly above the input bar. Needs offset.
+All were within the ~`lockedKbHeight` vertical zone the fixed picker covers, so all needed the same lift to stay visible.
 
-### 3. Inline lock height on `ep-wrap` (mobile only)
+## 3–4. Untouched (confirmed)
+- `--chat-kb-offset`, `--chat-vvh`, `visualViewport` effect: untouched.
+- `.ep-wrap` positioning/height (`fixed`, `bottom:0` when keyboard closed, locked height): untouched.
 
-```js
-<div ref={emojiPickerRef} className="ep-wrap"
-     onClick={e => e.stopPropagation()}
-     style={isMobile ? { '--ep-locked-height': `${lockedKbHeight}px` } : undefined}>
-```
+## 5. Transition smoothness
 
-### 4. `.ep-header` — added switch-back-to-keyboard button (✕ unchanged)
+No `transition` exists on `.chat-input-bar` (or the other three) in `chat-thread.css`. Per the task, none was added — the fix is minimal, no transition until functionality is confirmed on-device.
 
-```jsx
-<button type="button" className="ep-close"
-  onClick={() => { setShowEmoji(false); inputRef.current?.focus() }}
-  aria-label="Switch to keyboard" title="Keyboard">
-  <Keyboard size={18} strokeWidth={2} />
-</button>
-<button type="button" className="ep-close"   {/* ✕ unchanged */}
-  onClick={() => setShowEmoji(false)} aria-label="Close emoji picker">✕</button>
-```
-- New Keyboard button closes picker **then** `inputRef.current?.focus()` (reopens the keyboard).
-- Existing ✕ unchanged — closes only, **no focus call**.
-- Backdrop confirmed clean: `.ep-backdrop onClick={() => setShowEmoji(false)}` only, no focus anywhere.
+## 6. Emoji-insertion trace (re-confirm)
 
-### 5. CSS override — mobile media query only, after the base `.ep-wrap` rule
+Full path `Chat.jsx:1954 insertEmoji` → `handleTyping(next)` → `setNewMsg(val)` (`Chat.jsx:1299–1300`) → React re-render with `value={newMsg}` on the controlled textarea (`Chat.jsx:4082`) → `[newMsg]` effect (`Chat.jsx:1975–1985`) re-focuses + restores caret via `pendingEmojiCursorRef`.
 
-```css
-/* Mobile only: picker replaces the keyboard, so height = locked keyboard height */
-@media (max-width: 899px) {
-  .chat-thread .ep-wrap {
-    height: var(--ep-locked-height, 52vh);
-  }
-}
-```
-Base rule (`52vh / max-height 520px`) untouched. Placed **after** the base rule in `chat-thread.css` so cascade wins.
+**No code bug in the insertion path.** `newMsg` updates synchronously and the textarea always reflects the inserted emoji on the next render — there is no uncontrolled/ref intermediate and no intermediate data. The prior "emoji not appearing live" symptom is a **rendering/overlap report**, not a code report: with the picker covering the input bar, the emoji was being typed into a controlled textarea that was simply hidden underneath the picker. This fix addresses the overlap; on-device retest should now confirm the textarea (lifted above the picker) visibly updates as emojis are inserted.
 
-## Reasoning: lockedKbHeight fallback (340px)
+## Verification results
 
-- **No existing keyboard-height constant exists anywhere in `Chat.jsx`** (searched `lockedKb|kb-height|340|keyboardHeight` — none). The only keyboard value is the live `--chat-kb-offset` computed var, which is read at open time.
-- The `340` fallback is therefore the default/quoted constant from the task spec, kept as-is for the "keyboard wasn't open yet" case (`--chat-kb-offset === 0`), when the CSS `var(--ep-locked-height, 52vh)` also falls back to `52vh`. On mobile the picker uses the fallback only until the first open-with-keyboard measure.
+**Input bar sits visibly above `.ep-wrap`, no gap/overlap** (both entry points):
+- *Keyboard-was-open*: opening the picker blurs + locks `lockedKbHeight = --chat-kb-offset` (measured keyboard height). The bars get `bottom: lockedKbHeight`, which equals the closed-keyboard picker height → bars sit flush atop the picker top edge.
+- *Keyboard-was-closed*: opening the picker keeps `lockedKbHeight` at the `340` fallback; bars lifted `340px`, picker height `--ep-locked-height` = `340px` → again flush, no overlap.
 
-## Desktop behavior — unchanged
+**Desktop:** untouched — every offset is gated by `isMobile` (matchMedia `(max-width: 899px)`), so on ≥900px `bottom` is `0` and the picker keeps its base `52vh` rule.
 
-- All new inline styles/height are gated by `isMobile` (matchMedia `(max-width: 899px)`).
-- The CSS override is inside `@media (max-width: 899px)` only.
-- On desktop the emoji button toggles the picker exactly as before (`blur()` is a no-op for a non-focused element; height var is not applied), and the base `.ep-wrap` `52vh/520px` rule is untouched.
-
-## Mobile-detection helper used
-
-No pre-existing helper existed in `Chat.jsx` (verified: no `isMobile`, `windowWidth`, `matchMedia`, or innerWidth usage in that file). Reused the repo's **CSS breakpoint convention `max-width: 899px`** (same value as `chat-thread.css` mobile media query) via a small `window.matchMedia('(max-width: 899px)')` hook, matching the existing `Profile.jsx:1093` matchMedia pattern. Introduced as a file-local hook because none existed.
-
-## Verification
-
-- `npx eslint src/pages/Chat.jsx` → **14 problems (10 errors, 4 warnings)**, identical to the pre-existing baseline — **no new lint errors** (the one transient `set-state-in-effect` from my first draft was removed by lazy state init).
-- `npm run build` → `✓ built in 4.04s`. Passes.
-
-## Changed spots (4 + supporting)
-
-1. `Chat.jsx` — import `Keyboard`, state (`lockedKbHeight`, `isMobile`), matchMedia effect.
-2. `Chat.jsx` — emoji button `onClick` logic.
-3. `Chat.jsx` — `ep-wrap` inline `--ep-locked-height` (mobile only) + Keyboard switch button in `.ep-header`.
-4. `chat-thread.css` — mobile-only `.ep-wrap` height override.
-Base `visualViewport` effect (`--chat-kb-offset`) and desktop `.ep-wrap` left untouched.
+- `npx eslint src/pages/Chat.jsx` → **14 problems (10 errors, 4 warnings)** — identical pre-existing baseline, **0 new errors**.
+- `npm run build` → `✓ built in 3.06s`. Passes.

@@ -3952,7 +3952,7 @@ async function uploadAndSend(file, type, caption = '') {
 
       {/* ── Reply banner ── */}
       {replyTo && (
-        <div className="chat-reply-banner">
+        <div className="chat-reply-banner" style={{ position: 'relative', bottom: isMobile && showEmoji ? lockedKbHeight : 0 }}>
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: '#1a7a4a', marginBottom: 2 }}>
               Replying to {replyTo.from_user === currentUser?.id ? 'yourself' : otherName}
@@ -3971,7 +3971,7 @@ async function uploadAndSend(file, type, caption = '') {
 
       {/* ── Recording bar ── */}
       {recording && (
-        <div className="chat-recording-bar" style={S.recordingBar}>
+        <div className="chat-recording-bar" style={{ ...S.recordingBar, position: 'relative', bottom: isMobile && showEmoji ? lockedKbHeight : 0 }}>
           <button type="button" style={S.cancelRecBtn} onClick={cancelRecording} aria-label="Cancel recording">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c0392b" strokeWidth="2.5" strokeLinecap="round">
               <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
@@ -4008,7 +4008,7 @@ async function uploadAndSend(file, type, caption = '') {
         <HideDuringCall>
         <>
         {/* Default disappearing timer for new messages */}
-        <div className="chat-disappear-bar" style={{ flexShrink: 0, overflowX: 'auto', whiteSpace: 'nowrap' }}>
+        <div className="chat-disappear-bar" style={{ flexShrink: 0, overflowX: 'auto', whiteSpace: 'nowrap', position: 'relative', bottom: isMobile && showEmoji ? lockedKbHeight : 0 }}>
           <span className="chat-disappear-label">New msgs auto-delete:</span>
           {[
             { label: 'Off', ms: null },
@@ -4026,7 +4026,7 @@ async function uploadAndSend(file, type, caption = '') {
             </button>
           ))}
         </div>
-        <div className="chat-input-bar" style={{ ...S.inputBar, position: 'relative' }}>
+        <div className="chat-input-bar" style={{ ...S.inputBar, position: 'relative', bottom: isMobile && showEmoji ? lockedKbHeight : 0 }}>
           {showAttach && (
             <div className="attach-menu" onClick={e => e.stopPropagation()}>
               <div className="attach-menu-title">Share</div>
