@@ -1,58 +1,62 @@
-Task 1 — Reproduce precisely (read only, no code changes)
+Fix .attach-menu Clipping (Side-Effect)
 
-Open the chat on a physical iOS device (not simulator). Do the following sequence and note exactly when the clipping appears:
+Problem: overflow: hidden on .chat-input-bar clips the .attach-menu pop-up (which renders above the bar via position: absolute; bottom: calc(100% + 10px)). Must fix before shipping.
 
-Tap the text input → keyboard opens
-Tap the emoji button → picker opens, keyboard closes, bar lifts
-Watch the send button during the transition (keyboard sliding down)
-Tap anywhere to close the picker → bar drops back
+Task 1 — Remove overflow: hidden from the bar
 
-Answer: does the clipping appear during step 3 (mid-animation) and then recover? Or is it persistent after the picker is fully open?
+The send button overflow is already fixed by min-width: 0 on .chat-composer and width: 100% / box-sizing: border-box. overflow: hidden is redundant and harmful. Remove it:
 
-If mid-animation only → it is a compositing artifact. Proceed to Task 2.
-If persistent → there is a layout bug we haven't found yet. Report the exact lockedKbHeight value on that device and the viewport dimensions.
-Task 2 — Apply the compositing fix
+css
+/* BEFORE */
+.chat-thread .chat-input-bar {
+  background: rgba(255,255,255,0.96) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid var(--chat-line) !important;
+  padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px)) !important;
+  gap: 6px !important;
+  align-items: flex-end !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
 
-iOS Safari sometimes fails to repaint a position: relative element that shifts via bottom while the keyboard animation is in progress. The fix is to promote the input bar to its own compositor layer.
+/* AFTER */
+.chat-thread .chat-input-bar {
+  background: rgba(255,255,255,0.96) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid var(--chat-line) !important;
+  padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px)) !important;
+  gap: 6px !important;
+  align-items: flex-end !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+Task 2 — Verify .attach-menu renders correctly
 
-In Chat.jsx, find the S.inputBar style object and add willChange:
+Confirm .attach-menu (chat-thread.css:1320–1337) still has:
 
-jsx
-// BEFORE (the relevant part of S.inputBar)
-position: 'relative',
-bottom: isMobile && showEmoji && lockedKbHeight > 0 ? lockedKbHeight : 0,
+css
+position: absolute;
+bottom: calc(100% + 10px);
+z-index: 220;
 
-// AFTER
-position: 'relative',
-bottom: isMobile && showEmoji && lockedKbHeight > 0 ? lockedKbHeight : 0,
-willChange: isMobile && showEmoji ? 'transform' : 'auto',
+No changes needed — just confirm these are intact after Task 1.
 
-willChange: 'transform' tells Safari to promote this element to a GPU layer when the picker is open, which forces a clean repaint and eliminates the mid-animation clip. It is removed ('auto') when the picker is closed so it doesn't permanently consume GPU memory.
+Task 3 — Verify send button is still contained
 
-Task 3 — If Task 2 doesn't fix it: add a transitionEnd scroll nudge
+After removing overflow: hidden, confirm the fix still holds via the two properties that actually do the work:
 
-If the bar is still clipped after the compositor fix, the issue is that visualViewport.height settles after the CSS animation finishes, leaving a one-frame gap. Add this inside the emoji onClick handler, after setShowEmoji(true):
+.chat-input-bar has width: 100% !important and box-sizing: border-box !important ✓
+.chat-composer has flex: 1 and min-width: 0 ✓
 
-js
-// After setShowEmoji(true)
-requestAnimationFrame(() => {
-  requestAnimationFrame(() => {
-    window.scrollTo(0, 0)
-  })
-})
+These two together are sufficient. overflow: hidden was never needed.
 
-The double-rAF waits two frames — one for React's commit, one for the browser's layout — then nudges the scroll position, which forces Safari to recomposite the viewport and repaint the input bar at its correct position.
-
-Only apply Task 3 if Task 2 alone does not resolve it. Do not apply both simultaneously — test Task 2 first.
-
-Do NOT touch
-Padding, gap, min-width — already confirmed clean.
---chats-vvh listener — already synchronous.
-lockedKbHeight initialization — already correct.
 Deliverable
 
 Report back with:
 
-Answer to Task 1 (mid-animation vs persistent)
-Whether willChange from Task 2 resolved it
-If Task 3 was needed, confirm whether the double-rAF scroll nudge fixed it
+Confirm overflow: hidden removed
+Confirm .attach-menu absolute positioning intact
+Build passes

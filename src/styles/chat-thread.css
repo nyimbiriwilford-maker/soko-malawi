@@ -1204,10 +1204,13 @@
   padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px)) !important;
   gap: 6px !important;
   align-items: flex-end !important;
+  width: 100% !important;
+  box-sizing: border-box !important;
 }
 
 .chat-thread .chat-composer {
   flex: 1;
+  min-width: 0;
   display: flex;
   align-items: flex-end;
   gap: 2px;
