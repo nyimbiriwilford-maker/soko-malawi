@@ -1,26 +1,19 @@
-Implement Recent as a real first-class tab in the emoji picker. Reference: docs/response.md investigation.
+Fix: tapping an emoji tile reopens the keyboard. It shouldn't — keyboard should only open via the explicit keyboard-swap button.
 
-1. In emojiCatalog.js: add a 'recent' category entry to EMOJI_CATEGORIES as the FIRST item in the array — same shape as other entries: { id: 'recent', label: 'Recent', icon: <clock emoji, e.g. '\u{1F551}'>, emojis: [] } (emojis stays empty here; real content is injected dynamically in Chat.jsx, not stored statically).
+Root cause (already known from prior investigation, Chat.jsx:1975-1985): the [newMsg] effect unconditionally calls el.focus() whenever pendingEmojiCursorRef is set, and insertEmoji sets that ref on every single emoji tap — so every tap re-focuses the textarea and pops the keyboard back up.
 
-2. Change DEFAULT_EMOJI_TAB to resolve to 'recent' (EMOJI_CATEGORIES[0].id will now naturally be 'recent' given step 1, so this may need no separate change — confirm and adjust only if DEFAULT_EMOJI_TAB is hardcoded elsewhere instead of derived from EMOJI_CATEGORIES[0]).
+Fix: in the [newMsg] effect, only call el.focus() (and the selectionRange/height logic that depends on focus) when the emoji picker is NOT currently open. When showEmoji is true, still update caret position tracking if needed for when the picker eventually closes, but do NOT call el.focus().
 
-3. In Chat.jsx, replace the current unconditional Recent-section-at-top-of-grid code (Chat.jsx:3919-3926, the `{recentEmojis.length > 0 && (...)}` block that currently renders regardless of emojiTab) with tab-gated logic:
-   - Remove that unconditional block entirely from its current position.
-   - In the grid-rendering logic (currently `EMOJI_BY_ID[emojiTab]?.emojis`), add a branch: when emojiTab === 'recent', the tile source is `recentEmojis.length > 0 ? recentEmojis : EMOJI_FREQUENT` (import EMOJI_FREQUENT from emojiCatalog.js). Otherwise (any other tab), tile source stays `EMOJI_BY_ID[emojiTab]?.emojis || []` exactly as before.
-   - Recent emojis must ONLY appear when emojiTab === 'recent' — do not also show them prepended on other tabs anymore.
-   - Tiles keep using the same .ep-btn class and insertEmoji(em) handler, no change to insertion logic.
-
-4. Confirm the 'recent' tab renders in .ep-tabs like every other tab (same button markup, same active-state styling) — it should look and behave identically to Smileys/Hearts/etc., just first in order with a clock icon.
-
-5. "Prioritize recent once used" requirement: when recentEmojis is non-empty, the Recent tab shows actual recent picks (existing insertEmoji logic already prepends newest-used first — confirm this ordering is preserved, most-recently-used emoji appears first in the Recent tab grid).
-
-6. Empty state: when recentEmojis is empty (new user / cleared storage) AND user opens the picker (which defaults to the 'recent' tab per step 2), the grid should show EMOJI_FREQUENT (common/frequently-used defaults) rather than a blank grid. Once the user starts using emojis, insertEmoji already populates recentEmojis via existing logic — next time they open the picker (still defaulting to 'recent' tab), it should show their real recents instead of the static EMOJI_FREQUENT list. Confirm this switchover happens automatically via the existing recentEmojis.length > 0 ? recentEmojis : EMOJI_FREQUENT branch — no extra state needed.
-
-7. Do not touch --ep-locked-height, .ep-header, keyboard-swap button, mobile-lift fixes, or any other category's static emojis array.
+Specifically:
+1. In the [newMsg] effect (Chat.jsx ~1975-1985), wrap the el.focus() call in a condition: only focus if !showEmoji.
+2. el.setSelectionRange(at, at) — this can still run even without focus (it's fine on an unfocused element), OR gate it behind the same condition if it causes any issue when unfocused — use judgment, but test both ways if unsure.
+3. The height auto-resize logic (el.style.height = ...) should still run regardless of focus state, since the textarea content changed and needs to resize visually even while blurred.
+4. When the keyboard-swap button is tapped (setShowEmoji(false) + inputRef.current?.focus()) — this explicit focus call is UNCHANGED and remains the only way focus/keyboard reopens after picker use.
+5. Double check: after this fix, does typing normally (keyboard already open, not using emoji picker) still work exactly as before? The effect should still focus/restore caret in that case since showEmoji is false during normal typing. Confirm no regression there.
 
 After implementing, write to docs/response.md:
-- Confirm EMOJI_CATEGORIES[0] is now 'recent' and DEFAULT_EMOJI_TAB resolves correctly
-- Confirm the old unconditional recent-section code is fully removed (not just bypassed)
-- Confirm recent emojis appear ONLY on the recent tab, nowhere else
-- Confirm empty-state fallback to EMOJI_FREQUENT works and switches to real recents after first use
+- Exact diff of the [newMsg] effect
+- Confirm: tapping emoji tiles repeatedly while picker is open never triggers focus() or keyboard pop-up
+- Confirm: normal typing (picker closed) still auto-focuses/restores caret correctly, no regression
+- Confirm: keyboard-swap button still correctly reopens keyboard
 - npx eslint + npm run build results

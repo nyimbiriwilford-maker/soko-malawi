@@ -1979,12 +1979,18 @@ async function uploadAndSend(file, type, caption = '') {
     pendingEmojiCursorRef.current = null
     const el = inputRef.current
     if (!el) return
-    el.focus()
+    // Only refocus when the picker is closed. While the picker is open, refocusing
+    // would pop the keyboard back up on every emoji tap — focus/keyboard reopen
+    // happens exclusively via the keyboard-swap button instead.
+    if (!showEmoji) el.focus()
+    // setSelectionRange is fine on an unfocused element — records the caret so it's
+    // correct when the picker closes and the user returns to typing.
     el.setSelectionRange(at, at)
-    // Keep autosize in sync for programmatic inserts (onChange only handles typing).
+    // Keep autosize in sync for programmatic inserts (onChange only handles typing);
+    // must run regardless of focus since content changed and needs to resize visually.
     el.style.height = 'auto'
     el.style.height = Math.min(el.scrollHeight, 120) + 'px'
-  }, [newMsg])
+  }, [newMsg, showEmoji])
 
   // ── Voice recording ──────────────────────────────────────────────────────
   async function startRecording() {

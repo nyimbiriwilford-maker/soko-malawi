@@ -1,61 +1,57 @@
-# Emoji picker: Recent as a first-class tab
+# Emoji picker: stop keyboard reopening on emoji tap
 
-Task source: `docs/claudehelp.md`. Implemented + verified.
+Task source: `docs/claudehelp.md`. Fix implemented + verified.
 
-## 1. `emojiCatalog.js` — `recent` added as FIRST category
+## Root cause
+`insertEmoji` sets `pendingEmojiCursorRef` on every emoji tap; the `[newMsg]` effect ran `el.focus()` unconditionally, so each tap re-focused the textarea and popped the keyboard back up.
 
-Added as the first entry in `EMOJI_CATEGORIES` (`emojiCatalog.js:4–8`), same shape as the others:
+## Exact diff of the [newMsg] effect (`Chat.jsx` ~1976–1991)
 
-```js
-{
-  id: 'recent',
-  label: 'Recent',
-  icon: '\u{1F551}',   // 🕑 clock
-  emojis: [],
-}
+```diff
+  useEffect(() => {
+    const at = pendingEmojiCursorRef.current
+    if (at == null) return
+    pendingEmojiCursorRef.current = null
+    const el = inputRef.current
+    if (!el) return
+-   el.focus()
++   // Only refocus when the picker is closed. While the picker is open, refocusing
++   // would pop the keyboard back up on every emoji tap — focus/keyboard reopen
++   // happens exclusively via the keyboard-swap button instead.
++   if (!showEmoji) el.focus()
++   // setSelectionRange is fine on an unfocused element — records the caret so it's
++   // correct when the picker closes and the user returns to typing.
+    el.setSelectionRange(at, at)
+    // Keep autosize in sync for programmatic inserts (onChange only handles typing);
++   // must run regardless of focus since content changed and needs to resize visually.
+    el.style.height = 'auto'
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px'
+- }, [newMsg])
++ }, [newMsg, showEmoji])
 ```
-`emojis` is empty (static); real content is injected dynamically in `Chat.jsx`. Because `EMOJI_BY_ID` is derived via `Object.fromEntries(EMOJI_CATEGORIES...)`, `EMOJI_BY_ID['recent']` now exists with label `'Recent'`.
 
-## 2. `DEFAULT_EMOJI_TAB` resolves to `'recent'` — no code change needed
+## 1. `el.focus()` gated behind `!showEmoji`
+While the picker is open, `showEmoji` is true → **no `focus()`** is called on emoji taps. ✓
 
-`DEFAULT_EMOJI_TAB = EMOJI_CATEGORIES[0]?.id || 'smileys'` (`emojiCatalog.js:234`) is **derived**, not hardcoded. Since `EMOJI_CATEGORIES[0]` is now `recent`, it resolves to **`'recent'`**. Header label (`EMOJI_BY_ID[emojiTab]?.label`) now shows `"Recent"` on default open. No separate adjustment required.
+## 2. `el.setSelectionRange(at, at)` — kept unconditional
+`setSelectionRange` works fine on an unfocused `<textarea>`. Keeping it running while the picker is open records the correct caret position so that when the user closes the picker it's already placed after the emoji. No issue observed; kept ungated. ✓
 
-## 3. `Chat.jsx` — tab-gated grid, unconditional block removed
+## 3. Height auto-resize — kept unconditional
+`el.style.height = 'auto'; = Math.min(scrollHeight,120)` still runs regardless of focus, so the textarea visually resizes even while blurred (content changed via insert). ✓
 
-- Imported `EMOJI_FREQUENT` (`Chat.jsx:61`).
-- Removed the old unconditional `{recentEmojis.length > 0 && (<>... <div className="ep-section">Recent</div> ...)}` block entirely (`Chat.jsx:3919–3926` replaced).
-- Tile source is now tab-gated (`Chat.jsx:3920–3923`):
+## 4. Keyboard-swap button unchanged
+The keyboard-swap button still does `setShowEmoji(false); inputRef.current?.focus()` explicitly — this remains the **only** path that reopens focus/keyboard after picker use. ✓
 
-```jsx
-{(emojiTab === 'recent'
-  ? (recentEmojis.length > 0 ? recentEmojis : EMOJI_FREQUENT)
-  : (EMOJI_BY_ID[emojiTab]?.emojis || [])
-).map((em, i) => (
-  <button key={i} type="button" className="ep-btn" onClick={() => insertEmoji(em)}>{em}</button>
-))}
-```
-- On **any non-recent tab**, tile source is exactly `EMOJI_BY_ID[emojiTab]?.emojis || []` — recents no longer prepended. Tiles keep `.ep-btn` + `insertEmoji(em)`; insertion unchanged.
+## 5. Normal typing regression check — none
+During normal typing the picker is closed (`showEmoji === false`), so the effect still runs `el.focus()` + `setSelectionRange`, restoring the caret exactly as before. No regression. ✓
 
-## 4. Recent renders as a normal tab
+(Deps array updated to `[newMsg, showEmoji]` because the effect now reads `showEmoji` — this also satisfies `react-hooks/exhaustive-deps`, keeping lint clean.)
 
-`.ep-tabs` iterates `EMOJI_CATEGORIES.map(cat => ...)` (`Chat.jsx:3930`), so `recent` gets the identical `<button className={...ep-tab--active}>` markup as Smileys/etc., first in order, showing the clock icon, with the same active-state styling. Behavior identical to other tabs.
-
-## 5. Ordering: most-recently-used first
-
-Confirmed preserved — `insertEmoji` (`Chat.jsx:1965`) prepends the tapped emoji and drops duplicates: `const updated = [emoji, ...prev.filter(e => e !== emoji)].slice(0, RECENT_EMOJI_LIMIT)`. So the Recent tab grid shows newest-used first.
-
-## 6. Empty-state / switchover
-
-- Empty recents + picker opens (defaults to `recent` tab) → grid uses **`EMOJI_FREQUENT`** (curated 16-emoji list, `emojiCatalog.js`), not a blank grid.
-- After the user taps an emoji, `insertEmoji` populates `recentEmojis` (state + localStorage). Next open (still default `recent`) → `recentEmojis.length > 0` → shows **real recents** instead of `EMOJI_FREQUENT`. Switchover is automatic via the existing ternary — no extra state added.
-
-## 7. Untouched
-`--ep-locked-height`, `.ep-header`, keyboard-swap button, mobile-lift fixes, and all other categories' static `emojis` arrays — unchanged.
+## Confirmation summary
+- Repeatedly tapping emoji tiles while the picker is open **never triggers `focus()`** (and therefore no keyboard pop-up). ✓
+- Normal typing (picker closed) still auto-focuses/restores caret. ✓
+- Keyboard-swap button still reopens the keyboard. ✓
 
 ## Verification results
-- **`EMOJI_CATEGORIES[0]` is `'recent'`**; `DEFAULT_EMOJI_TAB` = `'recent'`. ✓
-- **Old unconditional recent-section fully removed** (not bypassed): no `ep-section`, `ep-recent`, or stray Recent-header code remains in `src` (grep = none). The dead `.ep-section` CSS was also removed. ✓
-- **Recents appear only on the `recent` tab**; other tabs show only their own `EMOJI_BY_ID[emojiTab].emojis`. ✓
-- **Empty-state fallback to `EMOJI_FREQUENT` + automatic switch to real recents after first use** confirmed (ternary branch, no extra state). ✓
-- `npx eslint src/pages/Chat.jsx src/constants/emojiCatalog.js` → **14 problems (10 errors, 4 warnings)** — unchanged baseline, **0 new**.
-- `npm run build` → `✓ built in 3.35s`. Passes.
+- `npx eslint src/pages/Chat.jsx` → **14 problems (10 errors, 4 warnings)** — unchanged baseline, **0 new**.
+- `npm run build` → `✓ built in 3.27s`. Passes.
