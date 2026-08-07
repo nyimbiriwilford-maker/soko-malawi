@@ -2539,7 +2539,6 @@ async function uploadAndSend(file, type, caption = '') {
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
         @keyframes spin{to{transform:rotate(360deg)}}
         @keyframes onlinePulse{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,0.5)}50%{box-shadow:0 0 0 4px rgba(34,197,94,0)}}
-        .emoji-btn:hover{transform:scale(1.25);transition:transform 0.1s}
         @media (min-width: 900px) { .chat-back-btn { display: none !important; } }
         @media (max-width: 899px) {
           .chat-page.chat-thread {
@@ -3864,70 +3863,40 @@ async function uploadAndSend(file, type, caption = '') {
 
       {/* ── Emoji Picker ── */}
       {showEmoji && (
-        <div ref={emojiPickerRef} className="emoji-picker-panel" onClick={e => e.stopPropagation()}>
-          <div className="emoji-picker-head">
-            <div className="emoji-picker-title">
-              <SmilePlus size={15} strokeWidth={2.2} />
-              <span>Emoji</span>
-            </div>
-            <div className="emoji-picker-head-actions">
-              <span className="emoji-picker-cat-label">
-                {EMOJI_BY_ID[emojiTab]?.label || 'Smileys'}
-              </span>
-              <button
-                type="button"
-                className="emoji-picker-close"
-                onClick={() => setShowEmoji(false)}
-                aria-label="Close emoji picker"
-                title="Close"
-              >
-                ✕
-              </button>
-            </div>
+        <div
+          ref={emojiPickerRef}
+          className="ep-wrap"
+          onClick={e => e.stopPropagation()}
+        >
+          {/* Recent strip */}
+          <div className="ep-recent">
+            {recentEmojis.length > 0
+              ? recentEmojis.map((em, i) => (
+                  <button key={i} type="button" className="ep-btn" onClick={() => insertEmoji(em)}>{em}</button>
+                ))
+              : <span className="ep-recent-empty">🕘 Recent emojis appear here</span>
+            }
           </div>
 
-          <div className="emoji-recent-strip">
-            {recentEmojis.length > 0 ? (
-              recentEmojis.map((emoji, i) => (
-                <button
-                  key={`recent-${i}-${emoji}`}
-                  type="button"
-                  className="emoji-btn emoji-btn-freq"
-                  onClick={() => insertEmoji(emoji)}
-                  title={emoji}
-                >
-                  {emoji}
-                </button>
-              ))
-            ) : (
-              <span className="emoji-recent-strip-empty">🕘 Your recent emojis will appear here</span>
-            )}
-          </div>
-
-          <div className="emoji-grid">
-            {(EMOJI_BY_ID[emojiTab]?.emojis || []).map((emoji, i) => (
-              <button
-                key={`${emojiTab}-${i}-${emoji}`}
-                type="button"
-                className="emoji-btn"
-                onClick={() => insertEmoji(emoji)}
-              >
-                {emoji}
-              </button>
+          {/* Emoji grid */}
+          <div className="ep-grid">
+            {(EMOJI_BY_ID[emojiTab]?.emojis || []).map((em, i) => (
+              <button key={i} type="button" className="ep-btn" onClick={() => insertEmoji(em)}>{em}</button>
             ))}
           </div>
 
-          <div className="emoji-tabs">
+          {/* Category tabs */}
+          <div className="ep-tabs">
             {EMOJI_CATEGORIES.map(cat => (
               <button
                 key={cat.id}
                 type="button"
-                className={`emoji-tab${emojiTab === cat.id ? ' is-active' : ''}`}
+                className={`ep-tab${emojiTab === cat.id ? ' ep-tab--active' : ''}`}
                 onClick={() => setEmojiTab(cat.id)}
-                title={cat.label}
                 aria-label={cat.label}
+                title={cat.label}
               >
-                <span className="emoji-tab-icon">{cat.icon}</span>
+                {cat.icon}
               </button>
             ))}
           </div>
