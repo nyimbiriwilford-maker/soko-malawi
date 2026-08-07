@@ -2974,27 +2974,17 @@
   }
 }
 
-/* Recent strip */
-.chat-thread .ep-recent {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding: 6px 8px;
-  gap: 2px;
-  border-bottom: 1px solid rgba(0,0,0,0.07);
-  flex-shrink: 0;
-  min-height: 48px;
-  align-items: center;
-  -webkit-overflow-scrolling: touch;
-}
-
-.chat-thread .ep-recent-empty {
+/* Recent section header (first row inside the scrollable emoji grid) */
+.chat-thread .ep-section {
+  grid-column: 1 / -1;
   font-size: 11px;
-  color: #aaa;
-  padding: 0 4px;
-  white-space: nowrap;
+  font-weight: 650;
+  color: #8a9a90;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+  padding: 10px 6px 2px;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* Emoji grid */
@@ -3077,9 +3067,6 @@
   .chat-thread .ep-wrap {
     background: #1a1f1c;
     box-shadow: 0 -4px 24px rgba(0,0,0,0.4);
-  }
-  .chat-thread .ep-recent {
-    border-bottom-color: rgba(255,255,255,0.08);
   }
   .chat-thread .ep-tabs {
     border-top-color: rgba(255,255,255,0.08);

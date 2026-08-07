@@ -3914,18 +3914,16 @@ async function uploadAndSend(file, type, caption = '') {
             </button>
           </div>
 
-          {/* Recent strip */}
-          <div className="ep-recent">
-            {recentEmojis.length > 0
-              ? recentEmojis.map((em, i) => (
-                  <button key={i} type="button" className="ep-btn" onClick={() => insertEmoji(em)}>{em}</button>
-                ))
-              : <span className="ep-recent-empty">🕘 Recent emojis appear here</span>
-            }
-          </div>
-
           {/* Emoji grid */}
           <div className="ep-grid">
+            {recentEmojis.length > 0 && (
+              <>
+                <div className="ep-section">Recent</div>
+                {recentEmojis.map((em, i) => (
+                  <button key={i} type="button" className="ep-btn" onClick={() => insertEmoji(em)}>{em}</button>
+                ))}
+              </>
+            )}
             {(EMOJI_BY_ID[emojiTab]?.emojis || []).map((em, i) => (
               <button key={i} type="button" className="ep-btn" onClick={() => insertEmoji(em)}>{em}</button>
             ))}
