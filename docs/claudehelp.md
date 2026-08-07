@@ -1,60 +1,118 @@
-Instructions for DeepSeek:
+Instructions for DeepSeek — Chat Media: No Auto-Download for New Incoming Media Only
 
-Instructions for DeepSeek — Emoji Picker: Block Keyboard on Textarea Tap
+Clarification: Only apply the click-to-load placeholder to newly received incoming media messages — media that arrives via real-time subscription after the chat is open. Already-loaded media in the existing message history stays as-is.
 
-Problem: When the emoji picker is open and the user taps the textarea, the software keyboard appears and the emoji picker closes/gets pushed. The textarea must not trigger the keyboard while the picker is open. The user should only be able to reposition the cursor — no keyboard, no dismiss.
+Task 1 — Read only, find the real-time message handler
 
-Task 1 — Prevent keyboard from appearing on textarea tap
+In Chat.jsx, find the Supabase real-time subscription that receives new incoming messages (likely postgres_changes or channel.on('INSERT', ...)). Report the exact line number and the handler function name/body. Do not change anything yet.
 
-When showEmoji is true, the textarea must not receive native focus (which triggers the keyboard). Use readOnly to suppress the keyboard while still allowing cursor repositioning via touch:
+Also find where new messages are appended to the messages list state (e.g. setMessages(prev => [...prev, newMsg])).
 
-Find the textarea in Chat.jsx and add a conditional readOnly prop:
+Task 2 — Tag new incoming media messages
+
+When a new message arrives via the real-time handler and it contains media (type === 'image' or type === 'video' or media_url is set), tag it so the UI knows to show a placeholder instead of auto-loading.
+
+js
+// Inside the real-time INSERT handler, when appending the new message:
+
+// BEFORE
+setMessages(prev => [...prev, newMsg])
+
+// AFTER
+const isIncoming = newMsg.sender_id !== currentUserId
+const hasMedia = newMsg.media_url || newMsg.type === 'image' || newMsg.type === 'video'
+
+setMessages(prev => [...prev, {
+  ...newMsg,
+  _pendingLoad: isIncoming && hasMedia   // true = show placeholder, false = load normally
+}])
+
+_pendingLoad is a client-only flag — it is never sent to the database.
+
+Task 3 — Render placeholder for _pendingLoad messages
+
+Find where media messages are rendered in the message bubble. Add a branch on _pendingLoad:
+
+Images:
 
 jsx
 // BEFORE
-<textarea
-  ref={inputRef}
-  ...
-/>
+<img src={msg.media_url} className="chat-media-img" />
 
 // AFTER
-<textarea
-  ref={inputRef}
-  readOnly={showEmoji}
-  ...
-/>
+{msg._pendingLoad ? (
+  <div
+    className="chat-media-placeholder"
+    onClick={() => setMessages(prev =>
+      prev.map(m => m.id === msg.id ? { ...m, _pendingLoad: false } : m)
+    )}
+  >
+    <div className="chat-media-placeholder-inner">
+      {Icon.image()}
+      <span>Tap to load photo</span>
+    </div>
+  </div>
+) : (
+  <img src={msg.media_url} className="chat-media-img" />
+)}
 
-readOnly on a textarea prevents the software keyboard from appearing on iOS/Android while still allowing the user to tap to reposition the cursor. The field remains interactive for cursor placement but does not invoke the keyboard.
-
-Task 2 — Re-enable input immediately when picker closes
-
-When showEmoji becomes false (picker dismissed), the textarea must become writable again instantly. Since readOnly is driven by showEmoji state, this is automatic — no extra logic needed. Just confirm the readOnly={showEmoji} prop is the only change and no additional disabled or pointerEvents:none was added.
-
-Task 3 — Prevent onFocus from firing the keyboard via blur guard
-
-Even with readOnly, some Android browsers still briefly show the keyboard on tap. Add a onFocus guard that immediately blurs the textarea when the picker is open:
+Videos:
 
 jsx
-onFocus={(e) => {
-  if (showEmoji) {
-    e.target.blur()
-    return
-  }
-  // existing onFocus logic here (if any)
-}}
+{msg._pendingLoad ? (
+  <div
+    className="chat-media-placeholder"
+    onClick={() => setMessages(prev =>
+      prev.map(m => m.id === msg.id ? { ...m, _pendingLoad: false } : m)
+    )}
+  >
+    <div className="chat-media-placeholder-inner">
+      {Icon.video()}
+      <span>Tap to load video</span>
+    </div>
+  </div>
+) : (
+  <video src={msg.media_url} controls preload="none" className="chat-media-video" />
+)}
+Task 4 — Style the placeholder in chat-thread.css
+css
+.chat-media-placeholder {
+  width: 100%;
+  aspect-ratio: 4/3;
+  background: var(--chat-bubble-in, #f0f0f0);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  min-height: 120px;
+}
 
-This is a belt-and-suspenders guard — readOnly handles iOS, blur() on focus handles Android.
+.chat-media-placeholder-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-2, #888);
+  font-size: 13px;
+}
 
+.chat-media-placeholder-inner svg {
+  width: 32px;
+  height: 32px;
+  opacity: 0.5;
+}
 Do NOT touch
-cursorPosRef logic — keep intact
-setShowEmoji(false) call sites already guarded — keep intact
-CSS files
-Any dismiss button handlers
+Existing message history rendering — no placeholders on already-loaded messages
+Outgoing messages — sender sees their own media load normally
+Voice/audio messages
+Any emoji picker or input bar changes from previous tasks
 Deliverable
 
 Report back with:
 
-Confirm readOnly={showEmoji} added to textarea
-Confirm onFocus blur guard added
-Confirm no disabled or pointerEvents added
+Real-time handler location (file + line number)
+Confirm _pendingLoad flag added on incoming media in the INSERT handler
+Confirm placeholder rendered for _pendingLoad === true for both image and video
+Confirm placeholder CSS added to chat-thread.css
 Build passes

@@ -792,13 +792,16 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
         const msg = payload.new
         if (!isRelevantMessage(msg, myId, source, ctxId)) return
+        const isIncoming = msg.from_user !== myId
+        const hasMedia   = !!msg.media_url && (msg.media_type === 'image' || msg.media_type === 'video')
+        const pendingMsg = isIncoming && hasMedia ? { ...msg, _pendingLoad: true } : msg
         setMessages(prev => {
           const withoutTemp = prev.filter(m => {
             if (String(m.id).startsWith('temp_') && m.from_user === msg.from_user && m.media_type === msg.media_type) return false
             if (m.id === msg.id) return false
             return true
           })
-          const next = [...withoutTemp, msg]
+          const next = [...withoutTemp, pendingMsg]
 
           if (!pendingGroupIdRef.current) {
             // Incremental append — fast path for the common case
@@ -816,7 +819,7 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
                   m.from_user === msg.from_user &&
                   m.media_type === msg.media_type)
               )
-              return imageGroupingService.appendMessage(withoutOptimistic, { ...msg, _status: undefined })
+              return imageGroupingService.appendMessage(withoutOptimistic, { ...pendingMsg, _status: undefined })
             })
           }
 
@@ -2214,6 +2217,24 @@ async function uploadAndSend(file, type, caption = '') {
         />
       )
     }
+    if (msg._pendingLoad) {
+      const isVideo = msg.media_type === 'video'
+      return (
+        <div
+          className="chat-media-placeholder"
+          onClick={e => {
+            e.stopPropagation()
+            setMessages(prev => prev.map(m => (m.id === msg.id ? { ...m, _pendingLoad: false } : m)))
+            setGroupedMessages(prev => prev.map(m => (m.id === msg.id ? { ...m, _pendingLoad: false } : m)))
+          }}
+        >
+          <div className="chat-media-placeholder-inner">
+            {isVideo ? <Video size={28} strokeWidth={2} /> : <ImageIcon size={28} strokeWidth={2} />}
+            <span>Tap to load {isVideo ? 'video' : 'photo'}</span>
+          </div>
+        </div>
+      )
+    }
     const { media_type: type, media_url: url } = msg
     if (!url) return null
     if (type === 'image') {
@@ -2338,7 +2359,7 @@ async function uploadAndSend(file, type, caption = '') {
         </svg>
       </a>
     )
-  }, [setLightbox, currentUser, renderVoiceNote])
+  }, [setLightbox, currentUser, renderVoiceNote, setMessages])
 
   const callHostProps = {
     userId,
