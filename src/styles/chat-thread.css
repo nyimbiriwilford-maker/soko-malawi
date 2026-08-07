@@ -2282,12 +2282,15 @@
      flex children allocate correctly: header + recent + category nav stay
      fixed (flex:none) and only the grid flexes to fill the remainder. */
   .chat-thread .emoji-picker-panel {
-    bottom: 66px;
-    left: 6px;
-    right: 6px;
-    max-width: none;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    max-width: 100%;
     height: min(82dvh, 600px);
     max-height: min(82dvh, 600px);
+    z-index: 1100;
+    border-radius: 18px 18px 0 0;
     touch-action: pan-y;
   }
 

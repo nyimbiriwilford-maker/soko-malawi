@@ -1,42 +1,33 @@
-# Fix: emoji grid too small on mobile (CSS only)
+# Fix: emoji picker clipped on mobile — switch to position:fixed
 
-Task source: `docs/claudehelp.md`. All changes in `src/styles/chat-thread.css`, inside the mobile `@media` block. No JS/logic changes.
+Task source: `docs/claudehelp.md`. CSS-only change in `src/styles/chat-thread.css`.
 
-## Changes applied
+## Change applied
 
-1. **Picker height increased further** — `.chat-thread .emoji-picker-panel`:
-   - `height: min(82dvh, 600px);` (was `min(72dvh, 520px)`)
-   - `max-height: min(82dvh, 600px);`
+Mobile `@media` block, `.chat-thread .emoji-picker-panel` — replaced entirely:
 
-2. **Header shrunk** — added mobile rule:
-   ```css
-   .chat-thread .emoji-picker-head { padding: 6px 10px; min-height: 0; }
-   ```
+```css
+.chat-thread .emoji-picker-panel {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  max-width: 100%;
+  height: min(82dvh, 600px);
+  max-height: min(82dvh, 600px);
+  z-index: 1100;
+  border-radius: 18px 18px 0 0;
+  touch-action: pan-y;
+}
+```
 
-3. **Recent strip shrunk** — added mobile rule:
-   ```css
-   .chat-thread .emoji-recent-strip { min-height: 36px; max-height: 48px; padding: 2px 6px; }
-   ```
+- Removed the parent-relative `left:6px / right:6px / bottom:66px` positioning.
+- Pins the picker to the bottom of the screen, full width, top-rounded bottom sheet, `z-index: 1100` (above the chat input bar).
+- No longer clipped by the `overflow:hidden` thread parent.
 
-4. **Category tab row shrunk** — added mobile rules:
-   ```css
-   .chat-thread .emoji-tabs { min-height: 0; height: 38px; }
-   .chat-thread .emoji-tab  { height: 38px; min-width: 32px; }
-   ```
+## Desktop rule — unchanged
 
-5. **Grid takes all remaining space** — confirmed the mobile `.chat-thread .emoji-grid` rule already has `flex: 1 1 0px; min-height: 0; max-height: none;` (unchanged — already correct).
-
-6. **Smaller emoji buttons** — `.chat-thread .emoji-btn`:
-   - `font-size: 22px` (was 24px)
-   - `min-height: 38px` (was 44px)
-   - `padding: 4px 2px` (was 6px 2px)
-
-(`.emoji-btn-freq` untouched — recent-strip buttons stay at 22px / 42×42.)
-
-## Result
-- Picker sheet up to `82dvh` / `600px` tall.
-- Header, recent strip, and tab row are more compact (`flex:none` fixed rows), so the grid (the only `flex:1; min-height:0; max-height:none` child) spans essentially all remaining panel height.
-- Slightly smaller buttons → more emojis fit per row/visible without scrolling.
+Confirmed the base rule (`.chat-thread .emoji-picker-panel`, chat-thread.css:1668–1685) still has `position: absolute; bottom: 70px; left: 8px; right: 8px; max-width: 420px; z-index: 200;`. Only the mobile override was touched.
 
 ## Verification
-`npm run build` → `✓ built in 3.95s` (2105 modules transformed). Passes.
+`npm run build` → `✓ built in 4.63s` (2105 modules transformed). Passes.
