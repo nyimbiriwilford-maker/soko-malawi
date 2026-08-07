@@ -129,7 +129,8 @@ export class ImageGroupingService {
 
   asGroup(group) {
     if (group.length === 1) return this.asBubble(group[0])
-    return { ...group[0], _imageGroup: group, _isGroup: true }
+    const anyPending = group.some(m => m._pendingLoad)
+    return { ...group[0], _imageGroup: group, _isGroup: true, _pendingLoad: anyPending }
   }
 
   asBubble(msg) {

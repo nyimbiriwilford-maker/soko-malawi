@@ -2224,8 +2224,27 @@ async function uploadAndSend(file, type, caption = '') {
           className="chat-media-placeholder"
           onClick={e => {
             e.stopPropagation()
-            setMessages(prev => prev.map(m => (m.id === msg.id ? { ...m, _pendingLoad: false } : m)))
-            setGroupedMessages(prev => prev.map(m => (m.id === msg.id ? { ...m, _pendingLoad: false } : m)))
+            const idsToClear = msg._isGroup
+              ? new Set((msg._imageGroup || []).map(m => m.id))
+              : new Set([msg.id])
+            setMessages(prev =>
+              prev.map(m => (idsToClear.has(m.id) ? { ...m, _pendingLoad: false } : m))
+            )
+            setGroupedMessages(prev =>
+              prev.map(m => {
+                if (idsToClear.has(m.id)) return { ...m, _pendingLoad: false }
+                if (m._isGroup && m._imageGroup?.some(g => idsToClear.has(g.id))) {
+                  return {
+                    ...m,
+                    _pendingLoad: false,
+                    _imageGroup: m._imageGroup.map(g =>
+                      idsToClear.has(g.id) ? { ...g, _pendingLoad: false } : g
+                    ),
+                  }
+                }
+                return m
+              })
+            )
           }}
         >
           <div className="chat-media-placeholder-inner">

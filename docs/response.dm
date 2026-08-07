@@ -1,51 +1,41 @@
-# Chat media: no auto-download for new incoming media only
+# Chat media placeholder: fix grouped images + remove debug logs
 
-Task source: `docs/claudehelp.md`. Implemented + verified. Field names follow the actual DB schema (`from_user` / `media_type` / `media_url` / `myId`), not the generic ones in the brief.
+Task source: `docs/claudehelp.md`.
 
-## Task 1 — Real-time handler location
-- **INSERT handler:** `Chat.jsx:792` — `.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, ...)` plus the appends to both render sources:
-  - `messages`: `Chat.jsx:799` — `const next = [...withoutTemp, msg]`
-  - `groupedMessages`: `Chat.jsx:822` — `imageGroupingService.appendMessage(...)`
+## Task 1 — Console output
+Requires running the app in a browser (Supabase real-time INSERT) — not capturable from this shell. Expected pattern for the fix to be correct:
+- `[media-debug]` (removed now, but it logged before change): `_pendingLoad: true` on new incoming media.
+- `[renderMedia]` (removed now): previously showed `_pendingLoad: undefined` for **grouped** bubbles because `asGroup` spread only the anchor `group[0]` — the confirmed root cause fixed in Task 2.
 
-## Task 2 — `_pendingLoad` flag on incoming media (INSERT handler)
-In `Chat.jsx:793–797`:
+## Task 2 — asGroup fix applied
+`src/lib/imageGroupingService.js:130–134`:
 ```js
-const isIncoming = msg.from_user !== myId
-const hasMedia   = !!msg.media_url && (msg.media_type === 'image' || msg.media_type === 'video')
-const pendingMsg = isIncoming && hasMedia ? { ...msg, _pendingLoad: true } : msg
-```
-The tagged `pendingMsg` is used in **both** the `messages` (`:801`) and `groupedMessages` (`:822`) appends, so this is only a client-only flag (never persisted). Already-loaded history and outgoing messages are not tagged.
-
-## Task 3 — Placeholder rendered for `_pendingLoad`
-Added a branch at the top of `renderMedia` (`Chat.jsx:2226–2246`) that replaces the media with a placeholder for both image and video:
-```jsx
-if (msg._pendingLoad) {
-  const isVideo = msg.media_type === 'video'
-  return (
-    <div className="chat-media-placeholder" onClick={e => {
-      e.stopPropagation()
-      setMessages(prev => prev.map(m => (m.id === msg.id ? { ...m, _pendingLoad: false } : m)))
-      setGroupedMessages(prev => prev.map(m => (m.id === msg.id ? { ...m, _pendingLoad: false } : m)))
-    }}>
-      <div className="chat-media-placeholder-inner">
-        {isVideo ? <Video size={28}/> : <ImageIcon size={28}/>}
-        <span>Tap to load {isVideo ? 'video' : 'photo'}</span>
-      </div>
-    </div>
-  )
+asGroup(group) {
+  if (group.length === 1) return this.asBubble(group[0])
+  const anyPending = group.some(m => m._pendingLoad)
+  return { ...group[0], _imageGroup: group, _isGroup: true, _pendingLoad: anyPending }
 }
 ```
-Tap clears the flag in both `messages` and `groupedMessages` (both are render sources), revealing the real `img`/`video`.
+Now if any member of the group is pending, the whole group bubble carries `_pendingLoad: true` → the placeholder shows for grouped incoming media.
 
-## Task 4 — Placeholder CSS
-Added to `src/styles/chat-thread.css` (`Chat.jsx` after `.media-video-wrap video`): `.chat-media-placeholder` (4/3, rounded, centered) and `.chat-media-placeholder-inner` (column, 32px icon). Uses `var(--chat-bubble-in, #f0f0f0)` / `var(--text-2, #888)`.
+## Task 3 — Tap clears all group members
+`Chat.jsx` renderMedia `_pendingLoad` onClick now:
+```js
+const idsToClear = msg._isGroup
+  ? new Set((msg._imageGroup || []).map(m => m.id))
+  : new Set([msg.id])
+```
+- `setMessages` clears every member by id.
+- `setGroupedMessages` clears matching top-level messages AND, for a group bubble, clears `_pendingLoad` on the bubble plus `_pendingLoad: false` on each matched member inside `_imageGroup`.
 
-## Do-not-touch compliance
-Existing history rendering, outgoing messages, voice/audio, and emoji-picker/input-bar changes from previous tasks were not modified.
+## Task 4 — Logs removed
+- `[media-debug]` INSERT-handler log — removed.
+- `[renderMedia]` top-of-function log — removed.
+Verified via grep: zero occurrences left in `Chat.jsx`.
 
-## Deliverable answers
-1. **Real-time handler:** `Chat.jsx:792` (INSERT); appends at `Chat.jsx:801` + `Chat.jsx:822`.
-2. **`_pendingLoad` on incoming media:** ✓ tagged in INSERT handler, propagated to both lists.
-3. **Placeholder for `_pendingLoad===true` (image + video):** ✓ `renderMedia` branch.
-4. **Placeholder CSS:** ✓ added to `chat-thread.css`.
-5. **Build:** `npm run build` → `✓ built in 3.89s`. Passes.
+## Deliverable
+1. Console output: requires live browser test (unavailable in this shell); root cause confirmed via code path.
+2. `asGroup` fix: ✓ applied (`imageGroupingService.js`).
+3. Grouped tap clears all members: ✓ applied (`Chat.jsx` onClick).
+4. Both logs removed: ✓ confirmed.
+5. Build: `npm run build` → `✓ built in 6.08s`. Passes.

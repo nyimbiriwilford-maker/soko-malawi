@@ -1,118 +1,74 @@
-Instructions for DeepSeek — Chat Media: No Auto-Download for New Incoming Media Only
+Instructions for DeepSeek — Chat Media Placeholder: Fix Grouped Images + Confirm Root Cause
 
-Clarification: Only apply the click-to-load placeholder to newly received incoming media messages — media that arrives via real-time subscription after the chat is open. Already-loaded media in the existing message history stays as-is.
+Situation: The flag and render path are correct for single images. The confirmed gap is grouped images — asGroup spreads group[0] (the anchor) as the bubble, so if the newest flagged image is a group member (not the anchor), _pendingLoad never reaches the bubble. Fix both paths.
 
-Task 1 — Read only, find the real-time message handler
+Task 1 — Read the console logs first
 
-In Chat.jsx, find the Supabase real-time subscription that receives new incoming messages (likely postgres_changes or channel.on('INSERT', ...)). Report the exact line number and the handler function name/body. Do not change anything yet.
+Before changing anything, send a new incoming image/video in the chat and read the browser console. Report:
 
-Also find where new messages are appended to the messages list state (e.g. setMessages(prev => [...prev, newMsg])).
+Does [media-debug] show _pendingLoad: true?
+Does [renderMedia] show _pendingLoad: true or undefined for that message?
 
-Task 2 — Tag new incoming media messages
+This tells us whether the bug is the grouping path or something else entirely.
 
-When a new message arrives via the real-time handler and it contains media (type === 'image' or type === 'video' or media_url is set), tag it so the UI knows to show a placeholder instead of auto-loading.
+Task 2 — Fix grouped images in imageGroupingService.js
+
+In asGroup, the anchor (group[0]) is spread as the bubble. If any message in the group has _pendingLoad: true, the whole group bubble must show the placeholder.
 
 js
-// Inside the real-time INSERT handler, when appending the new message:
-
 // BEFORE
-setMessages(prev => [...prev, newMsg])
+function asGroup(group) {
+  return { ...group[0], _imageGroup: group, _isGroup: true }
+}
 
 // AFTER
-const isIncoming = newMsg.sender_id !== currentUserId
-const hasMedia = newMsg.media_url || newMsg.type === 'image' || newMsg.type === 'video'
+function asGroup(group) {
+  const anyPending = group.some(m => m._pendingLoad)
+  return { ...group[0], _imageGroup: group, _isGroup: true, _pendingLoad: anyPending }
+}
+Task 3 — Fix the placeholder tap for grouped images
 
-setMessages(prev => [...prev, {
-  ...newMsg,
-  _pendingLoad: isIncoming && hasMedia   // true = show placeholder, false = load normally
-}])
-
-_pendingLoad is a client-only flag — it is never sent to the database.
-
-Task 3 — Render placeholder for _pendingLoad messages
-
-Find where media messages are rendered in the message bubble. Add a branch on _pendingLoad:
-
-Images:
+When the user taps the placeholder on a grouped bubble, clear _pendingLoad on all messages in the group, not just the anchor:
 
 jsx
-// BEFORE
-<img src={msg.media_url} className="chat-media-img" />
+// In renderMedia, inside the _pendingLoad branch onClick:
 
-// AFTER
-{msg._pendingLoad ? (
-  <div
-    className="chat-media-placeholder"
-    onClick={() => setMessages(prev =>
-      prev.map(m => m.id === msg.id ? { ...m, _pendingLoad: false } : m)
-    )}
-  >
-    <div className="chat-media-placeholder-inner">
-      {Icon.image()}
-      <span>Tap to load photo</span>
-    </div>
-  </div>
-) : (
-  <img src={msg.media_url} className="chat-media-img" />
-)}
+onClick={e => {
+  e.stopPropagation()
+  // Get all IDs to clear — single message or all in group
+  const idsToClear = msg._isGroup
+    ? new Set(msg._imageGroup.map(m => m.id))
+    : new Set([msg.id])
 
-Videos:
+  setMessages(prev =>
+    prev.map(m => idsToClear.has(m.id) ? { ...m, _pendingLoad: false } : m)
+  )
+  setGroupedMessages(prev =>
+    prev.map(m => {
+      if (idsToClear.has(m.id)) return { ...m, _pendingLoad: false }
+      if (m._isGroup && m._imageGroup?.some(g => idsToClear.has(g.id))) {
+        return {
+          ...m,
+          _pendingLoad: false,
+          _imageGroup: m._imageGroup.map(g => idsToClear.has(g.id) ? { ...g, _pendingLoad: false } : g)
+        }
+      }
+      return m
+    })
+  )
+}}
+Task 4 — Remove the temporary console logs
 
-jsx
-{msg._pendingLoad ? (
-  <div
-    className="chat-media-placeholder"
-    onClick={() => setMessages(prev =>
-      prev.map(m => m.id === msg.id ? { ...m, _pendingLoad: false } : m)
-    )}
-  >
-    <div className="chat-media-placeholder-inner">
-      {Icon.video()}
-      <span>Tap to load video</span>
-    </div>
-  </div>
-) : (
-  <video src={msg.media_url} controls preload="none" className="chat-media-video" />
-)}
-Task 4 — Style the placeholder in chat-thread.css
-css
-.chat-media-placeholder {
-  width: 100%;
-  aspect-ratio: 4/3;
-  background: var(--chat-bubble-in, #f0f0f0);
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  min-height: 120px;
-}
+Remove both logs added in the previous debug task:
 
-.chat-media-placeholder-inner {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  color: var(--text-2, #888);
-  font-size: 13px;
-}
-
-.chat-media-placeholder-inner svg {
-  width: 32px;
-  height: 32px;
-  opacity: 0.5;
-}
-Do NOT touch
-Existing message history rendering — no placeholders on already-loaded messages
-Outgoing messages — sender sees their own media load normally
-Voice/audio messages
-Any emoji picker or input bar changes from previous tasks
+Chat.jsx — the [media-debug] log in the INSERT handler
+Chat.jsx — the [renderMedia] log at the top of renderMedia
 Deliverable
 
 Report back with:
 
-Real-time handler location (file + line number)
-Confirm _pendingLoad flag added on incoming media in the INSERT handler
-Confirm placeholder rendered for _pendingLoad === true for both image and video
-Confirm placeholder CSS added to chat-thread.css
+Console log output from Task 1 (before any changes)
+Confirm asGroup fix applied in imageGroupingService.js
+Confirm grouped tap clears all group members
+Confirm both console logs removed
 Build passes
