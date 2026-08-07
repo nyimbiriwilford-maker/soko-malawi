@@ -20,6 +20,7 @@ import {
   File as FileIcon2,
   CircleDollarSign,
   Keyboard,
+  Download,
 } from 'lucide-react'
 import {
   buildOfferPayload,
@@ -2254,8 +2255,12 @@ async function uploadAndSend(file, type, caption = '') {
             alt=""
           />
           <div className="chat-media-placeholder-inner">
-            {isVideo ? <Video size={28} strokeWidth={2} /> : <ImageIcon size={28} strokeWidth={2} />}
-            <span>Tap to load {isVideo ? 'video' : 'photo'}</span>
+            <div className="chat-media-placeholder-btn">
+              <Download size={26} strokeWidth={2} />
+            </div>
+            <span className="chat-media-placeholder-label">
+              Tap to load {isVideo ? 'video' : 'photo'}
+            </span>
           </div>
         </div>
       )

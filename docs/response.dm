@@ -1,35 +1,34 @@
-# Chat media placeholder: blurred preview instead of opaque
+# Chat media placeholder: WhatsApp-style blur
 
 Task source: `docs/claudehelp.md`.
 
-## Task 1 + 2 — Blurred `<img>` added to both image and video placeholders
-In `renderMedia` (`Chat.jsx`), the `_pendingLoad` placeholder now renders a blurred preview layer above the icon/text:
+## Task 2 — JSX updated (renderMedia placeholder)
+`_pendingLoad` placeholder now uses a WhatsApp-style download button circle + label instead of the raw media icon:
 ```jsx
-<div className="chat-media-placeholder" onClick={/* tap-to-load handler unchanged */}>
-  <img
-    src={msg.media_url}
-    className="chat-media-placeholder-blur"
-    draggable={false}
-    alt=""
-  />
-  <div className="chat-media-placeholder-inner">
-    {isVideo ? <Video size={28} strokeWidth={2} /> : <ImageIcon size={28} strokeWidth={2} />}
-    <span>Tap to load {isVideo ? 'video' : 'photo'}</span>
+<div className="chat-media-placeholder-inner">
+  <div className="chat-media-placeholder-btn">
+    <Download size={26} strokeWidth={2} />
   </div>
+  <span className="chat-media-placeholder-label">
+    Tap to load {isVideo ? 'video' : 'photo'}
+  </span>
 </div>
 ```
-Both image and video branches share this single placeholder. For video, `msg.media_url` points to the video file so the `<img>` blur won't render a frame — it stays transparent and the dark base + overlay icon show instead (as specified).
+There is no `Icon.download` helper in this project, so I used `<Download>` from lucide-react. Added `Download` to the lucide import in `Chat.jsx` (line 23). The blurred `<img class="chat-media-placeholder-blur">` layer stays.
 
-## Task 3 — CSS updated (`chat-thread.css`)
-- `.chat-media-placeholder`: now `position: relative; overflow: hidden; background: #000`, removed solid bubble-color background.
-- `.chat-media-placeholder-blur` (new): absolutely positioned, `inset: 0`, `object-fit: cover`, `filter: blur(18px)`, `transform: scale(1.1)` (kills edge halos), `opacity: 0.6`.
-- `.chat-media-placeholder-inner`: now `position: relative; z-index: 1; color: #fff`.
-- `.chat-media-placeholder-inner svg`: `opacity: 0.9`.
+## Task 1 — CSS updated (`chat-thread.css`)
+- `.chat-media-placeholder`: background → `#1a1a1a` (darker).
+- `.chat-media-placeholder-blur`: heavier blur `24px`, `scale(1.15)`, `opacity: 0.45`.
+- `.chat-media-placeholder::after`: dark overlay `rgba(0,0,0,0.45)` (new), `z-index: 0`.
+- `.chat-media-placeholder-inner`: `z-index: 2`, 12px/500 weight label, gap 8.
+- `.chat-media-placeholder-btn` (new): 54px translucent circle, white ring + `backdrop-filter`.
+- `.chat-media-placeholder-btn svg` (new): 26px white.
+- `.chat-media-placeholder-label` (new): 11px, `rgba(255,255,255,0.85)`.
 
 ## Do-not-touch compliance
 `_pendingLoad` logic, onClick tap-to-load handler, and emoji/input-bar changes untouched.
 
 ## Deliverable
-1. Blurred `<img class="chat-media-placeholder-blur">` added to placeholder (covers image + video): ✓
-2. CSS blur-layer styles updated: ✓
-3. Build: `npm run build` → `✓ built in 2.94s`. Passes.
+1. CSS darker overlay + heavier blur + download circle button: ✓
+2. JSX download button circle + label: ✓ (`Download` imported from lucide-react)
+3. Build: `npm run build` → `✓ built in 3.15s`. Passes.
