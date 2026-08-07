@@ -1,153 +1,155 @@
-Instructions for DeepSeek — Chat Media Placeholder: WhatsApp-Style Blur
+Instructions for DeepSeek:
 
-Change: Make the blurred placeholder match WhatsApp's style — darker, heavier blur, with a clean download icon and file size hint. Not just a blurred image — a polished locked-media look.
+Instructions for DeepSeek — Chat: Paginated Message Loading (Infinite Scroll Upward)
 
-Task 1 — Update CSS in chat-thread.css
-css
-/* BEFORE */
-.chat-media-placeholder {
-  width: 100%;
-  aspect-ratio: 4/3;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  min-height: 120px;
-  position: relative;
-  overflow: hidden;
-  background: #000;
-}
+Goal: Instead of loading all messages at once, load only the most recent N messages on open. When the user scrolls up to the top, load the previous page — little by little, not all at once.
 
-.chat-media-placeholder-blur {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  filter: blur(18px);
-  transform: scale(1.1);
-  opacity: 0.6;
-}
+Task 1 — Read only, find current message loading
 
-.chat-media-placeholder-inner {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  color: #fff;
-  font-size: 13px;
-}
+In Chat.jsx, find:
 
-.chat-media-placeholder-inner svg {
-  width: 32px;
-  height: 32px;
-  opacity: 0.9;
-}
+The initial message fetch (likely a useEffect that queries Supabase for all messages in the thread)
+How messages are stored in state (setMessages)
+The scroll container ref (the div that wraps the messages list)
+The current query — does it have any limit, range, or order clause?
 
-/* AFTER */
-.chat-media-placeholder {
-  width: 100%;
-  aspect-ratio: 4/3;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  min-height: 120px;
-  position: relative;
-  overflow: hidden;
-  background: #1a1a1a;
-}
+Report exact line numbers. Do not change anything yet.
 
-.chat-media-placeholder-blur {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  filter: blur(24px);
-  transform: scale(1.15);
-  opacity: 0.45;
-}
+Task 2 — Add pagination state
 
-/* Dark overlay on top of blur */
-.chat-media-placeholder::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.45);
-  z-index: 0;
-}
+Near the top of the component, add these state/ref variables:
 
-.chat-media-placeholder-inner {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  color: #fff;
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.1px;
-}
+js
+const PAGE_SIZE = 20  // messages per page — constant, not state
+const [hasMore, setHasMore] = useState(true)
+const [loadingMore, setLoadingMore] = useState(false)
+const oldestLoadedIdRef = useRef(null)  // tracks the oldest message id loaded so far
+const scrollContainerRef = useRef(null) // if not already present
+Task 3 — Modify the initial fetch to load only the last 20 messages
 
-/* Download circle button — WhatsApp style */
-.chat-media-placeholder-btn {
-  width: 54px;
-  height: 54px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.2);
-  border: 2px solid rgba(255, 255, 255, 0.85);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 2px;
-  backdrop-filter: blur(4px);
-}
+Find the initial Supabase query for messages. Change it to fetch only the last PAGE_SIZE messages, ordered by created_at descending, then reverse for display:
 
-.chat-media-placeholder-btn svg {
-  width: 26px;
-  height: 26px;
-  color: #fff;
-  stroke: #fff;
-}
+js
+// BEFORE (example — match actual query)
+const { data } = await supabase
+  .from('messages')
+  .select('*')
+  .eq('thread_id', threadId)
+  .order('created_at', { ascending: true })
 
-.chat-media-placeholder-label {
-  font-size: 11px;
-  color: rgba(255,255,255,0.85);
-  font-weight: 400;
-}
-Task 2 — Update the placeholder JSX in renderMedia
-jsx
 // AFTER
-<div className="chat-media-placeholder" onClick={...}>
-  <img
-    src={msg.media_url}
-    className="chat-media-placeholder-blur"
-    draggable={false}
-    alt=""
-  />
-  <div className="chat-media-placeholder-inner">
-    <div className="chat-media-placeholder-btn">
-      {Icon.download ? Icon.download() : <Download size={26} strokeWidth={2} />}
-    </div>
-    <span className="chat-media-placeholder-label">
-      {isVideo ? 'Tap to load video' : 'Tap to load photo'}
-    </span>
+const { data } = await supabase
+  .from('messages')
+  .select('*')
+  .eq('thread_id', threadId)
+  .order('created_at', { ascending: false })
+  .limit(PAGE_SIZE)
+
+const messages = (data || []).reverse()  // oldest → newest for display
+
+if (messages.length < PAGE_SIZE) setHasMore(false)
+if (messages.length > 0) oldestLoadedIdRef.current = messages[0].id
+Task 4 — Add a loadMoreMessages function
+js
+const loadMoreMessages = useCallback(async () => {
+  if (loadingMore || !hasMore) return
+  setLoadingMore(true)
+
+  // Get the created_at of the oldest message currently loaded
+  const oldest = messages.find(m => m.id === oldestLoadedIdRef.current)
+  if (!oldest) { setLoadingMore(false); return }
+
+  const { data } = await supabase
+    .from('messages')
+    .select('*')
+    .eq('thread_id', threadId)
+    .lt('created_at', oldest.created_at)   // older than current oldest
+    .order('created_at', { ascending: false })
+    .limit(PAGE_SIZE)
+
+  const older = (data || []).reverse()
+
+  if (older.length < PAGE_SIZE) setHasMore(false)
+  if (older.length > 0) {
+    oldestLoadedIdRef.current = older[0].id
+    setMessages(prev => [...older, ...prev])  // prepend older messages
+  }
+
+  setLoadingMore(false)
+}, [loadingMore, hasMore, messages, threadId])
+Task 5 — Trigger loadMoreMessages on scroll to top
+
+On the scroll container, add a scroll handler:
+
+js
+const handleScroll = useCallback(() => {
+  const el = scrollContainerRef.current
+  if (!el) return
+  // When user is within 80px of the top, load more
+  if (el.scrollTop <= 80 && hasMore && !loadingMore) {
+    loadMoreMessages()
+  }
+}, [hasMore, loadingMore, loadMoreMessages])
+
+Wire it to the scroll container:
+
+jsx
+<div ref={scrollContainerRef} onScroll={handleScroll} className="chat-messages-list">
+Task 6 — Preserve scroll position when prepending messages
+
+When older messages are prepended, the scroll position jumps to the top. Fix this:
+
+js
+// In loadMoreMessages, before setMessages:
+const el = scrollContainerRef.current
+const prevScrollHeight = el ? el.scrollHeight : 0
+
+// After setMessages, in a useEffect or directly:
+requestAnimationFrame(() => {
+  if (el) {
+    el.scrollTop = el.scrollHeight - prevScrollHeight
+  }
+})
+Task 7 — Show a loading indicator at the top
+
+At the top of the messages list JSX, add:
+
+jsx
+{loadingMore && (
+  <div className="chat-load-more-spinner">
+    <span>Loading...</span>
   </div>
-</div>
+)}
+{!hasMore && messages.length > 0 && (
+  <div className="chat-load-more-end">
+    <span>No more messages</span>
+  </div>
+)}
 
-If Icon.download does not exist in the project's Icon helper, use <Download size={26} strokeWidth={2} /> from lucide-react — check which is already imported in Chat.jsx and use whichever is available.
+In chat-thread.css:
 
+css
+.chat-load-more-spinner,
+.chat-load-more-end {
+  text-align: center;
+  padding: 10px;
+  font-size: 12px;
+  color: var(--text-2, #888);
+}
 Do NOT touch
-_pendingLoad flag logic
-onClick tap-to-load handler
-Any emoji picker or input bar changes
+Real-time INSERT handler — new messages still append to the bottom normally
+_pendingLoad media placeholder logic
+Emoji picker or input bar changes
+imageGroupingService — it still receives messages the same way; just feed it the paginated array
 Deliverable
-CSS updated with darker overlay, heavier blur, download circle button styles
-JSX updated with download button circle + label
+
+Report back with:
+
+Current fetch location and query (Task 1)
+Confirm PAGE_SIZE, hasMore, loadingMore, oldestLoadedIdRef added
+Confirm initial fetch now loads last 20 only
+Confirm loadMoreMessages function added
+Confirm scroll handler wired to container
+Confirm scroll position preserved on prepend
+Confirm loading indicator added
 Build passes

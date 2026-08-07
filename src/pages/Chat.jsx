@@ -224,6 +224,12 @@ export default function Chat() {
   const [uploading, setUploading]         = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const pendingGroupIdRef = useRef(null)
+
+  // ── Pagination (infinite scroll upward) ──────────────────────────────────
+  const PAGE_SIZE = 20 // messages per page — constant
+  const [hasMore, setHasMore] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const oldestLoadedIdRef = useRef(null) // oldest message id loaded so far
   const [recording, setRecording]         = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
   const [waveHeights, setWaveHeights]     = useState(Array(40).fill(2))
@@ -406,6 +412,7 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
   }, [messages, chatSource, currentUser?.id, userId, dmAccepted])
   const bottomRef          = useRef(null)
   const messagesListRef    = useRef(null)
+  const scrollContainerRef = messagesListRef
   const nearBottomRef      = useRef(true)
   const mediaRecorderRef   = useRef(null)
   const chunksRef          = useRef([])
@@ -512,6 +519,12 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
       setUnreadBelow(n => n + 1)
     }
   }, [messages.length])
+
+  // Always land on the last message when the chat finishes loading
+  useEffect(() => {
+    if (loading) return
+    requestAnimationFrame(() => scrollToBottom(false))
+  }, [loading])
 
   // Load / sync reactions for this chat pair
   useEffect(() => {
@@ -1343,7 +1356,8 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
   async function loadMessages(myId, source, ctxId) {
     let query = supabase.from('messages').select('*')
       .or(`and(from_user.eq.${myId},to_user.eq.${userId}),and(from_user.eq.${userId},to_user.eq.${myId})`)
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: false })
+      .limit(PAGE_SIZE)
 
     query = applyContextFilter(query, source, ctxId)
 
@@ -1361,7 +1375,8 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
       console.warn('[Chat] loadMessages filter error, retrying loosely:', error.message)
       let fallback = supabase.from('messages').select('*')
         .or(`and(from_user.eq.${myId},to_user.eq.${userId}),and(from_user.eq.${userId},to_user.eq.${myId})`)
-        .order('created_at', { ascending: true })
+        .order('created_at', { ascending: false })
+        .limit(PAGE_SIZE)
       if (source === 'service' && ctxId) fallback = fallback.eq('service_id', ctxId)
       else if (source === 'listing' && ctxId) fallback = fallback.eq('listing_id', ctxId)
       const res = await fallback
@@ -1393,18 +1408,84 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
         if (m.expires_at && new Date(m.expires_at).getTime() <= now) return false
         return true
       })
-      setMessages(data)
-      const forGrouping = data.filter(m => !(m.deleted_at && m.media_type === 'image' && !m.media_url))
+      const messagesForDisplay = (data || []).reverse() // newest→oldest ⇒ oldest→newest
+      setMessages(messagesForDisplay)
+      const forGrouping = messagesForDisplay.filter(m => !(m.deleted_at && m.media_type === 'image' && !m.media_url))
       setGroupedMessages(imageGroupingService.groupMessages(forGrouping))
-      // TODO: when pagination is added, rebuild groupedMessages after prepending older messages:
-      // setGroupedMessages(imageGroupingService.groupMessages([...olderMessages, ...currentMessages]))
-      if (!isFromRequest.current && data?.some(m =>
+      if (!isFromRequest.current && messagesForDisplay?.some(m =>
         m.chat_source === 'request' || m.body?.includes('I can help with your request') || m.body?.includes('I saw your request for')
       )) {
         setIsRequestChat(true)
       }
+      if (messagesForDisplay.length < PAGE_SIZE) setHasMore(false)
+      if (messagesForDisplay.length > 0) oldestLoadedIdRef.current = messagesForDisplay[0].id
     }
   }
+
+  // ── Pagination: load one older page (infinite scroll upward) ────────────
+  const loadMoreMessages = useCallback(async () => {
+    if (loadingMore || !hasMore) return
+    setLoadingMore(true)
+
+    const myUserId = currentUserRef.current?.id
+
+    // Get created_at of the oldest message currently loaded
+    const oldest = messages.find(m => m.id === oldestLoadedIdRef.current)
+    if (!oldest) { setLoadingMore(false); return }
+
+    let query = supabase.from('messages').select('*')
+      .or(`and(from_user.eq.${myUserId},to_user.eq.${userId}),and(from_user.eq.${userId},to_user.eq.${myUserId})`)
+      .lt('created_at', oldest.created_at)
+      .order('created_at', { ascending: false })
+      .limit(PAGE_SIZE)
+    query = applyContextFilter(query, chatSourceRef.current, contextId)
+
+    const { data, error } = await query
+    if (error) {
+      console.warn('[Chat] loadMoreMessages error:', error.message)
+      setLoadingMore(false)
+      return
+    }
+
+    // Same client-side filtering as loadMessages
+    let older = data || []
+    let localHidden = []
+    try {
+      localHidden = JSON.parse(localStorage.getItem(`soko_msg_hidden_${currentUserRef.current?.id}`) || '[]')
+    } catch { localHidden = [] }
+    const now = Date.now()
+    older = older.filter(m => {
+      if (localHidden.includes(m.id)) return false
+      if (Array.isArray(m.hidden_for) && m.hidden_for.includes(currentUserRef.current?.id)) return false
+      if (m.expires_at && new Date(m.expires_at).getTime() <= now) return false
+      return true
+    })
+    older = older.reverse() // oldest→newest for prepending
+
+    if (older.length < PAGE_SIZE) setHasMore(false)
+    const el = scrollContainerRef.current
+    const prevScrollHeight = el ? el.scrollHeight : 0
+
+    if (older.length > 0) oldestLoadedIdRef.current = older[0].id
+    const nextRaw = [...older, ...messages]
+    setMessages(nextRaw)
+    setGroupedMessages(imageGroupingService.groupMessages(nextRaw))
+
+    // Preserve scroll position after prepending older messages
+    requestAnimationFrame(() => {
+      if (el) el.scrollTop = el.scrollHeight - prevScrollHeight
+    })
+
+    setLoadingMore(false)
+  }, [loadingMore, hasMore, messages, userId, contextId, chatSourceRef, currentUserRef])
+
+  const handleScroll = useCallback(() => {
+    const el = scrollContainerRef.current
+    if (!el) return
+    if (el.scrollTop <= 80 && hasMore && !loadingMore) {
+      loadMoreMessages()
+    }
+  }, [hasMore, loadingMore, loadMoreMessages])
 
   // ── sendMessage — optimistic UI + reply encoded in body ─────────────────
   async function sendMessage(body, type = 'text', mediaUrl = null, extraFields = {}, opts = {}) {
@@ -3073,8 +3154,20 @@ async function uploadAndSend(file, type, caption = '') {
           nearBottomRef.current = near
           setShowScrollBtn(distFromBottom > 120)
           if (near) setUnreadBelow(0)
+          handleScroll()
         }}
       >
+        {loadingMore && (
+          <div className="chat-load-more-spinner">
+            <span>Loading...</span>
+          </div>
+        )}
+        {!hasMore && messages.length > 0 && (
+          <div className="chat-load-more-end">
+            <span>No more messages</span>
+          </div>
+        )}
+
         {messages.length === 0 && !isServiceChat && (
           <div className="chat-empty">
             <div className="chat-empty-icon">👋</div>
