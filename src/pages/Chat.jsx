@@ -450,6 +450,9 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
       root.style.setProperty('--chat-vvh', `${h}px`)
       // Offset for visualViewport.offsetTop when the page is scrolled under the keyboard
       root.style.setProperty('--chat-vv-top', `${vv ? Math.round(vv.offsetTop) : 0}px`)
+      // Keyboard height = how much the visual viewport shrank from the window height.
+      // Lets bottom-anchored fixed layers (emoji picker) ride above the keyboard.
+      root.style.setProperty('--chat-kb-offset', `${window.innerHeight - (vv ? vv.height : window.innerHeight)}px`)
     }
     apply()
     const vv = window.visualViewport
@@ -462,6 +465,7 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
       window.removeEventListener('resize', apply)
       root.style.removeProperty('--chat-vvh')
       root.style.removeProperty('--chat-vv-top')
+      root.style.removeProperty('--chat-kb-offset')
     }
   }, [])
 
@@ -502,6 +506,7 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
   // Escape closes overlays
   useEffect(() => {
     function onKey(e) {
+      if (e.key === 'Escape' && showEmoji) { setShowEmoji(false); return }
       if (e.key !== 'Escape') return
       if (lightbox) setLightbox(null)
       else if (actionMsg) setActionMsg(null)
@@ -3863,11 +3868,13 @@ async function uploadAndSend(file, type, caption = '') {
 
       {/* ── Emoji Picker ── */}
       {showEmoji && (
-        <div
-          ref={emojiPickerRef}
-          className="ep-wrap"
-          onClick={e => e.stopPropagation()}
-        >
+        <>
+          <div className="ep-backdrop" onClick={() => setShowEmoji(false)} />
+          <div
+            ref={emojiPickerRef}
+            className="ep-wrap"
+            onClick={e => e.stopPropagation()}
+          >
           {/* Recent strip */}
           <div className="ep-recent">
             {recentEmojis.length > 0
@@ -3901,6 +3908,7 @@ async function uploadAndSend(file, type, caption = '') {
             ))}
           </div>
         </div>
+        </>
       )}
 
       {/* ── Reply banner ── */}
@@ -4033,6 +4041,7 @@ async function uploadAndSend(file, type, caption = '') {
               ref={inputRef}
               placeholder={isServiceChat ? `Message about ${service?.name || 'service'}…` : 'Message…'}
               value={newMsg}
+              onFocus={() => { if (showEmoji) setShowEmoji(false) }}
               onChange={e => {
                 handleTyping(e.target.value)
                 e.target.style.height = 'auto'

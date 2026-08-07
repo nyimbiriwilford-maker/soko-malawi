@@ -2942,11 +2942,19 @@
 }
 
 /* ── Emoji Picker ─────────────────────────────── */
+.chat-thread .ep-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1199;
+  background: transparent;
+  -webkit-tap-highlight-color: transparent;
+}
+
 .chat-thread .ep-wrap {
   position: fixed;
   left: 0;
   right: 0;
-  bottom: 0;
+  bottom: var(--chat-kb-offset, 0px);
   z-index: 1200;
   background: var(--bg, #fff);
   border-radius: 18px 18px 0 0;

@@ -1,213 +1,118 @@
-Remove the existing emoji picker CSS and JSX completely and rebuild it from scratch. Keep all existing emoji functions and state — only replace the UI and styles.
+Two UX fixes for the new emoji picker (ep-wrap). Investigation first, then fix.
 
 ═══════════════════════════════════
-STEP 1 — IDENTIFY EVERYTHING TO REMOVE
+INVESTIGATION
 ═══════════════════════════════════
 
-1. In src/pages/Chat.jsx, show the exact line numbers of:
-   - The full emoji picker JSX block (from {showEmoji && ( to its closing )})
-   - Any inline <style> rules for emoji inside the Chat.jsx <style> block
+1. Show how showEmoji is currently set to false — what triggers closing the picker right now (grep -n "setShowEmoji(false)" src/pages/Chat.jsx and show all call sites).
 
-2. In src/styles/chat-thread.css, grep -n "emoji" and show every line number and rule that contains "emoji" — we will delete all of them.
+2. Show the emojiPickerRef usage — is there already a click-outside handler that closes the picker? grep -n "emojiPickerRef" src/pages/Chat.jsx.
 
-3. Confirm these existing functions/state are kept untouched (do NOT delete):
-   - showEmoji state + setShowEmoji
-   - emojiTab state + setEmojiTab
-   - recentEmojis state
-   - insertEmoji function
-   - emojiPickerRef ref
-   - EMOJI_CATEGORIES import
-   - EMOJI_BY_ID import
-   - DEFAULT_EMOJI_TAB
+3. Show the chat input bar JSX (the div containing the Message... input, emoji button, send button) — specifically its position, z-index, and whether it sits above or below ep-wrap in the DOM order.
+
+4. On mobile, when the user taps the message input box after opening the emoji picker, does the keyboard open? If so, does ep-wrap (position:fixed; bottom:0) stay visible above the keyboard or get pushed behind it? Check if there is any existing keyboard-detection logic (visualViewport resize handler in Chat.jsx already tracks this via --chat-vvh).
 
 ═══════════════════════════════════
-STEP 2 — DELETE ALL EXISTING EMOJI PICKER CODE
+FIX A — Easy dismissal
 ═══════════════════════════════════
 
-4. Delete the entire {showEmoji && (...)} JSX block from Chat.jsx.
+After investigation, apply:
 
-5. Delete every CSS rule in chat-thread.css that contains "emoji" in its selector. Remove them all — every single one.
+1. Add a backdrop behind the picker. In the JSX, wrap the existing ep-wrap with a fragment and add a backdrop div before it:
 
-═══════════════════════════════════
-STEP 3 — BUILD NEW EMOJI PICKER
-═══════════════════════════════════
-
-6. Add this new JSX back in the same location where the old picker was in Chat.jsx:
-
+Find:
 {showEmoji && (
   <div
     ref={emojiPickerRef}
     className="ep-wrap"
     onClick={e => e.stopPropagation()}
   >
-    {/* Recent strip */}
-    <div className="ep-recent">
-      {recentEmojis.length > 0
-        ? recentEmojis.map((em, i) => (
-            <button key={i} type="button" className="ep-btn" onClick={() => insertEmoji(em)}>{em}</button>
-          ))
-        : <span className="ep-recent-empty">🕘 Recent emojis appear here</span>
-      }
-    </div>
 
-    {/* Emoji grid */}
-    <div className="ep-grid">
-      {(EMOJI_BY_ID[emojiTab]?.emojis || []).map((em, i) => (
-        <button key={i} type="button" className="ep-btn" onClick={() => insertEmoji(em)}>{em}</button>
-      ))}
-    </div>
+Replace with:
+{showEmoji && (
+  <>
+    <div className="ep-backdrop" onClick={() => setShowEmoji(false)} />
+    <div
+      ref={emojiPickerRef}
+      className="ep-wrap"
+      onClick={e => e.stopPropagation()}
+    >
 
-    {/* Category tabs */}
-    <div className="ep-tabs">
-      {EMOJI_CATEGORIES.map(cat => (
-        <button
-          key={cat.id}
-          type="button"
-          className={`ep-tab${emojiTab === cat.id ? ' ep-tab--active' : ''}`}
-          onClick={() => setEmojiTab(cat.id)}
-          aria-label={cat.label}
-          title={cat.label}
-        >
-          {cat.icon}
-        </button>
-      ))}
-    </div>
+Find the closing of the showEmoji block:
   </div>
 )}
 
-7. Add this new CSS at the END of src/styles/chat-thread.css:
+Replace with:
+    </div>
+  </>
+)}
 
-/* ── Emoji Picker ─────────────────────────────── */
+2. Add CSS for the backdrop at the end of chat-thread.css:
+
+.chat-thread .ep-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1199;
+  background: transparent;
+  -webkit-tap-highlight-color: transparent;
+}
+
+This means tapping anywhere outside the picker closes it instantly. z-index 1199 puts it just below ep-wrap (1200).
+
+3. Also close on Escape key — find the existing global keydown handler in Chat.jsx (there should be one handling Escape for lightbox etc). Add to it:
+
+if (e.key === 'Escape' && showEmoji) { setShowEmoji(false); return }
+
+Place this BEFORE the existing Escape checks so it fires first.
+
+═══════════════════════════════════
+FIX B — Picker works well with the typing box
+═══════════════════════════════════
+
+The picker is position:fixed; bottom:0. The input bar sits above it in the page flow. On mobile, when the keyboard is open, the visualViewport shrinks — ep-wrap at bottom:0 fixed will sit above the keyboard correctly IF bottom:0 is relative to the visual viewport. On iOS Safari this works. On Android Chrome, fixed elements can sit behind the keyboard.
+
+Fix: use the existing --chat-vvh visualViewport tracking to position ep-wrap correctly.
+
+In src/styles/chat-thread.css, find:
 .chat-thread .ep-wrap {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
   z-index: 1200;
-  background: var(--bg, #fff);
-  border-radius: 18px 18px 0 0;
-  box-shadow: 0 -4px 24px rgba(0,0,0,0.13);
-  display: flex;
-  flex-direction: column;
-  height: 52vh;
-  max-height: 520px;
-  overflow: hidden;
-  touch-action: pan-y;
-}
 
-/* Recent strip */
-.chat-thread .ep-recent {
-  display: flex;
-  flex-direction: row;
-  flex-wrap: nowrap;
-  overflow-x: auto;
-  overflow-y: hidden;
-  padding: 6px 8px;
-  gap: 2px;
-  border-bottom: 1px solid rgba(0,0,0,0.07);
-  flex-shrink: 0;
-  min-height: 48px;
-  align-items: center;
-  -webkit-overflow-scrolling: touch;
-}
+Add bottom positioning via JS instead. In Chat.jsx, find the visualViewport useEffect that sets --chat-vvh and --chat-vv-top. After the existing setProperty calls inside the apply() function, add nothing — instead, handle ep-wrap bottom positioning via CSS env():
 
-.chat-thread .ep-recent-empty {
-  font-size: 11px;
-  color: #aaa;
-  padding: 0 4px;
-  white-space: nowrap;
-}
+Replace bottom: 0 in the ep-wrap CSS with:
+  bottom: env(safe-area-inset-bottom, 0px);
 
-/* Emoji grid */
-.chat-thread .ep-grid {
-  display: grid;
-  grid-template-columns: repeat(8, 1fr);
-  gap: 0;
-  overflow-y: auto;
-  overflow-x: hidden;
-  flex: 1 1 0;
-  min-height: 0;
-  padding: 4px 4px 8px;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-y: contain;
-}
+AND add this rule so ep-wrap repositions when the keyboard is up (visualViewport height shrinks):
 
-/* Emoji buttons */
-.chat-thread .ep-btn {
-  font-size: 24px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 4px 2px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 40px;
-  width: 100%;
-  -webkit-tap-highlight-color: transparent;
-}
-.chat-thread .ep-btn:active {
-  background: rgba(0,0,0,0.07);
-}
+In Chat.jsx, in the same visualViewport apply() function that sets --chat-vvh, also set a new var:
+  root.style.setProperty('--chat-kb-offset', `${window.innerHeight - (vv ? vv.height : window.innerHeight)}px`)
 
-/* Category tabs */
-.chat-thread .ep-tabs {
-  display: flex;
-  flex-direction: row;
-  overflow-x: auto;
-  overflow-y: hidden;
-  flex-shrink: 0;
-  border-top: 1px solid rgba(0,0,0,0.07);
-  padding: 2px 4px;
-  gap: 0;
-  height: 44px;
-  align-items: center;
-  -webkit-overflow-scrolling: touch;
-}
+Then in chat-thread.css, update ep-wrap bottom to:
+  bottom: var(--chat-kb-offset, 0px);
 
-.chat-thread .ep-tab {
-  flex-shrink: 0;
-  font-size: 20px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  padding: 4px 6px;
-  border-radius: 8px;
-  min-width: 36px;
-  height: 36px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0.5;
-  transition: opacity 0.15s, background 0.15s;
-  -webkit-tap-highlight-color: transparent;
-}
+This means when the keyboard opens (innerHeight - visualViewport.height > 0), the picker lifts above the keyboard automatically.
 
-.chat-thread .ep-tab--active {
-  opacity: 1;
-  background: rgba(26,122,74,0.12);
-}
+Also: when the emoji picker is open and the user taps the input box to type, close the picker:
 
-.chat-thread .ep-tab:active {
-  background: rgba(0,0,0,0.08);
-}
+Find the message input's onFocus handler in Chat.jsx (the <textarea> or <input> for the message). If there is already an onFocus, add to it:
+  if (showEmoji) setShowEmoji(false)
 
-/* Dark mode */
-@media (prefers-color-scheme: dark) {
-  .chat-thread .ep-wrap {
-    background: #1a1f1c;
-    box-shadow: 0 -4px 24px rgba(0,0,0,0.4);
-  }
-  .chat-thread .ep-recent {
-    border-bottom-color: rgba(255,255,255,0.08);
-  }
-  .chat-thread .ep-tabs {
-    border-top-color: rgba(255,255,255,0.08);
-  }
-  .chat-thread .ep-btn:active {
-    background: rgba(255,255,255,0.1);
-  }
-}
+If there is no onFocus, add:
+  onFocus={() => { if (showEmoji) setShowEmoji(false) }}
 
-Run npx eslint src/pages/Chat.jsx and npm run build. Confirm both pass. Also confirm grep -n "ep-wrap\|ep-grid\|ep-tabs" src/pages/Chat.jsx returns the new JSX lines.
+This way tapping the input box closes the picker and lets the keyboard take over naturally.
+
+═══════════════════════════════════
+VERIFICATION
+═══════════════════════════════════
+
+Run npx eslint src/pages/Chat.jsx and npm run build. Report both.
+
+Confirm:
+- grep -n "ep-backdrop" src/pages/Chat.jsx src/styles/chat-thread.css — appears in both
+- grep -n "chat-kb-offset" src/pages/Chat.jsx src/styles/chat-thread.css — appears in both
+- grep -n "setShowEmoji(false)" src/pages/Chat.jsx — show all call sites including the new ones
