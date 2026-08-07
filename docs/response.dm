@@ -1,37 +1,32 @@
-# Two UX fixes for the emoji picker (ep-wrap)
+# Emoji picker: close button + real-time preview
 
 Task source: `docs/claudehelp.md`. Investigation first, then fix.
 
 ## INVESTIGATION
 
-1. **How `showEmoji` is set to false (before):** `setShowEmoji(false)` was called at: Escape handler (`Chat.jsx:513`), click-outside mousedown handler (`:574`), `:1061`, `:2989` (lightbox/overlay), `:4022` (attach toggle), `:4032` (offer toggle).
+1. **ep-wrap JSX structure:** No header row existed — the picker went straight from `<div className="ep-wrap">` into `.ep-recent`, then `.ep-grid`, then `.ep-tabs` (`Chat.jsx:3869–3912`).
 
-2. **Click-outside:** Yes — there is already a `mousedown` listener on `document` (`Chat.jsx:566–573`) that closes the picker when a tap lands outside `emojiPickerRef`. It uses `mousedown` (device-agnostic-ish) but can be flaky where the tap begins on a scrollable surface; the new dedicated backdrop gives a reliable full-surface tap target.
+2. **Message textarea / insertEmoji** (`Chat.jsx:4032–4043`, function `Chat.jsx:1940–1956`):
+   - State: **`newMsg`** (`value={newMsg}`); ref is **`inputRef`**.
+   - `insertEmoji`: reads live cursor from `inputRef.current`, splices the emoji into `newMsg`, sets `pendingEmojiCursorRef`, calls `handleTyping(next)` (owns `setNewMsg` + typing indicator), and records the recent emoji. It **does NOT call `setShowEmoji(false)`** and does **not** directly focus — instead a separate `useEffect([newMsg])` (`Chat.jsx:1964–1975`) re-focuses `inputRef` and resets the caret via `pendingEmojiCursorRef`.
 
-3. **Chat input bar:** `S.inputBar` = `position: static` (in flow), `z-index: 5` (`Chat.jsx:4096`). It renders BELOW the picker in the DOM (picker comes first, `z-index:1200`), so the fixed `ep-wrap` overlays the input bar when open. `.chat-composer` textarea at `Chat.jsx:4032–4043`, no prior `onFocus`.
+## FIX A — Close button + header
 
-4. **Keyboard + picker:** The picker is `position:fixed; bottom:0`. When the input is tapped to type, the soft keyboard opens and shrinks the visual viewport. On iOS Safari, `bottom:0` is relative to the visual viewport (works); on Android Chrome fixed elements can end up behind the keyboard. Chat.jsx already tracks the visual viewport via `--chat-vvh` (`Chat.jsx:444–466`), so we reuse that mechanism for the picker.
+- Added an `.ep-header` row as the **first child** of `ep-wrap` (`Chat.jsx:3878–3897`) with `.ep-header-label` (`EMOJI_BY_ID[emojiTab]?.label || 'Emoji'`) on the left and a `.ep-close` ✕ button (`onClick={() => setShowEmoji(false)}`, `aria-label="Close emoji picker"`).
+- Appended CSS for `.ep-header`, `.ep-header-label`, `.ep-close`, `.ep-close:active`, plus a `prefers-color-scheme: dark` override at the end of `chat-thread.css`.
 
-## FIX A — Easy dismissal
+## FIX B — Keep picker open, real-time preview
 
-- **Backdrop:** wrapped `ep-wrap` in a fragment and added `<div className="ep-backdrop" onClick={() => setShowEmoji(false)} />` before it (`Chat.jsx:3871–3872`). Closing tag updated to `</div></>`.
-- **CSS:** appended `.chat-thread .ep-backdrop` → `position:fixed; inset:0; z-index:1199; background:transparent` (just below `ep-wrap`'s 1200).
-- **Escape:** added `if (e.key === 'Escape' && showEmoji) { setShowEmoji(false); return }` as the **first** check in the global keydown handler (`Chat.jsx:509`), before all other Escape handling.
-
-## FIX B — Works with the typing box
-
-- **Keyboard offset var:** in the visualViewport `apply()` added `root.style.setProperty('--chat-kb-offset', \`${window.innerHeight - (vv ? vv.height : window.innerHeight)}px\`)` (`Chat.jsx:455`), cleaned up with `removeProperty` on unmount (`Chat.jsx:468`).
-- **CSS:** `ep-wrap` `bottom` changed from `0` to `bottom: var(--chat-kb-offset, 0px)` (`chat-thread.css:2957`). When the keyboard opens (KB offset > 0) the picker lifts above it; otherwise stays pinned to the bottom.
-- **Close on input focus:** added `onFocus={() => { if (showEmoji) setShowEmoji(false) }}` to the message `<textarea>` (`Chat.jsx:4044`) so tapping the input closes the picker and lets the keyboard take over.
+1. **insertEmoji does not close the picker** — confirmed, no `setShowEmoji(false)` inside it. No change needed.
+2. **Smart `onFocus` on textarea** (`Chat.jsx:4062`): replaced `onFocus={() => { if (showEmoji) setShowEmoji(false) }}` with the version that returns early when the focus came from an `ep-btn` (`e.relatedTarget?.classList?.contains('ep-btn')`), so programmatic focus after insert doesn't dismiss the picker, while a direct tap on the input still does.
+3. **Focus after insert** — already implemented via the `[newMsg]` effect (`inputRef.current.focus()` + `setSelectionRange`). Confirmed; no change needed.
+4. **Picker stays open on tap** — confirmed `insertEmoji` never calls `setShowEmoji`. ✓
+5. **Backdrop** — `ep-btn` buttons are children of `ep-wrap` (z-index 1200) above the `.ep-backdrop` (1199), and `ep-wrap` has `onClick={e.stopPropagation()}`, so they never trigger the backdrop. Correct; no change.
 
 ## VERIFICATION
 
-- `npx eslint src/pages/Chat.jsx` → 14 problems (10 errors, 4 warnings), **identical pre-existing baseline** (offer/offer DM/reaction/search `set-state-in-effect` + unused vars; line numbers only shifted by added lines). No new errors from this task.
-- `npm run build` → `✓ built in 3.19s` (2105 modules). Passes.
-- `ep-backdrop` → `Chat.jsx:3872` (JSX) + `chat-thread.css:2945` (CSS). ✓
-- `chat-kb-offset` → `Chat.jsx:455,468` + `chat-thread.css:2957`. ✓
-- `setShowEmoji(false)` sites incl. new: `Chat.jsx:509 (Escape), 513 (existing Escape), 574 (click-outside), 1061, 2989, 3872 (backdrop), 4022, 4032, 4044 (textarea focus)`.
-
-## Notes
-- `setShowEmoji(false)` on Escape is now handled twice (new first check `:509` + old `:513`) — harmless, the first returns early.
-- `--chat-kb-offset` defaults to `0` when the picker isn't affected by keyboard (desktop / keyboard closed), so the picker stays pinned to the bottom of the screen.
+- `npx eslint src/pages/Chat.jsx` → 14 problems (10 errors, 4 warnings), **unchanged pre-existing baseline**, no new lint errors.
+- `npm run build` → `✓ built in 3.41s` (2105 modules). Passes.
+- `ep-header|ep-close` present in both files: `Chat.jsx:3879,3880,3885`; `chat-thread.css:3085,3094,3101,3117,3122,3123`. ✓
+- `setShowEmoji(false)` sites (10) — `insertEmoji` is **NOT** among them. ✓
+- `insertEmoji` stays at `Chat.jsx:1940`; picker remains open after each insert.

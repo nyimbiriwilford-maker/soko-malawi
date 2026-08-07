@@ -3875,6 +3875,21 @@ async function uploadAndSend(file, type, caption = '') {
             className="ep-wrap"
             onClick={e => e.stopPropagation()}
           >
+          {/* Header */}
+          <div className="ep-header">
+            <span className="ep-header-label">
+              {EMOJI_BY_ID[emojiTab]?.label || 'Emoji'}
+            </span>
+            <button
+              type="button"
+              className="ep-close"
+              onClick={() => setShowEmoji(false)}
+              aria-label="Close emoji picker"
+            >
+              ✕
+            </button>
+          </div>
+
           {/* Recent strip */}
           <div className="ep-recent">
             {recentEmojis.length > 0
@@ -4041,7 +4056,12 @@ async function uploadAndSend(file, type, caption = '') {
               ref={inputRef}
               placeholder={isServiceChat ? `Message about ${service?.name || 'service'}…` : 'Message…'}
               value={newMsg}
-              onFocus={() => { if (showEmoji) setShowEmoji(false) }}
+              onFocus={e => {
+                // Only close picker if focus came from user tapping the input directly,
+                // not from insertEmoji programmatically focusing it.
+                if (showEmoji && e.relatedTarget?.classList?.contains('ep-btn')) return
+                if (showEmoji) setShowEmoji(false)
+              }}
               onChange={e => {
                 handleTyping(e.target.value)
                 e.target.style.height = 'auto'
