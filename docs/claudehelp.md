@@ -1,106 +1,60 @@
-Two clear bugs. Instructions for DeepSeek:
+Instructions for DeepSeek:
 
-Instructions for DeepSeek — Emoji Picker: Persist on Input Tap + Cursor Position Fix
-Bug 1 — Emoji picker dismisses when tapping the text input
+Instructions for DeepSeek — Emoji Picker: Block Keyboard on Textarea Tap
 
-Root cause: When the textarea is tapped, it fires focus → which triggers a keyboard show event → which runs logic that sets showEmoji(false) to close the picker.
+Problem: When the emoji picker is open and the user taps the textarea, the software keyboard appears and the emoji picker closes/gets pushed. The textarea must not trigger the keyboard while the picker is open. The user should only be able to reposition the cursor — no keyboard, no dismiss.
 
-Task 1 — Find the dismiss logic
+Task 1 — Prevent keyboard from appearing on textarea tap
 
-In Chat.jsx, search for every place setShowEmoji(false) is called. List each one with its line number and the event/condition that triggers it. Report back the full list before touching anything.
+When showEmoji is true, the textarea must not receive native focus (which triggers the keyboard). Use readOnly to suppress the keyboard while still allowing cursor repositioning via touch:
 
-Task 2 — Guard the dismiss on textarea focus/keyboard show
-
-The picker must not close when:
-
-The textarea receives focus
-The keyboard appears (visualViewport resize fires while showEmoji is true)
-
-Find the handler that calls setShowEmoji(false) on keyboard show / textarea focus and wrap it with a guard:
-
-js
-// BEFORE (example — exact code may differ)
-if (keyboardVisible) {
-  setShowEmoji(false)
-}
-
-// AFTER
-if (keyboardVisible && !showEmoji) {
-  setShowEmoji(false)
-}
-
-The picker should only close via:
-
-The explicit dismiss/close button handler
-The keyboard icon button handler
-Navigating away from the chat
-
-Do not close it on textarea focus, click, touchstart, or visualViewport resize.
-
-Bug 2 — Emoji inserts at position 0 instead of cursor position (2nd, 3rd emoji onwards)
-
-Root cause: After inserting the first emoji, the textarea loses focus (because the emoji button tap moves focus away). On the next insert, selectionStart is 0 (or the browser returns 0 for an unfocused element), so subsequent emojis go to the beginning.
-
-Task 3 — Store and restore cursor position manually
-
-In Chat.jsx, find the emoji insert function (where a tapped emoji character is inserted into the message). It likely reads inputRef.current.selectionStart.
-
-Add a cursorPosRef to track the last known cursor position:
-
-js
-// Add near other refs
-const cursorPosRef = useRef(null)
-
-On the textarea, add onSelect and onKeyUp handlers to save cursor position whenever it changes:
+Find the textarea in Chat.jsx and add a conditional readOnly prop:
 
 jsx
-onSelect={() => { cursorPosRef.current = inputRef.current?.selectionStart ?? null }}
-onKeyUp={() => { cursorPosRef.current = inputRef.current?.selectionStart ?? null }}
-
-Then in the emoji insert function, replace selectionStart reads with cursorPosRef.current:
-
-js
 // BEFORE
-const pos = inputRef.current.selectionStart ?? message.length
-const newMsg = message.slice(0, pos) + emoji + message.slice(pos)
-setMessage(newMsg)
-// cursor restore
-setTimeout(() => {
-  inputRef.current.selectionStart = pos + emoji.length
-  inputRef.current.selectionEnd = pos + emoji.length
-}, 0)
+<textarea
+  ref={inputRef}
+  ...
+/>
 
 // AFTER
-const pos = cursorPosRef.current ?? message.length
-const newMsg = message.slice(0, pos) + emoji + message.slice(pos)
-setMessage(newMsg)
-cursorPosRef.current = pos + emoji.length  // advance cursor ref
-setTimeout(() => {
-  if (inputRef.current) {
-    inputRef.current.selectionStart = cursorPosRef.current
-    inputRef.current.selectionEnd = cursorPosRef.current
-  }
-}, 0)
+<textarea
+  ref={inputRef}
+  readOnly={showEmoji}
+  ...
+/>
 
-Also save cursor position inside the emoji insert function itself, after the insert, so the ref always reflects where the next emoji should land.
+readOnly on a textarea prevents the software keyboard from appearing on iOS/Android while still allowing the user to tap to reposition the cursor. The field remains interactive for cursor placement but does not invoke the keyboard.
 
-Task 4 — Also save cursor on textarea onClick and onTouchEnd
+Task 2 — Re-enable input immediately when picker closes
+
+When showEmoji becomes false (picker dismissed), the textarea must become writable again instantly. Since readOnly is driven by showEmoji state, this is automatic — no extra logic needed. Just confirm the readOnly={showEmoji} prop is the only change and no additional disabled or pointerEvents:none was added.
+
+Task 3 — Prevent onFocus from firing the keyboard via blur guard
+
+Even with readOnly, some Android browsers still briefly show the keyboard on tap. Add a onFocus guard that immediately blurs the textarea when the picker is open:
+
 jsx
-onClick={() => { cursorPosRef.current = inputRef.current?.selectionStart ?? null }}
-onTouchEnd={() => { cursorPosRef.current = inputRef.current?.selectionStart ?? null }}
+onFocus={(e) => {
+  if (showEmoji) {
+    e.target.blur()
+    return
+  }
+  // existing onFocus logic here (if any)
+}}
 
-This captures the cursor when the user taps inside the textarea while the picker is open.
+This is a belt-and-suspenders guard — readOnly handles iOS, blur() on focus handles Android.
 
 Do NOT touch
-The emoji picker open logic
-lockedKbHeight
-Any CSS files
-The dismiss button and keyboard icon button handlers (those should still close the picker)
+cursorPosRef logic — keep intact
+setShowEmoji(false) call sites already guarded — keep intact
+CSS files
+Any dismiss button handlers
 Deliverable
 
 Report back with:
 
-Full list of setShowEmoji(false) call sites (Task 1)
-Which guard was added and on which line (Task 2)
-Confirm cursorPosRef added and all 4 cursor-save events wired (Tasks 3 + 4)
+Confirm readOnly={showEmoji} added to textarea
+Confirm onFocus blur guard added
+Confirm no disabled or pointerEvents added
 Build passes

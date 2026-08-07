@@ -4085,8 +4085,15 @@ async function uploadAndSend(file, type, caption = '') {
           <div className="chat-composer">
             <textarea
               ref={inputRef}
+              readOnly={showEmoji}
               placeholder={isServiceChat ? `Message about ${service?.name || 'service'}…` : 'Message…'}
               value={newMsg}
+              onFocus={(e) => {
+                if (showEmoji) {
+                  e.target.blur()
+                  return
+                }
+              }}
               onSelect={() => { cursorPosRef.current = inputRef.current?.selectionStart ?? null }}
               onKeyUp={() => { cursorPosRef.current = inputRef.current?.selectionStart ?? null }}
               onClick={() => { cursorPosRef.current = inputRef.current?.selectionStart ?? null }}

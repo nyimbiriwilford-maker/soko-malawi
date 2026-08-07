@@ -1,75 +1,29 @@
-# Emoji picker: persist on input tap + cursor position fix
+# Emoji picker: block keyboard on textarea tap
 
-Task source: `docs/claudehelp.md`. Implemented + verified.
+Task source: `docs/claudehelp.md`. Implemented + verified on `Chat.jsx:4086`.
 
-## Task 1 — Full list of `setShowEmoji(false)` call sites
+## Task 1 — `readOnly={showEmoji}` added to textarea
+The composer `<textarea ref={inputRef} ... />` now has `readOnly={showEmoji}`. When the picker is open, `readOnly` suppresses the native keyboard on iOS/Android while still allowing touch tap to reposition the cursor.
 
-| Line | Trigger / condition | Action |
-|---|---|---|
-| 524 | `Escape` key (first branch) | keep (explicit dismiss) |
-| 528 | `Escape` key (fallback chain) | keep (explicit dismiss) |
-| 590 | document `mousedown` outside `.ep-wrap` | **guarded** (Task 2) |
-| 1080 | `openActions(msg)` (message action sheet) | keep |
-| 3010 | messages list `onClick` | keep |
-| 3893 | `ep-backdrop` `onClick` | keep (explicit dismiss) |
-| 3908 | keyboard‑swap icon button | keep (explicit dismiss) |
-| 3917 | ✕ close button | keep (explicit dismiss) |
-| 4061 | attach button `onClick` | keep |
-| 4071 | offer button `onClick` | other |
-| 4087 | **textarea `onFocus`** (picker closed on input-focus) | **removed (Bug 1)** |
-| 4117 | emoji button `onClick` closing branch | keep (toggle) |
+## Task 2 — Re-enable input immediately when picker closes
+No extra logic needed — `readOnly` is driven directly by `showEmoji` state, so once the picker closes (`setShowEmoji(false)`) the textarea returns to writable automatically. Confirmed that **no** `disabled` or `pointerEvents:none` was added anywhere.
 
-The two persistent offenders for Bug 1 were the **textarea `onFocus`** (dismissed on focus) and the **document `mousedown` outside‑click** handler (dismissed on any tap outside `.ep-wrap`, which included tapping the textarea). Both fixed.
-
-## Task 2 — Guards added
-
-### 2a. Textarea no longer closes on focus (`Chat.jsx:4079–4088`)
-The `onFocus` prop (which ran `if (showEmoji) setShowEmoji(false)`) was **removed**. Focus/keyboard showing no longer dismisses the picker.
-
-### 2b. Outside-click keeps picker open on composer tap (`Chat.jsx:586–595`)
-```js
-function handler(e) {
-  if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target)) {
-    // Tapping the textarea/composer to move the cursor must NOT dismiss the
-    // picker (Bug 1) — only dismiss on a true outside area.
-    if (e.target?.closest && e.target.closest('.chat-composer')) return
-    setShowEmoji(false)
-  }
-}
-```
-Now a tap inside the composer (textarea / emoji button) does **not** close the picker; it stays open so the user can place the cursor and keep inserting emojis. It will only close via the explicit buttons/backdrop (✕, keyboard icon, `ep-backdrop`), Escape, navigating away, or a genuine outside‑of‑composer tap.
-
-## Tasks 3 + 4 — `cursorPosRef` (Bug 2)
-
-### Ref added (`Chat.jsx:419`)
-```js
-const cursorPosRef = useRef(null) // survives blur/unfocus (emoji inserts)
-```
-
-### Textarea now records the cursor on all four events (`Chat.jsx:4079–4088`)
+## Task 3 — `onFocus` blur guard added
+Added a belt-and-suspenders guard on `onFocus`:
 ```jsx
-onSelect={()     => { cursorPosRef.current = inputRef.current?.selectionStart ?? null }}
-onKeyUp={()     => { cursorPosRef.current = inputRef.current?.selectionStart ?? null }}
-onClick={()     => { cursorPosRef.current = inputRef.current?.selectionStart ?? null }}
-onTouchEnd={()  => { cursorPosRef.current = inputRef.current?.selectionStart ?? null }}
+onFocus={(e) => {
+  if (showEmoji) {
+    e.target.blur()
+    return
+  }
+}}
 ```
-These capture the caret when the user taps/types in the textarea (including while the picker is open), so the position survives blur.
-
-### `insertEmoji` reads the tracked cursor (`Chat.jsx:1958–1967`)
-```js
-const pos = cursorPosRef.current ?? newMsg.length
-const next = newMsg.slice(0, pos) + emoji + newMsg.slice(pos)
-pendingEmojiCursorRef.current = pos + emoji.length
-cursorPosRef.current = pos + emoji.length
-handleTyping(next)
-```
-Replaces the DOM `inputRef.current.selectionStart/selectionEnd` reads (which return `0` on the unfocused textarea). The ref is advanced after every insert, so 2nd/3rd/n+1th emojis land after the previous one instead of jumping to position 0.
+`readOnly` handles iOS; this blur-on-focus guard handles Android browsers that still briefly surface the keyboard.
 
 ## Deliverable answers
-1. **Call sites:** all listed above; the two Bug‑1 offenders (textarea `onFocus` and composer tap via outside‑click) were fixed.
-2. **Guard added:** (a) removed the `onFocus` dismiss, (b) `.chat-composer` guard in the `mousedown` outside‑click handler (`Chat.jsx:587–595`).
-3. **`cursorPosRef` added; all 4 events wired:** `onSelect`, `onKeyUp`, `onClick`, `onTouchEnd` + advanced inside `insertEmoji`. ✓
+1. **`readOnly={showEmoji}`**: ✓ added to the composer textarea (`Chat.jsx:4089`).
+2. **`onFocus` blur guard:** ✓ added (`Chat.jsx:4094–4099`).
+3. **No `disabled` / `pointerEvents`:** ✓ confirmed — only the `readOnly` prop and `onFocus` guard were introduced.
 
-Do-not-touch compliance: emoji picker open logic, `lockedKbHeight`, CSS, and the dismiss/✅ keyboard‑icon button handlers were not modified. Build:
-- `npx eslint src/pages/Chat.jsx` → **14 problems (10 errors, 4 warnings)** — unchanged baseline, 0 new.
-- `npm run build` → `✓ built in 3.73s`. Passes.
+Do-not-touch compliance: `cursorPosRef` logic, existing `setShowEmoji(false)` call sites, CSS, and dismiss-button handlers were left intact. Build:
+- `npm run build` → `✓ built in 4.67s`. Passes.
