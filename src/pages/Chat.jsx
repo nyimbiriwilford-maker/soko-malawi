@@ -19,6 +19,7 @@ import {
   Music,
   File as FileIcon2,
   CircleDollarSign,
+  Keyboard,
 } from 'lucide-react'
 import {
   buildOfferPayload,
@@ -229,6 +230,10 @@ export default function Chat() {
   const [audioDuration, setAudioDuration] = useState({})
   const [preview, setPreview]             = useState([])
   const [showEmoji, setShowEmoji]         = useState(false)
+  const [lockedKbHeight, setLockedKbHeight] = useState(340) // fallback px if keyboard wasn't open yet
+  const [isMobile, setIsMobile]           = useState(() =>
+    typeof window !== 'undefined' && window.matchMedia('(max-width: 899px)').matches
+  )
   const [showOffer, setShowOffer]         = useState(false)
   const [offerAmount, setOfferAmount]     = useState('')
   const [offerNote, setOfferNote]         = useState('')
@@ -467,6 +472,15 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
       root.style.removeProperty('--chat-vv-top')
       root.style.removeProperty('--chat-kb-offset')
     }
+  }, [])
+
+  // Reuse the CSS mobile breakpoint (max-width:899px) to gate mobile-only
+  // behaviours (emoji picker keyboard-replacement inline style).
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 899px)')
+    const onChange = e => setIsMobile(e.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
   }, [])
 
   useEffect(() => {
@@ -3874,12 +3888,22 @@ async function uploadAndSend(file, type, caption = '') {
             ref={emojiPickerRef}
             className="ep-wrap"
             onClick={e => e.stopPropagation()}
+            style={isMobile ? { '--ep-locked-height': `${lockedKbHeight}px` } : undefined}
           >
           {/* Header */}
           <div className="ep-header">
             <span className="ep-header-label">
               {EMOJI_BY_ID[emojiTab]?.label || 'Emoji'}
             </span>
+            <button
+              type="button"
+              className="ep-close"
+              onClick={() => { setShowEmoji(false); inputRef.current?.focus() }}
+              aria-label="Switch to keyboard"
+              title="Keyboard"
+            >
+              <Keyboard size={18} strokeWidth={2} />
+            </button>
             <button
               type="button"
               className="ep-close"
@@ -4073,7 +4097,21 @@ async function uploadAndSend(file, type, caption = '') {
             <button
               type="button"
               className={`chat-emoji-btn${showEmoji ? ' is-on' : ''}`}
-              onClick={e => { e.stopPropagation(); setShowEmoji(v => !v); setShowAttach(false) }}
+              onClick={e => {
+                e.stopPropagation(); setShowAttach(false)
+                if (!showEmoji) {
+                  // Read the live keyboard height already cached as a CSS var by the
+                  // visualViewport effect. Reuse it for a smooth keyboard-replacement.
+                  const cs = getComputedStyle(document.documentElement)
+                  const kb = parseFloat(cs.getPropertyValue('--chat-kb-offset')) || 0
+                  if (kb > 0) setLockedKbHeight(kb)
+                  inputRef.current?.blur()
+                  setShowEmoji(true)
+                } else {
+                  // Closing the picker also reopens the keyboard via the ep-header button.
+                  setShowEmoji(false)
+                }
+              }}
               onMouseDown={e => e.preventDefault()}
               title="Emoji"
               aria-label="Emoji"

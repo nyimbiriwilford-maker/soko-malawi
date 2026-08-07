@@ -2967,6 +2967,13 @@
   touch-action: pan-y;
 }
 
+/* Mobile only: picker replaces the keyboard, so height = locked keyboard height */
+@media (max-width: 899px) {
+  .chat-thread .ep-wrap {
+    height: var(--ep-locked-height, 52vh);
+  }
+}
+
 /* Recent strip */
 .chat-thread .ep-recent {
   display: flex;

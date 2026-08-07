@@ -1,124 +1,33 @@
-Two improvements to the emoji picker. Investigation first, then fix.
+Implement the emoji-picker keyboard-replacement swap on mobile. Reference: docs/response.md investigation.
 
-═══════════════════════════════════
-INVESTIGATION
-═══════════════════════════════════
+1. In Chat.jsx, add new state near inputRef/showEmoji declarations:
+   const [lockedKbHeight, setLockedKbHeight] = useState(340) // fallback px if keyboard wasn't open yet
 
-1. Show the current ep-wrap JSX structure — specifically the top of the picker (is there a header row already, or does it go straight into ep-recent?).
+2. Replace the emoji button onClick (Chat.jsx:4073-4082) with logic that, when opening the picker (showEmoji currently false):
+   - Read the live --chat-kb-offset value off document.documentElement (getComputedStyle or the cached vv offset var already used in the visualViewport effect — reuse existing pattern, don't reinvent)
+   - If that value is > 0, setLockedKbHeight(that value)
+   - If it's 0 (keyboard wasn't open), leave lockedKbHeight at its current/fallback value
+   - Then call inputRef.current?.blur()
+   When closing the picker (showEmoji currently true): just setShowEmoji(false), no focus call here (see step 4).
+   Keep setShowAttach(false) and e.stopPropagation() as-is.
 
-2. Show the message input (textarea) in Chat.jsx — its current value binding, onChange handler, and ref. Specifically:
-   - What state variable holds the message text? (likely `newMsg` or similar)
-   - What is the ref on the textarea (inputRef?)
-   - Does insertEmoji currently append to that state variable or does it manipulate the DOM directly?
-   - Show the full insertEmoji function.
+3. In chat-thread.css, inside the mobile media query (max-width:899px) only, override .ep-wrap height:
+   .chat-thread .ep-wrap { height: var(--ep-locked-height, 52vh); }
+   Leave the desktop/base .ep-wrap rule (52vh, max-height 520px) untouched — this override only applies under the mobile breakpoint.
+   In Chat.jsx, set the CSS var inline on the ep-wrap element (or a parent) from lockedKbHeight, e.g. style={{ '--ep-locked-height': `${lockedKbHeight}px` }} — only apply this inline style on mobile widths (reuse whatever mobile-detection pattern already exists in this file; do not hardcode window checks if a helper already exists).
 
-Do not fix anything yet.
+4. In .ep-header (around Chat.jsx:3879-3891), add a new button next to the existing ✕ close button:
+   - Icon: use an existing icon import if a keyboard icon is already imported from lucide-react; otherwise import { Keyboard } from 'lucide-react'
+   - onClick: setShowEmoji(false), then inputRef.current?.focus()
+   - aria-label="Switch to keyboard", title="Keyboard"
+   - Keep the existing ✕ button unchanged (it should still just close with no focus call — closing via backdrop tap must also NOT focus, confirm the backdrop's existing onClick only does setShowEmoji(false) and does not call focus anywhere)
 
-═══════════════════════════════════
-FIX A — Close button on picker
-═══════════════════════════════════
+5. Do not touch the visualViewport useEffect (Chat.jsx:444-470) — --chat-kb-offset logic is correct and untouched.
 
-After investigation, add a header row to ep-wrap with a close button and the current category label.
+6. Do not change desktop behavior — gate all new inline styles/height overrides to mobile only, using whatever existing mobile-detection convention this file already uses (check for an isMobile variable, matchMedia hook, or width-based helper already in scope before introducing a new one).
 
-In Chat.jsx, find the opening of ep-wrap content (right after <div className="ep-wrap" ...>), add as the FIRST child:
-
-<div className="ep-header">
-  <span className="ep-header-label">
-    {EMOJI_BY_ID[emojiTab]?.label || 'Emoji'}
-  </span>
-  <button
-    type="button"
-    className="ep-close"
-    onClick={() => setShowEmoji(false)}
-    aria-label="Close emoji picker"
-  >
-    ✕
-  </button>
-</div>
-
-Add CSS at the end of chat-thread.css:
-
-.chat-thread .ep-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 14px 6px;
-  flex-shrink: 0;
-  border-bottom: 1px solid rgba(0,0,0,0.06);
-}
-
-.chat-thread .ep-header-label {
-  font-size: 13px;
-  font-weight: 600;
-  color: #1a7a4a;
-  letter-spacing: 0.2px;
-}
-
-.chat-thread .ep-close {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(0,0,0,0.07);
-  color: #555;
-  font-size: 14px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  line-height: 1;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.chat-thread .ep-close:active {
-  background: rgba(0,0,0,0.15);
-}
-
-@media (prefers-color-scheme: dark) {
-  .chat-thread .ep-header-label { color: #4caf82; }
-  .chat-thread .ep-close { background: rgba(255,255,255,0.1); color: #ccc; }
-}
-
-═══════════════════════════════════
-FIX B — Real-time emoji preview in typing box
-═══════════════════════════════════
-
-The user wants to keep the picker OPEN while inserting emojis and see them appear in the message box in real time. Currently insertEmoji likely closes the picker or the picker closes on input focus.
-
-Show the full insertEmoji function first (from investigation step 2), then:
-
-1. Make sure insertEmoji does NOT close the picker. Find inside insertEmoji any call to setShowEmoji(false) and remove it if present.
-
-2. Make sure the textarea onFocus does NOT close the picker when the picker itself triggered the focus. Currently we added onFocus={() => { if (showEmoji) setShowEmoji(false) }} — this will close the picker when insertEmoji tries to refocus the input after inserting. 
-
-Replace that onFocus with a smarter version:
-Find:
-onFocus={() => { if (showEmoji) setShowEmoji(false) }}
-
-Replace with:
-onFocus={e => {
-  // Only close picker if focus came from user tapping the input directly
-  // not from insertEmoji programmatically focusing it
-  if (showEmoji && e.relatedTarget?.classList?.contains('ep-btn')) return
-  if (showEmoji) setShowEmoji(false)
-}}
-
-This means: if focus on the textarea came FROM an emoji button (ep-btn), don't close the picker. If the user tapped the textarea directly, close the picker.
-
-3. In insertEmoji, after inserting the emoji into the message state, programmatically focus the input so the cursor stays active. Show insertEmoji and confirm it already calls inputRef.current?.focus() or similar — if not, add it.
-
-4. Keep the picker open when emoji is tapped — confirm setShowEmoji is NOT called inside insertEmoji. If it is, remove that call.
-
-5. The ep-backdrop currently closes the picker on any tap outside. ep-btn buttons are INSIDE ep-wrap so they won't trigger the backdrop. Confirm this is correct (ep-btn is a child of ep-wrap which is above the backdrop at z-index 1200 vs 1199). No change needed here.
-
-═══════════════════════════════════
-VERIFICATION
-═══════════════════════════════════
-
-Run npx eslint src/pages/Chat.jsx and npm run build. Report both.
-
-Confirm:
-- grep -n "ep-header\|ep-close" src/pages/Chat.jsx src/styles/chat-thread.css — appears in both
-- grep -n "setShowEmoji(false)" src/pages/Chat.jsx — confirm insertEmoji is NOT in this list
-- grep -n "insertEmoji" src/pages/Chat.jsx — show the full function location and confirm it keeps picker open
-- Build passes, no new lint errors
+After implementing, write a summary to docs/response.md covering:
+- Exact code diff for each of the 4 changed spots
+- What value lockedKbHeight ended up holding in your reasoning for the fallback (340px) — confirm whether an existing default keyboard-height constant already exists elsewhere in the file that should be reused instead
+- Confirm no changes were made to desktop rendering
+- Any existing mobile-detection helper you found and reused (name + location)
