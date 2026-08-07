@@ -415,6 +415,8 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
   const inputRef           = useRef(null)
   /** Cursor position to restore after a programmatic emoji insert (commit-time). */
   const pendingEmojiCursorRef = useRef(null)
+  /** Last known cursor position in the textarea — survives blur/unfocus (emoji inserts). */
+  const cursorPosRef = useRef(null)
   const channelRef         = useRef(null)
   const presenceChannelRef = useRef(null)
   const typingTimeoutRef   = useRef(null)
@@ -586,7 +588,12 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
   // Close emoji picker on outside click
   useEffect(() => {
     function handler(e) {
-      if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target)) setShowEmoji(false)
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(e.target)) {
+        // Tapping the textarea/composer to move the cursor must NOT dismiss the
+        // picker (Bug 1) — only dismiss on a true outside area.
+        if (e.target?.closest && e.target.closest('.chat-composer')) return
+        setShowEmoji(false)
+      }
     }
     document.addEventListener('mousedown', handler)
     return () => document.removeEventListener('mousedown', handler)
@@ -1953,13 +1960,13 @@ async function uploadAndSend(file, type, caption = '') {
   }
 
   function insertEmoji(emoji) {
-    const el = inputRef.current
-    // Read the live cursor from the DOM — fall back to the end only if unavailable.
-    const pos = el && typeof el.selectionStart === 'number' ? el.selectionStart : newMsg.length
-    const end = el && typeof el.selectionEnd === 'number' ? el.selectionEnd : pos
-    const next = newMsg.slice(0, pos) + emoji + newMsg.slice(end)
+    // Use the tracked cursor (survives blur when the picker steals focus) instead
+    // of reading selectionStart off a possibly-unfocused textarea (returns 0).
+    const pos = cursorPosRef.current ?? newMsg.length
+    const next = newMsg.slice(0, pos) + emoji + newMsg.slice(pos)
     // Restore the caret right after the inserted emoji, once the new value is committed.
     pendingEmojiCursorRef.current = pos + emoji.length
+    cursorPosRef.current = pos + emoji.length
     // Single state path — handleTyping owns setNewMsg (and typing indicator).
     handleTyping(next)
     // Record emoji as recently used: move to front, drop duplicates, cap the list.
@@ -4080,12 +4087,10 @@ async function uploadAndSend(file, type, caption = '') {
               ref={inputRef}
               placeholder={isServiceChat ? `Message about ${service?.name || 'service'}…` : 'Message…'}
               value={newMsg}
-              onFocus={e => {
-                // Only close picker if focus came from user tapping the input directly,
-                // not from insertEmoji programmatically focusing it.
-                if (showEmoji && e.relatedTarget?.classList?.contains('ep-btn')) return
-                if (showEmoji) setShowEmoji(false)
-              }}
+              onSelect={() => { cursorPosRef.current = inputRef.current?.selectionStart ?? null }}
+              onKeyUp={() => { cursorPosRef.current = inputRef.current?.selectionStart ?? null }}
+              onClick={() => { cursorPosRef.current = inputRef.current?.selectionStart ?? null }}
+              onTouchEnd={() => { cursorPosRef.current = inputRef.current?.selectionStart ?? null }}
               onChange={e => {
                 handleTyping(e.target.value)
                 e.target.style.height = 'auto'
