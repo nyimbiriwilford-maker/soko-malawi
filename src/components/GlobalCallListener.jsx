@@ -127,6 +127,12 @@ export default function GlobalCallListener() {
       // never re-ring or re-surface the incoming UI for a duplicate SW event.
       if (callStateRef.current === 'in-call') return
       if (answerCommittedRef.current) return
+      // First success wins: a duplicate push for a callId that is already being
+      // readied (buffered) or already surfaced must not arm a second recovery /
+      // play a second ringtone.
+      const swKey = String(callId)
+      if (String(swPendingRef.current?.callId) === swKey) return
+      if (String(incomingRef.current?.callId) === swKey) return
 
       // Start buffering ICE early
       if (myUserIdRef.current) {
@@ -261,6 +267,15 @@ export default function GlobalCallListener() {
             subscribeToIceCandidatesEarly(payload.callId, user.id)
           }
         })
+      }
+
+      // ── Exactly-once offer surfacing (first success wins) ──
+      // The same ring can be delivered multiple times (SW push redundancy, relay
+      // replay, double-fired startCall). The first ring that surfaced this
+      // callId wins — later copies never re-surface the incoming UI or restart
+      // the ringtone for a call that is already on screen.
+      if (incomingRef.current && String(incomingRef.current.callId) === String(payload.callId)) {
+        return true
       }
 
       const swMeta = swPendingRef.current?.callId === payload.callId

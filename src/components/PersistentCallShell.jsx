@@ -64,6 +64,7 @@ export default function PersistentCallShell() {
     assignRemoteStream,
     assignLocalStream,
     restorePendingCall,
+    getLastCallDuration,
   } = useWebRTC({
     userId,
     currentUser,
@@ -122,7 +123,14 @@ export default function PersistentCallShell() {
       // Summary only for budgeted calls — standard calls (budgetMb 0) get none
       setCallSummary(
         budgetMb > 0
-          ? { duration: callDuration, bytesUsed, budgetMb, callType, wasExtended: isBudgetExtended(), budgetCapped: budgetCappedRef.current }
+          ? {
+              duration: getLastCallDuration ? getLastCallDuration() : callDuration,
+              bytesUsed,
+              budgetMb,
+              callType,
+              wasExtended: isBudgetExtended(),
+              budgetCapped: budgetCappedRef.current,
+            }
           : null
       )
       budgetCappedRef.current = false

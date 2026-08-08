@@ -137,6 +137,14 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
   const remoteVideoRef    = useRef(null)
   const callStateRef      = useRef('idle')
   const callDurationRef   = useRef(0)
+  /** Duration of the most recently finished call — survives the end-of-call reset. */
+  const lastFinishedDurationRef = useRef(0)
+  /**
+   * callIds whose incoming 'answer' has already been applied (first success wins).
+   * Guards this device's peer connection against applying a duplicate answer that
+   * the redundant delivery layer may re-send for the same callId.
+   */
+  const handledAnswerCallIdsRef = useRef(new Set())
   const lowDataIntervalRef = useRef(null)
   const switchingRef      = useRef(false)
   const switchPendingRef  = useRef(null)
@@ -590,7 +598,11 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
     setRemoteStream(null)
     pendingCandidates.current = []
     incomingOfferRef.current = null
+    handledAnswerCallIdsRef.current.clear()
     const targetToClose = callerIdRef.current || userIdRef.current
+    if (callDurationRef.current > 0) {
+      lastFinishedDurationRef.current = callDurationRef.current
+    }
     callIdRef.current = null
     callerIdRef.current = null
     callDurationRef.current = 0
@@ -629,7 +641,19 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
       if (_event === 'answer') {
         if (!pcRef.current) return false
         if (!sameCallId(payload.callId, myCallId)) return false
-        if (pcRef.current.signalingState !== 'have-local-offer') return true
+        // First success wins: the redundant delivery layer (retry re-broadcast,
+        // relay replay, second answer stack) can hand us the same 'answer' twice
+        // for the same call. Once one answer has been claimed/applied, every
+        // later one is dropped HERE — before setRemoteDescription is even reached —
+        // instead of relying on the signaling-state guard or the catch below.
+        const answerCallKey = String(payload.callId)
+        if (handledAnswerCallIdsRef.current.has(answerCallKey)) {
+          console.warn('[answer] skipping duplicate answer for callId:', answerCallKey)
+          return true
+        }
+        // Claim this callId for the answer handshake immediately so a sibling
+        // event arriving while this one is in flight is treated as a duplicate.
+        handledAnswerCallIdsRef.current.add(answerCallKey)
 
         pcRef.current
           .setRemoteDescription(new RTCSessionDescription(payload.answer))
@@ -648,7 +672,18 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
             startCallTimer()
             setActiveCall?.({ callType: callTypeRef.current, chatPath: window.location.pathname })
           })
-          .catch((err) => console.error('[answer] setRemoteDescription error:', err))
+          .catch((err) => {
+            // Defensive: a duplicate answer that slipped past the guards must
+            // not surface as an error — the connection is already stable.
+            if (pcRef.current?.signalingState === 'stable' && /wrong state/i.test(err?.message)) {
+              console.warn('[answer] duplicate answer ignored — connection already stable')
+              return
+            }
+            // Genuine failure: release the claim so a later (retry) answer can
+            // still complete the handshake instead of failing the call outright.
+            handledAnswerCallIdsRef.current.delete(answerCallKey)
+            console.error('[answer] setRemoteDescription error:', err)
+          })
         return true
       }
 
@@ -1044,6 +1079,7 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
     startCall, answerCall, declineCall, hangUp, endCallLocally,
     toggleMute, toggleCam, switchCamera, switchCallType, setupCallListener,
     assignRemoteStream, assignLocalStream, restorePendingCall,
+    getLastCallDuration: () => lastFinishedDurationRef.current,
   }
 }
 

@@ -73,6 +73,8 @@ export function CallProvider({ children }) {
   const callStackOwnerRef   = useRef(null) // who owns the active media path
   const earlyIceRef         = useRef(new Map())
   const incomingActionsRef  = useRef({ answer: null, decline: null })
+  /** callIds for which an 'answer' has already been broadcast — exactly-once delivery. */
+  const answeredCallIdsRef  = useRef(new Set())
 
   useEffect(() => {
     setupChannel()
@@ -274,6 +276,18 @@ export function CallProvider({ children }) {
   async function sendSignal(targetUserId, event, payload = {}) {
     if (!targetUserId) { console.error('sendSignal: no targetUserId'); return }
 
+    // Exactly-once answer: the global stack and the chat restore stack can race
+    // to answer the same incoming call, each sending an 'answer'. Only the first
+    // answer may leave this device so the caller never applies it twice.
+    if (event === 'answer' && payload.callId) {
+      const key = String(payload.callId)
+      if (answeredCallIdsRef.current.has(key)) {
+        console.warn('[CallContext] duplicate answer ignored for callId:', key)
+        return
+      }
+      answeredCallIdsRef.current.add(key)
+    }
+
     const channelName = `call_inbox_${targetUserId}`
     let ch = outboundChannelsRef.current[targetUserId]
 
@@ -299,6 +313,12 @@ export function CallProvider({ children }) {
         payload: { _event: event, ...payload },
       })
     } catch (err) {
+      // The first answer never left this device — release the claim so the
+      // retry safety net (re-send from the redundant delivery layer) can still
+      // deliver the answer instead of failing the call outright.
+      if (event === 'answer' && payload.callId) {
+        answeredCallIdsRef.current.delete(String(payload.callId))
+      }
       console.error('sendSignal error:', err)
     }
   }
