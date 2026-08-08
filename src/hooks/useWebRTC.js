@@ -328,7 +328,7 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
 
     const pc = buildPeerConnection('caller')
     stream.getTracks().forEach((t) => pc.addTrack(t, stream))
-    applyLowDataIfConfigured(pc, type)
+    await applyLowDataIfConfigured(pc, type)
 
     subscribeToIceCandidates(callId, cu.id, async (candidate) => {
       try {
@@ -467,7 +467,7 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
     await pc.setRemoteDescription(new RTCSessionDescription(incomingOfferRef.current))
 
     stream.getTracks().forEach((t) => pc.addTrack(t, stream))
-    applyLowDataIfConfigured(pc, type)
+    await applyLowDataIfConfigured(pc, type)
 
     for (const c of pendingCandidates.current) {
       try { await pc.addIceCandidate(new RTCIceCandidate(c)) } catch (_) {}
@@ -808,14 +808,14 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
    * The adaptive system in PersistentCallShell.jsx can still step quality lower
    * as the budget depletes, but will never exceed the user's chosen ceiling.
    */
-  function applyLowDataIfConfigured(pc, callType) {
+  async function applyLowDataIfConfigured(pc, callType) {
     console.log('[applyLowDataIfConfigured] CALLED', { callType })
     stopLowDataCap(lowDataIntervalRef.current)
     lowDataIntervalRef.current = null
 
     if (callType !== 'video') {
       console.log('[applyLowDataIfConfigured] SKIP: not video call')
-      return
+      return true
     }
 
     const pref = getCallBudgetPref(callType)
@@ -831,15 +831,23 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
     } else {
       // 'high' — no user-imposed ceiling, adaptive system still applies as budget depletes
       console.log('[applyLowDataIfConfigured] Quality is HIGH, no cap applied')
-      return
+      return true
     }
     console.log('[applyLowDataIfConfigured] Target maxBitrate:', maxBitrate, 'bps')
 
-    // Apply the cap to all video senders
+    // Apply the cap to all video senders, awaiting each so the caller knows the
+    // cap is in place before createOffer()/createAnswer() runs. A failure here
+    // must not silently vanish — return false so the caller can decide.
     const senders = pc.getSenders()
-    console.log('[applyLowDataIfConfigured] Total senders:', senders.length)
+    const videoSenders = senders.filter((s) => s.track?.kind === 'video')
+    console.log('[applyLowDataIfConfigured] Total senders:', senders.length, 'video senders:', videoSenders.length)
 
-    for (const sender of senders) {
+    if (videoSenders.length === 0) {
+      console.warn('[applyLowDataIfConfigured] No video sender found — cap not applied')
+      return false
+    }
+
+    for (const sender of videoSenders) {
       const track = sender.track
       console.log('[applyLowDataIfConfigured] Checking sender:', {
         hasTrack: !!track,
@@ -848,9 +856,7 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
         trackState: track?.readyState,
       })
 
-      if (sender.track?.kind === 'video') {
-        console.log('[applyLowDataIfConfigured] Found VIDEO sender, applying cap')
-
+      try {
         const paramsBefore = sender.getParameters()
         console.log('[applyLowDataIfConfigured] BEFORE setParameters:', {
           hasEncodings: !!paramsBefore.encodings,
@@ -865,18 +871,20 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
         paramsBefore.encodings[0].maxBitrate = maxBitrate
 
         console.log('[applyLowDataIfConfigured] Calling setParameters with maxBitrate:', maxBitrate)
+        await sender.setParameters(paramsBefore)
 
-        sender.setParameters(paramsBefore).then(() => {
-          const paramsAfter = sender.getParameters()
-          console.log('[applyLowDataIfConfigured] ✅ setParameters SUCCESS:', {
-            appliedMaxBitrate: paramsAfter.encodings?.[0]?.maxBitrate,
-            fullEncodings: paramsAfter.encodings?.[0],
-          })
-        }).catch(err => {
-          console.error('[applyLowDataIfConfigured] ❌ setParameters FAILED:', err)
+        const paramsAfter = sender.getParameters()
+        console.log('[applyLowDataIfConfigured] ✅ setParameters SUCCESS:', {
+          appliedMaxBitrate: paramsAfter.encodings?.[0]?.maxBitrate,
+          fullEncodings: paramsAfter.encodings?.[0],
         })
+      } catch (err) {
+        console.error('[applyLowDataIfConfigured] ❌ setParameters FAILED:', err)
+        return false
       }
     }
+
+    return true
   }
 
   /**
