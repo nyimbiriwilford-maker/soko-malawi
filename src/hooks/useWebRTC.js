@@ -4,7 +4,7 @@ import { ICE_SERVERS } from '../lib/webrtc'
 import { supabase } from '../lib/supabase'
 import { buildReceiverChatId } from '../utils/callNotifications'
 import { useCallDataBudget } from './useCallDataBudget'
-import { setCallBudgetPref } from '../lib/callBudgetPrefs'
+import { setCallBudgetPref, getCallBudgetPref } from '../lib/callBudgetPrefs'
 import { stopLowDataCap } from '../lib/callBitrateCap'
 
 // TEMP - dev-only test hook, remove when budget UI ships
@@ -803,14 +803,80 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
   }
 
   /**
-   * Shared low-data cap wiring (see ../lib/callBitrateCap). The fixed 40 kbit/s
-   * auto-cap this previously applied for low/medium video budgets is replaced by
-   * the adaptive quality steps in PersistentCallShell.jsx (Phase 4). The cap
-   * interval is still torn down here so endCallLocally() stays consistent.
+   * Apply user-selected quality cap at call start (Data Saver / Balanced / High).
+   * This sets the initial maxBitrate ceiling before adaptive budget caps engage.
+   * The adaptive system in PersistentCallShell.jsx can still step quality lower
+   * as the budget depletes, but will never exceed the user's chosen ceiling.
    */
-  function applyLowDataIfConfigured() {
+  function applyLowDataIfConfigured(pc, callType) {
+    console.log('[applyLowDataIfConfigured] CALLED', { callType })
     stopLowDataCap(lowDataIntervalRef.current)
     lowDataIntervalRef.current = null
+
+    if (callType !== 'video') {
+      console.log('[applyLowDataIfConfigured] SKIP: not video call')
+      return
+    }
+
+    const pref = getCallBudgetPref(callType)
+    const quality = pref?.quality || 'balanced'
+    console.log('[applyLowDataIfConfigured] User pref:', { pref, quality })
+
+    // Map quality to initial bitrate cap (bits per second)
+    let maxBitrate
+    if (quality === 'saver') {
+      maxBitrate = 40000 // 40 kbit/s
+    } else if (quality === 'balanced') {
+      maxBitrate = 200000 // 200 kbit/s
+    } else {
+      // 'high' — no user-imposed ceiling, adaptive system still applies as budget depletes
+      console.log('[applyLowDataIfConfigured] Quality is HIGH, no cap applied')
+      return
+    }
+    console.log('[applyLowDataIfConfigured] Target maxBitrate:', maxBitrate, 'bps')
+
+    // Apply the cap to all video senders
+    const senders = pc.getSenders()
+    console.log('[applyLowDataIfConfigured] Total senders:', senders.length)
+
+    for (const sender of senders) {
+      const track = sender.track
+      console.log('[applyLowDataIfConfigured] Checking sender:', {
+        hasTrack: !!track,
+        trackKind: track?.kind,
+        trackId: track?.id,
+        trackState: track?.readyState,
+      })
+
+      if (sender.track?.kind === 'video') {
+        console.log('[applyLowDataIfConfigured] Found VIDEO sender, applying cap')
+
+        const paramsBefore = sender.getParameters()
+        console.log('[applyLowDataIfConfigured] BEFORE setParameters:', {
+          hasEncodings: !!paramsBefore.encodings,
+          encodingsLength: paramsBefore.encodings?.length,
+          currentMaxBitrate: paramsBefore.encodings?.[0]?.maxBitrate,
+          transactionId: paramsBefore.transactionId,
+        })
+
+        if (!paramsBefore.encodings || paramsBefore.encodings.length === 0) {
+          paramsBefore.encodings = [{}]
+        }
+        paramsBefore.encodings[0].maxBitrate = maxBitrate
+
+        console.log('[applyLowDataIfConfigured] Calling setParameters with maxBitrate:', maxBitrate)
+
+        sender.setParameters(paramsBefore).then(() => {
+          const paramsAfter = sender.getParameters()
+          console.log('[applyLowDataIfConfigured] ✅ setParameters SUCCESS:', {
+            appliedMaxBitrate: paramsAfter.encodings?.[0]?.maxBitrate,
+            fullEncodings: paramsAfter.encodings?.[0],
+          })
+        }).catch(err => {
+          console.error('[applyLowDataIfConfigured] ❌ setParameters FAILED:', err)
+        })
+      }
+    }
   }
 
   /**

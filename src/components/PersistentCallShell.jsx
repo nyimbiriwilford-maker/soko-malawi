@@ -73,7 +73,7 @@ export default function PersistentCallShell() {
   })
 
   // Live data-usage meter for the in-call overlay (chat stack)
-  const { bytesUsed, sampleUsage } = useCallDataBudget(pcRef)
+  const { bytesUsed, sampleUsage, getMeasuredRate } = useCallDataBudget(pcRef)
   const sampleUsageRef = useRef(sampleUsage)
   useEffect(() => {
     sampleUsageRef.current = sampleUsage
@@ -92,6 +92,8 @@ export default function PersistentCallShell() {
     [callType]
   )
 
+  const budgetCappedRef = useRef(false)
+
   const { budgetWarning, qualityToast, handleBudgetAction, liveBudgetMb, isBudgetExtended } = useCallBudgetManager({
     bytesUsed,
     budgetMb: prefBudgetMb,
@@ -102,6 +104,7 @@ export default function PersistentCallShell() {
     clearActiveCall,
     boundChat,
     stickyRef,
+    budgetCappedRef,
   })
 
   // Mutable budget — the manager can grow it mid-call via extend actions. Its
@@ -119,9 +122,12 @@ export default function PersistentCallShell() {
       // Summary only for budgeted calls — standard calls (budgetMb 0) get none
       setCallSummary(
         budgetMb > 0
-          ? { duration: callDuration, bytesUsed, budgetMb, callType, wasExtended: isBudgetExtended() }
+          ? { duration: callDuration, bytesUsed, budgetMb, callType, wasExtended: isBudgetExtended(), budgetCapped: budgetCappedRef.current }
           : null
       )
+      budgetCappedRef.current = false
+    } else if (callState === 'in-call') {
+      budgetCappedRef.current = false
     } else {
       setCallSummary(null)
     }
@@ -130,7 +136,18 @@ export default function PersistentCallShell() {
   // Record data usage for future budget recommendations (effect, not render)
   useEffect(() => {
     if (callState === 'idle' && callSummary) {
-      saveCallUsageRecord(callSummary.callType, callSummary.bytesUsed, callSummary.duration)
+      console.log('[PersistentCallShell] SAVING usage record:', {
+        callType: callSummary.callType,
+        bytesUsed: callSummary.bytesUsed,
+        duration: callSummary.duration,
+        budgetCapped: callSummary.budgetCapped || false,
+      })
+      saveCallUsageRecord(
+        callSummary.callType,
+        callSummary.bytesUsed,
+        callSummary.duration,
+        callSummary.budgetCapped || false
+      )
     }
   }, [callState, callSummary])
 
@@ -318,6 +335,7 @@ export default function PersistentCallShell() {
           qualityToast={qualityToast}
           callSummary={callSummary}
           onDismissSummary={() => setCallSummary(null)}
+          measuredRate={getMeasuredRate ? getMeasuredRate() : null}
         />
       )}
       {mediaNotice && (

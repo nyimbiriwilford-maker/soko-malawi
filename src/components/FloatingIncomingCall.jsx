@@ -68,8 +68,19 @@ export default function FloatingIncomingCall() {
   const isVideo = callType === 'video'
   const avatarSrc = remoteAvatar
 
-  function handleAnswer() { setConnecting(true); incomingActionsRef.current?.answer?.() }
-  function handleDecline() { incomingActionsRef.current?.decline?.() }
+  function handleAnswer() {
+    console.log('[FloatingIncomingCall] Accept tapped', {
+      hasActionsRef: !!incomingActionsRef.current,
+      hasAnswerFn: !!incomingActionsRef.current?.answer,
+      connecting,
+    })
+    setConnecting(true)
+    incomingActionsRef.current?.answer?.()
+  }
+  function handleDecline() {
+    console.log('[FloatingIncomingCall] Decline tapped')
+    incomingActionsRef.current?.decline?.()
+  }
 
   return (
     <div style={S.overlay} role="alert" aria-live="assertive">

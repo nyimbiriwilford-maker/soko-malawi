@@ -14,7 +14,7 @@ import { memo, useEffect, useRef, useState } from 'react'
 import { Gauge } from 'lucide-react'
 import {
   getCallBudgetPref,
-  estimateDuration,
+  effectiveEstimateDuration,
   shouldAutoLowData,
 } from '../lib/callBudgetPrefs'
 
@@ -22,8 +22,8 @@ const MB = 1024 * 1024
 const HIDE_DELAY = 3000
 
 const COLORS = {
-  ok: '#34D399',
-  warn: '#F9AB00',
+  ok:     '#0F9D58',
+  warn:   '#F9AB00',
   danger: '#EF4444',
 }
 
@@ -49,7 +49,7 @@ const wrapStyle = {
   display: 'flex',
   justifyContent: 'center',
   width: '100%',
-  maxWidth: 230,
+  maxWidth: 240,
   boxSizing: 'border-box',
   flexShrink: 0,
 }
@@ -57,19 +57,19 @@ const wrapStyle = {
 const pillStyle = {
   display: 'flex',
   flexDirection: 'column',
-  gap: 7,
-  background: 'rgba(10, 18, 13, 0.5)',
-  border: '1px solid rgba(255, 255, 255, 0.14)',
+  gap: 8,
+  background: 'rgba(11,14,20,0.85)',
+  border: '1px solid rgba(255, 255, 255, 0.12)',
   borderRadius: 999,
-  padding: '9px 16px',
+  padding: '11px 20px',
   width: '100%',
   boxSizing: 'border-box',
-  backdropFilter: 'blur(14px)',
-  WebkitBackdropFilter: 'blur(14px)',
-  boxShadow: '0 6px 24px rgba(0, 0, 0, 0.35)',
+  backdropFilter: 'blur(24px)',
+  WebkitBackdropFilter: 'blur(24px)',
+  boxShadow: '0 10px 40px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255,255,255,0.04) inset',
   pointerEvents: 'none',
   textAlign: 'left',
-  transition: 'opacity 0.35s ease, transform 0.35s ease',
+  transition: 'opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1), transform 0.45s cubic-bezier(0.16, 1, 0.3, 1)',
 }
 
 const rowStyle = {
@@ -81,16 +81,16 @@ const rowStyle = {
 }
 
 const labelStyle = {
-  fontSize: 13,
-  fontWeight: 700,
+  fontSize: 14,
+  fontWeight: 750,
   color: '#fff',
-  letterSpacing: '0.01em',
+  letterSpacing: '-0.01em',
 }
 
 const timeStyle = {
-  fontSize: 11.5,
-  fontWeight: 600,
-  color: 'rgba(255, 255, 255, 0.62)',
+  fontSize: 13,
+  fontWeight: 700,
+  color: 'rgba(255, 255, 255, 0.75)',
   fontVariantNumeric: 'tabular-nums',
   whiteSpace: 'nowrap',
 }
@@ -98,23 +98,26 @@ const timeStyle = {
 const trackStyle = {
   display: 'block',
   width: '100%',
-  height: 4,
-  borderRadius: 2,
-  background: 'rgba(255, 255, 255, 0.18)',
+  height: 6,
+  borderRadius: 3,
+  background: 'rgba(255, 255, 255, 0.12)',
   overflow: 'hidden',
+  boxShadow: '0 0 0 1px rgba(0,0,0,0.2) inset',
 }
 
 const fillStyle = {
   display: 'block',
   height: '100%',
-  borderRadius: 2,
-  transition: 'width 0.4s ease, background 0.4s ease',
+  borderRadius: 3,
+  transition: 'width 0.6s cubic-bezier(0.16, 1, 0.3, 1), background 0.6s ease',
+  boxShadow: '0 1px 4px rgba(0,0,0,0.3)',
 }
 
 function CallDataMeter({
   bytesUsed = 0,
   budgetMb = null,
   callType = 'voice',
+  measuredRate = null,
   style,
 }) {
   const hasBudget = Number.isFinite(budgetMb) && budgetMb > 0
@@ -163,8 +166,15 @@ function CallDataMeter({
 
   const label = reached ? 'Budget reached' : `${remainingMb.toFixed(1)} MB remaining`
   const pref = getCallBudgetPref(callType)
-  const lowDataMode = pref ? shouldAutoLowData(callType, pref.preset) : false
-  const remainingSeconds = estimateDuration(callType, remainingMb, lowDataMode)
+  const qualityHint = pref?.quality || null
+
+  // Use measured rate if available, otherwise fall back to estimate
+  let remainingSeconds
+  if (measuredRate && measuredRate > 0) {
+    remainingSeconds = (remainingMb * MB) / measuredRate
+  } else {
+    remainingSeconds = effectiveEstimateDuration(callType, remainingMb, qualityHint)
+  }
   const timeLabel = `${formatRemainingTime(remainingSeconds)} left`
 
   return (

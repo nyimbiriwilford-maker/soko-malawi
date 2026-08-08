@@ -57,6 +57,15 @@ import CallMessageBubble from '../components/CallMessageBubble'
 import { maybePromptDealReady } from '../utils/dealNotificationFlow'
 import { notifyMissedCall, notifyCallDeclined } from '../utils/callNotifications'
 import {
+  notifyOfferNew,
+  notifyOfferCounter,
+  notifyOfferAccepted,
+  notifyOfferDeclined,
+  notifyOfferWithdrawn,
+  notifyOfferEdited,
+  scanOfferNotifications,
+} from '../utils/offerNotifications'
+import {
   EMOJI_CATEGORIES,
   EMOJI_BY_ID,
   EMOJI_FREQUENT,
@@ -199,6 +208,9 @@ export default function Chat() {
   const location = useLocation()
   const [searchParams] = useSearchParams()
 
+  // Extract search param to stable value to prevent effect re-runs
+  const searchParamSrc = searchParams.get('src')
+
   // ── State ────────────────────────────────────────────────────────────────
   const [messages, setMessages]           = useState([])
   const [groupedMessages, setGroupedMessages] = useState([])
@@ -248,6 +260,7 @@ export default function Chat() {
   const [counterParent, setCounterParent] = useState(null)
   const [editOfferMsg, setEditOfferMsg]   = useState(null)
   const [offerExpiryHours, setOfferExpiryHours] = useState(OFFER_DEFAULT_EXPIRY_HOURS)
+  const [offerCustomExpiry, setOfferCustomExpiry] = useState('')
   const [withdrawConfirmId, setWithdrawConfirmId] = useState(null)
   const [declineConfirmId, setDeclineConfirmId] = useState(null)
   // Phase 7 — product context. Offer listing_id → { status:'ok', listing } | { status:'unavailable' }
@@ -262,6 +275,7 @@ export default function Chat() {
   const [myProfile, setMyProfile]         = useState(null)
   const [replyTo, setReplyTo]             = useState(null)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
+  const [stickyDate, setStickyDate] = useState(null)
 const [chatSearch, setChatSearch]       = useState(null)
 const [searchMatches, setSearchMatches] = useState([])
 const [searchIdx, setSearchIdx]         = useState(0)
@@ -425,6 +439,8 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
   const pendingEmojiCursorRef = useRef(null)
   /** Last known cursor position in the textarea — survives blur/unfocus (emoji inserts). */
   const cursorPosRef = useRef(null)
+  const stickyDateRef = useRef(null)
+  const currentStickyDateRef = useRef(null)
   const channelRef         = useRef(null)
   const presenceChannelRef = useRef(null)
   const typingTimeoutRef   = useRef(null)
@@ -506,7 +522,7 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
       otherTypingRef.current = false
       otherRecordingRef.current = false
     }
-  }, [userId, contextId, searchParams.get('src')])
+  }, [userId, contextId, searchParamSrc])
 
   // Smart auto-scroll: only pin to bottom when user is already near it
   useEffect(() => {
@@ -525,6 +541,12 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
     if (loading) return
     requestAnimationFrame(() => scrollToBottom(false))
   }, [loading])
+
+  // Update the sticky date chip after grouping changes (initial load / prepend)
+  useEffect(() => {
+    if (!groupedMessages.length) return
+    requestAnimationFrame(() => updateStickyDate(scrollContainerRef.current))
+  }, [groupedMessages])
 
   // Load / sync reactions for this chat pair
   useEffect(() => {
@@ -1487,6 +1509,23 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
     }
   }, [hasMore, loadingMore, loadMoreMessages])
 
+  // Update the floating date chip based on the message nearest a detection line
+  function updateStickyDate(el) {
+    if (!el) return
+    const items = el.querySelectorAll('[data-date]')
+    const line = el.scrollTop + 72 // ~72px below the top
+    let target = null
+    for (const item of items) {
+      if (item.offsetTop <= line) target = item
+      else break
+    }
+    const label = target?.getAttribute('data-date') || null
+    if (label !== currentStickyDateRef.current) {
+      currentStickyDateRef.current = label
+      setStickyDate(label)
+    }
+  }
+
   // ── sendMessage — optimistic UI + reply encoded in body ─────────────────
   async function sendMessage(body, type = 'text', mediaUrl = null, extraFields = {}, opts = {}) {
     console.log('SM_ENTRY', { body, type, mediaUrl, trimmed: body.trim() })
@@ -1630,35 +1669,59 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
         const { data: myProf } = await supabase
           .from('profiles').select('full_name').eq('id', user.id).single()
         const senderName = myProf?.full_name || 'Someone'
-        let preview = trimmed
-        if (preview.includes('|||')) {
-          // eslint-disable-next-line no-control-regex
-          preview = preview.replace(/^\x02?\[/, '').split('|||')[0].trim()
+
+        // Offers use their own notification system (offerNotifications.js) instead
+        // of the generic new_message row — deep-links straight into the chat and
+        // differentiates new vs counter offers.
+        if (type === 'offer') {
+          const parsedOffer = parseOfferMessage(trimmed)
+          if (parsedOffer?.ok && parsedOffer.offer) {
+            const offer = parsedOffer.offer
+            const notifCtx = contextId || notifContextId || null
+            const params = {
+              toUserId: userId,
+              actorId: user.id,
+              actorName: senderName,
+              offer,
+              listingTitle: contextTitle,
+              listingId: notifContextId || null,
+              contextId: notifCtx,
+              messageId: inserted?.id || null,
+            }
+            if (offer.parent_offer_id) await notifyOfferCounter(params)
+            else await notifyOfferNew(params)
+          }
+        } else {
+          let preview = trimmed
+          if (preview.includes('|||')) {
+            // eslint-disable-next-line no-control-regex
+            preview = preview.replace(/^\x02?\[/, '').split('|||')[0].trim()
+          }
+          if (!preview) {
+            preview = mediaUrl
+              ? (type === 'image' ? '📷 Photo'
+               : type === 'video' ? '🎥 Video'
+               : type === 'audio' ? '🎤 Voice note'
+               : '📎 File')
+              : 'Sent a message'
+          }
+          await supabase.from('notifications').insert({
+            user_id: userId,
+            type: 'new_message',
+            title: senderName,
+            body: preview.slice(0, 80),
+            message: preview.slice(0, 80),
+            data: {
+              sender_id: user.id,
+              sender_name: senderName,
+              context_id: notifContextId,
+              message_id: inserted?.id || null,
+              chat_source: src,
+              listing_title: contextTitle,
+            },
+            read: false,
+          })
         }
-        if (!preview) {
-          preview = mediaUrl
-            ? (type === 'image' ? '📷 Photo'
-             : type === 'video' ? '🎥 Video'
-             : type === 'audio' ? '🎤 Voice note'
-             : '📎 File')
-            : 'Sent a message'
-        }
-        await supabase.from('notifications').insert({
-          user_id: userId,
-          type: 'new_message',
-          title: senderName,
-          body: preview.slice(0, 80),
-          message: preview.slice(0, 80),
-          data: {
-            sender_id: user.id,
-            sender_name: senderName,
-            context_id: notifContextId,
-            message_id: inserted?.id || null,
-            chat_source: src,
-            listing_title: contextTitle,
-          },
-          read: false,
-        })
 } catch (notifErr) {
           console.warn('Message notification error:', notifErr)
         }
@@ -1839,6 +1902,24 @@ async function uploadAndSend(file, type, caption = '') {
         .eq('id', editOfferMsg.id)
         .then(res => { if (res.error) console.warn('Offer edit failed:', res.error.message) })
       closeOfferSheet()
+
+      // Phase 5 — let the other party know the offer changed (amount / note / time)
+      const notifTitle = (() => {
+        const entry = offerListings[parsed.offer.listing_id]
+        if (entry?.status === 'ok' && entry.listing) return entry.listing.title
+        if (parsed.offer.listing_id === listing?.id && listing) return listing.title
+        return null
+      })()
+      notifyOfferEdited({
+        toUserId: editOfferMsg.to_user || userId,
+        actorId: currentUser?.id,
+        actorName: myProfile?.full_name || null,
+        offer: updated,
+        listingTitle: notifTitle,
+        listingId: parsed.offer.listing_id || null,
+        contextId: parsed.offer.listing_id || contextId || null,
+        messageId: editOfferMsg.id,
+      }).catch(() => {})
       return
     }
 
@@ -1910,6 +1991,7 @@ async function uploadAndSend(file, type, caption = '') {
     setCounterParent(null)
     setEditOfferMsg(null)
     setOfferExpiryHours(OFFER_DEFAULT_EXPIRY_HOURS)
+    setOfferCustomExpiry('')
     setWithdrawConfirmId(null)
   }
 
@@ -1972,6 +2054,24 @@ async function uploadAndSend(file, type, caption = '') {
     }
     setWithdrawConfirmId(null)
     showToast('Offer withdrawn')
+
+    // Phase 5 — in-app notification for the recipient (offer withdrawn)
+    const notifTitle = (() => {
+      const entry = offerListings[parsed.offer.listing_id]
+      if (entry?.status === 'ok' && entry.listing) return entry.listing.title
+      if (parsed.offer.listing_id === listing?.id && listing) return listing.title
+      return null
+    })()
+    notifyOfferWithdrawn({
+      toUserId: msg.to_user || userId,
+      actorId: currentUser.id,
+      actorName: myProfile?.full_name || null,
+      offer: parsed.offer,
+      listingTitle: notifTitle,
+      listingId: parsed.offer.listing_id || null,
+      contextId: parsed.offer.listing_id || contextId || null,
+      messageId: msg.id,
+    }).catch(() => {})
   }
 
 
@@ -2028,6 +2128,25 @@ async function uploadAndSend(file, type, caption = '') {
     }
     setDeclineConfirmId(null)
     showToast(action === OFFER_STATUS.accepted ? 'Offer accepted' : 'Offer declined')
+
+    // Phase 5 — in-app notifications for the offerer (accepted / declined)
+    const notifTitle = (() => {
+      const entry = offerListings[parsed.offer.listing_id]
+      if (entry?.status === 'ok' && entry.listing) return entry.listing.title
+      if (parsed.offer.listing_id === listing?.id && listing) return listing.title
+      return null
+    })()
+    const notifFn = action === OFFER_STATUS.accepted ? notifyOfferAccepted : notifyOfferDeclined
+    notifFn({
+      toUserId: msg.from_user,
+      actorId: currentUser.id,
+      actorName: myProfile?.full_name || null,
+      offer: parsed.offer,
+      listingTitle: notifTitle,
+      listingId: parsed.offer.listing_id || null,
+      contextId: parsed.offer.listing_id || contextId || null,
+      messageId: msg.id,
+    }).catch(() => {})
   }
 
   /** Prefill the existing offer sheet with the previous offer for a counter offer. */
@@ -2038,9 +2157,12 @@ async function uploadAndSend(file, type, caption = '') {
     setCounterParent(msg)
     setOfferAmount(String(parsed.offer.amount))
     setOfferNote(parsed.offer.note || '')
-    setOfferExpiryHours(Number.isFinite(parsed.offer.expires_in_hours)
+    const hrs = Number.isFinite(parsed.offer.expires_in_hours)
       ? parsed.offer.expires_in_hours
-      : OFFER_DEFAULT_EXPIRY_HOURS)
+      : OFFER_DEFAULT_EXPIRY_HOURS
+    setOfferExpiryHours(hrs)
+    const isPreset = OFFER_EXPIRY_OPTIONS.some(o => o.hours === hrs)
+    setOfferCustomExpiry(isPreset ? '' : String(hrs > 0 ? hrs : 24))
     setShowOffer(true)
   }
 
@@ -2185,6 +2307,51 @@ async function uploadAndSend(file, type, caption = '') {
     return () => clearInterval(t)
   }, [])
 
+  // Live offer expiry: flip pending offers to "expired" exactly when time is due.
+  // Re-triggers a render right at the nearest pending offer's deadline, then again
+  // after it passes so the card re-renders as expired. Also re-ticks each minute so
+  // any due-soon countdowns stay fresh even if scheduling drifts.
+  const [, setOfferExpiryTick] = useState(0)
+  useEffect(() => {
+    let timer
+    let interval
+    const refresh = () => {
+      const due = Date.now() + 1200
+      let nearest = null
+      for (const m of messages) {
+        if (m.media_type !== 'offer') continue
+        const parsed = parseOfferMessage(m.body)
+        if (!parsed?.ok) continue
+        const o = parsed.offer
+        if (o.status !== OFFER_STATUS.pending) continue
+        const at = offerExpiresAt(o)
+        if (!at) continue
+        const t = new Date(at).getTime()
+        if (t <= due) { if (t > Date.now()) nearest = Math.min(nearest ?? t, t) }
+        else nearest = nearest == null ? t : Math.min(nearest, t)
+      }
+      clearTimeout(timer)
+      clearInterval(interval)
+      if (nearest != null) {
+        const wait = Math.max(0, nearest - Date.now()) + 150
+        timer = setTimeout(() => { setOfferExpiryTick(n => n + 1); refresh() }, wait)
+        // Also tick every minute so the countdown label counts down live
+        interval = setInterval(() => setOfferExpiryTick(n => n + 1), 30_000)
+      } else {
+        // No active deadline — poll loosely so newly created offers get scheduled
+        interval = setInterval(() => setOfferExpiryTick(n => n + 1), 60_000)
+      }
+    }
+    refresh()
+    // Phase 5 — drive the offer notification system (approaching deadline +
+    // expired) off the same ticker; it re-checks every tick on `messages`.
+    if (currentUser?.id && messages.some(m => m.media_type === 'offer')) {
+      scanOfferNotifications({ messages, currentUserId: currentUser.id, contextId })
+        .catch(() => {})
+    }
+    return () => { clearTimeout(timer); clearInterval(interval) }
+  }, [messages])
+
   // ── Avatar helpers ───────────────────────────────────────────────────────
   const otherName    = otherProfile?.full_name || otherUser?.name || otherUser?.email || 'User'
   const otherAvatar  = otherProfile?.avatar_url || null
@@ -2194,6 +2361,22 @@ async function uploadAndSend(file, type, caption = '') {
   const myInitial    = myName[0].toUpperCase()
 
   // ── Render helpers ───────────────────────────────────────────────────────
+  function dateChipLabel(iso) {
+    const d = new Date(iso)
+    const now = new Date()
+    const startOfDay = t => new Date(t.getFullYear(), t.getMonth(), t.getDate())
+    const today = startOfDay(now).getTime()
+    const diffDays = Math.round((today - startOfDay(d).getTime()) / 864e5)
+    const monthDay = d.toLocaleDateString([], { month: 'short', day: 'numeric' })
+    if (diffDays === 0) return 'Today'
+    if (diffDays === 1) return 'Yesterday'
+    if (diffDays < 7) return d.toLocaleDateString([], { weekday: 'long' })
+    const sameYear = d.getFullYear() === now.getFullYear()
+    return sameYear
+      ? monthDay
+      : `${monthDay}, ${d.getFullYear()}`
+  }
+
   function audioLabelFromUrl(url) {
     const base = (url || '').split('/').pop() || ''
     const clean = base.split('?')[0]
@@ -2273,6 +2456,7 @@ async function uploadAndSend(file, type, caption = '') {
               )}
               {audioLabelFromUrl(url)}
             </span>
+            {!isVoiceNote && (
             <a
               href={url}
               download
@@ -2284,6 +2468,7 @@ async function uploadAndSend(file, type, caption = '') {
             >
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             </a>
+            )}
           </div>
         </div>
       </div>
@@ -3155,8 +3340,14 @@ async function uploadAndSend(file, type, caption = '') {
           setShowScrollBtn(distFromBottom > 120)
           if (near) setUnreadBelow(0)
           handleScroll()
+          updateStickyDate(el)
         }}
       >
+        {stickyDate && (
+          <div className="chat-sticky-date" aria-hidden="true">
+            <span>{stickyDate}</span>
+          </div>
+        )}
         {loadingMore && (
           <div className="chat-load-more-spinner">
             <span>Loading...</span>
@@ -3240,6 +3431,36 @@ async function uploadAndSend(file, type, caption = '') {
                 return `⏱ ${Math.ceil(ms / 86400000)}d`
               })()
             : null
+          // Offer accept-window countdown — shown on the card for both parties
+          const offerExpiryAt = isOffer && offer && offerExpiresAt(offer)
+          const offerTimeLeft = !offerExpired && offerExpiryAt
+            ? (() => {
+                const ms = new Date(offerExpiryAt).getTime() - Date.now()
+                if (ms <= 0) return null
+                if (ms < 3600000) {
+                  const m = Math.max(1, Math.ceil(ms / 60000))
+                  return m < 60 ? `${m}m` : `1h ${m - 60}m`
+                }
+                if (ms < 86400000) {
+                  const h = Math.floor(ms / 3600000)
+                  const m = Math.floor((ms % 3600000) / 60000)
+                  return m ? `${h}h ${m}m` : `${h}h`
+                }
+                const d = Math.floor(ms / 86400000)
+                const h = Math.floor((ms % 86400000) / 3600000)
+                return h ? `${d}d ${h}h` : `${d}d`
+              })()
+            : null
+          // Urgency tier for countdown pill styling (purely visual, no logic change)
+          const offerCountdownUrgency = !offerExpired && offerExpiryAt
+            ? (() => {
+                const ms = new Date(offerExpiryAt).getTime() - Date.now()
+                if (ms <= 0) return null
+                if (ms < 3600000)  return 'urgent'   // < 1 hour  → red pulse
+                if (ms < 86400000) return 'warning'  // < 24 hours → amber
+                return null
+              })()
+            : null
 
           let radiusClass = ''
           if (isMine) {
@@ -3251,10 +3472,10 @@ async function uploadAndSend(file, type, caption = '') {
           }
 
           return (
-            <div key={msg.id} id={`msg-${msg.id}`} className={swipeHintId === msg.id ? 'is-swipe-ready' : ''}>
+            <div key={msg.id} id={`msg-${msg.id}`} data-date={dateChipLabel(msg.created_at)} className={swipeHintId === msg.id ? 'is-swipe-ready' : ''}>
               {showDate && (
                 <div className="chat-date-chip">
-                  {new Date(msg.created_at).toLocaleDateString([], { weekday: 'short', day: 'numeric', month: 'short' })}
+                  {dateChipLabel(msg.created_at)}
                 </div>
               )}
 
@@ -3406,12 +3627,15 @@ async function uploadAndSend(file, type, caption = '') {
                         {flow && flow.hasChild && (
                           <div className="offer-card-parent is-down">↓ continued by offer {flow.index + 1}</div>
                         )}
-                        <div className="offer-card-meta">
-                          {isMine ? 'You sent an offer' : 'New price offer'}
-                          {offer.listing_id ? ' · on a listing' : ''}
-                        </div>
-                        <div className={`offer-card-statusline is-${effStatus}`}>
-                          {offerStatusText({ ...offer, status: effStatus }, currentUser?.id, isMine)}
+<div className="offer-card-footer">
+                          <span className={`offer-card-statusline is-${effStatus}`}>
+                            {offerStatusText({ ...offer, status: effStatus }, currentUser?.id, isMine)}
+                          </span>
+                          {offerTimeLeft && (
+                            <span className={`offer-card-countdown${offerCountdownUrgency ? ` is-${offerCountdownUrgency}` : ''}`}>
+                              <span aria-hidden>⏳</span> {offerTimeLeft}
+                            </span>
+                          )}
                         </div>
                         {isMine && !deletedEveryone && (
                           <div className="offer-card-actions is-manage">
@@ -3938,6 +4162,58 @@ async function uploadAndSend(file, type, caption = '') {
                 value={offerNote}
                 onChange={e => setOfferNote(e.target.value)}
               />
+            </div>
+
+            <div className="offer-sheet-field">
+              <label className="offer-sheet-label">Accept before (optional)</label>
+              <div className="offer-sheet-expiry">
+                {OFFER_EXPIRY_OPTIONS.map(opt => (
+                  <button
+                    key={opt.key}
+                    type="button"
+                    className={`offer-sheet-expiry-chip${offerCustomExpiry === '' && offerExpiryHours === opt.hours ? ' is-on' : ''}`}
+                    onClick={() => { setOfferCustomExpiry(''); setOfferExpiryHours(opt.hours) }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className={`offer-sheet-expiry-chip${offerCustomExpiry !== '' ? ' is-on' : ''}`}
+                  onClick={() => { setOfferCustomExpiry(String(offerExpiryHours > 0 ? offerExpiryHours : 24)) }}
+                >
+                  Custom
+                </button>
+              </div>
+              {offerCustomExpiry !== '' ? (
+                <div className="offer-sheet-custom-expiry">
+                  <input
+                    type="number"
+                    min="1"
+                    max="8760"
+                    className="offer-sheet-custom-input"
+                    value={offerCustomExpiry}
+                    onChange={e => setOfferCustomExpiry(e.target.value)}
+                    onBlur={() => {
+                      const h = Math.round(Number(offerCustomExpiry))
+                      if (Number.isFinite(h) && h > 0) {
+                        setOfferExpiryHours(h)
+                        setOfferCustomExpiry(String(h))
+                      } else {
+                        setOfferCustomExpiry('')
+                      }
+                    }}
+                    placeholder="Hours"
+                  />
+                  <span className="offer-sheet-custom-unit">hour(s)</span>
+                </div>
+              ) : (
+                <div className="offer-sheet-hint">
+                  {offerExpiryHours === 0
+                    ? 'This offer will not expire'
+                    : `The other party must respond within ${offerExpiryHours} hour${offerExpiryHours === 1 ? '' : 's'}`}
+                </div>
+              )}
             </div>
 
             <div className="offer-sheet-actions">

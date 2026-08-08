@@ -4,6 +4,7 @@
  */
 
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Phone, Video, ShieldCheck, SlidersHorizontal } from 'lucide-react'
 import { useNavigate, useLocation, useParams } from 'react-router-dom'
 import { useCall } from '../context/CallContext'
@@ -38,152 +39,185 @@ const headerBtnStyle = {
 
 const DIALOG_STYLES = `
   @keyframes callSheetUp {
-    from { transform: translateY(100%); }
-    to { transform: translateY(0); }
+    from { transform: translateY(100%); opacity: 0; }
+    to   { transform: translateY(0);    opacity: 1; }
   }
   @keyframes callSheetPop {
-    from { opacity: 0; transform: translateY(16px) scale(0.97); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
+    from { opacity: 0; transform: translateY(18px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0)    scale(1);    }
   }
   .call-sheet-overlay {
     position: fixed;
     inset: 0;
     z-index: 9500;
-    background: rgba(9, 12, 10, 0.72);
+    background: rgba(10, 20, 14, 0.45);
     display: flex;
     align-items: flex-end;
     justify-content: center;
-    font-family: 'Sora', 'Inter', system-ui, sans-serif;
+    font-family: 'Sora', 'DM Sans', system-ui, sans-serif;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
   }
   .call-sheet {
     width: 100%;
     max-width: 560px;
+    max-height: min(88vh, 88dvh);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     box-sizing: border-box;
-    background: #161b17;
-    border: 1px solid #2a342c;
+    background: #ffffff;
+    border: 1px solid #d8e5dc;
     border-bottom: none;
     border-radius: 24px 24px 0 0;
-    padding: 12px 20px calc(20px + env(safe-area-inset-bottom, 0px));
-    box-shadow: 0 -24px 60px rgba(0, 0, 0, 0.6);
-    animation: callSheetUp 0.32s cubic-bezier(0.16, 1, 0.3, 1);
+    padding: 14px 20px calc(22px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -8px 40px rgba(15, 50, 30, 0.12);
+    animation: callSheetUp 0.3s cubic-bezier(0.16, 1, 0.3, 1);
   }
   .call-sheet-handle {
     display: block;
-    width: 40px;
+    width: 36px;
     height: 4px;
     border-radius: 2px;
-    background: rgba(255, 255, 255, 0.16);
-    margin: 0 auto 14px;
+    background: #d8e5dc;
+    margin: 0 auto 16px;
   }
   .call-sheet-title {
-    color: #e8efe9;
+    color: #0f1410;
     font-size: 20px;
     font-weight: 800;
     margin-bottom: 4px;
+    text-transform: capitalize;
   }
   .call-sheet-subtitle {
-    color: #93a39a;
+    color: #637068;
     font-size: 13px;
-    line-height: 1.4;
+    line-height: 1.45;
     margin-bottom: 18px;
   }
   .call-sheet-options {
     display: flex;
     flex-direction: column;
-    gap: 12px;
+    gap: 10px;
   }
   .call-sheet-option {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 14px;
     width: 100%;
     box-sizing: border-box;
     text-align: left;
-    background: #1e2520;
-    border: 1px solid #2a342c;
+    background: #f4f8f5;
+    border: 1.5px solid #d8e5dc;
     border-radius: 16px;
-    padding: 14px;
+    padding: 14px 16px;
     cursor: pointer;
-    color: #e8efe9;
+    color: #0f1410;
     font-family: inherit;
-    transition: border-color 0.2s ease, background 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
+    transition: border-color 0.2s, background 0.2s, transform 0.15s, box-shadow 0.2s;
   }
-  .call-sheet-option:hover { border-color: #3a4a3f; }
-  .call-sheet-option:active { transform: scale(0.985); }
+  .call-sheet-option:hover  { border-color: #b0ccba; background: #edf5f0; }
+  .call-sheet-option:active { transform: scale(0.983); }
   .call-sheet-option-last {
-    border-color: rgba(15, 157, 88, 0.55);
-    background: rgba(15, 157, 88, 0.12);
+    border-color: rgba(15, 157, 88, 0.45);
+    background: rgba(15, 157, 88, 0.07);
+    box-shadow: 0 0 0 1px rgba(15, 157, 88, 0.15);
   }
+  .call-sheet-option-last:hover { border-color: rgba(15, 157, 88, 0.7); background: rgba(15, 157, 88, 0.11); }
   .call-sheet-option-icon {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 40px;
-    height: 40px;
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.06);
-    color: #e8efe9;
+    width: 44px;
+    height: 44px;
+    border-radius: 14px;
+    background: #e6f0ea;
+    box-shadow: 0 0 0 1px #d8e5dc;
+    color: #637068;
     flex-shrink: 0;
   }
   .call-sheet-icon-green {
-    background: rgba(15, 157, 88, 0.16);
-    color: #4ade80;
+    background: rgba(15, 157, 88, 0.1);
+    box-shadow: 0 0 0 1px rgba(15, 157, 88, 0.25);
+    color: #0F9D58;
+  }
+  .call-sheet-icon-blue {
+    background: rgba(59, 130, 246, 0.09);
+    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.22);
+    color: #3b82f6;
+  }
+  .call-sheet-icon-amber {
+    background: rgba(212, 146, 10, 0.09);
+    box-shadow: 0 0 0 1px rgba(212, 146, 10, 0.22);
+    color: #d4920a;
   }
   .call-sheet-option-body {
     min-width: 0;
     flex: 1;
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: 3px;
   }
   .call-sheet-option-title {
     font-size: 15px;
     font-weight: 800;
-    color: #e8efe9;
+    color: #0f1410;
     line-height: 1.3;
   }
   .call-sheet-option-sub {
     font-size: 12px;
-    color: #93a39a;
+    color: #637068;
     line-height: 1.4;
   }
   .call-sheet-chip {
     flex-shrink: 0;
     display: inline-flex;
     align-items: center;
-    background: rgba(15, 157, 88, 0.16);
-    border: 1px solid rgba(15, 157, 88, 0.4);
+    background: #e6f7ee;
+    border: 1px solid rgba(15, 157, 88, 0.3);
     border-radius: 999px;
-    padding: 6px 10px;
-    color: #a7f3d0;
+    padding: 5px 11px;
+    color: #0F9D58;
     font-size: 11px;
     font-weight: 700;
     white-space: nowrap;
+    letter-spacing: 0.01em;
   }
   .call-sheet-cancel {
     width: 100%;
     height: 48px;
-    margin-top: 16px;
+    margin-top: 14px;
     background: transparent;
-    color: #93a39a;
-    border: 1px solid #2a342c;
-    border-radius: 12px;
+    color: #637068;
+    border: 1.5px solid #d8e5dc;
+    border-radius: 13px;
     font-size: 14px;
     font-weight: 600;
     cursor: pointer;
     font-family: inherit;
-    transition: color 0.2s ease, border-color 0.2s ease;
+    transition: color 0.2s, border-color 0.2s, background 0.2s;
   }
+  .call-sheet-cancel:hover  { color: #0f1410; border-color: #b0ccba; background: #f4f8f5; }
   .call-sheet-cancel:active { transform: scale(0.98); }
   @media (min-width: 640px) {
-    .call-sheet-overlay { align-items: center; padding: 20px; }
+    .call-sheet-overlay {
+      align-items: flex-start;
+      justify-content: center;
+      padding: 5vh 20px 20px;
+      overflow-y: auto;
+      backdrop-filter: blur(5px);
+      -webkit-backdrop-filter: blur(5px);
+    }
     .call-sheet {
+      width: 100%;
       max-width: 400px;
-      border-radius: 24px;
-      border-bottom: 1px solid #2a342c;
-      padding: 12px 22px 20px;
-      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
-      animation: callSheetPop 0.25s ease;
+      max-height: none;
+      overflow-y: visible;
+      border-radius: 22px;
+      border: 1.5px solid #24302a;
+      border-bottom: 1.5px solid #24302a;
+      padding: 14px 22px 22px;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.6);
+      animation: callSheetPop 0.24s ease;
     }
   }
 `
@@ -271,7 +305,7 @@ function CallStartDialog({ callType, onLastBudget, onStandard, onSetBudget, onCl
             onClick={onStandard}
             aria-label="Standard call with no data monitoring"
           >
-            <span className="call-sheet-option-icon">
+            <span className="call-sheet-option-icon call-sheet-icon-blue">
               <Phone size={20} strokeWidth={2.2} aria-hidden />
             </span>
             <span className="call-sheet-option-body">
@@ -285,7 +319,7 @@ function CallStartDialog({ callType, onLastBudget, onStandard, onSetBudget, onCl
             onClick={onSetBudget}
             aria-label="Set a call data budget"
           >
-            <span className="call-sheet-option-icon">
+            <span className="call-sheet-option-icon call-sheet-icon-amber">
               <SlidersHorizontal size={20} strokeWidth={2.2} aria-hidden />
             </span>
             <span className="call-sheet-option-body">
@@ -410,7 +444,7 @@ export function CallHeaderButtons({ style = headerBtnStyle }) {
       >
         <Video size={17} strokeWidth={2.1} color="#0F9D58" aria-hidden />
       </button>
-      {pendingType && (
+      {pendingType && createPortal(
         <CallStartDialog
           callType={pendingType}
           onLastBudget={() => {
@@ -431,7 +465,8 @@ export function CallHeaderButtons({ style = headerBtnStyle }) {
           onClose={() => {
             setPendingType(null)
           }}
-        />
+        />,
+        document.body
       )}
     </>
   )

@@ -276,28 +276,8 @@ export default function ListingDetail() {
   }
 
   async function handleChatWithSeller() {
-    if (currentUser) {
-      try {
-        const { data: myProf } = await supabase
-          .from('profiles').select('full_name').eq('id', currentUser.id).single()
-        const buyerName = myProf?.full_name || 'Someone'
-        await supabase.from('notifications').insert({
-          user_id: listing.seller_id,
-          type: 'listing_offer',
-          title: '💰 New inquiry on your listing',
-          body: `${buyerName} is interested in "${listing.title}"`,
-          message: `${buyerName} is interested in "${listing.title}"`,
-          data: {
-            listing_id: listing.id,
-            listing_title: listing.title,
-            listing_image: (listing.images || [])[0] || null,
-            buyer_id: currentUser.id,
-            buyer_name: buyerName,
-          },
-          read: false,
-        })
-      } catch (e) { console.warn('Offer notification error:', e) }
-    }
+    // Offer notifications are now handled by the offer notification system
+    // (offer_new / offer_counter / ...) in src/utils/offerNotifications.js.
     navigate(`/chat/${listing.seller_id}/${listing.id}?src=listing`, {
       state: { source: 'listing' },
     })

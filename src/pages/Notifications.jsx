@@ -46,6 +46,10 @@ import {
   ChevronRight,
   Navigation,
   Store,
+  Undo2,
+  Clock,
+  Timer,
+  PenLine,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useUserLocation } from '../hooks/useUserLocation'
@@ -195,6 +199,14 @@ const NOTIF_CONFIG = {
   missed_call:      { Icon: PhoneMissed,    color: '#ea4335', bg: '#fce8e6', label: 'Missed Call',     category: 'calls' },
   missed_video:     { Icon: VideoOff,       color: '#ea4335', bg: '#fce8e6', label: 'Missed Video',    category: 'calls' },
   listing_offer:    { Icon: CircleDollarSign, color: '#F9AB00', bg: '#fff8e1', label: 'Offer',         category: 'offers' },
+  offer_new:        { Icon: CircleDollarSign, color: '#0F9D58', bg: '#e8f5ee', label: 'New Offer',     category: 'offers' },
+  offer_counter:    { Icon: ArrowLeftRight,   color: '#1A73E8', bg: '#e8f0fe', label: 'Counter Offer', category: 'offers' },
+  offer_accepted:   { Icon: CheckCircle2,     color: '#0F9D58', bg: '#e8f5ee', label: 'Offer Accepted', category: 'offers' },
+offer_declined:   { Icon: X,                color: '#ea4335', bg: '#fce8e6', label: 'Offer Declined', category: 'offers' },
+  offer_withdrawn:  { Icon: Undo2,            color: '#80868b', bg: '#f8f9fa', label: 'Offer Withdrawn', category: 'offers' },
+  offer_edited:     { Icon: PenLine,          color: '#1A73E8', bg: '#e8f0fe', label: 'Offer Updated',   category: 'offers' },
+  offer_expired:    { Icon: Timer,            color: '#ea4335', bg: '#fce8e6', label: 'Offer Expired', category: 'offers' },
+  offer_expiring:   { Icon: Clock,            color: '#F9AB00', bg: '#fff8e1', label: 'Offer Expiring', category: 'offers' },
   listing_view:     { Icon: Eye,            color: '#7c5cff', bg: '#efeaff', label: 'View',            category: 'listings' },
   listing_comment:  { Icon: MessageSquare,  color: '#1A73E8', bg: '#e8f0fe', label: 'Comment',         category: 'listings' },
   listing_sold:     { Icon: PartyPopper,    color: '#0F9D58', bg: '#e8f5ee', label: 'Sold',            category: 'listings' },
@@ -217,6 +229,17 @@ const NOTIF_CONFIG = {
   warning:          { Icon: AlertTriangle,  color: '#ea4335', bg: '#fce8e6', label: 'Warning',         category: 'system' },
   default:          { Icon: Bell,           color: '#0F9D58', bg: '#e8f5ee', label: 'Notification',    category: 'system' },
 }
+
+const OFFER_NOTIF_TYPES = new Set([
+  'offer_new',
+  'offer_counter',
+  'offer_accepted',
+  'offer_declined',
+  'offer_withdrawn',
+  'offer_edited',
+  'offer_expired',
+  'offer_expiring',
+])
 
 const TABS = [
   { id: 'all',      label: 'All',      Icon: Bell },
@@ -260,11 +283,16 @@ function getActorId(notif) {
   if (notif.type === 'deal_request') return d.seller_id || null
   if (notif.type === 'deal_confirmed' || notif.type === 'deal_declined') return d.buyer_id || null
   if (notif.type === 'deal_vouching') return d.seller_id || null
+  // Offer notifications come from offerNotifications.js — the deep-link target
+  if (OFFER_NOTIF_TYPES.has(notif.type)) return d.actor_id || d.other_user_id || d.sender_id || null
   return d.sender_id || d.caller_id || d.seller_id || d.buyer_id || d.user_id || null
 }
 
 function getActorName(notif, sender) {
   const d = notif.data || {}
+  if (OFFER_NOTIF_TYPES.has(notif.type)) {
+    return sender?.full_name || d.actor_name || d.other_user_name || d.sender_name || 'Someone'
+  }
   return sender?.full_name || d.sender_name || d.caller_name || d.buyer_name || d.seller_name || 'Someone'
 }
 
@@ -321,7 +349,7 @@ function matchCategory(notif, category) {
   if (category === 'messages') return notif.type === 'new_message'
   if (category === 'calls')    return ['missed_call', 'missed_video'].includes(notif.type)
   if (category === 'listings') return notif.type.startsWith('listing_')
-  if (category === 'offers')   return notif.type === 'listing_offer'
+  if (category === 'offers')   return notif.type === 'listing_offer' || OFFER_NOTIF_TYPES.has(notif.type)
   if (category === 'deals')    return notif.type.startsWith('deal_') || notif.type === 'new_vouch'
   if (category === 'orders')   return notif.type.startsWith('order_')
   if (category === 'bookings') return notif.type.startsWith('booking_')
@@ -353,6 +381,8 @@ function groupByDate(notifications) {
 function renderSmartBody(notif, sender) {
   const data = notif.data || {}
   const name = getActorName(notif, sender)
+
+  const formatAmount = (d) => `${d.currency || 'MWK'} ${Number(d.amount || 0).toLocaleString()}`
 
   switch (notif.type) {
     case 'new_message':
@@ -394,6 +424,28 @@ function renderSmartBody(notif, sender) {
       return `Don't forget to vouch for ${data.seller_name || 'the seller'} — your vouch grows their reputation`
     case 'new_vouch':
       return `${name} vouched for you`
+    case 'offer_new':
+      return `${name} offered ${data.amount ? formatAmount(data) : ''}${data.listing_title ? ` for "${data.listing_title}"` : ''}`
+    case 'offer_counter':
+      return `${name} sent a counter offer of ${data.amount ? formatAmount(data) : ''}${data.listing_title ? ` for "${data.listing_title}"` : ''}`
+    case 'offer_accepted':
+      return `${name} accepted your offer of ${data.amount ? formatAmount(data) : ''}${data.listing_title ? ` for "${data.listing_title}"` : ''}`
+    case 'offer_declined':
+      return `${name} declined your offer of ${data.amount ? formatAmount(data) : ''}${data.listing_title ? ` for "${data.listing_title}"` : ''}`
+      case 'offer_withdrawn':
+        return `${name} withdrew their offer of ${data.amount ? formatAmount(data) : ''}${data.listing_title ? ` for "${data.listing_title}"` : ''}`
+    case 'offer_edited':
+      return `${name} updated their offer to ${data.amount ? formatAmount(data) : ''}${data.listing_title ? ` for "${data.listing_title}"` : ''}`
+    case 'offer_expired':
+      return data.is_offerer
+        ? `Your offer of ${data.amount ? formatAmount(data) : ''}${data.listing_title ? ` for "${data.listing_title}"` : ''} has expired`
+        : `The offer of ${data.amount ? formatAmount(data) : ''}${data.listing_title ? ` for "${data.listing_title}"` : ''} has expired`
+    case 'offer_expiring': {
+      const horizon = (data.reminder_window_hours || 0) > 24 ? '1 day' : '1 hour'
+      return data.is_offerer
+        ? `Your offer of ${data.amount ? formatAmount(data) : ''} expires in ${horizon}`
+        : `The offer of ${data.amount ? formatAmount(data) : ''} expires in ${horizon}`
+    }
     default:
       return 'Tap to view details'
   }
@@ -2624,6 +2676,27 @@ export default function Notifications() {
       case 'listing_liked':
       case 'listing_sold':
         if (data.listing_id) navigate(`/listing/${data.listing_id}`)
+        break
+      case 'offer_new':
+      case 'offer_counter':
+      case 'offer_accepted':
+      case 'offer_declined':
+      case 'offer_withdrawn':
+      case 'offer_edited':
+      case 'offer_expired':
+      case 'offer_expiring':
+        // Deep-link into the negotiation chat, scroll to the offer message
+        if (data.actor_id && data.context_id) {
+          navigate(`/chat/${data.actor_id}/${data.context_id}`, {
+            state: { source: 'listing', scrollToMessageId: data.message_id },
+          })
+        } else if (data.actor_id) {
+          navigate(`/chat/${data.actor_id}`, {
+            state: { source: 'listing', scrollToMessageId: data.message_id },
+          })
+        } else if (data.listing_id) {
+          navigate(`/listing/${data.listing_id}`)
+        }
         break
       case 'booking_request':
       case 'booking_confirmed':

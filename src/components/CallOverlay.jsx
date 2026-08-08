@@ -45,6 +45,7 @@ export default function CallOverlay({
   qualityToast,
   callSummary,
   onDismissSummary,
+  measuredRate,
 }) {
   if (callSummary) {
     return <CallSummaryScreen summary={callSummary} onDone={onDismissSummary} />
@@ -140,6 +141,7 @@ export default function CallOverlay({
           localVideoRef={localVideoRef}
           bytesUsed={bytesUsed}
           budgetMb={budgetMb}
+          measuredRate={measuredRate}
           warning="Tap Browse to use the app while staying on the call"
           controls={(
             <InCallControls

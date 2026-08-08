@@ -1,478 +1,269 @@
 import { useState } from 'react'
-import { Check, Video, Phone, Sparkles } from 'lucide-react'
+import { Check, Video, Phone, Sparkles, Leaf, Gauge, Crown, SlidersHorizontal } from 'lucide-react'
 import {
-  BUDGET_PRESETS,
-  getCallBudgetPref,
-  setCallBudgetPref,
-  estimateDuration,
-  shouldAutoLowData,
-  getCallUsageLog,
+  BUDGET_PRESETS, getCallBudgetPref, setCallBudgetPref,
+  effectiveEstimateDuration, shouldAutoLowData, getCallUsageLog,
 } from '../lib/callBudgetPrefs'
 
-const KEYS = ['low', 'medium', 'high']
-
+const KEYS  = ['low', 'medium', 'high']
 const NAMES = { low: 'Economy', medium: 'Balanced', high: 'Premium' }
-const DESCRIPTIONS = {
-  low: 'Best for quick calls when data is tight.',
+const DESC  = {
+  low:    'Best for quick calls when data is tight.',
   medium: 'A good everyday amount for most calls.',
-  high: 'Plenty for long, high-quality calls.',
+  high:   'Plenty for long, high-quality calls.',
   custom: 'Set your own amount — any size you like.',
 }
-
-const PALETTE = {
-  backdrop: 'rgba(9, 12, 10, 0.72)',
-  surface: '#161b17',
-  surfaceRaised: '#1e2520',
-  border: '#2a342c',
-  text: '#e8efe9',
-  textDim: '#93a39a',
-  green: '#0F9D58',
-  yellow: '#F9AB00',
+const TIERS = {
+  low:    { icon: Leaf,              color: '#34D399', tint: 'rgba(52,211,153,.13)',  ring: 'rgba(52,211,153,.28)'  },
+  medium: { icon: Gauge,             color: '#60A5FA', tint: 'rgba(96,165,250,.13)',  ring: 'rgba(96,165,250,.28)'  },
+  high:   { icon: Crown,             color: '#C084FC', tint: 'rgba(192,132,252,.13)', ring: 'rgba(192,132,252,.28)' },
+  custom: { icon: SlidersHorizontal, color: '#F9AB00', tint: 'rgba(249,171,0,.12)',   ring: 'rgba(249,171,0,.28)'   },
+}
+const P = {
+  backdrop: 'rgba(9,14,11,0.76)',
+  surface:  '#111714',
+  up:       '#192019',
+  border:   '#24302a',
+  borderUp: '#2d3d30',
+  text:     '#e2ede4',
+  sub:      '#9fb0a3',
+  dim:      '#677870',
+  green:    '#0F9D58',
+  greenTint:'rgba(15,157,88,.14)',
+  greenRing:'rgba(15,157,88,.4)',
+  yellow:   '#F9AB00',
 }
 
-/** Friendly duration label, e.g. "~45 min", "~1 hr 5 min". No technical terms. */
-function formatDuration(seconds) {
-  const total = Math.max(0, Math.round(Number(seconds) || 0))
-  if (total < 60) return 'under 1 min'
-  const mins = Math.round(total / 60)
-  if (mins < 60) return `~${mins} min`
-  const hrs = Math.floor(mins / 60)
-  const rem = mins % 60
-  return rem > 0 ? `~${hrs} hr ${rem} min` : `~${hrs} hr`
-}
-
-const overlayStyle = {
-  position: 'fixed',
-  inset: 0,
-  zIndex: 9500,
-  background: PALETTE.backdrop,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  padding: 20,
-  fontFamily: "'Sora', 'Inter', system-ui, sans-serif",
-}
-
-const cardStyle = {
-  width: 'min(400px, 100%)',
-  maxHeight: '90vh',
-  overflowY: 'auto',
-  background: PALETTE.surface,
-  border: `1px solid ${PALETTE.border}`,
-  borderRadius: 18,
-  padding: 22,
-  boxShadow: '0 24px 60px rgba(0,0,0,0.55)',
-  animation: 'budgetFadeUp 0.25s ease',
-}
-
-const titleStyle = {
-  color: PALETTE.text,
-  fontSize: 18,
-  fontWeight: 800,
-  marginBottom: 4,
-}
-
-const subtitleStyle = {
-  color: PALETTE.textDim,
-  fontSize: 13,
-  lineHeight: 1.4,
-  marginBottom: 18,
-}
-
-const optionsWrapStyle = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 12,
-  marginBottom: 18,
-}
-
-const recChipStyle = {
-  display: 'flex',
-  alignItems: 'center',
-  alignSelf: 'flex-start',
-  gap: 8,
-  background: 'rgba(15, 157, 88, 0.10)',
-  border: '1px solid rgba(15, 157, 88, 0.35)',
-  borderRadius: 999,
-  padding: '7px 13px',
-  marginBottom: 16,
-  color: PALETTE.green,
-  fontSize: 13,
-  fontWeight: 600,
-  lineHeight: 1.35,
-}
-
-const cardBase = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 4,
-  width: '100%',
-  boxSizing: 'border-box',
-  textAlign: 'left',
-  background: PALETTE.surfaceRaised,
-  border: `1px solid ${PALETTE.border}`,
-  borderRadius: 14,
-  padding: '14px 16px',
-  cursor: 'pointer',
-  color: PALETTE.text,
-  fontFamily: 'inherit',
-  transition: 'border-color 0.25s ease, background 0.25s ease, transform 0.2s ease, box-shadow 0.25s ease',
-}
-
-const cardSelected = {
-  borderColor: PALETTE.green,
-  background: 'rgba(15, 157, 88, 0.14)',
-  boxShadow: '0 0 0 1px rgba(15,157,88,0.4), 0 10px 30px rgba(0,0,0,0.35)',
-  transform: 'scale(1.015)',
-}
-
-const cardTop = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  width: '100%',
-}
-
-const cardName = {
-  fontSize: 16,
-  fontWeight: 800,
-}
-
-const checkBadge = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  width: 20,
-  height: 20,
-  borderRadius: '50%',
-  background: PALETTE.green,
-  color: '#ffffff',
-  flexShrink: 0,
-}
-
-const statsRow = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 16,
-  marginTop: 8,
-  flexWrap: 'wrap',
-}
-
-const mbBadge = {
-  fontSize: 20,
-  fontWeight: 800,
-  color: PALETTE.yellow,
-  fontVariantNumeric: 'tabular-nums',
-}
-
-const statItem = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 5,
-  color: PALETTE.textDim,
-  fontSize: 13,
-  fontWeight: 600,
-  whiteSpace: 'nowrap',
-}
-
-const descStyle = {
-  fontSize: 12,
-  color: PALETTE.textDim,
-  marginTop: 8,
-  lineHeight: 1.45,
-}
-
-const customInputRow = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 10,
-  marginTop: 10,
-}
-
-const customInputStyle = {
-  flex: 1,
-  minWidth: 0,
-  background: PALETTE.surface,
-  border: `1px solid ${PALETTE.green}`,
-  borderRadius: 10,
-  padding: '10px 12px',
-  color: PALETTE.text,
-  fontSize: 16,
-  fontWeight: 700,
-  fontFamily: 'inherit',
-  outline: 'none',
-}
-
-const customUnitStyle = {
-  fontSize: 13,
-  fontWeight: 700,
-  color: PALETTE.textDim,
-}
-
-const btnRowStyle = {
-  display: 'flex',
-  gap: 10,
-}
-
-const saveBtnStyle = {
-  flex: 1,
-  background: PALETTE.green,
-  color: '#ffffff',
-  border: 'none',
-  borderRadius: 12,
-  padding: '13px 0',
-  fontSize: 15,
-  fontWeight: 700,
-  cursor: 'pointer',
-  fontFamily: 'inherit',
-  opacity: 1,
-  transition: 'opacity 0.2s ease, transform 0.15s ease',
-}
-
-const saveBtnDisabledStyle = {
-  ...saveBtnStyle,
-  opacity: 0.45,
-  cursor: 'not-allowed',
-}
-
-const skipBtnStyle = {
-  flex: 1,
-  background: 'transparent',
-  color: PALETTE.textDim,
-  border: `1px solid ${PALETTE.border}`,
-  borderRadius: 12,
-  padding: '13px 0',
-  fontSize: 15,
-  fontWeight: 600,
-  cursor: 'pointer',
-  fontFamily: 'inherit',
-  transition: 'transform 0.15s ease',
-}
-
-const skipHintStyle = {
-  marginTop: 12,
-  color: PALETTE.textDim,
-  fontSize: 12,
-  lineHeight: 1.45,
-}
-
-const KEYFRAMES = `
-  @keyframes budgetFadeUp {
-    from { opacity: 0; transform: translateY(12px) scale(0.98); }
-    to { opacity: 1; transform: translateY(0) scale(1); }
+const CSS = `
+  @keyframes bsSlideUp { from{opacity:0;transform:translateY(20px) scale(.98)} to{opacity:1;transform:translateY(0) scale(1)} }
+  @keyframes bsCheck   { 0%{transform:scale(.3);opacity:0} 60%{transform:scale(1.25)} 100%{transform:scale(1);opacity:1} }
+  .bs-card:hover  { transform:translateY(-2px)!important; }
+  .bs-card:active { transform:scale(.982)!important; }
+  .bs-btn:active  { transform:scale(.97); }
+  .bs-check { animation:bsCheck .22s ease forwards; }
+  @media (max-width:519px){
+    .bs-overlay { align-items:flex-end!important; padding:0!important; }
+    .bs-sheet   { border-radius:22px 22px 0 0!important; max-height:92vh; width:100%!important; }
   }
-  @keyframes budgetPop {
-    0% { transform: scale(0.4); opacity: 0; }
-    60% { transform: scale(1.2); }
-    100% { transform: scale(1); opacity: 1; }
-  }
-  .budget-check-pop { animation: budgetPop 0.25s ease forwards; }
-  .budget-card:active { transform: scale(0.985); }
-  .budget-btn:active { transform: scale(0.98); }
 `
+
+function fmt(seconds) {
+  const t = Math.max(0, Math.round(Number(seconds) || 0))
+  if (t < 60) return 'under 1 min'
+  const m = Math.round(t / 60)
+  if (m < 60) return `~${m} min`
+  const h = Math.floor(m / 60), r = m % 60
+  return r ? `~${h} hr ${r} min` : `~${h} hr`
+}
+
+function TierIcon({ tierKey }) {
+  const t = TIERS[tierKey]
+  const Icon = t.icon
+  return (
+    <span style={{ display:'inline-flex', alignItems:'center', justifyContent:'center',
+      width:40, height:40, borderRadius:12, flexShrink:0,
+      background:t.tint, color:t.color, boxShadow:`0 0 0 1px ${t.ring}` }}>
+      <Icon size={19} strokeWidth={2.2} aria-hidden />
+    </span>
+  )
+}
 
 export default function CallBudgetSelector({ callType, onConfirm, onCancel }) {
   const saved = getCallBudgetPref(callType)
-  const savedIsCustom = saved && saved.preset === 'custom'
+  const savedIsCustom = saved?.preset === 'custom'
   const [selectedKey, setSelectedKey] = useState(
-    savedIsCustom
-      ? 'custom'
-      : saved && KEYS.includes(saved.preset)
-        ? saved.preset
-        : 'medium'
+    savedIsCustom ? 'custom' : (saved && KEYS.includes(saved.preset)) ? saved.preset : 'medium'
   )
-  const [customMb, setCustomMb] = useState(
-    savedIsCustom && saved ? saved.mb : 30
-  )
+  const [customMb, setCustomMb] = useState(savedIsCustom ? saved.mb : 30)
 
   const [recommendation] = useState(() => {
-    const matching = getCallUsageLog()
-      .filter((r) => r && r.callType === callType)
-      .slice(-3)
-    if (matching.length < 3) return null
-    let totalBytes = 0
-    let totalSec = 0
-    for (const r of matching) {
-      totalBytes += Number(r.bytesUsed) || 0
-      totalSec += Number(r.durationSec) || 0
-    }
+    const log = getCallUsageLog().filter((r) => r?.callType === callType).slice(-3)
+    if (log.length < 3) return null
+    let totalBytes = 0, totalSec = 0
+    for (const r of log) { totalBytes += Number(r.bytesUsed)||0; totalSec += Number(r.durationSec)||0 }
     if (totalSec <= 0) return null
-    const avgMbPerMin = (totalBytes / totalSec) * (60 / (1024 * 1024))
-    const avgCallMb = avgMbPerMin * (totalSec / matching.length / 60)
-    return avgCallMb <= BUDGET_PRESETS[callType].low
+    const avgMb = (totalBytes / totalSec) * (60 / (1024 * 1024)) * (totalSec / log.length / 60)
+    return avgMb <= BUDGET_PRESETS[callType].low
       ? 'Your recent calls suggest Economy is enough'
       : 'Based on your recent calls, Balanced suits you'
   })
 
-  const isCustom = selectedKey === 'custom'
+  const isCustom    = selectedKey === 'custom'
   const validCustom = Number.isFinite(customMb) && customMb > 0
-  const canSave = !isCustom || validCustom
+  const canSave     = !isCustom || validCustom
 
-  function presetDurations(key) {
+  function durations(key) {
     const mb = BUDGET_PRESETS[callType][key]
-    const videoLowData = callType === 'video' && shouldAutoLowData('video', key)
     return {
-      video: estimateDuration('video', mb, videoLowData),
+      video: estimateDuration('video', mb, callType === 'video' && shouldAutoLowData('video', key)),
       audio: estimateDuration('voice', mb, false),
     }
   }
-
-  function customDurations() {
-    if (!validCustom) return null
-    return {
-      video: estimateDuration('video', customMb, false),
-      audio: estimateDuration('voice', customMb, false),
-    }
-  }
+  const customD = isCustom && validCustom
+    ? { video: estimateDuration('video', customMb, false), audio: estimateDuration('voice', customMb, false) }
+    : null
 
   function handleSave() {
     if (isCustom) {
       if (!validCustom) return
       setCallBudgetPref(callType, { preset: 'custom', mb: Math.round(customMb * 10) / 10 })
       onConfirm?.('custom')
-      return
+    } else {
+      setCallBudgetPref(callType, { preset: selectedKey, mb: BUDGET_PRESETS[callType][selectedKey] })
+      onConfirm?.(selectedKey)
     }
-    setCallBudgetPref(callType, {
-      preset: selectedKey,
-      mb: BUDGET_PRESETS[callType][selectedKey],
-    })
-    onConfirm?.(selectedKey)
   }
 
-  function renderCheck(selected) {
-    return selected ? (
-      <span style={checkBadge} className="budget-check-pop" aria-hidden>
-        <Check size={13} strokeWidth={3} />
-      </span>
-    ) : null
-  }
-
-  const customD = isCustom ? customDurations() : null
+  const cardSt = (sel) => ({
+    display:'flex', width:'100%', boxSizing:'border-box', textAlign:'left',
+    cursor:'pointer', fontFamily:'inherit', color:P.text,
+    background: sel ? P.greenTint : P.up,
+    border: `1.5px solid ${sel ? P.green : P.border}`,
+    borderRadius:14, padding:'14px 16px',
+    boxShadow: sel ? `0 0 0 1px ${P.greenRing},0 10px 28px rgba(0,0,0,.4)` : 'none',
+    transform: sel ? 'translateY(-1px)' : undefined,
+    transition:'border-color .22s,background .22s,transform .18s,box-shadow .22s',
+  })
 
   return (
-    <div style={overlayStyle} onClick={onCancel}>
-      <div
-        style={cardStyle}
-        role="dialog"
-        aria-modal="true"
-        aria-label={`${callType} call data budget`}
+    <div className="bs-overlay" onClick={onCancel}
+      style={{ position:'fixed', inset:0, zIndex:9500, background:P.backdrop,
+        display:'flex', alignItems:'center', justifyContent:'center',
+        padding:20, fontFamily:"'Sora','DM Sans',system-ui,sans-serif" }}>
+      <div className="bs-sheet"
+        role="dialog" aria-modal="true" aria-label={`${callType} call data budget`}
         onClick={(e) => e.stopPropagation()}
-      >
-        <div style={titleStyle}>Call data budget</div>
-        <div style={subtitleStyle}>
-          Pick how much data to set aside. Each option shows how long it lasts
-          on video and voice calls.
+        style={{ width:'min(420px,100%)', maxHeight:'90vh', overflowY:'auto',
+          background:P.surface, border:`1px solid ${P.border}`,
+          borderRadius:20, padding:22,
+          boxShadow:'0 28px 64px rgba(0,0,0,.6)',
+          animation:'bsSlideUp .26s ease' }}>
+
+        <div style={{ color:P.text, fontSize:18, fontWeight:800, marginBottom:4 }}>Call data budget</div>
+        <div style={{ color:P.dim, fontSize:13, lineHeight:1.4, marginBottom:18 }}>
+          Pick how much data to set aside. Each option shows how long it lasts on video and voice calls.
         </div>
 
         {recommendation && (
-          <div style={recChipStyle} role="status" aria-live="polite">
+          <div role="status" aria-live="polite"
+            style={{ display:'flex', alignItems:'center', gap:8,
+              background:'rgba(15,157,88,.10)', border:'1px solid rgba(15,157,88,.32)',
+              borderRadius:999, padding:'8px 14px', marginBottom:16,
+              color:P.green, fontSize:13, fontWeight:600, lineHeight:1.35 }}>
             <Sparkles size={13} strokeWidth={2.5} aria-hidden />
             {recommendation}
           </div>
         )}
 
-        <div style={optionsWrapStyle} role="radiogroup" aria-label="Budget options">
+        <div role="radiogroup" aria-label="Budget options"
+          style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:18 }}>
           {KEYS.map((key) => {
-            const mb = BUDGET_PRESETS[callType][key]
-            const d = presetDurations(key)
-            const selected = key === selectedKey
+            const mb  = BUDGET_PRESETS[callType][key]
+            const d   = durations(key)
+            const sel = key === selectedKey
             return (
-              <button
-                key={key}
-                type="button"
-                className="budget-card"
-                role="radio"
-                aria-checked={selected}
-                onClick={() => setSelectedKey(key)}
-                style={selected ? { ...cardBase, ...cardSelected } : cardBase}
-              >
-                <div style={cardTop}>
-                  <span style={cardName}>{NAMES[key]}</span>
-                  {renderCheck(selected)}
+              <button key={key} type="button" className="bs-card" role="radio" aria-checked={sel}
+                onClick={() => setSelectedKey(key)} style={cardSt(sel)}>
+                <div style={{ display:'flex', alignItems:'flex-start', gap:12, width:'100%' }}>
+                  <TierIcon tierKey={key} />
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, marginBottom:2 }}>
+                      <span style={{ fontSize:15, fontWeight:800 }}>{NAMES[key]}</span>
+                      <span style={{ display:'inline-flex', alignItems:'center', gap:8, flexShrink:0 }}>
+                        {sel && <span className="bs-check" style={{ display:'inline-flex', alignItems:'center',
+                          justifyContent:'center', width:20, height:20, borderRadius:'50%',
+                          background:P.green, color:'#fff' }}><Check size={12} strokeWidth={3.2}/></span>}
+                        <span style={{ fontSize:16, fontWeight:800, color:P.yellow }}>{mb} MB</span>
+                      </span>
+                    </div>
+                    <div style={{ display:'flex', alignItems:'center', gap:12, flexWrap:'wrap', marginTop:4 }}>
+                      <span style={{ display:'inline-flex', alignItems:'center', gap:4, color:P.sub, fontSize:12, fontWeight:600 }}>
+                        <Video size={12} aria-hidden />{fmt(d.video)}
+                      </span>
+                      <span style={{ display:'inline-flex', alignItems:'center', gap:4, color:P.sub, fontSize:12, fontWeight:600 }}>
+                        <Phone size={12} aria-hidden />{fmt(d.audio)}
+                      </span>
+                    </div>
+                    <div style={{ fontSize:12, color:P.dim, lineHeight:1.4, marginTop:5 }}>{DESC[key]}</div>
+                  </div>
                 </div>
-                <div style={statsRow}>
-                  <span style={mbBadge}>{mb} MB</span>
-                  <span style={statItem}>
-                    <Video size={13} color={PALETTE.textDim} aria-hidden />
-                    {formatDuration(d.video)}
-                  </span>
-                  <span style={statItem}>
-                    <Phone size={13} color={PALETTE.textDim} aria-hidden />
-                    {formatDuration(d.audio)}
-                  </span>
-                </div>
-                <div style={descStyle}>{DESCRIPTIONS[key]}</div>
               </button>
             )
           })}
 
-          <div
-            className="budget-card"
-            role="radio"
-            aria-checked={isCustom}
-            tabIndex={0}
+          {/* Custom */}
+          <div className="bs-card" role="radio" aria-checked={isCustom} tabIndex={0}
             onClick={() => setSelectedKey('custom')}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' || e.key === ' ') setSelectedKey('custom')
-            }}
-            style={isCustom ? { ...cardBase, ...cardSelected } : cardBase}
-          >
-            <div style={cardTop}>
-              <span style={cardName}>Custom</span>
-              {renderCheck(isCustom)}
-            </div>
-            <div style={statsRow}>
-              <span style={mbBadge}>{validCustom ? customMb : '—'} MB</span>
-            </div>
-            <div style={descStyle}>{DESCRIPTIONS.custom}</div>
-            {isCustom && (
-              <div style={customInputRow} onClick={(e) => e.stopPropagation()}>
-                <input
-                  type="number"
-                  min="1"
-                  value={Number.isFinite(customMb) ? customMb : ''}
-                  onChange={(e) => setCustomMb(Number(e.target.value))}
-                  aria-label="Custom budget in megabytes"
-                  style={customInputStyle}
-                  placeholder="e.g. 20"
-                />
-                <span style={customUnitStyle}>MB</span>
+            onKeyDown={(e) => { if (e.key==='Enter'||e.key===' ') setSelectedKey('custom') }}
+            style={cardSt(isCustom)}>
+            <div style={{ display:'flex', alignItems:'flex-start', gap:12, width:'100%' }}>
+              <TierIcon tierKey="custom" />
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, marginBottom:2 }}>
+                  <span style={{ fontSize:15, fontWeight:800 }}>Custom</span>
+                  <span style={{ display:'inline-flex', alignItems:'center', gap:8, flexShrink:0 }}>
+                    {isCustom && <span className="bs-check" style={{ display:'inline-flex', alignItems:'center',
+                      justifyContent:'center', width:20, height:20, borderRadius:'50%',
+                      background:P.green, color:'#fff' }}><Check size={12} strokeWidth={3.2}/></span>}
+                    <span style={{ fontSize:16, fontWeight:800, color:P.yellow }}>
+                      {validCustom ? `${customMb} MB` : '— MB'}
+                    </span>
+                  </span>
+                </div>
+                <div style={{ fontSize:12, color:P.dim, lineHeight:1.4, marginTop:4 }}>{DESC.custom}</div>
+                {isCustom && (
+                  <div onClick={(e) => e.stopPropagation()} style={{ marginTop:12 }}>
+                    <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+                      <input type="number" min="1"
+                        value={Number.isFinite(customMb) ? customMb : ''}
+                        onChange={(e) => setCustomMb(Number(e.target.value))}
+                        aria-label="Custom budget in megabytes"
+                        placeholder="e.g. 20"
+                        style={{ flex:1, minWidth:0, background:P.surface,
+                          border:`1.5px solid ${P.green}`, borderRadius:10,
+                          padding:'10px 12px', color:P.text, fontSize:15,
+                          fontWeight:700, fontFamily:'inherit', outline:'none' }} />
+                      <span style={{ fontSize:13, fontWeight:700, color:P.dim }}>MB</span>
+                    </div>
+                    {customD && (
+                      <div style={{ display:'flex', alignItems:'center', gap:12, flexWrap:'wrap', marginTop:8 }}>
+                        <span style={{ display:'inline-flex', alignItems:'center', gap:4, color:P.sub, fontSize:12, fontWeight:600 }}>
+                          <Video size={12} aria-hidden />{fmt(customD.video)}
+                        </span>
+                        <span style={{ display:'inline-flex', alignItems:'center', gap:4, color:P.sub, fontSize:12, fontWeight:600 }}>
+                          <Phone size={12} aria-hidden />{fmt(customD.audio)}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-            )}
-            {isCustom && customD && (
-              <div style={statsRow}>
-                <span style={statItem}>
-                  <Video size={13} color={PALETTE.textDim} aria-hidden />
-                  {formatDuration(customD.video)}
-                </span>
-                <span style={statItem}>
-                  <Phone size={13} color={PALETTE.textDim} aria-hidden />
-                  {formatDuration(customD.audio)}
-                </span>
-              </div>
-            )}
+            </div>
           </div>
         </div>
 
-        <div style={btnRowStyle}>
-          <button
-            type="button"
-            className="budget-btn"
-            onClick={handleSave}
-            disabled={!canSave}
-            style={canSave ? saveBtnStyle : saveBtnDisabledStyle}
-          >
-            Save & call
+        <div style={{ display:'flex', gap:10 }}>
+          <button type="button" className="bs-btn" onClick={handleSave} disabled={!canSave}
+            style={{ flex:1, background: canSave ? P.green : P.up,
+              color: canSave ? '#fff' : P.dim,
+              border:'none', borderRadius:12, padding:'13px 0',
+              fontSize:15, fontWeight:700, cursor: canSave ? 'pointer' : 'not-allowed',
+              fontFamily:'inherit', transition:'all .2s' }}>
+            Save &amp; call
           </button>
-          <button type="button" className="budget-btn" onClick={() => onConfirm?.(null)} style={skipBtnStyle}>
+          <button type="button" className="bs-btn" onClick={() => onConfirm?.(null)}
+            style={{ flex:1, background:'transparent', color:P.sub,
+              border:`1px solid ${P.border}`, borderRadius:12, padding:'13px 0',
+              fontSize:15, fontWeight:600, cursor:'pointer', fontFamily:'inherit',
+              transition:'all .2s' }}>
             Cancel / Skip
           </button>
         </div>
-        <div style={skipHintStyle}>
+        <div style={{ marginTop:12, color:P.dim, fontSize:12, lineHeight:1.45 }}>
           Skip keeps the last saved budget. With none saved, the call runs at full quality.
         </div>
       </div>
-      <style>{KEYFRAMES}</style>
+      <style>{CSS}</style>
     </div>
   )
 }

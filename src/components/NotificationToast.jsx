@@ -6,12 +6,16 @@ import { T } from '../constants/tokens'
 import {
   MessageCircle, Phone, VideoOff, Tag, Eye, MessageSquare, CheckCircle2,
   Heart, Calendar, X, Flag, Handshake, Star, Package, Truck, Bell, AlertTriangle,
+  ArrowLeftRight, Undo2, Clock, CircleDollarSign, PenLine,
 } from 'lucide-react'
 
 const NOTIF_ICON_MAP = {
   new_message: MessageCircle, missed_call: Phone, missed_video: VideoOff,
   listing_offer: Tag, listing_view: Eye, listing_comment: MessageSquare,
   listing_sold: CheckCircle2, listing_liked: Heart,
+  offer_new: CircleDollarSign, offer_counter: ArrowLeftRight,
+  offer_accepted: CheckCircle2, offer_declined: X,
+  offer_withdrawn: Undo2, offer_edited: PenLine, offer_expired: Clock, offer_expiring: Clock,
   booking_request: Calendar, booking_confirmed: CheckCircle2,
   booking_cancelled: X, booking_completed: Flag,
   deal_ready: Handshake, deal_request: Handshake, deal_confirmed: CheckCircle2,
@@ -24,6 +28,9 @@ const TYPE_COLORS = {
   new_message: T.blue, missed_call: T.red, missed_video: T.red,
   listing_offer: T.amber, listing_sold: T.green, deal_ready: T.green,
   deal_request: T.amber, deal_confirmed: T.green, deal_declined: T.red,
+  offer_new: T.green, offer_counter: T.blue, offer_accepted: T.green,
+  offer_declined: T.red, offer_withdrawn: T.gray600, offer_edited: T.blue,
+  offer_expired: T.red, offer_expiring: T.amber,
 }
 
 function getIcon(type) {
@@ -41,6 +48,14 @@ function getTitle(type) {
   if (type === 'listing_liked') return 'Listing Liked'
   if (type === 'listing_comment') return 'New Comment'
   if (type === 'listing_offer') return 'New Offer'
+  if (type === 'offer_new') return 'New Offer'
+  if (type === 'offer_counter') return 'Counter Offer'
+  if (type === 'offer_accepted') return 'Offer Accepted'
+  if (type === 'offer_declined') return 'Offer Declined'
+  if (type === 'offer_withdrawn') return 'Offer Withdrawn'
+  if (type === 'offer_edited') return 'Offer Updated'
+  if (type === 'offer_expired') return 'Offer Expired'
+  if (type === 'offer_expiring') return 'Offer Expiring Soon'
   if (type === 'listing_view') return 'Listing Viewed'
   if (type?.startsWith('booking_')) return 'Booking Update'
   if (type?.startsWith('deal_')) return 'Deal Update'
@@ -127,7 +142,7 @@ export default function NotificationToast() {
   const toastRef = useRef(null)
   const inputRef = useRef(null)
 
-  const actorId = visible?.data?.sender_id || visible?.data?.caller_id || visible?.data?.decliner_id || visible?.data?.voucher_id || visible?.data?.viewer_id || visible?.data?.buyer_id || visible?.data?.seller_id || visible?.data?.user_id || null
+  const actorId = visible?.data?.sender_id || visible?.data?.caller_id || visible?.data?.decliner_id || visible?.data?.voucher_id || visible?.data?.viewer_id || visible?.data?.buyer_id || visible?.data?.seller_id || visible?.data?.user_id || visible?.data?.actor_id || null
   const senderProfile = useSenderProfile(actorId)
 
   useEffect(() => {
@@ -209,7 +224,7 @@ export default function NotificationToast() {
 
   const isMessage = visible?.type === 'new_message'
   const accent = getAccent(visible?.type)
-  const displayName = visible?.data?.sender_name || visible?.data?.caller_name || visible?.data?.decliner_name || visible?.data?.voucher_name || visible?.data?.viewer_name || visible?.data?.buyer_name || visible?.data?.seller_name || visible?.title || getTitle(visible?.type)
+  const displayName = visible?.data?.sender_name || visible?.data?.caller_name || visible?.data?.decliner_name || visible?.data?.voucher_name || visible?.data?.viewer_name || visible?.data?.buyer_name || visible?.data?.seller_name || visible?.data?.actor_name || visible?.title || getTitle(visible?.type)
 
   async function handleSendReply() {
     const text = replyText.trim()

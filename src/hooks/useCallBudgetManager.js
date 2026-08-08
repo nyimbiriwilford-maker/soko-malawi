@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { stopLowDataCap, applyMaxBitrateToVideoSender } from '../lib/callBitrateCap'
-
-/** Adaptive video-quality steps: maxBitrate in bits/sec per step (0 = normal). */
-const ADAPTIVE_CAPS = { 0: null, 1: 200000, 2: 80000, 3: 40000 }
+import { ADAPTIVE_CAPS } from '../lib/callBudgetConstants'
+import { getCallBudgetPref } from '../lib/callBudgetPrefs'
 
 export default function useCallBudgetManager({
   bytesUsed,
@@ -14,6 +13,7 @@ export default function useCallBudgetManager({
   clearActiveCall,
   boundChat,
   stickyRef,
+  budgetCappedRef,
 }) {
   // Live, extendable budget — starts from the saved pref but can grow mid-call
   // via the +5/+10/+20 MB and "Extend +10 MB" actions.
@@ -49,9 +49,31 @@ export default function useCallBudgetManager({
 
   function applyAdaptiveCap(step) {
     const pc = pcRef.current
-    const bits = ADAPTIVE_CAPS[step]
-    if (!pc || !bits) return
-    applyMaxBitrateToVideoSender(pc, bits)
+    let bits = ADAPTIVE_CAPS[step]
+    if (!pc) return
+
+    // Respect user's quality ceiling — adaptive system can step lower but never higher
+    const pref = getCallBudgetPref(callType)
+    const quality = pref?.quality || 'balanced'
+
+    let userCeiling
+    if (quality === 'saver') {
+      userCeiling = 40000 // 40 kbit/s
+    } else if (quality === 'balanced') {
+      userCeiling = 200000 // 200 kbit/s
+    }
+    // 'high' has no ceiling
+
+    // If adaptive wants to apply a cap higher than user's ceiling, use the ceiling instead
+    if (userCeiling && bits && bits > userCeiling) {
+      bits = userCeiling
+    }
+    // If adaptive wants no cap (step 0) but user has a ceiling, enforce the ceiling
+    if (userCeiling && !bits) {
+      bits = userCeiling
+    }
+
+    if (bits) applyMaxBitrateToVideoSender(pc, bits)
   }
 
   function ensureAdaptiveInterval() {
@@ -70,6 +92,7 @@ export default function useCallBudgetManager({
   function autoHangup() {
     if (autoHangupFiredRef.current) return
     autoHangupFiredRef.current = true
+    if (budgetCappedRef) budgetCappedRef.current = true
     setStage(null)
     setCountdown(10)
     ;(async () => {

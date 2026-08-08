@@ -410,10 +410,29 @@ export default function GlobalCallListener() {
   }
 
   async function handleAnswer() {
-    if (!incoming && !incomingRef.current) return
+    console.log('[handleAnswer] CALLED', {
+      hasIncoming: !!incoming,
+      hasIncomingRef: !!incomingRef.current,
+      answerCommitted: answerCommittedRef.current,
+    })
+
+    if (!incoming && !incomingRef.current) {
+      console.error('[handleAnswer] ❌ No incoming call data')
+      return
+    }
+
     const src = incoming || incomingRef.current
+    console.log('[handleAnswer] Source:', {
+      hasOffer: !!src?.offer,
+      fromUser: src?.fromUser,
+      callId: src?.callId,
+      callType: src?.callType,
+    })
+
     answerCommittedRef.current = true
+
     if (!src?.offer) {
+      console.log('[handleAnswer] No offer yet — waiting for realtime ring')
       // Wait for realtime ring SDP — do not navigate with offer:null
       answerWhenReadyRef.current = true
       setConnecting(true)
@@ -423,14 +442,17 @@ export default function GlobalCallListener() {
       armOfferRecovery(src)
       return
     }
+
+    console.log('[handleAnswer] Has offer — proceeding to answerWithOffer')
     try {
       await answerWithOffer(src)
+      console.log('[handleAnswer] ✅ answerWithOffer succeeded')
     } catch (err) {
       // The in-app answer failed after claiming the stack — tear everything
       // down so __globalCallActive is cleared (unblocking SW navigation), then
       // re-queue the offer so the chat stack / a fresh notification tap can
       // still answer this call as a fallback.
-      console.error('[GlobalCallListener] answer failed:', err)
+      console.error('[handleAnswer] ❌ answerWithOffer failed:', err)
       cleanupCall()
       sessionStorage.setItem('__pendingCallId', src.callId || '')
       sessionStorage.setItem('__pendingCall', JSON.stringify({
@@ -445,14 +467,26 @@ export default function GlobalCallListener() {
   }
 
   async function answerWithOffer(src) {
+    console.log('[answerWithOffer] CALLED', {
+      hasOffer: !!src?.offer,
+      hasFromUser: !!src?.fromUser,
+      hasCallId: !!src?.callId,
+      callType: src?.callType,
+    })
+
     if (!src?.offer || !src.fromUser || !src.callId) {
-      console.error('[GlobalCallListener] answerWithOffer missing offer/fromUser/callId')
+      console.error('[answerWithOffer] ❌ Missing required data:', {
+        hasOffer: !!src?.offer,
+        hasFromUser: !!src?.fromUser,
+        hasCallId: !!src?.callId,
+      })
       setConnecting(false)
       answerCommittedRef.current = false
       dismissIncoming()
       return
     }
 
+    console.log('[answerWithOffer] Stopping ring and claiming stack')
     stopRing()
     stopRingtone()
     dismissIncoming()
@@ -472,6 +506,7 @@ export default function GlobalCallListener() {
     sessionStorage.removeItem('__pendingCall')
     sessionStorage.removeItem('__pendingCallId')
 
+    console.log('[answerWithOffer] Requesting media:', { audio: true, video: type === 'video' })
     const constraints = { audio: true, video: type === 'video' }
     callDebugGetUserMedia(localStreamRef, constraints, 'answerWithOffer')
     let gUMError = null
@@ -479,28 +514,31 @@ export default function GlobalCallListener() {
       .getUserMedia(constraints)
       .catch((err) => {
         gUMError = err
-        console.error('[getUserMedia]', err?.name, err?.message)
+        console.error('[answerWithOffer] ❌ getUserMedia failed:', err?.name, err?.message)
         return null
       })
 
     if (!stream && gUMError?.name === 'NotReadableError') {
+      console.log('[answerWithOffer] NotReadableError — retrying after 1s')
       await new Promise((r) => setTimeout(r, 1000))
       callDebugGetUserMedia(localStreamRef, constraints, 'answerWithOffer:retry')
       stream = await navigator.mediaDevices
         .getUserMedia(constraints)
         .catch((err) => {
           gUMError = err
-          console.error('[getUserMedia retry]', err?.name, err?.message)
+          console.error('[answerWithOffer] ❌ getUserMedia retry failed:', err?.name, err?.message)
           return null
         })
     }
 
     if (!stream) {
+      console.error('[answerWithOffer] ❌ No media stream — declining call')
       alert(gUMError?.name ? `Camera/microphone error: ${gUMError.name}` : 'Microphone/camera access denied')
       await handleDecline()
       return
     }
 
+    console.log('[answerWithOffer] ✅ Got media stream')
     localStreamRef.current = stream
     if (localMediaStreamRef) localMediaStreamRef.current = stream
     const myId = myUserIdRef.current
@@ -511,12 +549,14 @@ export default function GlobalCallListener() {
     setCallState('in-call')
     setCallUiMode?.('full')
 
+    console.log('[answerWithOffer] Building peer connection')
     const earlyBuffer = drainEarlyCandidates(callId) || []
 
     const pc = new RTCPeerConnection(ICE_SERVERS)
     pcRef.current = pc
 
     pc.ontrack = (e) => {
+      console.log('[answerWithOffer] ✅ ontrack fired — remote stream received')
       remoteStreamRef.current = e.streams[0]
       if (remoteMediaStreamRef) remoteMediaStreamRef.current = e.streams[0]
       setRemoteStream(e.streams[0])
@@ -524,20 +564,27 @@ export default function GlobalCallListener() {
 
     pc.onicecandidate = async (e) => {
       if (!e.candidate || !myId) return
+      console.log('[answerWithOffer] Sending ICE candidate')
       await sendIceCandidate(callId, myId, callerId, e.candidate.toJSON())
     }
 
     pc.oniceconnectionstatechange = () => {
+      console.log('[answerWithOffer] ICE state:', pc.iceConnectionState)
       if (pc.iceConnectionState === 'failed') {
-        console.warn('[GlobalCallListener] ICE failed')
+        console.warn('[answerWithOffer] ❌ ICE failed')
         cleanupCall()
       }
     }
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === 'failed') cleanupCall()
+      console.log('[answerWithOffer] Connection state:', pc.connectionState)
+      if (pc.connectionState === 'failed') {
+        console.warn('[answerWithOffer] ❌ Connection failed')
+        cleanupCall()
+      }
     }
 
     if (myId) {
+      console.log('[answerWithOffer] Subscribing to ICE candidates')
       subscribeToIceCandidates(callId, myId, async (candidate) => {
         try {
           const cand = typeof candidate === 'string' ? JSON.parse(candidate) : candidate
@@ -550,11 +597,17 @@ export default function GlobalCallListener() {
       }, 'global')
     }
 
+    console.log('[answerWithOffer] Setting remote description')
     await pc.setRemoteDescription(new RTCSessionDescription(offer))
+
+    console.log('[answerWithOffer] Adding local tracks')
     stream.getTracks().forEach((t) => pc.addTrack(t, stream))
+
+    console.log('[answerWithOffer] Starting low-data cap')
     stopLowDataCap(lowDataIntervalRef.current)
     lowDataIntervalRef.current = startLowDataCap(pc, type)
 
+    console.log('[answerWithOffer] Adding buffered ICE candidates:', earlyBuffer.length + pendingICE.current.length)
     for (const c of [...earlyBuffer, ...pendingICE.current]) {
       try {
         const cand = typeof c === 'string' ? JSON.parse(c) : c
@@ -563,14 +616,17 @@ export default function GlobalCallListener() {
     }
     pendingICE.current = []
 
+    console.log('[answerWithOffer] Creating answer')
     const answer = await pc.createAnswer()
     await pc.setLocalDescription(answer)
 
+    console.log('[answerWithOffer] Sending answer signal to caller')
     await sendSignal(callerId, 'answer', {
       answer: pc.localDescription.toJSON(),
       callId,
     })
 
+    console.log('[answerWithOffer] ✅ Answer complete — call should be connecting')
     if (type === 'video') setIsVideo(true)
 
     durationRef.current = 0

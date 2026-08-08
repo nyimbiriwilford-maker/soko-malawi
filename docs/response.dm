@@ -1,57 +1,38 @@
-# Chat: paginated message loading (infinite scroll upward)
+# Call budget system — call time estimate review
 
-Task source: `docs/claudehelp.md`. Implemented + verified. Query uses actual schema fields `.or(...)/applyContextFilter`, not the generic `thread_id` from the brief.
+Task source: `docs/claudehelp.dm` — "invest now current call budget system call time estimate work. dont write any code. give a response that i can use to improve it."
 
-## Task 1 — Current message loading (read-only findings)
-- **Initial fetch:** `loadMessages(myId, source, ctxId)` at `Chat.jsx:1350`. Builds `supabase.from('messages').select('*')` with an `.or(...)` on `from_user`/`to_user`, applies `applyContextFilter` (source FK), plus a client-side source filter, hide-for-me + expiry filters.
-- **State:** `messages` (`Chat.jsx:203`), `setMessages` at `:1396`, `groupedMessages`/`setGroupedMessages` (render source).
-- **Scroll container ref:** `messagesListRef = useRef(null)` (`:414`), the `div.chat-messages` (`:3142`, `flex:1; overflowY:auto`), with an existing inline `onScroll` for near-bottom detection.
-- **Original query:** sole traversal was `.order('created_at', {ascending:true})` with **no limit/range**.
+## Verdict
 
-## Task 2 — Pagination state
-- `PAGE_SIZE = 20` (const), `hasMore`, `loadingMore`, `oldestLoadedIdRef` — added at `Chat.jsx:227–230`.
-- `scrollContainerRef` aliased to the existing `messagesListRef` (`:415`), reused as the scroll container — no duplicate ref required.
+The estimate math works but disagrees with how calls actually behave in three places: the quality picker is cosmetic, in-call "time left" ignores the measured rate, and the learned-rate calibration is easily skewed.
 
-## Task 3 — Initial fetch loads only the last 20
-Both `loadMessages` query paths changed to `.order('created_at', {ascending:false}).limit(PAGE_SIZE)` (`:1352`, fallback `:1371`). After filtering, the result is `.reverse()` into `messagesForDisplay` (oldest→newest for display), `setMessages(messagesForDisplay)`, and when `messagesForDisplay.length < PAGE_SIZE` → `setHasMore(false)`; `oldestLoadedIdRef.current = messagesForDisplay[0].id` (`:1409-1415`).
+## Findings
 
-## Task 4 — `loadMoreMessages` (`Chat.jsx:1420`)
-```js
-const loadMoreMessages = useCallback(async () => {
-  if (loadingMore || !hasMore) return
-  setLoadingMore(true)
-  const oldest = messages.find(m => m.id === oldestLoadedIdRef.current)
-  if (!oldest) { setLoadingMore(false); return }
-  // fetch < oldest.created_at, order desc, limit PAGE_SIZE
-  const older = (data||[]).filter(...same hide/expiry...).reverse()
-  if (older.length < PAGE_SIZE) setHasMore(false)
-  setMessages([...older, ...messages])
-  setGroupedMessages(imageGroupingService.groupMessages([...older, ...messages]))
-  startPosPreserve();  // Task 6
-  setLoadingMore(false)
-})
-```
+1. **The UI quality picker does not affect the call.** `shouldAutoLowData()` in `src/lib/callBudgetPrefs.js` always returns `false`, while the Custom card page offers "Data Saver 40 kbit/s / Balanced 200 kbit/s / High — no cap" (`CallBudget/index.jsx`, `QUALITIES`). Only the displayed estimate changes; the call runs identically regardless. Those estimates are fiction.
 
-## Task 5 — scroll handler wired
-Added `handleScroll` (`Chat.jsx:1476`) — `el.scrollTop <= 80 && hasMore && !loadingMore ⇒ loadMoreMessages()`. Wired into the container's existing `onScroll` (`:3147`) alongside the near-bottom logic (did not replace it).
+2. **Estimate constants mismatch labels and reality.**
+   - Data Saver uses `RATES.video.lowData = 10000 B/s` (80 kbit/s) but the label says 40 kbit/s — 2x off.
+   - Balanced is hardcoded at `35000 B/s` (280 kbit/s) in `CallBudget/index.jsx:customVideoSec` but the label says 200 kbit/s — 1.4x off.
+   - Voice fallback `8000 B/s` (64 kbit/s) vs the measured baseline of 10–11 KB/s (now seen ~85 kbit/s) is ~30% optimistic, so voice "time left" reads longer than reality.
 
-## Task 6 — scroll position preserved
-`loadMoreMessages` captures `prevScrollHeight` before prepend, then `requestAnimationFrame(() => el.scrollTop = el.scrollHeight - prevScrollHeight)` (`:1470`).
+3. **In-call "time left" uses the static estimate, not live data.** `CallDataMeter.jsx:167` calls `effectiveEstimateDuration(...)` on remaining MB with a fixed rate. The data for a live rate estimate already exists in `useCallDataBudget.sampleUsage()` (real `getStats()` bytes); the meter should divide remaining bytes by a measured rolling rate instead.
 
-## Task 7 — loading indicator
-JSX at top of messages list (`Chat.jsx:3183`, before empty-state):
-- `{loadingMore && <div class="chat-load-more-spinner"><span>Loading...</span></div>}`
-- `{!hasMore && messages.length > 0 && <div class="chat-load-more-end"><span>No more messages</span></div>}`
-- CSS `.chat-load-more-spinner, .chat-load-more-end` added to `chat-thread.css`.
+4. **Flat-rate estimate ignores the adaptive bitrate curve.** Real enforcement (`useCallBudgetManager.js`, `ADAPTIVE_CAPS` 200k→80k→40k bit/s as the budget depletes) means consumption is not linear, but `estimateDuration` treats it as `budgetBytes / flatRate`. Budgeted video calls actually last longer than projected because quality steps down; nothing models the piecewise curve.
 
-## Deliverable
-- Initial fetch: `loadMessages` (`:1350`), now limited + reversed last-20.
-- `PAGE_SIZE`/`hasMore`/`loadingMore`/`oldestLoadedIdRef` added ✓.
-- Initial fetch loads last 20 only ✓.
-- `loadMoreMessages` added ✓.
-- Scroll handler wired to `div.chat-messages` ✓.
-- Scroll position preserved on prepend ✓.
-- Loading indicator + CSS added ✓.
-- Grouping rebuilt from the merged raw list after prepend (older + messages) ✓.
-- Do-not-touch respected: realtime INSERT append (bottom), `_pendingLoad` placeholder, emoji/input bar, grouping service all unchanged.
-- Build: `npm run build` → `✓ built in 5.13s`. Passes.
+5. **Learned-rate calibration is skewable.** `getLearnedRates()` (`callBudgetPrefs.js`) averages the last ≤5 calls equally:
+   - Does not exclude budget-capped calls (which ran at low caps), so mixed pools under-state the normal rate and future estimates become too optimistic.
+   - No recency weighting — an old call weighs the same as today's.
+   - No outlier handling — one short connection-setup-heavy call (min 12s) inflates the mean.
+   - Arithmetic mean, not median — sensitive to spikes (billing overhead, retransmits).
+
+## Recommended fixes (prioritized)
+
+- **P1 — Wire or remove the quality picker:** either apply the saver/balanced/high selection to the actual sender bitrate at call start, or drop the picker and its hardcoded constants. If kept, make constants match the true caps (saver 40k, balanced 200k bit/s = `ADAPTIVE_CAPS` values).
+- **P2 — Live in-call rate:** keep a rolling ~30s window of byte-deltas/sec in `useCallDataBudget.sampleUsage`, divide remaining bytes by that rate, and fall back to the static rate only in the first seconds. Self-corrects on any network.
+- **P3 — Robust learning:** tag each usage-log entry with whether the call ran budget-capped; exclude capped calls (or learn per quality tier); use recency-weighted, duration-weighted median; drop outliers (e.g. duration < 60s).
+- **P4 — Model the step curve:** for budgeted estimates, project consumption piecewise across the 50%/25%/10%-remaining thresholds at the stepped cap rate; or approximate with a budgeted-weighted average of the video step rates.
+- **P5 — Fix voice fallback:** raise `RATES.voice.normal` from 8000 to the ~10,000–11,000 measured baseline.
+
+## Outstanding (out of scope here)
+
+Phase 5 enforcement UI (80% toast, 100% countdown, End Call / Add 10MB) is built and validated end-to-end on a real budgeted call; the remaining risk is only estimate accuracy, not enforcement.
