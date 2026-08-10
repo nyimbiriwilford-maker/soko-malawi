@@ -109,13 +109,11 @@ export function getCallUsageLog() {
 export function saveCallUsageRecord(callType, bytesUsed, durationSec, budgetCapped = false) {
   const log = getCallUsageLog()
   const record = { callType, bytesUsed, durationSec, budgetCapped }
-  console.log('[saveCallUsageRecord] Adding record:', record)
   log.push(record)
   const trimmed = log.length > CALL_USAGE_LOG_MAX
     ? log.slice(log.length - CALL_USAGE_LOG_MAX)
     : log
   localStorage.setItem(CALL_USAGE_LOG_KEY, JSON.stringify(trimmed))
-  console.log('[saveCallUsageRecord] Saved to localStorage. Total records:', trimmed.length)
 }
 
 /**
@@ -126,7 +124,6 @@ export function saveCallUsageRecord(callType, bytesUsed, durationSec, budgetCapp
  */
 export function getLearnedRates() {
   const log = getCallUsageLog()
-  console.log('[getLearnedRates] Full usage log:', log)
   const result = { voice: null, video: null }
   for (const type of ['voice', 'video']) {
     const records = log
@@ -137,9 +134,7 @@ export function getLearnedRates() {
         !r.budgetCapped            // ignore budget-capped calls
       )
       .slice(-5)                   // most recent 5 valid calls
-    console.log(`[getLearnedRates] Valid ${type} records:`, records)
     if (records.length < 2) {
-      console.log(`[getLearnedRates] Not enough ${type} records (need ≥2, have ${records.length})`)
       continue
     }
 
@@ -150,17 +145,11 @@ export function getLearnedRates() {
       ? (rates[rates.length / 2 - 1] + rates[rates.length / 2]) / 2
       : rates[Math.floor(rates.length / 2)]
 
-    console.log(`[getLearnedRates] ${type} rates:`, rates, '→ median:', median, 'bytes/sec')
-
     // Sanity bounds: 1 kbit/s – 10 Mbit/s
     if (median > 125 && median < 1250000) {
       result[type] = median
-      console.log(`[getLearnedRates] ✅ ${type} learned rate accepted:`, median, 'bytes/sec')
-    } else {
-      console.log(`[getLearnedRates] ❌ ${type} median out of bounds (125–1250000):`, median)
     }
   }
-  console.log('[getLearnedRates] Final result:', result)
   return result
 }
 
@@ -204,17 +193,6 @@ export function effectiveEstimateDuration(callType, mb, qualityHint = null) {
   // Try to use learned rate for this call type, regardless of quality tier
   const learned = getLearnedRates()
   const rate = learned[callType] ?? fallback
-
-  console.log('[effectiveEstimateDuration]', {
-    callType,
-    mb,
-    qualityHint,
-    learnedRate: learned[callType],
-    fallbackRate: fallback,
-    usedRate: rate,
-    usingLearned: learned[callType] !== undefined,
-    estimatedSeconds: (mb * 1024 * 1024) / rate,
-  })
 
   return (mb * 1024 * 1024) / rate
 }

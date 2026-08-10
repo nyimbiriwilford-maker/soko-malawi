@@ -27,20 +27,6 @@ function stopRingtone() {
   }
 }
 
-// TEMP - [CallDebug] diagnostic logging (Task 12). Remove after NotReadableError is root-caused.
-function callDebugGetUserMedia(streamRef, constraints, label) {
-  const stream = streamRef?.current
-  const tracks = stream ? stream.getTracks() : []
-  const stack = new Error().stack
-  console.log('[CallDebug] getUserMedia', {
-    call: label,
-    constraints,
-    callerStack: stack ? stack.split('\n').slice(1, 4).map((l) => l.trim()) : null,
-    priorStreamHeld: tracks.some((t) => t.readyState === 'live'),
-    priorTracks: tracks.map((t) => ({ kind: t.kind, state: t.readyState })),
-  })
-}
-
 export default function GlobalCallListener() {
   const [incoming, setIncoming] = useState(null)
   const navigate = useNavigate()
@@ -425,29 +411,16 @@ export default function GlobalCallListener() {
   }
 
   async function handleAnswer() {
-    console.log('[handleAnswer] CALLED', {
-      hasIncoming: !!incoming,
-      hasIncomingRef: !!incomingRef.current,
-      answerCommitted: answerCommittedRef.current,
-    })
-
     if (!incoming && !incomingRef.current) {
       console.error('[handleAnswer] ❌ No incoming call data')
       return
     }
 
     const src = incoming || incomingRef.current
-    console.log('[handleAnswer] Source:', {
-      hasOffer: !!src?.offer,
-      fromUser: src?.fromUser,
-      callId: src?.callId,
-      callType: src?.callType,
-    })
 
     answerCommittedRef.current = true
 
     if (!src?.offer) {
-      console.log('[handleAnswer] No offer yet — waiting for realtime ring')
       // Wait for realtime ring SDP — do not navigate with offer:null
       answerWhenReadyRef.current = true
       setConnecting(true)
@@ -458,10 +431,8 @@ export default function GlobalCallListener() {
       return
     }
 
-    console.log('[handleAnswer] Has offer — proceeding to answerWithOffer')
     try {
       await answerWithOffer(src)
-      console.log('[handleAnswer] ✅ answerWithOffer succeeded')
     } catch (err) {
       // The in-app answer failed after claiming the stack — tear everything
       // down so __globalCallActive is cleared (unblocking SW navigation), then
@@ -482,13 +453,6 @@ export default function GlobalCallListener() {
   }
 
   async function answerWithOffer(src) {
-    console.log('[answerWithOffer] CALLED', {
-      hasOffer: !!src?.offer,
-      hasFromUser: !!src?.fromUser,
-      hasCallId: !!src?.callId,
-      callType: src?.callType,
-    })
-
     if (!src?.offer || !src.fromUser || !src.callId) {
       console.error('[answerWithOffer] ❌ Missing required data:', {
         hasOffer: !!src?.offer,
@@ -501,7 +465,6 @@ export default function GlobalCallListener() {
       return
     }
 
-    console.log('[answerWithOffer] Stopping ring and claiming stack')
     stopRing()
     stopRingtone()
     dismissIncoming()
@@ -521,9 +484,7 @@ export default function GlobalCallListener() {
     sessionStorage.removeItem('__pendingCall')
     sessionStorage.removeItem('__pendingCallId')
 
-    console.log('[answerWithOffer] Requesting media:', { audio: true, video: type === 'video' })
     const constraints = { audio: true, video: type === 'video' }
-    callDebugGetUserMedia(localStreamRef, constraints, 'answerWithOffer')
     let gUMError = null
     let stream = await navigator.mediaDevices
       .getUserMedia(constraints)
@@ -534,9 +495,7 @@ export default function GlobalCallListener() {
       })
 
     if (!stream && gUMError?.name === 'NotReadableError') {
-      console.log('[answerWithOffer] NotReadableError — retrying after 1s')
       await new Promise((r) => setTimeout(r, 1000))
-      callDebugGetUserMedia(localStreamRef, constraints, 'answerWithOffer:retry')
       stream = await navigator.mediaDevices
         .getUserMedia(constraints)
         .catch((err) => {
@@ -553,7 +512,6 @@ export default function GlobalCallListener() {
       return
     }
 
-    console.log('[answerWithOffer] ✅ Got media stream')
     localStreamRef.current = stream
     if (localMediaStreamRef) localMediaStreamRef.current = stream
     const myId = myUserIdRef.current
@@ -564,14 +522,12 @@ export default function GlobalCallListener() {
     setCallState('in-call')
     setCallUiMode?.('full')
 
-    console.log('[answerWithOffer] Building peer connection')
     const earlyBuffer = drainEarlyCandidates(callId) || []
 
     const pc = new RTCPeerConnection(ICE_SERVERS)
     pcRef.current = pc
 
     pc.ontrack = (e) => {
-      console.log('[answerWithOffer] ✅ ontrack fired — remote stream received')
       remoteStreamRef.current = e.streams[0]
       if (remoteMediaStreamRef) remoteMediaStreamRef.current = e.streams[0]
       setRemoteStream(e.streams[0])
@@ -579,19 +535,16 @@ export default function GlobalCallListener() {
 
     pc.onicecandidate = async (e) => {
       if (!e.candidate || !myId) return
-      console.log('[answerWithOffer] Sending ICE candidate')
       await sendIceCandidate(callId, myId, callerId, e.candidate.toJSON())
     }
 
     pc.oniceconnectionstatechange = () => {
-      console.log('[answerWithOffer] ICE state:', pc.iceConnectionState)
       if (pc.iceConnectionState === 'failed') {
         console.warn('[answerWithOffer] ❌ ICE failed')
         cleanupCall()
       }
     }
     pc.onconnectionstatechange = () => {
-      console.log('[answerWithOffer] Connection state:', pc.connectionState)
       if (pc.connectionState === 'failed') {
         console.warn('[answerWithOffer] ❌ Connection failed')
         cleanupCall()
@@ -599,7 +552,6 @@ export default function GlobalCallListener() {
     }
 
     if (myId) {
-      console.log('[answerWithOffer] Subscribing to ICE candidates')
       subscribeToIceCandidates(callId, myId, async (candidate) => {
         try {
           const cand = typeof candidate === 'string' ? JSON.parse(candidate) : candidate
@@ -612,17 +564,13 @@ export default function GlobalCallListener() {
       }, 'global')
     }
 
-    console.log('[answerWithOffer] Setting remote description')
     await pc.setRemoteDescription(new RTCSessionDescription(offer))
 
-    console.log('[answerWithOffer] Adding local tracks')
     stream.getTracks().forEach((t) => pc.addTrack(t, stream))
 
-    console.log('[answerWithOffer] Starting low-data cap')
     stopLowDataCap(lowDataIntervalRef.current)
     lowDataIntervalRef.current = startLowDataCap(pc, type)
 
-    console.log('[answerWithOffer] Adding buffered ICE candidates:', earlyBuffer.length + pendingICE.current.length)
     for (const c of [...earlyBuffer, ...pendingICE.current]) {
       try {
         const cand = typeof c === 'string' ? JSON.parse(c) : c
@@ -631,17 +579,14 @@ export default function GlobalCallListener() {
     }
     pendingICE.current = []
 
-    console.log('[answerWithOffer] Creating answer')
     const answer = await pc.createAnswer()
     await pc.setLocalDescription(answer)
 
-    console.log('[answerWithOffer] Sending answer signal to caller')
     await sendSignal(callerId, 'answer', {
       answer: pc.localDescription.toJSON(),
       callId,
     })
 
-    console.log('[answerWithOffer] ✅ Answer complete — call should be connecting')
     if (type === 'video') setIsVideo(true)
 
     durationRef.current = 0
@@ -650,9 +595,7 @@ export default function GlobalCallListener() {
     timerRef.current = setInterval(() => {
       durationRef.current += 1
       setDuration(durationRef.current)
-      sampleUsage().then((bytesUsed) => {
-        console.log('[CallDataBudget][global] bytesUsed:', bytesUsed)
-      })
+      sampleUsage()
       publishActiveCall?.({
         source: 'global',
         status: 'in-call',
@@ -719,7 +662,6 @@ export default function GlobalCallListener() {
     const target = incomingRef.current?.fromUser || callerIdRef.current
     const callId = incomingRef.current?.callId || callIdRef.current
     dismissIncoming()
-    console.log('[GlobalCallListener] decline sending to:', target, 'callId:', callId)
     if (target) {
       await sendSignal(target, 'decline', { callId })
     }
@@ -729,7 +671,6 @@ export default function GlobalCallListener() {
   async function handleHangUp() {
     const target = callerIdRef.current
     const callId = callIdRef.current
-    console.log('[GlobalCallListener] hangup sending to:', target, 'callId:', callId)
     if (!target || !callId) {
       console.error('[GlobalCallListener] handleHangUp: missing target or callId — cannot send hangup')
       cleanupCall()
@@ -1016,7 +957,6 @@ async function handleSwitchCamera() {
       if (!stillWaiting) return
       const offer = await fetchCallOffer(callId)
       if (!offer) return // give-up timer handles expiry
-      console.log('[call_offers] recovered offer for', callId)
 
       const src = {
         fromUser: swPendingRef.current?.fromUser || incomingRef.current?.fromUser || callInfo.fromUser,

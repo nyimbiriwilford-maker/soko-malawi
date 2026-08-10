@@ -4,6 +4,21 @@ export function randBetween(a, b) {
   return Math.floor(Math.random() * (b - a + 1)) + a
 }
 
+// ── In-session image cache ────────────────────────────────
+// Remembers which image URLs have already finished loading in this tab.
+// Cards reuse the exact URL (R2 public, immutable) so when the user scrolls
+// back to an already-viewed item, the <img> renders instantly and skips the
+// blur/fade "reveal" animation that otherwise replays and reads as a reload.
+const loadedImageUrls = new Set()
+
+export function imageUrlLoaded(url) {
+  return !!(url && loadedImageUrls.has(url))
+}
+
+export function markImageUrlLoaded(url) {
+  if (url) loadedImageUrls.add(url)
+}
+
 export function isFlashActive(listing) {
   if (!listing.flash_sale_price || !listing.flash_sale_expires_at) return false
   return new Date(listing.flash_sale_expires_at) > new Date()

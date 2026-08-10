@@ -144,12 +144,6 @@ export default function PersistentCallShell() {
   // Record data usage for future budget recommendations (effect, not render)
   useEffect(() => {
     if (callState === 'idle' && callSummary) {
-      console.log('[PersistentCallShell] SAVING usage record:', {
-        callType: callSummary.callType,
-        bytesUsed: callSummary.bytesUsed,
-        duration: callSummary.duration,
-        budgetCapped: callSummary.budgetCapped || false,
-      })
       saveCallUsageRecord(
         callSummary.callType,
         callSummary.bytesUsed,

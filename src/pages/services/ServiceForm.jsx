@@ -66,7 +66,7 @@ export default function ServiceForm({ editingService, onSuccess, onCancel }) {
     for (const file of mediaFiles) {
       const ext = file.name.split('.').pop()
       const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`
-      const { error } = await supabase.storage.from('service-media').upload(path, file)
+      const { error } = await supabase.storage.from('service-media').upload(path, file, { cacheControl: '31536000', upsert: true })
       if (!error) {
         const { data: { publicUrl } } = supabase.storage.from('service-media').getPublicUrl(path)
         urls.push(publicUrl)

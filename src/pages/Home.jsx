@@ -50,7 +50,7 @@ import {
 } from '../constants/homeConstants'
 import {
   isFlashActive, isListingFeatured, prioritizeFeatured, rotateFeaturedFairly,
-  sortProductsSmart, trackSearch,
+  sortProductsSmart, trackSearch, imageUrlLoaded, markImageUrlLoaded,
 } from '../utils/homeUtils'
 import { buildChatPath } from '../utils/chatSources'
 import {
@@ -1566,10 +1566,11 @@ function LatestListingCard({ listing, delay = 0, onClick, user, navigate, saved,
           <img
             src={listing.images[0]}
             alt={listing.title}
-            loading="lazy"
+            loading={imageUrlLoaded(listing.images[0]) ? 'eager' : 'lazy'}
             decoding="async"
+            onLoad={() => markImageUrlLoaded(listing.images[0])}
             onError={() => setImgErr(true)}
-            className="soko-img-reveal"
+            className={imageUrlLoaded(listing.images[0]) ? undefined : 'soko-img-reveal'}
             style={{
               transform: hov ? 'scale(1.05)' : 'scale(1)',
               transition: 'transform 0.45s cubic-bezier(0.22,1,0.36,1)',

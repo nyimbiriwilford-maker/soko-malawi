@@ -193,10 +193,12 @@ const [installPrompt, setInstallPrompt] = useState(null)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    window.addEventListener('beforeinstallprompt', (e) => {
+    const onBeforeInstallPrompt = (e) => {
       e.preventDefault()
       setInstallPrompt(e)
-    })
+    }
+    window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt)
+    return () => window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt)
   }, [])
 
   function setupPush(session) {
@@ -240,8 +242,17 @@ const [installPrompt, setInstallPrompt] = useState(null)
 
   async function handleInstall() {
     if (!installPrompt) return
-    await installPrompt.prompt()
-    setInstallPrompt(null)
+    try {
+      await installPrompt.prompt()
+      const { outcome } = await installPrompt.userChoice
+      console.log('[app] install prompt outcome:', outcome)
+    } catch (err) {
+      console.warn('[app] install prompt failed', err)
+    } finally {
+      // Clear either way — the event is single-use, so a spent prompt must
+      // not remain tappable.
+      setInstallPrompt(null)
+    }
   }
 
   async function fetchRole(userId) {

@@ -675,13 +675,6 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
     const { data: otherProf } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
     setOtherProfile(otherProf)
 
-    // Ensure the other person has a `users` row when allowed (legacy FK support)
-    try {
-      await supabase.from('users').upsert(
-        { id: userId, name: otherProf?.full_name || 'User' },
-        { onConflict: 'id' }
-      )
-    } catch { /* ignore 403 */ }
     const { data: other } = await supabase.from('users').select('*').eq('id', userId).maybeSingle()
     setOtherUser(other || { id: userId, name: otherProf?.full_name || 'User' })
 

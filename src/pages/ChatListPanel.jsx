@@ -426,13 +426,6 @@ export default function ChatListPanel() {
 
   async function startNewChat(person) {
     setNewChatOpen(false)
-    // Optional legacy users-table upsert — ignore RLS 403s
-    try {
-      await supabase.from('users').upsert(
-        { id: person.id, name: person.full_name || 'User' },
-        { onConflict: 'id' }
-      )
-    } catch { /* ignore */ }
     navigate(`/chat/${person.id}?src=direct`, {
       state: { source: 'direct' },
     })

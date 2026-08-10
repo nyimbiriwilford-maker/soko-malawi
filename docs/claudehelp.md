@@ -1,13 +1,18 @@
-for both voice and video call, There's a design issue with the call-signal retry system. Originally, if a single call signal failed to reach the receiver, the call failed completely — so a fix was added that sends multiple signals to improve delivery odds. But now this is causing a duplicate answer problem: when the receiver successfully answers via one signal, a second signal is still being processed too, causing the caller to try applying the answer twice (setRemoteDescription called twice → InvalidStateError: Called in wrong state: stable).
+Kimi K3 was assigned the debug console.log cleanup task but is failing repeatedly with a "Response contained no choices" error before doing any work — switching this task to you instead.
 
-What's needed: the retry/redundancy system needs a "first success wins, cancel the rest" mechanism — not "send several and let all of them run independently to completion."
+Task: strip debug console.log statements added during this session from:
 
-Please implement it properly:
+src/lib/callBudgetPrefs.js
+src/hooks/useWebRTC.js
+src/components/GlobalCallListener.jsx
+src/hooks/useCallDataBudget.js
+src/components/CallDataMeter.jsx
+src/components/PersistentCallShell.jsx
+src/components/CallContext.jsx
+src/components/FloatingIncomingCall.jsx
 
-Find where call signals are currently being sent multiple times (likely duplicated sendSignal() calls, multiple channels, or a retry loop without cancellation) — both for the outgoing offer/ring and the incoming answer.
-Add a guard so that once a signal is successfully delivered and acknowledged/processed (e.g. the receiver picks up, or the caller successfully applies an answer), any other in-flight or pending duplicate signals for that same call are ignored/discarded — not processed a second time.
-Concretely for the answer flow specifically: once the caller successfully calls setRemoteDescription() with the first answer signal received, any subsequent "answer" signal for the same callId should be detected and skipped entirely (check callId + a "already answered" flag) before even attempting setRemoteDescription() again — don't rely on the try/catch error swallowing this, actually prevent the duplicate call.
-Keep the original resilience goal intact: if the first signal attempt genuinely fails to reach the receiver (timeout, no ack, etc.), the next signal attempt should still fire as a fallback — so a call doesn't fail outright just because one delivery attempt was lost. The fix is about eliminating redundant processing of successful duplicates, not about removing the retry safety net entirely.
-Apply the same "first success wins" logic to both directions — offer delivery (caller → receiver) and answer delivery (receiver → caller) — since both currently seem to use this multi-signal approach.
+Remove debug tracing logs (things like [applyLowDataIfConfigured] CALLED, [getLearnedRates] Full usage log:, [FloatingIncomingCall] Accept tapped, [answerWithOffer] step tracing, [CallDataBudget] bytesUsed: per-sample logs). Do NOT remove pre-existing console.error/console.warn that were part of legitimate error handling before this session — if unsure whether a log predates this session, leave it and flag for review.
 
-Rebuild and I'll retest to confirm no duplicate "answer" processing occurs and the call still connects reliably.
+Don't touch any logic — only remove logging. After cleanup, run npm run build and npx eslint on the touched files, confirm clean, and report a summary of how many lines removed per file.
+
+Separately, since this is the second Kimi failure in a row on this same task, I'd deprioritize Kimi for now rather than keep retrying — it may be having a genuine connectivity/integration issue tonight that isn't worth losing more time to.

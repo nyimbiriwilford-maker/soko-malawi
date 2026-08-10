@@ -12,20 +12,6 @@ if (import.meta.env.DEV) {
   window.setCallBudgetPref = setCallBudgetPref
 }
 
-// TEMP - [CallDebug] diagnostic logging (Task 12). Remove after NotReadableError is root-caused.
-function callDebugGetUserMedia(streamRef, constraints, label) {
-  const stream = streamRef?.current
-  const tracks = stream ? stream.getTracks() : []
-  const stack = new Error().stack
-  console.log('[CallDebug] getUserMedia', {
-    call: label,
-    constraints,
-    callerStack: stack ? stack.split('\n').slice(1, 4).map((l) => l.trim()) : null,
-    priorStreamHeld: tracks.some((t) => t.readyState === 'live'),
-    priorTracks: tracks.map((t) => ({ kind: t.kind, state: t.readyState })),
-  })
-}
-
 function generateCallId(uid1, uid2) {
   return [uid1, uid2].sort().join('-') + '-' + Date.now()
 }
@@ -180,9 +166,7 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
     callTimerRef.current = setInterval(() => {
       callDurationRef.current += 1
       setCallDuration(callDurationRef.current)
-      sampleUsage().then((bytesUsed) => {
-        console.log('[CallDataBudget] bytesUsed:', bytesUsed)
-      })
+      sampleUsage()
     }, 1000)
   }
 
@@ -251,7 +235,6 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
     pcRef.current = pc
 
     pc.ontrack = (e) => {
-      console.log(`[${role}] ontrack — ${e.track.kind}`)
       const s = e.streams[0]
       remoteStreamRef.current = s
       if (remoteMediaStreamRef) remoteMediaStreamRef.current = s
@@ -268,7 +251,6 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
 
     pc.oniceconnectionstatechange = () => {
       const st = pc.iceConnectionState
-      console.log(`[${role}] ICE: ${st}`)
       if (st === 'failed') {
         console.warn(`[${role}] ICE failed — ending call`)
         playCallEndSound()
@@ -278,7 +260,6 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
 
     pc.onconnectionstatechange = () => {
       const st = pc.connectionState
-      console.log(`[${role}] Conn: ${st}`)
       if (st === 'failed') {
         playCallEndSound()
         endCallLocally()
@@ -310,7 +291,6 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
     callStateRef.current = 'calling'
     setCallState('calling')
 
-    callDebugGetUserMedia(localStreamRef, { audio: true, video: type === 'video' }, 'startCall')
     const { stream, audioOnly, lastError } = await acquireCallMedia(type)
 
     if (!stream) {
@@ -443,7 +423,6 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
 
     claimCallStack?.('chat')
 
-    callDebugGetUserMedia(localStreamRef, { audio: true, video: type === 'video' }, 'answerCall')
     const { stream, audioOnly, lastError } = await acquireCallMedia(type)
 
     if (!stream) {
@@ -690,7 +669,6 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
       if (_event === 'hangup' || _event === 'decline' || _event === 'cancel') {
         if (callStateRef.current === 'idle') return false
         if (!sameCallId(payload.callId, myCallId)) return false
-        console.log('[useWebRTC] received:', _event)
         stopRingback()
         ctxStopRing()
         playCallEndSound()
@@ -844,18 +822,15 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
    * as the budget depletes, but will never exceed the user's chosen ceiling.
    */
   async function applyLowDataIfConfigured(pc, callType) {
-    console.log('[applyLowDataIfConfigured] CALLED', { callType })
     stopLowDataCap(lowDataIntervalRef.current)
     lowDataIntervalRef.current = null
 
     if (callType !== 'video') {
-      console.log('[applyLowDataIfConfigured] SKIP: not video call')
       return true
     }
 
     const pref = getCallBudgetPref(callType)
     const quality = pref?.quality || 'balanced'
-    console.log('[applyLowDataIfConfigured] User pref:', { pref, quality })
 
     // Map quality to initial bitrate cap (bits per second)
     let maxBitrate
@@ -865,17 +840,14 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
       maxBitrate = 200000 // 200 kbit/s
     } else {
       // 'high' — no user-imposed ceiling, adaptive system still applies as budget depletes
-      console.log('[applyLowDataIfConfigured] Quality is HIGH, no cap applied')
       return true
     }
-    console.log('[applyLowDataIfConfigured] Target maxBitrate:', maxBitrate, 'bps')
 
     // Apply the cap to all video senders, awaiting each so the caller knows the
     // cap is in place before createOffer()/createAnswer() runs. A failure here
     // must not silently vanish — return false so the caller can decide.
     const senders = pc.getSenders()
     const videoSenders = senders.filter((s) => s.track?.kind === 'video')
-    console.log('[applyLowDataIfConfigured] Total senders:', senders.length, 'video senders:', videoSenders.length)
 
     if (videoSenders.length === 0) {
       console.warn('[applyLowDataIfConfigured] No video sender found — cap not applied')
@@ -883,38 +855,15 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
     }
 
     for (const sender of videoSenders) {
-      const track = sender.track
-      console.log('[applyLowDataIfConfigured] Checking sender:', {
-        hasTrack: !!track,
-        trackKind: track?.kind,
-        trackId: track?.id,
-        trackState: track?.readyState,
-      })
-
       try {
         const paramsBefore = sender.getParameters()
-        console.log('[applyLowDataIfConfigured] BEFORE setParameters:', {
-          hasEncodings: !!paramsBefore.encodings,
-          encodingsLength: paramsBefore.encodings?.length,
-          currentMaxBitrate: paramsBefore.encodings?.[0]?.maxBitrate,
-          transactionId: paramsBefore.transactionId,
-        })
-
         if (!paramsBefore.encodings || paramsBefore.encodings.length === 0) {
           paramsBefore.encodings = [{}]
         }
         paramsBefore.encodings[0].maxBitrate = maxBitrate
-
-        console.log('[applyLowDataIfConfigured] Calling setParameters with maxBitrate:', maxBitrate)
         await sender.setParameters(paramsBefore)
-
-        const paramsAfter = sender.getParameters()
-        console.log('[applyLowDataIfConfigured] ✅ setParameters SUCCESS:', {
-          appliedMaxBitrate: paramsAfter.encodings?.[0]?.maxBitrate,
-          fullEncodings: paramsAfter.encodings?.[0],
-        })
       } catch (err) {
-        console.error('[applyLowDataIfConfigured] ❌ setParameters FAILED:', err)
+        console.error('[applyLowDataIfConfigured] setParameters failed:', err)
         return false
       }
     }

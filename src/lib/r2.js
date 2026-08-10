@@ -116,6 +116,10 @@ export async function uploadToR2(file, path, onProgress = null) {
     xhr.setRequestHeader('x-amz-date', datetime)
     xhr.setRequestHeader('Authorization', authorization)
     xhr.setRequestHeader('x-amz-content-sha256', 'UNSIGNED-PAYLOAD')
+    // Filenames embed a unique timestamp/uuid (never overwritten) → immutable public
+    // content. Long max-age makes the browser reuse already-fetched images instead
+    // of re-downloading/re-decoding them whenever the DOM re-renders or the user scrolls back.
+    xhr.setRequestHeader('Cache-Control', 'public, max-age=31536000, immutable')
     xhr.upload.onprogress = e => {
       if (e.lengthComputable && onProgress) onProgress(Math.round((e.loaded / e.total) * 100))
     }

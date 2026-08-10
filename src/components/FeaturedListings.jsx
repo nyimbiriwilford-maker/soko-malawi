@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react'
-import { isListingFeatured } from '../utils/homeUtils'
+import { isListingFeatured, imageUrlLoaded, markImageUrlLoaded } from '../utils/homeUtils'
 
 export const FEATURED_POOL_SIZE = 40
 
@@ -27,7 +27,7 @@ function formatPrice(n) {
 function FeaturedCard({ listing, onClick }) {
   const [hov, setHov] = useState(false)
   const [imgErr, setImgErr] = useState(false)
-  const [imgReady, setImgReady] = useState(false)
+  const [imgReady, setImgReady] = useState(() => imageUrlLoaded(listing.images?.[0]))
   const price = listing.price
 
   return (
@@ -65,7 +65,7 @@ function FeaturedCard({ listing, onClick }) {
               alt={listing.title}
               loading="lazy"
               decoding="async"
-              onLoad={() => setImgReady(true)}
+              onLoad={() => { setImgReady(true); markImageUrlLoaded(listing.images?.[0]) }}
               onError={() => setImgErr(true)}
               style={{
                 width: '100%',

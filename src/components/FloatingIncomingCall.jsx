@@ -69,16 +69,10 @@ export default function FloatingIncomingCall() {
   const avatarSrc = remoteAvatar
 
   function handleAnswer() {
-    console.log('[FloatingIncomingCall] Accept tapped', {
-      hasActionsRef: !!incomingActionsRef.current,
-      hasAnswerFn: !!incomingActionsRef.current?.answer,
-      connecting,
-    })
     setConnecting(true)
     incomingActionsRef.current?.answer?.()
   }
   function handleDecline() {
-    console.log('[FloatingIncomingCall] Decline tapped')
     incomingActionsRef.current?.decline?.()
   }
 

@@ -237,7 +237,6 @@ export function CallProvider({ children }) {
         handleIncomingSignal(payload)
       })
       .subscribe((status) => {
-        console.log('CallProvider channel status:', status)
         if (status === 'SUBSCRIBED') {
           reconnectAttemptsRef.current = 0
           return
@@ -256,7 +255,6 @@ export function CallProvider({ children }) {
   }
 
   function handleIncomingSignal(payload) {
-    console.log('[CallContext] signal received:', payload._event, 'listeners:', listenersRef.current.length)
     for (const listener of listenersRef.current) {
       const handled = listener(payload)
       if (handled) return
@@ -350,13 +348,10 @@ export function CallProvider({ children }) {
           if (iceOwnerRef.current !== owner) return
           const row = payload.new
           if (row.to_user !== myUserId) return
-          console.log(`[ice-db] received candidate for ${myUserId} (${owner})`)
           onCandidate(row.candidate)
         }
       )
-      .subscribe((status) => {
-        console.log(`[ice-db] subscription status: ${status} owner=${owner}`)
-      })
+      .subscribe(() => {})
 
     iceSub.current = sub
     return sub
@@ -390,7 +385,6 @@ export function CallProvider({ children }) {
 
   function subscribeToIceCandidatesEarly(callId, myUserId) {
     if (earlyIceRef.current.has(callId)) return
-    console.log(`[ice-early] starting buffer for ${callId}`)
 
     const entry = { candidates: [], sub: null }
     earlyIceRef.current.set(callId, entry)
@@ -403,13 +397,10 @@ export function CallProvider({ children }) {
         (payload) => {
           const row = payload.new
           if (row.to_user !== myUserId) return
-          console.log(`[ice-early] buffered candidate for ${callId}`)
           entry.candidates.push(row.candidate)
         }
       )
-      .subscribe((status) => {
-        console.log(`[ice-early] ${callId} status: ${status}`)
-      })
+      .subscribe(() => {})
 
     entry.sub = sub
   }
@@ -418,7 +409,6 @@ export function CallProvider({ children }) {
     const entry = earlyIceRef.current.get(callId)
     if (!entry) return []
     const candidates = [...entry.candidates]
-    console.log(`[ice-early] draining ${candidates.length} buffered candidates for ${callId}`)
     try { supabase.removeChannel(entry.sub) } catch (e) {}
     earlyIceRef.current.delete(callId)
     return candidates

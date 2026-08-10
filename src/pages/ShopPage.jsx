@@ -1889,7 +1889,7 @@ export default function ShopPage() {
       // shop-images RLS write policy requires the first path segment to equal
       // auth.uid() (see 20260713_008_storage.sql) — store under <uid>/covers/…
       const path = `${currentUserId}/covers/${crypto.randomUUID()}.${ext}`
-      const { error: upErr } = await supabase.storage.from('shop-images').upload(path, file)
+      const { error: upErr } = await supabase.storage.from('shop-images').upload(path, file, { cacheControl: '31536000', upsert: true })
       if (upErr) throw upErr
       const { data } = supabase.storage.from('shop-images').getPublicUrl(path)
       const { error } = await supabase.from('shops').update({ cover_url: data.publicUrl }).eq('id', shop.id)
@@ -1907,7 +1907,7 @@ export default function ShopPage() {
       const ext = file.name.split('.').pop()
       // Same <uid>/ prefix as covers — matches the shop-images RLS write policy.
       const path = `${currentUserId}/logos/${crypto.randomUUID()}.${ext}`
-      const { error: upErr } = await supabase.storage.from('shop-images').upload(path, file)
+      const { error: upErr } = await supabase.storage.from('shop-images').upload(path, file, { cacheControl: '31536000', upsert: true })
       if (upErr) throw upErr
       const { data } = supabase.storage.from('shop-images').getPublicUrl(path)
       const { error } = await supabase.from('shops').update({ logo_url: data.publicUrl }).eq('id', shop.id)
