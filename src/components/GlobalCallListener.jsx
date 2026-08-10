@@ -698,7 +698,6 @@ async function handleSwitchCamera() {
       currentTrack?.stop()
       localStreamRef.current.removeTrack(currentTrack)
       await new Promise(r => setTimeout(r, 200))
-      callDebugGetUserMedia(localStreamRef, { audio: false, video: { deviceId: { exact: nextDevice.deviceId } } }, 'handleSwitchCamera')
       const newStream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { deviceId: { exact: nextDevice.deviceId } } })
       const newTrack = newStream.getVideoTracks()[0]
       if (!newTrack) return

@@ -140,7 +140,9 @@ export function CallControlBtn({
         opacity: disabled ? 0.5 : 1,
         transition: 'transform 0.15s cubic-bezier(0.16, 1, 0.3, 1), background 0.2s ease, box-shadow 0.2s ease, opacity 0.2s ease',
         animation: variant === 'successPulse' ? 'callPulse 1.6s ease-in-out infinite' : undefined,
-        flexShrink: 0,
+        flexShrink: 1,
+        minWidth: 44,
+        minHeight: 44,
       }}
     >
       {children}
@@ -285,17 +287,26 @@ export function InCallControls({
   onSwitchType,
   switching = false,
 }) {
+  // Responsive sizes — scale down on narrow phones so the bar never overflows.
+  // 6 buttons (video) at max size = ~478px; clamp shrinks them to fit ≥320px.
+  const btnSize = 'clamp(48px, 13vw, 60px)'
+  const endBtnSize = 'clamp(54px, 15vw, 68px)'
+  const iconSize = 'clamp(19px, 5vw, 23px)'
+  const endIconSize = 'clamp(21px, 5.6vw, 26px)'
+  const smallIconSize = 'clamp(18px, 4.8vw, 22px)'
+
   return (
     <div
       style={{
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 14,
+        gap: 'clamp(8px, 2.6vw, 14px)',
         width: '100%',
         maxWidth: 520,
-        padding: '0 20px',
+        padding: '0 clamp(10px, 3vw, 20px)',
         boxSizing: 'border-box',
+        flexWrap: 'nowrap',
       }}
     >
       {/* Primary controls group */}
@@ -303,33 +314,33 @@ export function InCallControls({
         <CallControlBtn
           label=""
           variant="glass"
-          size={60}
+          size={btnSize}
           onClick={onMinimize}
           ariaLabel="Minimize call and browse app"
         >
-          <Minimize2 size={22} color="#fff" strokeWidth={2.2} aria-hidden />
+          <Minimize2 size={smallIconSize} color="#fff" strokeWidth={2.2} aria-hidden />
         </CallControlBtn>
       )}
 
       <CallControlBtn
         label=""
         variant={isMuted ? 'dangerActive' : 'glass'}
-        size={60}
+        size={btnSize}
         onClick={onMute}
         ariaLabel={isMuted ? 'Unmute microphone' : 'Mute microphone'}
       >
-        <CallIcon name={isMuted ? 'micOff' : 'mic'} size={23} color="#fff" strokeWidth={2.2} />
+        <CallIcon name={isMuted ? 'micOff' : 'mic'} size={iconSize} color="#fff" strokeWidth={2.2} />
       </CallControlBtn>
 
       {isVideo && (
         <CallControlBtn
           label=""
           variant={isCamOff ? 'dangerActive' : 'glass'}
-          size={60}
+          size={btnSize}
           onClick={onCam}
           ariaLabel={isCamOff ? 'Turn camera on' : 'Turn camera off'}
         >
-          <CallIcon name={isCamOff ? 'videoOff' : 'video'} size={23} color="#fff" strokeWidth={2.2} />
+          <CallIcon name={isCamOff ? 'videoOff' : 'video'} size={iconSize} color="#fff" strokeWidth={2.2} />
         </CallControlBtn>
       )}
 
@@ -337,11 +348,11 @@ export function InCallControls({
       <CallControlBtn
         label=""
         variant="danger"
-        size={68}
+        size={endBtnSize}
         onClick={onHangUp}
         ariaLabel="End call"
       >
-        <CallIcon name="phoneOff" size={26} color="#fff" strokeWidth={2.5} />
+        <CallIcon name="phoneOff" size={endIconSize} color="#fff" strokeWidth={2.5} />
       </CallControlBtn>
 
       {/* Secondary controls */}
@@ -349,11 +360,11 @@ export function InCallControls({
         <CallControlBtn
           label=""
           variant="glass"
-          size={60}
+          size={btnSize}
           onClick={onFlip}
           ariaLabel="Switch camera"
         >
-          <CallIcon name="switchCamera" size={22} color="#fff" strokeWidth={2.2} />
+          <CallIcon name="switchCamera" size={smallIconSize} color="#fff" strokeWidth={2.2} />
         </CallControlBtn>
       )}
 
@@ -361,12 +372,12 @@ export function InCallControls({
         <CallControlBtn
           label=""
           variant="glass"
-          size={60}
+          size={btnSize}
           disabled={switching}
           onClick={onSwitchType}
           ariaLabel={switching ? 'Switching call type' : (isVideo ? 'Switch to audio only' : 'Switch to video')}
         >
-          <CallIcon name={switching ? 'loader' : (isVideo ? 'phone' : 'video')} size={21} color="#fff" strokeWidth={2.2} />
+          <CallIcon name={switching ? 'loader' : (isVideo ? 'phone' : 'video')} size={smallIconSize} color="#fff" strokeWidth={2.2} />
         </CallControlBtn>
       )}
     </div>

@@ -792,7 +792,6 @@ export function useWebRTC({ userId, currentUser, onCallMessage, listingId, isSer
       localStreamRef.current.removeTrack(currentTrack)
       await new Promise((r) => setTimeout(r, 200))
 
-      callDebugGetUserMedia(localStreamRef, { audio: false, video: { deviceId: { exact: nextDevice.deviceId } } }, 'switchCamera')
       const newStream = await navigator.mediaDevices.getUserMedia({
         audio: false,
         video: { deviceId: { exact: nextDevice.deviceId } },
