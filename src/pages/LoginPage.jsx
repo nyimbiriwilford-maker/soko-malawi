@@ -58,12 +58,6 @@ export default function LoginPage() {
                   disabled={busy && loadingAction !== 'google'}
                   onClick={() => flow.handlers.handleOAuth('google')}
                 />
-                <SocialButton
-                  provider="facebook"
-                  loading={loadingAction === 'facebook'}
-                  disabled={busy && loadingAction !== 'facebook'}
-                  onClick={() => flow.handlers.handleOAuth('facebook')}
-                />
               </div>
             </>
           )}

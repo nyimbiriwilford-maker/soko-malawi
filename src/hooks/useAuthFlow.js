@@ -210,7 +210,7 @@ export function useAuthFlow() {
     async (provider) => {
       if (lockRef.current || busy) return;
       // Defense in depth — only google | facebook
-      if (provider !== 'google' && provider !== 'facebook') {
+      if (provider !== 'google') {
         setError('This sign-in method is not available.');
         return;
       }

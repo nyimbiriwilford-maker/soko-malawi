@@ -12,7 +12,7 @@ const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 const ALLOWED_EDGE_FUNCTIONS = new Set(['send-otp', 'verify-otp']);
 
 /** Only these OAuth providers are permitted. */
-const ALLOWED_OAUTH_PROVIDERS = new Set(['google', 'facebook']);
+const ALLOWED_OAUTH_PROVIDERS = new Set(['google']);
 
 /**
  * Allowed app origins for OAuth redirect (prevents open redirects).

@@ -1,22 +1,21 @@
 ﻿
-# Call buttons removed from chat top bar (applied)
+# Facebook login removal — applied
 
 ## Request
-1. Chat.jsx - remove CallHeaderButtons from import (line 55).
-2. Chat.jsx - remove the <CallHeaderButtons style={S.callBtn} /> button line (line 2951).
-3. Chat.jsx - remove the callBtn style object (line 4555).
-4. ChatCallHost.jsx - remove the voice + video button blocks (lines 427-446) and drop Phone from the lucide import if only used there.
+Apply all 6 changes from the Facebook login removal checklist, then run `npm run build` and confirm it passes.
 
-## Changes
-1. src/pages/Chat.jsx:55 - import now `import ChatCallHost, { HideDuringCall } from '../components/ChatCallHost'` (CallHeaderButtons removed).
-2. src/pages/Chat.jsx - deleted the `<CallHeaderButtons style={S.callBtn} />` line from chat-top-actions.
-3. src/pages/Chat.jsx - deleted the `callBtn: {...}` style from the S object.
-4. src/components/ChatCallHost.jsx - deleted the two <button> blocks (voice + video) inside CallHeaderButtons (lines 427-446); the component now only renders the pendingType budget dialog portal. Import line 8 is now `import { Phone, ShieldCheck, SlidersHorizontal } from 'lucide-react'` - Video removed. Phone was KEPT because it is still used at line 309 and in the mini-call button (line 419).
+## Changes (all applied)
+1. `src/pages/LoginPage.jsx` — deleted the facebook `<SocialButton provider="facebook" ... />` block (was lines 61-66). Google button remains.
+2. `src/components/auth/SocialButton.jsx` — deleted the `FacebookIcon` function (was lines 14-23).
+3. `src/components/auth/SocialButton.jsx` — deleted the `facebook` entry from `PROVIDERS` (was line 27). `PROVIDERS` now contains only `google`.
+4. `src/lib/authApi.js:15` — `const ALLOWED_OAUTH_PROVIDERS = new Set(['google']);`
+5. `src/hooks/useAuthFlow.js:213` — now `if (provider !== 'google') {`
+6. `src/hooks/useLoginForm.js` — file deleted (was dead code, not imported anywhere).
 
 ## Notes
-- The `CallHeaderButtons` component export itself still exists in ChatCallHost.jsx (line 349) and is now unused - no file imports it anymore. Left in place per scope; can be deleted entirely if no longer wanted.
-- The CallStartDialog budget flow is still reachable only via that now-unused component.
+- `SocialButton` import in `LoginPage.jsx` kept — still used by the Google button.
+- `SocialButton.jsx:38` fallback `PROVIDERS[provider] || PROVIDERS.google` and the default `provider = 'google'` prop mean the component works unchanged with only the google config.
+- Unrelated Facebook references (shop social_facebook link in ShopPage.jsx, share buttons in ListingDetail.jsx, `FBListingCard` in SearchPage.jsx) left untouched per scope.
 
 ## Verification
-- npx eslint src/pages/Chat.jsx src/components/ChatCallHost.jsx: only PRE-EXISTING errors remain (unused prefillMessage/stickyDateRef/isMsgHiddenForMe/e, refs-during-render, setState-in-effect) - no new issues from these edits.
-- npm run build: passes.
+- `npm run build`: PASSES — vite built 2107 modules, production bundle in 3.79s, no errors.
