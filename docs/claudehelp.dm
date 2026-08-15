@@ -33,3 +33,5 @@ Animate the post status option to look different with status-related animation.
 It is not looking professional. Make it look professional with a smooth professional icon.
 
 The icon should be the same as the one placed in the top nav in mobile view for consistency.
+
+Make the popup when clicking the bottom nav in mobile adjust to a proper size based on device. Don't let it get hidden at the top by the top header.

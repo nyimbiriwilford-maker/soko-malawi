@@ -448,6 +448,15 @@ const premiumCss = `
     left: 50%;
     transform: translateX(-50%);
     width: min(340px, calc(100vw - 32px));
+    max-width: calc(100vw - 24px);
+    /* Keep the popup fully on-screen: never taller than the space between the
+       sticky top header (~110px) and the bottom nav (84px + safe area), so it
+       never gets hidden under the top header. */
+    max-height: calc(100dvh - 210px);
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
     z-index: 99;
     background: #fff;
     border-radius: 16px;
@@ -455,7 +464,10 @@ const premiumCss = `
     border: 1px solid var(--sbn-line);
     box-shadow: 0 12px 40px rgba(15, 23, 42, 0.12);
     animation: sbnSlide 0.2s ease both;
+    scrollbar-width: thin;
   }
+  .sbn-post-menu::-webkit-scrollbar { width: 4px; }
+  .sbn-post-menu::-webkit-scrollbar-thumb { background: rgba(15, 23, 42, 0.18); border-radius: 99px; }
 
   .sbn-post-menu-head {
     padding: 12px 12px 10px;

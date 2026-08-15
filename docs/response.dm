@@ -202,6 +202,14 @@ The **Status** item in both the mobile bottom-nav post menu and the desktop head
 - `src/components/BottomNav.jsx`
 - `src/components/SokoNav.jsx`
 
+## Fix: bottom-nav post popup sizing / top-header overlap (new)
+The mobile bottom-nav **post popup** (`.sbn-post-menu`) could grow taller than the visible area and slide under the sticky top header on small screens.
+- Added `max-height: calc(100dvh - 210px)` so the popup is capped at the space between the sticky mobile header (~110px) and the bottom nav (84px + safe-area inset). It can never extend behind the top header.
+- Added `overflow-y: auto` + `-webkit-overflow-scrolling: touch` + `overscroll-behavior: contain` so on very short screens the menu scrolls instead of overflowing.
+- Added `max-width: calc(100vw - 24px)` and a thin scrollbar style; `min-height: 0` keeps flex/intrinsic sizing from fighting the cap.
+## Files changed
+- `src/components/BottomNav.jsx`
+
 ## Consistent Status icon (revision)
 The Status post-menu icon now matches the mobile top-nav **Statuses (Stories)** icon for consistency.
 - The mobile top-nav "Statuses (Stories)" pillar (`SOKO_PILLARS` in `SokoNav.jsx`) uses the **clock** glyph (circle + clock hands).
