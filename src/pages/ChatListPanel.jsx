@@ -292,8 +292,8 @@ export default function ChatListPanel() {
   const [deletedKeys, setDeletedKeys] = useState(() => new Set())
   const [rowMenuChat, setRowMenuChat] = useState(null)
   const [rowBusy, setRowBusy] = useState(false)
-  // Key of the row whose star/archive buttons are revealed by long-press
-  const [revealedKey, setRevealedKey] = useState(null)
+  // Long-press enters multi-select mode — holds the keys of selected rows.
+  const [selectedKeys, setSelectedKeys] = useState(() => new Set())
   const longPressRef = useRef(null)
   const suppressClickRef = useRef(null)
   // Live presence: otherUserId -> { online, typing, recording, activityMeta }
@@ -436,29 +436,7 @@ export default function ChatListPanel() {
     })
   }
 
-  function toggleStar(key, e) {
-    e.stopPropagation()
-    setStarred(prev => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      localStorage.setItem(STARRED_KEY, JSON.stringify([...next]))
-      return next
-    })
-  }
-
-  function toggleArchive(key, e) {
-    e.stopPropagation()
-    setArchived(prev => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      localStorage.setItem(ARCHIVED_KEY, JSON.stringify([...next]))
-      return next
-    })
-  }
-
-  // Long-press (touch or held mouse) reveals the star/archive buttons on a row.
+  // Long-press (touch or held mouse) selects the row and enters multi-select.
   // Fires after ~480ms of no movement; cancels on movement/cancel/release.
   function startLongPress(e, chat) {
     cancelLongPress()
@@ -468,7 +446,11 @@ export default function ChatListPanel() {
     lp.timer = setTimeout(() => {
       longPressRef.current = null
       suppressClickRef.current = chat.key
-      setRevealedKey(chat.key)
+      setSelectedKeys(prev => {
+        const next = new Set(prev)
+        next.add(chat.key)
+        return next
+      })
     }, 480)
     longPressRef.current = lp
   }
@@ -486,6 +468,53 @@ export default function ChatListPanel() {
     if (!lp) return
     clearTimeout(lp.timer)
     longPressRef.current = null
+  }
+
+  function toggleSelect(key) {
+    setSelectedKeys(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  function clearSelection() {
+    setSelectedKeys(new Set())
+  }
+
+  function bulkStar() {
+    const keys = [...selectedKeys]
+    if (!keys.length) return
+    setStarred(prev => {
+      const next = new Set(prev)
+      const allStarred = keys.every(k => next.has(k))
+      keys.forEach(k => allStarred ? next.delete(k) : next.add(k))
+      localStorage.setItem(STARRED_KEY, JSON.stringify([...next]))
+      return next
+    })
+  }
+
+  function bulkArchive() {
+    const keys = [...selectedKeys]
+    if (!keys.length) return
+    setArchived(prev => {
+      const next = new Set(prev)
+      const allArchived = keys.every(k => next.has(k))
+      keys.forEach(k => allArchived ? next.delete(k) : next.add(k))
+      localStorage.setItem(ARCHIVED_KEY, JSON.stringify([...next]))
+      return next
+    })
+    clearSelection()
+  }
+
+  function bulkDelete() {
+    const keys = [...selectedKeys]
+    if (!currentUser?.id || !keys.length) return
+    if (!window.confirm(`Delete ${keys.length} chat${keys.length > 1 ? 's' : ''}?`)) return
+    keys.forEach(key => markChatDeleted(currentUser.id, key))
+    setDeletedKeys(loadDeletedChatKeys(currentUser.id))
+    clearSelection()
   }
 
   async function loadChats() {
@@ -835,8 +864,7 @@ export default function ChatListPanel() {
 
     const profileAvatar = chat.avatarUrl || null
     const initial = (chat.displayName || 'U')[0].toUpperCase()
-    const isStarred = starred.has(chat.key)
-    const isArchived = archived.has(chat.key)
+    const isSelected = selectedKeys.has(chat.key)
     const hasUnread = chat.unread > 0
     const isOpen = openUserId === chat.otherId && String(openContextId || '') === String(chat.contextId || '')
     const presence = presenceMap[chat.otherId] || {}
@@ -868,15 +896,15 @@ export default function ChatListPanel() {
         style={{
           ...S.chatRow,
           animationDelay: i * 0.03 + 's',
-          background: isOpen ? '#e6f7ee' : hasUnread ? '#fafffd' : '#fff',
+          background: isSelected ? '#e6f7ee' : isOpen ? '#e6f7ee' : hasUnread ? '#fafffd' : '#fff',
         }}
         onClick={() => {
           if (suppressClickRef.current === chat.key) {
             suppressClickRef.current = null
             return
           }
-          if (revealedKey) {
-            setRevealedKey(null)
+          if (selectedKeys.size > 0) {
+            toggleSelect(chat.key)
             return
           }
           navigate(chatPath, { state: chatState })
@@ -884,7 +912,11 @@ export default function ChatListPanel() {
         onContextMenu={(e) => {
           e.preventDefault()
           e.stopPropagation()
-          setRevealedKey(chat.key)
+          setSelectedKeys(prev => {
+            const next = new Set(prev)
+            next.add(chat.key)
+            return next
+          })
         }}
         onTouchStart={(e) => startLongPress(e, chat)}
         onTouchMove={moveLongPress}
@@ -903,6 +935,13 @@ export default function ChatListPanel() {
             radius="50%"
             style={{ border: '2px solid #fff' }}
           />
+          {isSelected && (
+            <span style={S.selectCheck}>
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="20 6 9 17 4 12" />
+              </svg>
+            </span>
+          )}
           <span
             style={{
               ...S.onlineDot,
@@ -989,35 +1028,17 @@ export default function ChatListPanel() {
                 </span>
               )}
               <div style={S.actionIcons}>
-                <button
-                  style={S.starBtn}
-                  onClick={(e) => { e.stopPropagation(); setRowMenuChat(chat) }}
-                  aria-label="Chat options"
-                  title="Options"
-                >
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="#9ca3af">
-                    <circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" />
-                  </svg>
-                </button>
-                {revealedKey === chat.key && (
-                  <div className="chat-row-reveal" style={{ display: 'flex', alignItems: 'center', animation: 'revealIn 0.18s ease both' }}>
-                    <button
-                      style={S.starBtn}
-                      onClick={(e) => toggleStar(chat.key, e)}
-                      aria-label="Star conversation"
-                      title={isStarred ? 'Unstar' : 'Star'}
-                    >
-                      <StarIcon filled={isStarred} />
-                    </button>
-                    <button
-                      style={S.starBtn}
-                      onClick={(e) => toggleArchive(chat.key, e)}
-                      aria-label="Archive conversation"
-                      title={isArchived ? 'Unarchive' : 'Archive'}
-                    >
-                      <ArchiveIcon active={isArchived} />
-                    </button>
-                  </div>
+                {selectedKeys.size === 0 && (
+                  <button
+                    style={S.starBtn}
+                    onClick={(e) => { e.stopPropagation(); setRowMenuChat(chat) }}
+                    aria-label="Chat options"
+                    title="Options"
+                  >
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="#9ca3af">
+                      <circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" />
+                    </svg>
+                  </button>
                 )}
               </div>
             </div>
@@ -1103,13 +1124,17 @@ export default function ChatListPanel() {
 
   const empty = emptyStateCopy()
 
+  const inSelection = selectedKeys.size > 0
+  const selectedArr = inSelection ? [...selectedKeys] : []
+  const allStarred = selectedArr.length > 0 && selectedArr.every(k => starred.has(k))
+  const allArchived = selectedArr.length > 0 && selectedArr.every(k => archived.has(k))
+
   return (
     <div className="chat-list-panel" style={S.panel}>
       <style>{`
         @keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
         @keyframes typingDot { 0%,80%,100%{transform:scale(0.6);opacity:0.4} 40%{transform:scale(1);opacity:1} }
-        @keyframes revealIn { from{opacity:0;transform:translateX(6px)} to{opacity:1;transform:translateX(0)} }
         @keyframes searchDrop { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
 
         .chat-row {
@@ -1132,6 +1157,36 @@ export default function ChatListPanel() {
         }
       `}</style>
 
+      {/* Selection bar — replaces the brand row while chats are selected */}
+      {inSelection ? (
+        <div className="chat-select-bar" style={S.selectBar}>
+          <button
+            type="button"
+            style={S.selectClose}
+            onClick={clearSelection}
+            aria-label="Cancel selection"
+          >
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+            </svg>
+          </button>
+          <span style={S.selectCount}>{selectedKeys.size} selected</span>
+          <div style={S.selectActions}>
+            <button type="button" style={S.selectAction} onClick={bulkStar} aria-label="Star selected" title="Star">
+              <StarIcon filled={allStarred} />
+            </button>
+            <button type="button" style={S.selectAction} onClick={bulkArchive} aria-label="Archive selected" title="Archive">
+              <ArchiveIcon active={allArchived} />
+            </button>
+            <button type="button" style={S.selectAction} onClick={bulkDelete} aria-label="Delete selected" title="Delete">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3a443d" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      ) : (
+      <>
       {/* Brand row */}
       <div className="chat-brand-row" style={S.brandRow}>
         <div>
@@ -1192,6 +1247,8 @@ export default function ChatListPanel() {
         </div>
         </div>
       </div>
+      </>
+      )}
 
       {newChatOpen && (
         <div style={S.newChatOverlay} onClick={() => setNewChatOpen(false)}>
@@ -1319,7 +1376,7 @@ export default function ChatListPanel() {
       )}
 
       {/* Scroll body — empty + rows share one scroller so BottomNav padding applies to both */}
-      <div className="chat-list-scroll" style={S.list} onScroll={() => setRevealedKey(null)}>
+      <div className="chat-list-scroll" style={S.list}>
         {!loading && filtered.length === 0 && (
           <div style={S.empty}>
             <div style={{ ...S.emptyIconCircle, background: empty.bg }}>
@@ -1416,6 +1473,61 @@ const S = {
   brandRow: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '16px 20px 12px', flexShrink: 0 },
   logo: { fontSize: '22px', fontWeight: '900', letterSpacing: '-0.5px' },
   tagline: { fontSize: '11.5px', color: '#9aa39d', marginTop: '3px' },
+
+  selectBar: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 10,
+    padding: '14px 20px 12px',
+    flexShrink: 0,
+    animation: 'fadeUp 0.18s ease both',
+  },
+  selectClose: {
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    color: '#3a443d',
+    padding: '4px',
+    display: 'flex',
+    flexShrink: 0,
+  },
+  selectCount: {
+    fontSize: '16px',
+    fontWeight: '800',
+    color: '#0f1410',
+    letterSpacing: '-0.01em',
+  },
+  selectActions: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 4,
+    marginLeft: 'auto',
+  },
+  selectAction: {
+    background: 'rgba(0,0,0,0.04)',
+    border: 'none',
+    borderRadius: '10px',
+    width: '38px',
+    height: '38px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    cursor: 'pointer',
+  },
+  selectCheck: {
+    position: 'absolute',
+    top: -4,
+    left: -4,
+    width: 20,
+    height: 20,
+    borderRadius: '50%',
+    background: '#1a7a4a',
+    border: '2px solid #fff',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 2,
+  },
 
   menuWrap: { position: 'relative' },
   brandActions: { display: 'flex', alignItems: 'center', gap: 8 },

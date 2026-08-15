@@ -109,3 +109,17 @@ The star and archive icons were previously always visible on every chat row. Now
 - `npx vite build`: PASSES.
 ## Files changed
 - `src/pages/ChatListPanel.jsx`
+
+## Long-press now selects chats; star/archive/delete live in a selection bar (new)
+Changed long-press from revealing inline icons to full multi-select mode (WhatsApp-style):
+- **`src/pages/ChatListPanel.jsx`**
+  - `revealedKey` replaced with `selectedKeys` (Set). Long-press (or right-click) now selects that chat and enters selection mode; a selected row gets a green check badge on its avatar and a highlighted background.
+  - While selecting, tapping rows toggles their selection instead of navigating; the per-row ⋮ button is hidden; the list scrolls without cancelling the selection.
+  - The brand row is replaced by a **selection bar** showing the count plus three actions: Star / Unstar, Archive / Unarchive (applied to all selected), and Delete (confirm → `markChatDeleted` for each). Bulk star/archive decide all-vs-none from the current selection; archive/delete exit selection.
+  - Selection clears on confirm via the bar close button; navigating into a thread is impossible while selecting (row taps toggle), and leaving /chats unmounts the panel so state resets.
+  - Removed the now-unused `toggleStar` / `toggleArchive` per-row helpers and `revealIn` keyframe.
+## Verification
+- `npx eslint src/pages/ChatListPanel.jsx`: 11 errors, all pre-existing (was 12 before this change).
+- `npx vite build`: PASSES.
+## Files changed
+- `src/pages/ChatListPanel.jsx`
