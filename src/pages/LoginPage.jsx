@@ -97,7 +97,10 @@ export default function LoginPage() {
 
       {termsOpen && (
         <TermsModal
-          onAgree={() => setTermsOpen(false)}
+          onAgree={() => {
+            flow.setAgreedToTerms(true);
+            setTermsOpen(false);
+          }}
           onClose={() => setTermsOpen(false)}
         />
       )}

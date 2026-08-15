@@ -9,12 +9,12 @@ Do research on what can be all terms and conditions of this app that a user can 
 
 ## Status: implemented
 - **`src/constants/legal.js`** — new: full Terms & Conditions (20 sections: acceptance, eligibility 18+, account security, platform use, user content, prohibited content, transactions between users, fees & paid features, verification/vouching/trust, chats & calls, IP, privacy, warranties, liability, indemnity, suspension, disputes/governing law, changes, general, contact) plus a Privacy Policy (12 sections aligned with the Malawi Data Protection Act 2024). Written in plain, consumer-friendly language specific to SokoMw's features.
-- **`src/components/auth/TermsModal.jsx`** — new: bottom-sheet modal with Terms / Privacy tabs, a scroll-to-read gate (the "I Agree" button stays disabled until the user scrolls to the end), close button, focus management and safe-area padding.
-- **`src/pages/LoginPage.jsx`** — the existing "I agree" checkbox on the Sign Up step is now a clickable inline link to "Terms & Conditions" and "Privacy Policy" that opens the TermsModal. The existing agreement check in `useAuthFlow` (which blocks sign-up until the box is ticked) still applies.
+- **`src/components/auth/TermsModal.jsx`** — new: polished bottom-sheet modal branded with the SokoMw logo (green "Soko" + amber "Mw" wordmark with the Sora display font and house badge). Clean, orderly, mobile-friendly: handle bar, brand header row, title block, Terms/Privacy tab switcher, scrollable content with a highlighted intro callout, and a scroll-to-read gate (the "I Agree" button stays disabled until the user scrolls to the end). Safe-area padding, touch scrolling, focus management and reduced-motion friendly.
+- **`src/pages/LoginPage.jsx`** — the existing "I agree" checkbox on the Sign Up step is now a clickable inline link to "Terms & Conditions" and "Privacy Policy" that opens the TermsModal. Clicking "I Agree" in the modal also ticks the checkbox automatically; the existing agreement check in `useAuthFlow` (which blocks sign-up until the box is ticked) still applies.
 - Exported `TermsModal` from `src/components/auth/index.js`.
 
 ## Verification
-- `npm run build`: PASSES — built in 2.23s, no errors.
+- `npm run build`: PASSES — built in 2.11s, no errors.
 
 ## Files changed
 - `src/constants/legal.js` (new)

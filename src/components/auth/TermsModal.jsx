@@ -5,6 +5,15 @@
 import { useEffect, useRef, useState } from 'react'
 import { TERMS_SECTIONS, PRIVACY_SECTIONS, LEGAL } from '../../constants/legal'
 
+const GREEN = '#0F9D58'
+const GREEN_D = '#0a7a44'
+const AMBER = '#F9AB00'
+const INK = '#0f172a'
+const MUTED = '#64748b'
+const LINE = '#e2e8f0'
+const SOFT = '#f8fafc'
+const DISPLAY_FONT = "'Sora', 'Inter', system-ui, sans-serif"
+
 export default function TermsModal({ onAgree, onClose }) {
   const [tab, setTab] = useState('terms')
   const [scrolled, setScrolled] = useState(false)
@@ -37,16 +46,16 @@ export default function TermsModal({ onAgree, onClose }) {
 
         <div style={handle} />
 
-        <div style={headerRow}>
-          <div style={{ width: 44, height: 44, borderRadius: 14, background: 'rgba(15,157,88,0.10)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#0F9D58" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><polyline points="9 12 11 14 15 10" />
-            </svg>
-          </div>
-          <div>
-            <div style={{ fontSize: 17, fontWeight: 800, color: '#0f1410' }}>SokoMw {tab === 'terms' ? 'Terms & Conditions' : 'Privacy Policy'}</div>
-            <div style={{ fontSize: 11.5, color: '#637068', marginTop: 2 }}>
-              Effective {LEGAL.effectiveDate} · {tab === 'terms' ? 'Read before creating your account' : 'How we protect your data'}
+        {/* Brand header */}
+        <div style={brandHeader}>
+          <div style={logoRow}>
+            <div style={logoBadge}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M3 12l9-9 9 9" /><path d="M5 10v10a1 1 0 0 0 1 1h3v-6h6v6h3a1 1 0 0 0 1-1V10" />
+              </svg>
+            </div>
+            <div style={{ fontFamily: DISPLAY_FONT, fontSize: 21, fontWeight: 800, color: GREEN, letterSpacing: '-0.6px', lineHeight: 1 }}>
+              Soko<span style={{ color: AMBER }}>Mw</span>
             </div>
           </div>
           <button type="button" onClick={onClose} aria-label="Close" style={closeBtn}>
@@ -54,6 +63,16 @@ export default function TermsModal({ onAgree, onClose }) {
               <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
             </svg>
           </button>
+        </div>
+
+        {/* Title */}
+        <div style={titleBlock}>
+          <div style={{ fontSize: 19, fontWeight: 800, color: INK, fontFamily: DISPLAY_FONT, letterSpacing: '-0.3px' }}>
+            {tab === 'terms' ? 'Terms & Conditions' : 'Privacy Policy'}
+          </div>
+          <div style={{ fontSize: 12, color: MUTED, marginTop: 3, lineHeight: 1.5 }}>
+            Effective {LEGAL.effectiveDate} · {tab === 'terms' ? 'Read before creating your account' : 'How we protect your data'}
+          </div>
         </div>
 
         {/* Tabs */}
@@ -78,15 +97,19 @@ export default function TermsModal({ onAgree, onClose }) {
 
         {/* Scrollable body */}
         <div ref={scrollRef} style={body}>
-          {tab === 'terms' ? (
-            <p style={intro}>
-              These Terms & Conditions ("Terms") are a legally binding agreement between you and {LEGAL.legalName} ("SokoMw"). Please read them carefully before creating an account.
-            </p>
-          ) : (
-            <p style={intro}>
-              This Privacy Policy explains how SokoMw collects, uses, stores and protects your personal data. It complies with the Malawi Data Protection Act, 2024.
-            </p>
-          )}
+          <div style={intro}>
+            {tab === 'terms' ? (
+              <>
+                <span style={{ fontWeight: 800, color: INK, display: 'block', marginBottom: 4 }}>A legally binding agreement</span>
+                These Terms & Conditions are between you and {LEGAL.legalName} ("SokoMw"). Please read them carefully before creating your account.
+              </>
+            ) : (
+              <>
+                <span style={{ fontWeight: 800, color: INK, display: 'block', marginBottom: 4 }}>Your data is safe with us</span>
+                This Privacy Policy explains how SokoMw collects, uses, stores and protects your personal data. It complies with the Malawi Data Protection Act, 2024.
+              </>
+            )}
+          </div>
 
           {sections.map((s) => (
             <section key={s.id} style={section}>
@@ -98,7 +121,7 @@ export default function TermsModal({ onAgree, onClose }) {
 
         {/* Read-to-end gate */}
         <div style={footer}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: scrolled ? '#16a34a' : '#94a3b8', fontWeight: 600, marginBottom: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: scrolled ? '#16a34a' : MUTED, fontWeight: 600, marginBottom: 10 }}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
               {scrolled
                 ? <><polyline points="20 6 9 17 4 12" /></>
@@ -140,44 +163,63 @@ const overlay = {
 
 const modal = {
   background: '#fff',
-  borderRadius: '24px 24px 0 0',
-  padding: '8px 20px calc(24px + env(safe-area-inset-bottom))',
+  borderRadius: '28px 28px 0 0',
+  padding: '6px 0 calc(24px + env(safe-area-inset-bottom))',
   width: '100%',
   maxWidth: 560,
   maxHeight: '92vh',
   display: 'flex',
   flexDirection: 'column',
   animation: 'slideUp 0.3s ease',
+  boxShadow: '0 -8px 40px rgba(0,0,0,0.16)',
 }
 
 const handle = {
-  width: 36, height: 4,
-  background: '#e0ebe3',
-  borderRadius: 2,
-  margin: '8px auto 16px',
+  width: 40, height: 4.5,
+  background: '#e2e8f0',
+  borderRadius: 3,
+  margin: '8px auto 10px',
   flexShrink: 0,
 }
 
-const headerRow = {
-  display: 'flex', alignItems: 'center', gap: 12,
-  marginBottom: 14,
+const brandHeader = {
+  display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+  padding: '6px 20px 0',
   flexShrink: 0,
+}
+
+const logoRow = {
+  display: 'flex', alignItems: 'center', gap: 10,
+}
+
+const logoBadge = {
+  width: 34, height: 34,
+  borderRadius: 11,
+  background: 'linear-gradient(135deg, rgba(15,157,88,0.16), rgba(15,157,88,0.06))',
+  border: '1px solid rgba(15,157,88,0.18)',
+  display: 'flex', alignItems: 'center', justifyContent: 'center',
+  color: GREEN,
 }
 
 const closeBtn = {
-  marginLeft: 'auto',
-  width: 36, height: 36,
+  width: 34, height: 34,
   display: 'flex', alignItems: 'center', justifyContent: 'center',
-  border: 'none', background: '#f1f5f9', borderRadius: '50%',
-  color: '#64748b', cursor: 'pointer', flexShrink: 0,
+  border: 'none', background: SOFT, borderRadius: '50%',
+  color: MUTED, cursor: 'pointer', flexShrink: 0,
+}
+
+const titleBlock = {
+  padding: '12px 20px 12px',
+  flexShrink: 0,
 }
 
 const tabs = {
   display: 'flex', gap: 8,
   padding: 4,
-  background: '#f1f5f9',
+  margin: '0 20px 12px',
+  background: SOFT,
+  border: '1px solid #eef2f6',
   borderRadius: 12,
-  marginBottom: 12,
   flexShrink: 0,
 }
 
@@ -187,15 +229,16 @@ const tabBtn = {
   border: 'none', borderRadius: 9,
   background: 'transparent',
   fontSize: 13, fontWeight: 700,
-  color: '#64748b',
+  color: MUTED,
   cursor: 'pointer',
   fontFamily: 'inherit',
-  transition: 'background 0.15s, color 0.15s',
+  transition: 'background 0.15s, color 0.15s, box-shadow 0.15s',
+  WebkitTapHighlightColor: 'transparent',
 }
 
 const tabActive = {
   background: '#fff',
-  color: '#0F9D58',
+  color: GREEN,
   boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
 }
 
@@ -203,43 +246,44 @@ const body = {
   flex: 1,
   overflowY: 'auto',
   minHeight: 0,
-  padding: '4px 2px 12px',
+  padding: '0 20px 12px',
   scrollbarWidth: 'thin',
+  WebkitOverflowScrolling: 'touch',
 }
 
 const intro = {
   fontSize: 13.5,
   lineHeight: 1.6,
-  color: '#0f1410',
-  background: '#f8fbf9',
-  border: '1px solid #e0ebe3',
-  borderRadius: 12,
-  padding: '12px 14px',
-  margin: '0 0 14px',
+  color: MUTED,
+  background: 'linear-gradient(135deg, #f0faf4, #f8fbf9)',
+  border: '1px solid #d9eee2',
+  borderRadius: 14,
+  padding: '14px 16px',
+  margin: '0 0 18px',
 }
 
 const section = {
-  marginBottom: 16,
+  marginBottom: 20,
 }
 
 const sectionTitle = {
   fontSize: 13.5,
   fontWeight: 800,
-  color: '#0f1410',
-  margin: '0 0 5px',
+  color: INK,
+  margin: '0 0 6px',
   lineHeight: 1.4,
 }
 
 const sectionBody = {
-  fontSize: 13,
-  lineHeight: 1.62,
-  color: '#374151',
+  fontSize: 13.5,
+  lineHeight: 1.65,
+  color: '#3f4a5a',
   margin: 0,
 }
 
 const footer = {
   borderTop: '1px solid #eef2f6',
-  paddingTop: 12,
+  padding: '12px 20px 0',
   flexShrink: 0,
 }
 
@@ -251,6 +295,7 @@ const agreeBtn = {
   fontSize: 15, fontWeight: 700,
   cursor: 'pointer',
   fontFamily: 'inherit',
+  boxShadow: '0 2px 8px rgba(15,157,88,0.28)',
   display: 'flex', alignItems: 'center',
   justifyContent: 'center', gap: 8,
 }
@@ -265,7 +310,7 @@ const agreeDisabled = {
 const laterBtn = {
   width: '100%',
   background: 'transparent',
-  color: '#64748b', border: 'none',
+  color: MUTED, border: 'none',
   borderRadius: 14, padding: '10px',
   fontSize: 13.5, fontWeight: 600,
   cursor: 'pointer',
