@@ -201,6 +201,27 @@ const [installPrompt, setInstallPrompt] = useState(null)
     return () => window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt)
   }, [])
 
+  useEffect(() => {
+    // Slide the fixed bottom nav off-screen while the on-screen keyboard
+    // covers it (visualViewport shrinks on iOS + Android overlay mode).
+    const vv = window.visualViewport
+    if (!vv) return
+    let noKeyboard = vv.height
+    const update = () => {
+      const now = vv.height
+      const keyboardLikely = now < noKeyboard - 120 || now < window.innerHeight * 0.7
+      document.body.classList.toggle('keyboard-open', keyboardLikely)
+      if (!keyboardLikely) noKeyboard = now
+    }
+    vv.addEventListener('resize', update)
+    window.addEventListener('resize', update)
+    update()
+    return () => {
+      vv.removeEventListener('resize', update)
+      window.removeEventListener('resize', update)
+    }
+  }, [])
+
   function setupPush(session) {
     if (!session?.user) return
     registerPushNotifications(session.user.id, supabase)

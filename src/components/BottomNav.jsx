@@ -239,6 +239,8 @@ const premiumCss = `
     z-index: 100;
     padding: 0 0 calc(env(safe-area-inset-bottom, 0px));
     pointer-events: none;
+    transition: transform 0.25s ease, opacity 0.25s ease;
+    will-change: transform;
   }
 
   .sbn-bar-inner {
@@ -531,6 +533,16 @@ const premiumCss = `
   @keyframes sbnSlide {
     from { opacity: 0; transform: translateX(-50%) translateY(10px); }
     to { opacity: 1; transform: translateX(-50%) translateY(0); }
+  }
+
+  body.keyboard-open .soko-bottom-nav-mobile .sbn-bar {
+    transform: translateY(115%);
+    opacity: 0;
+  }
+
+  body.keyboard-open .soko-bottom-nav-mobile .sbn-bar,
+  body.keyboard-open .soko-bottom-nav-mobile .sbn-bar-inner {
+    pointer-events: none;
   }
 
   @media (min-width: 769px) {

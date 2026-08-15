@@ -73,3 +73,14 @@ The user reported seeing the generic "Something went wrong. Please try again." i
   2. **Authorized JavaScript origins** in Google Cloud Console must include the deployed origin exactly (e.g. `https://soko-malawi.vercel.app`) — otherwise the prompt is silently suppressed (`unregistered_origin`).
   3. **User must be signed into Google** in that browser/device — otherwise the reason is `opt_out_or_no_session` and no prompt appears.
   4. **Supabase Google provider client id** must match — `signInWithIdToken` validates the token audience against the client id configured for Google in Supabase Auth. If they differ, the token exchange fails even though the prompt shows.
+
+## Bottom nav climbs over on-screen keyboard when typing in Chat search (new)
+The mobile bottom nav (.sbn-bar) is position: fixed at the bottom, so opening the keyboard while focused in the Chats search box made the nav float on top of the keyboard. Fixed globally:
+- **`src/App.jsx`** — added a `visualViewport` listener (plus window resize) that toggles a `keyboard-open` class on `document.body` when the on-screen keyboard shrinks the visual viewport (detects iOS + Android overlay and resize modes; re-baselines when the keyboard closes).
+- **`src/components/BottomNav.jsx`** — when `body.keyboard-open` is set, the bottom nav bar (and the inner bar) slide down off-screen (translateY(115%), opacity 0, pointer-events none) with a 0.25s transition, then slide back when the keyboard closes. Desktop is unaffected (visualViewport == innerHeight there).
+## Verification
+- `npx eslint` on the two touched files: only 3 pre-existing errors in App.jsx (lines 131/140/141, the original getSession effect) — none from this change.
+- `npx vite build`: PASSES (2.17s).
+## Files changed
+- `src/App.jsx`
+- `src/components/BottomNav.jsx`
