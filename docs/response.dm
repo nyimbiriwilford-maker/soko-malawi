@@ -45,3 +45,7 @@ When creating an account with email and password, add a second field for the use
 The user reported seeing the generic "Something went wrong. Please try again." instead of a clear message. Fixed at three layers so a clear message always surfaces:
 - **`src/lib/authApi.js`** — `sanitizeAuthError` now maps "already registered / already have an account / user already / already exists" to **"An account already exists with this email. Please sign in instead."** Also added a client-side pre-check in `sendOtp` (profiles is anon-readable) that rejects registered emails before calling the edge function — so it works even if the edge function is stale.
 - **`supabase/functions/send-otp/index.ts`** — the server check now also verifies the authoritative `auth.users` table (paging through `admin.listUsers`) in case a user exists without a profile row, and returns HTTP 409 with the clear message.
+
+## Continue button visibly inactive until terms ticked (new)
+- **`src/pages/LoginPage.jsx`** — the Sign Up Continue button was already gated on `!agreedToTerms` (so it can't be clicked before the Terms & Privacy checkbox is checked).
+- **`src/styles/login.css`** — strengthened the disabled styling so the gate is visually obvious: `.login-btn:disabled` now fades the button (opacity 0.45, desaturated) and removes the lift/box-shadow, with `not-allowed` cursor. Before, only the cursor changed so the button looked clickable.
