@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { validateStrongPassword, validatePasswordMatch } from '../utils/validation'
 
 /**
  * ResetPassword.jsx
@@ -49,8 +50,8 @@ export default function ResetPassword() {
 
   async function handleReset() {
     if (!password || !confirm) { setError('Please fill in both fields'); return }
-    if (password.length < 8)   { setError('Password must be at least 8 characters'); return }
-    if (password !== confirm)  { setError('Passwords do not match'); return }
+    if (validateStrongPassword(password)) { setError(validateStrongPassword(password)); return }
+    if (validatePasswordMatch(confirm, password)) { setError(validatePasswordMatch(confirm, password)); return }
 
     setLoading(true)
     setMessage({ text: '', isError: false })
@@ -96,7 +97,7 @@ export default function ResetPassword() {
             <input
               style={styles.input}
               type="password"
-              placeholder="New password (min. 8 characters)"
+              placeholder="New password (8+ chars, uppercase, lowercase, number, special)"
               value={password}
               onChange={e => setPassword(e.target.value)}
               onKeyDown={handleKeyDown}
