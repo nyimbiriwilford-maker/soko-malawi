@@ -17,6 +17,7 @@ import {
   PasswordStrength,
 } from '../components/auth';
 import { AUTH_MODES, useAuthFlow } from '../hooks/useAuthFlow';
+import { validateEmail } from '../utils/validation';
 
 /**
  * SokoMw Login — premium CSS surface + full auth logic.
@@ -158,6 +159,31 @@ function LoginMode({ flow }) {
     goTo,
   } = flow;
 
+  const [confirmedEmail, setConfirmedEmail] = useState('');
+
+  const emailValid = validateEmail(email) === null;
+  const emailConfirmed = Boolean(confirmedEmail) && confirmedEmail.toLowerCase() === (email || '').trim().toLowerCase();
+
+  const localPart = (email || '').trim().toLowerCase().split('@')[0] || '';
+  const displayName = localPart
+    .split(/[._-]+/)
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ') || localPart;
+
+  const handleEmailChange = (e) => {
+    setConfirmedEmail('');
+    handlers.handleEmailChange(e);
+  };
+
+  const confirmAndContinue = (e) => {
+    e?.preventDefault?.();
+    if (emailValid) {
+      setConfirmedEmail(email.trim());
+      window.setTimeout(() => passwordRef.current?.focus({ preventScroll: true }), 60);
+    }
+  };
+
   return (
     <>
       <ModeHeader
@@ -167,7 +193,7 @@ function LoginMode({ flow }) {
 
       <form
         className="login-form"
-        onSubmit={handlers.handleLogin}
+        onSubmit={emailConfirmed ? handlers.handleLogin : confirmAndContinue}
         noValidate
         aria-label="Login form"
       >
@@ -178,9 +204,9 @@ function LoginMode({ flow }) {
           label="Email Address"
           type="email"
           inputMode="email"
-          enterKeyHint="next"
+          enterKeyHint={emailConfirmed ? 'next' : 'go'}
           value={email}
-          onChange={handlers.handleEmailChange}
+          onChange={handleEmailChange}
           onBlur={handlers.onEmailBlur}
           autoComplete="email"
           required
@@ -190,49 +216,65 @@ function LoginMode({ flow }) {
           placeholder="you@example.com"
         />
 
-        <PasswordField
-          ref={passwordRef}
-          id="login-password"
-          name="password"
-          label="Password"
-          value={password}
-          onChange={handlers.handlePasswordChange}
-          onBlur={handlers.onPasswordBlur}
-          showPassword={showPassword}
-          onToggleVisibility={toggleShowPassword}
-          required
-          error={fieldErrors.password}
-          touched={Boolean(touched.password)}
-          disabled={busy}
-          autoComplete="current-password"
-        />
+        {emailValid && !emailConfirmed && (
+          <div className="login-email-confirm">
+            <div className="login-email-confirm__avatar" aria-hidden="true">
+              {displayName.charAt(0) || 'U'}
+            </div>
+            <div className="login-email-confirm__body">
+              <div className="login-email-confirm__title">Continue as {displayName}?</div>
+              <div className="login-email-confirm__sub">{email.trim()}</div>
+            </div>
+          </div>
+        )}
 
-        <div className="login-row">
-          <Checkbox
-            id="login-remember"
-            name="rememberMe"
-            checked={rememberMe}
-            onChange={(e) => setRememberMe(e.target.checked)}
-            label="Remember Me"
-            disabled={busy}
-          />
-          <button
-            type="button"
-            onClick={() => goTo(AUTH_MODES.FORGOT)}
-            className="login-link"
-          >
-            Forgot Password?
-          </button>
-        </div>
+        {emailConfirmed && (
+          <>
+            <PasswordField
+              ref={passwordRef}
+              id="login-password"
+              name="password"
+              label="Password"
+              value={password}
+              onChange={handlers.handlePasswordChange}
+              onBlur={handlers.onPasswordBlur}
+              showPassword={showPassword}
+              onToggleVisibility={toggleShowPassword}
+              required
+              error={fieldErrors.password}
+              touched={Boolean(touched.password)}
+              disabled={busy}
+              autoComplete="current-password"
+            />
+
+            <div className="login-row">
+              <Checkbox
+                id="login-remember"
+                name="rememberMe"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                label="Remember Me"
+                disabled={busy}
+              />
+              <button
+                type="button"
+                onClick={() => goTo(AUTH_MODES.FORGOT)}
+                className="login-link"
+              >
+                Forgot Password?
+              </button>
+            </div>
+          </>
+        )}
 
         <PrimaryButton
           type="submit"
           loading={loadingAction === 'signin'}
           success={submitStatus === 'success'}
-          disabled={busy}
-          aria-label="Sign in to SokoMw"
+          disabled={busy || (emailConfirmed ? false : !emailValid)}
+          aria-label={emailConfirmed ? 'Sign in to SokoMw' : 'Continue with this email'}
         >
-          Sign In
+          {emailConfirmed ? 'Sign In' : 'Continue'}
         </PrimaryButton>
       </form>
     </>

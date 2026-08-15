@@ -49,3 +49,9 @@ The user reported seeing the generic "Something went wrong. Please try again." i
 ## Continue button visibly inactive until terms ticked (new)
 - **`src/pages/LoginPage.jsx`** — the Sign Up Continue button was already gated on `!agreedToTerms` (so it can't be clicked before the Terms & Privacy checkbox is checked).
 - **`src/styles/login.css`** — strengthened the disabled styling so the gate is visually obvious: `.login-btn:disabled` now fades the button (opacity 0.45, desaturated) and removes the lift/box-shadow, with `not-allowed` cursor. Before, only the cursor changed so the button looked clickable.
+
+## Login email detection + "Continue as" confirm (new)
+- **`src/pages/LoginPage.jsx`** — the login form is now two-step:
+  1. **Email step**: as the user types, `validateEmail` detects when the email is valid. A confirmation card appears showing an avatar initial and "Continue as {Name}?" (name derived from the email local-part) plus the email itself.
+  2. **Confirm step**: the Continue button stays disabled until a valid email is detected; clicking it (or pressing enter) confirms the identity, reveals the Password field, Remember Me + Forgot Password row, and switches the button to "Sign In". Changing the email resets the confirmation.
+- **`src/styles/login.css`** — added `.login-email-confirm` card styles (avatar, title, subtitle, fade-up animation).
