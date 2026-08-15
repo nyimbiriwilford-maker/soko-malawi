@@ -65,3 +65,11 @@ The user reported seeing the generic "Something went wrong. Please try again." i
 - **`.env`** — added a commented `VITE_GOOGLE_CLIENT_ID` placeholder (git-ignored).
 
 > Requires setup: create a **web application** OAuth client in Google Cloud Console, add the app origin to its authorized JavaScript origins, and set `VITE_GOOGLE_CLIENT_ID` in the Vercel project env. Until then the existing Google button keeps working and One Tap simply stays silent.
+
+## One Tap not auto-detecting? (diagnostics added)
+- Added console logging to `GoogleOneTap.jsx` so the reason is visible in the browser devtools (`[OneTap] ...` messages + the full prompt notification, including `getNotDisplayedReason()`).
+- Most common causes for no auto-detect:
+  1. **Vite bakes `VITE_*` vars at build time** — adding `VITE_GOOGLE_CLIENT_ID` in Vercel alone does nothing until the app is **redeployed** (push a new commit or use Vercel "Redeploy"). Check the running bundle's console for `[OneTap] VITE_GOOGLE_CLIENT_ID is not set`.
+  2. **Authorized JavaScript origins** in Google Cloud Console must include the deployed origin exactly (e.g. `https://soko-malawi.vercel.app`) — otherwise the prompt is silently suppressed (`unregistered_origin`).
+  3. **User must be signed into Google** in that browser/device — otherwise the reason is `opt_out_or_no_session` and no prompt appears.
+  4. **Supabase Google provider client id** must match — `signInWithIdToken` validates the token audience against the client id configured for Google in Supabase Auth. If they differ, the token exchange fails even though the prompt shows.

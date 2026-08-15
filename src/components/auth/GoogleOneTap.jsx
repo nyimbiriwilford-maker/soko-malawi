@@ -12,7 +12,10 @@ function GoogleOneTap({ clientId, onCredential, onError }) {
   const firedRef = useRef(false);
 
   useEffect(() => {
-    if (!clientId) return undefined;
+    if (!clientId) {
+      console.warn('[OneTap] VITE_GOOGLE_CLIENT_ID is not set — One Tap disabled.');
+      return undefined;
+    }
     if (typeof window === 'undefined' || firedRef.current) return undefined;
     firedRef.current = true;
 
@@ -43,6 +46,7 @@ function GoogleOneTap({ clientId, onCredential, onError }) {
     loadScript()
       .then(() => {
         if (cancelled || !window.google?.accounts?.id) return;
+        console.log('[OneTap] GIS loaded; initializing with client id:', clientId.slice(0, 8) + '…');
         window.google.accounts.id.initialize({
           client_id: clientId,
           callback: (resp) => {
@@ -53,16 +57,17 @@ function GoogleOneTap({ clientId, onCredential, onError }) {
           cancel_on_tap_outside: true,
         });
         window.google.accounts.id.prompt?.((notification) => {
-          // 'credential_returned' | 'suppressed_by_user' | 'dismissed' etc.
-          // If the account is suppressed / not available, let the regular button handle it.
+          console.log('[OneTap] prompt notification:', notification);
           if (notification && notification.isNotDisplayed && !notification.isSkippedMoment) {
-            // e.g. no signed-in account, or One Tap not permitted on this origin
-            onError?.(new Error('NO_SESSION'));
+            onError?.(new Error(notification.getNotDisplayedReason?.() || 'NO_SESSION'));
           }
         });
       })
       .catch((err) => {
-        if (!cancelled) onError?.(err);
+        if (!cancelled) {
+          console.error('[OneTap] failed to load/init:', err);
+          onError?.(err);
+        }
       });
 
     return () => {
