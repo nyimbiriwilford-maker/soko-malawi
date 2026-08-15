@@ -7,3 +7,5 @@ Do research on what can be all terms and conditions of this app that a user can 
 When creating an account with email and password, add a second field to repeat the password (Confirm Password). Enforce a strong password: at least 8 characters including an uppercase letter, a lowercase letter, a number and a special character. Apply the same when resetting the password.
 
 Add real-time password strength validation: as the user types, show a live strength meter and a checklist of the strong-password requirements.
+
+On the page where a user is required to enter the code sent to their email, remove the field that asks for a username.

@@ -3,7 +3,9 @@
  * Never log or store credential values.
  */
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+export const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export const USERNAME_RE = /^[a-zA-Z0-9_.]{3,20}$/;
 
 export const EMAIL_ERROR = 'Please enter a valid email address.';
 export const PASSWORD_ERROR = 'Password must contain at least 8 characters.';
@@ -115,4 +117,29 @@ export function getPasswordStrength(value = '') {
   }
 
   return { score, label, criteria };
+}
+
+/**
+ * Derive a valid username from an email address (used when the signup form
+ * no longer asks the user to pick one). Keeps letters/digits/. and _, replaces
+ * anything else with '.', and pads/truncates to satisfy USERNAME_RE (3-20).
+ * Falls back to a predictable handle if the local part is unusable.
+ * @param {string} email
+ * @returns {string}
+ */
+export function deriveUsernameFromEmail(email = '') {
+  let local = String(email).split('@')[0] || '';
+  let name = local.replace(/[^a-zA-Z0-9_.]/g, '.').replace(/\.{2,}/g, '.').replace(/^\.+|\.+$/g, '');
+
+  if (!USERNAME_RE.test(name)) {
+    if (name.length < 3) {
+      name = `user${name}`;
+    }
+    if (name.length > 20) {
+      name = name.slice(0, 20).replace(/\.+$/g, '') || name.slice(0, 19);
+    }
+    if (name.length < 3) name = 'sokomwuser';
+    if (name.length > 20) name = name.slice(0, 20);
+  }
+  return name;
 }

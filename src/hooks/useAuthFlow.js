@@ -2,7 +2,6 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   DISABLED_MESSAGE,
-  USERNAME_RE,
   createAccountAfterOtp,
   isCaptchaRequired,
   sanitizeAuthError,
@@ -11,7 +10,7 @@ import {
   signInWithOAuth,
   verifyOtp,
 } from '../lib/authApi';
-import { validateEmail, validatePassword, validateStrongPassword, validatePasswordMatch } from '../utils/validation';
+import { validateEmail, validatePassword, validateStrongPassword, validatePasswordMatch, deriveUsernameFromEmail } from '../utils/validation';
 
 export const AUTH_MODES = {
   LOGIN: 'login',
@@ -38,7 +37,6 @@ export function useAuthFlow() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
-  const [username, setUsername] = useState('');
   const [otpCode, setOtpCode] = useState('');
   const [newPass, setNewPass] = useState('');
   const [confirmPass, setConfirmPass] = useState('');
@@ -62,7 +60,6 @@ export function useAuthFlow() {
 
   const emailRef = useRef(null);
   const passwordRef = useRef(null);
-  const usernameRef = useRef(null);
   const lockRef = useRef(false);
 
   // React to ?disabled=1 if navigated after mount
@@ -112,13 +109,6 @@ export function useAuthFlow() {
     }, 320);
     return () => window.clearTimeout(t);
   }, [mode]);
-
-  // After signup OTP complete → focus username
-  useEffect(() => {
-    if (mode === AUTH_MODES.VERIFY_SIGNUP && otpCode.length === 6) {
-      usernameRef.current?.focus({ preventScroll: true });
-    }
-  }, [otpCode, mode]);
 
   const goTo = useCallback(
     (nextMode) => {
@@ -291,15 +281,8 @@ export function useAuthFlow() {
         setError('Enter the 6-digit code');
         return;
       }
-      const trimmedUsername = username.trim();
-      if (!trimmedUsername) {
-        setError('Choose a username');
-        return;
-      }
-      if (!USERNAME_RE.test(trimmedUsername)) {
-        setError('Username must be 3-20 characters (letters, numbers, . or _ only)');
-        return;
-      }
+      // Username is derived from the email — the signup flow no longer asks for it.
+      const derivedUsername = deriveUsernameFromEmail(email);
 
       lockRef.current = true;
       setLoadingAction('verifySignup');
@@ -309,7 +292,7 @@ export function useAuthFlow() {
         const result = await createAccountAfterOtp({
           email,
           password,
-          username: trimmedUsername,
+          username: derivedUsername,
           otpCode,
         });
         if (result.needsLogin) {
@@ -329,7 +312,7 @@ export function useAuthFlow() {
         lockRef.current = false;
       }
     },
-    [busy, clearMsg, email, navigate, otpCode, password, setError, setInfo, username]
+    [busy, clearMsg, email, navigate, otpCode, password, setError, setInfo]
   );
 
   /* ─── FORGOT / RESET ─── */
@@ -566,8 +549,6 @@ export function useAuthFlow() {
     setAgreedToTerms,
     rememberMe,
     setRememberMe,
-    username,
-    setUsername,
     otpCode,
     setOtpCode,
     newPass,
@@ -596,7 +577,6 @@ export function useAuthFlow() {
     captchaRequired: isCaptchaRequired(),
     emailRef,
     passwordRef,
-    usernameRef,
     handlers: {
       handleLogin,
       handleOAuth,

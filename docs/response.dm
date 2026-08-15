@@ -26,3 +26,8 @@ When creating an account with email and password, add a second field for the use
 - `src/pages/ResetPassword.jsx`
 - `src/components/auth/PasswordStrength.jsx` (new)
 - `src/components/auth/index.js`
+
+## Remove username field from OTP verification page (new)
+- **`src/pages/LoginPage.jsx`** — the "Verify Email" step (where users enter the emailed 6-digit code) no longer asks for a username. Removed the field and updated the subtitle text.
+- **`src/hooks/useAuthFlow.js`** — removed `username`/`setUsername` state and `usernameRef`; the username is now auto-derived from the email in `handleVerifyAndCreate`.
+- **`src/utils/validation.js`** — added `deriveUsernameFromEmail(email)` which sanitizes the email local-part into a valid username (3-20 chars, letters/digits/./_). Profile creation and the verify-otp edge function still receive a username.

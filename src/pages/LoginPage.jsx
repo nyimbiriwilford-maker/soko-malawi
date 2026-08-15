@@ -393,9 +393,6 @@ function VerifySignUpMode({ flow }) {
     email,
     otpCode,
     setOtpCode,
-    username,
-    setUsername,
-    usernameRef,
     busy,
     loadingAction,
     resendCooldown,
@@ -410,7 +407,7 @@ function VerifySignUpMode({ flow }) {
     <>
       <ModeHeader
         title="Verify Email"
-        subtitle={`Enter the 6-digit code sent to ${email || 'your email'}, then choose a username.`}
+        subtitle={`Enter the 6-digit code sent to ${email || 'your email'}.`}
       />
 
       <form
@@ -435,24 +432,6 @@ function VerifySignUpMode({ flow }) {
           disabled={busy}
           placeholder="6-digit code"
           maxLength={6}
-        />
-
-        <InputField
-          ref={usernameRef}
-          id="signup-username"
-          name="username"
-          label="Username"
-          type="text"
-          value={username}
-          onChange={(e) => {
-            setUsername(e.target.value.replace(/\s/g, ''));
-            clearMsg();
-          }}
-          autoComplete="username"
-          required
-          disabled={busy}
-          placeholder="e.g. chikondi.mw"
-          maxLength={20}
         />
 
         {captchaRequired && resendCooldown <= 0 && (
