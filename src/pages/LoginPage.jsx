@@ -14,6 +14,7 @@ import {
   FooterLinks,
   Captcha,
   TermsModal,
+  PasswordStrength,
 } from '../components/auth';
 import { AUTH_MODES, useAuthFlow } from '../hooks/useAuthFlow';
 
@@ -327,9 +328,7 @@ function SignUpMode({ flow, onOpenTerms }) {
           autoComplete="new-password"
         />
 
-        <p style={{ margin: 0, fontSize: 11.5, color: '#94a3b8', lineHeight: 1.5, paddingInline: 2 }}>
-          Strong password required: at least 8 characters with an uppercase letter, a lowercase letter, a number and a special character.
-        </p>
+        <PasswordStrength value={password} />
 
         <Checkbox
           id="signup-terms"
@@ -681,9 +680,7 @@ function NewPasswordMode({ flow }) {
           autoComplete="new-password"
         />
 
-        <p style={{ margin: 0, fontSize: 11.5, color: '#94a3b8', lineHeight: 1.5, paddingInline: 2 }}>
-          Strong password required: at least 8 characters with an uppercase letter, a lowercase letter, a number and a special character.
-        </p>
+        <PasswordStrength value={newPass} />
 
         <PrimaryButton
           type="submit"

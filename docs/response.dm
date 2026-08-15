@@ -10,8 +10,13 @@ When creating an account with email and password, add a second field for the use
 - **`src/pages/LoginPage.jsx`** — Sign Up step now has a **Confirm Password** field (own show/hide toggle) plus a helper note stating the strong-password requirement. The Reset flow's Set New Password step has the same helper note and strong-password enforcement.
 - **`src/pages/ResetPassword.jsx`** — standalone Supabase recovery page now enforces the same strong-password rule + confirm match via `validateStrongPassword` / `validatePasswordMatch`.
 
+## Real-time password strength meter (new)
+- **`src/utils/validation.js`** — added `getPasswordStrength(value)` returning a 0–4 score, a label (Weak / Fair / Good / Strong) and per-criterion met flags (length, uppercase, lowercase, number, special) for live feedback.
+- **`src/components/auth/PasswordStrength.jsx`** (new) — animated meter component: a labelled progress bar plus a checklist that ticks each requirement as it's met. Shown as the user types (hidden until the password has content).
+- Wired into **`src/pages/LoginPage.jsx`** (Sign Up + Set New Password steps) and **`src/pages/ResetPassword.jsx`**, replacing the previous static hint paragraph.
+
 ## Verification
-- `npm run build`: PASSES — built in 2.20s, no errors.
+- `npm run build`: PASSES — built in 2.12s, no errors.
 
 ## Files changed
 - `src/utils/validation.js`
@@ -19,3 +24,5 @@ When creating an account with email and password, add a second field for the use
 - `src/hooks/useAuthFlow.js`
 - `src/pages/LoginPage.jsx`
 - `src/pages/ResetPassword.jsx`
+- `src/components/auth/PasswordStrength.jsx` (new)
+- `src/components/auth/index.js`

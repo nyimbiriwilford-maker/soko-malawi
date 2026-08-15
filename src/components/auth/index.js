@@ -14,3 +14,4 @@ export { default as TrustMessage } from './TrustMessage';
 export { default as FooterLinks } from './FooterLinks';
 export { default as Captcha } from './Captcha';
 export { default as TermsModal } from './TermsModal';
+export { default as PasswordStrength } from './PasswordStrength';

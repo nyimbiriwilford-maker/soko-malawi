@@ -76,3 +76,43 @@ export function validateLoginForm(values) {
 export function hasErrors(errors) {
   return Object.keys(errors).some((key) => Boolean(errors[key]));
 }
+
+/**
+ * Real-time password strength analysis.
+ * Returns a score (0-4), a label, and per-criterion met flags so the UI
+ * can render a live strength meter / checklist as the user types.
+ * @param {string} value
+ * @returns {{ score: number, label: 'Weak'|'Fair'|'Good'|'Strong', criteria: { length: boolean, uppercase: boolean, lowercase: boolean, number: boolean, special: boolean } }}
+ */
+export function getPasswordStrength(value = '') {
+  const criteria = {
+    length: value.length >= 8,
+    uppercase: /[A-Z]/.test(value),
+    lowercase: /[a-z]/.test(value),
+    number: /\d/.test(value),
+    special: /[^A-Za-z0-9]/.test(value),
+  };
+
+  const met = Object.values(criteria).filter(Boolean).length;
+
+  let score;
+  let label;
+  if (!value || met === 0) {
+    score = 0;
+    label = 'Weak';
+  } else if (met <= 2) {
+    score = 1;
+    label = 'Weak';
+  } else if (met === 3) {
+    score = 2;
+    label = 'Fair';
+  } else if (met === 4) {
+    score = 3;
+    label = 'Good';
+  } else {
+    score = 4;
+    label = 'Strong';
+  }
+
+  return { score, label, criteria };
+}

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { validateStrongPassword, validatePasswordMatch } from '../utils/validation'
+import PasswordStrength from '../components/auth/PasswordStrength'
 
 /**
  * ResetPassword.jsx
@@ -112,6 +113,8 @@ export default function ResetPassword() {
               onKeyDown={handleKeyDown}
               autoComplete="new-password"
             />
+
+            <PasswordStrength value={password} />
 
             {message.text && (
               <p style={message.isError ? styles.error : styles.info}>{message.text}</p>
