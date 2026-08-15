@@ -533,8 +533,8 @@ export default function SokoNav({
           </div>
         </div>
 
-        {/* Row 2: Smart quick actions (icons only, mobile) */}
-        <div className="soko-quick-scroll" style={{ display: 'flex', alignItems: 'center', gap: 10, overflowX: 'auto', paddingBottom: 2, scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}>
+        {/* Row 2: Smart quick actions (plain icons, mobile) */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', padding: '2px 0' }}>
           {SOKO_PILLARS.filter(p => p.key !== 'verify').map(p => {
             const isActive = p.key === activePillar
             return (
@@ -544,23 +544,17 @@ export default function SokoNav({
                 aria-label={p.label}
                 onClick={() => navigate(p.path)}
                 style={{
-                  flexShrink: 0,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  width: 42, height: 42,
+                  width: 40, height: 40,
                   padding: 0,
-                  borderRadius: 12,
-                  background: isActive ? 'linear-gradient(135deg, #0F9D58, #0a7a44)' : 'rgba(255,255,255,0.8)',
-                  border: isActive ? '1px solid transparent' : '1px solid rgba(15,157,88,0.14)',
-                  boxShadow: isActive ? '0 3px 12px rgba(15,157,88,0.30)' : '0 1px 3px rgba(0,0,0,0.04)',
+                  background: 'none', border: 'none',
                   cursor: 'pointer',
-                  color: isActive ? '#fff' : '#3c4043',
+                  color: isActive ? T.green : '#64748b',
                   fontFamily: 'inherit',
-                  transition: 'transform 0.14s, box-shadow 0.14s, background 0.14s, color 0.14s',
+                  transition: 'transform 0.14s, color 0.14s',
                   WebkitTapHighlightColor: 'transparent',
                 }}>
-                <span style={{ display: 'flex', color: isActive ? '#fff' : T.green }}>
-                  {p.icon(18)}
-                </span>
+                {p.icon(isActive ? 20 : 19)}
               </button>
             )
           })}
