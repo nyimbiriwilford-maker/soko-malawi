@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import {
@@ -291,6 +291,10 @@ export default function ChatListPanel() {
   const [deletedKeys, setDeletedKeys] = useState(() => new Set())
   const [rowMenuChat, setRowMenuChat] = useState(null)
   const [rowBusy, setRowBusy] = useState(false)
+  // Key of the row whose star/archive buttons are revealed by long-press
+  const [revealedKey, setRevealedKey] = useState(null)
+  const longPressRef = useRef(null)
+  const suppressClickRef = useRef(null)
   // Live presence: otherUserId -> { online, typing, recording, activityMeta }
   // activityMeta scopes typing/recording to peer + context so only the right row lights up
   const [presenceMap, setPresenceMap] = useState({})
@@ -451,6 +455,36 @@ export default function ChatListPanel() {
       localStorage.setItem(ARCHIVED_KEY, JSON.stringify([...next]))
       return next
     })
+  }
+
+  // Long-press (touch or held mouse) reveals the star/archive buttons on a row.
+  // Fires after ~480ms of no movement; cancels on movement/cancel/release.
+  function startLongPress(e, chat) {
+    cancelLongPress()
+    const point = (e.changedTouches && e.changedTouches[0]) || (e.touches && e.touches[0]) || e
+    if (!point) return
+    const lp = { key: chat.key, x: point.clientX, y: point.clientY }
+    lp.timer = setTimeout(() => {
+      longPressRef.current = null
+      suppressClickRef.current = chat.key
+      setRevealedKey(chat.key)
+    }, 480)
+    longPressRef.current = lp
+  }
+
+  function moveLongPress(e) {
+    const lp = longPressRef.current
+    if (!lp) return
+    const point = (e.changedTouches && e.changedTouches[0]) || (e.touches && e.touches[0]) || e
+    if (!point) return
+    if (Math.abs(point.clientX - lp.x) > 10 || Math.abs(point.clientY - lp.y) > 10) cancelLongPress()
+  }
+
+  function cancelLongPress() {
+    const lp = longPressRef.current
+    if (!lp) return
+    clearTimeout(lp.timer)
+    longPressRef.current = null
   }
 
   async function loadChats() {
@@ -835,7 +869,30 @@ export default function ChatListPanel() {
           animationDelay: i * 0.03 + 's',
           background: isOpen ? '#e6f7ee' : hasUnread ? '#fafffd' : '#fff',
         }}
-        onClick={() => navigate(chatPath, { state: chatState })}
+        onClick={() => {
+          if (suppressClickRef.current === chat.key) {
+            suppressClickRef.current = null
+            return
+          }
+          if (revealedKey) {
+            setRevealedKey(null)
+            return
+          }
+          navigate(chatPath, { state: chatState })
+        }}
+        onContextMenu={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          setRevealedKey(chat.key)
+        }}
+        onTouchStart={(e) => startLongPress(e, chat)}
+        onTouchMove={moveLongPress}
+        onTouchEnd={cancelLongPress}
+        onTouchCancel={cancelLongPress}
+        onMouseDown={(e) => startLongPress(e, chat)}
+        onMouseMove={moveLongPress}
+        onMouseUp={cancelLongPress}
+        onMouseLeave={cancelLongPress}
       >
         <div style={S.avatarWrap}>
           <SafeAvatar
@@ -941,22 +998,26 @@ export default function ChatListPanel() {
                     <circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" />
                   </svg>
                 </button>
-                <button
-                  style={S.starBtn}
-                  onClick={(e) => toggleStar(chat.key, e)}
-                  aria-label="Star conversation"
-                  title={isStarred ? 'Unstar' : 'Star'}
-                >
-                  <StarIcon filled={isStarred} />
-                </button>
-                <button
-                  style={S.starBtn}
-                  onClick={(e) => toggleArchive(chat.key, e)}
-                  aria-label="Archive conversation"
-                  title={isArchived ? 'Unarchive' : 'Archive'}
-                >
-                  <ArchiveIcon active={isArchived} />
-                </button>
+                {revealedKey === chat.key && (
+                  <div className="chat-row-reveal" style={{ display: 'flex', alignItems: 'center', animation: 'revealIn 0.18s ease both' }}>
+                    <button
+                      style={S.starBtn}
+                      onClick={(e) => toggleStar(chat.key, e)}
+                      aria-label="Star conversation"
+                      title={isStarred ? 'Unstar' : 'Star'}
+                    >
+                      <StarIcon filled={isStarred} />
+                    </button>
+                    <button
+                      style={S.starBtn}
+                      onClick={(e) => toggleArchive(chat.key, e)}
+                      aria-label="Archive conversation"
+                      title={isArchived ? 'Unarchive' : 'Archive'}
+                    >
+                      <ArchiveIcon active={isArchived} />
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -1047,9 +1108,14 @@ export default function ChatListPanel() {
         @keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
         @keyframes typingDot { 0%,80%,100%{transform:scale(0.6);opacity:0.4} 40%{transform:scale(1);opacity:1} }
+        @keyframes revealIn { from{opacity:0;transform:translateX(6px)} to{opacity:1;transform:translateX(0)} }
 
         .chat-row {
           transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+          -webkit-touch-callout: none;
+          -webkit-user-select: none;
+          user-select: none;
+          touch-action: pan-y;
         }
         .chat-row:hover {
           background: #f8fffa !important;
@@ -1229,7 +1295,7 @@ export default function ChatListPanel() {
       )}
 
       {/* Scroll body — empty + rows share one scroller so BottomNav padding applies to both */}
-      <div className="chat-list-scroll" style={S.list}>
+      <div className="chat-list-scroll" style={S.list} onScroll={() => setRevealedKey(null)}>
         {!loading && filtered.length === 0 && (
           <div style={S.empty}>
             <div style={{ ...S.emptyIconCircle, background: empty.bg }}>

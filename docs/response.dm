@@ -84,3 +84,18 @@ The mobile bottom nav (.sbn-bar) is position: fixed at the bottom, so opening th
 ## Files changed
 - `src/App.jsx`
 - `src/components/BottomNav.jsx`
+
+## Long-press reveals star & archive buttons on chat list rows (new)
+The star and archive icons were previously always visible on every chat row. Now they only appear when a row is long-pressed:
+- **`src/pages/ChatListPanel.jsx`**
+  - Added `revealedKey` state plus `longPressRef` / `suppressClickRef` refs.
+  - `startLongPress` / `moveLongPress` / `cancelLongPress` — touch (touchstart/move/end/cancel) and mouse (mousedown/move/up/leave) long-press detection: fires after ~480ms of holding still; cancels if the pointer moves >10px (so scrolling never triggers it). Right-click (`onContextMenu`) also reveals as a desktop fallback.
+  - Row `onClick` suppresses the click that immediately follows a long-press, and a tap anywhere else dismisses the reveal before navigating.
+  - Star/archive buttons now render only when `revealedKey === chat.key`, animating in via a new `revealIn` keyframe. The ⋮ options button stays always visible.
+  - Scroll of the chat list dismisses an open reveal.
+  - `.chat-row` CSS now sets `-webkit-touch-callout: none; user-select: none; touch-action: pan-y` so long-press doesn't trigger iOS text selection / callouts or interfere with vertical scrolling.
+## Verification
+- `npx eslint src/pages/ChatListPanel.jsx`: only pre-existing errors; none from this change.
+- `npx vite build`: PASSES.
+## Files changed
+- `src/pages/ChatListPanel.jsx`
