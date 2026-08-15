@@ -3,7 +3,6 @@
  * Desktop + mobile layout. Only the primary CTA differs per page.
  */
 import { useState, useRef, useEffect } from 'react'
-import { createPortal } from 'react-dom'
 import { Image as ImageIcon, Wrench, Search, ChevronRight } from 'lucide-react'
 import { T } from '../constants/tokens'
 import { MALAWI_DISTRICTS } from '../constants/malawiDistricts'
@@ -143,7 +142,6 @@ export default function SokoNav({
   const [focused, setFocusedRaw] = useState(false)
   function setFocused(v) { setFocusedRaw(v); onFocusChange?.(v) }
   const [distOpen, setDistOpen] = useState(false)
-const [districtSearch, setDistrictSearch] = useState('')
   const [avatarOpen, setAvatarOpen] = useState(false)
   const [showPostMenu, setShowPostMenu] = useState(false)
   const [chatCount, setChatCount] = useState(0)
@@ -201,9 +199,6 @@ const [districtSearch, setDistrictSearch] = useState('')
   const inputRef = useRef(null)
 
   const districts = ['All Districts', ...MALAWI_DISTRICTS]
-const filteredDistricts = districts.filter(d =>
-  d.toLowerCase().includes(districtSearch.trim().toLowerCase())
-)
   const kw = animKeywords?.length > 0
     ? animKeywords[animIdx % animKeywords.length]
     : 'Samsung Galaxy A57'
@@ -227,7 +222,6 @@ const filteredDistricts = districts.filter(d =>
  function changeDistrict(d) {
   onDistrictChange?.(d)
   setDistOpen(false)
-  setDistrictSearch('')
 }
 
   return (
@@ -420,12 +414,12 @@ const filteredDistricts = districts.filter(d =>
       {/* ════════════════════ MOBILE HEADER ════════════════════ */}
       <div className="soko-nav-mobile">
 
-        {/* Row 1: Logo + District Pill + Notification Bell */}
+        {/* Row 1: Logo + Notification Bell */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
 
           {/* Logo */}
           <div onClick={() => navigate('/')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-            <div style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 900, color: T.green, letterSpacing: '-0.6px', lineHeight: 1 }}>
+            <div style={{ fontFamily: T.fontDisplay, fontSize: 21, fontWeight: 900, color: T.green, letterSpacing: '-0.6px', lineHeight: 1 }}>
               Soko<span style={{ color: T.amber }}>Mw</span>
             </div>
             <div style={{ fontSize: 9, color: T.gray500, fontWeight: 500, letterSpacing: '0.1px', marginTop: 2, whiteSpace: 'nowrap' }}>
@@ -433,135 +427,8 @@ const filteredDistricts = districts.filter(d =>
             </div>
           </div>
 
-          {/* Right side: District + Bell */}
+          {/* Right side: Notification Bell */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-
-            {/* District Filter Button */}
-            <div style={{ position: 'relative' }}>
-              <button
-                type="button"
-                onClick={() => setDistOpen(d => !d)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 5,
-                  padding: '6px 11px 6px 9px',
-                  borderRadius: 50,
-                  background: district !== 'All Districts' ? T.greenL : '#f3f4f6',
-                  border: `1.5px solid ${district !== 'All Districts' ? T.green : T.gray200}`,
-                  fontSize: 12, fontWeight: 700,
-                  color: district !== 'All Districts' ? T.green : T.gray700,
-                  cursor: 'pointer', whiteSpace: 'nowrap',
-                  maxWidth: 148, fontFamily: 'inherit',
-                  boxShadow: '0 1px 3px rgba(0,0,0,0.07)',
-                  transition: 'background 0.15s, border-color 0.15s',
-                }}>
-                {Icon.pin(12)}
-                <span style={{
-                  overflow: 'hidden', textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap', maxWidth: 86,
-                }}>
-                  {district}
-                </span>
-                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden
-                  style={{ transform: distOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', flexShrink: 0 }}>
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
-              </button>
-
-              {/* Mobile District Bottom Sheet */}
-              {distOpen && createPortal(
-                <>
-                  <div
-                    onClick={() => setDistOpen(false)}
-                    style={{ position: 'fixed', inset: 0, zIndex: 998, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(2px)', WebkitBackdropFilter: 'blur(2px)' }}
-                  />
-                  <div style={{
-                    position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 999,
-                    background: '#fff',
-                    borderTopLeftRadius: 24, borderTopRightRadius: 24,
-                    padding: '0 16px calc(20px + env(safe-area-inset-bottom, 0px))',
-                    maxHeight: '72vh', display: 'flex', flexDirection: 'column',
-                    boxShadow: '0 -12px 40px rgba(0,0,0,0.18)',
-                  }}>
-                    {/* Handle bar */}
-                    <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 4px' }}>
-                      <div style={{ width: 36, height: 4, borderRadius: 2, background: T.gray200 }} />
-                    </div>
-                    {/* Sheet header */}
-                    <div style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      paddingBottom: 12, paddingTop: 6,
-                      borderBottom: `1px solid ${T.gray100}`, marginBottom: 12,
-                      fontWeight: 800, fontSize: 17, color: T.gray900,
-                    }}>
-                      <span>Select District</span>
-                      <button
-                        type="button"
-                        onClick={() => { setDistOpen(false); setDistrictSearch(''); }}
-                        style={{
-                          background: T.gray100, border: 'none', borderRadius: '50%',
-                          width: 30, height: 30, cursor: 'pointer', fontSize: 14,
-                          color: T.gray600, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        }}>
-                        ✕
-                      </button>
-                    </div>
-                    {/* Search input */}
-                    <div style={{ position: 'relative', marginBottom: 12, flexShrink: 0 }}>
-                      <input
-                        autoFocus
-                        value={districtSearch}
-                        onChange={e => setDistrictSearch(e.target.value)}
-                        placeholder="Search district..."
-                        style={{
-                          width: '100%', padding: '10px 36px 10px 14px',
-                          borderRadius: 14,
-                          border: `1.5px solid ${T.gray200}`,
-                          fontSize: 14, color: T.gray900, outline: 'none',
-                          boxSizing: 'border-box', fontFamily: 'inherit',
-                          background: T.gray50,
-                        }}
-                      />
-                      {districtSearch && (
-                        <button
-                          type="button"
-                          onClick={() => setDistrictSearch('')}
-                          style={{
-                            position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
-                            background: T.gray200, border: 'none', borderRadius: '50%',
-                            width: 22, height: 22, display: 'flex', alignItems: 'center',
-                            justifyContent: 'center', cursor: 'pointer', color: T.gray600,
-                          }}>
-                          {Icon.x(10)}
-                        </button>
-                      )}
-                    </div>
-                    {/* District grid */}
-                    <div style={{ overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, paddingBottom: 8 }}>
-                      {filteredDistricts.length > 0 ? filteredDistricts.map(d => (
-                        <button key={d} type="button" onClick={() => changeDistrict(d)}
-                          style={{
-                            padding: '11px 12px',
-                            borderRadius: 14,
-                            background: d === district ? T.greenL : '#fff',
-                            border: `1.5px solid ${d === district ? T.green : T.gray200}`,
-                            fontSize: 13.5, fontWeight: d === district ? 700 : 500,
-                            color: d === district ? T.green : T.gray800,
-                            textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit',
-                            transition: 'background 0.1s, border-color 0.1s',
-                          }}>
-                          {d}
-                        </button>
-                      )) : (
-                        <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '24px 0', fontSize: 13, color: T.gray500 }}>
-                          No district found
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </>,
-                document.body
-              )}
-            </div>
 
             {/* Notification Bell */}
             <button
@@ -570,17 +437,16 @@ const filteredDistricts = districts.filter(d =>
               aria-label="Notifications"
               style={{
                 width: 38, height: 38, borderRadius: '50%',
-                background: '#f3f4f6',
-                border: `1.5px solid ${T.gray200}`,
+                background: '#f4f8f5',
+                border: '1px solid #e2ebe4',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', color: T.gray700, flexShrink: 0,
+                cursor: 'pointer', color: '#1a7a4a', flexShrink: 0,
                 position: 'relative',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.07)',
               }}>
-              {Icon.bell(19)}
+              {Icon.bell(18)}
               {notifCount > 0 && (
                 <span style={{
-                  position: 'absolute', top: 0, right: 0,
+                  position: 'absolute', top: 1, right: 1,
                   background: T.red, color: '#fff',
                   borderRadius: '50%', minWidth: 17, height: 17,
                   fontSize: 9.5, fontWeight: 800,
@@ -600,19 +466,19 @@ const filteredDistricts = districts.filter(d =>
         <div
           style={{
             width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-            background: focused ? '#fff' : T.gray100,
-            borderRadius: 16,
-            padding: '0 14px',
+            background: focused ? '#fff' : '#f4f8f5',
+            borderRadius: 50,
+            padding: '0 15px',
             minHeight: 44,
-            border: `1.5px solid ${focused ? T.green : 'transparent'}`,
-            boxShadow: focused ? `0 0 0 3px ${T.greenL}` : '0 1px 4px rgba(0,0,0,0.08)',
+            border: `1.5px solid ${focused ? '#1a7a4a' : '#e2ebe4'}`,
+            boxShadow: focused ? `0 0 0 3px rgba(26,122,74,0.10)` : 'none',
             position: 'relative', cursor: 'pointer',
             boxSizing: 'border-box',
             transition: 'border-color 0.15s, box-shadow 0.15s, background 0.15s',
           }}
           onClick={() => navigate('/search?focus=1')}
         >
-          <span style={{ color: focused ? T.green : T.gray400, flexShrink: 0, display: 'flex' }}>
+          <span style={{ color: focused ? '#1a7a4a' : T.gray400, flexShrink: 0, display: 'flex' }}>
             {Icon.search(17)}
           </span>
           <div style={{ flex: 1, position: 'relative', height: 24, minWidth: 0 }}>
