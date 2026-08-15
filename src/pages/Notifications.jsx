@@ -8,14 +8,12 @@ import {
   Armchair,
   Bell,
   Briefcase,
-  Calendar,
   Car,
   Check,
   CheckCircle2,
   ChevronDown,
   CircleDollarSign,
   Eye,
-  Flag,
   Handshake,
   Heart,
   Home,
@@ -211,10 +209,6 @@ offer_declined:   { Icon: X,                color: '#ea4335', bg: '#fce8e6', lab
   listing_comment:  { Icon: MessageSquare,  color: '#1A73E8', bg: '#e8f0fe', label: 'Comment',         category: 'listings' },
   listing_sold:     { Icon: PartyPopper,    color: '#0F9D58', bg: '#e8f5ee', label: 'Sold',            category: 'listings' },
   listing_liked:    { Icon: Heart,          color: '#ea4335', bg: '#fce8e6', label: 'Liked',           category: 'listings' },
-  booking_request:  { Icon: Calendar,       color: '#0F9D58', bg: '#e8f5ee', label: 'Booking',         category: 'bookings' },
-  booking_confirmed:{ Icon: CheckCircle2,   color: '#1A73E8', bg: '#e8f0fe', label: 'Confirmed',       category: 'bookings' },
-  booking_cancelled:{ Icon: X,              color: '#ea4335', bg: '#fce8e6', label: 'Cancelled',       category: 'bookings' },
-  booking_completed:{ Icon: Flag,           color: '#0F9D58', bg: '#e8f5ee', label: 'Completed',       category: 'bookings' },
   deal_ready:       { Icon: Handshake,      color: '#0F9D58', bg: '#e8f5ee', label: 'Confirm Deal',    category: 'deals' },
   deal_request:     { Icon: Handshake,      color: '#0F9D58', bg: '#e8f5ee', label: 'Deal Request',    category: 'deals' },
   deal_confirmed:   { Icon: PartyPopper,    color: '#0a7a44', bg: '#e8f5ee', label: 'Deal Confirmed',  category: 'deals' },
@@ -260,7 +254,6 @@ const CATEGORIES = [
   { id: 'offers',   label: 'Offers' },
   { id: 'deals',    label: 'Deals' },
   { id: 'orders',   label: 'Orders' },
-  { id: 'bookings', label: 'Bookings' },
   { id: 'system',   label: 'System' },
 ]
 
@@ -352,10 +345,10 @@ function matchCategory(notif, category) {
   if (category === 'offers')   return notif.type === 'listing_offer' || OFFER_NOTIF_TYPES.has(notif.type)
   if (category === 'deals')    return notif.type.startsWith('deal_') || notif.type === 'new_vouch'
   if (category === 'orders')   return notif.type.startsWith('order_')
-  if (category === 'bookings') return notif.type.startsWith('booking_')
   if (category === 'system') {
     return notif.type === 'system'
       || notif.type === 'warning'
+      || notif.type === 'job_match'
       || String(notif.type || '').startsWith('verification_')
   }
   return true
@@ -404,14 +397,6 @@ function renderSmartBody(notif, sender) {
       return `${name} liked "${data.listing_title || 'your listing'}"`
     case 'listing_sold':
       return `🎉 "${data.listing_title || 'Your listing'}" has been marked as sold!`
-    case 'booking_request':
-      return `${name} requested a booking for "${data.service_name || 'your service'}"`
-    case 'booking_confirmed':
-      return `Your booking for "${data.service_name || 'a service'}" has been confirmed`
-    case 'booking_cancelled':
-      return `Booking for "${data.service_name || 'a service'}" was cancelled`
-    case 'booking_completed':
-      return `Job completed: "${data.service_name || 'your service'}"`
     case 'deal_ready':
       return `You've chatted with ${data.buyer_name || 'a buyer'} about "${data.listing_title || 'a listing'}". Confirm the deal here if the sale happened.`
     case 'deal_request':
@@ -446,6 +431,8 @@ function renderSmartBody(notif, sender) {
         ? `Your offer of ${data.amount ? formatAmount(data) : ''} expires in ${horizon}`
         : `The offer of ${data.amount ? formatAmount(data) : ''} expires in ${horizon}`
     }
+    case 'job_match':
+      return notif.body || `A new job "${data.job_title || ''}" matches your keywords`
     default:
       return 'Tap to view details'
   }
@@ -519,8 +506,6 @@ function useProductContext(notifications) {
         // Prefer listing when we only have a title-ish message payload
         if (d.listing_title || n.type?.startsWith('listing_') || n.type?.startsWith('deal_') || n.type === 'new_message') {
           listingIds.add(String(contextId))
-        } else if (n.type?.startsWith('booking_')) {
-          serviceIds.add(String(contextId))
         } else {
           ambiguous.add(String(contextId))
         }
@@ -698,7 +683,6 @@ const EMPTY_COPY = {
   listings: { title: 'No listing activity', sub: 'Views, comments, likes and sales on your listings will appear here.', Icon: ShoppingBag, color: '#0F9D58', bg: '#e8f5ee' },
   offers:   { title: 'No offers yet', sub: 'Offers from buyers will appear here.', Icon: CircleDollarSign, color: '#F9AB00', bg: '#fff8e1' },
   deals:    { title: 'No deal updates', sub: 'Deal requests and confirmations will appear here.', Icon: Handshake, color: '#0F9D58', bg: '#e8f5ee' },
-  bookings: { title: 'No bookings yet', sub: 'Booking requests and updates will appear here.', Icon: Calendar, color: '#1A73E8', bg: '#e8f0fe' },
   orders:   { title: 'No orders yet', sub: 'Orders and shipping updates will appear here.', Icon: Package, color: '#1A73E8', bg: '#e8f0fe' },
   system:   { title: 'No system alerts', sub: 'System notifications and warnings will appear here.', Icon: Settings, color: '#80868b', bg: '#f8f9fa' },
 }
@@ -855,11 +839,6 @@ function NotificationActions({ notif, onAction }) {
         return [
           { id: 'accept', label: 'Accept', Icon: Check, variant: 'primary', onClick: handler('accept') },
           { id: 'counter', label: 'Counter', Icon: ArrowLeftRight, variant: 'secondary', onClick: handler('counter') },
-          { id: 'decline', label: 'Decline', Icon: X, variant: 'danger', onClick: handler('decline') },
-        ]
-      case 'booking_request':
-        return [
-          { id: 'confirm', label: 'Confirm', Icon: Check, variant: 'primary', onClick: handler('confirm') },
           { id: 'decline', label: 'Decline', Icon: X, variant: 'danger', onClick: handler('decline') },
         ]
       case 'deal_ready': {
@@ -2698,13 +2677,6 @@ export default function Notifications() {
           navigate(`/listing/${data.listing_id}`)
         }
         break
-      case 'booking_request':
-      case 'booking_confirmed':
-      case 'booking_cancelled':
-      case 'booking_completed':
-        if (data.booking_id) navigate(`/bookings/${data.booking_id}`)
-        else navigate('/services')
-        break
       // Deal flow stays in Notifications — do not open chat for deal actions
       case 'deal_ready':
       case 'deal_request':
@@ -2894,8 +2866,6 @@ export default function Notifications() {
           }
           break
         }
-        // Booking confirm (existing toast stub)
-        showToast('Confirmed', 'success')
         break
       }
 

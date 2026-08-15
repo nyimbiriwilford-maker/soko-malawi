@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { useStatusReplies } from './StatusReplies'
 
 /**
  * Status / story viewer — product-first layout (reference design).
@@ -384,8 +385,6 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
   const [progress, setProgress] = useState(0)
   const [paused, setPaused] = useState(false)
   const [localStories, setLocalStories] = useState(stories || [])
-  const [replyText, setReplyText] = useState('')
-  const [replySending, setReplySending] = useState(false)
   const [myReaction, setMyReaction] = useState(null)
   const [reactionCounts, setReactionCounts] = useState({})
   const [reacting, setReacting] = useState(false)
@@ -397,16 +396,11 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
   const [shareUrl, setShareUrl] = useState(null)
   const [copyOk, setCopyOk] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
-  const [myAvatar, setMyAvatar] = useState(null)
   // Stream media immediately (no “downloading…” gate)
   const [mediaReady, setMediaReady] = useState(false)
   const [mediaSrc, setMediaSrc] = useState(null)
   const [mediaKind, setMediaKind] = useState('image')  // image | video | none | text
   const [mediaError, setMediaError] = useState(null)
-  const [replies, setReplies] = useState([])
-  const [replyCount, setReplyCount] = useState(0)
-  const [showReplies, setShowReplies] = useState(false)
-  const [repliesLoading, setRepliesLoading] = useState(false)
   const [toast, setToast] = useState('')
   const [muted, setMuted] = useState(false)
 
@@ -433,27 +427,36 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
     toastRef.current = setTimeout(() => setToast(''), 2200)
   }
 
+  const repliesApi = useStatusReplies({ story, currentUserId, notify: showToast, preload: true })
+  const {
+    replies, replyCount,
+    loading: repliesLoading,
+    text: replyText, setText: setReplyText,
+    sending: replySending,
+    open: showReplies,
+    submit: handleReply,
+    myAvatar,
+  } = repliesApi
+
+  function openReplies() {
+    setPaused(true)
+    repliesApi.openReplies()
+  }
+  function closeReplies() {
+    setPaused(false)
+    repliesApi.closeReplies()
+  }
+
   useEffect(() => {
     setLocalStories(stories || [])
     setIdx(startIndex || 0)
     setMediaIdx(0)
   }, [stories, startIndex])
 
-  // Current user avatar for reply bar
-  useEffect(() => {
-    if (!currentUserId) return
-    supabase.from('profiles').select('avatar_url').eq('id', currentUserId).maybeSingle()
-      .then(({ data }) => setMyAvatar(data?.avatar_url || null))
-  }, [currentUserId])
-
   // Reset UI when story changes
   useEffect(() => {
     setMediaIdx(0)
-    setReplyText('')
     setShowMenu(false)
-    setShowReplies(false)
-    setReplies([])
-    setReplyCount(0)
     setMuted(false)
   }, [story?.id])
 
@@ -530,12 +533,6 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
       setViewCount(0)
     }
   }, [story?.id, currentUserId])
-
-  // Reply count for this status
-  useEffect(() => {
-    if (!story?.id) return
-    loadReplyCount(story.id)
-  }, [story?.id])
 
   // Reactions
   useEffect(() => {
@@ -800,209 +797,6 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
     else if (kind === 'service') navigate('/services')
     else if (kind === 'shop') navigate('/shop/' + id)
     else if (kind === 'request') navigate('/looking-for')
-  }
-
-  async function loadReplyCount(statusId) {
-    if (!statusId) return
-    // Prefer status_replies table
-    const { count, error } = await supabase
-      .from('status_replies')
-      .select('id', { count: 'exact', head: true })
-      .eq('status_id', statusId)
-    if (!error && count != null) {
-      setReplyCount(count)
-      return
-    }
-    // Fallback: messages tagged with status marker
-    const { data } = await supabase
-      .from('messages')
-      .select('id')
-      .ilike('body', `%[[status_reply:${statusId}]]%`)
-      .limit(200)
-    setReplyCount((data || []).length)
-  }
-
-  async function attachAuthors(rows) {
-    const ids = [...new Set((rows || []).map(r => r.from_user).filter(Boolean))]
-    if (!ids.length) return rows || []
-    const { data: profiles } = await supabase
-      .from('profiles')
-      .select('id, full_name, avatar_url')
-      .in('id', ids)
-    const map = {}
-    for (const p of profiles || []) map[p.id] = p
-    return (rows || []).map(r => ({
-      ...r,
-      author: r.author || map[r.from_user] || null,
-    }))
-  }
-
-  async function loadReplies() {
-    if (!story?.id) return
-    setRepliesLoading(true)
-
-    // Preferred: status_replies table
-    const { data, error } = await supabase
-      .from('status_replies')
-      .select('id, body, created_at, from_user, listing_id')
-      .eq('status_id', story.id)
-      .order('created_at', { ascending: false })
-      .limit(80)
-
-    if (!error && data) {
-      const withAuthors = await attachAuthors(data)
-      setReplies(withAuthors)
-      setReplyCount(data.length)
-      setRepliesLoading(false)
-      return
-    }
-
-    // Fallback: messages carrying status marker
-    const marker = `[[status_reply:${story.id}]]`
-    const { data: msgs } = await supabase
-      .from('messages')
-      .select('id, body, created_at, from_user, listing_id')
-      .ilike('body', `%${marker}%`)
-      .order('created_at', { ascending: false })
-      .limit(80)
-
-    const parsed = (msgs || []).map(m => ({
-      id: m.id,
-      body: String(m.body || '')
-        .replace(marker, '')
-        .replace(/\n*— replied on your status[\s\S]*$/i, '')
-        .replace(/^\n+/, '')
-        .trim(),
-      created_at: m.created_at,
-      from_user: m.from_user,
-      listing_id: m.listing_id,
-    }))
-    const withAuthors = await attachAuthors(parsed)
-    setReplies(withAuthors)
-    setReplyCount(parsed.length)
-    setRepliesLoading(false)
-  }
-
-  function openReplies() {
-    setPaused(true)
-    setShowReplies(true)
-    loadReplies()
-  }
-
-  function closeReplies() {
-    setShowReplies(false)
-    setPaused(false)
-  }
-
-  /**
-   * Auto-send reply to seller with status identity.
-   * Does NOT open chat — stays on the status viewer.
-   */
-  async function handleReply() {
-    if (!replyText.trim() || replySending || !currentUserId || !story) return
-    if (currentUserId === story.user_id) {
-      showToast('You can’t reply to your own status')
-      return
-    }
-
-    const text = replyText.trim()
-    setReplySending(true)
-
-    const statusSnippet = (story.content || '').replace(/\s+/g, ' ').trim().slice(0, 80)
-    const productLine = story.tagged?.title
-      ? `\nProduct: ${story.tagged.title}`
-      : (story.tagged_listing_id ? `\nListing: ${story.tagged_listing_id}` : '')
-
-    // Marker lets us find replies later; body is readable in chat for the seller
-    const marker = `[[status_reply:${story.id}]]`
-    const chatBody = [
-      marker,
-      text,
-      '',
-      '— replied on your status',
-      statusSnippet ? `Status: “${statusSnippet}${statusSnippet.length >= 80 ? '…' : ''}”` : null,
-      productLine.trim() || null,
-    ].filter(Boolean).join('\n')
-
-    let messageId = null
-    let sendError = null
-
-    // 1) Deliver into seller chat with listing/status identity
-    const msgPayload = {
-      from_user: currentUserId,
-      to_user: story.user_id,
-      body: chatBody,
-      read: false,
-      chat_source: story.tagged_listing_id ? 'listing' : 'direct',
-    }
-    if (story.tagged_listing_id) msgPayload.listing_id = story.tagged_listing_id
-
-    {
-      const res = await supabase.from('messages').insert(msgPayload).select('id').single()
-      if (res.error && /chat_source|listing_id|column/i.test(res.error.message || '')) {
-        // Retry minimal columns
-        const legacy = {
-          from_user: currentUserId,
-          to_user: story.user_id,
-          body: chatBody,
-          read: false,
-        }
-        if (story.tagged_listing_id) legacy.listing_id = story.tagged_listing_id
-        const res2 = await supabase.from('messages').insert(legacy).select('id').single()
-        messageId = res2.data?.id || null
-        sendError = res2.error
-      } else {
-        messageId = res.data?.id || null
-        sendError = res.error
-      }
-    }
-
-    // 2) Store structured reply for the replies sheet
-    if (!sendError) {
-      const replyRow = {
-        status_id: story.id,
-        from_user: currentUserId,
-        to_user: story.user_id,
-        body: text,
-        listing_id: story.tagged_listing_id || null,
-        message_id: messageId,
-      }
-      const { data: saved } = await supabase
-        .from('status_replies')
-        .insert(replyRow)
-        .select(`
-          id, body, created_at, from_user, listing_id,
-          author:profiles!from_user ( id, full_name, avatar_url )
-        `)
-        .maybeSingle()
-
-      // Optimistic local list update
-      const optimistic = saved || {
-        id: messageId || `local_${Date.now()}`,
-        body: text,
-        created_at: new Date().toISOString(),
-        from_user: currentUserId,
-        listing_id: story.tagged_listing_id || null,
-        author: {
-          id: currentUserId,
-          full_name: 'You',
-          avatar_url: myAvatar,
-        },
-      }
-      setReplies(prev => [optimistic, ...prev])
-      setReplyCount(c => c + 1)
-
-      // Notify chats UI without leaving
-      try { window.dispatchEvent(new Event('soko:messages-updated')) } catch { /* ignore */ }
-
-      setReplyText('')
-      showToast('Reply sent to seller')
-    } else {
-      console.error('Status reply failed:', sendError)
-      showToast('Could not send reply — try again')
-    }
-
-    setReplySending(false)
   }
 
   function onPointerDown() {

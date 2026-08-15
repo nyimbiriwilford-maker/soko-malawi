@@ -4,7 +4,7 @@
  */
 import { useState, useRef, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { Image as ImageIcon, Wrench, Briefcase, Search, ChevronRight } from 'lucide-react'
+import { Image as ImageIcon, Wrench, Search, ChevronRight } from 'lucide-react'
 import { T } from '../constants/tokens'
 import { MALAWI_DISTRICTS } from '../constants/malawiDistricts'
 import { supabase } from '../lib/supabase'
@@ -222,7 +222,6 @@ const filteredDistricts = districts.filter(d =>
     { label: 'Listing', desc: 'Sell a product or item', path: '/post', icon: <ImageIcon size={20} strokeWidth={1.85} /> },
     { label: 'Looking For', desc: 'Post what you need · get offers', path: '/looking-for', state: { openComposer: true }, icon: <Search size={20} strokeWidth={1.85} /> },
     { label: 'Service', desc: 'Offer your skills', path: '/services?tab=post', icon: <Wrench size={20} strokeWidth={1.85} /> },
-    { label: 'Job', desc: 'Post a job opening', path: '/jobs?tab=post', icon: <Briefcase size={20} strokeWidth={1.85} /> },
   ]
 
  function changeDistrict(d) {

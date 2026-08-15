@@ -869,7 +869,7 @@
   cursor: pointer;
 }
 
-/* ── Price offer card (v2 — premium) ────────────────────── */
+/* ── Price offer card (v3 — premium / professional) ─────── */
 .chat-thread .msg-bubble.offer-bubble {
   background: transparent;
   border: none;
@@ -879,73 +879,107 @@
 }
 
 .chat-thread .msg-bubble.offer-bubble .offer-card {
-  background: #fcfffd;
-  border: 1px solid #d2e8db;
+  --oc-accent: #1f2b26;
+  position: relative;
+  background: #ffffff;
+  border: 1px solid #e2ece6;
   border-radius: 16px;
-  /* padding on card; product strip uses negative margin to bleed full-width */
-  padding: 12px 14px 14px;
-  width: 268px;
-  max-width: 268px;
-  box-shadow: 0 2px 14px rgba(0,0,0,.10), 0 1px 3px rgba(0,0,0,.06);
+  padding: 14px 14px 15px;
+  width: 292px;
+  max-width: 292px;
+  box-shadow: 0 1px 2px rgba(15, 20, 16, 0.04), 0 8px 24px rgba(15, 20, 16, 0.07);
   overflow: hidden;
-  transition: box-shadow 0.15s ease;
+  transition: box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
 }
 
+.chat-thread .msg-bubble.offer-bubble .offer-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: linear-gradient(90deg, #1a7a4a, #22a05e);
+  opacity: 0.9;
+}
+
+.chat-thread .msg-bubble.offer-bubble .offer-card:hover {
+  box-shadow: 0 2px 4px rgba(15, 20, 16, 0.05), 0 14px 32px rgba(15, 20, 16, 0.10);
+  border-color: #cadfd3;
+}
+
+/* Mine vs theirs: subtle tone shift, both premium */
 .chat-thread .msg-bubble.offer-bubble.is-mine .offer-card {
-  background: #f7fdf9;
-  border-color: #beded0;
+  background: #fcfefd;
+  border-color: #cfe5d8;
 }
 
-/* Full-card status tints */
+/* Full-card status accents */
 .chat-thread .msg-bubble.offer-bubble .offer-card.is-accepted {
-  background: #f2fdf7;
-  border-color: #7dd8a8;
+  background: #f4fdf8;
+  border-color: #7fd8a7;
+}
+.chat-thread .msg-bubble.offer-bubble .offer-card.is-accepted::before {
+  background: linear-gradient(90deg, #16a34a, #4ade80);
 }
 
 .chat-thread .msg-bubble.offer-bubble .offer-card.is-declined {
-  background: #fef5f5;
-  border-color: #f5a0a0;
+  background: #fdf8f8;
+  border-color: #f3c1c1;
+}
+.chat-thread .msg-bubble.offer-bubble .offer-card.is-declined::before {
+  background: linear-gradient(90deg, #dc2626, #f87171);
 }
 
-/* Expired / withdrawn → desaturate the whole card */
+/* Expired / withdrawn → graceful desaturation + soft overlay */
 .chat-thread .msg-bubble.offer-bubble .offer-card.is-expired,
 .chat-thread .msg-bubble.offer-bubble .offer-card.is-withdrawn {
+  background: #fbfcfb;
+  border-color: #e6ebe7;
+  box-shadow: 0 1px 3px rgba(15, 20, 16, 0.04);
+}
+.chat-thread .msg-bubble.offer-bubble .offer-card.is-expired::before,
+.chat-thread .msg-bubble.offer-bubble .offer-card.is-withdrawn::before {
+  background: linear-gradient(90deg, #9aa6a0, #c3ccc7);
   opacity: 0.7;
-  filter: saturate(0.35);
+}
+.chat-thread .msg-bubble.offer-bubble .offer-card.is-expired,
+.chat-thread .msg-bubble.offer-bubble .offer-card.is-withdrawn {
+  opacity: 0.86;
+  filter: saturate(0.55);
 }
 
-/* Phase 7 — product context strip (full-bleed at card top) */
+/* Phase 7 — product / listing context strip (full-bleed at card top) */
 .chat-thread .offer-card-product {
   display: flex;
   align-items: center;
-  gap: 9px;
+  gap: 10px;
   width: calc(100% + 28px);   /* bleed past card's 14px padding on each side */
-  margin: -12px -14px 12px;   /* pull flush to card edges */
+  margin: -14px -14px 12px;   /* pull flush to card edges under the accent line */
   text-align: left;
-  background: #f0f8f4;
+  background: #f3f9f5;
   border: none;
-  border-bottom: 1px solid #daeee3;
+  border-bottom: 1px solid #e3efe7;
   border-radius: 0;
-  padding: 9px 14px;
+  padding: 8px 14px;
   cursor: pointer;
-  transition: background 0.1s ease;
+  transition: background 0.12s ease;
   font: inherit;
   color: inherit;
 }
 
 .chat-thread .offer-card-product:hover,
 .chat-thread .offer-card-product:active {
-  background: #e4f2ec;
+  background: #e9f5ee;
 }
 
 .chat-thread .offer-card-product-thumb {
   width: 34px;
   height: 34px;
-  border-radius: 8px;
+  border-radius: 9px;
   object-fit: cover;
   flex-shrink: 0;
-  background: #dbeee4;
-  border: 1px solid #cde5d7;
+  background: #dcefe3;
+  border: 1px solid #c9e2d3;
+  box-shadow: 0 1px 2px rgba(15, 20, 16, 0.04);
 }
 
 .chat-thread .offer-card-product-title {
@@ -953,7 +987,7 @@
   min-width: 0;
   font-size: 12.5px;
   font-weight: 600;
-  color: #1a2e24;
+  color: #21352b;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -961,10 +995,14 @@
 }
 
 .chat-thread .offer-card-product-arrow {
-  color: #8ab09e;
+  color: #7aa490;
   font-size: 15px;
   line-height: 1;
   flex-shrink: 0;
+  transition: transform 0.12s ease;
+}
+.chat-thread .offer-card-product:hover .offer-card-product-arrow {
+  transform: translateX(2px);
 }
 
 .chat-thread .offer-card-product.is-unavailable {
@@ -981,87 +1019,113 @@
   background: #f6f8f7;
 }
 
+/* Head row: eyebrow label + status pill */
 .chat-thread .offer-card-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .chat-thread .offer-card-tag {
-  font-size: 9.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.08em;
-  color: #4e8a6a;
+  letter-spacing: 0.1em;
+  color: #5b8571;
   text-transform: uppercase;
 }
+.chat-thread .offer-card-tag::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #1a7a4a;
+  box-shadow: 0 0 0 3px rgba(26, 122, 74, 0.14);
+}
 
-/* Status pill */
+/* Status pill — professional, subtle */
 .chat-thread .offer-card-status {
-  font-size: 9.5px;
+  font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: #92640a;
-  background: #fefce8;
-  border: 1px solid #f5d87a;
+  letter-spacing: 0.04em;
+  color: #8a5a00;
+  background: #fff8e6;
+  border: 1px solid #f0d88a;
   border-radius: 999px;
-  padding: 2px 9px;
+  padding: 2px 10px;
   white-space: nowrap;
-  line-height: 1.6;
+  line-height: 1.7;
 }
 
 .chat-thread .offer-card-status.is-accepted {
-  color: #166534;
-  background: #f0fdf4;
-  border-color: #86efac;
+  color: #116b38;
+  background: #ecfbf2;
+  border-color: #7fd8a7;
 }
 
 .chat-thread .offer-card-status.is-declined {
-  color: #991b1b;
-  background: #fef2f2;
-  border-color: #fca5a5;
+  color: #a32424;
+  background: #fceaea;
+  border-color: #f0aeae;
 }
 
 .chat-thread .offer-card-status.is-countered,
 .chat-thread .offer-card-status.is-superseded {
-  color: #475569;
-  background: #f8fafc;
-  border-color: #cbd5e1;
+  color: #3f4a55;
+  background: #f4f6f8;
+  border-color: #cdd5db;
 }
 
 .chat-thread .offer-card-status.is-withdrawn {
   color: #6b7280;
-  background: #f9fafb;
-  border-color: #d1d5db;
+  background: #f7f8f9;
+  border-color: #d6dbe0;
 }
 
 .chat-thread .offer-card-status.is-expired {
-  color: #9ca3af;
-  background: #f9fafb;
-  border-color: #e5e7eb;
+  color: #8a9490;
+  background: #f4f6f5;
+  border-color: #dfe5e2;
 }
 
-/* Amount — hero element */
+/* Amount — hero focal point */
 .chat-thread .offer-card-amount {
-  font-size: 26px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 30px;
   font-weight: 800;
-  color: #0c1f16;
+  font-family: 'Sora', 'DM Sans', system-ui, sans-serif;
+  color: #0d1a13;
   letter-spacing: -0.03em;
   line-height: 1.1;
-  margin: 0 0 4px;
+  margin: 0 0 3px;
+}
+
+.chat-thread .offer-card-amount-currency {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  color: #4c8a6b;
+  background: #eff8f2;
+  border: 1px solid #d4eadd;
+  border-radius: 7px;
+  padding: 3px 7px;
 }
 
 .chat-thread .offer-card-note {
-  font-size: 12px;
-  color: #637870;
-  line-height: 1.45;
+  font-size: 12.5px;
+  color: #5d6f66;
+  line-height: 1.5;
   margin: 2px 0 6px;
-  font-style: italic;
 }
 
-/* Legacy meta row (kept for compat) */
+/* Legacy meta row (kept for compat / unused by v3) */
 .chat-thread .offer-card-meta {
   font-size: 11px;
   color: #94a9a0;
@@ -1095,22 +1159,22 @@
   display: flex;
   align-items: center;
   gap: 0;
-  margin: 8px 0 4px;
+  margin: 10px 0 4px;
 }
 
 .chat-thread .offer-step {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 20px;
-  height: 20px;
+  min-width: 21px;
+  height: 21px;
   border-radius: 999px;
-  font-size: 10px;
+  font-size: 10.5px;
   font-weight: 800;
   background: #f1f5f9;
   color: #64748b;
   border: 1px solid #e2e8f0;
-  transition: background 0.1s;
+  transition: background 0.12s;
 }
 
 .chat-thread .offer-step.has-connector {
@@ -1133,6 +1197,7 @@
   background: #0f9d58;
   border-color: #0f9d58;
   color: #fff;
+  box-shadow: 0 0 0 3px rgba(15, 157, 88, 0.16);
 }
 
 .chat-thread .offer-step.is-past {
@@ -1147,94 +1212,123 @@
   color: #94a3b8;
 }
 
-/* Footer: statusline + countdown side-by-side */
+/* Footer: statusline + live countdown side-by-side */
 .chat-thread .offer-card-footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-top: 10px;
+  margin-top: 12px;
   flex-wrap: wrap;
 }
 
 .chat-thread .offer-card-statusline {
   font-size: 11.5px;
   font-weight: 600;
-  color: #6b8578;
+  color: #5d7066;
   flex: 1 1 auto;
   min-width: 0;
-  line-height: 1.4;
+  line-height: 1.45;
 }
 
 .chat-thread .offer-card-statusline.is-pending  { color: #92640a; }
-.chat-thread .offer-card-statusline.is-accepted  { color: #166534; }
-.chat-thread .offer-card-statusline.is-declined  { color: #991b1b; }
+.chat-thread .offer-card-statusline.is-accepted  { color: #147a3f; }
+.chat-thread .offer-card-statusline.is-declined  { color: #a32424; }
 .chat-thread .offer-card-statusline.is-countered,
 .chat-thread .offer-card-statusline.is-superseded { color: #64748b; }
-.chat-thread .offer-card-statusline.is-withdrawn  { color: #9ca3af; }
-.chat-thread .offer-card-statusline.is-expired    { color: #9ca3af; }
+.chat-thread .offer-card-statusline.is-withdrawn  { color: #8a9490; }
+.chat-thread .offer-card-statusline.is-expired    { color: #8a9490; }
 
-/* Countdown pill — default (> 24h) */
+/* Live countdown pill — HH:MM:SS. Default neutral (> 24 h) */
 .chat-thread .offer-card-countdown {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  gap: 5px;
   white-space: nowrap;
   flex-shrink: 0;
   border-radius: 999px;
-  padding: 2px 9px;
-  /* default tone: neutral green-grey */
-  color: #4e8a6a;
-  background: #edf7f2;
-  border: 1px solid #b8deca;
+  padding: 3px 10px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #3d7a5c;
+  background: #eef8f2;
+  border: 1px solid #bcdcc9;
   transition: color 0.2s, background 0.2s, border-color 0.2s;
+}
+
+.chat-thread .offer-card-countdown-ico {
+  display: inline-flex;
+  font-size: 11px;
+  line-height: 1;
+}
+
+.chat-thread .offer-card-countdown-label {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  opacity: 0.85;
+}
+
+.chat-thread .offer-card-countdown-time {
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  letter-spacing: 0.02em;
 }
 
 /* Warning: < 24 h remaining */
 .chat-thread .offer-card-countdown.is-warning {
-  color: #92640a;
-  background: #fefce8;
-  border-color: #f5d87a;
+  color: #8a5a00;
+  background: #fff8e6;
+  border-color: #eecf77;
 }
 
-/* Urgent: < 1 h remaining */
+/* Urgent: < 1 h remaining — gentle pulse on the pill only */
 .chat-thread .offer-card-countdown.is-urgent {
-  color: #b91c1c;
-  background: #fef2f2;
-  border-color: #fca5a5;
+  color: #b32524;
+  background: #fdecec;
+  border-color: #f2abab;
   animation: offerCountdownPulse 2s ease-in-out infinite;
+}
+
+/* Expired countdown chip — muted, no pulse */
+.chat-thread .offer-card-countdown.is-expired {
+  color: #8a9490;
+  background: #f4f6f5;
+  border-color: #dfe5e2;
+  animation: none;
 }
 
 @keyframes offerCountdownPulse {
   0%, 100% { opacity: 1; }
-  50%       { opacity: 0.7; }
+  50%       { opacity: 0.72; }
 }
 
-/* Offer response actions — recipient (Accept / Decline / Counter) */
+/* Offer response actions — recipient (Accept / Decline / Counter).
+   A dedicated, clearly delineated action area keeps future "Counter Offer"
+   and other actions easy to slot in. */
 .chat-thread .offer-card-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
-  margin-top: 10px;
-  border-top: 1px solid #deeae3;
-  padding-top: 10px;
+  gap: 8px;
+  margin-top: 12px;
+  border-top: 1px solid #e6efe9;
+  padding-top: 11px;
 }
 
 .chat-thread .offer-card-actions button {
   flex: 1 1 auto;
-  min-width: 80px;
-  min-height: 36px;
-  border-radius: 10px;
+  min-width: 84px;
+  min-height: 38px;
+  border-radius: 11px;
   border: 1px solid transparent;
   font-size: 12.5px;
   font-weight: 700;
   letter-spacing: 0.01em;
   cursor: pointer;
   touch-action: manipulation;
-  transition: transform 0.07s ease, background 0.1s ease, box-shadow 0.1s ease;
+  transition: transform 0.07s ease, background 0.12s ease, box-shadow 0.12s ease, border-color 0.12s ease;
 }
 
 .chat-thread .offer-card-actions button:active {
@@ -1249,19 +1343,19 @@
 .chat-thread .offer-btn-accept {
   color: #fff;
   background: #16a34a;
-  box-shadow: 0 1px 5px rgba(22,163,74,0.28);
+  box-shadow: 0 1px 6px rgba(22,163,74,0.26);
 }
 
-.chat-thread .offer-btn-accept:hover  { background: #15803d; }
+.chat-thread .offer-btn-accept:hover  { background: #15803d; box-shadow: 0 2px 8px rgba(22,163,74,0.32); }
 .chat-thread .offer-btn-accept:active { background: #14532d; }
 
 .chat-thread .offer-btn-decline {
-  color: #991b1b;
-  background: #fef2f2;
-  border-color: #fca5a5 !important;
+  color: #a32424;
+  background: #fdecec;
+  border-color: #f2abab !important;
 }
 
-.chat-thread .offer-btn-decline:hover { background: #fee2e2; }
+.chat-thread .offer-btn-decline:hover { background: #fbdcdc; }
 
 .chat-thread .offer-btn-decline.is-confirming {
   color: #fff;
@@ -1289,24 +1383,24 @@
 .chat-thread .offer-card-actions.is-manage button {
   flex: 1 1 auto;
   min-width: 0;
-  padding: 8px 10px;
+  padding: 9px 10px;
 }
 
 .chat-thread .offer-btn-edit {
-  color: #166534;
-  background: #f0fdf4;
-  border-color: #86efac !important;
+  color: #147a3f;
+  background: #ecfbf2;
+  border-color: #9fe3bd !important;
 }
 
-.chat-thread .offer-btn-edit:hover { background: #dcfce7; }
+.chat-thread .offer-btn-edit:hover { background: #d9f6e5; }
 
 .chat-thread .offer-btn-withdraw {
-  color: #92640a;
-  background: #fefce8;
-  border-color: #f5d87a !important;
+  color: #8a5a00;
+  background: #fff8e6;
+  border-color: #eecf77 !important;
 }
 
-.chat-thread .offer-btn-withdraw:hover { background: #fef9c3; }
+.chat-thread .offer-btn-withdraw:hover { background: #fbefc9; }
 
 .chat-thread .offer-btn-withdraw.is-confirming {
   color: #fff;
@@ -1316,19 +1410,19 @@
 
 /* Withdrawn / expired read-only state colors */
 .chat-thread .offer-card-status.is-withdrawn {
-  color: #92640a;
-  background: #fefce8;
-  border-color: #f5d87a;
+  color: #8a5a00;
+  background: #fff8e6;
+  border-color: #eecf77;
 }
 
 .chat-thread .offer-card-status.is-expired {
-  color: #9ca3af;
-  background: #f9fafb;
-  border-color: #e5e7eb;
+  color: #8a9490;
+  background: #f4f6f5;
+  border-color: #dfe5e2;
 }
 
-.chat-thread .offer-card-statusline.is-withdrawn { color: #92640a; }
-.chat-thread .offer-card-statusline.is-expired   { color: #9ca3af; }
+.chat-thread .offer-card-statusline.is-withdrawn { color: #8a5a00; }
+.chat-thread .offer-card-statusline.is-expired   { color: #8a9490; }
 
 /* Meta row sits below the offer card bubble */
 .chat-thread .msg-bubble.offer-bubble .msg-meta-row {
@@ -2198,8 +2292,8 @@
 
   .chat-thread .msg-bubble.offer-bubble .offer-card {
     min-width: 0;
-    width: min(84vw, 268px);
-    max-width: min(84vw, 268px);
+    width: min(88vw, 292px);
+    max-width: min(88vw, 292px);
   }
 
   /* Composer: 16px prevents iOS focus zoom; keep bar sticky at bottom */

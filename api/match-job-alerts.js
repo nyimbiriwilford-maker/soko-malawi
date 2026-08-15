@@ -57,9 +57,8 @@ export default async function handler(req, res) {
         if (description.includes(kw)) inDescription = true
       }
 
-      // Threshold: ≥1 keyword match against required_skills, or a keyword
-      // appearing in the job title. Description overlap is reported too.
-      if (skillOverlap < 1 && !inTitle) continue
+      // Threshold: ≥1 keyword match against required_skills, title, or description.
+      if (skillOverlap < 1 && !inTitle && !inDescription) continue
 
       matches.push({
         user_id: alert.user_id,

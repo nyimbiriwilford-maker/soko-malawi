@@ -229,7 +229,6 @@ export default function Chat() {
   const [chatSource, setChatSource]       = useState(() =>
     resolveChatSource({ searchParams, locationState: location.state, contextId }) || 'direct'
   )
-  const [booking, setBooking]             = useState(null)
   const [isServiceChat, setIsServiceChat] = useState(false)
   const chatSourceRef = useRef(chatSource)
   const [loading, setLoading]             = useState(true)
@@ -696,14 +695,13 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
     setRequest(null)
     setIsServiceChat(false)
     isServiceChatRef.current = false
-    setBooking(null)
 
     if (contextId) {
       // Explicit source from URL/state first; otherwise detect by probing tables
       if (!source || source === 'direct') {
         source = await detectContextSource(contextId)
       }
-      await loadContextEntity(source, contextId, user.id)
+      await loadContextEntity(source, contextId)
     } else {
       source = 'direct'
     }
@@ -745,7 +743,7 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
     return 'direct'
   }
 
-  async function loadContextEntity(source, id, myId) {
+  async function loadContextEntity(source, id) {
     if (!id || source === 'direct') return
     try {
       if (source === 'listing') {
@@ -757,10 +755,6 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
           setService(data)
           setIsServiceChat(true)
           isServiceChatRef.current = true
-          try {
-            const foundBooking = await loadBooking(id, myId, userId)
-            if (foundBooking) setBooking(foundBooking)
-          } catch { /* ignore */ }
         }
       } else if (source === 'shop') {
         const { data } = await supabase.from('shops').select('*').eq('id', id).maybeSingle()
@@ -1355,19 +1349,6 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
   }
 
   // ── Helpers ──────────────────────────────────────────────────────────────
-  async function loadBooking(serviceId, myId, otherId) {
-    if (!serviceId || serviceId === 'undefined' || !myId || !otherId) return null
-    const { data: bk1 } = await supabase.from('bookings').select('*')
-      .eq('service_id', serviceId).eq('customer_id', myId).eq('provider_id', otherId)
-      .order('created_at', { ascending: false }).limit(1)
-    if (bk1?.length) return bk1[0]
-    const { data: bk2 } = await supabase.from('bookings').select('*')
-      .eq('service_id', serviceId).eq('customer_id', otherId).eq('provider_id', myId)
-      .order('created_at', { ascending: false }).limit(1)
-    if (bk2?.length) return bk2[0]
-    return null
-  }
-
   async function loadMessages(myId, source, ctxId) {
     let query = supabase.from('messages').select('*')
       .or(`and(from_user.eq.${myId},to_user.eq.${userId}),and(from_user.eq.${userId},to_user.eq.${myId})`)
@@ -2328,8 +2309,9 @@ async function uploadAndSend(file, type, caption = '') {
       if (nearest != null) {
         const wait = Math.max(0, nearest - Date.now()) + 150
         timer = setTimeout(() => { setOfferExpiryTick(n => n + 1); refresh() }, wait)
-        // Also tick every minute so the countdown label counts down live
-        interval = setInterval(() => setOfferExpiryTick(n => n + 1), 30_000)
+        // Also tick every second so the countdown label counts down live.
+        // Reuses the same single ticker (same state/scheduling) — no second timer.
+        interval = setInterval(() => setOfferExpiryTick(n => n + 1), 1000)
       } else {
         // No active deadline — poll loosely so newly created offers get scheduled
         interval = setInterval(() => setOfferExpiryTick(n => n + 1), 60_000)
@@ -3300,23 +3282,6 @@ async function uploadAndSend(file, type, caption = '') {
         </div>
       )}
 
-      {/* ── Booking status ── */}
-      {isServiceChat && booking && (() => {
-        const cfg = {
-          pending:   { bg: '#fff8e6', color: '#d4920a', icon: '⏳', text: 'Booking pending' },
-          confirmed: { bg: '#e6f7ee', color: '#1a7a4a', icon: '✅', text: 'Booking confirmed' },
-          completed: { bg: '#e8eaff', color: '#3b4dd4', icon: '🏁', text: 'Job completed' },
-          cancelled: { bg: '#fef0f0', color: '#c0392b', icon: '❌', text: 'Cancelled' },
-        }[booking.status] || {}
-        return (
-          <div style={{ background: cfg.bg, borderBottom: `1px solid ${cfg.color}22`, padding: '8px 14px', display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: 15 }}>{cfg.icon}</span>
-            <span style={{ fontSize: 12, color: '#555', flex: 1 }}>{cfg.text}</span>
-            {booking.date && <span style={{ fontSize: 11, color: cfg.color, fontWeight: '700' }}>📆 {booking.date}</span>}
-          </div>
-        )
-      })()}
-
       {/* Call overlay is rendered by ChatCallHost (outside this page shell) */}
 
       {/* ── Messages ── */}
@@ -3424,24 +3389,21 @@ async function uploadAndSend(file, type, caption = '') {
                 return `⏱ ${Math.ceil(ms / 86400000)}d`
               })()
             : null
-          // Offer accept-window countdown — shown on the card for both parties
+          // Offer accept-window countdown — shown on the card for both parties.
+          // Live HH:MM:SS "clock" format, driven by the existing single ticker.
           const offerExpiryAt = isOffer && offer && offerExpiresAt(offer)
           const offerTimeLeft = !offerExpired && offerExpiryAt
             ? (() => {
                 const ms = new Date(offerExpiryAt).getTime() - Date.now()
                 if (ms <= 0) return null
-                if (ms < 3600000) {
-                  const m = Math.max(1, Math.ceil(ms / 60000))
-                  return m < 60 ? `${m}m` : `1h ${m - 60}m`
-                }
-                if (ms < 86400000) {
-                  const h = Math.floor(ms / 3600000)
-                  const m = Math.floor((ms % 3600000) / 60000)
-                  return m ? `${h}h ${m}m` : `${h}h`
-                }
-                const d = Math.floor(ms / 86400000)
-                const h = Math.floor((ms % 86400000) / 3600000)
-                return h ? `${d}d ${h}h` : `${d}d`
+                const totalSec = Math.max(1, Math.floor(ms / 1000))
+                const d = Math.floor(totalSec / 86400)
+                const h = Math.floor((totalSec % 86400) / 3600)
+                const m = Math.floor((totalSec % 3600) / 60)
+                const s = totalSec % 60
+                const pad = (n) => String(n).padStart(2, '0')
+                const clock = `${pad(h)}:${pad(m)}:${pad(s)}`
+                return d > 0 ? `${d}d ${clock}` : clock
               })()
             : null
           // Urgency tier for countdown pill styling (purely visual, no logic change)
@@ -3589,12 +3551,15 @@ async function uploadAndSend(file, type, caption = '') {
                           )
                         )}
                         <div className="offer-card-head">
-                          <span className="offer-card-tag">💰 Price offer</span>
+                          <span className="offer-card-tag">Price offer</span>
                           <span className={`offer-card-status is-${effStatus}`}>
                             {offerStatusLabel(effStatus)}
                           </span>
                         </div>
-                        <div className="offer-card-amount">{formatOfferAmount(offer)}</div>
+                        <div className="offer-card-amount">
+                          <span className="offer-card-amount-currency">{offer?.currency || 'MWK'}</span>
+                          {Number(offer && offer.amount || 0).toLocaleString()}
+                        </div>
                         {offer.note && <div className="offer-card-note">{offer.note}</div>}
                         {flow && flow.total > 1 && (
                           <div className="offer-stepper" aria-label={`Negotiation offer ${flow.index} of ${flow.total}`}>
@@ -3620,13 +3585,20 @@ async function uploadAndSend(file, type, caption = '') {
                         {flow && flow.hasChild && (
                           <div className="offer-card-parent is-down">↓ continued by offer {flow.index + 1}</div>
                         )}
-<div className="offer-card-footer">
+                        <div className="offer-card-footer">
                           <span className={`offer-card-statusline is-${effStatus}`}>
                             {offerStatusText({ ...offer, status: effStatus }, currentUser?.id, isMine)}
                           </span>
-                          {offerTimeLeft && (
+                          {offerTimeLeft ? (
                             <span className={`offer-card-countdown${offerCountdownUrgency ? ` is-${offerCountdownUrgency}` : ''}`}>
-                              <span aria-hidden>⏳</span> {offerTimeLeft}
+                              <span className="offer-card-countdown-ico" aria-hidden>⏱</span>
+                              <span className="offer-card-countdown-label">Expires in</span>
+                              <span className="offer-card-countdown-time">{offerTimeLeft}</span>
+                            </span>
+                          ) : effStatus === OFFER_STATUS.expired && (
+                            <span className="offer-card-countdown is-expired" aria-hidden>
+                              <span className="offer-card-countdown-ico">⏱</span>
+                              Offer expired
                             </span>
                           )}
                         </div>

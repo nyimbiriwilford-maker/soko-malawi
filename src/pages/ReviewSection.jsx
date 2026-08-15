@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { S, timeAgo, renderStars } from './serviceData'
+import { Star, CheckCircle2, MessageSquare, PenLine } from 'lucide-react'
 
 export default function ReviewSection({ serviceId, providerId, currentUser }) {
   const [reviews, setReviews] = useState([])
@@ -68,7 +69,7 @@ export default function ReviewSection({ serviceId, providerId, currentUser }) {
         </div>
         {avgRating && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span style={{ color: '#d4920a', fontSize: '15px' }}>★</span>
+            <Star size={14} fill="#d4920a" stroke="#d4920a" />
             <span style={{ fontSize: '15px', fontWeight: '800', color: '#0f1410' }}>{avgRating}</span>
           </div>
         )}
@@ -77,10 +78,10 @@ export default function ReviewSection({ serviceId, providerId, currentUser }) {
       {/* Write review — any logged-in user who hasn't yet reviewed */}
       {currentUser && !submitted && !showForm && (
         <button
-          style={{ width: '100%', background: '#f4f8f5', border: 'none', borderRadius: '10px', padding: '11px', fontSize: '13px', fontWeight: '700', color: '#1a7a4a', cursor: 'pointer', marginBottom: '14px', fontFamily: 'inherit' }}
+          style={{ width: '100%', background: '#f4f8f5', border: 'none', borderRadius: '10px', padding: '11px', fontSize: '13px', fontWeight: '700', color: '#1a7a4a', cursor: 'pointer', marginBottom: '14px', fontFamily: 'inherit', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
           onClick={() => setShowForm(true)}
         >
-          ⭐ Write a review
+          <PenLine size={14} /> Write a review
         </button>
       )}
 
@@ -91,12 +92,12 @@ export default function ReviewSection({ serviceId, providerId, currentUser }) {
             {[1, 2, 3, 4, 5].map(n => (
               <button
                 key={n}
-                style={S.starBtn}
+                style={{ ...S.starBtn, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                 onMouseEnter={() => setHoverRating(n)}
                 onMouseLeave={() => setHoverRating(0)}
                 onClick={() => setMyRating(n)}
               >
-                <span style={{ color: n <= (hoverRating || myRating) ? '#d4920a' : '#ddd' }}>★</span>
+                <Star size={24} fill={n <= (hoverRating || myRating) ? '#d4920a' : 'none'} stroke={n <= (hoverRating || myRating) ? '#d4920a' : '#d1d5db'} strokeWidth={1.5} />
               </button>
             ))}
           </div>
@@ -111,19 +112,19 @@ export default function ReviewSection({ serviceId, providerId, currentUser }) {
           <div style={{ display: 'flex', gap: '8px' }}>
             <button style={{ flex: 1, background: '#f0f4f1', border: 'none', borderRadius: '10px', padding: '10px', fontSize: '13px', fontWeight: '600', cursor: 'pointer', fontFamily: 'inherit', marginTop: '10px' }} onClick={() => setShowForm(false)}>Cancel</button>
             <button
-              style={{ ...S.reviewSubmitBtn, flex: 2, opacity: submitting ? 0.7 : 1 }}
+              style={{ ...S.reviewSubmitBtn, flex: 2, opacity: submitting ? 0.7 : 1, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
               onClick={submitReview}
               disabled={submitting}
             >
-              {submitting ? 'Submitting…' : '⭐ Submit'}
+              <Star size={14} fill="#fff" /> {submitting ? 'Submitting…' : 'Submit'}
             </button>
           </div>
         </div>
       )}
 
       {submitted && (
-        <div style={{ background: '#e6f7ee', borderRadius: '10px', padding: '10px 12px', marginBottom: '12px', fontSize: '12px', color: '#1a7a4a', fontWeight: '600' }}>
-          ✅ Thanks for your review!
+        <div style={{ background: '#e6f7ee', borderRadius: '10px', padding: '10px 12px', marginBottom: '12px', fontSize: '12px', color: '#1a7a4a', fontWeight: '600', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <CheckCircle2 size={14} /> Thanks for your review!
         </div>
       )}
 
@@ -137,7 +138,7 @@ export default function ReviewSection({ serviceId, providerId, currentUser }) {
 
       {!loading && reviews.length === 0 && (
         <div style={{ textAlign: 'center', padding: '20px 0' }}>
-          <div style={{ fontSize: '28px', marginBottom: '6px' }}>💬</div>
+          <div style={{ fontSize: '28px', marginBottom: '6px', color: '#c6c6c6' }}><MessageSquare size={26} strokeWidth={1.5} /></div>
           <p style={{ fontSize: '13px', color: '#aaa' }}>No reviews yet — be the first!</p>
         </div>
       )}

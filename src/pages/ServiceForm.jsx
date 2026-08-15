@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { supabase } from '../lib/supabase'
 import { uploadToR2, getR2Url, deleteFromR2 } from '../lib/r2'
 import { SERVICE_CATS, CITIES, AVAILABILITY_OPTIONS, S } from './serviceData'
+import { Rocket, Lightbulb, ImagePlus, CheckCircle2, Upload, Loader2, Save, Pencil, X } from 'lucide-react'
 
 export default function ServiceForm({ editingService, onSuccess, onCancel }) {
   const mediaInputRef = useRef(null)
@@ -78,7 +79,6 @@ export default function ServiceForm({ editingService, onSuccess, onCancel }) {
 
   async function handlePost() {
     setPostError('')
-    if (!form.name.trim()) { setPostError('Please enter your name'); return }
     if (!form.category) { setPostError('Please select a category'); return }
     if (!form.city) { setPostError('Please select your city'); return }
     if (!form.rate.trim()) { setPostError('Please enter your rate'); return }
@@ -87,12 +87,18 @@ export default function ServiceForm({ editingService, onSuccess, onCancel }) {
 
     setPosting(true)
     const { data: { user } } = await supabase.auth.getUser()
+    let serviceName = form.name.trim()
+    if (!serviceName && user) {
+      const { data: prof } = await supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle()
+      serviceName = (prof?.full_name || user.user_metadata?.full_name || user.user_metadata?.name || '').trim()
+    }
+    if (!serviceName) serviceName = (user?.email || '').split('@')[0] || 'SokoMw User'
     const newMediaUrls = await uploadMediaFiles(user.id)
     const existingKept = (editingService?.media_urls || []).filter(u => !removedUrls.includes(u))
 
     const payload = {
       provider_id: user.id,
-      name: form.name.trim(),
+      name: serviceName,
       category: form.category,
       description: form.description.trim(),
       rate: form.rate.trim(),
@@ -120,12 +126,15 @@ export default function ServiceForm({ editingService, onSuccess, onCancel }) {
     setTimeout(() => { setPostSuccess(false); onSuccess() }, 1200)
   }
 
-  const progress = [form.name, form.category, form.city && form.rate, form.contact].filter(Boolean).length
+  const progress = [form.category, form.city && form.rate, form.contact].filter(Boolean).length
 
   return (
     <div style={S.form}>
       <div style={S.formCard}>
-        <div style={S.formTitle}>{editingService ? '✏️ Edit Listing' : '🚀 Offer a Service'}</div>
+        <div style={{ ...S.formTitle, display: 'flex', alignItems: 'center', gap: 8 }}>
+          {editingService ? <Pencil size={20} /> : <Rocket size={20} />}
+          {editingService ? 'Edit Listing' : 'Offer a Service'}
+        </div>
         <div style={S.formSub}>
           {editingService
             ? 'Update your service listing to attract more customers.'
@@ -143,18 +152,16 @@ export default function ServiceForm({ editingService, onSuccess, onCancel }) {
 
         {/* Tips banner */}
         {!editingService && (
-          <div style={{ background: '#e6f7ee', borderRadius: '12px', padding: '12px 14px', marginBottom: '20px', fontSize: '12px', color: '#1a7a4a', lineHeight: '1.7' }}>
-            💡 <strong>Tips for more customers:</strong> Add a clear photo, describe your work in detail, and include your WhatsApp number so customers can reach you instantly.
+          <div style={{ background: '#e6f7ee', borderRadius: '12px', padding: '12px 14px', marginBottom: '20px', fontSize: '12px', color: '#1a7a4a', lineHeight: '1.7', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+            <Lightbulb size={15} style={{ flexShrink: 0, marginTop: 1 }} />
+            <span><strong>Tips for more customers:</strong> Add a clear photo, describe your work in detail, and include your WhatsApp number so customers can reach you instantly.</span>
           </div>
         )}
-
-        <label style={S.label}>Your Full Name *</label>
-        <input style={S.input} placeholder="e.g. James Mkandawire" value={form.name} onChange={e => setF('name', e.target.value)} />
 
         <label style={S.label}>Service Category *</label>
         <select style={S.input} value={form.category} onChange={e => setF('category', e.target.value)}>
           <option value="">Select category...</option>
-          {SERVICE_CATS.map(c => <option key={c.name} value={c.name}>{c.icon} {c.name}</option>)}
+          {SERVICE_CATS.map(c => <option key={c.name} value={c.name}>{c.emoji} {c.name}</option>)}
         </select>
 
         <div style={S.row}>
@@ -233,7 +240,7 @@ export default function ServiceForm({ editingService, onSuccess, onCancel }) {
           style={{ ...S.mediaUploadBox, opacity: mediaPreviewUrls.length >= MAX_MEDIA ? 0.5 : 1 }}
           onClick={() => mediaPreviewUrls.length < MAX_MEDIA && mediaInputRef.current.click()}
         >
-          <div style={{ fontSize: '30px' }}>📸</div>
+          <div style={{ fontSize: '26px', color: '#1a7a4a' }}><ImagePlus size={30} strokeWidth={1.5} /></div>
           <div style={S.mediaUploadText}>Tap to add photos or videos of your work</div>
           <div style={{ fontSize: '11px', color: '#bbb', marginTop: '4px' }}>JPG, PNG, MP4 · max {MAX_MEDIA} files · 10MB each</div>
         </div>
@@ -248,7 +255,7 @@ export default function ServiceForm({ editingService, onSuccess, onCancel }) {
                 ) : (
                   <img src={url} alt="" style={S.mediaPreviewImg} />
                 )}
-                <button style={S.mediaPreviewRemove} onClick={() => removeMedia(i)}>✕</button>
+                <button style={{ ...S.mediaPreviewRemove, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => removeMedia(i)}><X size={10} strokeWidth={2.5} /></button>
                 {i === 0 && (
                   <div style={{ position: 'absolute', bottom: '3px', left: '3px', background: '#1a7a4a', color: '#fff', fontSize: '8px', fontWeight: '700', borderRadius: '4px', padding: '1px 5px' }}>
                     COVER
@@ -261,17 +268,17 @@ export default function ServiceForm({ editingService, onSuccess, onCancel }) {
 
         {postError && <p style={S.error}>{postError}</p>}
         {postSuccess && (
-          <div style={S.successBanner}>
-            ✅ {editingService ? 'Listing updated!' : 'You\'re now live!'} Redirecting…
+          <div style={{ ...S.successBanner, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+            <CheckCircle2 size={16} /> {editingService ? 'Listing updated!' : 'You\'re now live!'} Redirecting…
           </div>
         )}
 
         <button
-          style={{ ...S.submitBtn, opacity: posting || uploadingMedia || charCount > MAX_CHARS ? 0.65 : 1 }}
+          style={{ ...S.submitBtn, opacity: posting || uploadingMedia || charCount > MAX_CHARS ? 0.65 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
           onClick={handlePost}
           disabled={posting || uploadingMedia || charCount > MAX_CHARS}
         >
-          {uploadingMedia ? '📤 Uploading…' : posting ? '⏳ Saving…' : editingService ? '💾 Save Changes' : '🚀 List My Service'}
+          {uploadingMedia ? <><Upload size={16} /> Uploading…</> : posting ? <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Saving…</> : editingService ? <><Save size={16} /> Save Changes</> : <><Rocket size={16} /> List My Service</>}
         </button>
 
         {editingService && (

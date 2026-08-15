@@ -874,19 +874,17 @@ export function InCallStage({
         <CallStatusPill live>{durationLabel}</CallStatusPill>
       </div>
 
-      {/* Data budget — smart floating indicator, never blocks video */}
+      {/* Data budget — compact chip, top-right below the self-view PiP */}
       {bytesUsed !== undefined && budgetMb > 0 && (
         <div style={{
           position: 'absolute',
           top: isVideo
-            ? 'max(190px, calc(env(safe-area-inset-top, 0px) + 190px))'
-            : 'max(240px, calc(env(safe-area-inset-top, 0px) + 240px))',
-          left: 0,
-          right: 0,
+            ? 'max(200px, calc(env(safe-area-inset-top, 0px) + 200px))'
+            : 'max(20px, calc(env(safe-area-inset-top, 0px) + 20px))',
+          right: 16,
           display: 'flex',
-          justifyContent: 'center',
+          justifyContent: 'flex-end',
           zIndex: 3,
-          padding: '0 20px',
           opacity: uiVisible ? 1 : 0,
           transition: 'opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1)',
           transform: uiVisible ? 'translateY(0)' : 'translateY(-12px)',

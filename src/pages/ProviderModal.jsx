@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { SERVICE_CATS, S, avatarColor, initials, renderStars, formatWhatsApp, timeAgo } from './serviceData'
+import { SERVICE_CATS, S, avatarColor, initials, renderStars, formatWhatsApp } from './serviceData'
 import ReviewSection from './ReviewSection'
+import { X, ArrowLeft, Share2, Flag, MapPin, Eye, BadgeCheck, Wrench, Star, Info, MessageCircle, Phone, PlayCircle, Lightbulb, CheckCircle2 } from 'lucide-react'
 
 export default function ProviderModal({ provider, currentUser, onClose }) {
   const navigate = useNavigate()
@@ -76,7 +77,7 @@ export default function ProviderModal({ provider, currentUser, onClose }) {
             justifyContent: 'center', backdropFilter: 'blur(4px)',
           }}
         >
-          ✕
+          <X size={20} />
         </button>
 
         {/* ── Hero ─────────────────────────────────── */}
@@ -87,21 +88,21 @@ export default function ProviderModal({ provider, currentUser, onClose }) {
               : <img src={heroMedia} alt={provider.name} style={S.modalHeroMedia} />
           ) : (
             <div style={S.modalHeroPlaceholder}>
-              {catInfo?.icon || '🔧'}
-            </div>
+            {catInfo ? <catInfo.icon size={44} strokeWidth={1.6} /> : <Wrench size={44} strokeWidth={1.6} />}
+          </div>
           )}
 
           {/* Gradient overlay */}
           <div style={S.modalOverlayGrad} />
 
           {/* Back */}
-          <button style={S.modalBack} onClick={onClose}>←</button>
+          <button style={S.modalBack} onClick={onClose}><ArrowLeft size={18} /></button>
 
           {/* Share + Report */}
           <div style={S.modalTopRight}>
-            <button style={S.modalIconBtn} onClick={handleShare} title="Share">🔗</button>
+            <button style={S.modalIconBtn} onClick={handleShare} title="Share"><Share2 size={15} /></button>
             {!isOwner && (
-              <button style={S.modalIconBtn} onClick={() => setShowReport(true)} title="Report">🚩</button>
+              <button style={S.modalIconBtn} onClick={() => setShowReport(true)} title="Report"><Flag size={15} /></button>
             )}
           </div>
 
@@ -112,16 +113,16 @@ export default function ProviderModal({ provider, currentUser, onClose }) {
             </div>
             <div style={S.modalName}>
               {provider.name}
-              {provider.verified && <span style={{ color: '#5de89e', marginLeft: '4px' }}>✓</span>}
+              {provider.verified && <BadgeCheck size={16} style={{ color: '#5de89e', marginLeft: '4px', verticalAlign: '-2px' }} />}
             </div>
             <div style={S.modalSubline}>
               {provider.rating > 0 && <span style={{ color: '#f0c040' }}>{renderStars(provider.rating)} {provider.rating} · </span>}
-              {provider.city && <span>📍 {provider.city}</span>}
-              {(provider.views || 0) > 0 && <span> · 👁 {provider.views}</span>}
+              {provider.city && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><MapPin size={11} /> {provider.city}</span>}
+              {(provider.views || 0) > 0 && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}> · <Eye size={11} /> {provider.views}</span>}
             </div>
             <div style={S.modalTags}>
-              <span style={S.modalTag}>{catInfo?.icon} {provider.category}</span>
-              {provider.verified && <span style={S.modalTagGreen}>✓ Verified</span>}
+              <span style={{ ...S.modalTag, display: 'inline-flex', alignItems: 'center', gap: 5 }}>{catInfo ? <catInfo.icon size={11} /> : <Wrench size={11} />} {provider.category}</span>
+              {provider.verified && <span style={{ ...S.modalTagGreen, display: 'inline-flex', alignItems: 'center', gap: 4 }}><BadgeCheck size={11} /> Verified</span>}
               {provider.available && <span style={S.modalTag}>{provider.available}</span>}
             </div>
           </div>
@@ -135,7 +136,7 @@ export default function ProviderModal({ provider, currentUser, onClose }) {
               style={{ ...S.tab, flex: 1, justifyContent: 'center', ...(activeTab === t ? S.tabActive : {}) }}
               onClick={() => setActiveTab(t)}
             >
-              {t === 'info' ? '📋 Info' : `⭐ Reviews${provider.rating > 0 ? ` ${provider.rating}` : ''}`}
+              {t === 'info' ? <><Info size={15} /> Info</> : <><Star size={15} fill={provider.rating > 0 ? '#d4920a' : 'none'} /> Reviews{provider.rating > 0 ? ` ${provider.rating}` : ''}</>}
             </button>
           ))}
         </div>
@@ -176,7 +177,7 @@ export default function ProviderModal({ provider, currentUser, onClose }) {
               {provider.coverage && (
                 <div style={S.modalSection}>
                   <div style={S.modalSectionTitle}>Coverage Area</div>
-                  <p style={S.modalText}>📍 {provider.coverage}</p>
+                  <p style={{ ...S.modalText, display: 'flex', alignItems: 'center', gap: 5 }}><MapPin size={13} /> {provider.coverage}</p>
                 </div>
               )}
 
@@ -194,7 +195,7 @@ export default function ProviderModal({ provider, currentUser, onClose }) {
                         style={{ background: '#e6f7ee', border: 'none', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', fontWeight: '700', color: '#1a7a4a', cursor: 'pointer' }}
                         onClick={doCall}
                       >
-                        📞
+                        <Phone size={15} />
                       </button>
                       <button
                         style={{ background: '#e7f9ee', border: 'none', borderRadius: '8px', padding: '8px 12px', fontSize: '13px', fontWeight: '700', color: '#128c3e', cursor: 'pointer' }}
@@ -216,7 +217,7 @@ export default function ProviderModal({ provider, currentUser, onClose }) {
                       url.match(/\.(mp4|mov|webm)$/i) ? (
                         <div key={i} style={{ position: 'relative' }}>
                           <video src={url} style={S.mediaVideo} muted onClick={() => setLightboxMedia(url)} />
-                          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', fontSize: '22px' }}>▶</div>
+                          <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}><PlayCircle size={26} fill="rgba(0,0,0,0.35)" stroke="#fff" /></div>
                         </div>
                       ) : (
                         <img key={i} src={url} alt="" style={S.mediaThumb} onClick={() => setLightboxMedia(url)} />
@@ -227,8 +228,8 @@ export default function ProviderModal({ provider, currentUser, onClose }) {
               )}
 
               {/* How to connect tip */}
-              <div style={{ background: '#fffbe6', borderWidth: '1px', borderStyle: 'solid', borderColor: '#fde68a', borderRadius: '12px', padding: '12px 14px', fontSize: '12px', color: '#7a5a00', lineHeight: '1.7', marginBottom: '8px' }}>
-                💡 <strong>How to connect:</strong> Message or call {provider.name} directly to discuss your needs, agree on a price, and arrange the job.
+              <div style={{ background: '#fffbe6', borderWidth: '1px', borderStyle: 'solid', borderColor: '#fde68a', borderRadius: '12px', padding: '12px 14px', fontSize: '12px', color: '#7a5a00', lineHeight: '1.7', marginBottom: '8px', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+                <Lightbulb size={15} style={{ flexShrink: 0, marginTop: 1 }} /> <span><strong>How to connect:</strong> Message or call {provider.name} directly to discuss your needs, agree on a price, and arrange the job.</span>
               </div>
             </>
           )}
@@ -251,10 +252,10 @@ export default function ProviderModal({ provider, currentUser, onClose }) {
           ) : (
             <>
               {currentUser && (
-                <button style={S.chatBtn} onClick={goChat}>💬</button>
+                <button style={S.chatBtn} onClick={goChat}><MessageCircle size={18} /></button>
               )}
               {hasContact && (
-                <button style={S.callBtn} onClick={doCall}>📞 Call</button>
+                <button style={S.callBtn} onClick={doCall}><Phone size={15} /> Call</button>
               )}
               <button style={S.whatsappBtn} onClick={doWhatsApp}>
                 WhatsApp {provider.name.split(' ')[0]}
@@ -270,7 +271,7 @@ export default function ProviderModal({ provider, currentUser, onClose }) {
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.95)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}
           onClick={() => setLightboxMedia(null)}
         >
-          <button style={{ position: 'absolute', top: 16, right: 16, background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: '50%', color: '#fff', width: 36, height: 36, fontSize: 18, cursor: 'pointer' }}>✕</button>
+          <button style={{ position: 'absolute', top: 16, right: 16, background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: '50%', color: '#fff', width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}><X size={18} /></button>
           {lightboxMedia.match(/\.(mp4|mov|webm)$/i)
             ? <video src={lightboxMedia} controls autoPlay style={{ maxWidth: '95vw', maxHeight: '90vh', borderRadius: 12 }} />
             : <img src={lightboxMedia} alt="media" style={{ maxWidth: '95vw', maxHeight: '90vh', borderRadius: 12, objectFit: 'contain' }} />
@@ -284,14 +285,14 @@ export default function ProviderModal({ provider, currentUser, onClose }) {
           <div style={{ background: '#fff', borderRadius: '20px', padding: '24px', width: '300px', margin: '0 16px' }} onClick={e => e.stopPropagation()}>
             {reportSent ? (
               <div style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: '36px', marginBottom: '10px' }}>✅</div>
+                <div style={{ fontSize: '36px', marginBottom: '10px' }}><CheckCircle2 size={40} color="#1a7a4a" strokeWidth={1.8} /></div>
                 <div style={{ fontWeight: '800', marginBottom: '6px', fontSize: '16px' }}>Report submitted</div>
                 <p style={{ fontSize: '13px', color: '#888', marginBottom: '16px' }}>We'll review this listing.</p>
                 <button style={S.postFirstBtn} onClick={() => setShowReport(false)}>Done</button>
               </div>
             ) : (
               <>
-                <div style={{ fontSize: '16px', fontWeight: '800', marginBottom: '6px' }}>🚩 Report listing</div>
+                <div style={{ fontSize: '16px', fontWeight: '800', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: 6 }}><Flag size={16} color="#c0392b" /> Report listing</div>
                 <p style={{ fontSize: '13px', color: '#888', marginBottom: '14px' }}>Why are you reporting this?</p>
                 {['Fake or scam', 'Inappropriate content', 'Wrong category', 'Duplicate listing', 'Other'].map(r => (
                   <button

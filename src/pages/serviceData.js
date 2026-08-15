@@ -1,20 +1,22 @@
+import { Wrench, Zap, BookOpen, Scissors, Sparkles, Camera, Brush, Hammer, Car, Laptop, PenTool, ChefHat, Flower, ShieldCheck, Stethoscope, Truck, Clock, Star, Eye, BadgeCheck } from 'lucide-react'
+
 export const SERVICE_CATS = [
-  { icon: '🔧', name: 'Plumbing' },
-  { icon: '⚡', name: 'Electrical' },
-  { icon: '📚', name: 'Tutoring' },
-  { icon: '✂️', name: 'Tailoring' },
-  { icon: '🧹', name: 'Cleaning' },
-  { icon: '📸', name: 'Photography' },
-  { icon: '💇', name: 'Hair & Beauty' },
-  { icon: '🪚', name: 'Carpentry' },
-  { icon: '🚗', name: 'Transport' },
-  { icon: '💻', name: 'Tech & IT' },
-  { icon: '🎨', name: 'Design' },
-  { icon: '🍳', name: 'Catering' },
-  { icon: '🌿', name: 'Gardening' },
-  { icon: '🔐', name: 'Security' },
-  { icon: '🏥', name: 'Healthcare' },
-  { icon: '📦', name: 'Delivery' },
+  { emoji: '🔧', icon: Wrench,        name: 'Plumbing' },
+  { emoji: '⚡', icon: Zap,           name: 'Electrical' },
+  { emoji: '📚', icon: BookOpen,      name: 'Tutoring' },
+  { emoji: '✂️', icon: Scissors,      name: 'Tailoring' },
+  { emoji: '🧹', icon: Sparkles,      name: 'Cleaning' },
+  { emoji: '📸', icon: Camera,        name: 'Photography' },
+  { emoji: '💇', icon: Brush,         name: 'Hair & Beauty' },
+  { emoji: '🪚', icon: Hammer,        name: 'Carpentry' },
+  { emoji: '🚗', icon: Car,           name: 'Transport' },
+  { emoji: '💻', icon: Laptop,        name: 'Tech & IT' },
+  { emoji: '🎨', icon: PenTool,       name: 'Design' },
+  { emoji: '🍳', icon: ChefHat,       name: 'Catering' },
+  { emoji: '🌿', icon: Flower,        name: 'Gardening' },
+  { emoji: '🔐', icon: ShieldCheck,   name: 'Security' },
+  { emoji: '🏥', icon: Stethoscope,   name: 'Healthcare' },
+  { emoji: '📦', icon: Truck,         name: 'Delivery' },
 ]
 
 export const CITIES = ['All', 'Lilongwe', 'Blantyre', 'Mzuzu', 'Zomba', 'Kasungu', 'Mangochi', 'Karonga', 'Salima']
@@ -29,10 +31,10 @@ export const AVAILABILITY_OPTIONS = [
 ]
 
 export const SORT_OPTIONS = [
-  { value: 'newest',   label: '🕐 Newest' },
-  { value: 'rating',  label: '⭐ Top rated' },
-  { value: 'views',   label: '👁 Most viewed' },
-  { value: 'verified',label: '✓ Verified' },
+  { value: 'newest',   label: 'Newest',      icon: Clock },
+  { value: 'rating',  label: 'Top rated',    icon: Star },
+  { value: 'views',   label: 'Most viewed',  icon: Eye },
+  { value: 'verified',label: 'Verified',     icon: BadgeCheck },
 ]
 
 export function avatarColor(name) {

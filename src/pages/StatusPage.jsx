@@ -1,11 +1,13 @@
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useNavigate, useSearchParams, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { fetchAllActiveStories } from '../hooks/useStatuses'
 import StoryViewer from '../components/StoryViewer'
-import FollowButton from '../components/FollowButton'
 import StatusUploadModal from '../components/StatusUploadModal'
+import { useStatusReplies } from '../components/StatusReplies'
 import SokoNav from '../components/SokoNav'
+import { AnimatePresence, motion } from 'framer-motion'
+import { Heart, MessageCircle, Share2, Eye, Clock, Send } from 'lucide-react'
 
 // ─────────────────────────────────────────────
 // Design tokens — aligned with Home / Looking For / Shops
@@ -70,6 +72,23 @@ function timeAgo(iso) {
   if (h >= 1) return `${h}h`
   if (m < 1) return 'now'
   return `${m}m`
+}
+
+function expiresInLabel(iso) {
+  if (!iso) return null
+  const ms = new Date(iso) - Date.now()
+  if (ms <= 0) return 'Expired'
+  const h = ms / 3600000
+  if (h < 1) return 'Expires soon'
+  if (h < 24) return `Expires in ${Math.ceil(h)}h`
+  return `Expires in ${Math.ceil(h / 24)}d`
+}
+
+function fmtCount(n) {
+  const v = n || 0
+  if (v >= 1000000) return `${(v / 1000000).toFixed(1)}M`
+  if (v >= 1000) return `${(v / 1000).toFixed(1)}k`
+  return `${v}`
 }
 
 // ─────────────────────────────────────────────
@@ -422,20 +441,82 @@ function StoryCard({ s, index, isOwn, viewedIds, onClick, nearBadge }) {
   )
 }
 
-/** Feed card — vertical stack (header → media → text) for balanced grid */
-function StatusListCard({ s, onOpen, currentUserId }) {
-  const name    = s.profiles?.full_name || 'Seller'
-  const avatar  = s.profiles?.avatar_url
-  const initial = name[0]?.toUpperCase() || 'S'
+/** Batched views / likes / replies for the vertical feed, with realtime refresh. */
+function useStoryFeedMetrics(stories, currentUserId) {
+  const idKey = useMemo(
+    () => (stories || []).map(s => s.id).filter(Boolean).join('|'),
+    [stories],
+  )
+  const [metrics, setMetrics] = useState({})
+
+  const refresh = useCallback(async () => {
+    const ids = idKey ? idKey.split('|') : []
+    if (!ids.length) return
+
+    const [reactRes, replyRes, viewRes] = await Promise.all([
+      supabase.from('status_reactions').select('status_id, user_id, reaction').in('status_id', ids),
+      Promise.all(ids.map(id => supabase.from('status_replies').select('id', { count: 'exact', head: true }).eq('status_id', id))),
+      Promise.all(ids.map(id => supabase.from('status_views').select('id', { count: 'exact', head: true }).eq('status_id', id))),
+    ])
+
+    const map = {}
+    for (const id of ids) map[id] = { views: 0, likes: 0, myLike: null, replies: 0 }
+    for (const r of reactRes.data || []) {
+      if (map[r.status_id] && r.reaction === 'love') {
+        map[r.status_id].likes += 1
+        if (r.user_id === currentUserId) map[r.status_id].myLike = 'love'
+      }
+    }
+    replyRes.forEach((res, i) => { if (map[ids[i]] && res.count != null) map[ids[i]].replies = res.count })
+    viewRes.forEach((res, i) => { if (map[ids[i]] && res.count != null) map[ids[i]].views = res.count })
+    setMetrics(map)
+  }, [idKey, currentUserId])
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- fetch feed metrics on id/user change
+  useEffect(() => { refresh() }, [refresh])
+
+  // Realtime: keep counts fresh when replies/reactions change anywhere in the feed
+  useEffect(() => {
+    const ch = supabase.channel('st-feed-metrics')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'status_replies' }, () => refresh())
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'status_replies' }, () => refresh())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'status_reactions' }, () => refresh())
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'status_reactions' }, () => refresh())
+      .subscribe()
+    return () => supabase.removeChannel(ch)
+  }, [refresh])
+
+  async function likeStory(storyId) {
+    if (!currentUserId || !metrics[storyId]) return
+    const cur = metrics[storyId]
+    if (cur.myLike) {
+      setMetrics(m => ({ ...m, [storyId]: { ...m[storyId], myLike: null, likes: Math.max(0, (m[storyId]?.likes || 0) - 1) } }))
+      await supabase.from('status_reactions').delete().eq('status_id', storyId).eq('user_id', currentUserId)
+    } else {
+      setMetrics(m => ({ ...m, [storyId]: { ...m[storyId], myLike: 'love', likes: (m[storyId]?.likes || 0) + 1 } }))
+      await supabase.from('status_reactions').insert({ status_id: storyId, user_id: currentUserId, reaction: 'love' })
+    }
+    refresh()
+  }
+
+  return { metrics, likeStory }
+}
+
+/** Facebook-style feed card — header → media → caption → engagement row → shared comment drawer */
+function StatusFeedCard({ s, onOpen, currentUserId, metrics, onLike }) {
+  const name       = s.profiles?.full_name || 'Seller'
+  const avatar     = s.profiles?.avatar_url
+  const initial    = name[0]?.toUpperCase() || 'S'
   const isVerified = s.profiles?.is_verified || false
-  const media   = s.media_urls?.[0]
-  const isVideo = media && (/\.(mp4|mov|webm)(\?|$)/i.test(media) || media.includes('video'))
-  const isUrgent = s.content?.toLowerCase().includes('price drop') ||
-                   s.content?.toLowerCase().includes('urgent') ||
-                   s.content?.toLowerCase().includes('first to confirm')
-  const ago = timeAgo(s.created_at)
+  const media      = s.media_urls?.[0]
+  const isVideo    = media && (/\.(mp4|mov|webm)(\?|$)/i.test(media) || media.includes('video'))
+  const ago        = timeAgo(s.created_at)
+  const expires    = expiresInLabel(s.expires_at)
   const rawContent = (s.content || '').trim()
   const isGenericPhoto = /^photo update$/i.test(rawContent) || /^video update$/i.test(rawContent)
+  const isUrgent = rawContent.toLowerCase().includes('price drop') ||
+                   rawContent.toLowerCase().includes('urgent') ||
+                   rawContent.toLowerCase().includes('first to confirm')
   const category = isUrgent ? 'Urgent'
     : s.status_type === 'availability' ? 'Available'
     : s.status_type === 'work_ping' ? 'Work'
@@ -444,52 +525,87 @@ function StatusListCard({ s, onOpen, currentUserId }) {
   const displayText = isGenericPhoto
     ? (s.tagged?.title ? `Shared · ${s.tagged.title}` : (isVideo ? 'Shared a video update' : 'Shared a photo update'))
     : (rawContent || 'Tap to open status')
+  const m = metrics[s.id] || { views: 0, likes: 0, myLike: null, replies: 0 }
+
+  const [copied, setCopied] = useState(false)
+  const [commentFeedback, setCommentFeedback] = useState('')
+  const feedbackRef = useRef()
+
+  const replies = useStatusReplies({
+    story: s,
+    currentUserId,
+    notify: msg => {
+      setCommentFeedback(msg)
+      clearTimeout(feedbackRef.current)
+      feedbackRef.current = setTimeout(() => setCommentFeedback(''), 2200)
+    },
+  })
+
+  async function handleShare() {
+    const url = s.tagged_listing_id
+      ? `${window.location.origin}/listing/${s.tagged_listing_id}`
+      : `${window.location.origin}/profile/${s.user_id}`
+    if (/Android|iPhone|iPad|iPod/i.test(navigator.userAgent) && navigator.share) {
+      navigator.share({ title: `${name} on SokoMw`, text: s.content || '', url }).catch(() => {})
+      return
+    }
+    const done = () => { setCopied(true); setTimeout(() => setCopied(false), 1600) }
+    navigator.clipboard?.writeText(url).then(done).catch(() => {
+      const el = document.createElement('textarea')
+      el.value = url
+      document.body.appendChild(el)
+      el.select()
+      document.execCommand('copy')
+      document.body.removeChild(el)
+      done()
+    })
+  }
 
   return (
-    <article
-      className={`st-feed-card${isUrgent ? ' is-urgent' : ''}${media ? ' has-media' : ''}`}
-      onClick={onOpen}
-      role="button"
-      tabIndex={0}
-      onKeyDown={e => (e.key === 'Enter' || e.key === ' ') && onOpen?.()}
-    >
+    <article className={`st-feed-card${media ? ' has-media' : ''}`}>
       <div className="st-feed-body">
         <div className="st-feed-head">
-          <div className="st-feed-avatar">
-            {avatar ? <img src={avatar} alt="" /> : initial}
-          </div>
-          <div className="st-feed-who">
-            <div className="st-feed-name-row">
-              <span className="st-feed-name">{name}</span>
-              {isVerified && <VerifiedBadge />}
+          <button type="button" className="st-feed-headbtn" onClick={onOpen}>
+            <div className="st-feed-avatar">
+              {avatar ? <img src={avatar} alt="" /> : initial}
             </div>
-            <div className="st-feed-meta">
-              <Badge color={isUrgent ? T.orangeDeep : T.green} bg={isUrgent ? T.orangeLight : T.greenLight}>
-                {category}
-              </Badge>
-              <span className="st-feed-time">{ago} ago</span>
-              {s.location_hint && (
-                <span className="st-feed-loc">
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                    <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
-                  </svg>
-                  {s.location_hint}
-                </span>
-              )}
+            <div className="st-feed-who">
+              <div className="st-feed-name-row">
+                <span className="st-feed-name">{name}</span>
+                {isVerified && <VerifiedBadge />}
+              </div>
+              <div className="st-feed-meta">
+                <Badge color={isUrgent ? T.orangeDeep : T.green} bg={isUrgent ? T.orangeLight : T.greenLight}>
+                  {category}
+                </Badge>
+                <span className="st-feed-time">{ago} ago</span>
+                {s.location_hint && (
+                  <span className="st-feed-loc">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+                      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
+                    </svg>
+                    {s.location_hint}
+                  </span>
+                )}
+              </div>
             </div>
-          </div>
-          <span className="st-feed-open" aria-hidden>›</span>
+          </button>
+          {expires && (
+            <span className={`st-feed-expires${expires === 'Expired' ? ' is-expired' : ''}`}>
+              <Clock size={11} /> {expires}
+            </span>
+          )}
         </div>
 
         {media && (
-          <div className="st-feed-media">
+          <button type="button" className="st-feed-media" onClick={onOpen} aria-label="Open status">
             {isVideo
               ? <video src={media} muted playsInline preload="metadata" />
               : <img src={media} alt="" loading="lazy" />
             }
             {isVideo && <span className="st-feed-play" aria-hidden>▶</span>}
             <div className="st-feed-media-fade" aria-hidden />
-          </div>
+          </button>
         )}
 
         <p className="st-feed-text">{displayText}</p>
@@ -510,22 +626,102 @@ function StatusListCard({ s, onOpen, currentUserId }) {
           </div>
         )}
 
-        <div className="st-feed-foot">
-          <span className="st-feed-views">
-            <svg width="13" height="13" viewBox="0 0 12 12" fill="none" aria-hidden>
-              <path d="M6 2.5C3.5 2.5 1.5 5 1.5 6s2 3.5 4.5 3.5S10.5 7 10.5 6 8.5 2.5 6 2.5z" stroke="currentColor" strokeWidth="1.2"/>
-              <circle cx="6" cy="6" r="1.5" fill="currentColor"/>
-            </svg>
-            {(s.view_count || 0).toLocaleString()} views
-          </span>
-          {s.user_id !== currentUserId ? (
-            <div onClick={e => e.stopPropagation()}>
-              <FollowButton currentUserId={currentUserId} sellerId={s.user_id} size="sm" />
-            </div>
-          ) : (
-            <span className="st-feed-yours">Your post</span>
-          )}
+        <div className="st-feed-stats">
+          <span className="st-feed-views"><Eye size={12} /> {fmtCount(m.views)} views</span>
+          <span className="st-feed-stat"><Heart size={12} /> {fmtCount(m.likes)}</span>
+          <span className="st-feed-stat"><MessageCircle size={12} /> {fmtCount(m.replies)}</span>
         </div>
+
+        <div className="st-feed-eng">
+          <motion.button
+            type="button"
+            whileTap={{ scale: 1.28 }}
+            className={`st-feed-eng-btn${m.myLike ? ' is-liked' : ''}`}
+            onClick={() => onLike(s.id)}
+            aria-pressed={!!m.myLike}
+          >
+            <Heart size={17} fill={m.myLike ? '#ea4335' : 'none'} strokeWidth={2.2} />
+            <span>{m.myLike ? 'Liked' : 'Like'}</span>
+          </motion.button>
+
+          <motion.button
+            type="button"
+            whileTap={{ scale: 1.28 }}
+            className={`st-feed-eng-btn${replies.open ? ' is-active' : ''}`}
+            onClick={() => replies.open ? replies.closeReplies() : replies.openReplies()}
+            aria-expanded={replies.open}
+          >
+            <MessageCircle size={17} />
+            <span>Comment</span>
+          </motion.button>
+
+          <motion.button type="button" whileTap={{ scale: 1.28 }} className="st-feed-eng-btn" onClick={handleShare}>
+            <Share2 size={17} />
+            <span>{copied ? 'Copied' : 'Share'}</span>
+          </motion.button>
+        </div>
+
+        <AnimatePresence initial={false}>
+          {replies.open && (
+            <motion.div
+              className="st-feed-comments"
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={{ duration: 0.22, ease: 'easeOut' }}
+            >
+              <div className="st-feed-comments-in">
+                {commentFeedback && (
+                  <div className={`st-feed-comments-feedback${commentFeedback === 'Could not send reply — try again' ? ' is-error' : ''}`}>
+                    {commentFeedback}
+                  </div>
+                )}
+                {replies.loading ? (
+                  <div className="st-feed-comments-state">Loading comments…</div>
+                ) : replies.replies.length === 0 ? (
+                  <div className="st-feed-comments-state">No comments yet — start the conversation.</div>
+                ) : (
+                  replies.replies.map(c => (
+                    <div className="st-feed-comment" key={c.id}>
+                      <div className="st-feed-comment-avatar">
+                        {c.author?.avatar_url
+                          ? <img src={c.author.avatar_url} alt="" />
+                          : (c.author?.full_name || 'U')[0].toUpperCase()}
+                      </div>
+                      <div className="st-feed-comment-body">
+                        <div className="st-feed-comment-head">
+                          <strong>{c.author?.full_name || 'Someone'}</strong>
+                          <span>{timeAgo(c.created_at)}</span>
+                        </div>
+                        <p>{c.body}</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+                <div className="st-feed-comment-box">
+                  <input
+                    type="text"
+                    value={replies.text}
+                    placeholder="Write a comment…"
+                    disabled={replies.sending}
+                    onChange={e => replies.setText(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') replies.submit() }}
+                  />
+                  <motion.button
+                    type="button"
+                    whileTap={{ scale: 0.85 }}
+                    className="st-feed-comment-send"
+                    onClick={replies.submit}
+                    disabled={replies.sending || !replies.text.trim()}
+                    aria-label="Send comment"
+                  >
+                    <Send size={15} />
+                  </motion.button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     </article>
   )
@@ -565,6 +761,7 @@ function StatusPageInner({ user, navigate }) {
 
   const [stories, setStories]               = useState([])
   const [storiesLoaded, setStoriesLoaded]   = useState(false)
+  const [storiesError, setStoriesError]     = useState(null)
   const [viewerStories, setViewerStories]   = useState([])
   const [viewing, setViewing]               = useState(null)
   const [categoryFilter, setCategoryFilter] = useState('All')
@@ -586,6 +783,7 @@ function StatusPageInner({ user, navigate }) {
   const isMobile = windowWidth < 768
 
   function reloadStories() {
+    setStoriesError(null)
     setStoriesLoaded(false)
     return fetchAllActiveStories(user.id, categoryFilter).then(async data => {
       const listingIds = [...new Set(data.filter(s => s.tagged_listing_id).map(s => s.tagged_listing_id))]
@@ -598,7 +796,9 @@ function StatusPageInner({ user, navigate }) {
         setStories(data)
       }
       setStoriesLoaded(true)
-    }).catch(() => {
+    }).catch(err => {
+      console.error('Failed to load stories', err)
+      setStoriesError(err)
       setStoriesLoaded(true)
     })
   }
@@ -791,6 +991,23 @@ function StatusPageInner({ user, navigate }) {
   const recentStatuses = searchedStories
     .filter(s => s.user_id !== user.id)
     .slice(0, 12)
+
+  const { metrics: feedMetrics, likeStory } = useStoryFeedMetrics(recentStatuses, user.id)
+
+  async function openFeedStory(s) {
+    const { data } = await supabase.from('user_statuses')
+      .select(`id, content, status_type, expires_at, created_at, media_urls, tagged_listing_id, user_id, location_hint,
+        profiles:user_id ( id, full_name, avatar_url, is_verified ),
+        tagged:tagged_listing_id ( id, title, price, images, category, description )`)
+      .eq('user_id', s.user_id).gt('expires_at', new Date().toISOString())
+      .order('created_at', { ascending: false })
+    const norm = (data || []).map(x => {
+      if (Array.isArray(x.profiles)) x.profiles = x.profiles[0] || null
+      return x
+    })
+    setViewerStories(norm.length ? norm : [s])
+    setViewing(0)
+  }
 
   return (
     <div className="st-page" style={{ minHeight: '100vh', background: T.bg, fontFamily: T.font, color: T.text, paddingBottom: 88 }}>
@@ -1092,30 +1309,48 @@ function StatusPageInner({ user, navigate }) {
         )}
 
         {/* ── Feed ── */}
-        {recentStatuses.length > 0 ? (
+        {storiesError && storyGroups.length === 0 ? (
+          <section className="st-feed-section">
+            <SectionHeader kicker="Timeline" title="Latest updates" />
+            <div className="st-empty st-empty-error">
+              <div className="st-empty-ico">⚠️</div>
+              <h3>Couldn't load stories</h3>
+              <p>Something went wrong while loading status updates. Check your connection and try again.</p>
+              <div className="st-empty-actions">
+                <button type="button" className="st-primary-btn" onClick={() => reloadStories()}>Retry</button>
+              </div>
+            </div>
+          </section>
+        ) : recentStatuses.length > 0 ? (
           <section className="st-feed-section">
             <SectionHeader kicker="Timeline" title="Latest updates" count={recentStatuses.length} />
             <div className="st-feed-grid">
               {recentStatuses.map(s => (
-                <StatusListCard
+                <StatusFeedCard
                   key={s.id}
                   s={s}
                   currentUserId={user.id}
-                  onOpen={async () => {
-                    const { data } = await supabase.from('user_statuses')
-                      .select(`id, content, status_type, expires_at, created_at, media_urls, tagged_listing_id, user_id, location_hint,
-          profiles:user_id ( id, full_name, avatar_url, is_verified ),
-                        tagged:tagged_listing_id ( id, title, price, images, category, description )`)
-                      .eq('user_id', s.user_id).gt('expires_at', new Date().toISOString())
-                      .order('created_at', { ascending: false })
-                    const norm = (data || []).map(x => {
-                      if (Array.isArray(x.profiles)) x.profiles = x.profiles[0] || null
-                      return x
-                    })
-                    setViewerStories(norm.length ? norm : [s])
-                    setViewing(0)
-                  }}
+                  metrics={feedMetrics}
+                  onLike={likeStory}
+                  onOpen={() => openFeedStory(s)}
                 />
+              ))}
+            </div>
+          </section>
+        ) : !storiesLoaded ? (
+          <section className="st-feed-section" aria-hidden>
+            <SectionHeader kicker="Timeline" title="Latest updates" />
+            <div className="st-feed-grid">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div className="st-feed-card st-feed-skeleton" key={i}>
+                  <div className="st-feed-skel-media" />
+                  <div className="st-feed-body">
+                    <div className="st-skel-row st-skel-w30" />
+                    <div className="st-skel-row st-skel-w80" />
+                    <div className="st-skel-row st-skel-w55" />
+                    <div className="st-skel-row st-skel-w70" />
+                  </div>
+                </div>
               ))}
             </div>
           </section>
@@ -1258,9 +1493,11 @@ function StatusPageInner({ user, navigate }) {
         .st-feed-section { min-width: 0; }
         .st-feed-grid {
           display: grid;
-          grid-template-columns: repeat(3, minmax(0, 1fr));
+          grid-template-columns: 1fr;
           gap: 14px;
           align-items: stretch;
+          max-width: 640px;
+          margin: 0 auto;
         }
         .st-feed-card {
           display: flex; flex-direction: column;
@@ -1268,7 +1505,6 @@ function StatusPageInner({ user, navigate }) {
           border: 1px solid ${T.border};
           border-radius: 18px;
           overflow: hidden;
-          cursor: pointer;
           box-shadow: ${T.shadow};
           transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
           font-family: inherit;
@@ -1302,6 +1538,11 @@ function StatusPageInner({ user, navigate }) {
           gap: 10px;
           min-width: 0;
         }
+        .st-feed-headbtn {
+          display: flex; align-items: center; gap: 10px;
+          min-width: 0; flex: 1; cursor: pointer;
+          border: none; background: none; padding: 0; font-family: inherit; text-align: left;
+        }
         .st-feed-avatar {
           width: 42px; height: 42px; border-radius: 50%; overflow: hidden; flex-shrink: 0;
           background: linear-gradient(135deg, ${T.green}, #34c77a);
@@ -1326,6 +1567,14 @@ function StatusPageInner({ user, navigate }) {
           max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
           color: ${T.textMuted};
         }
+        .st-feed-expires {
+          display: inline-flex; align-items: center; gap: 4px;
+          flex-shrink: 0;
+          font-size: 10.5px; font-weight: 800; color: #b45309;
+          background: #fef3c7; border: 1px solid rgba(245,158,11,0.28);
+          border-radius: 999px; padding: 5px 9px; line-height: 1; white-space: nowrap;
+        }
+        .st-feed-expires.is-expired { color: #b91c1c; background: #fee2e2; border-color: rgba(220,38,38,0.28); }
         .st-feed-open {
           flex-shrink: 0;
           width: 28px; height: 28px; border-radius: 50%;
@@ -1345,6 +1594,7 @@ function StatusPageInner({ user, navigate }) {
           overflow: hidden;
           background: linear-gradient(145deg, #0f172a, #1e293b);
           flex-shrink: 0;
+          border: none; padding: 0; cursor: pointer; display: block;
         }
         .st-feed-media img,
         .st-feed-media video {
@@ -1404,20 +1654,104 @@ function StatusPageInner({ user, navigate }) {
           background: #fff; border: 1px solid rgba(15,157,88,0.18);
           border-radius: 999px; padding: 6px 11px; flex-shrink: 0;
         }
-        .st-feed-foot {
-          display: flex; align-items: center; justify-content: space-between; gap: 10px;
-          padding-top: 2px;
-          border-top: 1px solid ${T.border};
-          margin-top: auto;
-          padding-top: 10px;
+        .st-feed-stats {
+          display: flex; align-items: center; gap: 16px;
+          padding: 9px 0 2px;
         }
         .st-feed-views {
           display: inline-flex; align-items: center; gap: 5px;
-          font-size: 11.5px; font-weight: 600; color: ${T.textMuted};
+          font-size: 11.5px; font-weight: 700; color: ${T.textMuted};
         }
-        .st-feed-yours {
-          font-size: 11px; font-weight: 700; color: ${T.green};
-          background: ${T.greenLight}; border-radius: 999px; padding: 4px 9px;
+        .st-feed-stat {
+          display: inline-flex; align-items: center; gap: 5px;
+          font-size: 11.5px; font-weight: 700; color: ${T.textMuted};
+        }
+        .st-feed-eng {
+          display: flex; align-items: stretch;
+          border-top: 1px solid ${T.border};
+          margin-top: 6px;
+        }
+        .st-feed-eng-btn {
+          flex: 1;
+          display: flex; align-items: center; justify-content: center; gap: 7px;
+          border: none; background: none; padding: 11px 6px;
+          font-family: inherit; font-size: 12.5px; font-weight: 700; color: ${T.textSub};
+          cursor: pointer; border-radius: 10px; min-height: 44px;
+          transition: color 0.15s, background 0.15s;
+        }
+        .st-feed-eng-btn:hover { background: ${T.bg}; color: ${T.text}; }
+        .st-feed-eng-btn.is-active { color: ${T.green}; background: ${T.greenLight}; }
+        .st-feed-eng-btn.is-liked { color: #ea4335; }
+        @keyframes stHeartPop {
+          0% { transform: scale(1); }
+          35% { transform: scale(1.45); }
+          100% { transform: scale(1); }
+        }
+        .st-feed-eng-btn.is-liked svg { animation: stHeartPop 0.32s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+        .st-feed-comments { overflow: hidden; }
+        .st-feed-comments-in {
+          display: flex; flex-direction: column; gap: 12px;
+          background: ${T.bg}; border: 1px solid ${T.border};
+          border-radius: 14px; padding: 12px;
+          max-height: 320px; overflow-y: auto;
+        }
+        .st-feed-comments-state { font-size: 12.5px; color: ${T.textMuted}; font-weight: 600; text-align: center; padding: 8px 0; }
+        .st-feed-comments-feedback {
+          font-size: 12px; font-weight: 700; text-align: center; padding: 6px 10px;
+          color: ${T.green}; background: ${T.greenLight}; border-radius: 999px;
+        }
+        .st-feed-comments-feedback.is-error { color: #b91c1c; background: #fee2e2; }
+        .st-feed-comment { display: flex; gap: 9px; }
+        .st-feed-comment-avatar {
+          width: 30px; height: 30px; border-radius: 50%; overflow: hidden; flex-shrink: 0;
+          background: linear-gradient(135deg, ${T.green}, #34c77a);
+          color: #fff; font-weight: 800; font-size: 12px;
+          display: flex; align-items: center; justify-content: center;
+        }
+        .st-feed-comment-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+        .st-feed-comment-body { min-width: 0; flex: 1; }
+        .st-feed-comment-head { display: flex; align-items: baseline; gap: 8px; }
+        .st-feed-comment-head strong { font-size: 12.5px; color: ${T.text}; }
+        .st-feed-comment-head span { font-size: 10.5px; color: ${T.textMuted}; font-weight: 600; }
+        .st-feed-comment-body p {
+          margin: 3px 0 0; font-size: 13px; line-height: 1.45; color: ${T.text};
+          background: #fff; border: 1px solid ${T.border}; border-radius: 12px;
+          padding: 8px 11px;
+        }
+        .st-feed-comment-box { display: flex; gap: 8px; align-items: center; }
+        .st-feed-comment-box input {
+          flex: 1; min-width: 0;
+          border: 1px solid ${T.borderDark}; border-radius: 999px;
+          padding: 10px 14px; font-size: 13px; font-family: inherit;
+          color: ${T.text}; background: #fff; outline: none;
+          transition: border-color 0.15s;
+        }
+        .st-feed-comment-box input:focus { border-color: ${T.green}; }
+        .st-feed-comment-send {
+          width: 38px; height: 38px; border-radius: 50%; border: none; flex-shrink: 0;
+          background: ${T.green}; color: #fff; cursor: pointer;
+          display: grid; place-items: center;
+          transition: opacity 0.15s;
+        }
+        .st-feed-comment-send:disabled { opacity: 0.45; cursor: default; }
+
+        .st-feed-card.st-feed-skeleton { cursor: default; pointer-events: none; }
+        .st-feed-skel-media,
+        .st-skel-row {
+          background: linear-gradient(90deg, ${T.border} 25%, #f4f6f7 45%, ${T.border} 65%);
+          background-size: 300% 100%;
+          animation: stShimmer 1.3s ease-in-out infinite;
+        }
+        .st-feed-skel-media { width: 100%; aspect-ratio: 16 / 10; border-radius: 14px; flex-shrink: 0; }
+        .st-skel-row { height: 13px; border-radius: 7px; }
+        .st-skel-w30 { width: 30%; }
+        .st-skel-w55 { width: 55%; }
+        .st-skel-w70 { width: 70%; }
+        .st-skel-w80 { width: 80%; }
+        @keyframes stShimmer {
+          0% { background-position: 100% 0; }
+          100% { background-position: 0 0; }
         }
 
         .st-empty-inline {
@@ -1441,6 +1775,12 @@ function StatusPageInner({ user, navigate }) {
           margin: 0 auto 18px; max-width: 340px; font-size: 13.5px; color: ${T.textMuted}; line-height: 1.5;
         }
         .st-empty-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+        .st-empty-error .st-empty-ico {
+          background: linear-gradient(135deg, #fef3c7, #fffbeb);
+          color: #b45309;
+        }
+        .st-empty-error h3 { color: #92400e; }
+        .st-empty-error p { max-width: 380px; }
         .st-primary-btn {
           border: none; background: ${T.green}; color: #fff; border-radius: 12px;
           padding: 11px 16px; font-size: 13px; font-weight: 800; cursor: pointer; font-family: inherit;
@@ -1452,9 +1792,6 @@ function StatusPageInner({ user, navigate }) {
           cursor: pointer; font-family: inherit;
         }
 
-        @media (max-width: 1100px) {
-          .st-feed-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        }
         @media (max-width: 768px) {
           .st-hero-inner {
             padding: 18px 14px 16px !important;
@@ -1477,7 +1814,7 @@ function StatusPageInner({ user, navigate }) {
           .st-hero-bg { background-position: center 35% !important; }
           .st-panel { border-radius: 16px; padding: 14px 12px 12px; }
           .st-story-tile { width: 136px !important; height: 210px !important; }
-          .st-feed-grid { grid-template-columns: 1fr; gap: 10px; }
+          .st-feed-grid { gap: 10px; }
           .st-feed-media { aspect-ratio: 16 / 9; }
         }
         @media (max-width: 420px) {

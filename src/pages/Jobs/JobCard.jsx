@@ -10,55 +10,59 @@ export default function JobCard({ job, index, savedIds, onToggleSave, onClick })
   return (
     <div
       className="job-card"
-      style={{ animationDelay: `${index * 0.04}s` }}
+      style={{ animationDelay: `${index * 0.05}s` }}
       onClick={() => onClick(job)}
     >
-      {/* Cover image banner — shown if present */}
+      {/* Cover image banner */}
       {job.cover_image_url && (
         <div className="job-card-cover">
-          <img src={job.cover_image_url} alt="Job cover" className="job-card-cover-img" />
+          <img src={job.cover_image_url} alt="" className="job-card-cover-img" />
+          <div className="job-card-cover-overlay" />
         </div>
       )}
 
-      {/* Header row */}
-      <div className="job-card-top">
-        {job.logo_url ? (
-          <img className="job-card-logo job-card-logo--img" src={job.logo_url} alt={`${job.company} logo`} />
-        ) : (
-          <div className="job-card-logo" style={{ background: gradientFromName(job.company) }}>
-            {getInitials(job.company)}
-          </div>
-        )}
+      {/* Body */}
+      <div className="job-card-body">
+        {/* Header row */}
+        <div className="job-card-top">
+          {job.logo_url ? (
+            <img className="job-card-logo job-card-logo--img" src={job.logo_url} alt="" />
+          ) : (
+            <div className="job-card-logo" style={{ background: gradientFromName(job.company) }}>
+              {getInitials(job.company)}
+            </div>
+          )}
 
-        <div className="job-card-info">
-          <div className="job-card-title">{job.title}</div>
-          <div className="job-card-company">{job.company}</div>
-          {job.address && <div className="job-card-address">📍 {job.address}</div>}
+          <div className="job-card-info">
+            <div className="job-card-title">{job.title}</div>
+            <div className="job-card-company">{job.company}</div>
+            {job.address && <div className="job-card-address">📍 {job.address}</div>}
+          </div>
+
+          <button
+            className={`job-bookmark-btn${isSaved ? ' saved' : ''}`}
+            onClick={e => { e.stopPropagation(); onToggleSave?.(job.id) }}
+            title={isSaved ? 'Remove bookmark' : 'Save job'}
+          >
+            {isSaved ? '🔖' : '🏷️'}
+          </button>
         </div>
 
-        <button
-          className="job-bookmark-btn"
-          onClick={e => { e.stopPropagation(); onToggleSave?.(job.id) }}
-          title={isSaved ? 'Remove bookmark' : 'Save job'}
-        >
-          {isSaved ? '🔖' : '🏷️'}
-        </button>
-      </div>
+        {/* Meta chips */}
+        <div className="job-card-meta">
+          <span className="type-badge" style={{ background: colors.bg, color: colors.text }}>
+            <span className="type-badge-dot" style={{ background: colors.dot }} />
+            {job.type}
+          </span>
+          <span className="meta-chip">🏙️ {job.city}</span>
+          {job.category && <span className="meta-chip">{catIcon} {job.category}</span>}
+          {job.salary && <span className="meta-chip salary">💰 {job.salary}</span>}
+          {dl && <span className={`meta-chip ${dl.urgent ? 'urgent' : 'deadline'}`}>⏰ {dl.label}</span>}
+        </div>
 
-      {/* Meta chips */}
-      <div className="job-card-meta">
-        <span className="type-badge" style={{ background: colors.bg, color: colors.text }}>
-          <span className="type-badge-dot" style={{ background: colors.dot }} />
-          {job.type}
-        </span>
-        <span className="meta-chip">🏙️ {job.city}</span>
-        {job.category && <span className="meta-chip">{catIcon} {job.category}</span>}
-        {job.salary && <span className="meta-chip salary">💰 {job.salary}</span>}
-        {dl && <span className={`meta-chip ${dl.urgent ? 'urgent' : 'deadline'}`}>⏰ {dl.label}</span>}
+        {/* Preview text */}
+        <p className="job-card-desc">{job.overview || job.description}</p>
       </div>
-
-      {/* Preview text */}
-      <p className="job-card-desc">{job.overview || job.description}</p>
 
       {/* Footer */}
       <div className="job-card-footer">

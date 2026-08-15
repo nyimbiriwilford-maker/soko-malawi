@@ -1,25 +1,22 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { JOB_TYPES, CITIES, CATEGORIES } from './jobsConstants'
 import JobCard from './JobCard'
 import JobModal from './JobModal'
-import PostJobForm from './PostJobForm'
-import MyJobs from './MyJobs'
-import JobAlerts from './JobAlerts'
+import JobAlertTrigger, { JobAlertWizard } from './JobAlerts'
 import SokoNav from '../../components/SokoNav'
+import { Search, SlidersHorizontal, X, ChevronRight, Briefcase, Bookmark, Lock, SearchX } from 'lucide-react'
 import './Jobs.css'
 
 const TABS = [
-  { id: 'browse', label: 'Browse' },
-  { id: 'post',   label: 'Post Job' },
+  { id: 'browse', label: 'Browse All' },
   { id: 'saved',  label: 'Saved' },
-  { id: 'mine',   label: 'My Listings' },
 ]
 
 export default function Jobs() {
   const navigate = useNavigate()
-  const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get('tab') || 'browse')
+  const [tab, setTab] = useState('browse')
   const [jobs, setJobs] = useState([])
   const [loading, setLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState(null)
@@ -27,6 +24,7 @@ export default function Jobs() {
   const [notifCount, setNotifCount] = useState(0)
   const [navSearch, setNavSearch] = useState('')
   const [selectedJob, setSelectedJob] = useState(null)
+  const [alertOpen, setAlertOpen] = useState(false)
 
   // Filters
   const [search, setSearch] = useState('')
@@ -34,15 +32,13 @@ export default function Jobs() {
   const [filterType, setFilterType] = useState('')
   const [filterCat, setFilterCat] = useState('')
 
-  // Saved jobs (stored in localStorage for quick access, synced with DB if user is logged in)
+  // Saved jobs
   const [savedIds, setSavedIds] = useState(() => {
     try { return JSON.parse(localStorage.getItem('saved_jobs') || '[]') } catch { return [] }
   })
 
   // ── Init ────────────────────────────────────────────────
-  useEffect(() => {
-    init()
-  }, [])
+  useEffect(() => { init() }, [])
 
   async function init() {
     const { data: { user } } = await supabase.auth.getUser()
@@ -70,6 +66,11 @@ export default function Jobs() {
     setNotifCount(count || 0)
   }
 
+  const INITIAL_LIMIT = 20
+  const LOAD_MORE = 10
+  const [showCount, setShowCount] = useState(INITIAL_LIMIT)
+  const [loadingMore, setLoadingMore] = useState(false)
+
   async function loadJobs() {
     setLoading(true)
     const today = new Date().toISOString().split('T')[0]
@@ -80,11 +81,19 @@ export default function Jobs() {
       .or(`deadline.is.null,deadline.gte.${today}`)
       .order('created_at', { ascending: false })
     setJobs(data || [])
+    setShowCount(INITIAL_LIMIT)
     setLoading(false)
   }
 
-  // Open a specific job modal when arriving via a job_match notification
-  // (/jobs?job_id=…). Runs once after the list has loaded.
+  function loadMore() {
+    setLoadingMore(true)
+    setTimeout(() => {
+      setShowCount(c => c + LOAD_MORE)
+      setLoadingMore(false)
+    }, 400)
+  }
+
+  // Open specific job via URL param
   const openedJobRef = useRef(false)
   useEffect(() => {
     if (openedJobRef.current) return
@@ -119,30 +128,38 @@ export default function Jobs() {
         await supabase.from('saved_jobs').delete()
           .eq('user_id', currentUser.id).eq('job_id', jobId)
       } else {
-       await supabase.from('saved_jobs').upsert(
-  { user_id: currentUser.id, job_id: jobId },
-  { onConflict: 'user_id,job_id', ignoreDuplicates: true }
-)
+        await supabase.from('saved_jobs').upsert(
+          { user_id: currentUser.id, job_id: jobId },
+          { onConflict: 'user_id,job_id', ignoreDuplicates: true }
+        )
       }
     }
   }
 
   // ── Filter ──────────────────────────────────────────────
-  const filtered = jobs.filter(j => {
+  const allFiltered = jobs.filter(j => {
     if (filterCity && j.city !== filterCity) return false
     if (filterType && j.type !== filterType) return false
     if (filterCat && j.category !== filterCat) return false
     if (search) {
       const q = search.toLowerCase()
-      const match = j.title.toLowerCase().includes(q) || j.company.toLowerCase().includes(q) || j.city.toLowerCase().includes(q)
+      const match = j.title?.toLowerCase().includes(q) ||
+                    j.company?.toLowerCase().includes(q) ||
+                    j.city?.toLowerCase().includes(q)
       if (!match) return false
     }
     return true
   })
 
-  const savedJobs = jobs.filter(j => savedIds.includes(j.id))
-
+  const today = new Date().toISOString().split('T')[0]
+  const savedJobs = jobs.filter(j => {
+    if (!savedIds.includes(j.id)) return false
+    if (j.deadline && j.deadline < today) return false
+    return true
+  })
   const hasActiveFilters = filterCity || filterType || filterCat || search
+  const filtered = allFiltered.slice(0, showCount)
+  const hasMore = showCount < allFiltered.length
 
   function clearFilters() {
     setSearch('')
@@ -150,6 +167,21 @@ export default function Jobs() {
     setFilterType('')
     setFilterCat('')
   }
+
+  // Stats
+  const activeCount = jobs.length
+  const citiesCount = new Set(jobs.map(j => j.city)).size
+
+  // Rotating headline words
+  const rotateWords = useMemo(() => ['opportunity', 'career', 'future'], [])
+  const [wordIdx, setWordIdx] = useState(0)
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setWordIdx(i => (i + 1) % rotateWords.length)
+    }, 3000)
+    return () => clearInterval(interval)
+  }, [rotateWords.length])
 
   // ─────────────────────────────────────────────────────────
   return (
@@ -161,79 +193,71 @@ export default function Jobs() {
         setSearch={setNavSearch}
         navigate={navigate}
         activePillar="jobs"
-        ctaLabel="Post Job"
-        onCta={() => setTab('post')}
+        hideCta
       />
 
-      {/* ── Sub-header + tabs ── */}
-      <div className="jobs-header">
-        <div className="jobs-header-inner">
-          <div className="jobs-header-top">
-            <div style={{ minWidth: 0 }}>
-              <h1 className="jobs-header-title">Jobs</h1>
-              <div className="jobs-header-sub">
-                {loading ? 'Loading…' : `${jobs.length} open position${jobs.length !== 1 ? 's' : ''} across Malawi`}
-              </div>
-            </div>
-            <button
-              type="button"
-              className="jobs-post-btn"
-              onClick={() => setTab(tab === 'post' ? 'browse' : 'post')}
-            >
-              {tab === 'post' ? '← Back' : '+ Post Job'}
-            </button>
-          </div>
+      {/* ── Hero Section ── */}
+      <div className="jobs-hero">
+        <div className="jobs-hero-dots" />
+        <div className="jobs-hero-inner">
+          <h1 className="hero-headline">
+            Your next <span className="hero-headline-green" key={rotateWords[wordIdx]}>{rotateWords[wordIdx]}</span><br />
+            starts here.
+          </h1>
 
-          <div className="jobs-tabs">
-            {TABS.map(t => (
-              <button
-                key={t.id}
-                type="button"
-                className={`jobs-tab ${tab === t.id ? 'active' : ''}`}
-                onClick={() => setTab(t.id)}
-              >
-                {t.label}
-                {t.id === 'saved' && savedIds.length > 0 && (
-                  <span className="jobs-tab-badge">{savedIds.length}</span>
-                )}
-              </button>
-            ))}
+          <div className="hero-accent" />
+
+          <p className="hero-support">
+            Find verified jobs from trusted employers across Malawi. Apply directly. It's free.
+          </p>
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <button className="hero-cta" onClick={() => document.querySelector('.jobs-search-card')?.scrollIntoView({ behavior: 'smooth', block: 'center' })}>
+              <Briefcase size={16} strokeWidth={2.5} />
+              Browse Jobs Now
+              <ChevronRight size={16} strokeWidth={2.5} />
+            </button>
+            <JobAlertTrigger currentUser={currentUser} onClick={() => setAlertOpen(true)} />
           </div>
         </div>
       </div>
 
-      {/* ── BROWSE TAB ── */}
-      {tab === 'browse' && (
-        <div className="jobs-browse-body">
-          <div className="jobs-search-wrap">
-            <div className="jobs-search-box">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9aa0a6" strokeWidth="2.5" strokeLinecap="round">
-                <circle cx="11" cy="11" r="8" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
-              <input
-                placeholder="Search job title, company, city…"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
-                enterKeyHint="search"
-                autoComplete="off"
-              />
-              {search && (
-                <button
-                  type="button"
-                  onClick={() => setSearch('')}
-                  style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', fontSize: 14, padding: '0 2px' }}
-                  aria-label="Clear search"
-                >
-                  ✕
-                </button>
-              )}
+      {/* ── Job Alert Wizard Modal ── */}
+      {alertOpen && (
+        <JobAlertWizard
+          currentUser={currentUser}
+          onClose={() => setAlertOpen(false)}
+          onSave={() => {
+            // Refresh the trigger badge count
+            window.__jobAlertTriggerRefresh?.()
+          }}
+        />
+      )}
+
+      {/* ── Search Card ── */}
+      <div className="jobs-controls">
+        <div className="jobs-search-card">
+          <div className="jobs-search-inner">
+            <div className="jobs-search-icon">
+              <Search size={18} strokeWidth={2.5} />
             </div>
+            <input
+              className="jobs-search-input"
+              placeholder="Search job title, company, city..."
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              enterKeyHint="search"
+              autoComplete="off"
+            />
+            {search && (
+              <button className="jobs-search-clear" onClick={() => setSearch('')} aria-label="Clear search">✕</button>
+            )}
           </div>
 
-          <div className="jobs-filter-row">
+          {/* Filter chips */}
+          <div className="jobs-filters">
             <select
-              className={`jobs-filter-select ${filterType ? 'active' : ''}`}
+              className={`jobs-filter-chip${filterType ? ' active' : ''}`}
               value={filterType}
               onChange={e => setFilterType(e.target.value)}
             >
@@ -241,7 +265,7 @@ export default function Jobs() {
               {JOB_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
             </select>
             <select
-              className={`jobs-filter-select ${filterCity ? 'active' : ''}`}
+              className={`jobs-filter-chip${filterCity ? ' active' : ''}`}
               value={filterCity}
               onChange={e => setFilterCity(e.target.value)}
             >
@@ -249,7 +273,7 @@ export default function Jobs() {
               {CITIES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
             <select
-              className={`jobs-filter-select ${filterCat ? 'active' : ''}`}
+              className={`jobs-filter-chip${filterCat ? ' active' : ''}`}
               value={filterCat}
               onChange={e => setFilterCat(e.target.value)}
             >
@@ -257,86 +281,106 @@ export default function Jobs() {
               {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
             {hasActiveFilters && (
-              <button
-                type="button"
-                className="jobs-filter-select"
-                onClick={clearFilters}
-                style={{ color: 'var(--red)', borderColor: '#fad0ca', background: 'var(--red-bg)', paddingRight: 12 }}
-              >
-                ✕ Clear
-              </button>
+              <button className="jobs-filter-clear" onClick={clearFilters}>✕ Clear</button>
             )}
           </div>
+        </div>
+      </div>
 
-          {!loading && (
-            <div className="jobs-results-count">
-              {filtered.length === jobs.length
-                ? `${filtered.length} jobs found`
-                : `${filtered.length} of ${jobs.length} jobs`}
-            </div>
-          )}
+      {/* ── Tabs ── */}
+      <div className="jobs-tabs-wrap">
+        <div className="jobs-tabs">
+          {TABS.map(t => (
+            <button
+              key={t.id}
+              type="button"
+              className={`jobs-tab${tab === t.id ? ' active' : ''}`}
+              onClick={() => setTab(t.id)}
+            >
+              {t.label}
+              {t.id === 'saved' && savedJobs.length > 0 && (
+                <span className="jobs-tab-badge">{savedJobs.length}</span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
 
-          <div className="jobs-list">
-            {loading && [1, 2, 3].map(i => <div key={i} className="job-skeleton" />)}
-
-            {!loading && filtered.length === 0 && (
-              <div className="jobs-empty">
-                <div className="jobs-empty-icon">🔍</div>
-                <p className="jobs-empty-title">No jobs found</p>
-                <p className="jobs-empty-sub">
-                  {hasActiveFilters
-                    ? 'Try adjusting your search or filters to find more results.'
-                    : 'No active listings yet. Be the first to post!'}
-                </p>
-                {hasActiveFilters
-                  ? <button type="button" className="jobs-empty-btn" onClick={clearFilters}>Clear Filters</button>
-                  : <button type="button" className="jobs-empty-btn" onClick={() => setTab('post')}>Post a Job</button>
-                }
-              </div>
-            )}
-
-            {!loading && filtered.map((job, i) => (
-              <JobCard
-                key={job.id}
-                job={job}
-                index={i}
-                savedIds={savedIds}
-                onToggleSave={toggleSave}
-                onClick={setSelectedJob}
-              />
-            ))}
+      {/* ── Results Count ── */}
+      {tab === 'browse' && !loading && (
+        <div className="jobs-results">
+          <div className="jobs-results-count">
+            <strong>{filtered.length}</strong> job{filtered.length !== 1 ? 's' : ''} found
           </div>
         </div>
       )}
 
-      {/* ── POST TAB ── */}
-      {tab === 'post' && (
-        <PostJobForm
-          onSuccess={() => {
-            loadJobs()
-            setTab('browse')
-          }}
-        />
+      {/* ── Browse Tab ── */}
+      {tab === 'browse' && (
+        <div className="jobs-grid">
+          {loading && [1, 2, 3, 4, 5, 6].map(i => (
+            <div key={i} className="job-skeleton" style={{ animationDelay: `${i * 0.08}s` }} />
+          ))}
+
+          {!loading && filtered.length === 0 && (
+            <div className="jobs-empty">
+              <div className="jobs-empty-icon"><SearchX size={32} strokeWidth={1.5} /></div>
+              <p className="jobs-empty-title">No jobs found</p>
+              <p className="jobs-empty-sub">
+                {hasActiveFilters
+                  ? 'Try adjusting your search or filters to find more results.'
+                  : 'No active job listings yet. Check back soon!'}
+              </p>
+              {hasActiveFilters && (
+                <button className="jobs-empty-btn" onClick={clearFilters}>Clear Filters</button>
+              )}
+            </div>
+          )}
+
+          {!loading && filtered.map((job, i) => (
+            <JobCard
+              key={job.id}
+              job={job}
+              index={i}
+              savedIds={savedIds}
+              onToggleSave={toggleSave}
+              onClick={setSelectedJob}
+            />
+          ))}
+
+          {!loading && hasMore && (
+            <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'center', padding: '8px 0 16px' }}>
+              <button
+                className="jobs-empty-btn"
+                onClick={loadMore}
+                disabled={loadingMore}
+                style={{ minWidth: 160 }}
+              >
+                {loadingMore ? 'Loading...' : `Show More (${allFiltered.length - showCount} left)`}
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
-      {/* ── SAVED TAB ── */}
+      {/* ── Saved Tab ── */}
       {tab === 'saved' && (
-        <>
-          <div style={{ padding: '14px 14px 8px' }}>
-            <p style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600 }}>
-              {savedIds.length} saved job{savedIds.length !== 1 ? 's' : ''}
-            </p>
-          </div>
-          <div className="jobs-list">
-            {savedJobs.length === 0 && (
-              <div className="jobs-empty">
-                <div className="jobs-empty-icon">🔖</div>
-                <p className="jobs-empty-title">No saved jobs yet</p>
-                <p className="jobs-empty-sub">Tap the 🏷️ icon on any job to bookmark it for later.</p>
-                <button className="jobs-empty-btn" onClick={() => setTab('browse')}>Browse Jobs</button>
-              </div>
-            )}
-            {savedJobs.map((job, i) => (
+        <div className="jobs-grid">
+          {!currentUser ? (
+            <div className="jobs-empty">
+              <div className="jobs-empty-icon"><Lock size={32} strokeWidth={1.5} /></div>
+              <p className="jobs-empty-title">Sign in required</p>
+              <p className="jobs-empty-sub">Sign in to save and manage your favorite job listings.</p>
+            </div>
+          ) : savedJobs.length === 0 ? (
+            <div className="jobs-empty">
+              <div className="jobs-empty-icon"><Bookmark size={32} strokeWidth={1.5} /></div>
+              <p className="jobs-empty-title">No saved jobs yet</p>
+              <p className="jobs-empty-sub">Tap the bookmark icon on any job to save it for later.</p>
+              <button className="jobs-empty-btn" onClick={() => setTab('browse')}>Browse Jobs</button>
+            </div>
+          ) : (
+            savedJobs.map((job, i) => (
               <JobCard
                 key={job.id}
                 job={job}
@@ -345,20 +389,9 @@ export default function Jobs() {
                 onToggleSave={toggleSave}
                 onClick={setSelectedJob}
               />
-            ))}
-          </div>
-        </>
-      )}
-
-      {/* ── MY LISTINGS TAB ── */}
-      {tab === 'mine' && (
-        <>
-          <JobAlerts currentUser={currentUser} />
-          <MyJobs
-            currentUser={currentUser}
-            onViewJob={setSelectedJob}
-          />
-        </>
+            ))
+          )}
+        </div>
       )}
 
       {/* ── Job Detail Modal ── */}
@@ -370,8 +403,6 @@ export default function Jobs() {
           onClose={() => setSelectedJob(null)}
         />
       )}
-
-      {/* ── Bottom Nav ── */}
     </div>
   )
 }

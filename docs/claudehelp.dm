@@ -1,0 +1,1 @@
+﻿Services page: redesign the service provider cards to a premium look. Poster (provider) must be visible on the card, the price must not hide the service/provider name, and each card should indicate whether the provider is verified or not (verified status badge at the end of the name). Files: src/pages/ServicesPage.jsx.

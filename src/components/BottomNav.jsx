@@ -9,7 +9,6 @@ import {
   UserRound,
   Image as ImageIcon,
   Wrench,
-  Briefcase,
   Search,
   ChevronRight,
 } from 'lucide-react'
@@ -144,24 +143,6 @@ export default function BottomNav() {
               <ChevronRight size={16} strokeWidth={2.2} className="sbn-post-chev" aria-hidden />
             </button>
 
-            <button
-              type="button"
-              role="menuitem"
-              className="sbn-post-item"
-              onClick={() => {
-                setShowPostMenu(false)
-                navigate('/jobs?tab=post')
-              }}
-            >
-              <span className="sbn-post-ic sbn-post-ic-job" aria-hidden="true">
-                <Briefcase size={20} strokeWidth={1.85} />
-              </span>
-              <span className="sbn-post-copy">
-                <strong>Job</strong>
-                <span>Post a job opening</span>
-              </span>
-              <ChevronRight size={16} strokeWidth={2.2} className="sbn-post-chev" aria-hidden />
-            </button>
           </div>
         </>
       )}

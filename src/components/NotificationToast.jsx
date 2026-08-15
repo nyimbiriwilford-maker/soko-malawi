@@ -5,8 +5,8 @@ import { sendMessageReply } from '../utils/sendMessageReply'
 import { T } from '../constants/tokens'
 import {
   MessageCircle, Phone, VideoOff, Tag, Eye, MessageSquare, CheckCircle2,
-  Heart, Calendar, X, Flag, Handshake, Star, Package, Truck, Bell, AlertTriangle,
-  ArrowLeftRight, Undo2, Clock, CircleDollarSign, PenLine,
+  Heart, X, Handshake, Star, Package, Truck, Bell, AlertTriangle,
+  ArrowLeftRight, Undo2, Clock, CircleDollarSign, PenLine, Briefcase,
 } from 'lucide-react'
 
 const NOTIF_ICON_MAP = {
@@ -16,12 +16,11 @@ const NOTIF_ICON_MAP = {
   offer_new: CircleDollarSign, offer_counter: ArrowLeftRight,
   offer_accepted: CheckCircle2, offer_declined: X,
   offer_withdrawn: Undo2, offer_edited: PenLine, offer_expired: Clock, offer_expiring: Clock,
-  booking_request: Calendar, booking_confirmed: CheckCircle2,
-  booking_cancelled: X, booking_completed: Flag,
   deal_ready: Handshake, deal_request: Handshake, deal_confirmed: CheckCircle2,
   deal_declined: X, deal_vouching: Star, new_vouch: Star,
   order_placed: Package, order_shipped: Truck, order_delivered: CheckCircle2,
   order_cancelled: X, system: Bell, warning: AlertTriangle,
+  job_match: Briefcase,
 }
 
 const TYPE_COLORS = {
@@ -30,7 +29,7 @@ const TYPE_COLORS = {
   deal_request: T.amber, deal_confirmed: T.green, deal_declined: T.red,
   offer_new: T.green, offer_counter: T.blue, offer_accepted: T.green,
   offer_declined: T.red, offer_withdrawn: T.gray600, offer_edited: T.blue,
-  offer_expired: T.red, offer_expiring: T.amber,
+  offer_expired: T.red, offer_expiring: T.amber, job_match: '#7c3aed',
 }
 
 function getIcon(type) {
@@ -57,10 +56,10 @@ function getTitle(type) {
   if (type === 'offer_expired') return 'Offer Expired'
   if (type === 'offer_expiring') return 'Offer Expiring Soon'
   if (type === 'listing_view') return 'Listing Viewed'
-  if (type?.startsWith('booking_')) return 'Booking Update'
   if (type?.startsWith('deal_')) return 'Deal Update'
   if (type?.startsWith('order_')) return 'Order Update'
   if (type === 'system' || type === 'warning') return 'System Alert'
+  if (type === 'job_match') return 'Job Match'
   return 'Notification'
 }
 

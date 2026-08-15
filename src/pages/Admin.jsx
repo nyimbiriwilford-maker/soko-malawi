@@ -17,9 +17,10 @@ import AdminVerificationDetail from '../components/AdminVerificationDetail'
 import AdminVerificationSettings from '../components/AdminVerificationSettings'
 import AdminVerifiedSellers from '../components/AdminVerifiedSellers'
 import AdminVerificationHub from '../components/AdminVerificationHub'
+import PostJobForm from './Jobs/PostJobForm'
 import { uploadToR2, getR2Url, deleteFromR2 } from '../lib/r2'
 
-const TABS = ['Dashboard', 'Featured', 'Listings', 'Users', 'Verifications', 'Verify Settings', 'Shop Reports', 'Safety', 'Broadcast', 'Banners']
+const TABS = ['Dashboard', 'Featured', 'Listings', 'Users', 'Jobs', 'Verifications', 'Verify Settings', 'Shop Reports', 'Safety', 'Broadcast', 'Banners']
 
 export default function Admin() {
   const navigate = useNavigate()
@@ -64,6 +65,10 @@ export default function Admin() {
   const [bannerSaving, setBannerSaving] = useState(false)
   const [bannerAnalytics, setBannerAnalytics] = useState([])
   const [bannerAnalyticsLoading, setBannerAnalyticsLoading] = useState(false)
+  const [jobs, setJobs] = useState([])
+  const [jobsLoading, setJobsLoading] = useState(false)
+  const [jobActionLoading, setJobActionLoading] = useState(null)
+  const [showPostJobForm, setShowPostJobForm] = useState(false)
 
   useEffect(() => { init() }, [])
 
@@ -121,6 +126,7 @@ export default function Admin() {
       loadSettings(),
       loadBanners(),
       loadBannerAnalytics(),
+      loadJobs(),
     ])
     setLoading(false)
   }
@@ -164,6 +170,41 @@ export default function Admin() {
       // analytics table may not exist yet
     }
     setBannerAnalyticsLoading(false)
+  }
+
+  async function loadJobs() {
+    setJobsLoading(true)
+    const { data } = await supabase
+      .from('jobs')
+      .select('*')
+      .order('created_at', { ascending: false })
+    setJobs(data || [])
+    setJobsLoading(false)
+  }
+
+  async function closeJob(id) {
+    setJobActionLoading(id)
+    await supabase.from('jobs').update({ status: 'closed' }).eq('id', id)
+    setJobs(js => js.map(j => j.id === id ? { ...j, status: 'closed' } : j))
+    setJobActionLoading(null)
+    showToast('Job closed')
+  }
+
+  async function reactivateJob(id) {
+    setJobActionLoading(id)
+    await supabase.from('jobs').update({ status: 'active' }).eq('id', id)
+    setJobs(js => js.map(j => j.id === id ? { ...j, status: 'active' } : j))
+    setJobActionLoading(null)
+    showToast('Job reactivated')
+  }
+
+  async function deleteJob(id) {
+    if (!window.confirm('Delete this job permanently?')) return
+    setJobActionLoading(id)
+    await supabase.from('jobs').delete().eq('id', id)
+    setJobs(js => js.filter(j => j.id !== id))
+    setJobActionLoading(null)
+    showToast('Job deleted')
   }
 
   async function saveBanner(b) {
@@ -810,7 +851,7 @@ async function loadUsers() {
     !r.status || r.status === 'open' || r.status === 'pending'
   ).length
   const TAB_ICONS = {
-    Dashboard: '📊', Featured: '⭐', Listings: '📦', Users: '👥',
+    Dashboard: '📊', Featured: '⭐', Listings: '📦', Users: '👥', Jobs: '💼',
     Verifications: '✅', 'Verify Settings': '⚙️', 'Shop Reports': '🚩',
     Safety: '🛡️', Broadcast: '📣', Banners: '🖼️',
   }
@@ -942,6 +983,7 @@ async function loadUsers() {
               {tab === 'Featured' && 'Control homepage spotlight'}
               {tab === 'Listings' && `${filteredListings.length} listings`}
               {tab === 'Users' && `${stats.users} accounts`}
+              {tab === 'Jobs' && `${jobs.length} job listings`}
               {tab === 'Banners' && `${banners.length} banners`}
               {tab === 'Verifications' && 'Review seller applications'}
               {tab === 'Verify Settings' && 'Fees, docs, methods & analytics'}
@@ -1484,6 +1526,118 @@ async function loadUsers() {
                 </tbody>
               </table>
             </div>
+          </div>
+        )}
+
+        {/* ══ TAB: JOBS ══ */}
+        {tab === 'Jobs' && (
+          <div style={S.content}>
+            {showPostJobForm ? (
+              <div style={{ marginBottom: 20 }}>
+                <button
+                  onClick={() => { setShowPostJobForm(false); loadJobs() }}
+                  style={{
+                    background: '#f3f4f6', border: '1px solid #d0ddd5', borderRadius: 10,
+                    padding: '8px 16px', fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                    fontFamily: "'DM Sans', system-ui, sans-serif", marginBottom: 16,
+                    display: 'inline-flex', alignItems: 'center', gap: 6,
+                  }}
+                >
+                  ← Back to Jobs
+                </button>
+                <PostJobForm onSuccess={() => { loadJobs(); setShowPostJobForm(false) }} />
+              </div>
+            ) : (
+              <>
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+                  <button
+                    onClick={() => setShowPostJobForm(true)}
+                    style={{
+                      background: '#1a7a4a', color: '#fff', border: 'none',
+                      borderRadius: 10, padding: '10px 18px', fontSize: 13, fontWeight: 700,
+                      cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6,
+                      fontFamily: "'DM Sans', system-ui, sans-serif",
+                    }}
+                  >
+                    + Post Job
+                  </button>
+                </div>
+
+                <div style={S.tableCard}>
+                  <div style={S.tableHeader}>
+                    <div style={S.tableTitle}>All Jobs ({jobs.length})</div>
+                  </div>
+                  {jobsLoading ? (
+                    <div style={{ padding: 40, textAlign: 'center', color: '#999', fontSize: 13 }}>Loading...</div>
+                  ) : jobs.length === 0 ? (
+                    <div style={{ padding: 40, textAlign: 'center', color: '#aaa', fontSize: 13 }}>
+                      No jobs posted yet. Click "+ Post Job" to create one.
+                    </div>
+                  ) : (
+                    <table style={S.table}>
+                      <thead>
+                        <tr>
+                          <th style={S.th}>Job</th>
+                          <th style={S.th}>Company</th>
+                          <th style={S.th}>City</th>
+                          <th style={S.th}>Type</th>
+                          <th style={S.th}>Status</th>
+                          <th style={S.th}>Deadline</th>
+                          <th style={S.th}>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {jobs.map(j => (
+                          <tr key={j.id} className="row-hover" style={S.tr}>
+                            <td style={S.td}>
+                              <div style={{ fontSize: 13, fontWeight: 700, color: '#111', maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {j.title}
+                              </div>
+                              <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>
+                                Posted {j.created_at ? new Date(j.created_at).toLocaleDateString() : '—'}
+                              </div>
+                            </td>
+                            <td style={{ ...S.td, fontSize: 13, color: '#555' }}>{j.company || '—'}</td>
+                            <td style={S.td}><span style={S.cityBadge}>{j.city}</span></td>
+                            <td style={S.td}>
+                              <span style={{ fontSize: 12, fontWeight: 600, color: '#555' }}>{j.type}</span>
+                            </td>
+                            <td style={S.td}><StatusBadge status={j.status} /></td>
+                            <td style={{ ...S.td, fontSize: 12, color: j.deadline ? '#c2410c' : '#aaa' }}>
+                              {j.deadline || '—'}
+                            </td>
+                            <td style={S.td}>
+                              <div style={{ display: 'flex', gap: 6 }}>
+                                <ActionBtn
+                                  title={j.status === 'active' ? 'Close' : 'Reactivate'}
+                                  bg={j.status === 'active' ? '#fef3c7' : '#e6f4ec'}
+                                  color={j.status === 'active' ? '#b45309' : '#1a7a4a'}
+                                  disabled={jobActionLoading === j.id}
+                                  onClick={() => j.status === 'active' ? closeJob(j.id) : reactivateJob(j.id)}
+                                >
+                                  {j.status === 'active' ? '⏸' : '▶'}
+                                </ActionBtn>
+                                <ActionBtn
+                                  title="Delete"
+                                  bg="#fee2e2" color="#dc2626"
+                                  disabled={jobActionLoading === j.id}
+                                  onClick={() => deleteJob(j.id)}
+                                >
+                                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                                    <polyline points="3 6 5 6 21 6"/>
+                                    <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                                  </svg>
+                                </ActionBtn>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </>
+            )}
           </div>
         )}
 
