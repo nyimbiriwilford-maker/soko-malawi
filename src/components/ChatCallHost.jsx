@@ -5,7 +5,7 @@
 
 import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { Phone, Video, ShieldCheck, SlidersHorizontal } from 'lucide-react'
+import { Phone, ShieldCheck, SlidersHorizontal } from 'lucide-react'
 import { useNavigate, useLocation, useParams } from 'react-router-dom'
 import { useCall } from '../context/CallContext'
 import { getCallBudgetPref, estimateDuration, shouldAutoLowData } from '../lib/callBudgetPrefs'
@@ -424,26 +424,6 @@ export function CallHeaderButtons({ style = headerBtnStyle }) {
 
   return (
     <>
-      <button
-        type="button"
-        style={base}
-        onClick={() => { if (startCall && !busy) setPendingType('voice') }}
-        disabled={!startCall || busy}
-        title="Voice call"
-        aria-label="Start voice call"
-      >
-        <Phone size={17} strokeWidth={2.1} color="#0F9D58" aria-hidden />
-      </button>
-      <button
-        type="button"
-        style={base}
-        onClick={() => { if (startCall && !busy) setPendingType('video') }}
-        disabled={!startCall || busy}
-        title="Video call"
-        aria-label="Start video call"
-      >
-        <Video size={17} strokeWidth={2.1} color="#0F9D58" aria-hidden />
-      </button>
       {pendingType && createPortal(
         <CallStartDialog
           callType={pendingType}

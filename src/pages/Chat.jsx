@@ -52,7 +52,7 @@ import {
   formatLastSeen,
   activityTargetsChat,
 } from '../hooks/usePresence'
-import ChatCallHost, { CallHeaderButtons, HideDuringCall } from '../components/ChatCallHost'
+import ChatCallHost, { HideDuringCall } from '../components/ChatCallHost'
 import CallMessageBubble from '../components/CallMessageBubble'
 import { maybePromptDealReady } from '../utils/dealNotificationFlow'
 import { notifyMissedCall, notifyCallDeclined } from '../utils/callNotifications'
@@ -2948,7 +2948,6 @@ async function uploadAndSend(file, type, caption = '') {
               <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
             </svg>
           </button>
-          <CallHeaderButtons style={S.callBtn} />
           <button
             type="button"
             className="chat-icon-btn"
@@ -4552,7 +4551,6 @@ const S = {
   topInfo: { display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 },
   onlineDot: { position: 'absolute', bottom: 1, right: 1, width: 11, height: 11, borderRadius: '50%', transition: 'background 0.3s' },
   topStatus: { fontSize: 12, marginTop: 2, display: 'flex', alignItems: 'center' },
-  callBtn: { background: '#f3f7f4', border: 'none', borderRadius: 12, width: 38, height: 38, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 },
   ctxTitle: { fontSize: 13, fontWeight: 650, color: '#0f1410', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
   ctxSub: { fontSize: 11, color: '#1a7a4a', fontWeight: 650 },
   recordingBar: { display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 },
