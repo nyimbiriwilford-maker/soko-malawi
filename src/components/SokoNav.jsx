@@ -442,10 +442,10 @@ export default function SokoNav({
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
 
           {/* Logo */}
-          <div onClick={() => navigate('/')} style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center' }}>
-            <div style={{ fontFamily: T.fontDisplay, fontSize: 26, fontWeight: 900, color: T.green, letterSpacing: '-0.7px', lineHeight: 1 }}>
+          <div onClick={() => navigate('/')} style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center', height: 40 }}>
+            <span style={{ fontFamily: T.fontDisplay, fontSize: 23, fontWeight: 800, color: T.green, letterSpacing: '-0.55px', lineHeight: 1, whiteSpace: 'nowrap' }}>
               Soko<span style={{ color: T.amber }}>Mw</span>
-            </div>
+            </span>
           </div>
 
           {/* Right side: Search + Notification Bell + Profile */}
