@@ -166,3 +166,22 @@ The **Calls** category is no longer visible in the Notifications UI — removed 
 - `npx vite build`: PASSES.
 ## Files changed
 - `src/pages/Notifications.jsx`
+
+## Move status posting to the Post button (home + nav) (new)
+The home page's **first status card** ("Create Status" — the `AddStatusCard` "Create/Sell Products/Promote Business/Share Updates" card at the start of the status rail) has been **removed**. Posting a status is now done from the **Post** buttons:
+- **Mobile** — the bottom nav Post (FAB) menu now includes a **Status** item ("Share a quick update") that navigates to `/status?compose=1`.
+- **Desktop** — the header **Post Now** menu now includes a **Status** item ("Share a quick update") that navigates to `/status?compose=1`.
+- The status rail header's old desktop-only "Post status" button was removed too (superseded by the header Post menu).
+- `StatusPage` auto-opens the `StatusUploadModal` when arriving with `?compose=1` (the query param is stripped afterwards so refresh/re-entries don't re-open it).
+## Implementation details
+- `HomeStatusSection.jsx`: removed `AddStatusCard` component + its render + the desktop "Post status" header button; dropped now-unused `Plus` import and `currentUserProfile` prop.
+- `BottomNav.jsx`: added `Sparkles` import, Status menu item, and `.sbn-post-ic-status` styling.
+- `SokoNav.jsx`: added `Sparkles` import and the Status entry in `POST_ITEMS`.
+- `StatusPage.jsx`: added `useEffect` that opens the upload modal when `compose=1` is in the query string.
+## Verification
+- `npx vite build`: PASSES.
+## Files changed
+- `src/components/HomeStatusSection.jsx`
+- `src/components/BottomNav.jsx`
+- `src/components/SokoNav.jsx`
+- `src/pages/StatusPage.jsx`

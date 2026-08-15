@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
-import { ChevronRight, Plus, MapPin, ShoppingBag, Store, Briefcase, Wrench } from 'lucide-react'
+import { ChevronRight, MapPin, ShoppingBag, Store, Briefcase, Wrench } from 'lucide-react'
 import { STATUS_META } from '../constants/homeConstants'
 import { supabase } from '../lib/supabase'
 import { isStatusVideoUrl } from '../utils/statusVideo'
@@ -285,59 +285,6 @@ function LazyMedia({ src, isVideo, style }) {
         />
       )}
     </div>
-  )
-}
-
-function AddStatusCard({ onClick, currentUserId, navigate, userProfile }) {
-  return (
-    <button type="button" className="hs-add-btn"
-      onClick={() => { if (!currentUserId) { navigate?.('/login'); return }; onClick() }}
-      style={{
-        flexShrink: 0, overflow: 'hidden',
-        position: 'relative', cursor: 'pointer', border: '1.5px solid #16A34A',
-        padding: 0, fontFamily: 'inherit',
-        textAlign: 'center',
-        background: '#FFFFFF',
-        boxShadow: '0 8px 25px rgba(0,0,0,0.06)',
-        transition: 'transform 0.25s ease, box-shadow 0.25s ease',
-        scrollSnapAlign: 'start',
-      }}
-    >
-      <div style={{
-        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-        height: '100%', padding: '0 20px',
-      }}>
-        <div style={{
-          width: 52, height: 52, borderRadius: '50%',
-          background: '#16A34A', color: '#fff',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          marginBottom: 14,
-          boxShadow: '0 6px 15px rgba(22,163,74,0.25)',
-          transition: 'transform 0.25s ease',
-        }}>
-          <Plus size={26} strokeWidth={3} />
-        </div>
-        <span style={{ fontSize: 17, fontWeight: 700, color: '#111827', lineHeight: 1.2, letterSpacing: '0.02em', marginBottom: 2 }}>
-          Create
-        </span>
-        <span style={{ fontSize: 17, fontWeight: 700, color: '#111827', lineHeight: 1.2, letterSpacing: '0.02em', marginBottom: 14 }}>
-          Status
-        </span>
-        <div style={{
-          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1,
-        }}>
-          <span style={{ fontSize: 11, fontWeight: 500, color: '#9CA3AF', lineHeight: 1.5, letterSpacing: '0.01em' }}>
-            Sell Products
-          </span>
-          <span style={{ fontSize: 11, fontWeight: 500, color: '#9CA3AF', lineHeight: 1.5, letterSpacing: '0.01em' }}>
-            Promote Business
-          </span>
-          <span style={{ fontSize: 11, fontWeight: 500, color: '#9CA3AF', lineHeight: 1.5, letterSpacing: '0.01em' }}>
-            Share Updates
-          </span>
-        </div>
-      </div>
-    </button>
   )
 }
 
@@ -638,7 +585,7 @@ function persistViewedStoryIds(set) {
 
 function getInitCount(w) { return w >= 1024 ? 5 : 4 }
 
-export default function HomeStatusSection({ navigate, stories, loading, onCreateStory, currentUserId, currentUserProfile }) {
+export default function HomeStatusSection({ navigate, stories, loading, onCreateStory, currentUserId }) {
   const [viewedIds, setViewedIds] = useState(loadViewedStoryIds)
   const [activeCategory, setActiveCategory] = useState('All')
   const [windowWidth, setWindowWidth] = useState(window.innerWidth)
@@ -876,21 +823,6 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
                   )}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-{!isMobile && (
-                    <button type="button"
-                      onClick={() => { if (!currentUserId) { navigate?.('/login'); return }; onCreateStory?.() }}
-                      style={{
-                        border: 'none', background: G.green, color: '#fff', cursor: 'pointer', fontFamily: 'inherit',
-                        display: 'inline-flex', alignItems: 'center', gap: 4,
-                        padding: '5px 12px', fontSize: 11, fontWeight: 800,
-                        borderRadius: 999, whiteSpace: 'nowrap',
-                        boxShadow: '0 2px 8px rgba(15,157,88,0.3)',
-                      }}
-                    >
-                      <Plus size={12} strokeWidth={3} />
-                      Post status
-                    </button>
-                  )}
                   <button type="button"
                     onClick={() => { if (rankedStories.length) openStoryGroup(rankedStories[0]) }}
                     style={{
@@ -925,12 +857,6 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
                       marginTop: -10,
                     }}
                   >
-                    <AddStatusCard
-                      onClick={() => onCreateStory?.()}
-                      currentUserId={currentUserId}
-                      navigate={navigate}
-                      userProfile={currentUserProfile}
-                    />
                     {rankedStories.slice(0, displayLimit).map(s => (
                       <StoryCard
                         key={s.user_id}

@@ -25,3 +25,5 @@ On the login page, detect the Google account linked to the device/phone (Google 
 The login page is not auto-detecting the Google account even though VITE_GOOGLE_CLIENT_ID was placed in Vercel. Diagnose why and make One Tap fire reliably (redeploy required for VITE_ vars; authorized JavaScript origins in Google Cloud Console; user signed into Google; Supabase provider client id must match).
 
 Remove the challs (Calls) category in notifications — just make the call category not visible.
+
+On the home page remove the first status card button to post status. Make the post option for status be found in the post button in bottom nav for mobile view and in header post button for desktop view.

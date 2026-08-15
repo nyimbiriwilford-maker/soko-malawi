@@ -11,6 +11,7 @@ import {
   Wrench,
   Search,
   ChevronRight,
+  Sparkles,
 } from 'lucide-react'
 
 const ICON = { size: 22, strokeWidth: 1.75 }
@@ -139,6 +140,25 @@ export default function BottomNav() {
               <span className="sbn-post-copy">
                 <strong>Service</strong>
                 <span>Offer your skills</span>
+              </span>
+              <ChevronRight size={16} strokeWidth={2.2} className="sbn-post-chev" aria-hidden />
+            </button>
+
+            <button
+              type="button"
+              role="menuitem"
+              className="sbn-post-item"
+              onClick={() => {
+                setShowPostMenu(false)
+                navigate('/status?compose=1')
+              }}
+            >
+              <span className="sbn-post-ic sbn-post-ic-status" aria-hidden="true">
+                <Sparkles size={20} strokeWidth={1.85} />
+              </span>
+              <span className="sbn-post-copy">
+                <strong>Status</strong>
+                <span>Share a quick update</span>
               </span>
               <ChevronRight size={16} strokeWidth={2.2} className="sbn-post-chev" aria-hidden />
             </button>
@@ -495,7 +515,8 @@ const premiumCss = `
   .sbn-post-ic-listing,
   .sbn-post-ic-looking,
   .sbn-post-ic-service,
-  .sbn-post-ic-job {
+  .sbn-post-ic-job,
+  .sbn-post-ic-status {
     background: #f3f4f6;
     color: #374151;
   }

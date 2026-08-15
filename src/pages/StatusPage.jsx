@@ -782,6 +782,16 @@ function StatusPageInner({ user, navigate }) {
   }, [])
   const isMobile = windowWidth < 768
 
+  // Auto-open the status composer when arriving via /status?compose=1
+  useEffect(() => {
+    if (searchParams.get('compose') === '1') {
+      setShowUpload(true)
+      const next = new URLSearchParams(searchParams)
+      next.delete('compose')
+      setSearchParams(next, { replace: true })
+    }
+  }, [searchParams, setSearchParams])
+
   function reloadStories() {
     setStoriesError(null)
     setStoriesLoaded(false)

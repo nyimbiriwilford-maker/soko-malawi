@@ -3,7 +3,7 @@
  * Desktop + mobile layout. Only the primary CTA differs per page.
  */
 import { useState, useRef, useEffect } from 'react'
-import { Image as ImageIcon, Wrench, Search, ChevronRight } from 'lucide-react'
+import { Image as ImageIcon, Wrench, Search, ChevronRight, Sparkles } from 'lucide-react'
 import { T } from '../constants/tokens'
 import { MALAWI_DISTRICTS } from '../constants/malawiDistricts'
 import { supabase } from '../lib/supabase'
@@ -230,6 +230,7 @@ export default function SokoNav({
     { label: 'Listing', desc: 'Sell a product or item', path: '/post', icon: <ImageIcon size={20} strokeWidth={1.85} /> },
     { label: 'Looking For', desc: 'Post what you need · get offers', path: '/looking-for', state: { openComposer: true }, icon: <Search size={20} strokeWidth={1.85} /> },
     { label: 'Service', desc: 'Offer your skills', path: '/services?tab=post', icon: <Wrench size={20} strokeWidth={1.85} /> },
+    { label: 'Status', desc: 'Share a quick update', path: '/status?compose=1', icon: <Sparkles size={20} strokeWidth={1.85} /> },
   ]
 
  function changeDistrict(d) {
