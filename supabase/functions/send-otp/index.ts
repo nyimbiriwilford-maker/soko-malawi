@@ -126,15 +126,37 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    // Signup: deny if the email is already registered (check via profiles mirror)
+    // Signup: deny if the email is already registered.
+    // Check both the profiles mirror and the authoritative auth.users table.
     if (isEmail && body.action !== 'reset') {
+      let exists = false
+
       const { data: existing, error: existingErr } = await supabase
         .from('profiles')
         .select('id')
         .eq('email', identifier)
         .limit(1)
-
       if (!existingErr && existing && existing.length > 0) {
+        exists = true
+      }
+
+      if (!exists) {
+        // Page through auth.users (listUsers caps at 50/page)
+        let page = 1
+        let done = false
+        while (!done && !exists) {
+          const { data: users, error: usersErr } = await supabase.auth.admin.listUsers({
+            page,
+            perPage: 1000,
+          })
+          if (usersErr || !users?.users) break
+          exists = users.users.some((u) => (u.email || '').toLowerCase() === identifier)
+          done = users.users.length === 0 || users.users.length < 1000
+          page += 1
+        }
+      }
+
+      if (exists) {
         return new Response(JSON.stringify({
           error: 'This email is already registered. Please sign in instead.',
         }), {

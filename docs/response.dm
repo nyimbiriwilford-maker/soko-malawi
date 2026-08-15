@@ -40,3 +40,8 @@ When creating an account with email and password, add a second field for the use
 - **`src/lib/authApi.js`** — `sendOtp` now accepts an `action` ('signup' | 'reset') and forwards it to the `send-otp` edge function.
 - **`src/hooks/useAuthFlow.js`** — passes `'signup'` on the signup/resend-signup OTP sends and `'reset'` on the forgot-password/resend-reset sends.
 - **`supabase/functions/send-otp/index.ts`** — when the OTP is for **signup** (email), the function now checks `profiles` by email and returns HTTP 409 "This email is already registered. Please sign in instead." so already-registered users are denied before any code is sent. Reset requests are unaffected.
+
+## Clear "already registered" message (new fix)
+The user reported seeing the generic "Something went wrong. Please try again." instead of a clear message. Fixed at three layers so a clear message always surfaces:
+- **`src/lib/authApi.js`** — `sanitizeAuthError` now maps "already registered / already have an account / user already / already exists" to **"An account already exists with this email. Please sign in instead."** Also added a client-side pre-check in `sendOtp` (profiles is anon-readable) that rejects registered emails before calling the edge function — so it works even if the edge function is stale.
+- **`supabase/functions/send-otp/index.ts`** — the server check now also verifies the authoritative `auth.users` table (paging through `admin.listUsers`) in case a user exists without a profile row, and returns HTTP 409 with the clear message.

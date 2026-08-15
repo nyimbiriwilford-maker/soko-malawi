@@ -2,7 +2,7 @@
  * SokoMw auth API — Supabase + OTP edge functions.
  * Security: allowlists, sanitized errors, no credential logging.
  */
-import { supabase } from './supabase';
+import { supabase, isSupabaseConfigured } from './supabase';
 import { validateEmail, validateStrongPassword } from '../utils/validation';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
@@ -59,6 +59,14 @@ export function sanitizeAuthError(err, fallback = 'Something went wrong. Please 
 
   if (err.code === 'ACCOUNT_DISABLED' || err.isInfo) {
     return raw || DISABLED_MESSAGE;
+  }
+  if (
+    lower.includes('already registered') ||
+    lower.includes('already have an account') ||
+    lower.includes('user already') ||
+    lower.includes('already exists')
+  ) {
+    return 'An account already exists with this email. Please sign in instead.';
   }
   if (lower.includes('email not confirmed') || lower.includes('not confirmed')) {
     return 'Please verify your email before signing in.';
@@ -237,6 +245,25 @@ export async function sendOtp(identifier, captchaToken = '', action = 'signup') 
   if (isCaptchaRequired() && !captchaToken) {
     throw new Error('Please complete the security check.');
   }
+
+  // Signup: reject already-registered emails before sending any code.
+  // profiles is anon-readable, so this works even if the edge function is stale.
+  if (action !== 'reset' && isSupabaseConfigured) {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', id)
+        .limit(1);
+      if (!error && data && data.length > 0) {
+        throw new Error('An account already exists with this email. Please sign in instead.');
+      }
+    } catch (err) {
+      if (err?.message?.includes('already exists')) throw err;
+      // Ignore lookup failures — the edge function will enforce the rule server-side.
+    }
+  }
+
   return callEdgeFunction('send-otp', {
     identifier: id,
     captchaToken: captchaToken || '',
