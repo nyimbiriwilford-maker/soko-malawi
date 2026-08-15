@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion';
+import { useState } from 'react';
 import '../styles/login.css';
 import {
   LoginCard,
@@ -12,6 +13,7 @@ import {
   TrustMessage,
   FooterLinks,
   Captcha,
+  TermsModal,
 } from '../components/auth';
 import { AUTH_MODES, useAuthFlow } from '../hooks/useAuthFlow';
 
@@ -21,6 +23,7 @@ import { AUTH_MODES, useAuthFlow } from '../hooks/useAuthFlow';
 export default function LoginPage() {
   const flow = useAuthFlow();
   const { mode, goTo, busy, message, loadingAction } = flow;
+  const [termsOpen, setTermsOpen] = useState(false);
 
   return (
     <div className="login-page">
@@ -38,7 +41,7 @@ export default function LoginPage() {
               transition={{ duration: 0.22, ease: 'easeOut' }}
             >
               {mode === AUTH_MODES.LOGIN && <LoginMode flow={flow} />}
-              {mode === AUTH_MODES.SIGNUP && <SignUpMode flow={flow} />}
+              {mode === AUTH_MODES.SIGNUP && <SignUpMode flow={flow} onOpenTerms={() => setTermsOpen(true)} />}
               {mode === AUTH_MODES.VERIFY_SIGNUP && <VerifySignUpMode flow={flow} />}
               {mode === AUTH_MODES.FORGOT && <ForgotMode flow={flow} />}
               {mode === AUTH_MODES.OTP_RESET && <OtpResetMode flow={flow} />}
@@ -91,6 +94,13 @@ export default function LoginPage() {
           )}
         </LoginCard>
       </main>
+
+      {termsOpen && (
+        <TermsModal
+          onAgree={() => setTermsOpen(false)}
+          onClose={() => setTermsOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -225,7 +235,7 @@ function LoginMode({ flow }) {
   );
 }
 
-function SignUpMode({ flow }) {
+function SignUpMode({ flow, onOpenTerms }) {
   const {
     email,
     setEmail,
@@ -299,7 +309,36 @@ function SignUpMode({ flow }) {
           name="agreedToTerms"
           checked={agreedToTerms}
           onChange={(e) => setAgreedToTerms(e.target.checked)}
-          label="I agree to the Terms & Privacy Policy"
+          label={
+            <>
+              I agree to the{' '}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onOpenTerms();
+                }}
+                className="login-link"
+                style={{ minHeight: 0, fontSize: 'inherit' }}
+              >
+                Terms & Conditions
+              </button>{' '}
+              and{' '}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  onOpenTerms();
+                }}
+                className="login-link"
+                style={{ minHeight: 0, fontSize: 'inherit' }}
+              >
+                Privacy Policy
+              </button>
+            </>
+          }
           disabled={busy}
         />
 

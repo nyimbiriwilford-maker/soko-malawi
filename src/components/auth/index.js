@@ -13,3 +13,4 @@ export { default as TrustBadges } from './TrustBadges';
 export { default as TrustMessage } from './TrustMessage';
 export { default as FooterLinks } from './FooterLinks';
 export { default as Captcha } from './Captcha';
+export { default as TermsModal } from './TermsModal';

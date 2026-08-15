@@ -1,23 +1,23 @@
-﻿# Mobile header logo + quick actions cleanup
+﻿# Terms & Conditions + Privacy Policy on the login page
 
-## Request
-- Remove the house logo in front of the Soko logo.
-- Remove the words below the Soko logo ("Buy · Sell · Find").
-- Make the "SokoMw" logo large and properly fitted in that section.
-- (Previous) Quick actions as plain icons, no boxes, evenly fitted for all mobile devices.
+## Request (from docs/claudehelp.dm)
+Do research on what can be all terms and conditions of this app that a user can agree to first on login before creating an account. On the login page, write those terms for users to agree.
 
-## Status: implemented in `src/components/SokoNav.jsx`
-Mobile-only changes; desktop header untouched.
+## Research
+- Audited the app's full feature set to draft accurate legal text: marketplace listings, shops, jobs, services, Looking For requests, statuses/stories, chats + audio/video calls, deal confirmation + vouching/trust scores, seller verification, featured listings (MWK 2,500 / 7 days), OTP email verification, Cloudflare Turnstile captcha, admin role.
+- Malawi Data Protection Act, 2024 (in force 3 June 2024; MACRA is the data protection authority): lawful processing, data-subject rights (access/rectify/delete/restrict/port), 72-hour breach notification to MACRA and affected users, safeguards for international transfers, no data from children.
 
-- **Logo cleanup:** Removed the house (home) icon box in front of the Soko logo and removed the "Buy · Sell · Find" tagline. The "SokoMw" wordmark now stands alone, enlarged to 26px (was 20px) so it fills the left section cleanly.
-- **Quick actions (no boxes):** Each quick action is a plain icon button with `background: none; border: none` — no rounded background, border, or shadow.
-- **Evenly fitted for all devices:** The quick-actions row is `display: flex; justify-content: space-between` across the full width (no horizontal scroll), so the 6 icons (Marketplace, Shops, Looking For, Jobs, Services, Statuses) space out evenly on any screen size. Verification remains removed.
-- **Active state** is shown by color only: active icon turns green (`#0F9D58`), inactive icons are slate (`#64748b`).
-- **Looking For icon:** The "People Looking For" quick action now uses a target/crosshair icon (mobile only) — a proper icon representing "find what you're looking for". Desktop pillar row keeps the person icon.
+## Status: implemented
+- **`src/constants/legal.js`** — new: full Terms & Conditions (20 sections: acceptance, eligibility 18+, account security, platform use, user content, prohibited content, transactions between users, fees & paid features, verification/vouching/trust, chats & calls, IP, privacy, warranties, liability, indemnity, suspension, disputes/governing law, changes, general, contact) plus a Privacy Policy (12 sections aligned with the Malawi Data Protection Act 2024). Written in plain, consumer-friendly language specific to SokoMw's features.
+- **`src/components/auth/TermsModal.jsx`** — new: bottom-sheet modal with Terms / Privacy tabs, a scroll-to-read gate (the "I Agree" button stays disabled until the user scrolls to the end), close button, focus management and safe-area padding.
+- **`src/pages/LoginPage.jsx`** — the existing "I agree" checkbox on the Sign Up step is now a clickable inline link to "Terms & Conditions" and "Privacy Policy" that opens the TermsModal. The existing agreement check in `useAuthFlow` (which blocks sign-up until the box is ticked) still applies.
+- Exported `TermsModal` from `src/components/auth/index.js`.
 
 ## Verification
-- `npm run build`: PASSES — built in 2.16s, no errors.
-- Desktop layout untouched.
+- `npm run build`: PASSES — built in 2.23s, no errors.
 
 ## Files changed
-- `src/components/SokoNav.jsx`
+- `src/constants/legal.js` (new)
+- `src/components/auth/TermsModal.jsx` (new)
+- `src/components/auth/index.js`
+- `src/pages/LoginPage.jsx`
