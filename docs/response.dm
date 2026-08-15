@@ -243,3 +243,32 @@ The previous flashy treatment (spinning conic ring, pulsing glow, blinking red L
 ## Files changed
 - `src/components/BottomNav.jsx`
 - `src/components/SokoNav.jsx`
+
+# Background status publishing + instant-dismiss picker
+
+## Request
+On status posting, the status picker should disappear the moment the post/publish button is clicked; trimming and posting run in the background; a floating circle shows progress from trimming to publishing; once published the floating indicator disappears.
+
+## Status: implemented
+- **`src/lib/statusPublishStore.js`** (new, untracked) - tiny pub/sub store for background publishing. `startStatusPublish()` begins a session and returns a token; `updateStatusPublish(token, next)` reports progress (phase + percent); `completeStatusPublish(token, ok, message)` finishes with a success ring that auto-dismisses after ~1.9s (so the floating indicator disappears once published) or a persistent error ring. `dismissStatusPublish()` hides the ring without cancelling the background job.
+- **`src/components/StatusPublishRing.jsx`** (new) - floating progress circle. Renders nothing until a publish session is active, then shows a ring with a progress arc + label (`Trimming…` → `Uploading…` → `Publishing…` → `Published` / error). Switches to a green ✓ when done and disappears automatically because the store clears the success state. Tapping it dismisses the ring without stopping the posting. Mounted globally so it survives navigation.
+- **`src/App.jsx`** - mounts `<StatusPublishRing />` alongside the other authed global overlays.
+- **`src/components/StatusUploadModal.jsx`** - `handlePublish` now: validates quickly, snapshots all fields, calls `startStatusPublish()`, then calls `onClose()` **immediately** so the picker disappears the instant Publish is clicked. The actual work moved into `runBackgroundPublish()` which runs trim/compress/upload/insert in the background, reporting phases `preparing → trimming (with % during compress) → uploading → publishing → Published`, and ends with `completeStatusPublish(token, true)` on success or `completeStatusPublish(token, false, msg)` on failure.
+- **`src/components/StatusPicker.jsx`** - `handlePost` now dismisses the picker instantly via `onDone()` right after `startStatusPublish()`, and posts in the background reporting `publishing` phase, finishing with `completeStatusPublish`.
+
+## Behavior
+1. Click **Post/Publish** → the picker/modal closes immediately.
+2. Trimming (meta-trim or compress) and the Supabase insert run in the background.
+3. A floating circle appears showing progress: Trimming… → Uploading… → Publishing… → Published ✓.
+4. On success the ring flips to a green check and auto-disappears (~1.9s). On error it stays red with the message until dismissed.
+
+## Verification
+- `npm run build`: PASSES (built in ~2.4s).
+- `npx eslint` on the four changed files: no new errors introduced (remaining errors are all pre-existing, confirmed by stashing before diffing).
+
+## Files changed
+- `src/lib/statusPublishStore.js` (new)
+- `src/components/StatusPublishRing.jsx` (new)
+- `src/App.jsx`
+- `src/components/StatusUploadModal.jsx`
+- `src/components/StatusPicker.jsx`

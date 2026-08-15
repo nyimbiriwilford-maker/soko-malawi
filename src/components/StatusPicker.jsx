@@ -1,5 +1,10 @@
 import { useState } from 'react'
 import { useStatuses } from '../hooks/useStatuses'
+import {
+  startStatusPublish,
+  updateStatusPublish,
+  completeStatusPublish,
+} from '../lib/statusPublishStore'
 
 const AVAILABILITY_TEMPLATES = [
   'Available today — can meet in Blantyre CBD',
@@ -51,7 +56,6 @@ export default function StatusPicker({ userId, listingId = null, onDone }) {
   const [selected, setSelected] = useState('')
   const [custom, setCustom]   = useState('')
   const [posting, setPosting] = useState(false)
-  const [msg, setMsg]         = useState('')
 
   const activeStatus = statuses[0] || null
 
@@ -72,17 +76,27 @@ export default function StatusPicker({ userId, listingId = null, onDone }) {
         : tab === 'work_ping' ? 'work_ping'
         : 'availability'
 
-    const { error } = await postStatus({
-      content,
-      status_type: tab === 'listing' ? 'listing_update' : tab,
-      listing_id: tab === 'listing' ? listingId : null,
-      expiryKey,
-    })
-    setPosting(false)
-    if (error) { setMsg('Error posting status'); return }
-    setMsg('Status posted!')
-    setSelected(''); setCustom('')
-    setTimeout(() => { setMsg(''); onDone?.() }, 1200)
+    // Dismiss the picker instantly; posting keeps running in the background.
+    const token = startStatusPublish()
+    onDone?.()
+
+    try {
+      updateStatusPublish(token, { phase: 'publishing', pct: 35, message: 'Publishing…' })
+      const { error } = await postStatus({
+        content,
+        status_type: tab === 'listing' ? 'listing_update' : tab,
+        listing_id: tab === 'listing' ? listingId : null,
+        expiryKey,
+      })
+      if (error) throw new Error('Error posting status')
+      updateStatusPublish(token, { phase: 'publishing', pct: 100, message: 'Published' })
+      completeStatusPublish(token, true)
+      setSelected(''); setCustom('')
+    } catch (err) {
+      completeStatusPublish(token, false, err?.message || 'Error posting status')
+    } finally {
+      setPosting(false)
+    }
   }
 
   const tabStyle = (t) => ({
@@ -176,7 +190,7 @@ export default function StatusPicker({ userId, listingId = null, onDone }) {
           transition: 'all 0.15s',
         }}
       >
-        {posting ? 'Posting…' : msg || 'Post Status'}
+        {posting ? 'Posting…' : 'Post Status'}
       </button>
     </div>
   )

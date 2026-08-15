@@ -22,6 +22,11 @@ import {
   needsClipFragment,
   generateThumbnails,
 } from '../utils/statusVideo'
+import {
+  startStatusPublish,
+  updateStatusPublish,
+  completeStatusPublish,
+} from '../lib/statusPublishStore'
 import Timeline from './Timeline'
 
 const BG_COLORS = [
@@ -134,7 +139,7 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
   const [mediaPreview, setMediaPreview] = useState('')
   const [mediaType, setMediaType] = useState('image')
   const [isDragging, setIsDragging] = useState(false)
-  const [isUploading, setIsUploading] = useState(false)
+  const [isUploading] = useState(false)
   const [isTrimming, setIsTrimming] = useState(false)
   const [trimPct, setTrimPct] = useState(0)
   const [trimNote, setTrimNote] = useState('')
@@ -480,129 +485,151 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
       pv.load()
     }
 
-    setIsUploading(true)
-    setErrorMsg('')
+    // Snapshot everything the background job needs — the picker unmounts now.
+    const snapshot = {
+      tab,
+      caption,
+      bgColor,
+      location,
+      taggedId,
+      taggedKind,
+      mediaFile,
+      sourceFile,
+      mediaType,
+      clipStart,
+      clipSeconds,
+      sourceDuration,
+      trimDirty,
+      overlayFile,
+    }
+
+    // Dismiss the picker instantly; trim + posting keep running in the background.
+    const token = startStatusPublish()
+    onClose?.()
+
     try {
-      let mediaUrls = []
-      if (tab === 'media') {
-        let fileToUpload = mediaFile
-        let publishClipStart = mediaType === 'video' ? clipStart : 0
-        let publishClipDur = mediaType === 'video' ? clipSeconds : null
-        let publishOrigDur = sourceDuration
-
-        // Apply user trim prefs on publish if still dirty (or over hard max)
-        // trimStatusVideo always returns meta-trim — original bytes + clip window.
-        if (mediaType === 'video' && sourceFile && (trimDirty || (sourceDuration != null && sourceDuration > STATUS_VIDEO_MAX_SECONDS))) {
-          setIsTrimming(true)
-          try {
-            const result = await trimStatusVideo(sourceFile, {
-              startSeconds: clipStart,
-              durationSeconds: clipSeconds,
-            })
-            fileToUpload = result.file
-            setPreferredClipSeconds(clipSeconds)
-            setTrimDirty(false)
-            publishClipStart = result.startSeconds
-            publishClipDur = result.durationSeconds
-            publishOrigDur = result.originalDuration
-          } finally {
-            setIsTrimming(false)
-            setTrimPct(0)
-          }
-        }
-        if (!fileToUpload) throw new Error('Add a photo or video first')
-
-        // If the file exceeds the upload limit, compress it first.
-        // Compression re-encodes the clip window — the result is already cut,
-        // so no #t= fragment is needed.
-        if (fileToUpload.size > STATUS_VIDEO_MAX_UPLOAD_BYTES) {
-          setIsTrimming(true)
-          setTrimPct(5)
-          try {
-            const compressed = await compressForUpload(
-              fileToUpload,
-              publishClipStart,
-              publishClipDur,
-              (pct) => setTrimPct(pct),
-            )
-            if (compressed) {
-              fileToUpload = compressed
-              publishClipStart = 0
-              publishClipDur = null
-              publishOrigDur = null
-            } else {
-              throw new Error('Video is too large. Choose a shorter length or smaller file.')
-            }
-          } finally {
-            setIsTrimming(false)
-            setTrimPct(0)
-          }
-        }
-
-        let url = await uploadToStorage(fileToUpload)
-        if (
-          mediaType === 'video'
-          && publishClipDur != null
-          && needsClipFragment(publishClipStart, publishClipDur, publishOrigDur)
-        ) {
-          url = applyClipToMediaUrl(url, publishClipStart, publishClipDur)
-        }
-        mediaUrls = [url]
-        // Video annotation overlay (transparent PNG) as second media entry
-        if (mediaType === 'video' && overlayFile) {
-          try {
-            const overlayUrl = await uploadToStorage(overlayFile)
-            mediaUrls.push(overlayUrl)
-          } catch (e) {
-            console.error('Overlay upload failed', e)
-            throw new Error(`Edits failed to save (${e?.message || 'upload error'}) — try again or remove the marks.`)
-          }
-        }
-      } else if (tab === 'text') {
-        // Store solid colour as first "media" so viewers can render text boards
-        mediaUrls = [bgColor]
-      }
-
-      const expiresAt = new Date(Date.now() + 24 * 3600 * 1000).toISOString()
-      const defaultCaption = mediaType === 'video' ? '' : 'Photo update'
-
-      const kind = taggedKind || (taggedId ? 'listing' : null)
-      const statusType = kind === 'job' || kind === 'service'
-        ? 'work_ping'
-        : kind
-          ? 'listing_update'
-          : (tab === 'text' ? 'availability' : 'listing_update')
-
-      const payload = {
-        user_id: user.id,
-        status_type: statusType,
-        content: caption.trim() || defaultCaption,
-        media_urls: mediaUrls,
-        tagged_listing_id: kind === 'listing' ? taggedId : null,
-        listing_id: kind === 'listing' ? taggedId : null,
-        tagged_kind: kind,
-        tagged_ref_id: taggedId || null,
-        location_hint: location || null,
-        expires_at: expiresAt,
-      }
-
-      let { error } = await supabase.from('user_statuses').insert(payload)
-      if (error && /tagged_kind|tagged_ref_id|column/i.test(error.message || '')) {
-        const legacy = { ...payload }
-        delete legacy.tagged_kind
-        delete legacy.tagged_ref_id
-        ;({ error } = await supabase.from('user_statuses').insert(legacy))
-      }
-      if (error) throw error
-
+      await runBackgroundPublish(token, snapshot)
+      completeStatusPublish(token, true)
       onSuccess?.()
-      onClose?.()
     } catch (err) {
       console.error('Status upload error:', err)
-      setErrorMsg(err?.message || 'Upload failed. Please try again.')
-    } finally {
-      setIsUploading(false)
+      completeStatusPublish(token, false, err?.message || 'Upload failed. Please try again.')
     }
+  }
+
+  async function runBackgroundPublish(token, s) {
+    updateStatusPublish(token, { phase: 'preparing', pct: 2, message: 'Preparing…' })
+
+    let mediaUrls = []
+    if (s.tab === 'media') {
+      let fileToUpload = s.mediaFile
+      let publishClipStart = s.mediaType === 'video' ? s.clipStart : 0
+      let publishClipDur = s.mediaType === 'video' ? s.clipSeconds : null
+      let publishOrigDur = s.sourceDuration
+
+      // Apply user trim prefs on publish if still dirty (or over hard max)
+      if (
+        s.mediaType === 'video'
+        && s.sourceFile
+        && (s.trimDirty || (s.sourceDuration != null && s.sourceDuration > STATUS_VIDEO_MAX_SECONDS))
+      ) {
+        updateStatusPublish(token, { phase: 'trimming', pct: 5, message: 'Trimming your clip…' })
+        const result = await trimStatusVideo(s.sourceFile, {
+          startSeconds: s.clipStart,
+          durationSeconds: s.clipSeconds,
+        })
+        fileToUpload = result.file
+        setPreferredClipSeconds(s.clipSeconds)
+        publishClipStart = result.startSeconds
+        publishClipDur = result.durationSeconds
+        publishOrigDur = result.originalDuration
+        updateStatusPublish(token, { phase: 'trimming', pct: 45, message: 'Trim applied' })
+      }
+      if (!fileToUpload) throw new Error('Add a photo or video first')
+
+      // If the file exceeds the upload limit, compress it first.
+      if (fileToUpload.size > STATUS_VIDEO_MAX_UPLOAD_BYTES) {
+        updateStatusPublish(token, { phase: 'trimming', pct: 48, message: 'Compressing video…' })
+        const compressed = await compressForUpload(
+          fileToUpload,
+          publishClipStart,
+          publishClipDur,
+          (pct) => updateStatusPublish(token, {
+            phase: 'trimming',
+            pct: Math.min(75, 48 + pct * 0.27),
+            message: 'Compressing video…',
+          }),
+        )
+        if (compressed) {
+          fileToUpload = compressed
+          publishClipStart = 0
+          publishClipDur = null
+          publishOrigDur = null
+        } else {
+          throw new Error('Video is too large. Choose a shorter length or smaller file.')
+        }
+      }
+
+      updateStatusPublish(token, { phase: 'uploading', pct: 80, message: 'Uploading…' })
+      let url = await uploadToStorage(fileToUpload)
+      if (
+        s.mediaType === 'video'
+        && publishClipDur != null
+        && needsClipFragment(publishClipStart, publishClipDur, publishOrigDur)
+      ) {
+        url = applyClipToMediaUrl(url, publishClipStart, publishClipDur)
+      }
+      mediaUrls = [url]
+      // Video annotation overlay (transparent PNG) as second media entry
+      if (s.mediaType === 'video' && s.overlayFile) {
+        try {
+          const overlayUrl = await uploadToStorage(s.overlayFile)
+          mediaUrls.push(overlayUrl)
+        } catch (e) {
+          console.error('Overlay upload failed', e)
+          throw new Error(`Edits failed to save (${e?.message || 'upload error'}) — try again or remove the marks.`)
+        }
+      }
+    } else if (s.tab === 'text') {
+      // Store solid colour as first "media" so viewers can render text boards
+      mediaUrls = [s.bgColor]
+    }
+
+    updateStatusPublish(token, { phase: 'publishing', pct: 90, message: 'Publishing…' })
+
+    const expiresAt = new Date(Date.now() + 24 * 3600 * 1000).toISOString()
+    const defaultCaption = s.mediaType === 'video' ? '' : 'Photo update'
+
+    const kind = s.taggedKind || (s.taggedId ? 'listing' : null)
+    const statusType = kind === 'job' || kind === 'service'
+      ? 'work_ping'
+      : kind
+        ? 'listing_update'
+        : (s.tab === 'text' ? 'availability' : 'listing_update')
+
+    const payload = {
+      user_id: user.id,
+      status_type: statusType,
+      content: s.caption.trim() || defaultCaption,
+      media_urls: mediaUrls,
+      tagged_listing_id: kind === 'listing' ? s.taggedId : null,
+      listing_id: kind === 'listing' ? s.taggedId : null,
+      tagged_kind: kind,
+      tagged_ref_id: s.taggedId || null,
+      location_hint: s.location || null,
+      expires_at: expiresAt,
+    }
+
+    let { error } = await supabase.from('user_statuses').insert(payload)
+    if (error && /tagged_kind|tagged_ref_id|column/i.test(error.message || '')) {
+      const legacy = { ...payload }
+      delete legacy.tagged_kind
+      delete legacy.tagged_ref_id
+      ;({ error } = await supabase.from('user_statuses').insert(legacy))
+    }
+    if (error) throw error
+
+    updateStatusPublish(token, { phase: 'publishing', pct: 100, message: 'Published' })
   }
 
   function handleOverlayClick(e) {

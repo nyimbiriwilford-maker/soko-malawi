@@ -40,6 +40,7 @@ import FloatingIncomingCall from './components/FloatingIncomingCall'
 import NotificationToast from './components/NotificationToast'
 import PersistentCallShell from './components/PersistentCallShell'
 import MiniCallBar from './components/MiniCallBar'
+import StatusPublishRing from './components/StatusPublishRing'
 import { CallProvider }   from './context/CallContext'
 import { NetworkProvider } from './context/NetworkContext'
 import { useGlobalPresence } from './hooks/usePresence'
@@ -341,6 +342,7 @@ const [installPrompt, setInstallPrompt] = useState(null)
 {authed && <NotificationToast />}
         {authed && <PersistentCallShell />}
         {authed && <MiniCallBar />}
+        {authed && <StatusPublishRing />}
         <Suspense fallback={<PageLoader />}>
           <ErrorBoundary>
           <Routes>
