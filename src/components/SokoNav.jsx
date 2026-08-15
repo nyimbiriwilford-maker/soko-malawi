@@ -433,7 +433,7 @@ export default function SokoNav({
           </div>
 
           {/* Right side: Search + Notification Bell */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
 
             {/* Search icon button — expands the search bar */}
             <button
@@ -441,14 +441,12 @@ export default function SokoNav({
               onClick={() => { setMobileSearchOpen(true); requestAnimationFrame(() => inputRef.current?.focus()) }}
               aria-label="Search"
               style={{
-                width: 38, height: 38, borderRadius: '50%',
-                background: mobileSearchOpen ? '#1a7a4a' : '#f4f8f5',
-                border: mobileSearchOpen ? '1px solid #1a7a4a' : '1px solid #e2ebe4',
+                background: 'none', border: 'none', padding: 0,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', color: mobileSearchOpen ? '#fff' : '#1a7a4a', flexShrink: 0,
-                transition: 'background 0.18s, color 0.18s, border-color 0.18s',
+                cursor: 'pointer', color: mobileSearchOpen ? '#1a7a4a' : '#334155', flexShrink: 0,
+                transition: 'color 0.18s',
               }}>
-              {Icon.search(18)}
+              {Icon.search(20)}
             </button>
 
             {/* Notification Bell */}
@@ -457,20 +455,18 @@ export default function SokoNav({
               onClick={() => navigate('/notifications')}
               aria-label="Notifications"
               style={{
-                width: 38, height: 38, borderRadius: '50%',
-                background: '#f4f8f5',
-                border: '1px solid #e2ebe4',
+                background: 'none', border: 'none', padding: 0,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', color: '#1a7a4a', flexShrink: 0,
+                cursor: 'pointer', color: '#334155', flexShrink: 0,
                 position: 'relative',
               }}>
-              {Icon.bell(18)}
+              {Icon.bell(20)}
               {notifCount > 0 && (
                 <span style={{
-                  position: 'absolute', top: 1, right: 1,
+                  position: 'absolute', top: -3, right: -5,
                   background: T.red, color: '#fff',
-                  borderRadius: '50%', minWidth: 17, height: 17,
-                  fontSize: 9.5, fontWeight: 800,
+                  borderRadius: '50%', minWidth: 16, height: 16,
+                  fontSize: 9, fontWeight: 800,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   border: '2px solid #fff', padding: '0 3px',
                   lineHeight: 1,
