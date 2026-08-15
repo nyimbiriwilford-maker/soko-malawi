@@ -210,6 +210,17 @@ The mobile bottom-nav **post popup** (`.sbn-post-menu`) could grow taller than t
 ## Files changed
 - `src/components/BottomNav.jsx`
 
+## Fix: adaptive popup sizing so nothing is hidden on short phones (revision)
+The bottom-nav post popup was still too tall on short phones and got clipped under the sticky top header. Two fixes:
+1. **vh fallback** — the `max-height` cap now starts with `calc(100vh - 210px)` (supported everywhere) and only overrides with `100dvh` where supported. Previously only `100dvh` was used, which some phone browsers ignore entirely — that is why the earlier fix appeared to do nothing.
+2. **Adaptive compaction** — two `@media (max-height: …)` breakpoints shrink the option rows, icons, ring, and typography so the *whole* menu fits on screen without scrolling:
+   - `@media (max-height: 660px)` → compact: menu padding/head reduced, icon + ring 42→34px, row padding 11→7px, fonts ~0.82/0.68rem, menu sits a bit lower (`bottom: 70px`).
+   - `@media (max-height: 560px)` → extra compact: icon + ring 34→30px, row padding 5px, fonts ~0.78/0.65rem, menu at `bottom: 64px`.
+   - The `sbn-post-ic svg` / `sbn-status-ring svg` sizes are also scaled so the glyphs shrink with the rows.
+The popup remains `position: fixed` bottom-anchored with `overflow-y: auto` as a final safety net, and `max-width: calc(100vw - 24px)` keeps it within the screen width.
+## Files changed
+- `src/components/BottomNav.jsx`
+
 ## Consistent Status icon (revision)
 The Status post-menu icon now matches the mobile top-nav **Statuses (Stories)** icon for consistency.
 - The mobile top-nav "Statuses (Stories)" pillar (`SOKO_PILLARS` in `SokoNav.jsx`) uses the **clock** glyph (circle + clock hands).

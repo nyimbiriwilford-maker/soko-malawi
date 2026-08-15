@@ -35,3 +35,5 @@ It is not looking professional. Make it look professional with a smooth professi
 The icon should be the same as the one placed in the top nav in mobile view for consistency.
 
 Make the popup when clicking the bottom nav in mobile adjust to a proper size based on device. Don't let it get hidden at the top by the top header.
+
+The popup on my short phone is still long and gets hidden by the top header. Make the option sizes adaptive to shrink based on mobile size so the whole popup is visible with no information hidden.

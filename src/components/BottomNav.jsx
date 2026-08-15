@@ -444,16 +444,21 @@ const premiumCss = `
 
   .sbn-post-menu {
     position: fixed;
+    /* Anchor to the bottom nav. The height is capped (vh first for older
+       browsers, dvh where supported) so the popup always fits between the
+       sticky top header (~110px) and the bottom nav — it can never be hidden
+       under the header or go off-screen. */
     bottom: calc(84px + env(safe-area-inset-bottom, 0px));
     left: 50%;
     transform: translateX(-50%);
     width: min(340px, calc(100vw - 32px));
     max-width: calc(100vw - 24px);
-    /* Keep the popup fully on-screen: never taller than the space between the
-       sticky top header (~110px) and the bottom nav (84px + safe area), so it
-       never gets hidden under the top header. */
+    max-height: calc(100vh - 210px);
     max-height: calc(100dvh - 210px);
     min-height: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     overscroll-behavior: contain;
@@ -468,6 +473,70 @@ const premiumCss = `
   }
   .sbn-post-menu::-webkit-scrollbar { width: 4px; }
   .sbn-post-menu::-webkit-scrollbar-thumb { background: rgba(15, 23, 42, 0.18); border-radius: 99px; }
+
+  /* Adaptive compaction on short screens — shrink option sizes so the whole
+     popup stays visible and never gets hidden under the sticky top header. */
+  .sbn-post-ic svg,
+  .sbn-status-ring svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  @media (max-height: 660px) {
+    .sbn-post-menu {
+      max-height: calc(100vh - 175px);
+      max-height: calc(100dvh - 175px);
+      bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+      padding: 4px 8px 6px;
+    }
+    .sbn-post-menu-head {
+      padding: 8px 12px 4px;
+    }
+    .sbn-post-menu-head strong { font-size: 0.85rem; }
+    .sbn-post-item {
+      padding: 7px 12px;
+      gap: 10px;
+    }
+    .sbn-post-ic,
+    .sbn-status-ring {
+      width: 34px;
+      height: 34px;
+    }
+    .sbn-post-ic svg,
+    .sbn-status-ring svg {
+      width: 17px;
+      height: 17px;
+    }
+    .sbn-post-copy strong { font-size: 0.82rem; }
+    .sbn-post-copy span { font-size: 0.68rem; }
+  }
+
+  @media (max-height: 560px) {
+    .sbn-post-menu {
+      max-height: calc(100vh - 150px);
+      max-height: calc(100dvh - 150px);
+      bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+      border-radius: 14px;
+    }
+    .sbn-post-menu-head { padding: 6px 12px 2px; }
+    .sbn-post-item {
+      padding: 5px 12px;
+      gap: 8px;
+    }
+    .sbn-post-ic,
+    .sbn-status-ring {
+      width: 30px;
+      height: 30px;
+    }
+    .sbn-post-ic svg,
+    .sbn-status-ring svg {
+      width: 15px;
+      height: 15px;
+    }
+    .sbn-post-copy strong { font-size: 0.78rem; }
+    .sbn-post-copy span { font-size: 0.65rem; }
+    .sbn-post-menu-kicker { font-size: 0.6rem; }
+  }
 
   .sbn-post-menu-head {
     padding: 12px 12px 10px;
