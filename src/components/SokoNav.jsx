@@ -144,7 +144,6 @@ export default function SokoNav({
   const [distOpen, setDistOpen] = useState(false)
   const [avatarOpen, setAvatarOpen] = useState(false)
   const [showPostMenu, setShowPostMenu] = useState(false)
-  const [mobileSearchOpen, setMobileSearchOpen] = useState(false)
   const [chatCount, setChatCount] = useState(0)
   const postRef = useRef(null)
 
@@ -239,10 +238,6 @@ export default function SokoNav({
         .soko-nav-mobile { display: none; }
         .soko-scroll { scrollbar-width: none; }
         .soko-scroll::-webkit-scrollbar { display: none; }
-        @keyframes sokoSearchIn {
-          from { opacity: 0; transform: translateY(-8px) scaleY(0.96); }
-          to   { opacity: 1; transform: translateY(0) scaleY(1); }
-        }
         @media (max-width: 768px) {
           .soko-nav-mobile {
             display: flex !important;
@@ -435,15 +430,15 @@ export default function SokoNav({
           {/* Right side: Search + Notification Bell */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
 
-            {/* Search icon button — expands the search bar */}
+            {/* Search icon button */}
             <button
               type="button"
-              onClick={() => { setMobileSearchOpen(true); requestAnimationFrame(() => inputRef.current?.focus()) }}
+              onClick={() => navigate('/search?focus=1')}
               aria-label="Search"
               style={{
                 background: 'none', border: 'none', padding: 0,
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                cursor: 'pointer', color: mobileSearchOpen ? '#1a7a4a' : '#334155', flexShrink: 0,
+                cursor: 'pointer', color: '#334155', flexShrink: 0,
                 transition: 'color 0.18s',
               }}>
               {Icon.search(20)}
@@ -478,74 +473,6 @@ export default function SokoNav({
 
           </div>
         </div>
-
-        {/* Row 2: Expanding Search Bar (only when search icon tapped) */}
-        {mobileSearchOpen && (
-          <div style={{
-            width: '100%', display: 'flex', alignItems: 'center', gap: 10,
-            background: focused ? '#fff' : '#f4f8f5',
-            borderRadius: 50,
-            padding: '0 6px 0 15px',
-            minHeight: 44,
-            border: `1.5px solid ${focused ? '#1a7a4a' : '#e2ebe4'}`,
-            boxShadow: focused ? `0 0 0 3px rgba(26,122,74,0.10)` : '0 2px 10px rgba(0,0,0,0.05)',
-            position: 'relative', cursor: 'pointer',
-            boxSizing: 'border-box',
-            animation: 'sokoSearchIn 0.22s cubic-bezier(0.16,1,0.3,1)',
-          }}>
-            <span style={{ color: focused ? '#1a7a4a' : T.gray400, flexShrink: 0, display: 'flex' }}>
-              {Icon.search(17)}
-            </span>
-            <div style={{ flex: 1, position: 'relative', height: 24, minWidth: 0 }}>
-              <input
-                ref={inputRef}
-                value={search}
-                onChange={e => { e.stopPropagation(); const val = e.target.value; setSearch?.(val); navigate(`/search?q=${encodeURIComponent(val)}&focus=1`); }}
-                onFocus={() => { setFocused(true); navigate('/search?focus=1'); }}
-                onBlur={() => setFocused(false)}
-                aria-label="Search marketplace"
-                style={{
-                  position: 'absolute', inset: 0, width: '100%',
-                  border: 'none', background: 'transparent',
-                  fontSize: 14, color: T.gray900, outline: 'none',
-                  zIndex: search || focused ? 2 : 0, fontFamily: 'inherit',
-                }}
-              />
-              {!search && !focused && (
-                <div style={{
-                  position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
-                  pointerEvents: 'none', fontSize: 13.5, color: T.gray400,
-                  overflow: 'hidden', whiteSpace: 'nowrap',
-                }}>
-                  Search anything in Malawi...
-                </div>
-              )}
-            </div>
-            {search && (
-              <button
-                type="button"
-                onClick={e => { e.stopPropagation(); setSearch?.(''); }}
-                style={{
-                  background: T.gray200, border: 'none', borderRadius: '50%',
-                  width: 22, height: 22, display: 'flex', alignItems: 'center',
-                  justifyContent: 'center', cursor: 'pointer', color: T.gray600, flexShrink: 0,
-                }}>
-                {Icon.x(10)}
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => { setMobileSearchOpen(false); setSearch?.(''); setFocused(false) }}
-              aria-label="Close search"
-              style={{
-                background: '#1a7a4a', border: 'none', borderRadius: '50%',
-                width: 32, height: 32, display: 'flex', alignItems: 'center',
-                justifyContent: 'center', cursor: 'pointer', color: '#fff', flexShrink: 0,
-              }}>
-              {Icon.x(13)}
-            </button>
-          </div>
-        )}
 
       </div>
       {/* ════════════════════ END MOBILE HEADER ════════════════════ */}
