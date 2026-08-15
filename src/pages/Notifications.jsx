@@ -242,14 +242,12 @@ const TABS = [
   { id: 'offers',   label: 'Offers',   Icon: CircleDollarSign },
   { id: 'deals',    label: 'Deals',    Icon: Handshake },
   { id: 'orders',   label: 'Orders',   Icon: Package },
-  { id: 'calls',    label: 'Calls',    Icon: Phone },
   { id: 'system',   label: 'System',   Icon: Settings },
 ]
 
 const CATEGORIES = [
   { id: 'all',      label: 'All' },
   { id: 'messages', label: 'Messages' },
-  { id: 'calls',    label: 'Calls' },
   { id: 'listings', label: 'Listings' },
   { id: 'offers',   label: 'Offers' },
   { id: 'deals',    label: 'Deals' },

@@ -155,3 +155,14 @@ The desktop top navigation (brand + search + Chats/Alerts + Post Now + avatar) a
 - `npx vite build`: PASSES.
 ## Files changed
 - `src/components/SokoNav.jsx`
+
+## Remove "Calls" category from Notifications (new)
+The **Calls** category is no longer visible in the Notifications UI — removed from both the header tab bar (`TABS`) and the filter panel category list (`CATEGORIES`).
+- `TABS` no longer includes the `calls` tab (Phone icon), so the header shows All / Messages / Listings / Offers / Deals / Orders / System.
+- `CATEGORIES` no longer includes `calls`, so the advanced Filters → Category section omits it too.
+- Missed-call notifications themselves still render in the All list (unchanged behaviour) — only the category filter/tab is hidden. The `Phone` import is kept because it's still used by the "Call back" action button.
+## Verification
+- `npx eslint src/pages/Notifications.jsx`: 9 errors, all pre-existing (setState-in-effect, refs-in-render, memoization) — none from this change.
+- `npx vite build`: PASSES.
+## Files changed
+- `src/pages/Notifications.jsx`
