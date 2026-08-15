@@ -71,6 +71,11 @@ const SOKO_PILLARS = [
         <circle cx="12" cy="8" r="4" /><path d="M4 21v-1a8 8 0 0 1 16 0v1" />
       </svg>
     ),
+    mobileIcon: (s) => (
+      <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden>
+        <circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1.2" fill="currentColor" />
+      </svg>
+    ),
   },
   {
     key: 'jobs', label: 'Jobs', path: '/jobs',
@@ -544,7 +549,7 @@ export default function SokoNav({
                   transition: 'transform 0.14s, color 0.14s',
                   WebkitTapHighlightColor: 'transparent',
                 }}>
-                {p.icon(isActive ? 20 : 19)}
+                {p.mobileIcon ? p.mobileIcon(isActive ? 21 : 19) : p.icon(isActive ? 20 : 19)}
               </button>
             )
           })}
