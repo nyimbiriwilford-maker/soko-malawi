@@ -7,6 +7,11 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export const EMAIL_ERROR = 'Please enter a valid email address.';
 export const PASSWORD_ERROR = 'Password must contain at least 8 characters.';
+export const PASSWORD_STRONG_ERROR =
+  'Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number and a special character.';
+export const PASSWORD_MISMATCH_ERROR = 'Passwords do not match.';
+
+const PASSWORD_STRONG_RE = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
 
 /**
  * @param {string} value
@@ -26,6 +31,28 @@ export function validateEmail(value) {
 export function validatePassword(value, { minLength = 8, maxLength = 128 } = {}) {
   if (!value || value.length < minLength) return PASSWORD_ERROR;
   if (value.length > maxLength) return 'Password is too long.';
+  return null;
+}
+
+/**
+ * Enforce a strong password: 8+ chars with uppercase, lowercase, number and special char.
+ * @param {string} value
+ * @param {{ maxLength?: number }} [options]
+ * @returns {string|null}
+ */
+export function validateStrongPassword(value, { maxLength = 128 } = {}) {
+  if (!value || !PASSWORD_STRONG_RE.test(value)) return PASSWORD_STRONG_ERROR;
+  if (value.length > maxLength) return 'Password is too long.';
+  return null;
+}
+
+/**
+ * @param {string} value
+ * @param {string} match
+ * @returns {string|null}
+ */
+export function validatePasswordMatch(value, match) {
+  if (!value || value !== match) return PASSWORD_MISMATCH_ERROR;
   return null;
 }
 

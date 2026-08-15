@@ -11,7 +11,7 @@ import {
   signInWithOAuth,
   verifyOtp,
 } from '../lib/authApi';
-import { validateEmail, validatePassword } from '../utils/validation';
+import { validateEmail, validatePassword, validateStrongPassword, validatePasswordMatch } from '../utils/validation';
 
 export const AUTH_MODES = {
   LOGIN: 'login',
@@ -35,6 +35,7 @@ export function useAuthFlow() {
   const [mode, setMode] = useState(AUTH_MODES.LOGIN);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [agreedToTerms, setAgreedToTerms] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [username, setUsername] = useState('');
@@ -85,6 +86,7 @@ export function useAuthFlow() {
   /** Wipe secrets from memory when leaving password-bearing modes */
   const clearSecrets = useCallback(() => {
     setPassword('');
+    setConfirmPassword('');
     setNewPass('');
     setConfirmPass('');
     setOtpCode('');
@@ -239,8 +241,14 @@ export function useAuthFlow() {
         setError('Enter email and password');
         return;
       }
-      if (password.length < 8) {
-        setError('Password must be at least 8 characters');
+      const strongErr = validateStrongPassword(password);
+      if (strongErr) {
+        setError(strongErr);
+        return;
+      }
+      const matchErr = validatePasswordMatch(confirmPassword, password);
+      if (matchErr) {
+        setError(matchErr);
         return;
       }
       if (!agreedToTerms) {
@@ -270,7 +278,7 @@ export function useAuthFlow() {
         lockRef.current = false;
       }
     },
-    [agreedToTerms, busy, captchaToken, clearMsg, email, password, resetCaptcha, setError, setInfo, startResendCooldown]
+    [agreedToTerms, busy, captchaToken, clearMsg, confirmPassword, email, password, resetCaptcha, setError, setInfo, startResendCooldown]
   );
 
   /* ─── VERIFY SIGNUP + CREATE ─── */
@@ -400,8 +408,9 @@ export function useAuthFlow() {
         setError('Fill in both fields');
         return;
       }
-      if (newPass.length < 8) {
-        setError('Password must be at least 8 characters');
+      const strongErr = validateStrongPassword(newPass);
+      if (strongErr) {
+        setError(strongErr);
         return;
       }
       if (newPass !== confirmPass) {
@@ -551,6 +560,8 @@ export function useAuthFlow() {
     setEmail,
     password,
     setPassword,
+    confirmPassword,
+    setConfirmPassword,
     agreedToTerms,
     setAgreedToTerms,
     rememberMe,

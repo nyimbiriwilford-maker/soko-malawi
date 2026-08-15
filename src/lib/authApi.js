@@ -3,7 +3,7 @@
  * Security: allowlists, sanitized errors, no credential logging.
  */
 import { supabase } from './supabase';
-import { validateEmail, validatePassword } from '../utils/validation';
+import { validateEmail, validateStrongPassword } from '../utils/validation';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
@@ -79,6 +79,9 @@ export function sanitizeAuthError(err, fallback = 'Something went wrong. Please 
   }
   if (lower.includes('invalid or expired') || lower.includes('verification code')) {
     return 'Invalid or expired code. Please request a new one.';
+  }
+  if (lower.includes('uppercase') && lower.includes('special character')) {
+    return 'Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number and a special character.';
   }
   if (lower.includes('password') && lower.includes('character')) {
     return 'Password must be at least 8 characters.';
@@ -253,8 +256,8 @@ export async function verifyOtp({ identifier, code, newPassword, consume = true 
   if (!/^\d{6}$/.test(cleanCode)) {
     throw new Error('Enter the 6-digit code.');
   }
-  if (newPassword != null && validatePassword(newPassword)) {
-    throw new Error('Password must be at least 8 characters.');
+  if (newPassword != null && validateStrongPassword(newPassword)) {
+    throw new Error(sanitizeAuthError(validateStrongPassword(newPassword), 'Password is not strong enough.'));
   }
 
   const body = {
@@ -282,8 +285,8 @@ export async function createAccountAfterOtp({ email, password, username, otpCode
   if (validateEmail(cleanEmail)) {
     throw new Error('Please enter a valid email address.');
   }
-  if (validatePassword(password)) {
-    throw new Error('Password must be at least 8 characters.');
+  if (validateStrongPassword(password)) {
+    throw new Error('Password must be at least 8 characters and include an uppercase letter, a lowercase letter, a number and a special character.');
   }
   if (!USERNAME_RE.test(trimmedUsername)) {
     throw new Error('Username must be 3-20 characters (letters, numbers, . or _ only)');

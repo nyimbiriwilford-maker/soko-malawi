@@ -244,10 +244,14 @@ function SignUpMode({ flow, onOpenTerms }) {
     setEmail,
     password,
     setPassword,
+    confirmPassword,
+    setConfirmPassword,
     agreedToTerms,
     setAgreedToTerms,
     showPassword,
     toggleShowPassword,
+    showConfirmPassword,
+    setShowConfirmPassword,
     busy,
     loadingAction,
     captchaKey,
@@ -306,6 +310,26 @@ function SignUpMode({ flow, onOpenTerms }) {
           disabled={busy}
           autoComplete="new-password"
         />
+
+        <PasswordField
+          id="signup-confirm-password"
+          name="confirmPassword"
+          label="Confirm Password"
+          value={confirmPassword}
+          onChange={(e) => {
+            setConfirmPassword(e.target.value);
+            clearMsg();
+          }}
+          showPassword={showConfirmPassword}
+          onToggleVisibility={() => setShowConfirmPassword((v) => !v)}
+          required
+          disabled={busy}
+          autoComplete="new-password"
+        />
+
+        <p style={{ margin: 0, fontSize: 11.5, color: '#94a3b8', lineHeight: 1.5, paddingInline: 2 }}>
+          Strong password required: at least 8 characters with an uppercase letter, a lowercase letter, a number and a special character.
+        </p>
 
         <Checkbox
           id="signup-terms"
@@ -656,6 +680,10 @@ function NewPasswordMode({ flow }) {
           disabled={busy}
           autoComplete="new-password"
         />
+
+        <p style={{ margin: 0, fontSize: 11.5, color: '#94a3b8', lineHeight: 1.5, paddingInline: 2 }}>
+          Strong password required: at least 8 characters with an uppercase letter, a lowercase letter, a number and a special character.
+        </p>
 
         <PrimaryButton
           type="submit"
