@@ -442,19 +442,9 @@ export default function SokoNav({
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
 
           {/* Logo */}
-          <div onClick={() => navigate('/')} style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 9 }}>
-            <div style={{ width: 30, height: 30, borderRadius: 10, background: 'linear-gradient(135deg, rgba(15,157,88,0.14), rgba(15,157,88,0.05))', border: '1px solid rgba(15,157,88,0.16)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.green, flexShrink: 0 }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                <path d="M3 12l9-9 9 9" /><path d="M5 10v10a1 1 0 0 0 1 1h3v-6h6v6h3a1 1 0 0 0 1-1V10" />
-              </svg>
-            </div>
-            <div>
-              <div style={{ fontFamily: T.fontDisplay, fontSize: 20, fontWeight: 900, color: T.green, letterSpacing: '-0.6px', lineHeight: 1 }}>
-                Soko<span style={{ color: T.amber }}>Mw</span>
-              </div>
-              <div style={{ fontSize: 8.5, color: T.gray500, fontWeight: 600, letterSpacing: '0.14px', marginTop: 2, whiteSpace: 'nowrap', textTransform: 'uppercase' }}>
-                Buy · Sell · Find
-              </div>
+          <div onClick={() => navigate('/')} style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center' }}>
+            <div style={{ fontFamily: T.fontDisplay, fontSize: 26, fontWeight: 900, color: T.green, letterSpacing: '-0.7px', lineHeight: 1 }}>
+              Soko<span style={{ color: T.amber }}>Mw</span>
             </div>
           </div>
 
