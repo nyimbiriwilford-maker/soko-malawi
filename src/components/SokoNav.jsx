@@ -299,15 +299,13 @@ export default function SokoNav({
           .soko-nav-mobile > * { position: relative; z-index: 1; }
           .soko-nav-mobile button:active { transform: scale(0.94); }
           .soko-nav-desktop { display: none !important; }
+          .soko-pillar-row { display: none !important; }
         }
         @media (max-width: 360px) {
           .soko-nav-mobile { padding-left: 12px !important; padding-right: 12px !important; gap: 9px !important; }
           .soko-nav-mobile button[aria-label="Search"],
           .soko-nav-mobile button[aria-label="Notifications"],
           .soko-nav-mobile button[aria-label="My Profile"] { width: 38px; height: 38px; }
-        }
-          .soko-nav-desktop { display: none !important; }
-          .soko-pillar-row { display: none !important; }
         }
         @media (min-width: 769px) {
           .soko-nav-mobile { display: none !important; }

@@ -123,3 +123,35 @@ Changed long-press from revealing inline icons to full multi-select mode (WhatsA
 - `npx vite build`: PASSES.
 ## Files changed
 - `src/pages/ChatListPanel.jsx`
+
+## Swipe-to-dismiss / reply on popup notifications (messages only) (new)
+Popup notification toasts (`NotificationToast.jsx`) now support touch swipes, and the swipe gestures apply **only to `new_message` (message) notifications**:
+- **Swipe left** → **dismiss** the toast (slides off to the left, then fades away). Uses `dismiss({ keepOffset: true })` so the slide-out offset survives the fade instead of snapping back.
+- **Swipe right** → **quick reply** (expands the inline reply input on message toasts).
+- Non-message toasts ignore swipe gestures entirely (tap still navigates to /notifications).
+- Swipes on the reply area are ignored (so typing / tapping the input never triggers a swipe).
+- After a swipe, the trailing click event is suppressed so it doesn't also navigate to /notifications.
+- Horizontal-only movement is required (a vertical scroll/pan never triggers a swipe); dragging disables the CSS transform transition so the toast follows the finger live (`touch-action: pan-y` kept).
+## Implementation details
+- `dragRef` / `swipedRef` refs track the pointer; `swipeX` / `dragging` state drive the live translate + transition toggling.
+- `handleTouchStart` bails out when `!isMessage` — this is the guard that confines swipe gestures to message toasts only.
+- `endSwipe` uses a 70px threshold; right = reply (settles back to 0 and opens the reply input), left = slide-out dismiss.
+## Verification
+- `npx eslint src/components/NotificationToast.jsx`: 2 errors, both pre-existing (line 116 empty catch, line 201 setState-in-effect) — none from this change.
+- `npx vite build`: PASSES.
+## Files changed
+- `src/components/NotificationToast.jsx`
+
+## Fix: desktop header missing on wide screens (new)
+The desktop top navigation (brand + search + Chats/Alerts + Post Now + avatar) and the desktop pillar row were invisible on all screen sizes, including desktop.
+- **Root cause** — in `SokoNav.jsx` the inline `<style>` block had two rules placed **after** the `@media (max-width: 360px)` block's closing brace (followed by a stray `}`):
+  ```css
+  .soko-nav-desktop { display: none !important; }
+  .soko-pillar-row { display: none !important; }
+  ```
+  Because they were outside any media query, `display: none !important` applied at **every** width, so the desktop nav never rendered on wide screens.
+- **Fix** — moved `.soko-nav-desktop` and `.soko-pillar-row` hide rules **inside** the `@media (max-width: 768px)` block (alongside the existing mobile-only rules) and removed the stray brace. Now they only hide on mobile, so ≥769px viewports show the full desktop header + pillar row again.
+## Verification
+- `npx vite build`: PASSES.
+## Files changed
+- `src/components/SokoNav.jsx`

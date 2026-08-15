@@ -140,6 +140,10 @@ export default function NotificationToast() {
   const timerRef = useRef(null)
   const toastRef = useRef(null)
   const inputRef = useRef(null)
+  const dragRef = useRef(null)
+  const swipedRef = useRef(false)
+  const [swipeX, setSwipeX] = useState(0)
+  const [dragging, setDragging] = useState(false)
 
   const actorId = visible?.data?.sender_id || visible?.data?.caller_id || visible?.data?.decliner_id || visible?.data?.voucher_id || visible?.data?.viewer_id || visible?.data?.buyer_id || visible?.data?.seller_id || visible?.data?.user_id || visible?.data?.actor_id || null
   const senderProfile = useSenderProfile(actorId)
@@ -172,9 +176,11 @@ export default function NotificationToast() {
     }
   }, [])
 
-  const dismiss = useCallback(() => {
+  const dismiss = useCallback((opts = {}) => {
     clearTimeout(timerRef.current)
     setShow(false)
+    if (!opts.keepOffset) setSwipeX(0)
+    setDragging(false)
     setTimeout(() => { setVisible(null); setReplyText(''); setReplySent(false); setInteracting(false); setReplyExpanded(false) }, 200)
   }, [])
 
@@ -262,8 +268,69 @@ export default function NotificationToast() {
 
   function handleToastClick(e) {
     if (e.target.closest('.toast-reply-area') || replySent) return
+    // A swipe just happened — this click is the tail end of the drag, so don't
+    // navigate to /notifications (the swipe already dismissed/replied).
+    if (swipedRef.current) {
+      swipedRef.current = false
+      return
+    }
     dismiss()
     navigate('/notifications')
+  }
+
+  function handleTouchStart(e) {
+    // Swipe gestures apply ONLY to message notifications
+    if (!isMessage) return
+    if (e.target.closest('.toast-reply-area')) return
+    const t = e.touches[0]
+    dragRef.current = { startX: t.clientX, startY: t.clientY, dx: 0 }
+    swipedRef.current = false
+    setDragging(true)
+  }
+
+  function handleTouchMove(e) {
+    const drag = dragRef.current
+    if (!drag) return
+    const t = e.touches[0]
+    const dx = t.clientX - drag.startX
+    const dy = t.clientY - drag.startY
+    // Only treat clearly-horizontal movement as a swipe
+    if (Math.abs(dx) < 10 || Math.abs(dx) <= Math.abs(dy)) return
+    drag.dx = dx
+    swipedRef.current = true
+    setSwipeX(dx)
+  }
+
+  function endSwipe() {
+    const drag = dragRef.current
+    dragRef.current = null
+    setDragging(false)
+    if (!drag || drag.dx === 0) return
+    const threshold = 70
+    if (Math.abs(drag.dx) >= threshold) {
+      if (drag.dx > 0) {
+        // Swipe right on a message → quick reply
+        setSwipeX(0)
+        setReplyExpanded(true)
+        setInteracting(true)
+        clearTimer()
+      } else {
+        // Swipe left → dismiss (slide out to the left first)
+        setSwipeX(-420)
+        clearTimeout(timerRef.current)
+        timerRef.current = setTimeout(() => dismiss({ keepOffset: true }), 200)
+      }
+    } else {
+      setSwipeX(0)
+    }
+  }
+
+  function handleTouchEnd() { endSwipe() }
+
+  function handleTouchCancel() {
+    dragRef.current = null
+    setDragging(false)
+    setSwipeX(0)
   }
 
   if (!visible && !show) return null
@@ -273,6 +340,10 @@ export default function NotificationToast() {
       <div
         ref={toastRef}
         onClick={handleToastClick}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchCancel}
         onMouseEnter={handleMouseEnter}
         onMouseLeave={handleMouseLeave}
         role="alert"
@@ -280,10 +351,12 @@ export default function NotificationToast() {
         style={{
           background: T.white, borderRadius: 16, border: `1px solid ${T.gray200}`,
           boxShadow: T.shadowMd, overflow: 'hidden', cursor: replySent ? 'default' : 'pointer',
-          transition: 'opacity 0.2s ease-in, transform 0.2s ease-in',
+          transition: dragging ? 'none' : 'opacity 0.2s ease-in, transform 0.2s ease-in',
           animation: 'toastSlideIn 0.25s ease-out',
           opacity: show ? 1 : 0,
-          transform: show ? 'scale(1)' : 'scale(0.96)',
+          transform: `translateX(${swipeX}px) ${show ? 'scale(1)' : 'scale(0.96)'}`,
+          touchAction: 'pan-y',
+          willChange: 'transform',
         }}
       >
         <div style={{ padding: '14px 16px', display: 'flex', gap: 12, alignItems: 'flex-start' }}>
