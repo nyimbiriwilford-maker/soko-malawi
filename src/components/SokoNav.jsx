@@ -246,17 +246,61 @@ export default function SokoNav({
         .soko-nav-mobile { display: none; }
         .soko-scroll { scrollbar-width: none; }
         .soko-scroll::-webkit-scrollbar { display: none; }
+        .soko-quick-scroll { scrollbar-width: none; }
+        .soko-quick-scroll::-webkit-scrollbar { display: none; }
+        @keyframes sokoBadgeIn {
+          from { transform: scale(0.4); opacity: 0; }
+          to { transform: scale(1); opacity: 1; }
+        }
         @media (max-width: 768px) {
           .soko-nav-mobile {
             display: flex !important;
             flex-direction: column !important;
-            padding: 10px max(14px, env(safe-area-inset-left)) 10px max(14px, env(safe-area-inset-right)) !important;
+            padding: 10px max(16px, env(safe-area-inset-left)) 10px max(16px, env(safe-area-inset-right)) !important;
             width: 100% !important;
             gap: 10px !important;
-            background: #fff !important;
             box-sizing: border-box !important;
-            border-bottom: 1px solid #f0f0f0 !important;
+            position: relative !important;
+            overflow: hidden !important;
+            background:
+              radial-gradient(120% 120% at 100% -20%, rgba(15,157,88,0.10) 0%, rgba(15,157,88,0) 42%),
+              radial-gradient(90% 90% at -10% 120%, rgba(249,171,0,0.07) 0%, rgba(249,171,0,0) 46%),
+              linear-gradient(180deg, #ffffff 0%, #fcfdfc 100%) !important;
+            border-bottom: 1px solid rgba(15,157,88,0.08) !important;
+            box-shadow: 0 1px 0 rgba(0,0,0,0.03), 0 6px 18px rgba(15,157,88,0.05) !important;
           }
+          .soko-nav-mobile::before,
+          .soko-nav-mobile::after {
+            content: '';
+            position: absolute;
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 0;
+          }
+          .soko-nav-mobile::before {
+            width: 130px;
+            height: 130px;
+            top: -70px;
+            right: -45px;
+            background: radial-gradient(circle, rgba(15,157,88,0.09) 0%, rgba(15,157,88,0) 70%);
+          }
+          .soko-nav-mobile::after {
+            width: 90px;
+            height: 90px;
+            bottom: -55px;
+            left: -35px;
+            background: radial-gradient(circle, rgba(249,171,0,0.07) 0%, rgba(249,171,0,0) 70%);
+          }
+          .soko-nav-mobile > * { position: relative; z-index: 1; }
+          .soko-nav-mobile button:active { transform: scale(0.94); }
+          .soko-nav-desktop { display: none !important; }
+        }
+        @media (max-width: 360px) {
+          .soko-nav-mobile { padding-left: 12px !important; padding-right: 12px !important; gap: 9px !important; }
+          .soko-nav-mobile button[aria-label="Search"],
+          .soko-nav-mobile button[aria-label="Notifications"],
+          .soko-nav-mobile button[aria-label="My Profile"] { width: 38px; height: 38px; }
+        }
           .soko-nav-desktop { display: none !important; }
           .soko-pillar-row { display: none !important; }
         }
@@ -394,21 +438,28 @@ export default function SokoNav({
       {/* ════════════════════ MOBILE HEADER ════════════════════ */}
       <div className="soko-nav-mobile">
 
-        {/* Row 1: Logo + Search icon + Notification Bell */}
+        {/* Row 1: Logo + Search icon + Notification Bell + Profile */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
 
           {/* Logo */}
-          <div onClick={() => navigate('/')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-            <div style={{ fontFamily: T.fontDisplay, fontSize: 21, fontWeight: 900, color: T.green, letterSpacing: '-0.6px', lineHeight: 1 }}>
-              Soko<span style={{ color: T.amber }}>Mw</span>
+          <div onClick={() => navigate('/')} style={{ cursor: 'pointer', userSelect: 'none', display: 'flex', alignItems: 'center', gap: 9 }}>
+            <div style={{ width: 30, height: 30, borderRadius: 10, background: 'linear-gradient(135deg, rgba(15,157,88,0.14), rgba(15,157,88,0.05))', border: '1px solid rgba(15,157,88,0.16)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: T.green, flexShrink: 0 }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <path d="M3 12l9-9 9 9" /><path d="M5 10v10a1 1 0 0 0 1 1h3v-6h6v6h3a1 1 0 0 0 1-1V10" />
+              </svg>
             </div>
-            <div style={{ fontSize: 9, color: T.gray500, fontWeight: 500, letterSpacing: '0.1px', marginTop: 2, whiteSpace: 'nowrap' }}>
-              Buy · Sell · Find · Anywhere in Malawi
+            <div>
+              <div style={{ fontFamily: T.fontDisplay, fontSize: 20, fontWeight: 900, color: T.green, letterSpacing: '-0.6px', lineHeight: 1 }}>
+                Soko<span style={{ color: T.amber }}>Mw</span>
+              </div>
+              <div style={{ fontSize: 8.5, color: T.gray500, fontWeight: 600, letterSpacing: '0.14px', marginTop: 2, whiteSpace: 'nowrap', textTransform: 'uppercase' }}>
+                Buy · Sell · Find
+              </div>
             </div>
           </div>
 
-          {/* Right side: Search + Notification Bell */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          {/* Right side: Search + Notification Bell + Profile */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
 
             {/* Search icon button */}
             <button
@@ -416,10 +467,12 @@ export default function SokoNav({
               onClick={() => navigate('/search?focus=1')}
               aria-label="Search"
               style={{
-                background: 'none', border: 'none', padding: 0,
+                width: 40, height: 40, padding: 0,
+                background: 'none', border: 'none',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 cursor: 'pointer', color: '#334155', flexShrink: 0,
-                transition: 'color 0.18s',
+                transition: 'transform 0.14s, color 0.14s',
+                WebkitTapHighlightColor: 'transparent',
               }}>
               {Icon.search(20)}
             </button>
@@ -430,28 +483,88 @@ export default function SokoNav({
               onClick={() => navigate('/notifications')}
               aria-label="Notifications"
               style={{
-                background: 'none', border: 'none', padding: 0,
+                width: 40, height: 40, padding: 0,
+                background: 'none', border: 'none',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 cursor: 'pointer', color: '#334155', flexShrink: 0,
                 position: 'relative',
+                transition: 'transform 0.14s, color 0.14s',
+                WebkitTapHighlightColor: 'transparent',
               }}>
               {Icon.bell(20)}
               {notifCount > 0 && (
                 <span style={{
-                  position: 'absolute', top: -3, right: -5,
+                  position: 'absolute', top: 4, right: 4,
                   background: T.red, color: '#fff',
-                  borderRadius: '50%', minWidth: 16, height: 16,
-                  fontSize: 9, fontWeight: 800,
+                  borderRadius: '50%', minWidth: 17, height: 17,
+                  fontSize: 9.5, fontWeight: 800,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   border: '2px solid #fff', padding: '0 3px',
                   lineHeight: 1,
+                  boxShadow: '0 1px 4px rgba(234,67,53,0.35)',
+                  animation: 'sokoBadgeIn 0.22s cubic-bezier(0.34,1.4,0.64,1) both',
                 }}>
                   {notifCount > 9 ? '9+' : notifCount}
                 </span>
               )}
             </button>
 
+            {/* Profile / Account */}
+            <button
+              type="button"
+              onClick={() => navigate('/profile')}
+              aria-label="My Profile"
+              style={{
+                width: 40, height: 40, borderRadius: 14, padding: 0,
+                background: user?.avatar_url ? 'transparent' : 'linear-gradient(135deg, #0F9D58, #0a7a44)',
+                border: '2px solid rgba(15,157,88,0.35)', overflow: 'hidden',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#fff', fontSize: 15, fontWeight: 800, flexShrink: 0,
+                cursor: 'pointer',
+                transition: 'transform 0.14s, box-shadow 0.14s',
+                boxShadow: '0 2px 8px rgba(15,157,88,0.22)',
+                WebkitTapHighlightColor: 'transparent',
+              }}>
+              {user?.avatar_url
+                ? <img src={user.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : (user?.email?.[0] || user?.full_name?.[0] || 'S').toUpperCase()}
+            </button>
+
           </div>
+        </div>
+
+        {/* Row 2: Smart quick actions */}
+        <div className="soko-quick-scroll" style={{ display: 'flex', alignItems: 'center', gap: 8, overflowX: 'auto', paddingBottom: 2, scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}>
+          {SOKO_PILLARS.map(p => {
+            const isActive = p.key === activePillar
+            return (
+              <button
+                key={p.key}
+                type="button"
+                onClick={() => navigate(p.path)}
+                style={{
+                  flexShrink: 0,
+                  display: 'flex', alignItems: 'center', gap: 7,
+                  padding: '9px 14px',
+                  borderRadius: 12,
+                  background: isActive ? 'linear-gradient(135deg, #0F9D58, #0a7a44)' : 'rgba(255,255,255,0.8)',
+                  border: isActive ? '1px solid transparent' : '1px solid rgba(15,157,88,0.14)',
+                  boxShadow: isActive ? '0 3px 12px rgba(15,157,88,0.30)' : '0 1px 3px rgba(0,0,0,0.04)',
+                  cursor: 'pointer',
+                  fontSize: 12.5, fontWeight: 700,
+                  color: isActive ? '#fff' : '#3c4043',
+                  whiteSpace: 'nowrap',
+                  fontFamily: 'inherit',
+                  transition: 'transform 0.14s, box-shadow 0.14s, background 0.14s, color 0.14s',
+                  WebkitTapHighlightColor: 'transparent',
+                }}>
+                <span style={{ display: 'flex', color: isActive ? '#fff' : T.green }}>
+                  {p.icon(16)}
+                </span>
+                {p.label}
+              </button>
+            )
+          })}
         </div>
 
       </div>
