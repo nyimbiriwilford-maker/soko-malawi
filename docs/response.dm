@@ -1,13 +1,17 @@
-﻿# Mobile header quick actions — plain icons, evenly fitted, no boxes
+﻿# Mobile header logo + quick actions cleanup
 
 ## Request
-The mobile quick action icons (Market, Status, etc.) must NOT be placed in circular/rounded boxes. Present them as clean, smart, plain icons that are properly fitted for all mobile devices.
+- Remove the house logo in front of the Soko logo.
+- Remove the words below the Soko logo ("Buy · Sell · Find").
+- Make the "SokoMw" logo large and properly fitted in that section.
+- (Previous) Quick actions as plain icons, no boxes, evenly fitted for all mobile devices.
 
 ## Status: implemented in `src/components/SokoNav.jsx`
-Mobile-only change; desktop pillar row untouched.
+Mobile-only changes; desktop header untouched.
 
-- **No boxes:** Each quick action is now a plain icon button with `background: none; border: none` — no rounded background, border, or shadow.
-- **Evenly fitted for all devices:** The row is `display: flex; justify-content: space-between` across the full width (no horizontal scroll), so the 6 icons (Marketplace, Shops, Looking For, Jobs, Services, Statuses) space out evenly on any screen size. Verification remains removed.
+- **Logo cleanup:** Removed the house (home) icon box in front of the Soko logo and removed the "Buy · Sell · Find" tagline. The "SokoMw" wordmark now stands alone, enlarged to 26px (was 20px) so it fills the left section cleanly.
+- **Quick actions (no boxes):** Each quick action is a plain icon button with `background: none; border: none` — no rounded background, border, or shadow.
+- **Evenly fitted for all devices:** The quick-actions row is `display: flex; justify-content: space-between` across the full width (no horizontal scroll), so the 6 icons (Marketplace, Shops, Looking For, Jobs, Services, Statuses) space out evenly on any screen size. Verification remains removed.
 - **Active state** is shown by color only: active icon turns green (`#0F9D58`), inactive icons are slate (`#64748b`).
 
 ## Verification
