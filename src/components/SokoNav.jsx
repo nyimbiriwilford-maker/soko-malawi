@@ -44,6 +44,14 @@ const Icon = {
       <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" /><line x1="3" y1="6" x2="21" y2="6" /><path d="M16 10a4 4 0 0 1-8 0" />
     </svg>
   ),
+  sliders: (s = 18) => (
+    <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <line x1="21" y1="4" x2="14" y2="4" /><line x1="10" y1="4" x2="3" y2="4" />
+      <line x1="21" y1="12" x2="12" y2="12" /><line x1="8" y1="12" x2="3" y2="12" />
+      <line x1="21" y1="20" x2="16" y2="20" /><line x1="12" y1="20" x2="3" y2="20" />
+      <line x1="14" y1="2" x2="14" y2="6" /><line x1="8" y1="10" x2="8" y2="14" /><line x1="16" y1="18" x2="16" y2="22" />
+    </svg>
+  ),
 }
 
 const SOKO_PILLARS = [
@@ -271,34 +279,6 @@ export default function SokoNav({
           <div style={{ fontSize: 10.5, color: T.gray600, fontWeight: 500, whiteSpace: 'nowrap' }}>
             Buy. Sell. Find. Anywhere in Malawi.
           </div>
-        </div>
-
-        {/* Desktop District Filter */}
-        <div style={{ position: 'relative', flexShrink: 0 }}>
-          <button type="button" onClick={() => setDistOpen(d => !d)}
-            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 50, background: '#fff', border: `1.5px solid ${T.gray200}`, fontSize: 13, fontWeight: 600, color: T.gray800, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit' }}>
-            {Icon.pin(13)}
-            <span style={{ color: district !== 'All Districts' ? T.amber : T.gray900, fontWeight: district !== 'All Districts' ? 800 : 600 }}>{district}</span>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
-              <polyline points="6 9 12 15 18 9" />
-            </svg>
-            {district !== 'All Districts' && (
-              <span role="button" tabIndex={0}
-                onClick={e => { e.stopPropagation(); changeDistrict('All Districts') }}
-                onKeyDown={e => e.key === 'Enter' && changeDistrict('All Districts')}
-                style={{ marginLeft: 2, color: T.gray400, fontSize: 11, lineHeight: 1 }}>✕</span>
-            )}
-          </button>
-          {distOpen && (
-            <div style={{ position: 'absolute', top: 'calc(100% + 8px)', left: 0, background: T.white, borderRadius: 16, padding: '8px 0', boxShadow: T.shadowLg, minWidth: 200, border: `1px solid ${T.gray200}`, zIndex: 200 }}>
-              {districts.map(d => (
-                <button key={d} type="button" onClick={() => changeDistrict(d)}
-                  style={{ display: 'block', width: '100%', padding: '9px 16px', textAlign: 'left', background: d === district ? T.greenL : 'transparent', border: 'none', fontSize: 13.5, fontWeight: d === district ? 700 : 500, color: d === district ? T.green : T.gray800, cursor: 'pointer', fontFamily: 'inherit' }}>
-                  {d}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
 
         {/* Desktop Search */}
