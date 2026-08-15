@@ -277,6 +277,7 @@ export default function ChatListPanel() {
   // 'all' | 'marketplace' | 'services' | 'jobs' | 'requests' | 'shops' | 'starred' | 'unread' | 'offers' | 'archived'
   const [activeFilter, setActiveFilter] = useState('all')
   const [search, setSearch] = useState('')
+  const [searchOpen, setSearchOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [newChatOpen, setNewChatOpen] = useState(false)
   const [newChatQuery, setNewChatQuery] = useState('')
@@ -1109,6 +1110,7 @@ export default function ChatListPanel() {
         @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
         @keyframes typingDot { 0%,80%,100%{transform:scale(0.6);opacity:0.4} 40%{transform:scale(1);opacity:1} }
         @keyframes revealIn { from{opacity:0;transform:translateX(6px)} to{opacity:1;transform:translateX(0)} }
+        @keyframes searchDrop { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
 
         .chat-row {
           transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -1139,7 +1141,17 @@ export default function ChatListPanel() {
           <div style={S.tagline}>Buy. Sell. Find. Anywhere in Malawi.</div>
         </div>
 
-        <div style={S.menuWrap}>
+        <div style={S.brandActions}>
+          <button
+            type="button"
+            style={{ ...S.menuBtn, ...(searchOpen ? S.menuBtnActive : {}) }}
+            onClick={() => setSearchOpen(v => !v)}
+            aria-label="Search chats"
+            aria-expanded={searchOpen}
+          >
+            <SearchGlassIcon size={18} color={searchOpen ? '#1a7a4a' : '#3a443d'} />
+          </button>
+          <div style={S.menuWrap}>
           <button type="button" style={S.menuBtn} onClick={() => setMenuOpen(v => !v)} aria-label="More filters">
             <KebabIcon />
           </button>
@@ -1177,6 +1189,7 @@ export default function ChatListPanel() {
               </div>
             </>
           )}
+        </div>
         </div>
       </div>
 
@@ -1231,25 +1244,36 @@ export default function ChatListPanel() {
         </div>
       )}
 
-      {/* Search */}
-      <div style={S.searchWrap}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#aaa" strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0 }}>
-          <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-        </svg>
-        <input
-          style={S.searchInput}
-          placeholder="Search chats"
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-        />
-        {search && (
-          <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#aaa', padding: 0 }} onClick={() => setSearch('')}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round">
+      {/* Search — appears only after tapping the search icon in the brand row */}
+      {searchOpen && (
+        <div style={{ ...S.searchWrap, animation: 'searchDrop 0.18s ease both' }}>
+          <SearchGlassIcon size={15} color="#8aa093" />
+          <input
+            autoFocus
+            style={S.searchInput}
+            placeholder="Search chats"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+          />
+          {search && (
+            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#aaa', padding: 0 }} onClick={() => setSearch('')}>
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round">
+                <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          )}
+          <button
+            type="button"
+            style={S.searchCloseBtn}
+            onClick={() => setSearchOpen(false)}
+            aria-label="Close search"
+          >
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
               <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
             </svg>
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Category pills — horizontal, was the vertical sidebar */}
       <div style={S.rowWrap}>
@@ -1394,6 +1418,7 @@ const S = {
   tagline: { fontSize: '11.5px', color: '#9aa39d', marginTop: '3px' },
 
   menuWrap: { position: 'relative' },
+  brandActions: { display: 'flex', alignItems: 'center', gap: 8 },
   menuBtn: {
     background: 'rgba(0,0,0,0.04)',
     border: 'none',
@@ -1404,7 +1429,9 @@ const S = {
     alignItems: 'center',
     justifyContent: 'center',
     cursor: 'pointer',
+    transition: 'background 0.2s ease',
   },
+  menuBtnActive: { background: '#e6f7ee' },
   menuOverlay: { position: 'fixed', inset: 0, zIndex: 20 },
   menuDropdown: {
     position: 'absolute',
@@ -1495,6 +1522,15 @@ const S = {
     fontSize: '15px',
     color: '#111',
     outline: 'none',
+  },
+  searchCloseBtn: {
+    background: 'none',
+    border: 'none',
+    cursor: 'pointer',
+    color: '#9aa39d',
+    padding: '2px',
+    display: 'flex',
+    flexShrink: 0,
   },
 
   pillRow: { display: 'flex', gap: '8px', padding: '0 16px 12px', overflowX: 'auto' },

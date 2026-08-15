@@ -99,3 +99,13 @@ The star and archive icons were previously always visible on every chat row. Now
 - `npx vite build`: PASSES.
 ## Files changed
 - `src/pages/ChatListPanel.jsx`
+
+## Chat list: search icon at top, search box appears only when tapped (new)
+- **`src/pages/ChatListPanel.jsx`**
+  - Added `searchOpen` state. A search icon button (`SearchGlassIcon`) now sits at the top of the panel in the brand row, next to the ⋮ filters button (wrapped in a new `brandActions` row; the button shows a green active state via new `menuBtnActive` style while open).
+  - The search box is no longer always visible — it renders only when `searchOpen` is true, dropping in with a new `searchDrop` keyframe and auto-focusing. It keeps the existing query-clear button and adds a close (X) button (`S.searchCloseBtn`) that collapses the search. Tapping the search icon again toggles it back.
+## Verification
+- `npx eslint src/pages/ChatListPanel.jsx`: no new errors from this change.
+- `npx vite build`: PASSES.
+## Files changed
+- `src/pages/ChatListPanel.jsx`
