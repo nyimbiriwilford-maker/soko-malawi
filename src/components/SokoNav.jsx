@@ -245,16 +245,17 @@ const filteredDistricts = districts.filter(d =>
         .soko-scroll { scrollbar-width: none; }
         .soko-scroll::-webkit-scrollbar { display: none; }
         @media (max-width: 768px) {
-          .soko-nav-desktop { display: none !important; }
           .soko-nav-mobile {
             display: flex !important;
             flex-direction: column !important;
-            padding: 10px 14px 8px !important;
+            padding: 10px max(14px, env(safe-area-inset-left)) 10px max(14px, env(safe-area-inset-right)) !important;
             width: 100% !important;
-            gap: 8px !important;
+            gap: 10px !important;
             background: #fff !important;
             box-sizing: border-box !important;
+            border-bottom: 1px solid #f0f0f0 !important;
           }
+          .soko-nav-desktop { display: none !important; }
           .soko-pillar-row { display: none !important; }
         }
         @media (min-width: 769px) {
@@ -424,11 +425,11 @@ const filteredDistricts = districts.filter(d =>
 
           {/* Logo */}
           <div onClick={() => navigate('/')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-            <div style={{ fontFamily: T.fontDisplay, fontSize: 20, fontWeight: 800, color: T.green, letterSpacing: '-0.5px', lineHeight: 1.1 }}>
+            <div style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 900, color: T.green, letterSpacing: '-0.6px', lineHeight: 1 }}>
               Soko<span style={{ color: T.amber }}>Mw</span>
             </div>
-            <div style={{ fontSize: 9.5, color: T.gray600, fontWeight: 500, whiteSpace: 'nowrap' }}>
-              Buy. Sell. Find. Anywhere in Malawi.
+            <div style={{ fontSize: 9, color: T.gray500, fontWeight: 500, letterSpacing: '0.1px', marginTop: 2, whiteSpace: 'nowrap' }}>
+              Buy · Sell · Find · Anywhere in Malawi
             </div>
           </div>
 
@@ -437,13 +438,31 @@ const filteredDistricts = districts.filter(d =>
 
             {/* District Filter Button */}
             <div style={{ position: 'relative' }}>
-              <button type="button" onClick={() => setDistOpen(d => !d)}
-                style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '5px 11px', borderRadius: 50, background: '#f3f4f6', border: `1px solid ${T.gray200}`, fontSize: 12, fontWeight: 600, color: T.gray800, cursor: 'pointer', whiteSpace: 'nowrap', maxWidth: 150, fontFamily: 'inherit' }}>
+              <button
+                type="button"
+                onClick={() => setDistOpen(d => !d)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 5,
+                  padding: '6px 11px 6px 9px',
+                  borderRadius: 50,
+                  background: district !== 'All Districts' ? T.greenL : '#f3f4f6',
+                  border: `1.5px solid ${district !== 'All Districts' ? T.green : T.gray200}`,
+                  fontSize: 12, fontWeight: 700,
+                  color: district !== 'All Districts' ? T.green : T.gray700,
+                  cursor: 'pointer', whiteSpace: 'nowrap',
+                  maxWidth: 148, fontFamily: 'inherit',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.07)',
+                  transition: 'background 0.15s, border-color 0.15s',
+                }}>
                 {Icon.pin(12)}
-                <span style={{ color: district !== 'All Districts' ? T.amber : T.gray900, fontWeight: district !== 'All Districts' ? 800 : 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 90 }}>
+                <span style={{
+                  overflow: 'hidden', textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap', maxWidth: 86,
+                }}>
                   {district}
                 </span>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden>
+                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" aria-hidden
+                  style={{ transform: distOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', flexShrink: 0 }}>
                   <polyline points="6 9 12 15 18 9" />
                 </svg>
               </button>
@@ -451,39 +470,89 @@ const filteredDistricts = districts.filter(d =>
               {/* Mobile District Bottom Sheet */}
               {distOpen && createPortal(
                 <>
-                  <div onClick={() => setDistOpen(false)}
-                    style={{ position: 'fixed', inset: 0, zIndex: 998, background: 'rgba(0,0,0,0.32)' }} />
-                  <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 999, background: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: '16px 16px calc(24px + env(safe-area-inset-bottom, 0px))', maxHeight: '70vh', display: 'flex', flexDirection: 'column', boxShadow: '0 -8px 30px rgba(0,0,0,0.15)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 12, borderBottom: `1px solid ${T.gray100}`, marginBottom: 10, fontWeight: 700, fontSize: 16, color: T.gray900 }}>
+                  <div
+                    onClick={() => setDistOpen(false)}
+                    style={{ position: 'fixed', inset: 0, zIndex: 998, background: 'rgba(0,0,0,0.4)', backdropFilter: 'blur(2px)', WebkitBackdropFilter: 'blur(2px)' }}
+                  />
+                  <div style={{
+                    position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 999,
+                    background: '#fff',
+                    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+                    padding: '0 16px calc(20px + env(safe-area-inset-bottom, 0px))',
+                    maxHeight: '72vh', display: 'flex', flexDirection: 'column',
+                    boxShadow: '0 -12px 40px rgba(0,0,0,0.18)',
+                  }}>
+                    {/* Handle bar */}
+                    <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 4px' }}>
+                      <div style={{ width: 36, height: 4, borderRadius: 2, background: T.gray200 }} />
+                    </div>
+                    {/* Sheet header */}
+                    <div style={{
+                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                      paddingBottom: 12, paddingTop: 6,
+                      borderBottom: `1px solid ${T.gray100}`, marginBottom: 12,
+                      fontWeight: 800, fontSize: 17, color: T.gray900,
+                    }}>
                       <span>Select District</span>
-                      <button type="button" onClick={() => { setDistOpen(false); setDistrictSearch('') }}
-                        style={{ background: T.gray100, border: 'none', borderRadius: '50%', width: 28, height: 28, cursor: 'pointer', fontSize: 14, color: T.gray600, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <button
+                        type="button"
+                        onClick={() => { setDistOpen(false); setDistrictSearch(''); }}
+                        style={{
+                          background: T.gray100, border: 'none', borderRadius: '50%',
+                          width: 30, height: 30, cursor: 'pointer', fontSize: 14,
+                          color: T.gray600, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}>
                         ✕
                       </button>
                     </div>
-                    <div style={{ position: 'relative', marginBottom: 10, flexShrink: 0 }}>
+                    {/* Search input */}
+                    <div style={{ position: 'relative', marginBottom: 12, flexShrink: 0 }}>
                       <input
                         autoFocus
                         value={districtSearch}
                         onChange={e => setDistrictSearch(e.target.value)}
                         placeholder="Search district..."
-                        style={{ width: '100%', padding: '10px 14px', borderRadius: 12, border: `1.5px solid ${T.gray200}`, fontSize: 14, color: T.gray900, outline: 'none', boxSizing: 'border-box', fontFamily: 'inherit' }}
+                        style={{
+                          width: '100%', padding: '10px 36px 10px 14px',
+                          borderRadius: 14,
+                          border: `1.5px solid ${T.gray200}`,
+                          fontSize: 14, color: T.gray900, outline: 'none',
+                          boxSizing: 'border-box', fontFamily: 'inherit',
+                          background: T.gray50,
+                        }}
                       />
                       {districtSearch && (
-                        <button type="button" onClick={() => setDistrictSearch('')}
-                          style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: T.gray200, border: 'none', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: T.gray600 }}>
+                        <button
+                          type="button"
+                          onClick={() => setDistrictSearch('')}
+                          style={{
+                            position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                            background: T.gray200, border: 'none', borderRadius: '50%',
+                            width: 22, height: 22, display: 'flex', alignItems: 'center',
+                            justifyContent: 'center', cursor: 'pointer', color: T.gray600,
+                          }}>
                           {Icon.x(10)}
                         </button>
                       )}
                     </div>
-                    <div style={{ overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, paddingTop: 4 }}>
+                    {/* District grid */}
+                    <div style={{ overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, paddingBottom: 8 }}>
                       {filteredDistricts.length > 0 ? filteredDistricts.map(d => (
                         <button key={d} type="button" onClick={() => changeDistrict(d)}
-                          style={{ padding: '10px 12px', borderRadius: 12, background: d === district ? T.greenL : T.gray50, border: `1px solid ${d === district ? T.green : T.gray200}`, fontSize: 13, fontWeight: d === district ? 700 : 500, color: d === district ? T.green : T.gray800, textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit' }}>
+                          style={{
+                            padding: '11px 12px',
+                            borderRadius: 14,
+                            background: d === district ? T.greenL : '#fff',
+                            border: `1.5px solid ${d === district ? T.green : T.gray200}`,
+                            fontSize: 13.5, fontWeight: d === district ? 700 : 500,
+                            color: d === district ? T.green : T.gray800,
+                            textAlign: 'left', cursor: 'pointer', fontFamily: 'inherit',
+                            transition: 'background 0.1s, border-color 0.1s',
+                          }}>
                           {d}
                         </button>
                       )) : (
-                        <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '20px 0', fontSize: 13, color: T.gray500 }}>
+                        <div style={{ gridColumn: '1 / -1', textAlign: 'center', padding: '24px 0', fontSize: 13, color: T.gray500 }}>
                           No district found
                         </div>
                       )}
@@ -495,11 +564,30 @@ const filteredDistricts = districts.filter(d =>
             </div>
 
             {/* Notification Bell */}
-            <button type="button" onClick={() => navigate('/notifications')} aria-label="Notifications"
-              style={{ width: 36, height: 36, borderRadius: '50%', background: '#f3f4f6', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: T.gray800, flexShrink: 0, position: 'relative' }}>
+            <button
+              type="button"
+              onClick={() => navigate('/notifications')}
+              aria-label="Notifications"
+              style={{
+                width: 38, height: 38, borderRadius: '50%',
+                background: '#f3f4f6',
+                border: `1.5px solid ${T.gray200}`,
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', color: T.gray700, flexShrink: 0,
+                position: 'relative',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.07)',
+              }}>
               {Icon.bell(19)}
               {notifCount > 0 && (
-                <span style={{ position: 'absolute', top: 1, right: 1, background: T.red, color: '#fff', borderRadius: '50%', minWidth: 15, height: 15, fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1.5px solid #fff', padding: '0 3px' }}>
+                <span style={{
+                  position: 'absolute', top: 0, right: 0,
+                  background: T.red, color: '#fff',
+                  borderRadius: '50%', minWidth: 17, height: 17,
+                  fontSize: 9.5, fontWeight: 800,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  border: '2px solid #fff', padding: '0 3px',
+                  lineHeight: 1,
+                }}>
                   {notifCount > 9 ? '9+' : notifCount}
                 </span>
               )}
@@ -510,28 +598,57 @@ const filteredDistricts = districts.filter(d =>
 
         {/* Row 2: Full-width Search Bar */}
         <div
-          style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 8, background: T.gray100, borderRadius: 14, padding: '0 12px', minHeight: 40, border: `1.5px solid ${focused ? T.green : T.gray200}`, position: 'relative', cursor: 'pointer', boxSizing: 'border-box' }}
+          style={{
+            width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+            background: focused ? '#fff' : T.gray100,
+            borderRadius: 16,
+            padding: '0 14px',
+            minHeight: 44,
+            border: `1.5px solid ${focused ? T.green : 'transparent'}`,
+            boxShadow: focused ? `0 0 0 3px ${T.greenL}` : '0 1px 4px rgba(0,0,0,0.08)',
+            position: 'relative', cursor: 'pointer',
+            boxSizing: 'border-box',
+            transition: 'border-color 0.15s, box-shadow 0.15s, background 0.15s',
+          }}
           onClick={() => navigate('/search?focus=1')}
         >
-          <span style={{ color: focused ? T.green : T.gray400, flexShrink: 0, display: 'flex' }}>{Icon.search(16)}</span>
-          <div style={{ flex: 1, position: 'relative', height: 22, minWidth: 0 }}>
+          <span style={{ color: focused ? T.green : T.gray400, flexShrink: 0, display: 'flex' }}>
+            {Icon.search(17)}
+          </span>
+          <div style={{ flex: 1, position: 'relative', height: 24, minWidth: 0 }}>
             <input
-              ref={inputRef} value={search}
-              onChange={e => { e.stopPropagation(); const val = e.target.value; setSearch?.(val); navigate(`/search?q=${encodeURIComponent(val)}&focus=1`) }}
-              onFocus={() => { setFocused(true); navigate('/search?focus=1') }}
+              ref={inputRef}
+              value={search}
+              onChange={e => { e.stopPropagation(); const val = e.target.value; setSearch?.(val); navigate(`/search?q=${encodeURIComponent(val)}&focus=1`); }}
+              onFocus={() => { setFocused(true); navigate('/search?focus=1'); }}
               onBlur={() => setFocused(false)}
               aria-label="Search marketplace"
-              style={{ position: 'absolute', inset: 0, width: '100%', border: 'none', background: 'transparent', fontSize: 13.5, color: T.gray900, outline: 'none', zIndex: search || focused ? 2 : 0, fontFamily: 'inherit' }}
+              style={{
+                position: 'absolute', inset: 0, width: '100%',
+                border: 'none', background: 'transparent',
+                fontSize: 14, color: T.gray900, outline: 'none',
+                zIndex: search || focused ? 2 : 0, fontFamily: 'inherit',
+              }}
             />
             {!search && !focused && (
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', pointerEvents: 'none', fontSize: 13, color: T.gray400, overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                Search anything...
+              <div style={{
+                position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
+                pointerEvents: 'none', fontSize: 13.5, color: T.gray400,
+                overflow: 'hidden', whiteSpace: 'nowrap',
+              }}>
+                Search anything in Malawi...
               </div>
             )}
           </div>
           {search && (
-            <button type="button" onClick={e => { e.stopPropagation(); setSearch?.('') }}
-              style={{ background: T.gray200, border: 'none', borderRadius: '50%', width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: T.gray600, flexShrink: 0 }}>
+            <button
+              type="button"
+              onClick={e => { e.stopPropagation(); setSearch?.(''); }}
+              style={{
+                background: T.gray200, border: 'none', borderRadius: '50%',
+                width: 22, height: 22, display: 'flex', alignItems: 'center',
+                justifyContent: 'center', cursor: 'pointer', color: T.gray600, flexShrink: 0,
+              }}>
               {Icon.x(10)}
             </button>
           )}
