@@ -11,7 +11,7 @@ import {
   Wrench,
   Search,
   ChevronRight,
-  GalleryHorizontalEnd,
+  Clock,
 } from 'lucide-react'
 
 const ICON = { size: 22, strokeWidth: 1.75 }
@@ -155,7 +155,7 @@ export default function BottomNav() {
             >
               <span className="sbn-status-ring" aria-hidden="true">
                 <span className="sbn-post-ic sbn-post-ic-status">
-                  <GalleryHorizontalEnd size={20} strokeWidth={1.75} />
+                  <Clock size={20} strokeWidth={1.75} />
                 </span>
               </span>
               <span className="sbn-post-copy">

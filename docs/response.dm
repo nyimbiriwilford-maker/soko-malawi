@@ -202,6 +202,14 @@ The **Status** item in both the mobile bottom-nav post menu and the desktop head
 - `src/components/BottomNav.jsx`
 - `src/components/SokoNav.jsx`
 
+## Consistent Status icon (revision)
+The Status post-menu icon now matches the mobile top-nav **Statuses (Stories)** icon for consistency.
+- The mobile top-nav "Statuses (Stories)" pillar (`SOKO_PILLARS` in `SokoNav.jsx`) uses the **clock** glyph (circle + clock hands).
+- Swapped the post-menu Status icon from `GalleryHorizontalEnd` to **`Clock`** in both `BottomNav.jsx` (mobile post menu) and `SokoNav.jsx` (`POST_ITEMS` desktop menu), at the same stroke weight (1.75) so the two match.
+## Files changed
+- `src/components/BottomNav.jsx`
+- `src/components/SokoNav.jsx`
+
 ## Refined professional Status option (revision)
 The previous flashy treatment (spinning conic ring, pulsing glow, blinking red LIVE badge, shimmer sweep) was replaced with a calm, professional design:
 - **Smooth icon** — swapped `Sparkles` for the cleaner `GalleryHorizontalEnd` (gallery/story glyph) at a lighter stroke weight (1.75).
