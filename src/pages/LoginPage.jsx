@@ -380,7 +380,7 @@ function SignUpMode({ flow, onOpenTerms }) {
         <PrimaryButton
           type="submit"
           loading={loadingAction === 'signup'}
-          disabled={busy}
+          disabled={busy || !agreedToTerms}
           aria-label="Continue sign up"
         >
           Continue

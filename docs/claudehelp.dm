@@ -11,3 +11,5 @@ Add real-time password strength validation: as the user types, show a live stren
 On the page where a user is required to enter the code sent to their email, remove the field that asks for a username.
 
 When the password matching fails while typing in the second password (Confirm Password) field, the field should turn red.
+
+On the signup form, the Continue button should be disabled (inactive) until the Terms & Privacy checkbox is checked. Also, when a person tries to sign up with an email that is already registered, they should be denied with an error message.

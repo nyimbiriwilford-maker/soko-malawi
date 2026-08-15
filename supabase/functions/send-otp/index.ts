@@ -78,7 +78,7 @@ serve(async (req) => {
   }
 
   try {
-    let body: { identifier?: string; captchaToken?: string }
+    let body: { identifier?: string; captchaToken?: string; action?: string }
     try {
       body = await req.json()
     } catch {
@@ -125,6 +125,24 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
+
+    // Signup: deny if the email is already registered (check via profiles mirror)
+    if (isEmail && body.action !== 'reset') {
+      const { data: existing, error: existingErr } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('email', identifier)
+        .limit(1)
+
+      if (!existingErr && existing && existing.length > 0) {
+        return new Response(JSON.stringify({
+          error: 'This email is already registered. Please sign in instead.',
+        }), {
+          status: 409,
+          headers: { ...headers, 'Content-Type': 'application/json' },
+        })
+      }
+    }
 
     const windowStart = new Date(Date.now() - WINDOW_MINUTES * 60 * 1000).toISOString()
     const { count, error: countErr } = await supabase

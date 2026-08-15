@@ -254,7 +254,7 @@ export function useAuthFlow() {
       setLoadingAction('signup');
       clearMsg();
       try {
-        await sendOtp(email, captchaToken);
+        await sendOtp(email, captchaToken, 'signup');
         setInfo('Verification code sent to your email.');
         setOtpCode('');
         startResendCooldown();
@@ -332,7 +332,7 @@ export function useAuthFlow() {
       setLoadingAction('sendReset');
       clearMsg();
       try {
-        await sendOtp(email, captchaToken);
+        await sendOtp(email, captchaToken, 'reset');
         setInfo('Code sent to your email.');
         setOtpCode('');
         startResendCooldown();
@@ -436,7 +436,7 @@ export function useAuthFlow() {
     setLoadingAction('resend');
     clearMsg();
     try {
-      await sendOtp(email, captchaToken);
+      await sendOtp(email, captchaToken, mode === AUTH_MODES.OTP_RESET ? 'reset' : 'signup');
       setInfo('A new code has been sent to your email.');
       startResendCooldown();
       resetCaptcha();
@@ -446,7 +446,7 @@ export function useAuthFlow() {
     } finally {
       setLoadingAction(null);
     }
-  }, [busy, captchaToken, clearMsg, email, resendCooldown, resetCaptcha, setError, setInfo, startResendCooldown]);
+  }, [busy, captchaToken, clearMsg, email, mode, resendCooldown, resetCaptcha, setError, setInfo, startResendCooldown]);
 
   const clearFieldError = useCallback((field) => {
     setFieldErrors((prev) => {

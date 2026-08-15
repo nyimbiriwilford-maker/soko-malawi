@@ -227,8 +227,9 @@ export function isCaptchaRequired() {
  * Start signup / reset — send email OTP.
  * @param {string} identifier
  * @param {string} [captchaToken] Cloudflare Turnstile token (required in production)
+ * @param {'signup'|'reset'} [action] purpose of the OTP — 'signup' rejects already-registered emails
  */
-export async function sendOtp(identifier, captchaToken = '') {
+export async function sendOtp(identifier, captchaToken = '', action = 'signup') {
   const id = (identifier ?? '').trim().toLowerCase();
   if (validateEmail(id)) {
     throw new Error('Please enter a valid email address.');
@@ -239,6 +240,7 @@ export async function sendOtp(identifier, captchaToken = '') {
   return callEdgeFunction('send-otp', {
     identifier: id,
     captchaToken: captchaToken || '',
+    action: action === 'reset' ? 'reset' : 'signup',
   });
 }
 

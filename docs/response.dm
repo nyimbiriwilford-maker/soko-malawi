@@ -34,3 +34,9 @@ When creating an account with email and password, add a second field for the use
 
 ## Live red border on Confirm Password mismatch (new)
 - **`src/pages/LoginPage.jsx`** — the Confirm Password fields in both the Sign Up step and the Set New Password (reset) step now show the error state live: as soon as the typed value differs from the password, the field turns red (error styling via existing `.login-field.is-error`) with a "Passwords do not match." message, without waiting for blur or submit. It returns to valid styling once the two match.
+
+## Continue button gated on Terms + deny already-registered emails (new)
+- **`src/pages/LoginPage.jsx`** — the "Continue" button on the Sign Up step is now disabled until the Terms & Privacy checkbox is checked (`disabled={busy || !agreedToTerms}`).
+- **`src/lib/authApi.js`** — `sendOtp` now accepts an `action` ('signup' | 'reset') and forwards it to the `send-otp` edge function.
+- **`src/hooks/useAuthFlow.js`** — passes `'signup'` on the signup/resend-signup OTP sends and `'reset'` on the forgot-password/resend-reset sends.
+- **`supabase/functions/send-otp/index.ts`** — when the OTP is for **signup** (email), the function now checks `profiles` by email and returns HTTP 409 "This email is already registered. Please sign in instead." so already-registered users are denied before any code is sent. Reset requests are unaffected.
