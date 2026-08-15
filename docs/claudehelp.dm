@@ -9,3 +9,5 @@ When creating an account with email and password, add a second field to repeat t
 Add real-time password strength validation: as the user types, show a live strength meter and a checklist of the strong-password requirements.
 
 On the page where a user is required to enter the code sent to their email, remove the field that asks for a username.
+
+When the password matching fails while typing in the second password (Confirm Password) field, the field should turn red.

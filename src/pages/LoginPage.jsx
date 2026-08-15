@@ -326,6 +326,8 @@ function SignUpMode({ flow, onOpenTerms }) {
           required
           disabled={busy}
           autoComplete="new-password"
+          error={confirmPassword && confirmPassword !== password ? 'Passwords do not match.' : undefined}
+          touched={Boolean(confirmPassword)}
         />
 
         <PasswordStrength value={password} />
@@ -657,6 +659,8 @@ function NewPasswordMode({ flow }) {
           required
           disabled={busy}
           autoComplete="new-password"
+          error={confirmPass && confirmPass !== newPass ? 'Passwords do not match.' : undefined}
+          touched={Boolean(confirmPass)}
         />
 
         <PasswordStrength value={newPass} />
