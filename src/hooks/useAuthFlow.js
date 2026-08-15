@@ -7,6 +7,7 @@ import {
   sanitizeAuthError,
   sendOtp,
   signInWithEmailPassword,
+  signInWithGoogleIdToken,
   signInWithOAuth,
   verifyOtp,
 } from '../lib/authApi';
@@ -219,6 +220,26 @@ export function useAuthFlow() {
       }
     },
     [busy, clearMsg, setError]
+  );
+
+  /* ─── GOOGLE ONE TAP (id token exchange, no redirect) ─── */
+  const handleGoogleOneTap = useCallback(
+    async (idToken) => {
+      if (lockRef.current || busy) return;
+      lockRef.current = true;
+      setLoadingAction('google');
+      clearMsg();
+      try {
+        await signInWithGoogleIdToken(idToken);
+        setLoadingAction(null);
+        window.setTimeout(() => navigate('/'), 500);
+      } catch (err) {
+        setError(err.message || 'Google sign-in failed. Please try again.');
+        setLoadingAction(null);
+        lockRef.current = false;
+      }
+    },
+    [busy, clearMsg, navigate, setError]
   );
 
   /* ─── SIGNUP START ─── */
@@ -580,6 +601,7 @@ export function useAuthFlow() {
     handlers: {
       handleLogin,
       handleOAuth,
+      handleGoogleOneTap,
       handleSignUpStart,
       handleVerifyAndCreate,
       handleSendResetOtp,

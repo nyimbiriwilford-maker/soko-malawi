@@ -15,6 +15,7 @@ import {
   Captcha,
   TermsModal,
   PasswordStrength,
+  GoogleOneTap,
 } from '../components/auth';
 import { AUTH_MODES, useAuthFlow } from '../hooks/useAuthFlow';
 import { validateEmail } from '../utils/validation';
@@ -68,6 +69,14 @@ export default function LoginPage() {
           )}
 
           <TrustMessage />
+
+          {mode === AUTH_MODES.LOGIN && (
+            <GoogleOneTap
+              clientId={import.meta.env.VITE_GOOGLE_CLIENT_ID}
+              onCredential={(idToken) => flow.handlers.handleGoogleOneTap(idToken)}
+              onError={() => {}}
+            />
+          )}
 
           {(mode === AUTH_MODES.LOGIN || mode === AUTH_MODES.SIGNUP) && (
             <FooterLinks

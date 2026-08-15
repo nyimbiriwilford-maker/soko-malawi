@@ -55,3 +55,13 @@ The user reported seeing the generic "Something went wrong. Please try again." i
   1. **Email step**: as the user types, `validateEmail` detects when the email is valid. A confirmation card appears showing an avatar initial and "Continue as {Name}?" (name derived from the email local-part) plus the email itself.
   2. **Confirm step**: the Continue button stays disabled until a valid email is detected; clicking it (or pressing enter) confirms the identity, reveals the Password field, Remember Me + Forgot Password row, and switches the button to "Sign In". Changing the email resets the confirmation.
 - **`src/styles/login.css`** — added `.login-email-confirm` card styles (avatar, title, subtitle, fade-up animation).
+
+## Google One Tap — detect device Google account + "Continue as {email}" (new)
+- **`src/components/auth/GoogleOneTap.jsx`** (new) — loads Google Identity Services, initializes with the web client id, and calls `google.accounts.id.prompt()`. If a Google account is already signed in on this device/browser, Google renders the native **"Continue as {email}"** prompt automatically. The returned ID token is exchanged for a Supabase session via `signInWithIdToken` — no redirect.
+- **`src/lib/authApi.js`** — added `signInWithGoogleIdToken(idToken)` using `supabase.auth.signInWithIdToken({ provider: 'google', token })`.
+- **`src/hooks/useAuthFlow.js`** — added `handleGoogleOneTap` handler (exchanges the token, navigates to `/` on success, surfaces errors).
+- **`src/pages/LoginPage.jsx`** — renders `<GoogleOneTap>` on the LOGIN mode with `VITE_GOOGLE_CLIENT_ID` from env. Falls back silently to the existing "Continue with Google" button when no client id is configured or no account is detected.
+- **`src/components/auth/index.js`** — exported the new component.
+- **`.env`** — added a commented `VITE_GOOGLE_CLIENT_ID` placeholder (git-ignored).
+
+> Requires setup: create a **web application** OAuth client in Google Cloud Console, add the app origin to its authorized JavaScript origins, and set `VITE_GOOGLE_CLIENT_ID` in the Vercel project env. Until then the existing Google button keeps working and One Tap simply stays silent.

@@ -226,6 +226,22 @@ export async function signInWithOAuth(provider) {
   if (error) throw new Error(sanitizeAuthError(error));
 }
 
+/**
+ * Google One Tap — exchange the ID token issued by Google Identity Services
+ * for a Supabase session. No redirect required; the browser stays on the page.
+ * @param {string} idToken Google ID token (JWT) from the One Tap credential.
+ * @returns {Promise<{ redirectTo: string }>}
+ */
+export async function signInWithGoogleIdToken(idToken) {
+  if (!idToken) throw new Error('Google sign-in failed. Please try again.');
+  const { data, error } = await supabase.auth.signInWithIdToken({
+    provider: 'google',
+    token: idToken,
+  });
+  if (error) throw new Error(sanitizeAuthError(error, 'Google sign-in failed. Please try again.'));
+  return { redirectTo: '/' };
+}
+
 /** Captcha required only when a production site key is configured. */
 export function isCaptchaRequired() {
   return Boolean(import.meta.env.VITE_TURNSTILE_SITE_KEY);
