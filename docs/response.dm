@@ -185,3 +185,19 @@ The home page's **first status card** ("Create Status" — the `AddStatusCard` "
 - `src/components/BottomNav.jsx`
 - `src/components/SokoNav.jsx`
 - `src/pages/StatusPage.jsx`
+
+## Animated Status option in post menus (new)
+The **Status** item in both the mobile bottom-nav post menu and the desktop header **Post Now** menu is now visually distinct with story/status-themed animations:
+- **Rotating story ring** — the Status icon sits inside a `conic-gradient` ring (green → gold → green, with a red accent) that continuously spins (`sbnRingSpin` / `sokoRingSpin`), like an Instagram/WhatsApp status ring.
+- **Pulsing glow** — the ring's box-shadow pulses (`sbnRingPulse` / `sokoRingPulse`) to draw attention.
+- **LIVE badge** — a small red `LIVE` pill next to "Status" blinks on/off (`sbnLiveBlink` / `sokoLiveBlink`).
+- **Shimmer sweep** — the mobile status row has an animated light sweep (`sbnShimmer`) across its subtle green/gold gradient background (mobile only).
+- The menu row gets a soft green→gold gradient background, a tinted border, and the chevron turns green — so it clearly stands apart from Listing / Looking For / Service.
+## Implementation details
+- `BottomNav.jsx`: added `sbn-status-ring` wrapper + `LIVE` pill + `.sbn-post-item-status` styling and the `sbnRingSpin / sbnRingPulse / sbnShimmer / sbnLiveBlink` keyframes.
+- `SokoNav.jsx`: `POST_ITEMS` Status entry now has `status: true`; the render switches to an animated ring + LIVE badge, and the shared nav `<style>` block carries `sokoRingSpin / sokoRingPulse / sokoLiveBlink` + the tinted `.is-status` row styling.
+## Verification
+- `npx vite build`: PASSES.
+## Files changed
+- `src/components/BottomNav.jsx`
+- `src/components/SokoNav.jsx`

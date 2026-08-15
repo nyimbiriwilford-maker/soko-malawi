@@ -230,7 +230,7 @@ export default function SokoNav({
     { label: 'Listing', desc: 'Sell a product or item', path: '/post', icon: <ImageIcon size={20} strokeWidth={1.85} /> },
     { label: 'Looking For', desc: 'Post what you need · get offers', path: '/looking-for', state: { openComposer: true }, icon: <Search size={20} strokeWidth={1.85} /> },
     { label: 'Service', desc: 'Offer your skills', path: '/services?tab=post', icon: <Wrench size={20} strokeWidth={1.85} /> },
-    { label: 'Status', desc: 'Share a quick update', path: '/status?compose=1', icon: <Sparkles size={20} strokeWidth={1.85} /> },
+    { label: 'Status', desc: 'Share a quick update', path: '/status?compose=1', status: true, icon: <Sparkles size={20} strokeWidth={1.85} /> },
   ]
 
  function changeDistrict(d) {
@@ -257,6 +257,19 @@ export default function SokoNav({
         @keyframes sokoBadgeIn {
           from { transform: scale(0.4); opacity: 0; }
           to { transform: scale(1); opacity: 1; }
+        }
+        .soko-post-item { position: relative; overflow: hidden; }
+        .soko-post-item.is-status { border: 1px solid rgba(15,157,88,0.18); border-radius: 12px; }
+        @keyframes sokoRingSpin {
+          to { transform: rotate(360deg); }
+        }
+        @keyframes sokoRingPulse {
+          0%, 100% { box-shadow: 0 0 0 1px rgba(15,157,88,0.15), 0 4px 14px rgba(15,157,88,0.35); }
+          50% { box-shadow: 0 0 0 2px rgba(15,157,88,0.28), 0 4px 22px rgba(15,157,88,0.5); }
+        }
+        @keyframes sokoLiveBlink {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.55; transform: scale(0.94); }
         }
         @media (max-width: 768px) {
           .soko-nav-mobile {
@@ -384,18 +397,33 @@ export default function SokoNav({
                     <div style={{ fontSize: 14, fontWeight: 700, color: T.gray900, marginTop: 2 }}>What do you want to post?</div>
                   </div>
                   {POST_ITEMS.map((item, i) => (
-                    <button key={i} type="button" role="menuitem" onClick={() => { setShowPostMenu(false); navigate(item.path, item.state ? { state: item.state } : undefined) }}
-                      style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '10px 16px', border: 'none', background: 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', transition: 'background 0.12s' }}
-                      onMouseEnter={e => e.currentTarget.style.background = T.gray100}
-                      onMouseLeave={e => e.currentTarget.style.background = 'none'}>
-                      <span style={{ width: 36, height: 36, borderRadius: 10, background: T.gray100, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: T.green }}>
-                        {item.icon}
-                      </span>
+                    <button key={i} type="button" role="menuitem"
+                      className={`soko-post-item${item.status ? ' is-status' : ''}`}
+                      onClick={() => { setShowPostMenu(false); navigate(item.path, item.state ? { state: item.state } : undefined) }}
+                      style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '10px 16px', border: 'none', background: item.status ? 'linear-gradient(120deg, rgba(15,157,88,0.06), rgba(249,171,0,0.05))' : 'none', cursor: 'pointer', textAlign: 'left', fontFamily: 'inherit', transition: 'background 0.12s' }}
+                      onMouseEnter={e => e.currentTarget.style.background = item.status ? 'linear-gradient(120deg, rgba(15,157,88,0.10), rgba(249,171,0,0.08))' : T.gray100}
+                      onMouseLeave={e => e.currentTarget.style.background = item.status ? 'linear-gradient(120deg, rgba(15,157,88,0.06), rgba(249,171,0,0.05))' : 'none'}>
+                      {item.status ? (
+                        <span className="soko-status-ring" aria-hidden="true" style={{ width: 42, height: 42, borderRadius: '50%', padding: 3, background: 'conic-gradient(#0F9D58, #F9AB00, #22c55e, #e91e63, #0F9D58)', boxShadow: '0 0 0 1px rgba(15,157,88,0.15), 0 4px 14px rgba(15,157,88,0.35)', animation: 'sokoRingSpin 3s linear infinite, sokoRingPulse 2.2s ease-in-out infinite', display: 'grid', placeItems: 'center', flexShrink: 0 }}>
+                          <span style={{ width: '100%', height: '100%', borderRadius: '50%', background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0F9D58' }}>
+                            {item.icon}
+                          </span>
+                        </span>
+                      ) : (
+                        <span style={{ width: 36, height: 36, borderRadius: 10, background: T.gray100, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: T.green }}>
+                          {item.icon}
+                        </span>
+                      )}
                       <span style={{ flex: 1 }}>
-                        <strong style={{ fontSize: 14, fontWeight: 600, color: T.gray900, display: 'block' }}>{item.label}</strong>
+                        <strong style={{ fontSize: 14, fontWeight: 700, color: item.status ? '#0a7a44' : T.gray900, display: 'flex', alignItems: 'center', gap: 8 }}>
+                          {item.label}
+                          {item.status && (
+                            <span className="soko-status-live" style={{ fontSize: 10, fontWeight: 800, letterSpacing: '0.06em', color: '#fff', background: '#dc2626', borderRadius: 999, padding: '1px 8px', lineHeight: 1.5, animation: 'sokoLiveBlink 1.4s ease-in-out infinite' }}>LIVE</span>
+                          )}
+                        </strong>
                         <span style={{ fontSize: 12, color: T.gray500, display: 'block', marginTop: 1 }}>{item.desc}</span>
                       </span>
-                      <ChevronRight size={16} strokeWidth={2.2} style={{ color: T.gray400, flexShrink: 0 }} />
+                      <ChevronRight size={16} strokeWidth={2.2} style={{ color: item.status ? T.green : T.gray400, flexShrink: 0 }} />
                     </button>
                   ))}
                 </div>
