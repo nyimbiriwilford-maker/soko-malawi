@@ -29,3 +29,5 @@ Remove the challs (Calls) category in notifications — just make the call categ
 On the home page remove the first status card button to post status. Make the post option for status be found in the post button in bottom nav for mobile view and in header post button for desktop view.
 
 Animate the post status option to look different with status-related animation.
+
+It is not looking professional. Make it look professional with a smooth professional icon.

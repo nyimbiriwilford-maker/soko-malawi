@@ -11,7 +11,7 @@ import {
   Wrench,
   Search,
   ChevronRight,
-  Sparkles,
+  GalleryHorizontalEnd,
 } from 'lucide-react'
 
 const ICON = { size: 22, strokeWidth: 1.75 }
@@ -155,14 +155,11 @@ export default function BottomNav() {
             >
               <span className="sbn-status-ring" aria-hidden="true">
                 <span className="sbn-post-ic sbn-post-ic-status">
-                  <Sparkles size={20} strokeWidth={1.85} />
+                  <GalleryHorizontalEnd size={20} strokeWidth={1.75} />
                 </span>
               </span>
               <span className="sbn-post-copy">
-                <strong className="sbn-post-copy-status">
-                  Status
-                  <span className="sbn-status-live">LIVE</span>
-                </strong>
+                <strong>Status</strong>
                 <span>Share a quick update</span>
               </span>
               <ChevronRight size={16} strokeWidth={2.2} className="sbn-post-chev" aria-hidden />
@@ -507,39 +504,31 @@ const premiumCss = `
   .sbn-post-item:active { background: #eef0ee; }
 
   .sbn-post-item.sbn-post-item-status {
-    background: linear-gradient(120deg, rgba(15,157,88,0.06), rgba(249,171,0,0.05));
-    border: 1px solid rgba(15,157,88,0.18);
-    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.6);
+    background: linear-gradient(120deg, rgba(15,157,88,0.045), rgba(249,171,0,0.03));
+    border: 1px solid rgba(15,157,88,0.14);
     position: relative;
-    overflow: hidden;
   }
   .sbn-post-item.sbn-post-item-status:hover,
   .sbn-post-item.sbn-post-item-status:active {
-    background: linear-gradient(120deg, rgba(15,157,88,0.10), rgba(249,171,0,0.08));
-  }
-  .sbn-post-item.sbn-post-item-status::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(110deg, transparent 25%, rgba(255,255,255,0.55) 50%, transparent 75%);
-    background-size: 250% 100%;
-    animation: sbnShimmer 2.4s ease-in-out infinite;
-    pointer-events: none;
+    background: linear-gradient(120deg, rgba(15,157,88,0.075), rgba(249,171,0,0.05));
   }
   .sbn-post-item.sbn-post-item-status .sbn-post-chev { color: #0F9D58; }
 
   .sbn-status-ring {
     position: relative;
-    width: 44px;
-    height: 44px;
+    width: 42px;
+    height: 42px;
     flex-shrink: 0;
     border-radius: 50%;
-    padding: 3px;
-    background: conic-gradient(#0F9D58, #F9AB00, #22c55e, #e91e63, #0F9D58);
-    box-shadow: 0 0 0 1px rgba(15,157,88,0.15), 0 4px 14px rgba(15,157,88,0.35);
-    animation: sbnRingSpin 3s linear infinite, sbnRingPulse 2.2s ease-in-out infinite;
+    padding: 2px;
+    background: linear-gradient(135deg, #0F9D58 0%, #22a05e 55%, #0a7a44 100%);
+    box-shadow: 0 2px 8px rgba(15,157,88,0.22);
     display: grid;
     place-items: center;
+    transition: box-shadow 0.2s ease;
+  }
+  .sbn-post-item.sbn-post-item-status:hover .sbn-status-ring {
+    box-shadow: 0 2px 12px rgba(15,157,88,0.35);
   }
   .sbn-status-ring .sbn-post-ic {
     width: 100%;
@@ -548,22 +537,8 @@ const premiumCss = `
     background: #fff;
     color: #0F9D58;
   }
-  .sbn-post-copy-status {
-    display: inline-flex;
-    align-items: center;
-    gap: 7px;
-    color: #0a7a44 !important;
-  }
-  .sbn-status-live {
-    font-size: 0.6rem;
-    font-weight: 800;
-    letter-spacing: 0.06em;
-    color: #fff;
-    background: #dc2626;
-    border-radius: 999px;
-    padding: 1px 7px;
-    line-height: 1.5;
-    animation: sbnLiveBlink 1.4s ease-in-out infinite;
+  .sbn-post-item.sbn-post-item-status .sbn-post-copy strong {
+    color: #0a7a44;
   }
 
   .sbn-post-ic {
@@ -609,25 +584,6 @@ const premiumCss = `
   .sbn-post-chev {
     color: #d1d5db;
     flex-shrink: 0;
-  }
-
-  @keyframes sbnRingSpin {
-    to { transform: rotate(360deg); }
-  }
-
-  @keyframes sbnRingPulse {
-    0%, 100% { box-shadow: 0 0 0 1px rgba(15,157,88,0.15), 0 4px 14px rgba(15,157,88,0.35); }
-    50% { box-shadow: 0 0 0 2px rgba(15,157,88,0.28), 0 4px 22px rgba(15,157,88,0.5); }
-  }
-
-  @keyframes sbnShimmer {
-    0% { background-position: 200% 0; }
-    100% { background-position: -50% 0; }
-  }
-
-  @keyframes sbnLiveBlink {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50% { opacity: 0.55; transform: scale(0.94); }
   }
 
   @keyframes sbnFade {

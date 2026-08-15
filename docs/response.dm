@@ -201,3 +201,18 @@ The **Status** item in both the mobile bottom-nav post menu and the desktop head
 ## Files changed
 - `src/components/BottomNav.jsx`
 - `src/components/SokoNav.jsx`
+
+## Refined professional Status option (revision)
+The previous flashy treatment (spinning conic ring, pulsing glow, blinking red LIVE badge, shimmer sweep) was replaced with a calm, professional design:
+- **Smooth icon** — swapped `Sparkles` for the cleaner `GalleryHorizontalEnd` (gallery/story glyph) at a lighter stroke weight (1.75).
+- **Static gradient ring** — the icon sits in a refined circular ring using a single green gradient (`#0F9D58 → #22a05e → #0a7a44`) with a soft 2px shadow. No spin, no pulse.
+- **Subtle tinted row** — the Status row keeps a faint green/gold wash background and a thin green border so it still reads as "featured", with a gentle hover shadow. The label turns deep green.
+- **Removed** all gimmicky animations: `sbnRingSpin`, `sbnRingPulse`, `sbnShimmer`, `sbnLiveBlink`, `sokoRingSpin`, `sokoRingPulse`, `sokoLiveBlink` and the `LIVE` badge.
+## Implementation details
+- `BottomNav.jsx`: updated the Status item JSX (new icon, no LIVE pill), replaced the status CSS with the subtle ring/tint, removed unused keyframes and `Sparkles` import.
+- `SokoNav.jsx`: updated `POST_ITEMS` Status icon + `status: true` render path, removed the animated ring/LIVE badge inline styles and unused keyframes/import.
+## Verification
+- `npx vite build`: PASSES.
+## Files changed
+- `src/components/BottomNav.jsx`
+- `src/components/SokoNav.jsx`
