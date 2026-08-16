@@ -1,11 +1,12 @@
 /**
  * StatusPublishRing — floating progress ring for background status publishing.
  *
- * Renders nothing until a background publish is running. Shows a small circle
- * with a progress arc + phase label (Trimming → Uploading → Publishing) and
- * flips to a checkmark once published. The store auto-clears the success state
- * so the ring disappears by itself. Tapping the ring dismisses it without
- * cancelling the posting.
+ * Renders nothing until a background publish is running. Shows a compact ring
+ * with a progress arc + phase label (Trimming → Uploading → Publishing) in the
+ * bottom-right corner so it never shades the main content or bottom nav. Flips
+ * to a checkmark once published; the store auto-clears the success state so it
+ * disappears by itself. It can be dismissed any time — tapping the pill or its
+ * ✕ button hides it without cancelling the posting.
  */
 import { useEffect, useState } from 'react'
 import {
@@ -23,8 +24,8 @@ const PHASE_LABELS = {
   error: 'Failed',
 }
 
-const SIZE = 58
-const R = (SIZE - 10) / 2
+const SIZE = 34
+const R = (SIZE - 8) / 2
 const CIRC = 2 * Math.PI * R
 
 export default function StatusPublishRing() {
@@ -50,54 +51,85 @@ export default function StatusPublishRing() {
     <button
       type="button"
       onClick={dismissStatusPublish}
-      aria-label={`Status publish: ${label}`}
-      style={{
-        position: 'fixed',
-        bottom: 'calc(88px + env(safe-area-inset-bottom, 0px))',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        zIndex: 12000,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 10,
-        padding: '7px 16px 7px 7px',
-        borderRadius: 999,
-        border: '1px solid rgba(255,255,255,0.14)',
-        background: 'rgba(10,18,14,0.94)',
-        backdropFilter: 'blur(14px)',
-        WebkitBackdropFilter: 'blur(14px)',
-        boxShadow: '0 12px 40px rgba(0,0,0,0.45)',
-        fontFamily: "'DM Sans', system-ui, sans-serif",
-        cursor: 'pointer',
-        animation: 'sprPop 0.25s cubic-bezier(0.16,1,0.3,1)',
-      }}
+      aria-label={`Status publish: ${label}. Tap to dismiss.`}
+      className="spr-pill"
     >
       <style>{`
+        .spr-pill {
+          position: fixed;
+          right: 14px;
+          bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+          z-index: 12000;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          max-width: min(230px, calc(100vw - 52px));
+          padding: 4px 6px 4px 4px;
+          border-radius: 999px;
+          border: 1px solid rgba(255,255,255,0.14);
+          background: rgba(10,18,14,0.92);
+          backdrop-filter: blur(14px);
+          -webkit-backdrop-filter: blur(14px);
+          box-shadow: 0 8px 26px rgba(0,0,0,0.4);
+          font-family: 'DM Sans', system-ui, sans-serif;
+          cursor: pointer;
+          color: #fff;
+          animation: sprPop 0.25s cubic-bezier(0.16,1,0.3,1);
+        }
+        @media (min-width: 769px) {
+          .spr-pill { right: 20px; bottom: 20px; }
+        }
+        .spr-ring {
+          position: relative;
+          width: ${SIZE}px;
+          height: ${SIZE}px;
+          flex-shrink: 0;
+          display: grid;
+          place-items: center;
+        }
+        .spr-glyph {
+          position: absolute;
+          inset: 0;
+          display: grid;
+          place-items: center;
+        }
+        .spr-label {
+          font-size: 12px;
+          font-weight: 700;
+          line-height: 1.1;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .spr-x {
+          flex-shrink: 0;
+          width: 18px;
+          height: 18px;
+          border-radius: 50%;
+          display: grid;
+          place-items: center;
+          font-size: 10px;
+          font-weight: 700;
+          color: rgba(255,255,255,0.75);
+          background: rgba(255,255,255,0.1);
+          line-height: 1;
+        }
         @keyframes sprPop {
-          from { opacity: 0; transform: translateX(-50%) translateY(12px) scale(0.92); }
-          to   { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+          from { opacity: 0; transform: translateY(10px) scale(0.92); }
+          to   { opacity: 1; transform: translateY(0) scale(1); }
         }
         @keyframes sprSpin { to { transform: rotate(360deg); } }
       `}</style>
 
-      <span
-        style={{
-          position: 'relative',
-          width: SIZE,
-          height: SIZE,
-          flexShrink: 0,
-          display: 'grid',
-          placeItems: 'center',
-        }}
-      >
-        <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} style={{ position: 'absolute', inset: 0 }}>
+      <span className="spr-ring">
+        <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`}>
           <circle
             cx={SIZE / 2}
             cy={SIZE / 2}
             r={R}
             fill="none"
-            stroke="rgba(255,255,255,0.14)"
-            strokeWidth="5"
+            stroke="rgba(255,255,255,0.16)"
+            strokeWidth="4"
           />
           <circle
             cx={SIZE / 2}
@@ -105,7 +137,7 @@ export default function StatusPublishRing() {
             r={R}
             fill="none"
             stroke={arcColor}
-            strokeWidth="5"
+            strokeWidth="4"
             strokeLinecap="round"
             strokeDasharray={CIRC}
             strokeDashoffset={dashOffset}
@@ -113,16 +145,16 @@ export default function StatusPublishRing() {
             style={{ transition: 'stroke-dashoffset 0.3s linear, stroke 0.2s ease' }}
           />
         </svg>
-
         {isError ? (
-          <span style={{ color: '#f87171', fontSize: 20, fontWeight: 800, lineHeight: 1 }}>✕</span>
+          <span className="spr-glyph" style={{ color: '#f87171', fontSize: 12, fontWeight: 800, lineHeight: 1 }}>✕</span>
         ) : isDone ? (
-          <span style={{ color: '#22c55e', fontSize: 20, fontWeight: 800, lineHeight: 1 }}>✓</span>
+          <span className="spr-glyph" style={{ color: '#22c55e', fontSize: 12, fontWeight: 800, lineHeight: 1 }}>✓</span>
         ) : (
           <span
+            className="spr-glyph"
             style={{
-              width: 16,
-              height: 16,
+              width: 9,
+              height: 9,
               borderRadius: '50%',
               border: '2px solid rgba(255,255,255,0.28)',
               borderTopColor: '#22c55e',
@@ -132,8 +164,14 @@ export default function StatusPublishRing() {
         )}
       </span>
 
-      <span style={{ fontSize: 13, fontWeight: 750, color: '#fff', whiteSpace: 'nowrap' }}>
-        {label}
+      <span className="spr-label">{label}</span>
+
+      <span
+        className="spr-x"
+        role="img"
+        aria-hidden="true"
+      >
+        ✕
       </span>
     </button>
   )

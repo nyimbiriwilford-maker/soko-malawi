@@ -5,7 +5,7 @@
 export default function HomeStyles() {
   return (
     <style>{`
-      @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=DM+Sans:wght@400;500;600&display=swap');
+
       * { box-sizing: border-box; }
       @keyframes fadeUp        { from{opacity:0} to{opacity:1} }
       @keyframes shimmer       { 0%{background-position:-400px 0} 100%{background-position:400px 0} }

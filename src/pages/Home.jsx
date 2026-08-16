@@ -127,7 +127,6 @@ function catIcon(cat) { return CAT_ICON[cat] || CAT_ICON.Other }
 function GlobalStyles() {
   return (
     <style>{`
-      @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
 
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -2480,6 +2479,11 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
           box-shadow:0 12px 40px rgba(22,101,52,0.1),0 3px 12px rgba(0,0,0,0.06);
           border-color:#bbf7d0;
         }
+        .lfr-card:focus-visible {
+          outline: 3px solid rgba(15,157,88,0.28);
+          outline-offset: 2px;
+          border-color: #0F9D58;
+        }
         .lfr-card .lfr-badge { animation:lfrBadgeIn 0.35s ease forwards; opacity:0; }
         @keyframes lfrFadeIn { 0%{opacity:0;transform:translateY(16px)} 100%{opacity:1;transform:translateY(0)} }
         @keyframes lfrBadgeIn { 0%{opacity:0;transform:scale(0.85)} 100%{opacity:1;transform:scale(1)} }
@@ -2541,7 +2545,7 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
           </h2>
 
           {/* Filter row */}
-          <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:14, flexWrap:'nowrap', overflowX:'auto', scrollbarWidth:'none', msOverflowStyle:'none', WebkitOverflowScrolling:'touch' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:14, flexWrap:'wrap', overflow:'visible' }}>
             {/* Nearby filter */}
             <div ref={lfNearbyRef} style={{ position:'relative' }}>
               <button type="button" onClick={() => { setLfNearbyOpen(!lfNearbyOpen); setLfCatOpen(false); setLfSortOpen(false) }} style={{
@@ -2618,10 +2622,8 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
               )}
             </div>
 
-            <div style={{ flex:1 }} />
-
             {/* View all + Post request */}
-            <div className="lfr-head-actions" style={{ display:'flex', alignItems:'center', gap:6 }}>
+            <div className="lfr-head-actions" style={{ display:'flex', alignItems:'center', gap:6, marginLeft:'auto' }}>
               <button type="button" onClick={() => navigate('/looking-for')} style={{
                 display:'inline-flex', alignItems:'center', gap:4, borderRadius:999, padding:'7px 14px',
                 fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap',
@@ -2684,7 +2686,20 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
                 const extraAreas = allAreas.length - 1
 
                 return (
-                  <div key={r.id} className="lfr-card" onClick={() => navigate(`/looking-for?request=${r.id}`)}>
+                  <div
+                    key={r.id}
+                    className="lfr-card"
+                    role="link"
+                    tabIndex={0}
+                    aria-label={`Open request: ${r.title || 'Looking For request'}`}
+                    onClick={() => navigate(`/looking-for?request=${r.id}`)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault()
+                        navigate(`/looking-for?request=${r.id}`)
+                      }
+                    }}
+                  >
 
                     {/* Image collage */}
                     <div style={{
@@ -3242,6 +3257,11 @@ function ShopsSection({ navigate, shops, loading }) {
           display: flex; flex-direction: column;
         }
         .shop-card:hover { transform: translateY(-6px); box-shadow: 0 18px 44px rgba(0,0,0,0.14); }
+        .shop-card:focus-visible {
+          outline: 3px solid rgba(15,157,88,0.28);
+          outline-offset: 2px;
+          border-color: #0F9D58;
+        }
         .shop-logo-wrap { transition: transform 0.28s cubic-bezier(0.22,1,0.36,1); }
         .shop-card:hover .shop-logo-wrap { transform: scale(1.08); }
         .visit-btn {
@@ -3299,7 +3319,20 @@ function ShopsSection({ navigate, shops, loading }) {
 
             <div ref={scrollRef} className="shops-scroll" style={{ display: 'flex', gap: 16, overflowX: 'auto', paddingBottom: 8, paddingTop: 4 }}>
               {shops.map((s, i) => (
-                <div key={s.id} className="shop-card" onClick={() => navigate('/shop/' + s.slug)}>
+                <div
+                  key={s.id}
+                  className="shop-card"
+                  role="link"
+                  tabIndex={0}
+                  aria-label={`Open shop: ${s.name || 'Shop'}`}
+                  onClick={() => navigate('/shop/' + s.slug)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      navigate('/shop/' + s.slug)
+                    }
+                  }}
+                >
 
                   {/* Cover image */}
                   <div style={{ position: 'relative', width: '100%', height: 120, flexShrink: 0, overflow: 'hidden', background: T.gray100 }}>
@@ -3394,7 +3427,20 @@ function ShopsSection({ navigate, shops, loading }) {
               ))}
 
               {/* Create shop CTA card */}
-              <div className="shop-card" onClick={() => navigate('/shop-setup')} style={{ border: `2px dashed ${T.gray200}`, background: T.gray50, justifyContent: 'center', alignItems: 'center', minHeight: 300 }}>
+              <div
+                className="shop-card"
+                role="link"
+                tabIndex={0}
+                aria-label="Open shop setup"
+                onClick={() => navigate('/shop-setup')}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault()
+                    navigate('/shop-setup')
+                  }
+                }}
+                style={{ border: `2px dashed ${T.gray200}`, background: T.gray50, justifyContent: 'center', alignItems: 'center', minHeight: 300 }}
+              >
                 <div style={{ textAlign: 'center', padding: '20px 16px' }}>
                   <div style={{ width: 48, height: 48, borderRadius: '50%', background: T.amberL, display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', color: T.amberD }}>
                     {Icon.plus(22)}
@@ -3436,14 +3482,21 @@ function JobsServicesSection({ navigate, jobs, services, loading }) {
                 ? [1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 58, borderRadius: 14 }} />)
                 : jobs.length > 0
                   ? jobs.map(j => (
-                    <div key={j.id} onClick={() => navigate('/jobs')} className="soko-card-bg soko-card-hover" style={{ background: '#fff', border: `1px solid ${T.gray200}`, borderRadius: 14, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <button
+                      key={j.id}
+                      type="button"
+                      onClick={() => navigate('/jobs')}
+                      className="soko-card-bg soko-card-hover"
+                      style={{ background: '#fff', border: `1px solid ${T.gray200}`, borderRadius: 14, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', fontFamily: 'inherit' }}
+                      aria-label={`Open jobs page for ${j.title || 'job details'}`}
+                    >
                       <div style={{ width: 38, height: 38, borderRadius: 10, background: T.blueL, color: T.blue, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{Icon.briefcase(17)}</div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13.5, fontWeight: 700, color: T.gray900 }}>{j.title}</div>
                         <div style={{ fontSize: 11.5, color: T.gray600 }}>{j.company || j.city} · {j.type || 'Full-time'}</div>
                       </div>
                       {Icon.chevR(15)}
-                    </div>
+                    </button>
                   ))
                   : <EmptyMini text="No jobs posted yet." cta="Post a Job" onClick={() => navigate('/jobs')} />
               }
@@ -3457,14 +3510,21 @@ function JobsServicesSection({ navigate, jobs, services, loading }) {
                 ? [1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 58, borderRadius: 14 }} />)
                 : services.length > 0
                   ? services.map(s => (
-                    <div key={s.id} onClick={() => navigate('/services')} className="soko-card-bg soko-card-hover" style={{ background: '#fff', border: `1px solid ${T.gray200}`, borderRadius: 14, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => navigate('/services')}
+                      className="soko-card-bg soko-card-hover"
+                      style={{ background: '#fff', border: `1px solid ${T.gray200}`, borderRadius: 14, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 12, width: '100%', textAlign: 'left', fontFamily: 'inherit' }}
+                      aria-label={`Open services page for ${s.name || 'service details'}`}
+                    >
                       <div style={{ width: 38, height: 38, borderRadius: 10, background: T.violetL, color: T.violet, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{Icon.wrench(17)}</div>
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: 13.5, fontWeight: 700, color: T.gray900 }}>{s.name}</div>
                         <div style={{ fontSize: 11.5, color: T.gray600 }}>{s.category || s.city || 'Malawi'}</div>
                       </div>
                       {Icon.chevR(15)}
-                    </div>
+                    </button>
                   ))
                   : <EmptyMini text="No services listed yet." cta="Offer a Service" onClick={() => navigate('/services')} />
               }
@@ -3526,10 +3586,16 @@ function HomeWorkCard({
       role="button"
       tabIndex={0}
       onClick={onClick}
-      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') onClick() }}
+      onKeyDown={e => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onClick()
+        }
+      }}
       className="soko-work-card"
+      aria-label={`Open job details for ${title || 'job'}`}
     >
-      <div className="soko-wc-top" style={{ background: accentBg }}>
+      <div className="soko-wc-media" style={{ background: accentBg }}>
         {image ? (
           <img
             src={image}
@@ -3543,15 +3609,21 @@ function HomeWorkCard({
             {fallbackIcon}
           </div>
         )}
-        {jobType && <span className="soko-wc-type">{jobType}</span>}
       </div>
       <div className="soko-wc-body">
-        <div className="soko-wc-title">{title}</div>
-        {company && <div className="soko-wc-company">{company}</div>}
+        <div className="soko-wc-head">
+          <div className="soko-wc-title-wrap">
+            <div className="soko-wc-title">{title}</div>
+            {company && <div className="soko-wc-company">{company}</div>}
+          </div>
+          {jobType && <span className="soko-wc-type">{jobType}</span>}
+        </div>
+
         <div className="soko-wc-foot">
           {salary && <span className="soko-wc-salary">{salary}</span>}
-          {meta && <span className="soko-wc-loc">{Icon.pin(9)} {meta}</span>}
+          {meta && <span className="soko-wc-loc">{Icon.pin(10)} {meta}</span>}
         </div>
+
         <div className="soko-wc-apply-row" ref={applyRef}>
           <button
             type="button"
@@ -4033,11 +4105,12 @@ function ShopsJobsServicesRow({ navigate, shops, jobs, services, loading, curren
         }
         .soko-sjb-icon { display: inline-flex; }
 
-        /* ── Job Cards ── */
+        /* ── Job Cards (horizontal listing style) ── */
         .soko-work-card {
           flex-shrink: 0;
-          width: 230px;
-          max-width: min(230px, 72vw);
+          width: 324px;
+          max-width: min(324px, 84vw);
+          min-height: 148px;
           border: 1px solid #e5e7eb;
           border-radius: 14px;
           overflow: hidden;
@@ -4047,74 +4120,94 @@ function ShopsJobsServicesRow({ navigate, shops, jobs, services, loading, curren
           text-align: left;
           font-family: inherit;
           display: flex;
-          flex-direction: column;
+          align-items: stretch;
           box-shadow: 0 1px 2px rgba(0,0,0,0.04);
           scroll-snap-align: start;
           transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
         }
         .soko-work-card:hover {
-          transform: translateY(-3px);
+          transform: translateY(-2px);
           box-shadow: 0 6px 20px rgba(0,0,0,0.06), 0 12px 40px rgba(0,0,0,0.04);
           border-color: ${T.blue};
         }
-        .soko-work-card:active { transform: scale(0.98); }
-        .soko-wc-top {
-          position: relative; width: 100%; height: 92px; flex-shrink: 0;
+        .soko-work-card:focus-visible {
+          outline: 3px solid rgba(26,115,232,0.26);
+          outline-offset: 2px;
+        }
+        .soko-work-card:active { transform: scale(0.985); }
+        .soko-wc-media {
+          width: 96px;
+          min-width: 96px;
+          border-right: 1px solid ${T.gray200};
           overflow: hidden;
+          display: flex;
+          align-items: center;
+          justify-content: center;
         }
         .soko-wc-img {
           width: 100%; height: 100%;
           object-fit: cover; display: block;
           transition: transform 0.3s ease;
         }
-        .soko-work-card:hover .soko-wc-img { transform: scale(1.05); }
+        .soko-work-card:hover .soko-wc-img { transform: scale(1.04); }
         .soko-wc-fallback {
-          width: 100%; height: 100%;
+          width: 56px; height: 56px;
+          border-radius: 12px;
           display: flex; align-items: center; justify-content: center;
-          opacity: 0.7;
-        }
-        .soko-wc-type {
-          position: absolute; bottom: 8px; left: 8px;
-          font-size: 9.5px; font-weight: 800;
-          padding: 3px 8px; border-radius: 999px;
-          background: rgba(255,255,255,0.92);
-          color: ${T.blue};
-          backdrop-filter: blur(4px);
-          box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+          opacity: 0.8;
         }
         .soko-wc-body {
           padding: 10px 12px 12px;
-          display: flex; flex-direction: column; gap: 3px;
+          display: flex; flex-direction: column;
           min-width: 0; flex: 1;
         }
+        .soko-wc-head {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 8px;
+          margin-bottom: 6px;
+        }
+        .soko-wc-title-wrap { min-width: 0; flex: 1; }
         .soko-wc-title {
           font-size: 13.5px; font-weight: 800; color: ${T.gray900}; line-height: 1.25;
           overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
         }
         .soko-wc-company {
+          margin-top: 2px;
           font-size: 11.5px; font-weight: 600; color: ${T.gray600};
           overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         }
+        .soko-wc-type {
+          font-size: 9.5px; font-weight: 800;
+          padding: 3px 8px; border-radius: 999px;
+          background: ${T.blueL};
+          color: ${T.blue};
+          flex-shrink: 0;
+          white-space: nowrap;
+        }
         .soko-wc-foot {
-          margin-top: auto; padding-top: 6px;
+          margin-top: auto; padding-top: 2px;
           display: flex; align-items: center; justify-content: space-between; gap: 6px;
         }
         .soko-wc-salary {
           font-size: 11px; font-weight: 700; color: ${T.green};
           background: ${T.greenL}; padding: 2px 8px; border-radius: 999px;
           overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+          max-width: 58%;
         }
         .soko-wc-loc {
           font-size: 10.5px; font-weight: 600; color: ${T.gray500};
           display: inline-flex; align-items: center; gap: 3px;
           white-space: nowrap;
+          overflow: hidden; text-overflow: ellipsis;
         }
         .soko-wc-apply-row {
-          margin-top: 6px; position: relative;
+          margin-top: 8px; position: relative;
         }
         .soko-wc-apply-btn {
           display: inline-flex; align-items: center; gap: 4px;
-          width: 100%; padding: 5px 0; border: none; border-radius: 8px;
+          width: 100%; padding: 6px 0; border: none; border-radius: 8px;
           background: ${T.blueL}; color: ${T.blue};
           font-family: inherit; font-size: 11px; font-weight: 700;
           cursor: pointer; transition: background 0.15s, transform 0.15s;
@@ -4284,6 +4377,13 @@ function ShopsJobsServicesRow({ navigate, shops, jobs, services, loading, curren
             scroll-padding-inline: 14px;
             gap: 10px !important;
           }
+          .soko-work-card {
+            width: 288px;
+            max-width: min(288px, 88vw);
+            min-height: 140px;
+          }
+          .soko-wc-media { width: 84px; min-width: 84px; }
+          .soko-wc-fallback { width: 48px; height: 48px; }
           .soko-sjs-block { margin-bottom: 18px; }
         }
       `}</style>
@@ -4446,7 +4546,7 @@ function ShopsJobsServicesRow({ navigate, shops, jobs, services, loading, curren
             </button>
           </div>
           {/* Job filters */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'nowrap', overflowX: 'auto', scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap', overflow: 'visible' }}>
             <div ref={jobCatRef} style={{ position: 'relative' }}>
               <button type="button" onClick={() => { setJobCatOpen(v => !v); setJobTypeOpen(false); setJobSortOpen(false) }} style={{
                 display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 999, padding: '7px 13px',
@@ -4519,7 +4619,7 @@ function ShopsJobsServicesRow({ navigate, shops, jobs, services, loading, curren
           {loading ? (
             <div className="soko-sjs-rail">
               {[1, 2, 3].map(i => (
-                <div key={i} className="skeleton" style={{ flexShrink: 0, width: 230, height: 190, borderRadius: 14 }} />
+                <div key={i} className="skeleton" style={{ flexShrink: 0, width: 324, height: 148, borderRadius: 14 }} />
               ))}
             </div>
           ) : filteredJobs.length > 0 ? (
@@ -4900,7 +5000,7 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
         const [listingsData, shopsData] = await Promise.all([
           supabase.from('listings')
             .select('id,title,price,images,city')
-            .eq('status', 'published')
+            .in('status', ['published', 'active'])
             .ilike('title', `%${q}%`)
             .order('created_at', { ascending: false })
             .limit(5),
@@ -5552,9 +5652,17 @@ function SokoFooter({ navigate }) {
               <div style={{ fontSize: 11, fontWeight: 800, color: '#fff', letterSpacing: 1, textTransform: 'uppercase', marginBottom: 14 }}>{group}</div>
               <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 9 }}>
                 {items.map(([label, path]) => (
-                  <li key={label}><span onClick={() => navigate(path)} style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', cursor: 'pointer' }}
-                    onMouseEnter={e => e.currentTarget.style.color = '#fff'} onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.5)'}
-                  >{label}</span></li>
+                  <li key={label}>
+                    <button
+                      type="button"
+                      onClick={() => navigate(path)}
+                      style={{ fontSize: 13, color: 'rgba(255,255,255,0.5)', cursor: 'pointer', background: 'transparent', border: 'none', padding: 0, fontFamily: 'inherit', textAlign: 'left' }}
+                      onMouseEnter={e => e.currentTarget.style.color = '#fff'}
+                      onMouseLeave={e => e.currentTarget.style.color = 'rgba(255,255,255,0.5)'}
+                    >
+                      {label}
+                    </button>
+                  </li>
                 ))}
               </ul>
             </div>
@@ -5721,6 +5829,8 @@ export default function Home() {
   const [selectedService, setSelectedService] = useState(null)
   const [selectedJob, setSelectedJob] = useState(null)
   const [savedJobIds, setSavedJobIds] = useState([])
+  const listingsRequestRef = useRef(0)
+  const sectionsRequestRef = useRef(0)
 
   // Boot GPS early (same reverse-geocode as Looking For page)
   useEffect(() => {
@@ -5865,6 +5975,7 @@ export default function Home() {
   }
 
   async function loadListings() {
+    const requestId = ++listingsRequestRef.current
     setLoading(true)
     try {
       // Phase 3.1 — featured discovery is a dedicated query only (featured_until > now).
@@ -5946,6 +6057,7 @@ export default function Home() {
         enrichListingRows(featuredRows || []),
         enrichListingRows(recentRows || []),
       ])
+      if (requestId !== listingsRequestRef.current) return
 
       // Featured section: promotion-priority sort + fair rotation within tiers
       const featuredActive = featuredEnriched.filter(l => isListingFeatured(l))
@@ -5968,13 +6080,17 @@ export default function Home() {
 
       // Latest / general feed: recent posts only (not used for featured discovery)
       const { data: { user: authUser } } = await supabase.auth.getUser()
+      if (requestId !== listingsRequestRef.current) return
       const sorted = await sortProductsSmart(recentEnriched, userLat, userLng, authUser?.id)
+      if (requestId !== listingsRequestRef.current) return
       setListings(sorted)
     } catch (e) {
       console.error('loadListings:', e)
     } finally {
-      setLoading(false)
-      bumpLoadProgress('listings')
+      if (requestId === listingsRequestRef.current) {
+        setLoading(false)
+        bumpLoadProgress('listings')
+      }
     }
   }
 
@@ -5983,6 +6099,7 @@ export default function Home() {
   // if a table name differs) can't crash the homepage — it just renders the
   // section's empty state instead.
   async function loadAuxSections() {
+    const requestId = ++sectionsRequestRef.current
     setSectionsLoading(true)
     try {
     await Promise.all([
@@ -6014,8 +6131,13 @@ export default function Home() {
               .limit(12))
           }
           if (error) console.error('shops query error:', error)
+          if (requestId !== sectionsRequestRef.current) return
           setShops(data || [])
-        } catch (e) { console.error('shops catch:', e); setShops([]) }
+        } catch (e) {
+          console.error('shops catch:', e)
+          if (requestId !== sectionsRequestRef.current) return
+          setShops([])
+        }
       })(),
       (async () => {
         try {
@@ -6058,8 +6180,13 @@ export default function Home() {
             }
           }
           if (error) console.error('jobs query error:', error)
+          if (requestId !== sectionsRequestRef.current) return
           setJobs(data || [])
-        } catch (e) { console.error('jobs catch:', e); setJobs([]) }
+        } catch (e) {
+          console.error('jobs catch:', e)
+          if (requestId !== sectionsRequestRef.current) return
+          setJobs([])
+        }
       })(),
       (async () => {
         try {
@@ -6094,8 +6221,13 @@ export default function Home() {
             if (!alt.error && alt.data?.length) data = alt.data
           }
           if (error) console.error('services query error:', error)
+          if (requestId !== sectionsRequestRef.current) return
           setServices(data || [])
-        } catch (e) { console.error('services catch:', e); setServices([]) }
+        } catch (e) {
+          console.error('services catch:', e)
+          if (requestId !== sectionsRequestRef.current) return
+          setServices([])
+        }
       })(),
       (async () => {
         try {
@@ -6110,7 +6242,11 @@ export default function Home() {
             } catch {}
             return null
           })()
-          if (cached) { setRequests(cached); return }
+          if (cached) {
+            if (requestId !== sectionsRequestRef.current) return
+            setRequests(cached)
+            return
+          }
 
           const nowIso = new Date().toISOString()
           const selectBase = 'id, title, description, category, city, cities, created_at, budget, offer_count, view_count, urgency, image_url, image_urls, expires_at, user_id, profiles:user_id(full_name,avatar_url,is_verified)'
@@ -6124,15 +6260,21 @@ export default function Home() {
           if (result.data) {
             try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ data: result.data, ts: Date.now() })) } catch {}
           }
+          if (requestId !== sectionsRequestRef.current) return
           setRequests(result.data || [])
-        } catch { setRequests([]) }
+        } catch {
+          if (requestId !== sectionsRequestRef.current) return
+          setRequests([])
+        }
       })(),
     ])
     } catch (e) {
       console.error('loadAuxSections:', e)
     } finally {
-      setSectionsLoading(false)
-      bumpLoadProgress('sections')
+      if (requestId === sectionsRequestRef.current) {
+        setSectionsLoading(false)
+        bumpLoadProgress('sections')
+      }
     }
   }
 

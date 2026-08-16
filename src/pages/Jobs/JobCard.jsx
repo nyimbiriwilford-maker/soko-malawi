@@ -8,31 +8,34 @@ export default function JobCard({ job, index, savedIds, onToggleSave, onClick })
   const catIcon = CATEGORY_ICONS[job.category] || '📋'
 
   return (
-    <div
+    <article
       className="job-card"
       style={{ animationDelay: `${index * 0.05}s` }}
       onClick={() => onClick(job)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onClick(job)
+        }
+      }}
+      aria-label={`Open job details for ${job.title || 'job'}`}
     >
-      {/* Cover image banner */}
-      {job.cover_image_url && (
-        <div className="job-card-cover">
-          <img src={job.cover_image_url} alt="" className="job-card-cover-img" />
-          <div className="job-card-cover-overlay" />
-        </div>
-      )}
+      <div className="job-card-media" aria-hidden="true">
+        {job.cover_image_url ? (
+          <img src={job.cover_image_url} alt="" className="job-card-media-img" />
+        ) : job.logo_url ? (
+          <img src={job.logo_url} alt="" className="job-card-media-logo" />
+        ) : (
+          <div className="job-card-media-fallback" style={{ background: gradientFromName(job.company) }}>
+            {getInitials(job.company)}
+          </div>
+        )}
+      </div>
 
-      {/* Body */}
-      <div className="job-card-body">
-        {/* Header row */}
+      <div className="job-card-main">
         <div className="job-card-top">
-          {job.logo_url ? (
-            <img className="job-card-logo job-card-logo--img" src={job.logo_url} alt="" />
-          ) : (
-            <div className="job-card-logo" style={{ background: gradientFromName(job.company) }}>
-              {getInitials(job.company)}
-            </div>
-          )}
-
           <div className="job-card-info">
             <div className="job-card-title">{job.title}</div>
             <div className="job-card-company">{job.company}</div>
@@ -40,15 +43,16 @@ export default function JobCard({ job, index, savedIds, onToggleSave, onClick })
           </div>
 
           <button
+            type="button"
             className={`job-bookmark-btn${isSaved ? ' saved' : ''}`}
             onClick={e => { e.stopPropagation(); onToggleSave?.(job.id) }}
             title={isSaved ? 'Remove bookmark' : 'Save job'}
+            aria-label={isSaved ? 'Remove bookmark' : 'Save job'}
           >
             {isSaved ? '🔖' : '🏷️'}
           </button>
         </div>
 
-        {/* Meta chips */}
         <div className="job-card-meta">
           <span className="type-badge" style={{ background: colors.bg, color: colors.text }}>
             <span className="type-badge-dot" style={{ background: colors.dot }} />
@@ -60,15 +64,13 @@ export default function JobCard({ job, index, savedIds, onToggleSave, onClick })
           {dl && <span className={`meta-chip ${dl.urgent ? 'urgent' : 'deadline'}`}>⏰ {dl.label}</span>}
         </div>
 
-        {/* Preview text */}
         <p className="job-card-desc">{job.overview || job.description}</p>
-      </div>
 
-      {/* Footer */}
-      <div className="job-card-footer">
-        <span className="job-card-date">{timeAgo(job.created_at)}</span>
-        <span className="job-card-cta">View details →</span>
+        <div className="job-card-footer">
+          <span className="job-card-date">{timeAgo(job.created_at)}</span>
+          <span className="job-card-cta">View details →</span>
+        </div>
       </div>
-    </div>
+    </article>
   )
 }
