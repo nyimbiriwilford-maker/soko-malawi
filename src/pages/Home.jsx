@@ -630,9 +630,9 @@ function GlobalStyles() {
         .soko-cat-grid::-webkit-scrollbar { display: none !important; }
         .soko-cat-grid .soko-cat-tile {
           flex: 0 0 auto !important;
-          width: 84px !important;
-          min-width: 84px !important;
-          max-width: 84px !important;
+          width: calc((100vw - 44px) / 3) !important;
+          min-width: calc((100vw - 44px) / 3) !important;
+          max-width: calc((100vw - 44px) / 3) !important;
           min-height: 92px !important;
         }
         /* ── App shell (not a website) ── */

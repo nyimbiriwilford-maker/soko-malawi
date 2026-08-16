@@ -1,20 +1,19 @@
 ﻿Done ✅
 
-I changed only what you asked:
+I made a focused mobile-only change so **only 3 categories are visible by default** on screen, and the rest appear when scrolling horizontally.
 
-- On **mobile**, Home categories are now in **one horizontal row**.
-- Categories now **scroll horizontally**.
-- I did **not** change anything else.
+## Change made
+- File: `src/pages/Home.jsx`
+- In mobile categories CSS (`@media (max-width: 768px)`), category tile width is now dynamic:
 
-## File changed
-- `src/pages/Home.jsx`
+```css
+width: calc((100vw - 44px) / 3)
+min-width: calc((100vw - 44px) / 3)
+max-width: calc((100vw - 44px) / 3)
+```
 
-## Exact mobile behavior added
-In `@media (max-width: 768px)`:
-- `.soko-cat-grid` → `display:flex`, `flex-wrap:nowrap`, `overflow-x:auto`
-- hidden scrollbar styling kept for clean UI
-- each category tile fixed width (`84px`) so row scrolls horizontally
+This ensures proper fit for 3 cards across the phone width (with existing side padding and gap), while preserving horizontal scroll for the remaining categories.
 
 ## Validation
-- Ran `npm run build`
+- Ran: `npm run build`
 - Result: ✅ successful build
