@@ -615,6 +615,26 @@ function GlobalStyles() {
         }
       }
       @media (max-width: 768px) {
+        .soko-cat-grid {
+          display: flex !important;
+          flex-direction: row !important;
+          flex-wrap: nowrap !important;
+          overflow-x: auto !important;
+          overflow-y: hidden !important;
+          -webkit-overflow-scrolling: touch;
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+          gap: 8px !important;
+          padding: 0 14px 6px !important;
+        }
+        .soko-cat-grid::-webkit-scrollbar { display: none !important; }
+        .soko-cat-grid .soko-cat-tile {
+          flex: 0 0 auto !important;
+          width: 84px !important;
+          min-width: 84px !important;
+          max-width: 84px !important;
+          min-height: 92px !important;
+        }
         /* ── App shell (not a website) ── */
         .soko-v3 {
           /* Bottom clearance comes from body (bottom nav) — keep shell light */
