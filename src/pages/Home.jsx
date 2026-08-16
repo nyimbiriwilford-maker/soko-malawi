@@ -529,67 +529,67 @@ function GlobalStyles() {
 
       .soko-cat-tile:hover { border-color:${T.gray200} !important; box-shadow:${T.shadow}; transform: translateY(-3px); }
       .soko-cat-tile:active { transform: translateY(-1px); }
+      .soko-cat-icon-wrap {
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,0.7), 0 1px 3px rgba(15,23,42,0.08);
+      }
 
       @media (max-width: 980px) {
         .soko-trust-grid { grid-template-columns: repeat(2,1fr) !important; }
         .soko-jobs-services { grid-template-columns: 1fr 1fr !important; }
         .soko-footer-grid { grid-template-columns: 1fr 1fr !important; }
         .soko-featured-stories-grid { grid-template-columns: 1fr !important; }
-      }
-      /* Categories: always one horizontal line on phone/tablet (scroll, never wrap) */
-      @media (max-width: 980px) {
+
         .soko-cat-section {
-          padding: 12px 0 6px !important;
+          padding: 12px 0 8px !important;
         }
         .soko-cat-section > div {
           max-width: none !important;
           width: 100% !important;
         }
-        .cat-header-row { padding: 0 14px; margin-bottom: 12px !important; }
+        .cat-header-row {
+          padding: 0 14px;
+          margin-bottom: 12px !important;
+        }
         .soko-cat-grid {
-          display: flex !important;
-          flex-direction: row !important;
-          flex-wrap: nowrap !important;
-          align-items: stretch !important;
-          grid-template-columns: none !important;
-          grid-auto-flow: column !important;
+          display: grid !important;
+          grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
           gap: 8px !important;
-          overflow-x: auto !important;
-          overflow-y: hidden !important;
-          -webkit-overflow-scrolling: touch;
-          scroll-snap-type: x mandatory;
-          scrollbar-width: none;
-          -ms-overflow-style: none;
           padding: 0 14px 4px !important;
           margin: 0 !important;
           width: 100% !important;
           max-width: 100% !important;
+          overflow: visible !important;
         }
-        .soko-cat-grid::-webkit-scrollbar { display: none !important; }
         .soko-cat-grid .soko-cat-tile {
-          flex: 0 0 auto !important;
-          flex-shrink: 0 !important;
-          width: 72px !important;
-          min-width: 72px !important;
-          max-width: 72px !important;
-          scroll-snap-align: start;
-          padding: 10px 6px 8px !important;
-          border-radius: 14px !important;
+          width: auto !important;
+          min-width: 0 !important;
+          max-width: none !important;
+          padding: 10px 6px 9px !important;
+          border-radius: 12px !important;
           gap: 6px !important;
+          min-height: 96px;
         }
-        .soko-cat-grid .soko-cat-tile > div:first-child {
-          width: 36px !important;
-          height: 36px !important;
+        .soko-cat-grid .soko-cat-icon-wrap {
+          width: 34px !important;
+          height: 34px !important;
+          border-radius: 10px !important;
         }
-        .soko-cat-grid .soko-cat-tile .soko-cat-sub { display: none !important; }
-        .soko-cat-grid .soko-cat-tile .soko-cat-label {
+        .soko-cat-grid .soko-cat-sub { display: none !important; }
+        .soko-cat-grid .soko-cat-label {
           font-size: 10.5px !important;
           line-height: 1.15 !important;
+          text-align: center;
           white-space: nowrap !important;
           overflow: hidden !important;
           text-overflow: ellipsis !important;
-          max-width: 68px !important;
+          width: 100%;
         }
+      }
+      @media (max-width: 980px) and (orientation: landscape) {
+        .soko-cat-grid { grid-template-columns: repeat(6, minmax(0, 1fr)) !important; }
+      }
+      @media (max-width: 640px) {
+        .soko-cat-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
       }
       @media (max-width: 768px) {
         /* ── App shell (not a website) ── */
@@ -967,14 +967,14 @@ function formatPrice(n) {
    no overflow tile).
 ───────────────────────────────────────────────────────────────────────────── */
 const QUICK_CATEGORIES = [
-  { key: 'all',         label: 'All Categories', sub: 'Browse all',        icon: Icon.grid,        fg: '#3c4043', bg: '#f1f3f4', isAll: true },
-  { key: 'Vehicles',    label: 'Vehicles',       sub: 'Cars, bikes, more', icon: Icon.car,         fg: '#0284c7', bg: '#e0f2fe' },
-  { key: 'Electronics', label: 'Electronics',    sub: 'Phones, laptops',   icon: Icon.phone,       fg: '#7c3aed', bg: '#f1ebfd' },
-  { key: 'Clothing',    label: 'Fashion',        sub: 'Clothing, shoes',   icon: Icon.shirt,       fg: '#e0245e', bg: '#fdeaf0' },
-  { key: 'Property',    label: 'Property',       sub: 'Houses, land',      icon: Icon.houseFilled, fg: '#ea580c', bg: '#fef0e6' },
-  { key: 'Agriculture', label: 'Agriculture',    sub: 'Machinery, crops',  icon: Icon.leaf,        fg: '#0f766e', bg: '#ecfdf5' },
-  { key: 'Jobs',        label: 'Jobs',           sub: 'Find a job',        icon: Icon.briefcase,   fg: '#2563eb', bg: '#e9f1fd', isJobs: true },
-  { key: 'Services',    label: 'Services',       sub: 'Hire experts',      icon: Icon.tools,       fg: '#5f6368', bg: '#eef0f1', isServices: true },
+  { key: 'all',         label: 'All Categories', sub: 'Browse all',        icon: Icon.grid,        fg: '#1f2937', bg: '#eef2f7', isAll: true },
+  { key: 'Vehicles',    label: 'Vehicles',       sub: 'Cars, bikes, more', icon: Icon.car,         fg: '#0369a1', bg: '#e0f2fe' },
+  { key: 'Electronics', label: 'Electronics',    sub: 'Phones, laptops',   icon: Icon.phone,       fg: '#6d28d9', bg: '#f3e8ff' },
+  { key: 'Clothing',    label: 'Fashion',        sub: 'Clothes, shoes',    icon: Icon.shirt,       fg: '#be185d', bg: '#fce7f3' },
+  { key: 'Property',    label: 'Property',       sub: 'Houses, land',      icon: Icon.houseFilled, fg: '#c2410c', bg: '#fff7ed' },
+  { key: 'Agriculture', label: 'Agriculture',    sub: 'Farm tools, crops', icon: Icon.leaf,        fg: '#0f766e', bg: '#ecfdf5' },
+  { key: 'Jobs',        label: 'Jobs',           sub: 'Find a job',        icon: Icon.briefcase,   fg: '#1d4ed8', bg: '#eaf2ff', isJobs: true },
+  { key: 'Services',    label: 'Services',       sub: 'Hire experts',      icon: Icon.tools,       fg: '#475569', bg: '#f1f5f9', isServices: true },
 ]
 
 function CategoryGrid({ navigate, onCategoryChange }) {
@@ -991,20 +991,19 @@ function CategoryGrid({ navigate, onCategoryChange }) {
         {/* — Section header — */}
         <div className="cat-header-row" style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', marginBottom:20 }}>
           <div>
-            <div style={{ fontFamily:T.fontDisplay, fontSize:20, fontWeight:800, color:T.gray900, letterSpacing:'-0.3px', lineHeight:1.2 }}>Browse Categories</div>
-            <div style={{ fontSize:13, color:T.gray600, marginTop:4, fontWeight:500, lineHeight:1.3 }}>Find products by category</div>
+            <div style={{ fontFamily:T.fontDisplay, fontSize:20, fontWeight:800, color:T.gray900, letterSpacing:'-0.3px', lineHeight:1.2 }}>Shop by Category</div>
+            <div style={{ fontSize:13, color:T.gray600, marginTop:4, fontWeight:500, lineHeight:1.3 }}>Trusted categories for faster discovery</div>
           </div>
           <button type="button" onClick={() => navigate('/categories')}
             style={{ background:'none', border:'none', padding:0, fontSize:13, fontWeight:700, color:T.green, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:4 }}>
             View All <span style={{ fontSize:14, lineHeight:1 }}>→</span>
           </button>
         </div>
-        {/* Desktop: 9-col grid. Mobile/tablet (≤980): forced single-line horizontal scroll via CSS. */}
         <div
           className="soko-cat-grid"
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(9, 1fr)',
+            gridTemplateColumns: 'repeat(9, minmax(0, 1fr))',
             gap: 12,
           }}
         >
@@ -1015,7 +1014,7 @@ function CategoryGrid({ navigate, onCategoryChange }) {
               borderRadius: 16, transition: 'border-color .15s, box-shadow .15s, transform .15s',
               boxSizing: 'border-box',
             }}>
-              <div style={{ width: 44, height: 44, borderRadius: '50%', background: item.bg, color: item.fg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <div className="soko-cat-icon-wrap" style={{ width: 44, height: 44, borderRadius: 12, background: item.bg, color: item.fg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 {item.icon(19)}
               </div>
               <div style={{ textAlign: 'center', minWidth: 0, width: '100%' }}>
@@ -1025,11 +1024,14 @@ function CategoryGrid({ navigate, onCategoryChange }) {
             </button>
           ))}
           <button onClick={() => navigate('/categories')} className="soko-cat-tile" style={{
-            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 4,
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8,
             background: '#fdf6e8', border: `1.5px dashed ${T.amber}66`, cursor: 'pointer', padding: '18px 8px 16px',
             borderRadius: 16, transition: 'border-color .15s, box-shadow .15s, transform .15s',
             boxSizing: 'border-box',
           }}>
+            <div className="soko-cat-icon-wrap" style={{ width: 44, height: 44, borderRadius: 12, background: '#fff4d8', color: T.amberD, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {Icon.layers(18)}
+            </div>
             <div className="soko-cat-label" style={{ fontSize: 13.5, fontWeight: 700, color: T.amberD }}>More</div>
             <div className="soko-cat-sub" style={{ fontSize: 10.5, color: T.gray600 }}>View all</div>
           </button>
@@ -2545,7 +2547,7 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
           </h2>
 
           {/* Filter row */}
-          <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:14, flexWrap:'wrap', overflow:'visible' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:14, flexWrap:'nowrap', overflow:'visible', width:'100%' }}>
             {/* Nearby filter */}
             <div ref={lfNearbyRef} style={{ position:'relative' }}>
               <button type="button" onClick={() => { setLfNearbyOpen(!lfNearbyOpen); setLfCatOpen(false); setLfSortOpen(false) }} style={{
@@ -4546,7 +4548,7 @@ function ShopsJobsServicesRow({ navigate, shops, jobs, services, loading, curren
             </button>
           </div>
           {/* Job filters */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'wrap', overflow: 'visible' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'nowrap', overflow: 'visible', width: '100%' }}>
             <div ref={jobCatRef} style={{ position: 'relative' }}>
               <button type="button" onClick={() => { setJobCatOpen(v => !v); setJobTypeOpen(false); setJobSortOpen(false) }} style={{
                 display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 999, padding: '7px 13px',

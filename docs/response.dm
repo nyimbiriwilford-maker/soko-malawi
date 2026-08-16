@@ -1,39 +1,40 @@
-﻿Done ✅ I fixed both issues on the Home page sections (Jobs + Looking For).
+﻿Done ✅ I upgraded the Home **Categories** section to look more professional, trustworthy, and mobile-friendly.
 
-## What was fixed
+## What I changed
 
-### 1) Filter options were getting hidden when clicked
-Cause: both filter rows were configured as horizontal scroll containers (`overflowX: auto`), which can clip absolutely-positioned dropdown menus.
+### 1) Better, more premium category icon presentation
+File: `src/pages/Home.jsx`
 
-Fix applied in `src/pages/Home.jsx`:
-- **Looking For filter row**
-  - changed from horizontal scroll container to wrapping visible container
-  - from:
-    - `flexWrap: 'nowrap'`
-    - `overflowX: 'auto'`
-    - scrollbar-hiding props
-  - to:
-    - `flexWrap: 'wrap'`
-    - `overflow: 'visible'`
+- Refined category icon palette and visual hierarchy (cleaner professional colors).
+- Upgraded icon container style from simple circles to premium rounded-square icon badges.
+- Added subtle inset/shadow polish on icon containers for a smart, high-quality look.
+- Upgraded header copy to feel more trusted and marketplace-focused:
+  - **Shop by Category**
+  - **Trusted categories for faster discovery**
+- Improved “More” tile with proper icon badge (`layers`) so it matches the category cards style.
 
-- **Jobs filter row**
-  - same change as above
-  - now dropdown menus open fully and are not clipped/hidden
+### 2) Mobile fit improvement (no forced tiny scroll-first layout)
+File: `src/pages/Home.jsx`
 
-### 2) Removed the “scroll helper/filter scroll bar” behavior
-You asked to remove the filter bar that helps scrolling.
+Previously categories were forced into a tiny horizontal scroller on mobile/tablet.
+That made cards feel cramped and required scrolling immediately.
 
-Fix applied:
-- removed horizontal scrolling behavior from both filter rows by removing the overflow-x scroll setup
-- filters now lay out in normal wrapped rows instead of a horizontal scroller
+I replaced that behavior with a responsive premium grid:
+- ≤980px: **4 columns**
+- ≤640px: **3 columns**
+- ≤980px in landscape: **6 columns**
 
-### 3) Small alignment adjustment after removing spacer
-In Looking For filter row:
-- removed the manual spacer div (`<div style={{ flex:1 }} />`)
-- kept actions aligned by using `marginLeft: 'auto'` on the action group
+This means categories now fit the horizontal phone screen much better by default before any extra scrolling.
+
+### 3) Card sizing and typography tuned for mobile readability
+File: `src/pages/Home.jsx`
+
+- Reduced mobile card/icon dimensions for clean fit.
+- Kept labels readable with proper truncation and centered alignment.
+- Hidden micro-subtext on small screens to avoid clutter and maintain a premium appearance.
 
 ## Validation
 - Ran: `npm run build`
-- Result: ✅ successful build.
+- Result: ✅ successful production build.
 
-If you want, I can also make the filter dropdowns open **upward** on very small screens when there isn’t enough space below.
+If you want, I can also do a second polish pass to match icon style/colors with your brand system exactly (e.g., stricter green/amber identity), while keeping this layout behavior.
