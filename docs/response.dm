@@ -1,40 +1,35 @@
-﻿Done ✅ I upgraded the Home **Categories** section to look more professional, trustworthy, and mobile-friendly.
+﻿Done ✅ I refined the Home Categories section to keep a **vertical card layout**, use cleaner premium icon treatment, and fit better in that area on mobile and desktop.
 
 ## What I changed
 
-### 1) Better, more premium category icon presentation
+### 1) Keep categories in vertical card format
 File: `src/pages/Home.jsx`
+- Ensured category tiles remain vertical (icon above label) for a professional catalog look.
+- Added explicit mobile rule to keep card content vertical:
+  - `display: flex`
+  - `flex-direction: column`
 
-- Refined category icon palette and visual hierarchy (cleaner professional colors).
-- Upgraded icon container style from simple circles to premium rounded-square icon badges.
-- Added subtle inset/shadow polish on icon containers for a smart, high-quality look.
-- Upgraded header copy to feel more trusted and marketplace-focused:
-  - **Shop by Category**
-  - **Trusted categories for faster discovery**
-- Improved “More” tile with proper icon badge (`layers`) so it matches the category cards style.
-
-### 2) Mobile fit improvement (no forced tiny scroll-first layout)
+### 2) Premium/professional icon style
 File: `src/pages/Home.jsx`
+- Kept clean line icons and improved the visual treatment:
+  - polished icon badge container (`.soko-cat-icon-wrap`) with subtle inset + elevation
+  - better color balancing for trust/professional tone
+- Improved category text/subtext wording to feel higher quality and clearer.
 
-Previously categories were forced into a tiny horizontal scroller on mobile/tablet.
-That made cards feel cramped and required scrolling immediately.
-
-I replaced that behavior with a responsive premium grid:
-- ≤980px: **4 columns**
-- ≤640px: **3 columns**
-- ≤980px in landscape: **6 columns**
-
-This means categories now fit the horizontal phone screen much better by default before any extra scrolling.
-
-### 3) Card sizing and typography tuned for mobile readability
+### 3) Better fit in the Home placement
 File: `src/pages/Home.jsx`
+- Reduced section top spacing so it sits better under the hero.
+- Changed desktop grid from `9` narrow columns to a more readable and premium layout:
+  - default: **5 columns**
+  - ≤1200px: **4 columns**
+- Mobile tuning for fit and clarity:
+  - ≤980px: **4 columns**
+  - ≤640px: **3 columns**
+  - ≤420px: tighter spacing/padding
+  - Landscape phones: **6 columns**
 
-- Reduced mobile card/icon dimensions for clean fit.
-- Kept labels readable with proper truncation and centered alignment.
-- Hidden micro-subtext on small screens to avoid clutter and maintain a premium appearance.
+This keeps categories visible and balanced on horizontal phone screens by default, without a cramped or low-trust look.
 
 ## Validation
 - Ran: `npm run build`
-- Result: ✅ successful production build.
-
-If you want, I can also do a second polish pass to match icon style/colors with your brand system exactly (e.g., stricter green/amber identity), while keeping this layout behavior.
+- Result: ✅ successful build.

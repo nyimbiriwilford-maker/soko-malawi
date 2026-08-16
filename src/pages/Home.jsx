@@ -527,10 +527,23 @@ function GlobalStyles() {
       .soko-btn-dark:hover { background: #000; box-shadow: 0 4px 16px rgba(0,0,0,.18); transform: translateY(-1px); }
       .soko-btn-dark:active { transform: scale(.98); }
 
+      .soko-cat-grid {
+        align-items: stretch;
+      }
+      .soko-cat-tile {
+        min-height: 116px;
+      }
       .soko-cat-tile:hover { border-color:${T.gray200} !important; box-shadow:${T.shadow}; transform: translateY(-3px); }
       .soko-cat-tile:active { transform: translateY(-1px); }
       .soko-cat-icon-wrap {
-        box-shadow: inset 0 0 0 1px rgba(255,255,255,0.7), 0 1px 3px rgba(15,23,42,0.08);
+        box-shadow: inset 0 0 0 1px rgba(255,255,255,0.75), 0 2px 6px rgba(15,23,42,0.08);
+      }
+      .soko-cat-more {
+        border-style: dashed !important;
+      }
+
+      @media (max-width: 1200px) {
+        .soko-cat-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
       }
 
       @media (max-width: 980px) {
@@ -568,6 +581,9 @@ function GlobalStyles() {
           border-radius: 12px !important;
           gap: 6px !important;
           min-height: 96px;
+          display: flex !important;
+          flex-direction: column !important;
+          justify-content: flex-start;
         }
         .soko-cat-grid .soko-cat-icon-wrap {
           width: 34px !important;
@@ -590,6 +606,13 @@ function GlobalStyles() {
       }
       @media (max-width: 640px) {
         .soko-cat-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+      }
+      @media (max-width: 420px) {
+        .soko-cat-grid { gap: 7px !important; }
+        .soko-cat-grid .soko-cat-tile {
+          min-height: 92px;
+          padding: 9px 6px 8px !important;
+        }
       }
       @media (max-width: 768px) {
         /* ── App shell (not a website) ── */
@@ -967,14 +990,14 @@ function formatPrice(n) {
    no overflow tile).
 ───────────────────────────────────────────────────────────────────────────── */
 const QUICK_CATEGORIES = [
-  { key: 'all',         label: 'All Categories', sub: 'Browse all',        icon: Icon.grid,        fg: '#1f2937', bg: '#eef2f7', isAll: true },
-  { key: 'Vehicles',    label: 'Vehicles',       sub: 'Cars, bikes, more', icon: Icon.car,         fg: '#0369a1', bg: '#e0f2fe' },
-  { key: 'Electronics', label: 'Electronics',    sub: 'Phones, laptops',   icon: Icon.phone,       fg: '#6d28d9', bg: '#f3e8ff' },
-  { key: 'Clothing',    label: 'Fashion',        sub: 'Clothes, shoes',    icon: Icon.shirt,       fg: '#be185d', bg: '#fce7f3' },
-  { key: 'Property',    label: 'Property',       sub: 'Houses, land',      icon: Icon.houseFilled, fg: '#c2410c', bg: '#fff7ed' },
-  { key: 'Agriculture', label: 'Agriculture',    sub: 'Farm tools, crops', icon: Icon.leaf,        fg: '#0f766e', bg: '#ecfdf5' },
-  { key: 'Jobs',        label: 'Jobs',           sub: 'Find a job',        icon: Icon.briefcase,   fg: '#1d4ed8', bg: '#eaf2ff', isJobs: true },
-  { key: 'Services',    label: 'Services',       sub: 'Hire experts',      icon: Icon.tools,       fg: '#475569', bg: '#f1f5f9', isServices: true },
+  { key: 'all',         label: 'All Categories', sub: 'Browse everything', icon: Icon.grid,        fg: '#1f2937', bg: '#eef2f7', isAll: true },
+  { key: 'Vehicles',    label: 'Vehicles',       sub: 'Cars and bikes',    icon: Icon.car,         fg: '#0369a1', bg: '#e0f2fe' },
+  { key: 'Electronics', label: 'Electronics',    sub: 'Phones and laptops',icon: Icon.phone,       fg: '#6d28d9', bg: '#f3e8ff' },
+  { key: 'Clothing',    label: 'Fashion',        sub: 'Clothes and shoes', icon: Icon.shirt,       fg: '#be185d', bg: '#fce7f3' },
+  { key: 'Property',    label: 'Property',       sub: 'Houses and land',   icon: Icon.houseFilled, fg: '#c2410c', bg: '#fff7ed' },
+  { key: 'Agriculture', label: 'Agriculture',    sub: 'Farm and produce',  icon: Icon.leaf,        fg: '#0f766e', bg: '#ecfdf5' },
+  { key: 'Jobs',        label: 'Jobs',           sub: 'Work opportunities',icon: Icon.briefcase,   fg: '#1d4ed8', bg: '#eaf2ff', isJobs: true },
+  { key: 'Services',    label: 'Services',       sub: 'Trusted experts',   icon: Icon.tools,       fg: '#475569', bg: '#f1f5f9', isServices: true },
 ]
 
 function CategoryGrid({ navigate, onCategoryChange }) {
@@ -986,7 +1009,7 @@ function CategoryGrid({ navigate, onCategoryChange }) {
   }
 
   return (
-    <section className="soko-cat-section" style={{ padding: '28px 20px 8px', background: '#fff' }}>
+    <section className="soko-cat-section" style={{ padding: '20px 20px 8px', background: '#fff' }}>
       <div style={{ maxWidth: 1400, margin: '0 auto' }}>
         {/* — Section header — */}
         <div className="cat-header-row" style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', marginBottom:20 }}>
@@ -1003,7 +1026,7 @@ function CategoryGrid({ navigate, onCategoryChange }) {
           className="soko-cat-grid"
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(9, minmax(0, 1fr))',
+            gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
             gap: 12,
           }}
         >
@@ -1023,7 +1046,7 @@ function CategoryGrid({ navigate, onCategoryChange }) {
               </div>
             </button>
           ))}
-          <button onClick={() => navigate('/categories')} className="soko-cat-tile" style={{
+          <button onClick={() => navigate('/categories')} className="soko-cat-tile soko-cat-more" style={{
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8,
             background: '#fdf6e8', border: `1.5px dashed ${T.amber}66`, cursor: 'pointer', padding: '18px 8px 16px',
             borderRadius: 16, transition: 'border-color .15s, box-shadow .15s, transform .15s',
