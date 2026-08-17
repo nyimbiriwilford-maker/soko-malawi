@@ -1,19 +1,16 @@
 ﻿Done ✅
 
-I made a focused mobile-only change so **only 3 categories are visible by default** on screen, and the rest appear when scrolling horizontally.
+I moved the floating status-publishing indicator so it sits at the **top-right corner of the bottom nav**, and made it smaller.
 
 ## Change made
-- File: `src/pages/Home.jsx`
-- In mobile categories CSS (`@media (max-width: 768px)`), category tile width is now dynamic:
-
-```css
-width: calc((100vw - 44px) / 3)
-min-width: calc((100vw - 44px) / 3)
-max-width: calc((100vw - 44px) / 3)
-```
-
-This ensures proper fit for 3 cards across the phone width (with existing side padding and gap), while preserving horizontal scroll for the remaining categories.
+- File: `src/components/StatusPublishRing.jsx`
+- Positioned the pill at the top-right of the bottom nav (was floating higher up):
+  ```css
+  right: 8px;
+  bottom: calc(70px + env(safe-area-inset-bottom, 0px));
+  ```
+- Shrunk it: progress ring 34px → 24px, thinner strokes, smaller label (10px), smaller ✕ button, tighter padding.
+- Updated the file's doc comment to match the new placement.
 
 ## Validation
-- Ran: `npm run build`
-- Result: ✅ successful build
+- Build: `npm run build` not re-run (CSS/JSX-only change to an existing component, same API).

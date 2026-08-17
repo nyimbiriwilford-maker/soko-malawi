@@ -2,8 +2,8 @@
  * StatusPublishRing — floating progress ring for background status publishing.
  *
  * Renders nothing until a background publish is running. Shows a compact ring
- * with a progress arc + phase label (Trimming → Uploading → Publishing) in the
- * bottom-right corner so it never shades the main content or bottom nav. Flips
+ * with a progress arc + phase label (Trimming → Uploading → Publishing) pinned
+ * to the top-right corner of the bottom nav so it never shades the content. Flips
  * to a checkmark once published; the store auto-clears the success state so it
  * disappears by itself. It can be dismissed any time — tapping the pill or its
  * ✕ button hides it without cancelling the posting.
@@ -24,8 +24,8 @@ const PHASE_LABELS = {
   error: 'Failed',
 }
 
-const SIZE = 34
-const R = (SIZE - 8) / 2
+const SIZE = 24
+const R = (SIZE - 6) / 2
 const CIRC = 2 * Math.PI * R
 
 export default function StatusPublishRing() {
@@ -57,14 +57,14 @@ export default function StatusPublishRing() {
       <style>{`
         .spr-pill {
           position: fixed;
-          right: 14px;
-          bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+          right: 8px;
+          bottom: calc(70px + env(safe-area-inset-bottom, 0px));
           z-index: 12000;
           display: flex;
           align-items: center;
-          gap: 8px;
-          max-width: min(230px, calc(100vw - 52px));
-          padding: 4px 6px 4px 4px;
+          gap: 6px;
+          max-width: min(160px, calc(100vw - 40px));
+          padding: 3px 5px 3px 3px;
           border-radius: 999px;
           border: 1px solid rgba(255,255,255,0.14);
           background: rgba(10,18,14,0.92);
@@ -77,7 +77,7 @@ export default function StatusPublishRing() {
           animation: sprPop 0.25s cubic-bezier(0.16,1,0.3,1);
         }
         @media (min-width: 769px) {
-          .spr-pill { right: 20px; bottom: 20px; }
+          .spr-pill { right: 16px; bottom: 16px; }
         }
         .spr-ring {
           position: relative;
@@ -94,7 +94,7 @@ export default function StatusPublishRing() {
           place-items: center;
         }
         .spr-label {
-          font-size: 12px;
+          font-size: 10px;
           font-weight: 700;
           line-height: 1.1;
           white-space: nowrap;
@@ -103,12 +103,12 @@ export default function StatusPublishRing() {
         }
         .spr-x {
           flex-shrink: 0;
-          width: 18px;
-          height: 18px;
+          width: 15px;
+          height: 15px;
           border-radius: 50%;
           display: grid;
           place-items: center;
-          font-size: 10px;
+          font-size: 8px;
           font-weight: 700;
           color: rgba(255,255,255,0.75);
           background: rgba(255,255,255,0.1);
@@ -129,7 +129,7 @@ export default function StatusPublishRing() {
             r={R}
             fill="none"
             stroke="rgba(255,255,255,0.16)"
-            strokeWidth="4"
+            strokeWidth="3"
           />
           <circle
             cx={SIZE / 2}
@@ -137,7 +137,7 @@ export default function StatusPublishRing() {
             r={R}
             fill="none"
             stroke={arcColor}
-            strokeWidth="4"
+            strokeWidth="3"
             strokeLinecap="round"
             strokeDasharray={CIRC}
             strokeDashoffset={dashOffset}
@@ -146,17 +146,17 @@ export default function StatusPublishRing() {
           />
         </svg>
         {isError ? (
-          <span className="spr-glyph" style={{ color: '#f87171', fontSize: 12, fontWeight: 800, lineHeight: 1 }}>✕</span>
+          <span className="spr-glyph" style={{ color: '#f87171', fontSize: 10, fontWeight: 800, lineHeight: 1 }}>✕</span>
         ) : isDone ? (
-          <span className="spr-glyph" style={{ color: '#22c55e', fontSize: 12, fontWeight: 800, lineHeight: 1 }}>✓</span>
+          <span className="spr-glyph" style={{ color: '#22c55e', fontSize: 10, fontWeight: 800, lineHeight: 1 }}>✓</span>
         ) : (
           <span
             className="spr-glyph"
             style={{
-              width: 9,
-              height: 9,
+              width: 7,
+              height: 7,
               borderRadius: '50%',
-              border: '2px solid rgba(255,255,255,0.28)',
+              border: '1.5px solid rgba(255,255,255,0.28)',
               borderTopColor: '#22c55e',
               animation: 'sprSpin 0.7s linear infinite',
             }}
