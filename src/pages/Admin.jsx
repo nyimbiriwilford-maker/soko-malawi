@@ -12,15 +12,21 @@ import {
   enrichAdminVerificationQueue,
   buildAdminPendingActions,
   getAdminVerificationNotifications,
+  getVerificationAnomalies,
+  adminScanAnomalies,
 } from '../lib/verification'
 import AdminVerificationDetail from '../components/AdminVerificationDetail'
 import AdminVerificationSettings from '../components/AdminVerificationSettings'
 import AdminVerifiedSellers from '../components/AdminVerifiedSellers'
 import AdminVerificationHub from '../components/AdminVerificationHub'
+import AdminVerificationAnomalies from '../components/AdminVerificationAnomalies'
 import PostJobForm from './Jobs/PostJobForm'
 import { uploadToR2, getR2Url, deleteFromR2 } from '../lib/r2'
 
-const TABS = ['Dashboard', 'Featured', 'Listings', 'Users', 'Jobs', 'Verifications', 'Verify Settings', 'Shop Reports', 'Safety', 'Broadcast', 'Banners']
+// Module-level throttle for the lazy anomaly scan (≥5 min between runs, no pg_cron)
+let _lastAnomalyScanAt = 0
+
+const TABS = ['Dashboard', 'Featured', 'Listings', 'Users', 'Jobs', 'Verifications', 'Verify Settings', 'Shop Reports', 'Safety', 'Broadcast', 'Banners', 'Anomalies']
 
 export default function Admin() {
   const navigate = useNavigate()
@@ -69,6 +75,7 @@ export default function Admin() {
   const [jobsLoading, setJobsLoading] = useState(false)
   const [jobActionLoading, setJobActionLoading] = useState(null)
   const [showPostJobForm, setShowPostJobForm] = useState(false)
+  const [anomalyCount, setAnomalyCount] = useState(0)
 
   useEffect(() => { init() }, [])
 

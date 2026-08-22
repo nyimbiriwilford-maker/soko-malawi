@@ -1,4 +1,6 @@
-const CACHE = 'sokomw-v8'
+const CACHE = 'sokomw-v9'
+const IMAGES_CACHE = 'sokomw-images-v1'
+const MAX_CACHED_IMAGES = 120
 const ASSETS = ['/', '/index.html']
 
 // ── Install & cache ──────────────────────────────────────
@@ -9,8 +11,9 @@ self.addEventListener('install', e => {
 
 // ── Activate & clean old caches ──────────────────────────
 self.addEventListener('activate', e => {
+  const keep = [CACHE, IMAGES_CACHE]
   e.waitUntil(caches.keys().then(keys =>
-    Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k)))
+    Promise.all(keys.filter(k => !keep.includes(k)).map(k => caches.delete(k)))
   ))
   self.clients.claim()
 })
@@ -38,6 +41,24 @@ function isDevBypass(url) {
   return false
 }
 
+// R2/CDN image URLs carry uuid filenames and immutable Cache-Control,
+// so serving already-downloaded images first saves data on mobile networks.
+async function cacheFirstImage(request) {
+  const cache = await caches.open(IMAGES_CACHE)
+  const hit = await cache.match(request)
+  if (hit) return hit
+  const response = await fetch(request)
+  if (response.ok || response.type === 'opaque') {
+    cache.put(request, response.clone()).catch(() => {})
+    // Bound the image cache (LRU by insertion order)
+    const keys = await cache.keys()
+    if (keys.length > MAX_CACHED_IMAGES) {
+      await Promise.all(keys.slice(0, keys.length - MAX_CACHED_IMAGES).map(k => cache.delete(k)))
+    }
+  }
+  return response
+}
+
 // ── Fetch (network first, cache fallback) ────────────────
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return
@@ -49,8 +70,21 @@ self.addEventListener('fetch', e => {
     return
   }
 
-  // Cross-origin APIs
-  if (url.origin !== self.location.origin) return
+  // Cache-first for cross-origin CDN listing/shop images (saves data, works offline)
+  if (url.origin !== self.location.origin) {
+    if (e.request.destination === 'image' || /\.(webp|jpe?g|png|gif|avif)(\?|$)/i.test(url.pathname)) {
+      e.respondWith(
+        cacheFirstImage(e.request).catch(async () => {
+          const cached = await caches.match(e.request)
+          if (cached) return cached
+          return Response.error()
+        })
+      )
+      return
+    }
+    return
+  }
+
   if (e.request.url.includes('supabase.co')) return
 
   // Critical: do not touch Vite dev / HMR traffic

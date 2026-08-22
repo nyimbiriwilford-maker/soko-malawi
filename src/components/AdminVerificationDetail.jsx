@@ -16,6 +16,16 @@ import {
   VERIFICATION_STATUSES,
   PAYMENT_STATUSES,
   friendlyVerificationError,
+  getVerificationIssueCatalog,
+  adminFlagIssues,
+  getIssuesForRequest,
+  adminResolveIssue,
+  resolveOpenIssuesForRequest,
+  adminExtendInfoDeadline,
+  adminOverrideStatus,
+  getVerificationAnomalies,
+  stageOfStatus,
+  ADMIN_OVERRIDE_TARGETS,
 } from '../lib/verification'
 
 /**
@@ -42,19 +52,43 @@ export default function AdminVerificationDetail({
   const [preview, setPreview] = useState(null) // { url, name, mime, kind }
   const [payNote, setPayNote] = useState('')
 
+  // Structured issues
+  const [issues, setIssues] = useState([])
+  const [issueCatalog, setIssueCatalog] = useState([])
+  const [flagSelected, setFlagSelected] = useState([]) // catalog codes
+  const [flagFixes, setFlagFixes] = useState({}) // code -> edited suggested_fix
+  const [flagMessage, setFlagMessage] = useState('')
+
+  // Override modal
+  const [showOverride, setShowOverride] = useState(false)
+  const [overrideTarget, setOverrideTarget] = useState('')
+  const [overrideJust, setOverrideJust] = useState('')
+
+  // Inline confirm rows (replace window.confirm / window.prompt)
+  const [confirmApprove, setConfirmApprove] = useState(false)
+  const [confirmReject, setConfirmReject] = useState(false)
+  const [confirmPayReject, setConfirmPayReject] = useState(null) // payment id
+  const [payRejectNote, setPayRejectNote] = useState('')
+
+  const [openAnomalies, setOpenAnomalies] = useState(0)
+
   const load = useCallback(async (signal = { cancelled: false }) => {
     if (!requestId) return
     // Defer state updates so callers (effects) stay lint-clean
     await Promise.resolve()
     if (!signal.cancelled) setLoading(true)
     try {
-      const [d, s] = await Promise.all([
+      const [d, s, iss, anom] = await Promise.all([
         getAdminVerificationDetail(requestId),
         getVerificationSettings().catch(() => null),
+        getIssuesForRequest(requestId).catch(() => []),
+        getVerificationAnomalies({ status: 'open', limit: 50, requestId }).catch(() => []),
       ])
       if (signal.cancelled) return
       setDetail(d)
       setSettings(s)
+      setIssues(Array.isArray(iss) ? iss : [])
+      setOpenAnomalies(Array.isArray(anom) ? anom.length : 0)
       setRejectReason(d.request?.rejection_reason || '')
       setInfoMessage(d.request?.additional_info_message || '')
       setError('')
@@ -125,21 +159,14 @@ export default function AdminVerificationDetail({
 
   function handleApprove() {
     if (!detail) return
-    if (readiness && !readiness.ok) {
-      const force = window.confirm(
-        `Requirements not fully met:\n\n• ${readiness.blockers.join('\n• ')}\n\nApprove anyway?`
-      )
-      if (!force) {
-        setActionMsg(readiness.blockers[0] || 'Cannot approve yet')
-        return
-      }
-      return run('approve', () => adminApproveVerification(detail.request.id, approveNote || null, {
-        force: true,
-        readiness,
-      }))
+    const isConfirming = readiness && !readiness.ok
+    if (!confirmApprove) {
+      setConfirmApprove(true)
+      return
     }
-    if (!window.confirm('Approve this verification? The seller will receive a verified badge.')) return
+    setConfirmApprove(false)
     return run('approve', () => adminApproveVerification(detail.request.id, approveNote || null, {
+      force: isConfirming,
       readiness,
     }))
   }
@@ -151,19 +178,23 @@ export default function AdminVerificationDetail({
       setActionMsg('Rejection reason is required.')
       return
     }
-    if (!window.confirm('Reject this verification request?')) return
+    if (!confirmReject) {
+      setConfirmReject(true)
+      return
+    }
+    setConfirmReject(false)
     return run('reject', () => adminRejectVerification(detail.request.id, reason))
   }
 
   function handleNeedInfo() {
     if (!detail) return
     const msg = infoMessage.trim()
-    if (!msg) {
+    if (!msg && !flagSelected.length) {
       setActionMsg('Please describe what additional information is needed.')
       return
     }
     return run('info', async () => {
-      await adminRequestMoreInfo(detail.request.id, msg)
+      await adminRequestMoreInfo(detail.request.id, msg || 'Please provide the requested items.')
       setActionMsg('Seller notified — additional information requested.')
     })
   }
@@ -178,14 +209,102 @@ export default function AdminVerificationDetail({
 
   function handleRejectPay(payment) {
     if (!payment?.id) return
-    const note = payNote.trim() || window.prompt('Why reject this payment?') || ''
+    if (confirmPayReject !== payment.id) {
+      setConfirmPayReject(payment.id)
+      setPayRejectNote(payNote)
+      return
+    }
+    const note = (payRejectNote || payNote || '').trim()
     if (!note) {
       setActionMsg('A reason is required to reject payment.')
       return
     }
+    setConfirmPayReject(null)
     return run(`pay-no-${payment.id}`, async () => {
       await adminRejectPayment(payment.id, note)
       setActionMsg('Payment rejected.')
+    })
+  }
+
+  // ── Structured issues ──────────────────────────────────────
+  useEffect(() => {
+    if (!detail) return
+    let cancelled = false
+    void getVerificationIssueCatalog({ activeOnly: true })
+      .then((list) => { if (!cancelled) setIssueCatalog(list) })
+      .catch(() => { if (!cancelled) setIssueCatalog([]) })
+    return () => { cancelled = true }
+  }, [detail?.request?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  function toggleFlagCode(code) {
+    setFlagSelected((sel) => (sel.includes(code) ? sel.filter((c) => c !== code) : [...sel, code]))
+  }
+
+  function handleFlagIssues() {
+    if (!detail) return
+    const items = flagSelected.map((code) => {
+      const cat = issueCatalog.find((c) => c.code === code)
+      return {
+        category_code: code,
+        suggested_fix: (flagFixes[code] ?? '').trim() || cat?.default_suggested_fix || null,
+        next_action: cat?.default_next_action || null,
+      }
+    })
+    return run('flag-issues', async () => {
+      const n = await adminFlagIssues(
+        detail.request.id,
+        items,
+        flagMessage.trim() || null
+      )
+      setFlagSelected([])
+      setFlagFixes({})
+      setFlagMessage('')
+      setActionMsg(`Flagged ${n} issue${n === 1 ? '' : 's'} — seller notified.`)
+    })
+  }
+
+  function handleResolveIssue(issue, status) {
+    if (!issue?.id) return
+    return run(`issue-${issue.id}`, async () => {
+      await adminResolveIssue(issue.id, status)
+      setActionMsg(`Issue ${status === 'waived' ? 'waived' : 'resolved'}.`)
+    })
+  }
+
+  function handleExtendDeadline() {
+    if (!detail) return
+    return run('extend-deadline', async () => {
+      await adminExtendInfoDeadline(detail.request.id, 3)
+      setActionMsg('Deadline extended by +3 days.')
+    })
+  }
+
+  function handleWaiveAllIssues() {
+    if (!detail) return
+    return run('waive-all', async () => {
+      const n = await resolveOpenIssuesForRequest(detail.request.id, 'waived')
+      setActionMsg(`Waived ${n} open issue${n === 1 ? '' : 's'}.`)
+    })
+  }
+
+  // ── Override ───────────────────────────────────────────────
+  function handleOverride() {
+    if (!detail) return
+    if (!overrideTarget) {
+      setActionMsg('Pick a target status.')
+      return
+    }
+    const just = overrideJust.trim()
+    if (!just) {
+      setActionMsg('A justification is required to override status.')
+      return
+    }
+    return run('override', async () => {
+      await adminOverrideStatus(detail.request.id, overrideTarget, just)
+      setShowOverride(false)
+      setOverrideTarget('')
+      setOverrideJust('')
+      setActionMsg(`Status overridden to ${statusLabel(overrideTarget)}.`)
     })
   }
 
@@ -331,6 +450,25 @@ export default function AdminVerificationDetail({
                 }}>
                   {actionMsg}
                 </div>
+              )}
+
+              {openAnomalies > 0 && (
+                <a
+                  href="/admin?tab=Anomalies"
+                  style={{
+                    display: 'block',
+                    background: '#fff7ed',
+                    border: '1px solid #fed7aa',
+                    color: '#9a3412',
+                    borderRadius: 10,
+                    padding: '8px 12px',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    textDecoration: 'none',
+                  }}
+                >
+                  ⚠ {openAnomalies} open anomaly{openAnomalies === 1 ? '' : 'ies'} linked to this request — open the Anomalies tab
+                </a>
               )}
 
               {/* USER — compact; full field list expands on demand */}
@@ -693,6 +831,145 @@ export default function AdminVerificationDetail({
                 </ul>
               </section>
 
+              {/* ISSUES */}
+              <section style={styles.card}>
+                <h3 style={styles.sectionTitle}>Issues</h3>
+
+                {issues.length === 0 && (
+                  <p style={styles.empty}>No issues flagged for this request.</p>
+                )}
+                {issues.length > 0 && (
+                  <ul style={styles.list}>
+                    {issues.map((iss) => (
+                      <li key={iss.id} style={styles.docItem}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 800 }}>
+                            {iss.label || iss.category_code}
+                            <span style={{
+                              marginLeft: 8,
+                              fontSize: 10,
+                              fontWeight: 800,
+                              padding: '2px 8px',
+                              borderRadius: 999,
+                              background: iss.status === 'open' ? '#fef3c7'
+                                : iss.status === 'needs_recheck' ? '#dbeafe'
+                                  : '#f3f4f6',
+                              color: iss.status === 'open' ? '#b45309'
+                                : iss.status === 'needs_recheck' ? '#1d4ed8' : '#6b7280',
+                            }}>
+                              {iss.status}
+                            </span>
+                          </div>
+                          {iss.suggested_fix && (
+                            <div style={styles.metaLine}>Fix: {iss.suggested_fix}</div>
+                          )}
+                          {iss.next_action && (
+                            <div style={styles.metaLine}>Next: {iss.next_action}</div>
+                          )}
+                          <div style={styles.metaLine}>Flagged {fmtDate(iss.flagged_at)}</div>
+                        </div>
+                        {(iss.status === 'open' || iss.status === 'needs_recheck') && (
+                          <div style={styles.btnCol}>
+                            <button
+                              type="button"
+                              style={styles.secondaryBtn}
+                              disabled={!!busy}
+                              onClick={() => handleResolveIssue(iss, 'resolved')}
+                            >
+                              {busy === `issue-${iss.id}` ? '…' : 'Resolve'}
+                            </button>
+                            <button
+                              type="button"
+                              style={styles.ghostBtn}
+                              disabled={!!busy}
+                              onClick={() => handleResolveIssue(iss, 'waived')}
+                            >
+                              Waive
+                            </button>
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                {(issues.some((i) => i.status === 'open' || i.status === 'needs_recheck')) && (
+                  <button
+                    type="button"
+                    style={{ ...styles.ghostBtn, marginTop: 10 }}
+                    disabled={!!busy}
+                    onClick={handleWaiveAllIssues}
+                  >
+                    {busy === 'waive-all' ? '…' : 'Waive all open issues'}
+                  </button>
+                )}
+
+                {/* Flag new issues */}
+                <div style={{ marginTop: 14, borderTop: '1px solid #f0f5f2', paddingTop: 12 }}>
+                  <strong style={{ fontSize: 12, color: '#555' }}>Flag issues & notify seller</strong>
+                  {issueCatalog.length === 0 && (
+                    <p style={{ ...styles.metaLine, marginTop: 6 }}>
+                      Issue catalog unavailable (run the issues migration first).
+                    </p>
+                  )}
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                    {issueCatalog.map((c) => {
+                      const on = flagSelected.includes(c.code)
+                      return (
+                        <button
+                          key={c.code}
+                          type="button"
+                          onClick={() => toggleFlagCode(c.code)}
+                          style={{
+                            border: `1.5px solid ${on ? '#b45309' : '#e8f0ec'}`,
+                            background: on ? '#fef3c7' : '#fff',
+                            color: on ? '#92400e' : '#555',
+                            borderRadius: 999,
+                            padding: '5px 10px',
+                            fontSize: 11,
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            fontFamily: 'inherit',
+                          }}
+                        >
+                          {c.label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {flagSelected.map((code) => {
+                    const cat = issueCatalog.find((c) => c.code === code)
+                    return (
+                      <label key={code} style={{ ...styles.label, marginTop: 8 }}>
+                        Fix shown to seller — {cat?.label || code}
+                        <input
+                          style={styles.input}
+                          value={flagFixes[code] ?? cat?.default_suggested_fix ?? ''}
+                          onChange={(e) => setFlagFixes((m) => ({ ...m, [code]: e.target.value }))}
+                        />
+                      </label>
+                    )
+                  })}
+                  <label style={{ ...styles.label, marginTop: 10 }}>
+                    Message to seller (optional — defaults to issue list)
+                    <input
+                      style={styles.input}
+                      value={flagMessage}
+                      onChange={(e) => setFlagMessage(e.target.value)}
+                      placeholder="Optional extra instructions"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    style={{ ...styles.warnBtn, width: '100%', marginTop: 8 }}
+                    disabled={!!busy || flagSelected.length === 0}
+                    onClick={handleFlagIssues}
+                  >
+                    {busy === 'flag-issues' ? 'Sending…' : `Flag ${flagSelected.length || ''} issues & notify`.replace('Flag  issues', 'Flag issues')}
+                  </button>
+                </div>
+              </section>
+
               {/* PAYMENT */}
               <section style={styles.card}>
                 <h3 style={styles.sectionTitle}>Payment</h3>
@@ -743,7 +1020,43 @@ export default function AdminVerificationDetail({
                           </button>
                         </div>
                       )}
-                      {awaiting && (
+                      {awaiting && confirmPayReject === pay.id && (
+                        <div style={{
+                          marginTop: 8,
+                          padding: 10,
+                          borderRadius: 10,
+                          background: '#fef2f2',
+                          border: '1px solid #fecaca',
+                        }}>
+                          <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: '#b91c1c' }}>
+                            Reject this payment? The seller will have to pay again.
+                          </p>
+                          <input
+                            style={{ ...styles.input, marginTop: 8 }}
+                            value={payRejectNote}
+                            onChange={(e) => setPayRejectNote(e.target.value)}
+                            placeholder="Reason (required)"
+                          />
+                          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                            <button
+                              type="button"
+                              style={styles.dangerBtn}
+                              disabled={!!busy}
+                              onClick={() => handleRejectPay(pay)}
+                            >
+                              {busy === `pay-no-${pay.id}` ? '…' : 'Confirm rejection'}
+                            </button>
+                            <button
+                              type="button"
+                              style={styles.ghostBtn}
+                              onClick={() => setConfirmPayReject(null)}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      {awaiting && confirmPayReject !== pay.id && (
                         <div style={{ marginTop: 12 }}>
                           <label style={styles.label}>
                             Payment note (optional)
@@ -868,14 +1181,46 @@ export default function AdminVerificationDetail({
                   </label>
                   <button
                     type="button"
-                    style={{ ...styles.primaryBtn, width: '100%', marginTop: 8, marginBottom: 16 }}
+                    style={{ ...styles.primaryBtn, width: '100%', marginTop: 8 }}
                     disabled={!!busy}
                     onClick={handleApprove}
                   >
                     {busy === 'approve' ? 'Approving…' : '✓ Approve verification'}
                   </button>
+                  {confirmApprove && (
+                    <div style={{
+                      marginTop: 8, padding: 10, borderRadius: 10,
+                      background: readiness?.ok === false ? '#fffbeb' : '#f0faf4',
+                      border: `1px solid ${readiness?.ok === false ? '#fde68a' : '#bbf7d0'}`,
+                    }}>
+                      <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: readiness?.ok === false ? '#92400e' : '#1a7a4a' }}>
+                        {readiness?.ok === false
+                          ? `Requirements not fully met: ${readiness.blockers.join(' · ')}. Approve anyway?`
+                          : 'Approve this verification? The seller will receive a verified badge.'}
+                      </p>
+                      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                        <button type="button" style={styles.primaryBtn} disabled={!!busy} onClick={handleApprove}>
+                          Confirm approve
+                        </button>
+                        <button type="button" style={styles.ghostBtn} onClick={() => setConfirmApprove(false)}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
-                  <label style={styles.label}>
+                  {req.status === VERIFICATION_STATUSES.ADDITIONAL_INFO_REQUIRED && (
+                    <button
+                      type="button"
+                      style={{ ...styles.secondaryBtn, width: '100%', marginTop: 12 }}
+                      disabled={!!busy}
+                      onClick={handleExtendDeadline}
+                    >
+                      {busy === 'extend-deadline' ? '…' : 'Extend resubmit deadline +3 days'}
+                    </button>
+                  )}
+
+                  <label style={{ ...styles.label, marginTop: 16 }}>
                     Request more information (required message)
                     <textarea
                       style={{ ...styles.input, minHeight: 64, resize: 'vertical' }}
@@ -886,14 +1231,14 @@ export default function AdminVerificationDetail({
                   </label>
                   <button
                     type="button"
-                    style={{ ...styles.warnBtn, width: '100%', marginTop: 8, marginBottom: 16 }}
+                    style={{ ...styles.warnBtn, width: '100%', marginTop: 8 }}
                     disabled={!!busy}
                     onClick={handleNeedInfo}
                   >
                     {busy === 'info' ? 'Sending…' : 'Request more information'}
                   </button>
 
-                  <label style={styles.label}>
+                  <label style={{ ...styles.label, marginTop: 16 }}>
                     Reject (reason required)
                     <textarea
                       style={{ ...styles.input, minHeight: 64, resize: 'vertical' }}
@@ -910,6 +1255,24 @@ export default function AdminVerificationDetail({
                   >
                     {busy === 'reject' ? 'Rejecting…' : '✕ Reject verification'}
                   </button>
+                  {confirmReject && (
+                    <div style={{
+                      marginTop: 8, padding: 10, borderRadius: 10,
+                      background: '#fef2f2', border: '1px solid #fecaca',
+                    }}>
+                      <p style={{ margin: 0, fontSize: 12, fontWeight: 800, color: '#b91c1c' }}>
+                        Reject this verification request? The seller can no longer resubmit it.
+                      </p>
+                      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+                        <button type="button" style={styles.dangerBtn} disabled={!!busy} onClick={handleReject}>
+                          Confirm reject
+                        </button>
+                        <button type="button" style={styles.ghostBtn} onClick={() => setConfirmReject(false)}>
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </section>
               )}
 
@@ -919,12 +1282,99 @@ export default function AdminVerificationDetail({
                     This request is <strong>{statusLabel(req.status)}</strong>
                     {req.rejection_reason ? ` — ${req.rejection_reason}` : ''}.
                   </div>
+                  <p style={{ ...styles.metaLine, marginTop: 8 }}>
+                    No actions available in this stage. Use Override below to reopen it (justification required).
+                  </p>
                 </section>
               )}
+
+              {/* OVERRIDE — available on all stages incl. terminal */}
+              <section style={styles.card}>
+                <h3 style={styles.sectionTitle}>Override status</h3>
+                <p style={{ ...styles.metaLine, margin: '0 0 10px' }}>
+                  Force any status transition — including reopening a terminal request. Requires a written
+                  justification and is fully audited. Stage: <strong>{stageOfStatus(req.status)}</strong>.
+                </p>
+                {[VERIFICATION_STATUSES.PAYMENT_PENDING, VERIFICATION_STATUSES.PAYMENT_CONFIRMED].includes(req.status) && (
+                  <div style={{
+                    background: '#fffbeb', border: '1px solid #fde68a', color: '#92400e',
+                    borderRadius: 10, padding: '8px 10px', fontSize: 12, fontWeight: 700, marginBottom: 10,
+                  }}>
+                    Payment stage: prefer the Confirm payment / Reject payment actions instead.
+                  </div>
+                )}
+                <button
+                  type="button"
+                  style={{ ...styles.secondaryBtn, width: '100%' }}
+                  onClick={() => {
+                    setShowOverride(true)
+                    setOverrideTarget('')
+                    setOverrideJust('')
+                  }}
+                >
+                  Override status…
+                </button>
+              </section>
             </>
           )}
         </div>
       </aside>
+
+      {/* Override modal */}
+      {showOverride && (
+        <div style={styles.previewOverlay} role="presentation" onClick={() => !busy && setShowOverride(false)}>
+          <div
+            style={{ background: '#fff', borderRadius: 16, padding: 18, width: 'min(480px, 94vw)', maxHeight: '86vh', overflowY: 'auto' }}
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-label="Override verification status"
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <strong style={{ fontSize: 14 }}>Override status</strong>
+              <button type="button" style={styles.closeBtn} onClick={() => !busy && setShowOverride(false)}>×</button>
+            </div>
+            <p style={{ ...styles.metaLine, marginTop: 6 }}>
+              Current: <strong>{statusLabel(req.status)}</strong> (stage <strong>{stageOfStatus(req.status)}</strong>).
+              This is fully audited and allows any transition, including reopening closed requests.
+            </p>
+            <label style={{ ...styles.label, marginTop: 10 }}>
+              New status
+              <select
+                style={styles.input}
+                value={overrideTarget}
+                onChange={(e) => setOverrideTarget(e.target.value)}
+              >
+                <option value="">— choose target status —</option>
+                {ADMIN_OVERRIDE_TARGETS.filter((s) => s !== req.status).map((s) => (
+                  <option key={s} value={s}>{statusLabel(s)} ({stageOfStatus(s)})</option>
+                ))}
+              </select>
+            </label>
+            <label style={{ ...styles.label, marginTop: 10 }}>
+              Justification (required)
+              <textarea
+                style={{ ...styles.input, minHeight: 80, resize: 'vertical' }}
+                value={overrideJust}
+                onChange={(e) => setOverrideJust(e.target.value)}
+                placeholder="Why is this override needed? This is stored in the audit trail."
+              />
+            </label>
+            <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+              <button
+                type="button"
+                style={styles.primaryBtn}
+                disabled={!!busy || !overrideTarget || !overrideJust.trim()}
+                onClick={handleOverride}
+              >
+                {busy === 'override' ? 'Overriding…' : 'Apply override'}
+              </button>
+              <button type="button" style={styles.ghostBtn} disabled={!!busy} onClick={() => setShowOverride(false)}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Document / receipt lightbox */}
       {preview && (

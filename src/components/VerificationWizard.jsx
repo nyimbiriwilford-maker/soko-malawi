@@ -42,10 +42,28 @@ import {
   paymentStatusLabel,
   docTypeLabel,
   isTrackingStatus,
+  getIssuesForRequest,
   PAYMENT_STATUSES,
 } from '../lib/verification'
 
 const STEP_IDS = WIZARD_STEPS.map((s) => s.id)
+
+function issueChipStyle(status) {
+  const map = {
+    open: { background: '#ffedd5', color: '#c2410c' },
+    needs_recheck: { background: '#dbeafe', color: '#1d4ed8' },
+    resolved: { background: '#e6f4ec', color: '#1a7a4a' },
+    waived: { background: '#f3f4f6', color: '#6b7280' },
+  }
+  const s = map[status] || map.open
+  return {
+    fontSize: 10,
+    fontWeight: 800,
+    padding: '2px 8px',
+    borderRadius: 999,
+    ...s,
+  }
+}
 
 function stepIndex(id) {
   const i = STEP_IDS.indexOf(id)
@@ -206,6 +224,22 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
         VERIFICATION_STATUSES.EXPIRED,
       ].includes(request?.status))
   const isResubmitFlow = needsMoreInfo
+
+  // Structured admin-flagged issues (shown only on the status step)
+  const [issues, setIssues] = useState([])
+  useEffect(() => {
+    if (!needsMoreInfo || !request?.id) {
+      setIssues([])
+      return
+    }
+    let cancelled = false
+    void getIssuesForRequest(request.id).then((list) => {
+      if (!cancelled) setIssues(Array.isArray(list) ? list : [])
+    })
+    return () => { cancelled = true }
+  }, [needsMoreInfo, request?.id, request?.status, request?.updated_at])
+  const openIssues = issues.filter((i) => i.status === 'open' || i.status === 'needs_recheck')
+  const deadlineAt = request?.additional_info_deadline_at || null
 
   // Display status for seller (never "payment pending" when payment is confirmed / need-info)
   const displayStatus = useMemo(
@@ -1220,6 +1254,11 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
                   <p style={{ margin: '6px 0 0' }}>
                     {request.additional_info_message || 'Please update the items below and resubmit.'}
                   </p>
+                  {deadlineAt && (
+                    <p style={{ margin: '4px 0 0', fontSize: 12, fontWeight: 700, color: '#9a3412' }}>
+                      Deadline: {new Date(deadlineAt).toLocaleString()}
+                    </p>
+                  )}
                   {request.reviewed_at && (
                     <p className="vw-fine" style={{ marginTop: 4, color: '#9a3412' }}>
                       Requested {new Date(request.reviewed_at || request.updated_at).toLocaleString()}
@@ -1760,10 +1799,59 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
                               || request.admin_note
                               || 'Please upload clearer documents or complete the missing items.'}
                           </p>
+                          {deadlineAt && (
+                            <p style={{ margin: '6px 0 0', fontSize: 12, fontWeight: 700, color: '#9a3412' }}>
+                              Deadline: {new Date(deadlineAt).toLocaleString()}
+                            </p>
+                          )}
                           <p className="vw-fine" style={{ marginTop: 8, color: '#9a3412' }}>
                             Requested{' '}
                             {new Date(request.reviewed_at || request.updated_at || request.created_at).toLocaleString()}
                           </p>
+
+                          {issues.length > 0 && (
+                            <div style={{ marginTop: 12 }}>
+                              <strong style={{ fontSize: 12 }}>
+                                Items to fix ({openIssues.length} open)
+                              </strong>
+                              <ul style={{ listStyle: 'none', margin: '6px 0 0', padding: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                {issues.map((issue) => (
+                                  <li
+                                    key={issue.id}
+                                    style={{
+                                      border: '1px solid #fdba74',
+                                      borderRadius: 10,
+                                      background: '#fff8f2',
+                                      padding: '8px 10px',
+                                    }}
+                                  >
+                                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                                      <strong style={{ fontSize: 13 }}>{issue.label || issue.category_code}</strong>
+                                      <span style={issueChipStyle(issue.status)}>
+                                        {issue.status === 'needs_recheck' ? 'Awaiting recheck' : issue.status}
+                                      </span>
+                                    </div>
+                                    {issue.suggested_fix && (
+                                      <p style={{ margin: '6px 0 0', fontSize: 12, color: '#7c3a07' }}>
+                                        <em>What's wrong:</em> {issue.suggested_fix}
+                                      </p>
+                                    )}
+                                    {issue.next_action && (
+                                      <p style={{ margin: '4px 0 0', fontSize: 12, color: '#1f2937' }}>
+                                        <em>What to do:</em> {issue.next_action}
+                                      </p>
+                                    )}
+                                    {issue.note && (
+                                      <p style={{ margin: '4px 0 0', fontSize: 12, color: '#6b7280' }}>
+                                        Note: {issue.note}
+                                      </p>
+                                    )}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
                           {(missingDocs.length > 0 || rejectedDocs.length > 0) && (
                             <div style={{ marginTop: 10 }}>
                               <strong style={{ fontSize: 12 }}>Missing / update items</strong>

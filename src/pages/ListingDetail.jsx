@@ -1,7 +1,8 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { MapPin, CheckCircle, Lock, AlertTriangle, ShieldCheck } from 'lucide-react'
+import { MapPin, CheckCircle, Lock, AlertTriangle, ShieldCheck, Banknote, Eye, Star } from 'lucide-react'
+import { formatPrice } from '../lib/format'
 import SokoNav from '../components/SokoNav'
 import Comments from '../components/Comments'
 import VouchChainBanner from '../components/VouchChainBanner'
@@ -12,6 +13,7 @@ import { fetchListingStatus, fetchUserActiveStatus } from '../hooks/useStatuses'
 import { isListingFeatured } from '../utils/homeUtils'
 import { featureExistingListing } from '../lib/featureListing'
 import { featuredPriceLabel } from '../constants/featuredPricing'
+import PlaceOrderModal from '../components/PlaceOrderModal'
 
 const CAT_META = {
   Electronics: { color: '#1a7a4a', bg: '#e6f4ec' },
@@ -126,6 +128,8 @@ export default function ListingDetail() {
   const [quantity, setQuantity]     = useState(1)
   const [showShareSheet, setShowShareSheet] = useState(false)
   const [copied, setCopied]         = useState(false)
+  const [showOrderModal, setShowOrderModal] = useState(false)
+  const [orderPlaced, setOrderPlaced]       = useState(null)
   const [vouchChain, setVouchChain] = useState(null)
   const [sellerTrust, setSellerTrust] = useState(null)
   const [sellerDeals, setSellerDeals] = useState(0)
@@ -133,6 +137,7 @@ export default function ListingDetail() {
   const [sellerStatus, setSellerStatus]   = useState(null)
   const [isFavorited, setIsFavorited]     = useState(false)
   const [featuring, setFeaturing]         = useState(false)
+  const [featureError, setFeatureError]   = useState(null)
   const [ldSearch, setLdSearch] = useState('')
   const touchStartX = useRef(null)
   const viewNotifSent = useRef(false)
@@ -344,6 +349,7 @@ export default function ListingDetail() {
   const catMeta       = CAT_META[listing.category] || { color: '#1a7a4a', bg: '#e6f4ec' }
   const condition     = listing.condition && CONDITION_META[listing.condition]
   const hasBulk       = listing.price_tiers && listing.price_tiers.length > 0
+  const orderable     = !isOwner && Number(listing.price) > 0 && (listing.status === 'active' || listing.status === 'published') && listing.availability_status !== 'not_available' && !(listing.stock_qty != null && Number(listing.stock_qty) <= 0)
 
   const activeTier = hasBulk
     ? [...listing.price_tiers].filter(t => parseInt(t.min_qty) <= quantity)
@@ -406,7 +412,6 @@ export default function ListingDetail() {
   return (
     <div style={S.page}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body { background: #f3f4f6; }
         @keyframes spin { to { transform: rotate(360deg); } }
@@ -418,12 +423,12 @@ export default function ListingDetail() {
         ::-webkit-scrollbar-thumb { background: #d1d5db; border-radius: 3px; }
 
         /* nav tab active underline */
-        .ld-tab-active { border-bottom: 2px solid #1a7a4a !important; color: #1a7a4a !important; font-weight: 600 !important; }
+        .ld-tab-active { border-bottom: 2px solid #0F9D58 !important; color: #0F9D58 !important; font-weight: 600 !important; }
         .ld-tab { border-bottom: 2px solid transparent; color: #374151; font-size: 14px; font-weight: 500; padding: 12px 4px; cursor: pointer; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
-        .ld-tab:hover { color: #1a7a4a; }
+        .ld-tab:hover { color: #0F9D58; }
         .ld-btn-hover:hover { opacity: .88; transform: translateY(-1px); transition: all .15s; }
         .ld-thumb-item { border: 2px solid #e5e7eb; border-radius: 8px; overflow: hidden; cursor: pointer; flex-shrink: 0; transition: border-color .15s; }
-        .ld-thumb-item:hover { border-color: #1a7a4a; }
+        .ld-thumb-item:hover { border-color: #0F9D58; }
         .ld-share-opt:hover { background: #f9fafb !important; }
 
         /* Two column layout breakpoints */
@@ -485,7 +490,7 @@ export default function ListingDetail() {
             <div style={S.galleryCard}>
               {/* featured badge only */}
               {isListingFeatured(listing) && (
-                <div style={{ ...S.galleryBadge, top: 12, background: '#1a7a4a', display: 'flex', alignItems: 'center', gap: 4 }}>
+                <div style={{ ...S.galleryBadge, top: 12, background: '#0F9D58', display: 'flex', alignItems: 'center', gap: 4 }}>
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="white"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
                   Featured
                 </div>
@@ -551,7 +556,7 @@ export default function ListingDetail() {
                       className="ld-thumb-item"
                       style={{
                         width: 72, height: 72, position: 'relative',
-                        borderColor: i === mediaIndex ? '#1a7a4a' : '#e5e7eb',
+                        borderColor: i === mediaIndex ? '#0F9D58' : '#e5e7eb',
                         opacity: i === mediaIndex ? 1 : 0.72,
                       }}
                       onClick={() => setMediaIndex(i)}
@@ -655,8 +660,8 @@ export default function ListingDetail() {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around' }}>
                   {[
                     { val: `${flashDiscount}%`,                           lab: 'Discount' },
-                    { val: `MWK ${Number(listing.flash_sale_price).toLocaleString()}`, lab: 'Flash price' },
-                    { val: `MWK ${Number(listing.price).toLocaleString()}`, lab: 'Original', strike: true },
+                    { val: formatPrice(listing.flash_sale_price), lab: 'Flash price' },
+                    { val: formatPrice(listing.price), lab: 'Original', strike: true },
                   ].map(({ val, lab, strike }) => (
                     <div key={lab} style={{ textAlign: 'center' }}>
                       <div style={{ fontSize: 15, fontWeight: 800, color: strike ? '#bbb' : '#111827', textDecoration: strike ? 'line-through' : 'none' }}>{val}</div>
@@ -677,7 +682,7 @@ export default function ListingDetail() {
                   </div>
                   <div style={{ ...S.bulkRow, ...(quantity === 1 && !activeTier ? S.bulkActiveRow : {}) }}>
                     <span style={S.bulkCell}>1 unit</span>
-                    <span style={{ ...S.bulkCell, fontWeight: 700 }}>MWK {Number(listing.price).toLocaleString()}</span>
+                    <span style={{ ...S.bulkCell, fontWeight: 700 }}>{formatPrice(listing.price)}</span>
                     <span style={{ ...S.bulkCell, color: '#9ca3af' }}>—</span>
                   </div>
                   {[...listing.price_tiers].sort((a, b) => a.min_qty - b.min_qty).map((tier, i) => {
@@ -688,9 +693,9 @@ export default function ListingDetail() {
                     return (
                       <div key={i} style={{ ...S.bulkRow, ...(isAct ? S.bulkActiveRow : {}) }}>
                         <span style={S.bulkCell}>{tier.min_qty}+ units {isAct && <span style={S.bulkPill}>✓ Active</span>}</span>
-                        <span style={{ ...S.bulkCell, fontWeight: 700, color: '#1a7a4a' }}>MWK {tp.toLocaleString()}</span>
+                        <span style={{ ...S.bulkCell, fontWeight: 700, color: '#0F9D58' }}>{formatPrice(tp)}</span>
                         <span style={{ ...S.bulkCell, color: '#dc2626', fontWeight: 600 }}>
-                          MWK {sv.toLocaleString()}/ea <span style={S.discPill}>-{pct}%</span>
+                          {formatPrice(sv)}/ea <span style={S.discPill}>-{pct}%</span>
                         </span>
                       </div>
                     )
@@ -715,13 +720,13 @@ export default function ListingDetail() {
                 <div style={S.cardH2}>🛠 Booking Rates</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 10, marginBottom: listing.booking_deposit_required ? 12 : 0 }}>
                   {[
-                    { label: 'Hourly', value: listing.booking_hourly, icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1a7a4a" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> },
-                    { label: 'Daily',  value: listing.booking_daily,  icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1a7a4a" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> },
-                    { label: 'Weekly', value: listing.booking_weekly, icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1a7a4a" strokeWidth="2" strokeLinecap="round"><path d="M3 3v18h18"/><path d="M18.7 8l-5.5 5.5-3-3L4 16.5"/></svg> },
+                    { label: 'Hourly', value: listing.booking_hourly, icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0F9D58" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> },
+                    { label: 'Daily',  value: listing.booking_daily,  icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0F9D58" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> },
+                    { label: 'Weekly', value: listing.booking_weekly, icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0F9D58" strokeWidth="2" strokeLinecap="round"><path d="M3 3v18h18"/><path d="M18.7 8l-5.5 5.5-3-3L4 16.5"/></svg> },
                   ].filter(r => r.value).map(({ label, value, icon }) => (
                     <div key={label} style={{ border: '1px solid #f3f4f6', borderRadius: 10, padding: '12px 10px', textAlign: 'center', background: '#fafafa' }}>
                       <div style={{ marginBottom: 6, display: 'flex', justifyContent: 'center' }}>{icon}</div>
-                      <div style={{ fontSize: 15, fontWeight: 800, color: '#111827' }}>MWK {Number(value).toLocaleString()}</div>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: '#111827' }}>{formatPrice(value)}</div>
                       <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2 }}>{label}</div>
                     </div>
                   ))}
@@ -743,7 +748,7 @@ export default function ListingDetail() {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 15, fontWeight: 700, color: '#111827', marginBottom: listing.meetup_note ? 4 : 0 }}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1a7a4a" strokeWidth="2.2" strokeLinecap="round" style={{ flexShrink: 0 }}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0F9D58" strokeWidth="2.2" strokeLinecap="round" style={{ flexShrink: 0 }}>
                         <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/>
                       </svg>
                       {formatLocationLine(listing)}
@@ -761,7 +766,7 @@ export default function ListingDetail() {
                         ? `https://maps.google.com/?q=${listing.latitude},${listing.longitude}`
                         : `https://maps.google.com/?q=${encodeURIComponent(listing.city + ', Malawi')}`, '_blank')}>
                     Open in Google Maps
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1a7a4a" strokeWidth="2.3" strokeLinecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0F9D58" strokeWidth="2.3" strokeLinecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                   </button>
                 </div>
 
@@ -876,9 +881,9 @@ export default function ListingDetail() {
                 ) : (
                   <>
                     <span style={{ ...S.bigPrice, ...(flash ? { color: '#dc2626' } : {}) }}>
-                      MWK {Number(effectiveUnitPrice).toLocaleString()}
+                      {formatPrice(effectiveUnitPrice)}
                     </span>
-                    {flash && <span style={S.strikePrice}>MWK {Number(listing.price).toLocaleString()}</span>}
+                    {flash && <span style={S.strikePrice}>{formatPrice(listing.price)}</span>}
                     {listing.price_type === 'negotiable' && !flash && (
                       <span style={S.negTag}>Negotiable</span>
                     )}
@@ -893,7 +898,7 @@ export default function ListingDetail() {
               )}
               {quantity > 1 && listing.price_type !== 'free' && (
                 <div style={S.totalLine}>
-                  Total: <strong>MWK {totalPrice.toLocaleString()}</strong> for {quantity} units
+                  Total: <strong>{formatPrice(totalPrice)}</strong> for {quantity} units
                 </div>
               )}
 
@@ -935,6 +940,19 @@ export default function ListingDetail() {
               {/* CTA buttons */}
               {!isOwner ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  {orderable && (
+                    <button className="ld-btn-hover" style={S.orderBtn} onClick={() => setShowOrderModal(true)}>
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+                      Place Order · {formatPrice(effectiveUnitPrice * quantity)}
+                    </button>
+                  )}
+                  {orderable && (
+                    <div style={S.assureRow}>
+                      <span style={S.assureItem}><span style={S.assureIcon}><Banknote size={13} strokeWidth={2.2} /></span>Pay on delivery</span>
+                      <span style={S.assureItem}><span style={S.assureIcon}><Eye size={13} strokeWidth={2.2} /></span>Inspect before paying</span>
+                      <span style={S.assureItem}><span style={S.assureIcon}><Star size={13} strokeWidth={2.2} /></span>Rate after delivery</span>
+                    </div>
+                  )}
                   <button className="ld-btn-hover" style={S.chatBtn} onClick={handleChatWithSeller}>
                     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                     Chat with Seller
@@ -1011,7 +1029,7 @@ export default function ListingDetail() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                     <span style={S.sellerName}>{ownerDisplayName}</span>
                     {ownerIsVerified && (
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#1a7a4a" strokeWidth="2.5" strokeLinecap="round">
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0F9D58" strokeWidth="2.5" strokeLinecap="round">
                         <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
                       </svg>
                     )}
@@ -1090,7 +1108,7 @@ export default function ListingDetail() {
             {!isOwner && (
               <div style={S.sideCard}>
                 <div style={S.sideCardHdr}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1a7a4a" strokeWidth="2.2" strokeLinecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0F9D58" strokeWidth="2.2" strokeLinecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
                   Buy with Confidence
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
@@ -1157,8 +1175,8 @@ export default function ListingDetail() {
             {/* ── BUYERS LOOKING FOR CROSS-LINK ── */}
             {listing.buyers_looking_for && (
               <div style={{ ...S.sideCard, background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: '#1a7a4a', marginBottom: 6 }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1a7a4a" strokeWidth="2.2" strokeLinecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: '#0F9D58', marginBottom: 6 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0F9D58" strokeWidth="2.2" strokeLinecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
                   This item matches buyer alerts
                 </div>
                 <p style={{ fontSize: 12, color: '#374151', marginBottom: 10, lineHeight: 1.5 }}>
@@ -1199,18 +1217,20 @@ export default function ListingDetail() {
         <div className="ld-desktop-bar" style={S.desktopBar}>
           <div style={S.desktopBarInner}>
             <div>
-              <div style={S.barPrice}>MWK {Number(effectiveUnitPrice).toLocaleString()}</div>
+              <div style={S.barPrice}>{formatPrice(effectiveUnitPrice)}</div>
               <div style={S.barTitle}>{listing.title}</div>
               {listing.price_type === 'negotiable' && <div style={S.barNeg}>Negotiable</div>}
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
-              <button className="ld-btn-hover" style={S.barCallBtn}
-                onClick={() => seller?.phone && (window.location.href = `tel:${seller.phone}`)}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.4 2 2 0 0 1 3.58 1.22h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-                Call Seller
-              </button>
-              <button className="ld-btn-hover" style={S.barChatBtn} onClick={handleChatWithSeller}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              {orderable && (
+                <button className="ld-btn-hover" style={S.barChatBtn}
+                  onClick={() => setShowOrderModal(true)}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+                  Place Order
+                </button>
+              )}
+              <button className="ld-btn-hover" style={orderable ? S.barCallBtn : S.barChatBtn} onClick={handleChatWithSeller}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                 Chat with Seller
               </button>
             </div>
@@ -1219,41 +1239,45 @@ export default function ListingDetail() {
       )}
       {isOwner && (
         <div className="ld-desktop-bar" style={S.desktopBar}>
-          <div style={S.desktopBarInner}>
-            <div>
-              <div style={S.barPrice}>MWK {Number(effectiveUnitPrice).toLocaleString()}</div>
-              <div style={S.barTitle}>{listing.title}</div>
-            </div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              {!isListingFeatured(listing) && (
-                <button
-                  className="ld-btn-hover"
-                  style={{ ...S.barCallBtn, color: '#b45309', borderColor: '#fde68a', background: '#fffbeb' }}
-                  disabled={featuring}
-                  onClick={async () => {
-                    if (!currentUser || featuring) return
-                    setFeaturing(true)
-                    try {
-                      const result = await featureExistingListing({
-                        listing,
-                        user: currentUser,
-                        profileName: seller?.full_name || seller?.name,
-                      })
-                      if (result?.free) {
-                        await loadListing()
+          <div style={{ ...S.desktopBarInner, flexDirection: 'column', alignItems: 'stretch', gap: 8 }}>
+            {featureError && <div style={S.featureErrorInline}>{featureError}</div>}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={S.barPrice}>{formatPrice(effectiveUnitPrice)}</div>
+                <div style={S.barTitle}>{listing.title}</div>
+              </div>
+              <div style={{ display: 'flex', gap: 10 }}>
+                {!isListingFeatured(listing) && (
+                  <button
+                    className="ld-btn-hover"
+                    style={{ ...S.barCallBtn, color: '#b45309', borderColor: '#fde68a', background: '#fffbeb' }}
+                    disabled={featuring}
+                    onClick={async () => {
+                      if (!currentUser || featuring) return
+                      setFeaturing(true)
+                      try {
+                        const result = await featureExistingListing({
+                          listing,
+                          user: currentUser,
+                          profileName: seller?.full_name || seller?.name,
+                        })
+                        if (result?.free) {
+                          await loadListing()
+                        }
+                      } catch (e) {
+                        setFeatureError(e?.message || 'Could not feature listing')
+                        setTimeout(() => setFeatureError(null), 5000)
+                      } finally {
+                        setFeaturing(false)
                       }
-                    } catch (e) {
-                      alert(e?.message || 'Could not feature listing')
-                    } finally {
-                      setFeaturing(false)
-                    }
-                  }}
-                >
-                  {featuring ? '…' : `⭐ Feature (${featuredPriceLabel()})`}
-                </button>
-              )}
-              <button className="ld-btn-hover" style={S.barCallBtn} onClick={() => navigate('/post/edit/' + listing.id)}>Edit Listing</button>
-              <button className="ld-btn-hover" style={{ ...S.barCallBtn, color: '#dc2626', borderColor: '#fecaca' }} onClick={() => setShowDeleteConfirm(true)}>Delete</button>
+                    }}
+                  >
+                    {featuring ? '…' : `⭐ Feature (${featuredPriceLabel()})`}
+                  </button>
+                )}
+                <button className="ld-btn-hover" style={S.barCallBtn} onClick={() => navigate('/post/edit/' + listing.id)}>Edit Listing</button>
+                <button className="ld-btn-hover" style={{ ...S.barCallBtn, color: '#dc2626', borderColor: '#fecaca' }} onClick={() => setShowDeleteConfirm(true)}>Delete</button>
+              </div>
             </div>
           </div>
         </div>
@@ -1262,43 +1286,89 @@ export default function ListingDetail() {
       {/* ── MOBILE STICKY FOOTER ── */}
       {!isOwner ? (
         <div className="ld-mobile-bar" style={S.mobileBar}>
+          {orderable && (
+            <button style={{ ...S.mobileChatBtn, flex: 2 }} onClick={() => setShowOrderModal(true)}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+              Order
+            </button>
+          )}
           <button style={S.mobileCallBtn} onClick={() => seller?.phone && (window.location.href = `tel:${seller.phone}`)}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.4 2 2 0 0 1 3.58 1.22h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-            Call Seller
+            Call
           </button>
-          <button style={S.mobileChatBtn} onClick={handleChatWithSeller}>
+          <button style={{ ...S.mobileChatBtn, flex: orderable ? 1.4 : 2 }} onClick={handleChatWithSeller}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            Chat with Seller
+            Chat
           </button>
         </div>
       ) : (
-        <div className="ld-mobile-bar" style={S.mobileBar}>
-          {!isListingFeatured(listing) && (
-            <button
-              style={{ ...S.mobileCallBtn, color: '#b45309', borderColor: '#fde68a' }}
-              disabled={featuring}
-              onClick={async () => {
-                if (!currentUser || featuring) return
-                setFeaturing(true)
-                try {
-                  const result = await featureExistingListing({
-                    listing,
-                    user: currentUser,
-                    profileName: seller?.full_name || seller?.name,
-                  })
-                  if (result?.free) await loadListing()
-                } catch (e) {
-                  alert(e?.message || 'Could not feature listing')
-                } finally {
-                  setFeaturing(false)
-                }
-              }}
-            >
-              {featuring ? '…' : '⭐ Feature'}
-            </button>
-          )}
-          <button style={S.mobileCallBtn} onClick={() => navigate('/post/edit/' + listing.id)}>Edit</button>
-          <button style={{ ...S.mobileChatBtn, background: '#dc2626' }} onClick={() => setShowDeleteConfirm(true)}>Delete</button>
+        <div className="ld-mobile-bar" style={{ ...S.mobileBar, flexWrap: 'wrap' }}>
+          {featureError && <div style={{ ...S.featureErrorInline, flex: '1 1 100%' }}>{featureError}</div>}
+          <div style={{ display: 'flex', gap: 10, flex: '1 1 100%' }}>
+            {!isListingFeatured(listing) && (
+              <button
+                style={{ ...S.mobileCallBtn, color: '#b45309', borderColor: '#fde68a' }}
+                disabled={featuring}
+                onClick={async () => {
+                  if (!currentUser || featuring) return
+                  setFeaturing(true)
+                  try {
+                    const result = await featureExistingListing({
+                      listing,
+                      user: currentUser,
+                      profileName: seller?.full_name || seller?.name,
+                    })
+                    if (result?.free) await loadListing()
+                  } catch (e) {
+                    setFeatureError(e?.message || 'Could not feature listing')
+                    setTimeout(() => setFeatureError(null), 5000)
+                  } finally {
+                    setFeaturing(false)
+                  }
+                }}
+              >
+                {featuring ? '…' : '⭐ Feature'}
+              </button>
+            )}
+            <button style={S.mobileCallBtn} onClick={() => navigate('/post/edit/' + listing.id)}>Edit</button>
+            <button style={{ ...S.mobileChatBtn, background: '#dc2626' }} onClick={() => setShowDeleteConfirm(true)}>Delete</button>
+          </div>
+        </div>
+      )}
+
+      {/* ── PLACE ORDER MODAL ── */}
+      {showOrderModal && orderable && (
+        <PlaceOrderModal
+          listing={listing}
+          quantity={quantity}
+          seller={seller}
+          initialTotal={totalPrice}
+          onQtyChange={(delta) => setQuantity(q => Math.max(1, Math.min(listing.stock_qty || 999, q + delta)))}
+          onClose={() => setShowOrderModal(false)}
+          onPlaced={(result) => {
+            setShowOrderModal(false)
+            setOrderPlaced(result)
+          }}
+        />
+      )}
+
+      {/* ── ORDER PLACED CONFIRMATION ── */}
+      {orderPlaced && (
+        <div style={S.overlay} onClick={() => setOrderPlaced(null)}>
+          <div style={{ ...S.modal, paddingBottom: 28, textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+            <div style={{ fontSize: 44, marginBottom: 10 }}>✅</div>
+            <div style={S.modalTitle}>Order Placed!</div>
+            <div style={S.modalSub}>
+              Order <strong>{orderPlaced.order_number}</strong> was sent to the seller.
+              You can track it in <strong>My Orders</strong>.
+            </div>
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button style={S.modalCancel} onClick={() => setOrderPlaced(null)}>Keep Browsing</button>
+              <button style={{ ...S.modalDelete, background: '#0F9D58' }} onClick={() => navigate('/orders')}>
+                View My Orders
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -1326,7 +1396,7 @@ export default function ListingDetail() {
             <div style={S.modalTitle}>Share Listing</div>
             <div style={{ padding: '8px 0' }}>
               {[
-                { onClick: () => { copyLink(); setShowShareSheet(false) }, icon: copied ? <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#1a7a4a" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2" strokeLinecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>, bg: copied ? '#dcfce7' : '#f3f4f6', label: copied ? 'Copied!' : 'Copy link', href: null },
+                { onClick: () => { copyLink(); setShowShareSheet(false) }, icon: copied ? <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0F9D58" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2" strokeLinecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>, bg: copied ? '#dcfce7' : '#f3f4f6', label: copied ? 'Copied!' : 'Copy link', href: null },
                 { href: `https://wa.me/?text=${encodeURIComponent(listing.title + ' — ' + window.location.href)}`, icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="#15803d"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>, bg: '#dcfce7', label: 'Share on WhatsApp' },
                 { href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}`, icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="#1d4ed8"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>, bg: '#dbeafe', label: 'Share on Facebook' },
                 { href: `https://twitter.com/intent/tweet?text=${encodeURIComponent(listing.title)}&url=${encodeURIComponent(window.location.href)}`, icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="#0ea5e9"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.748l7.73-8.835L1.254 2.25H8.08l4.259 5.63 5.905-5.63zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>, bg: '#f0f9ff', label: 'Post on X' },
@@ -1384,7 +1454,7 @@ function YouMayAlsLike({ currentListingId, category, navigate }) {
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#1a7a4a', marginTop: 2 }}>MWK {Number(item.price).toLocaleString()}</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#0F9D58', marginTop: 2 }}>{formatPrice(item.price)}</div>
             {item.city && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="#9ca3af" style={{ flexShrink: 0 }}>
@@ -1411,27 +1481,27 @@ function YouMayAlsLike({ currentListingId, category, navigate }) {
 }
 
 const S = {
-  page:       { minHeight: '100vh', background: '#f3f4f6', fontFamily: "'Inter', system-ui, sans-serif" },
+  page:       { minHeight: '100vh', background: '#f3f4f6', fontFamily: "'DM Sans', 'Sora', system-ui, sans-serif" },
   loadWrap:   { display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' },
-  loadSpinner:{ width: 36, height: 36, border: '3px solid #e5e7eb', borderTop: '3px solid #1a7a4a', borderRadius: '50%', animation: 'spin .8s linear infinite' },
+  loadSpinner:{ width: 36, height: 36, border: '3px solid #e5e7eb', borderTop: '3px solid #0F9D58', borderRadius: '50%', animation: 'spin .8s linear infinite' },
   notFound:   { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: 8, color: '#374151' },
-  notFoundBtn:{ marginTop: 16, background: '#1a7a4a', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 24px', fontSize: 14, fontWeight: 700, cursor: 'pointer' },
+  notFoundBtn:{ marginTop: 16, background: '#0F9D58', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 24px', fontSize: 14, fontWeight: 700, cursor: 'pointer' },
 
   // ── TOP NAV ──
   topnav:     { background: '#fff', borderBottom: '1px solid #e5e7eb', position: 'sticky', top: 0, zIndex: 60 },
   topnavInner:{ maxWidth: 1200, margin: '0 auto', padding: '10px 24px', display: 'flex', alignItems: 'center', gap: 20 },
   logo:       { cursor: 'pointer', flexShrink: 0 },
-  logoSoko:   { fontSize: 20, fontWeight: 800, color: '#1a7a4a' },
+  logoSoko:   { fontSize: 20, fontWeight: 800, color: '#0F9D58' },
   logoMw:     { fontSize: 20, fontWeight: 800, color: '#374151' },
   logoSub:    { fontSize: 10, color: '#9ca3af', lineHeight: 1, marginTop: 1 },
   searchWrap: { flex: 1, position: 'relative', display: 'flex', alignItems: 'center' },
   searchInput:{ width: '100%', border: '1.5px solid #e5e7eb', borderRadius: 8, padding: '9px 12px 9px 36px', fontSize: 13, color: '#374151', outline: 'none', fontFamily: 'inherit', paddingRight: 90 },
-  searchBtn:  { position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)', background: '#1a7a4a', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
+  searchBtn:  { position: 'absolute', right: 4, top: '50%', transform: 'translateY(-50%)', background: '#0F9D58', color: '#fff', border: 'none', borderRadius: 6, padding: '6px 16px', fontSize: 13, fontWeight: 600, cursor: 'pointer' },
   navRight:   { display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 },
   navIconBtn: { display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, background: 'none', border: 'none', cursor: 'pointer', color: '#374151' },
   navIconLabel:{ fontSize: 11, color: '#374151', fontWeight: 500 },
-  sellNowBtn: { display: 'flex', alignItems: 'center', gap: 5, background: '#1a7a4a', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer' },
-  avatarCircle:{ width: 34, height: 34, borderRadius: '50%', background: '#e6f4ec', color: '#1a7a4a', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, cursor: 'pointer', border: '2px solid #d1fae5' },
+  sellNowBtn: { display: 'flex', alignItems: 'center', gap: 5, background: '#0F9D58', color: '#fff', border: 'none', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 700, cursor: 'pointer' },
+  avatarCircle:{ width: 34, height: 34, borderRadius: '50%', background: '#e6f4ec', color: '#0F9D58', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, cursor: 'pointer', border: '2px solid #d1fae5' },
 
   // ── TAB NAV ──
   tabnav:     { background: '#fff', borderBottom: '1px solid #e5e7eb', position: 'sticky', top: 57, zIndex: 55 },
@@ -1486,9 +1556,9 @@ const S = {
   // Description
   descBlock:    { display: 'flex', flexDirection: 'column', gap: 6 },
   descLine:     { display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 14, color: '#374151', lineHeight: 1.6 },
-  descCheck:    { width: 18, height: 18, borderRadius: '50%', background: '#1a7a4a', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 },
+  descCheck:    { width: 18, height: 18, borderRadius: '50%', background: '#0F9D58', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginTop: 2 },
   tagsRow:      { display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 14 },
-  tagChip:      { background: '#f0fdf4', color: '#1a7a4a', fontSize: 12, fontWeight: 600, borderRadius: 20, padding: '3px 10px', border: '1px solid #d1fae5' },
+  tagChip:      { background: '#f0fdf4', color: '#0F9D58', fontSize: 12, fontWeight: 600, borderRadius: 20, padding: '3px 10px', border: '1px solid #d1fae5' },
 
   // Flash section
   flashSection:   { background: 'linear-gradient(135deg,#fff5f5,#fff)', border: '1.5px solid #fecaca', borderRadius: 12, padding: '14px 16px' },
@@ -1497,16 +1567,16 @@ const S = {
   // Bulk
   bulkTable:    { border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden', marginBottom: 12 },
   bulkRow:      { display: 'flex', alignItems: 'center', padding: '10px 14px', borderBottom: '1px solid #f3f4f6' },
-  bulkActiveRow:{ background: '#f0fdf4', borderLeft: '3px solid #1a7a4a' },
+  bulkActiveRow:{ background: '#f0fdf4', borderLeft: '3px solid #0F9D58' },
   bulkHead:     { flex: 1, fontSize: 11, fontWeight: 700, color: '#6b7280', textTransform: 'uppercase', letterSpacing: .4 },
   bulkCell:     { flex: 1, fontSize: 13, color: '#374151', display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap' },
-  bulkPill:     { background: '#1a7a4a', color: '#fff', fontSize: 9, fontWeight: 800, borderRadius: 4, padding: '1px 5px', marginLeft: 4 },
+  bulkPill:     { background: '#0F9D58', color: '#fff', fontSize: 9, fontWeight: 800, borderRadius: 4, padding: '1px 5px', marginLeft: 4 },
   discPill:     { background: '#dcfce7', color: '#15803d', borderRadius: 20, padding: '1px 6px', fontSize: 10, fontWeight: 800, marginLeft: 3 },
   qtyRow:       { display: 'flex', alignItems: 'center', justifyContent: 'space-between', paddingTop: 12, borderTop: '1px solid #f3f4f6' },
-  qtyBtn:       { width: 32, height: 32, borderRadius: 8, background: '#f0fdf4', border: '1.5px solid #d1fae5', color: '#1a7a4a', fontSize: 18, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  qtyBtn:       { width: 32, height: 32, borderRadius: 8, background: '#f0fdf4', border: '1.5px solid #d1fae5', color: '#0F9D58', fontSize: 18, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' },
 
   // Location
-  viewMapLink:  { background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 13, color: '#1a7a4a', fontWeight: 600, textDecoration: 'none' },
+  viewMapLink:  { background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 13, color: '#0F9D58', fontWeight: 600, textDecoration: 'none' },
   mapBox:       { width: 180, height: 110, borderRadius: 10, overflow: 'hidden', border: '1px solid #e5e7eb', flexShrink: 0 },
   mapBoxLarge:  { width: '100%', height: 320, borderRadius: 12, overflow: 'hidden', border: '1px solid #e5e7eb' },
 
@@ -1527,7 +1597,7 @@ const S = {
 
   // Price
   priceRow:      { display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', marginBottom: 4 },
-  bigPrice:      { fontSize: 26, fontWeight: 800, color: '#1a7a4a', lineHeight: 1 },
+  bigPrice:      { fontSize: 26, fontWeight: 800, color: '#0F9D58', lineHeight: 1 },
   freePrice:     { fontSize: 24, fontWeight: 900, color: '#15803d' },
   strikePrice:   { fontSize: 14, color: '#bbb', textDecoration: 'line-through', fontWeight: 500 },
   negTag:        { fontSize: 13, color: '#6b7280', fontWeight: 500 },
@@ -1544,20 +1614,25 @@ const S = {
   factVal:       { fontSize: 12, color: '#111827', fontWeight: 700, textAlign: 'center' },
 
   // CTA buttons
-  chatBtn:  { width: '100%', background: '#1a7a4a', color: '#fff', border: 'none', borderRadius: 10, padding: '13px', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 4px 12px rgba(26,122,74,.28)' },
+  orderBtn: { width: '100%', background: '#F9AB00', color: '#202124', border: 'none', borderRadius: 10, padding: '14px', fontSize: 14.5, fontWeight: 800, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 4px 12px rgba(249,171,0,.32)' },
+  chatBtn:  { width: '100%', background: '#0F9D58', color: '#fff', border: 'none', borderRadius: 10, padding: '13px', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, boxShadow: '0 4px 12px rgba(15,157,88,.28)' },
   callBtn:  { width: '100%', background: '#fff', color: '#374151', border: '1.5px solid #d1d5db', borderRadius: 10, padding: '12px', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 },
   favBtn:   { width: '100%', background: '#fff', color: '#374151', border: '1.5px solid #d1d5db', borderRadius: 10, padding: '12px', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 },
 
   // Seller
-  sellerAvatar:  { width: 46, height: 46, borderRadius: '50%', background: '#1a7a4a', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, fontWeight: 800, flexShrink: 0, overflow: 'hidden' },
+  sellerAvatar:  { width: 46, height: 46, borderRadius: '50%', background: '#0F9D58', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17, fontWeight: 800, flexShrink: 0, overflow: 'hidden' },
   sellerName:    { fontSize: 15, fontWeight: 700, color: '#111827' },
-  verifiedText:  { fontSize: 12, color: '#1a7a4a', fontWeight: 600, marginTop: 1 },
+  verifiedText:  { fontSize: 12, color: '#0F9D58', fontWeight: 600, marginTop: 1 },
   sellerMetaRow: { display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#6b7280' },
   viewProfileBtn:{ width: '100%', background: '#f9fafb', border: '1.5px solid #e5e7eb', borderRadius: 8, padding: '10px', fontSize: 13, fontWeight: 700, color: '#374151', cursor: 'pointer' },
 
   // Trust card
   trustRow:     { display: 'flex', alignItems: 'center', gap: 10 },
-  safetyLink:   { background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 13, color: '#1a7a4a', fontWeight: 600 },
+  safetyLink:   { background: 'none', border: 'none', padding: 0, cursor: 'pointer', fontSize: 13, color: '#0F9D58', fontWeight: 600 },
+  assureRow:    { display: 'flex', flexDirection: 'column', gap: 8, background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 10, padding: '10px 12px' },
+  assureItem:   { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#374151', fontWeight: 500 },
+  assureIcon:   { width: 22, height: 22, borderRadius: 6, background: '#e8f5ee', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, color: '#0F9D58' },
+  featureErrorInline: { fontSize: 12, fontWeight: 600, color: '#dc2626', background: '#fee2e2', border: '1px solid #fecaca', borderRadius: 8, padding: '7px 10px' },
 
   // Share
   shareOpt:     { flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 5, background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'none', padding: '6px 4px', borderRadius: 8 },
@@ -1572,16 +1647,16 @@ const S = {
   // Desktop sticky footer bar
   desktopBar:      { position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100, background: '#fff', borderTop: '1px solid #e5e7eb', boxShadow: '0 -4px 20px rgba(0,0,0,.06)' },
   desktopBarInner: { maxWidth: 1200, margin: '0 auto', padding: '12px 24px', paddingBottom: 'calc(12px + env(safe-area-inset-bottom))', display: 'flex', alignItems: 'center', justifyContent: 'space-between' },
-  barPrice:        { fontSize: 20, fontWeight: 800, color: '#1a7a4a' },
+  barPrice:        { fontSize: 20, fontWeight: 800, color: '#0F9D58' },
   barTitle:        { fontSize: 13, color: '#6b7280', marginTop: 2, maxWidth: 400, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' },
   barNeg:          { fontSize: 11, color: '#6b7280', marginTop: 1 },
   barCallBtn:      { display: 'flex', alignItems: 'center', gap: 7, background: '#fff', border: '1.5px solid #d1d5db', borderRadius: 10, padding: '11px 24px', fontSize: 14, fontWeight: 700, color: '#374151', cursor: 'pointer' },
-  barChatBtn:      { display: 'flex', alignItems: 'center', gap: 7, background: '#1a7a4a', color: '#fff', border: 'none', borderRadius: 10, padding: '11px 26px', fontSize: 14, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(26,122,74,.28)' },
+  barChatBtn:      { display: 'flex', alignItems: 'center', gap: 7, background: '#0F9D58', color: '#fff', border: 'none', borderRadius: 10, padding: '11px 26px', fontSize: 14, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(15,157,88,.28)' },
 
   // Mobile footer
   mobileBar:     { position: 'fixed', bottom: 60, left: 0, right: 0, zIndex: 100, background: '#fff', borderTop: '1px solid #e5e7eb', padding: '10px 14px', paddingBottom: 'calc(10px + env(safe-area-inset-bottom))', display: 'none', gap: 10, boxShadow: '0 -4px 20px rgba(0,0,0,.08)' },
   mobileCallBtn: { flex: 1, background: '#fff', border: '1.5px solid #d1d5db', borderRadius: 10, padding: '12px', fontSize: 14, fontWeight: 700, color: '#374151', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 },
-  mobileChatBtn: { flex: 2, background: '#1a7a4a', color: '#fff', border: 'none', borderRadius: 10, padding: '12px', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, boxShadow: '0 4px 12px rgba(26,122,74,.28)' },
+  mobileChatBtn: { flex: 2, background: '#0F9D58', color: '#fff', border: 'none', borderRadius: 10, padding: '12px', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, boxShadow: '0 4px 12px rgba(15,157,88,.28)' },
 
   // Modals
   overlay:     { position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', backdropFilter: 'blur(4px)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' },

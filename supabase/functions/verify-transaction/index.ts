@@ -19,6 +19,41 @@ function json(body: Record<string, unknown>, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: cors })
 }
 
+// Non-blocking anomaly logging into verification_anomalies (service role).
+// Never throws, never changes the response contract. Best-effort only.
+async function logAnomaly(opts: {
+  category: string
+  message: string
+  severity?: 'info' | 'warning' | 'error' | 'critical'
+  txRef?: string
+  gatewayStatus?: number | null
+  extra?: Record<string, unknown>
+}) {
+  try {
+    const adminDb = createClient(SUPABASE_URL, SERVICE_ROLE, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+    const message = String(opts.message || 'Unknown error').slice(0, 2000)
+    const context = {
+      tx_ref: opts.txRef || null,
+      gateway_status: opts.gatewayStatus ?? null,
+      ...(opts.extra || {}),
+    }
+    const { error } = await adminDb.from('verification_anomalies').insert({
+      source: 'edge',
+      severity: opts.severity || 'error',
+      category: String(opts.category).slice(0, 120),
+      message,
+      context,
+    })
+    if (error) {
+      /* table may not be deployed yet — stay silent */
+    }
+  } catch {
+    /* best-effort only — table may not exist yet */
+  }
+}
+
 function mapGatewayStatus(raw: Record<string, unknown> | null): {
   confirmed: boolean
   outcome: 'confirmed' | 'failed' | 'cancelled' | 'expired' | 'pending' | 'unknown'
@@ -85,13 +120,30 @@ serve(async (req) => {
     const isFeatureTx = tx_ref.startsWith('SOKO-FEATURE-')
 
     // 1) Source of truth: PayChangu verify API
-    const res = await fetch(`https://api.paychangu.com/verify-payment/${encodeURIComponent(tx_ref)}`, {
-      headers: {
-        Authorization: `Bearer ${PAYCHANGU_SECRET}`,
-        Accept: 'application/json',
-      },
-    })
-    const raw = await res.json().catch(() => null)
+    let gatewayHttpError: string | null = null
+    let raw = null
+    try {
+      const res = await fetch(`https://api.paychangu.com/verify-payment/${encodeURIComponent(tx_ref)}`, {
+        headers: {
+          Authorization: `Bearer ${PAYCHANGU_SECRET}`,
+          Accept: 'application/json',
+        },
+      })
+      if (!res.ok) {
+        gatewayHttpError = `Gateway HTTP ${res.status}`
+      }
+      raw = await res.json().catch(() => null)
+    } catch (fe) {
+      gatewayHttpError = fe instanceof Error ? fe.message : String(fe)
+    }
+    if (gatewayHttpError) {
+      void logAnomaly({
+        category: 'gateway_http_error',
+        message: `PayChangu verify call failed: ${gatewayHttpError}`,
+        severity: 'error',
+        txRef: tx_ref,
+      })
+    }
     const mapped = mapGatewayStatus(raw)
 
     // 2) Service-role DB updates (browser never self-confirms gateway)
@@ -201,6 +253,11 @@ serve(async (req) => {
     })
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e)
+    void logAnomaly({
+      category: 'verify_transaction_error',
+      message,
+      severity: 'critical',
+    })
     return json({ error: message, confirmed: false, outcome: 'failed', feature_confirmed: false }, 500)
   }
 })

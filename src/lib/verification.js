@@ -702,7 +702,23 @@ export async function reconcileVerificationPayment(txRef) {
   })
 
   if (error) {
-    throw new Error(typeof error === 'string' ? error : (error.message || 'Could not verify payment'))
+    const msg = typeof error === 'string' ? error : (error.message || 'Could not verify payment')
+    void reportVerificationAnomaly({
+      category: 'reconcile_payment_failed',
+      severity: 'error',
+      message: msg,
+      context: { tx_ref: txRef, fn: 'verify-transaction' },
+    })
+    throw new Error(msg)
+  }
+
+  if (!data?.confirmed) {
+    void reportVerificationAnomaly({
+      category: 'payment_not_confirmed',
+      severity: 'info',
+      message: data?.message || 'Payment was not confirmed by the gateway',
+      context: { tx_ref: txRef, outcome: data?.outcome || null },
+    })
   }
 
   return {
@@ -945,7 +961,16 @@ export async function submitVerificationApplication(requestId, { notes = null } 
     .eq('id', requestId)
     .select('*')
     .single()
-  if (error) throw error
+  if (error) {
+    void reportVerificationAnomaly({
+      category: 'submit_application_failed',
+      severity: 'error',
+      message: error.message || 'Seller submit failed',
+      requestId,
+      context: { from_status: current.status, path: 'direct_update' },
+    })
+    throw error
+  }
 
   try {
     if (data?.seller_id || current.seller_id) {
@@ -1581,7 +1606,16 @@ export async function getAdminVerificationDetail(requestId) {
     .select('*')
     .eq('id', requestId)
     .maybeSingle()
-  if (error) throw error
+  if (error) {
+    void reportVerificationAnomaly({
+      category: 'admin_detail_load_failed',
+      severity: 'error',
+      message: error.message || 'Admin verification detail load failed',
+      requestId,
+      context: { fn: 'getAdminVerificationDetail' },
+    })
+    throw error
+  }
   request = row
   if (!request) throw new Error('Verification request not found')
 
@@ -1830,6 +1864,205 @@ export async function adminRequestMoreInfo(requestId, message) {
     VERIFICATION_STATUSES.ADDITIONAL_INFO_REQUIRED,
     text
   )
+}
+
+// ─── Verification issues & anomalies (20260820 additions) ──
+
+/** Logical review stage groups (drives admin action availability) */
+export function stageOfStatus(status) {
+  const s = String(status || '').toLowerCase()
+  if (s === VERIFICATION_STATUSES.DRAFT) return 'draft'
+  if (s === VERIFICATION_STATUSES.PAYMENT_PENDING || s === VERIFICATION_STATUSES.PAYMENT_CONFIRMED) return 'payment'
+  if (s === VERIFICATION_STATUSES.SUBMITTED) return 'submitted'
+  if (s === VERIFICATION_STATUSES.UNDER_REVIEW) return 'under_review'
+  if (s === VERIFICATION_STATUSES.ADDITIONAL_INFO_REQUIRED) return 'additional_info_required'
+  return 'terminal'
+}
+
+/** Admin stage-action matrix — normal actions per stage. Override covers the rest. */
+export const ADMIN_STAGE_ACTIONS = Object.freeze({
+  draft: ['cancel_on_behalf', 'move_to_review'],
+  payment: ['confirm_payment', 'reject_payment', 'move_to_review'],
+  submitted: ['pickup_review', 'reject', 'request_info', 'flag_issues'],
+  under_review: ['approve', 'reject', 'request_info', 'flag_issues'],
+  additional_info_required: ['approve', 'reject', 'extend_deadline', 'clear_issues', 'flag_issues'],
+  terminal: [],
+})
+
+/** Statuses an override action may target (all 10; UI filters same-status) */
+export const ADMIN_OVERRIDE_TARGETS = Object.freeze([...Object.values(VERIFICATION_STATUSES)])
+
+/** Issue/UI status helpers for the seller checklist */
+export const VERIFICATION_ISSUE_STATUSES = Object.freeze(['open', 'needs_recheck', 'resolved', 'waived'])
+
+export async function getVerificationIssueCatalog({ activeOnly = true } = {}) {
+  let q = supabase.from('verification_issue_catalog').select('*').order('sort_order', { ascending: true })
+  if (activeOnly) q = q.eq('is_active', true)
+  const { data, error } = await q
+  if (error) throw error
+  return data || []
+}
+
+/** Admin: flag curated issues → auto additional_info_required + seller notify (RPC) */
+export async function adminFlagIssues(requestId, issues = [], message = null) {
+  if (!requestId) throw new Error('Request id required')
+  const list = (Array.isArray(issues) ? issues : []).map((i) => ({
+    category_code: i.category_code || 'other',
+    doc_id: i.doc_id || null,
+    note: i.note || null,
+    suggested_fix: i.suggested_fix || null,
+    next_action: i.next_action || null,
+  }))
+  const { data, error } = await supabase.rpc('admin_flag_verification_issues', {
+    p_request_id: requestId,
+    p_issues: list,
+    p_message: message,
+  })
+  if (error) throw error
+  return typeof data === 'number' ? data : (Array.isArray(data) ? data[0] : 0)
+}
+
+/** Seller or admin: load issues for one request (labels joined server-side) */
+export async function getIssuesForRequest(requestId) {
+  if (!requestId) return []
+  try {
+    const { data, error } = await supabase.rpc('get_verification_issues', {
+      p_request_id: requestId,
+    })
+    if (error) return []
+    return data || []
+  } catch {
+    return []
+  }
+}
+
+/** Admin: resolve / waive / reopen a single issue */
+export async function adminResolveIssue(issueId, status, note = null) {
+  if (!issueId) throw new Error('Issue id required')
+  const { data, error } = await supabase.rpc('admin_resolve_verification_issue', {
+    p_issue_id: issueId,
+    p_status: status,
+    p_note: note,
+  })
+  if (error) throw error
+  return Array.isArray(data) ? data[0] : data
+}
+
+/** Admin: close all open issues (waive-on-approve helper) */
+export async function resolveOpenIssuesForRequest(requestId, status = 'resolved') {
+  if (!requestId) return 0
+  try {
+    const { data, error } = await supabase.rpc('resolve_open_issues_for_request', {
+      p_request_id: requestId,
+      p_status: status,
+    })
+    if (error) return 0
+    return typeof data === 'number' ? data : 0
+  } catch {
+    return 0
+  }
+}
+
+/** Admin: push the additional-info deadline forward (days from now) */
+export async function adminExtendInfoDeadline(requestId, days = 3) {
+  if (!requestId) throw new Error('Request id required')
+  const at = new Date(Date.now() + Number(days || 3) * 24 * 60 * 60 * 1000).toISOString()
+  const { data, error } = await supabase
+    .from('verification_requests')
+    .update({ additional_info_deadline_at: at, updated_at: new Date().toISOString() })
+    .eq('id', requestId)
+    .select('*')
+    .maybeSingle()
+  if (error) throw error
+  return data
+}
+
+/**
+ * Admin: force any status transition (incl. reopening terminal) with justification.
+ * Validated server-side; audited in verification_admin_audit + status events.
+ */
+export async function adminOverrideStatus(requestId, toStatus, justification) {
+  if (!requestId) throw new Error('Request id required')
+  if (!Object.values(VERIFICATION_STATUSES).includes(toStatus)) {
+    throw new Error('Invalid target status')
+  }
+  const text = String(justification || '').trim()
+  if (!text) throw new Error('A justification is required to override status')
+  const { data, error } = await supabase.rpc('admin_override_verification_status', {
+    p_request_id: requestId,
+    p_to_status: toStatus,
+    p_justification: text,
+  })
+  if (error) throw error
+  return Array.isArray(data) ? data[0] : data
+}
+
+// Client-side throttle for anomaly reports: 1 per key per 60s (server also dedupes)
+const _anomalyLastSent = new Map()
+
+/**
+ * Best-effort anomaly reporter. Never throws. Throttled per category key.
+ */
+export async function reportVerificationAnomaly({
+  source = 'client',
+  severity = 'warning',
+  category = 'unknown',
+  message = '',
+  requestId = null,
+  sellerId = null,
+  context = null,
+} = {}) {
+  try {
+    const key = `${category}|${requestId || ''}`
+    const now = Date.now()
+    const last = _anomalyLastSent.get(key)
+    if (last && now - last < 60_000) return null
+    _anomalyLastSent.set(key, now)
+
+    const { data, error } = await supabase.rpc('report_verification_anomaly', {
+      p_source: source,
+      p_severity: severity,
+      p_category: category,
+      p_message: message || 'No message',
+      p_request_id: requestId,
+      p_seller_id: sellerId,
+      p_context: context || {},
+    })
+    if (error) return null
+    return data
+  } catch {
+    return null
+  }
+}
+
+export async function adminScanAnomalies() {
+  const { data, error } = await supabase.rpc('admin_scan_verification_anomalies')
+  if (error) throw error
+  return typeof data === 'number' ? data : 0
+}
+
+export async function getVerificationAnomalies({ status = 'open', limit = 200, requestId = null } = {}) {
+  let q = supabase
+    .from('verification_anomalies')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(limit)
+  if (status && status !== 'all') q = q.eq('status', status)
+  if (requestId) q = q.eq('request_id', requestId)
+  const { data, error } = await q
+  if (error) throw error
+  return data || []
+}
+
+export async function adminUpdateAnomaly(id, status, note = null) {
+  if (!id) throw new Error('Anomaly id required')
+  const { data, error } = await supabase.rpc('admin_update_verification_anomaly', {
+    p_id: id,
+    p_status: status,
+    p_note: note,
+  })
+  if (error) throw error
+  return Array.isArray(data) ? data[0] : data
 }
 
 // ─── Admin Verification Settings module ───────────────────
@@ -4321,6 +4554,21 @@ export default {
   adminApproveVerification,
   adminRejectVerification,
   adminRequestMoreInfo,
+  stageOfStatus,
+  ADMIN_STAGE_ACTIONS,
+  ADMIN_OVERRIDE_TARGETS,
+  VERIFICATION_ISSUE_STATUSES,
+  getVerificationIssueCatalog,
+  adminFlagIssues,
+  getIssuesForRequest,
+  adminResolveIssue,
+  resolveOpenIssuesForRequest,
+  adminExtendInfoDeadline,
+  adminOverrideStatus,
+  reportVerificationAnomaly,
+  adminScanAnomalies,
+  getVerificationAnomalies,
+  adminUpdateAnomaly,
   adminUpdateVerificationSettings,
   adminUpdateVerificationType,
   adminUpdatePaymentMethod,

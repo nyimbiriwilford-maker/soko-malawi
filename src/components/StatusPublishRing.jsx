@@ -118,7 +118,6 @@ export default function StatusPublishRing() {
           from { opacity: 0; transform: translateY(10px) scale(0.92); }
           to   { opacity: 1; transform: translateY(0) scale(1); }
         }
-        @keyframes sprSpin { to { transform: rotate(360deg); } }
       `}</style>
 
       <span className="spr-ring">
@@ -149,19 +148,7 @@ export default function StatusPublishRing() {
           <span className="spr-glyph" style={{ color: '#f87171', fontSize: 10, fontWeight: 800, lineHeight: 1 }}>✕</span>
         ) : isDone ? (
           <span className="spr-glyph" style={{ color: '#22c55e', fontSize: 10, fontWeight: 800, lineHeight: 1 }}>✓</span>
-        ) : (
-          <span
-            className="spr-glyph"
-            style={{
-              width: 7,
-              height: 7,
-              borderRadius: '50%',
-              border: '1.5px solid rgba(255,255,255,0.28)',
-              borderTopColor: '#22c55e',
-              animation: 'sprSpin 0.7s linear infinite',
-            }}
-          />
-        )}
+        ) : null}
       </span>
 
       <span className="spr-label">{label}</span>

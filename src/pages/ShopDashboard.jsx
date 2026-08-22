@@ -1,7 +1,9 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { uploadToR2, getR2Url, deleteFromR2 } from '../lib/r2'
+import { uploadToR2 } from '../lib/r2'
+import OrderManager from '../components/OrderManager'
+import { fetchShopAnalytics, fetchPendingCount } from '../lib/orders'
 
 const T = {
   green: '#2e7d32',
@@ -81,6 +83,11 @@ const css = `
   }
   .sd-tab.active { color: ${T.green}; }
   .sd-tab.active::after { content: ''; position: absolute; bottom: -1px; left: 0; right: 0; height: 2px; background: ${T.green}; }
+  .sd-order-badge {
+    display: inline-flex; align-items: center; justify-content: center;
+    min-width: 18px; height: 18px; border-radius: 10px; background: ${T.goldDark};
+    color: #fff; font-size: 10.5px; font-weight: 800; padding: 0 5px; margin-left: 6px;
+  }
 
   /* Stats grid */
   .sd-stats-grid {
@@ -123,6 +130,25 @@ const css = `
   }
   .sd-listing-status.active { background: ${T.greenLight}; color: ${T.green}; }
   .sd-listing-status.inactive { background: #f1f3f1; color: ${T.textMuted}; }
+  .sd-listing-status.lowstock { background: #fef3e2; color: ${T.goldDark}; }
+
+  .sd-lowstock-tag {
+    font-size: 10.5px; font-weight: 700; color: ${T.goldDark};
+    background: #fef3e2; border-radius: 12px; padding: 2px 8px; margin-left: 6px;
+  }
+  .sd-lowstock-banner {
+    background: #fef3e2; border: 1px solid #fde6b1; color: #92600a;
+    border-radius: 12px; padding: 12px 16px; font-size: 13px; font-weight: 600;
+    margin-bottom: 22px; line-height: 1.5;
+  }
+  .sd-stock-ctrl { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+  .sd-stock-btn {
+    width: 26px; height: 26px; border-radius: 7px; border: 1.5px solid ${T.border};
+    background: ${T.white}; color: ${T.green}; font-size: 15px; font-weight: 800;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .sd-stock-btn:hover { border-color: ${T.green}; }
+  .sd-stock-num { font-size: 12.5px; font-weight: 800; color: ${T.text}; min-width: 26px; text-align: center; }
 
   .sd-empty-state {
     background: ${T.white}; border: 1.5px dashed ${T.border}; border-radius: 14px;
@@ -213,6 +239,21 @@ export default function ShopDashboard() {
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState(null)
 
+  // Orders & analytics state
+  const [analytics, setAnalytics] = useState(null)
+  const [pendingOrders, setPendingOrders] = useState(0)
+
+  const refreshOrdersStats = async (shop) => {
+    const target = shop || null
+    if (!target) return
+    const [stats, pending] = await Promise.all([
+      fetchShopAnalytics(target.id),
+      fetchPendingCount(target.id),
+    ])
+    setAnalytics(stats)
+    setPendingOrders(pending)
+  }
+
   useEffect(() => {
     let active = true
     async function init() {
@@ -248,12 +289,15 @@ export default function ShopDashboard() {
 
       const { data: listingData } = await supabase
         .from('listings')
-        .select('id, title, price, images, status, created_at')
+        .select('id, title, price, images, status, created_at, stock_qty')
         .eq('shop_id', shopData.id)
         .order('created_at', { ascending: false })
 
       if (active) setListings(listingData || [])
       setLoading(false)
+
+      // Orders + analytics (best-effort; migration may not be applied yet)
+      refreshOrdersStats(shopData).catch(() => {})
     }
     init()
     return () => { active = false }
@@ -272,6 +316,31 @@ export default function ShopDashboard() {
     const url = await uploadToR2(file, 'shop-images/' + path)
     if (!url) throw new Error('Upload failed')
     return url
+  }
+
+  // +/- 1 stock on a product; DB trigger auto-delists at 0 and restores on restock
+  async function adjustStock(listing, delta) {
+    if (!listing || !shop) return
+    const next = Math.max(0, Number(listing.stock_qty || 0) + delta)
+    const prev = listings
+    setSaveMsg(null)
+    try {
+      setListings(ls => ls.map(l => l.id === listing.id ? { ...l, stock_qty: next } : l))
+      const { error } = await supabase
+        .from('listings')
+        .update({ stock_qty: next })
+        .eq('id', listing.id)
+      if (error) throw error
+      const { data: fresh } = await supabase
+        .from('listings')
+        .select('id, title, price, images, status, created_at, stock_qty')
+        .eq('shop_id', shop.id)
+        .order('created_at', { ascending: false })
+      if (fresh) setListings(fresh)
+    } catch (e) {
+      setSaveMsg({ type: 'error', text: e.message || 'Could not update stock.' })
+      setListings(prev)
+    }
   }
 
   async function handleSave() {
@@ -328,6 +397,7 @@ export default function ShopDashboard() {
   }
 
   const activeListings = listings.filter(l => l.status === 'active')
+  const lowStockListings = listings.filter(l => l.stock_qty != null && Number(l.stock_qty) <= 3)
 
   return (
     <div className="sd-root">
@@ -361,6 +431,10 @@ export default function ShopDashboard() {
 
         <div className="sd-tabs">
           <button className={`sd-tab ${tab === 'overview' ? 'active' : ''}`} onClick={() => setTab('overview')}>Overview</button>
+          <button className={`sd-tab ${tab === 'orders' ? 'active' : ''}`} onClick={() => setTab('orders')}>
+            Orders
+            {pendingOrders > 0 && <span className="sd-order-badge">{pendingOrders}</span>}
+          </button>
           <button className={`sd-tab ${tab === 'products' ? 'active' : ''}`} onClick={() => setTab('products')}>Products</button>
           <button className={`sd-tab ${tab === 'edit' ? 'active' : ''}`} onClick={() => setTab('edit')}>Edit Shop Info</button>
         </div>
@@ -373,6 +447,24 @@ export default function ShopDashboard() {
                 <div className="sd-stat-num">{listings.length}</div>
                 <div className="sd-stat-label">Total products</div>
               </div>
+              <div className="sd-stat-card">
+                <div className="sd-stat-icon" style={{ background: T.greenLight }}>🛒</div>
+                <div className="sd-stat-num">{analytics?.orders_total ?? pendingOrders}</div>
+                <div className="sd-stat-label">{pendingOrders > 0 ? `${pendingOrders} pending order${pendingOrders === 1 ? '' : 's'}` : 'Orders received'}</div>
+              </div>
+              <div className="sd-stat-card">
+                <div className="sd-stat-icon" style={{ background: '#e3f2fd' }}>👀</div>
+                <div className="sd-stat-num">{analytics?.views ?? '—'}</div>
+                <div className="sd-stat-label">Product views</div>
+              </div>
+              <div className="sd-stat-card">
+                <div className="sd-stat-icon" style={{ background: '#fef3e2' }}>💰</div>
+                <div className="sd-stat-num">{analytics ? `MK ${Number(analytics.revenue || 0).toLocaleString()}` : '—'}</div>
+                <div className="sd-stat-label">Revenue (delivered)</div>
+              </div>
+            </div>
+
+            <div className="sd-stats-grid" style={{ marginTop: -14 }}>
               <div className="sd-stat-card">
                 <div className="sd-stat-icon" style={{ background: T.greenLight }}>👥</div>
                 <div className="sd-stat-num">{followerCount}</div>
@@ -388,11 +480,22 @@ export default function ShopDashboard() {
                 <div className="sd-stat-num">{activeListings.length}</div>
                 <div className="sd-stat-label">Active listings</div>
               </div>
+              <div className="sd-stat-card">
+                <div className="sd-stat-icon" style={{ background: '#fee2e2' }}>🔖</div>
+                <div className="sd-stat-num">{analytics?.saves ?? '—'}</div>
+                <div className="sd-stat-label">Listing saves</div>
+              </div>
             </div>
 
             <button className="sd-add-product-btn" onClick={() => navigate('/post', { state: { shopId: shop.id } })}>
               + Add Product
             </button>
+
+            {lowStockListings.length > 0 && (
+              <div className="sd-lowstock-banner">
+                ⚠️ {lowStockListings.length} product{lowStockListings.length === 1 ? '' : 's'} running low on stock — restock in the Products tab before you miss sales.
+              </div>
+            )}
 
             <div className="sd-section-title">Tips to grow your shop</div>
             <ul className="sd-tips-list">
@@ -404,26 +507,49 @@ export default function ShopDashboard() {
           </>
         )}
 
+        {tab === 'orders' && (
+          <OrderManager shopId={shop.id} pendingBadge={() => refreshOrdersStats(shop).catch(() => {})} />
+        )}
+
         {tab === 'products' && (
           <>
             <button className="sd-add-product-btn" onClick={() => navigate('/post', { state: { shopId: shop.id } })}>
               + Add Product
             </button>
+            {saveMsg && <div className={`sd-msg sd-msg-${saveMsg.type}`}>{saveMsg.text}</div>}
+            {lowStockListings.length > 0 && (
+              <div className="sd-lowstock-banner">
+                ⚠️ Low stock: {lowStockListings.map(l => l.title).join(', ')}
+              </div>
+            )}
             {listings.length === 0 ? (
               <div className="sd-empty-state">No products yet. Add your first one to start selling.</div>
             ) : (
-              listings.map(l => (
-                <div key={l.id} className="sd-listing-row" onClick={() => navigate(`/post/edit/${l.id}`)} style={{ cursor: 'pointer' }}>
-                  <img className="sd-listing-thumb" src={l.images?.[0]} alt={l.title} />
-                  <div>
-                    <div className="sd-listing-title">{l.title}</div>
-                    <div className="sd-listing-price">MK {Number(l.price).toLocaleString()}</div>
+              listings.map(l => {
+                const low = l.stock_qty != null && Number(l.stock_qty) <= 3
+                return (
+                  <div key={l.id} className="sd-listing-row">
+                    <img className="sd-listing-thumb" src={l.images?.[0]} alt={l.title} onClick={() => navigate(`/post/edit/${l.id}`)} style={{ cursor: 'pointer' }} />
+                    <div onClick={() => navigate(`/post/edit/${l.id}`)} style={{ cursor: 'pointer', flex: 1, minWidth: 0 }}>
+                      <div className="sd-listing-title">
+                        {l.title}
+                        {low && <span className="sd-lowstock-tag">{Number(l.stock_qty) === 0 ? 'Out of stock' : `${l.stock_qty} left`}</span>}
+                      </div>
+                      <div className="sd-listing-price">MK {Number(l.price).toLocaleString()}</div>
+                    </div>
+                    {l.stock_qty != null && (
+                      <div className="sd-stock-ctrl" title="Adjust stock">
+                        <button className="sd-stock-btn" onClick={() => adjustStock(l, -1)} disabled={Number(l.stock_qty) <= 0}>−</button>
+                        <span className="sd-stock-num">{l.stock_qty}</span>
+                        <button className="sd-stock-btn" onClick={() => adjustStock(l, 1)}>+</button>
+                      </div>
+                    )}
+                    <div className={`sd-listing-status ${l.status === 'active' ? 'active' : low ? 'lowstock' : 'inactive'}`}>
+                      {l.status === 'active' ? (low ? 'Low stock' : 'Active') : 'Inactive'}
+                    </div>
                   </div>
-                  <div className={`sd-listing-status ${l.status === 'active' ? 'active' : 'inactive'}`}>
-                    {l.status === 'active' ? 'Active' : 'Inactive'}
-                  </div>
-                </div>
-              ))
+                )
+              })
             )}
           </>
         )}

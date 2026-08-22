@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
+import { ShieldCheck, TrendingUp, Lock, CalendarDays, Info } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import VerificationModal from '../components/VerificationModal'
 import SokoNav from '../components/SokoNav'
@@ -78,24 +79,6 @@ const SHOP_THEMES = {
 function resolveShopTheme(themeKey) {
   return SHOP_THEMES[themeKey] || SHOP_THEMES.green
 }
-
-// ── Placeholder data — swap these for real Supabase queries once
-// listings / reviews / shop_policies tables + relations are ready ──
-const PLACEHOLDER_LISTINGS = [
-  { id: 1, title: 'African Print Maxi Dress', price: 'MK25,000', img: 'https://images.pexels.com/photos/9594433/pexels-photo-9594433.jpeg?auto=compress&cs=tinysrgb&w=600', city: 'Blantyre', featured: true },
-  { id: 2, title: 'Office Wear Dress', price: 'MK30,000', img: 'https://images.pexels.com/photos/9558626/pexels-photo-9558626.jpeg?auto=compress&cs=tinysrgb&w=600', city: 'Blantyre', featured: false },
-  { id: 3, title: 'Leather Handbag', price: 'MK20,000', img: 'https://images.pexels.com/photos/1152077/pexels-photo-1152077.jpeg?auto=compress&cs=tinysrgb&w=600', city: 'Blantyre', featured: false },
-  { id: 4, title: 'African Print Two Piece', price: 'MK28,000', img: 'https://images.pexels.com/photos/9594427/pexels-photo-9594427.jpeg?auto=compress&cs=tinysrgb&w=600', city: 'Blantyre', featured: false },
-  { id: 5, title: 'Summer Dress', price: 'MK22,000', img: 'https://images.pexels.com/photos/9558667/pexels-photo-9558667.jpeg?auto=compress&cs=tinysrgb&w=600', city: 'Blantyre', featured: false },
-  { id: 6, title: 'Ankara Jumpsuit', price: 'MK26,000', img: 'https://images.pexels.com/photos/9594459/pexels-photo-9594459.jpeg?auto=compress&cs=tinysrgb&w=600', city: 'Blantyre', featured: false },
-]
-
-const PLACEHOLDER_SIMILAR_SHOPS = [
-  { name: 'Zed Collections', category: "Men's Fashion", followers: '892', rating: '4.7', initials: 'ZC', color: T.text },
-  { name: 'Tinas Bags', category: 'Bags & Luggage', followers: '645', rating: '4.6', img: 'https://images.pexels.com/photos/1152077/pexels-photo-1152077.jpeg?auto=compress&cs=tinysrgb&w=200' },
-  { name: 'Elegant Steps', category: 'Shoes', followers: '1.1K', rating: '4.8', img: 'https://images.pexels.com/photos/336372/pexels-photo-336372.jpeg?auto=compress&cs=tinysrgb&w=200' },
-  { name: 'Bella Boutique', category: "Women's Fashion", followers: '723', rating: '4.7', initials: 'BB', color: T.goldDark },
-]
 
 const css = `
   *, *::before, *::after { box-sizing: border-box; }
@@ -1632,7 +1615,6 @@ export default function ShopPage() {
       console.error('[ShopPage] feature failed', e)
       setFeatureToast(msg)
       setTimeout(() => setFeatureToast(null), 5000)
-      window.alert(msg)
     } finally {
       setFeaturingId(null)
     }
@@ -1787,6 +1769,7 @@ export default function ShopPage() {
   const [saveMsg, setSaveMsg] = useState(null)
   const [shareToast, setShareToast] = useState(null)
   const [moreMenuOpen, setMoreMenuOpen] = useState(false)
+  const [themeError, setThemeError] = useState(null)
   const [blockToast, setBlockToast] = useState(false)
   const [verifyModalOpen, setVerifyModalOpen] = useState(false)
   const [reportModalOpen, setReportModalOpen] = useState(false)
@@ -2275,13 +2258,15 @@ if (!shop) {
 
   async function applyShopTheme(nextTheme) {
     if (!shop?.id || !SHOP_THEMES[nextTheme]) return
+    setThemeError(null)
     const prev = shop.theme
     setShop(s => ({ ...s, theme: nextTheme }))
     const { error } = await supabase.from('shops').update({ theme: nextTheme }).eq('id', shop.id)
     if (error) {
       console.error('Theme update failed:', error)
       setShop(s => ({ ...s, theme: prev }))
-      alert(error.message || 'Could not update theme')
+      setThemeError(error.message || 'Could not update theme')
+      setTimeout(() => setThemeError(null), 5000)
       return
     }
     setMoreMenuOpen(false)
@@ -2444,6 +2429,7 @@ if (!shop) {
                       <div style={{ fontSize: 11, color: T.textMuted, marginTop: 8 }}>
                         Active: <strong style={{ color: activeTheme.dark }}>{activeTheme.label}</strong>
                       </div>
+                      {themeError && <div style={{ fontSize: 11, fontWeight: 600, color: '#dc2626', marginTop: 6 }}>{themeError}</div>}
                     </div>
                     <div style={{ height: 1, background: T.border, margin: '4px 6px' }} />
                   </>
@@ -2619,9 +2605,9 @@ if (!shop) {
               display: 'flex', gap: 10, flexShrink: 0, flexWrap: 'wrap',
             }}>
               {[
-                { icon: '✅', label: 'Verified badge' },
-                { icon: '📈', label: 'Higher ranking' },
-                { icon: '🔒', label: 'Buyer trust' },
+                { icon: <ShieldCheck size={12} strokeWidth={2.2} />, label: 'Verified badge' },
+                { icon: <TrendingUp size={12} strokeWidth={2.2} />, label: 'Higher ranking' },
+                { icon: <Lock size={12} strokeWidth={2.2} />, label: 'Buyer trust' },
               ].map(b => (
                 <div key={b.label} style={{
                   display: 'flex', alignItems: 'center', gap: 5,
@@ -2631,7 +2617,7 @@ if (!shop) {
                   fontSize: 11, color: 'rgba(255,255,255,0.7)', fontWeight: 500,
                   whiteSpace: 'nowrap',
                 }}>
-                  <span style={{ fontSize: 10 }}>{b.icon}</span>{b.label}
+                  <span style={{ display: 'inline-flex', color: '#f9a825' }}>{b.icon}</span>{b.label}
                 </div>
               ))}
             </div>
@@ -2674,20 +2660,6 @@ if (!shop) {
       {/* ── STATS BAR ── */}
       <div className="sp-stats">
         <div className="sp-stats-inner">
-          <div className="sp-stat">
-            <div className="sp-stat-icon" style={{ background: '#f1edff' }}><Icon.ListingsIcon /></div>
-            <div>
-              <div className="sp-stat-num">{listingCount}</div>
-              <div className="sp-stat-label">Listings</div>
-            </div>
-          </div>
-          <div className="sp-stat">
-            <div className="sp-stat-icon" style={{ background: activeTheme.light }}><Icon.FollowersIcon /></div>
-            <div>
-              <div className="sp-stat-num">{followerCount >= 1000 ? `${(followerCount/1000).toFixed(1)}K` : followerCount}</div>
-              <div className="sp-stat-label">Followers</div>
-            </div>
-          </div>
           <div className="sp-stat" style={{ cursor: shop.rating ? 'pointer' : 'default' }} onClick={() => shop.rating && setTab('reviews')}>
             <div className="sp-stat-icon" style={{ background: '#fef3e2' }}><Icon.RatingIcon /></div>
             <div>
@@ -2703,19 +2675,39 @@ if (!shop) {
             </div>
           </div>
           <div className="sp-stat">
-            <div className="sp-stat-icon" style={{ background: shop.is_verified ? '#e3f2fd' : '#fff8e1' }}>
-              {shop.is_verified
-                ? <Icon.ResponseIcon />
-                : <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#f9a825" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              }
-            </div>
+            <div className="sp-stat-icon" style={{ background: '#f1edff' }}><Icon.ListingsIcon /></div>
             <div>
-              <div className="sp-stat-num" style={{ color: shop.is_verified ? T.text : '#f9a825', fontSize: 14 }}>
-                {shop.is_verified ? 'Verified' : 'Unverified'}
-              </div>
-              <div className="sp-stat-label">Shop Status</div>
+              <div className="sp-stat-num">{listingCount}</div>
+              <div className="sp-stat-label">Listings</div>
             </div>
           </div>
+          <div className="sp-stat">
+            <div className="sp-stat-icon" style={{ background: activeTheme.light }}><Icon.FollowersIcon /></div>
+            <div>
+              <div className="sp-stat-num">{followerCount >= 1000 ? `${(followerCount/1000).toFixed(1)}K` : followerCount}</div>
+              <div className="sp-stat-label">Followers</div>
+            </div>
+          </div>
+          {shop.created_at ? (
+            <div className="sp-stat">
+              <div className="sp-stat-icon" style={{ background: '#e8f0fe' }}><CalendarDays size={17} strokeWidth={2} color="#1a73e8" /></div>
+              <div>
+                <div className="sp-stat-num" style={{ fontSize: 14 }}>
+                  Open since{' '}
+                  {new Date(shop.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                </div>
+                <div className="sp-stat-label">Selling on Soko</div>
+              </div>
+            </div>
+          ) : (
+            <div className="sp-stat">
+              <div className="sp-stat-icon" style={{ background: T.gray100 }}><Icon.Clock /></div>
+              <div>
+                <div className="sp-stat-num" style={{ color: T.textMuted, fontSize: 14 }}>New shop</div>
+                <div className="sp-stat-label">Selling on Soko</div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -3101,8 +3093,12 @@ if (!shop) {
                 <div key={i} className="sp-policy-row"><Icon.ChevronRight /> {p.label}</div>
               ))}
               {!shop.policy_delivery && !shop.policy_returns && !shop.policy_payment && (!shop.policy_custom || shop.policy_custom.length === 0) && (
-                <div style={{ fontSize: 13, color: T.textMuted }}>
-                  {isOwner ? 'You haven\u2019t added any policies yet — click Edit Policies to add some.' : 'This shop hasn\u2019t added any policies yet.'}
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: T.textMuted, lineHeight: 1.5 }}>
+                  <span style={{ flexShrink: 0, marginTop: 1, color: T.textLight }}><Info size={14} strokeWidth={2} /></span>
+                  <span>
+                    Delivery and returns aren't listed — ask the shop in chat before ordering.
+                    {isOwner && ' Click Edit Policies to add yours.'}
+                  </span>
                 </div>
               )}
             </div>
@@ -3241,7 +3237,10 @@ if (!shop) {
               <div key={i} className="sp-policy-row"><Icon.ChevronRight /> {p.label}</div>
             ))}
             {!shop.policy_delivery && !shop.policy_returns && !shop.policy_payment && (!shop.policy_custom || shop.policy_custom.length === 0) && (
-              <div style={{ fontSize: 12.5, color: T.textLight }}>No policies added yet.</div>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 7, fontSize: 12.5, color: T.textMuted, lineHeight: 1.5 }}>
+                <span style={{ flexShrink: 0, marginTop: 1, color: T.textLight }}><Info size={13} strokeWidth={2} /></span>
+                <span>Delivery and returns aren't listed — ask the shop in chat before ordering.</span>
+              </div>
             )}
             <div className="sp-policy-link" onClick={() => setTab('policies')}>View all policies <Icon.ChevronRight /></div>
           </div>
@@ -3502,6 +3501,7 @@ if (!shop) {
                 <div style={{ fontSize: 12, color: T.textMuted, marginTop: 8 }}>
                   Colors your cover, buttons, and accents. Active: <strong style={{ color: activeTheme.dark }}>{activeTheme.label}</strong>
                 </div>
+                {themeError && <div style={{ fontSize: 12, fontWeight: 600, color: '#dc2626', marginTop: 6 }}>{themeError}</div>}
               </div>
 
               <div className="sp-d-field">
