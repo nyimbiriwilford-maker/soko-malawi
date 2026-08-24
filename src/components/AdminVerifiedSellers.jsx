@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   adminListVerificationProfiles,
   adminManualVerificationAction,
@@ -6,6 +6,7 @@ import {
   getLatestRequestIdForSeller,
   adminManualVerifyUser,
   adminManualUnverifyUser,
+  adminSearchUsers,
   statusLabel,
   friendlyVerificationError,
 } from '../lib/verification'
@@ -41,6 +42,42 @@ export default function AdminVerifiedSellers({ adminName = '', onToast, onOpenRe
     adminNote: '',
   })
   const [manualVerifyBusy, setManualVerifyBusy] = useState(false)
+  const [userSearch, setUserSearch] = useState('')
+  const [userSearchResults, setUserSearchResults] = useState([])
+  const [userSearchLoading, setUserSearchLoading] = useState(false)
+  const [userLookupError, setUserLookupError] = useState('')
+  const userSearchDebounce = useRef(null)
+
+  async function runUserSearch(q) {
+    setUserSearchLoading(true)
+    setUserLookupError('')
+    try {
+      const results = await adminSearchUsers(q, 20)
+      setUserSearchResults(Array.isArray(results) ? results : [])
+    } catch (e) {
+      setUserLookupError(friendlyVerificationError(e) || 'Could not search users')
+      setUserSearchResults([])
+    } finally {
+      setUserSearchLoading(false)
+    }
+  }
+
+  function onUserSearchChange(value) {
+    setUserSearch(value)
+    setManualVerifyForm((f) => ({ ...f, userId: '' }))
+    if (userSearchDebounce.current) clearTimeout(userSearchDebounce.current)
+    if (!value.trim()) {
+      setUserSearchResults([])
+      return
+    }
+    userSearchDebounce.current = setTimeout(() => runUserSearch(value.trim()), 300)
+  }
+
+  function selectUser(u) {
+    setManualVerifyForm((f) => ({ ...f, userId: u.id }))
+    setUserSearch(`${u.full_name || 'Unknown'}${u.email ? ` (${u.email})` : ''}`)
+    setUserSearchResults([])
+  }
 
   const toast = (m) => onToast?.(m)
 
@@ -165,6 +202,7 @@ export default function AdminVerifiedSellers({ adminName = '', onToast, onOpenRe
 
       toast(`✅ User verified successfully (request ID: ${result.request_id})`)
       setShowManualVerifyModal(false)
+      setUserSearch(''); setUserSearchResults([]); setUserLookupError('')
       setManualVerifyForm({
         userId: '',
         verificationType: 'seller',
@@ -208,6 +246,7 @@ export default function AdminVerifiedSellers({ adminName = '', onToast, onOpenRe
 
       toast(`✅ Verification removed for user ${userId}`)
       setShowManualVerifyModal(false)
+      setUserSearch(''); setUserSearchResults([]); setUserLookupError('')
       setManualVerifyForm((f) => ({ ...f, userId: '' }))
       setNote('')
       await load()
@@ -248,7 +287,11 @@ export default function AdminVerifiedSellers({ adminName = '', onToast, onOpenRe
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button
               type="button"
-              onClick={() => { setManualVerifyMode('verify'); setShowManualVerifyModal(true) }}
+              onClick={() => {
+                setManualVerifyMode('verify')
+                setUserSearch(''); setUserSearchResults([]); setUserLookupError('')
+                setShowManualVerifyModal(true)
+              }}
               style={{
                 padding: '7px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
                 fontSize: 12, fontWeight: 700, background: '#fef3c7', color: '#b45309',
@@ -505,7 +548,7 @@ export default function AdminVerifiedSellers({ adminName = '', onToast, onOpenRe
         <div style={{
           position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex',
           alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 16,
-        }} onClick={() => setShowManualVerifyModal(false)}>
+        }} onClick={() => { setShowManualVerifyModal(false); setUserSearch(''); setUserSearchResults([]); setUserLookupError('') }}>
           <div style={{
             background: '#fff', borderRadius: 16, width: '100%', maxWidth: 480,
             maxHeight: '90vh', overflow: 'auto', padding: 20,
@@ -520,15 +563,85 @@ export default function AdminVerifiedSellers({ adminName = '', onToast, onOpenRe
             </div>
 
             <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 4 }}>
-              User ID
+              Find user
+            </label>
+            <input
+              value={userSearch}
+              onChange={(e) => onUserSearchChange(e.target.value)}
+              placeholder="Search by name, email, or phone…"
+              style={{
+                width: '100%', boxSizing: 'border-box', border: '1.5px solid #e0e8e2', borderRadius: 10,
+                padding: '10px 12px', fontSize: 13, fontFamily: 'inherit', marginBottom: 6,
+              }}
+            />
+            <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 8 }}>
+              {userSearchLoading ? 'Searching…' : 'Start typing to search. You can also paste a full user UUID.'}
+            </div>
+
+            {userLookupError && (
+              <div style={{ fontSize: 12, color: '#b91c1c', marginBottom: 8 }}>{userLookupError}</div>
+            )}
+
+            {userSearchResults.length > 0 && (
+              <div style={{
+                maxHeight: 220, overflow: 'auto', border: '1px solid #e0e8e2', borderRadius: 10,
+                marginBottom: 10,
+              }}>
+                {userSearchResults.map((u) => {
+                  const selected = manualVerifyForm.userId === u.id
+                  return (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onClick={() => selectUser(u)}
+                      style={{
+                        width: '100%', textAlign: 'left', background: selected ? '#e6f4ec' : '#fff',
+                        border: 'none', borderBottom: '1px solid #f0f5f2', cursor: 'pointer',
+                        padding: '8px 10px', fontFamily: 'inherit', display: 'flex', gap: 8, alignItems: 'center',
+                      }}
+                    >
+                      <div style={{
+                        width: 30, height: 30, borderRadius: '50%', background: '#e6f4ec', flexShrink: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#1a7a4a',
+                        fontWeight: 800, overflow: 'hidden', fontSize: 13,
+                      }}>
+                        {u.avatar_url
+                          ? <img src={u.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          : (u.full_name || '?').trim().charAt(0).toUpperCase()}
+                      </div>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: '#111', display: 'flex', gap: 6, alignItems: 'center' }}>
+                          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {u.full_name || 'Name not on profile'}
+                          </span>
+                          {u.is_verified && (
+                            <span style={{ fontSize: 9, fontWeight: 800, padding: '1px 6px', borderRadius: 20, background: '#e6f4ec', color: '#1a7a4a' }}>
+                              Verified
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: 11, color: '#9ca3af', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {[u.email, u.phone, u.city].filter(Boolean).join(' · ') || u.id}
+                        </div>
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+
+            <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 4 }}>
+              Selected user ID
             </label>
             <input
               value={manualVerifyForm.userId}
               onChange={(e) => setManualVerifyForm((f) => ({ ...f, userId: e.target.value }))}
-              placeholder="UUID of the user"
+              placeholder="UUID of the user (auto-filled when you pick a result)"
+              readOnly={userSearchResults.length > 0 && !!manualVerifyForm.userId}
               style={{
                 width: '100%', boxSizing: 'border-box', border: '1.5px solid #e0e8e2', borderRadius: 10,
                 padding: '10px 12px', fontSize: 13, fontFamily: 'inherit', marginBottom: 10,
+                background: manualVerifyForm.userId ? '#f0faf4' : '#fff',
               }}
             />
 
@@ -602,7 +715,7 @@ export default function AdminVerifiedSellers({ adminName = '', onToast, onOpenRe
               <button
                 type="button"
                 disabled={manualVerifyBusy}
-                onClick={() => setShowManualVerifyModal(false)}
+                onClick={() => { setShowManualVerifyModal(false); setUserSearch(''); setUserSearchResults([]); setUserLookupError('') }}
                 style={{
                   padding: '9px 14px', borderRadius: 10, border: '1.5px solid #e5e7eb', cursor: 'pointer',
                   fontSize: 13, fontWeight: 700, background: '#fff', color: '#374151', fontFamily: 'inherit',

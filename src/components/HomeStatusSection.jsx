@@ -305,6 +305,7 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
   // Text boards already show the words on the tile — don't repeat them in the label
   const title = tagged?.title || tagged?.name || (boardColor ? null : s.content) || null
   const price = tagged?.price != null ? `MK${Number(tagged.price).toLocaleString()}` : tagged?.rate || tagged?.salary || null
+  const statusCount = group.length
 
   if (isMobile) {
     return (
@@ -330,16 +331,17 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
               <>
                 <LazyMedia src={media} isVideo={isVideo}
                   style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
-                {isVideo && (
-                  <div style={{
-                    position: 'absolute', bottom: 8, right: 8, zIndex: 5,
-                    width: 20, height: 20, borderRadius: '50%',
-                    background: 'rgba(0,0,0,0.55)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="#fff"><polygon points="6,3 20,12 6,21" /></svg>
-                  </div>
-                )}
+                <div style={{
+                  position: 'absolute', bottom: 8, right: 8, zIndex: 5,
+                  minWidth: 24, height: 20, borderRadius: 10,
+                  background: 'rgba(0,0,0,0.7)',
+                  backdropFilter: 'blur(8px)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  padding: '0 6px',
+                  fontSize: 10, fontWeight: 700, color: '#fff',
+                }}>
+                  {statusCount}
+                </div>
               </>
             )}
           </div>
@@ -463,16 +465,17 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
               <>
                 <LazyMedia src={media} isVideo={isVideo}
                   style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
-                {isVideo && (
-                  <div style={{
-                    position: 'absolute', bottom: 8, right: 8, zIndex: 5,
-                    width: 20, height: 20, borderRadius: '50%',
-                    background: 'rgba(0,0,0,0.55)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="#fff"><polygon points="6,3 20,12 6,21" /></svg>
-                  </div>
-                )}
+                <div style={{
+                  position: 'absolute', bottom: 8, right: 8, zIndex: 5,
+                  minWidth: 24, height: 20, borderRadius: 10,
+                  background: 'rgba(0,0,0,0.7)',
+                  backdropFilter: 'blur(8px)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  padding: '0 6px',
+                  fontSize: 10, fontWeight: 700, color: '#fff',
+                }}>
+                  {statusCount}
+                </div>
               </>
             )}
           </div>

@@ -2104,6 +2104,19 @@ export async function adminManualUnverifyUser({
   return data
 }
 
+/**
+ * Admin-only user search by name / email / phone / city / id.
+ * Returns lightweight profile summaries for the manual verify flow.
+ */
+export async function adminSearchUsers(query = '', limit = 20) {
+  const { data, error } = await supabase.rpc('admin_search_users', {
+    p_query: query || null,
+    p_limit: limit || 20,
+  })
+  if (error) throw error
+  return Array.isArray(data) ? data : []
+}
+
 export async function getVerificationAnomalies({ status = 'open', limit = 200, requestId = null } = {}) {
   let q = supabase
     .from('verification_anomalies')
@@ -4633,6 +4646,7 @@ export default {
   adminAutoExpireOverdueRequests,
   adminManualVerifyUser,
   adminManualUnverifyUser,
+  adminSearchUsers,
   getVerificationAnomalies,
   adminUpdateAnomaly,
   adminUpdateVerificationSettings,
