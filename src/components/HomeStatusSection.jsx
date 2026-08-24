@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
-import { ChevronRight, MapPin, ShoppingBag, Store, Briefcase, Wrench } from 'lucide-react'
+import { ChevronRight, MapPin, ShoppingBag, Store, Briefcase, Wrench, Plus } from 'lucide-react'
 import { STATUS_META } from '../constants/homeConstants'
 import { supabase } from '../lib/supabase'
 import { isStatusVideoUrl, isStatusColorBoard } from '../utils/statusVideo'
@@ -877,6 +877,45 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
                       marginTop: -10,
                     }}
                   >
+                    <button type="button" className="hs-add-btn"
+                      onClick={() => { if (!currentUserId) { navigate?.('/login'); return }; onCreateStory?.() }}
+                      style={{
+                        flexShrink: 0, borderRadius: isMobile ? 18 : 20, overflow: 'hidden',
+                        cursor: 'pointer', border: '2px dashed ' + G.gray200, padding: 0, fontFamily: 'inherit',
+                        textAlign: 'center', background: 'linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%)',
+                        scrollSnapAlign: 'start',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                        transition: 'all 0.25s ease',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                        gap: 8,
+                      }}
+                    >
+                      <div style={{
+                        width: isMobile ? 44 : 56, height: isMobile ? 44 : 56,
+                        borderRadius: '50%',
+                        background: 'linear-gradient(135deg, #0F9D58 0%, #16a34a 100%)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        boxShadow: '0 4px 12px rgba(15,157,88,0.25)',
+                      }}>
+                        <Plus size={isMobile ? 24 : 28} color="#fff" strokeWidth={2.5} />
+                      </div>
+                      <div style={{
+                        fontSize: isMobile ? 11 : 12,
+                        fontWeight: 700,
+                        color: G.text,
+                        letterSpacing: -0.2,
+                      }}>
+                        Create Status
+                      </div>
+                      <div style={{
+                        fontSize: isMobile ? 8.5 : 9,
+                        fontWeight: 500,
+                        color: G.textMuted,
+                        maxWidth: '80%',
+                      }}>
+                        Share your update
+                      </div>
+                    </button>
                     {rankedStories.slice(0, displayLimit).map(s => (
                       <StoryCard
                         key={s.user_id}
