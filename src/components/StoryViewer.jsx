@@ -796,7 +796,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
         .from('user_statuses')
         .select(`id, content, status_type, expires_at, created_at, media_urls, tagged_listing_id, tagged_kind, tagged_ref_id, user_id, location_hint,
           profiles:user_id ( id, full_name, avatar_url, city ),
-          tagged:tagged_listing_id ( id, title, price, images, category, description, city, district )`)
+          tagged:tagged_listing_id ( id, title, price, images, category, description, city, district, is_featured, promoted_until )`)
         .eq('user_id', nextStory.user_id)
         .gt('expires_at', new Date().toISOString())
         .order('created_at', { ascending: false })
@@ -1023,9 +1023,11 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
   const barActive = useMediaBars ? mediaIdx : storyLocalIdx
 
   const loveCount = reactionCounts.love || 0
-  const isFeatured = String(story.status_type || '').toLowerCase().includes('promo')
-    || String(story.content || '').toLowerCase().includes('featured')
-    || !!tagged
+
+  // Check if product is actually featured and not expired
+  const isFeatured = tagged && tagged.is_featured && (
+    !tagged.promoted_until || new Date(tagged.promoted_until) > new Date()
+  )
 
   const filteredViewers = viewers.filter(v =>
     !viewerSearch || v.viewer?.full_name?.toLowerCase().includes(viewerSearch.toLowerCase()),
