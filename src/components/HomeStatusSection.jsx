@@ -328,21 +328,8 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
               <StatusTextBoard color={boardColor} text={s.content}
                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
             ) : (
-              <>
-                <LazyMedia src={media} isVideo={isVideo}
-                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
-                <div style={{
-                  position: 'absolute', bottom: 8, right: 8, zIndex: 5,
-                  minWidth: 24, height: 20, borderRadius: 10,
-                  background: 'rgba(0,0,0,0.7)',
-                  backdropFilter: 'blur(8px)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  padding: '0 6px',
-                  fontSize: 10, fontWeight: 700, color: '#fff',
-                }}>
-                  {statusCount}
-                </div>
-              </>
+              <LazyMedia src={media} isVideo={isVideo}
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
             )}
           </div>
         ) : avatar ? (
@@ -355,6 +342,18 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
           position: 'absolute', inset: 0,
           background: 'linear-gradient(180deg, rgba(0,0,0,0.15) 0%, transparent 35%, rgba(0,0,0,0.05) 50%, rgba(0,0,0,0.55) 100%)',
         }} />
+
+        <div style={{
+          position: 'absolute', bottom: 8, right: 8, zIndex: 5,
+          minWidth: 24, height: 20, borderRadius: 10,
+          background: 'rgba(0,0,0,0.7)',
+          backdropFilter: 'blur(8px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          padding: '0 6px',
+          fontSize: 10, fontWeight: 700, color: '#fff',
+        }}>
+          {statusCount}
+        </div>
 
         <div style={{
           position: 'absolute', top: 12, left: 12, zIndex: 3,
@@ -462,21 +461,8 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
               <StatusTextBoard color={boardColor} text={s.content}
                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
             ) : (
-              <>
-                <LazyMedia src={media} isVideo={isVideo}
-                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
-                <div style={{
-                  position: 'absolute', bottom: 8, right: 8, zIndex: 5,
-                  minWidth: 24, height: 20, borderRadius: 10,
-                  background: 'rgba(0,0,0,0.7)',
-                  backdropFilter: 'blur(8px)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  padding: '0 6px',
-                  fontSize: 10, fontWeight: 700, color: '#fff',
-                }}>
-                  {statusCount}
-                </div>
-              </>
+              <LazyMedia src={media} isVideo={isVideo}
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
             )}
           </div>
       ) : avatar ? (
@@ -489,6 +475,18 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
         position: 'absolute', inset: 0,
         background: 'linear-gradient(180deg, rgba(0,0,0,0.05) 0%, transparent 40%, rgba(0,0,0,0.55) 100%)',
       }} />
+
+      <div style={{
+        position: 'absolute', bottom: 8, right: 8, zIndex: 5,
+        minWidth: 24, height: 20, borderRadius: 10,
+        background: 'rgba(0,0,0,0.7)',
+        backdropFilter: 'blur(8px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: '0 6px',
+        fontSize: 10, fontWeight: 700, color: '#fff',
+      }}>
+        {statusCount}
+      </div>
 
       {isVideo && (
         <div className="hs-tablet-hide" style={{
