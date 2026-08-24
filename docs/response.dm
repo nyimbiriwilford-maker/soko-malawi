@@ -322,3 +322,24 @@ Videos trimmed with the "meta trim" strategy keep the original file bytes and ca
 ## Validation
 - `npm run build` — PASS (4.6s, no errors).
 - ESLint on all touched files — only pre-existing errors remain; no new issues introduced.
+
+---
+
+# Edit caption & delete status for owners — IMPLEMENTED
+
+## Problem
+Once a status was published, the owner could not change its caption or remove it — it had to run its full 24h expiry.
+
+## Changes — `src/components/StoryViewer.jsx`
+No migration needed: existing RLS (`20260711_security_hardening.sql`) already allows owners to UPDATE/DELETE their own `user_statuses` rows.
+
+- **Owner menu** (? on your own status) gains two items: **Edit caption** and **Delete status** (red, two-step confirm).
+- **Edit caption sheet**: pre-filled textarea (180-char limit + live counter), Save/Cancel. Saves via `update` on `user_statuses`, updates `localStories` in place so the caption changes instantly everywhere in the viewer (caption chip, text boards), toast confirmation.
+- **Delete confirm sheet**: shows the status type (Video/Photo/Text) + caption preview, Delete/Cancel with busy state. Deletes the row, best-effort removes the uploaded media files from Supabase storage (parses `…/storage/v1/object/public/<bucket>/<path>` out of `media_urls`), removes the story from the local list and auto-advances to the next one (closes the viewer if none remain).
+- Sheets pause playback/auto-advance while open and reset when switching stories.
+- Added `IconTrash` + `IconVideoBadge` helpers; `MenuItem` supports a `danger` style.
+
+## Validation
+- `npm run build` — PASS.
+- ESLint on `StoryViewer.jsx` — no new errors (same pre-existing set as before).
+- Note: changes not committed yet — say the word and I'll push to master.

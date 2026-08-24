@@ -170,6 +170,26 @@ function IconUnmuted({ size = 16 }) {
     </svg>
   )
 }
+function IconTrash({ size = 16, color = '#fff' }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M3 6h18" />
+      <path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2" />
+      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+    </svg>
+  )
+}
+function IconVideoBadge({ label }) {
+  return (
+    <span style={{
+      background: '#e8f5e9', color: '#166534',
+      fontSize: 10, fontWeight: 800, letterSpacing: 0.4,
+      padding: '3px 7px', borderRadius: 8, flexShrink: 0, textTransform: 'uppercase',
+    }}>
+      {label}
+    </span>
+  )
+}
 
 function fmtK(n) {
   const v = Number(n) || 0
@@ -397,6 +417,12 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
   const [shareUrl, setShareUrl] = useState(null)
   const [copyOk, setCopyOk] = useState(false)
   const [showMenu, setShowMenu] = useState(false)
+  // Owner actions: edit caption / delete status
+  const [showEditCaption, setShowEditCaption] = useState(false)
+  const [editCaption, setEditCaption] = useState('')
+  const [savingCaption, setSavingCaption] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   // Stream media immediately (no “downloading…” gate)
   const [mediaReady, setMediaReady] = useState(false)
   const [mediaSrc, setMediaSrc] = useState(null)
@@ -449,6 +475,84 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
     repliesApi.closeReplies()
   }
 
+  // ── Owner actions: edit caption / delete status ────────────────────────────
+  function openEditCaption() {
+    setShowMenu(false)
+    setEditCaption(story?.content || '')
+    setShowEditCaption(true)
+    setPaused(true)
+  }
+
+  async function saveCaption() {
+    if (!story?.id || savingCaption) return
+    setSavingCaption(true)
+    const next = editCaption.trim().slice(0, 180)
+    const { error } = await supabase
+      .from('user_statuses')
+      .update({ content: next })
+      .eq('id', story.id)
+    setSavingCaption(false)
+    if (error) {
+      showToast('Could not save caption — try again')
+      return
+    }
+    setLocalStories(prev => prev.map(s => (s.id === story.id ? { ...s, content: next } : s)))
+    setShowEditCaption(false)
+    setPaused(false)
+    showToast('Caption updated')
+  }
+
+  function openDeleteConfirm() {
+    setShowMenu(false)
+    setShowDeleteConfirm(true)
+    setPaused(true)
+  }
+
+  /** Best-effort cleanup of uploaded media files after a status is deleted. */
+  function cleanupStatusMedia(s) {
+    try {
+      const urls = (s?.media_urls || []).filter(u => u && /^https?:\/\//i.test(u))
+      const byBucket = new Map()
+      for (const url of urls) {
+        const m = String(url).match(/\/storage\/v1\/object\/public\/([^/]+)\/(.+?)(?:[?#].*)?$/)
+        if (!m) continue
+        if (!byBucket.has(m[1])) byBucket.set(m[1], [])
+        byBucket.get(m[1]).push(m[2])
+      }
+      for (const [bucket, paths] of byBucket) {
+        supabase.storage.from(bucket).remove(paths).then(() => {}).catch(() => {})
+      }
+    } catch { /* ignore */ }
+  }
+
+  async function confirmDelete() {
+    if (!story?.id || deleting) return
+    setDeleting(true)
+    const id = story.id
+    const target = story
+    const { error } = await supabase
+      .from('user_statuses')
+      .delete()
+      .eq('id', id)
+    setDeleting(false)
+    if (error) {
+      showToast('Delete failed — try again')
+      return
+    }
+    cleanupStatusMedia(target)
+    const remaining = localStories.filter(s => s.id !== id)
+    setShowDeleteConfirm(false)
+    setPaused(false)
+    if (!remaining.length) {
+      onClose?.()
+      return
+    }
+    setLocalStories(remaining)
+    setMediaIdx(0)
+    setIdx(i => Math.min(i, remaining.length - 1))
+    showToast('Status deleted')
+  }
+
   useEffect(() => {
     setLocalStories(stories || [])
     setIdx(startIndex || 0)
@@ -460,6 +564,8 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
     setMediaIdx(0)
     setShowMenu(false)
     setMuted(false)
+    setShowEditCaption(false)
+    setShowDeleteConfirm(false)
   }, [story?.id])
 
   // ── Stream media right away (no download % UI) ─────────────────────────────
@@ -1241,6 +1347,12 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                 {isOwn && (
                   <MenuItem label="View analytics" onClick={() => { setShowMenu(false); openViewers() }} />
                 )}
+                {isOwn && story && (
+                  <MenuItem label="Edit caption" onClick={openEditCaption} />
+                )}
+                {isOwn && story && (
+                  <MenuItem label="Delete status" danger onClick={() => openDeleteConfirm()} />
+                )}
                 <MenuItem label="Share status" onClick={() => { setShowMenu(false); openShare() }} />
                 <MenuItem label="View profile" onClick={() => { setShowMenu(false); onClose?.(); navigate(`/profile/${story.user_id}`) }} />
                 <MenuItem label="Close" onClick={() => { setShowMenu(false); setPaused(false) }} />
@@ -1888,6 +2000,139 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
           </Sheet>
         )}
 
+        {/* ── Edit caption sheet (owner) ── */}
+        {showEditCaption && story && (
+          <Sheet onClose={() => { setShowEditCaption(false); setPaused(false) }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <div style={{
+                width: 36, height: 36, borderRadius: 10,
+                background: 'rgba(26,122,74,0.12)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1a7a4a" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M12 20h9" />
+                  <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+                </svg>
+              </div>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>Edit caption</div>
+                <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>Changes show instantly on your status</div>
+              </div>
+            </div>
+            <div style={{ position: 'relative', marginBottom: 8 }}>
+              <textarea
+                value={editCaption}
+                onChange={e => setEditCaption(e.target.value.slice(0, 180))}
+                placeholder="Price drop, still available, meet today…"
+                rows={4}
+                autoFocus
+                style={{
+                  width: '100%', resize: 'none',
+                  border: '1.5px solid #e2e8f0', borderRadius: 12,
+                  padding: '10px 12px', fontSize: 14, color: '#0f172a',
+                  fontFamily: 'inherit', outline: 'none',
+                  boxSizing: 'border-box',
+                }}
+              />
+              <span style={{
+                position: 'absolute', right: 10, bottom: 8,
+                fontSize: 10, fontWeight: 700, color: '#94a3b8',
+                background: 'rgba(255,255,255,0.9)', padding: '1px 5px', borderRadius: 6,
+              }}>
+                {editCaption.length}/180
+              </span>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => { setShowEditCaption(false); setPaused(false) }}
+                style={{
+                  flex: 1, padding: '11px 12px', borderRadius: 12,
+                  border: '1.5px solid #e2e8f0', background: '#fff',
+                  fontSize: 13, fontWeight: 700, color: '#475569',
+                  cursor: 'pointer', fontFamily: 'inherit',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={saveCaption}
+                disabled={savingCaption}
+                style={{
+                  flex: 1, padding: '11px 12px', borderRadius: 12, border: 'none',
+                  background: savingCaption ? '#cbd5e1' : GREEN,
+                  fontSize: 13, fontWeight: 800, color: '#fff',
+                  cursor: savingCaption ? 'default' : 'pointer', fontFamily: 'inherit',
+                }}
+              >
+                {savingCaption ? 'Saving…' : 'Save caption'}
+              </button>
+            </div>
+          </Sheet>
+        )}
+
+        {/* ── Delete confirm sheet (owner) ── */}
+        {showDeleteConfirm && story && (
+          <Sheet onClose={() => { if (!deleting) { setShowDeleteConfirm(false); setPaused(false) } }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+              <div style={{
+                width: 36, height: 36, borderRadius: 10,
+                background: 'rgba(239,68,68,0.12)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <IconTrash size={16} color="#ef4444" />
+              </div>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 800, color: '#0f172a' }}>Delete this status?</div>
+                <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600 }}>It disappears for everyone, immediately</div>
+              </div>
+            </div>
+            <div style={{
+              background: '#f8fafc', border: '1px solid #eef2f7', borderRadius: 12,
+              padding: '10px 12px', fontSize: 13, color: '#334155', fontWeight: 600,
+              marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8,
+            }}>
+              {(story.media_urls || []).some(m => m && isVideoUrl(m))
+                ? <IconVideoBadge label="Video status" />
+                : (story.media_urls || []).some(m => m && isRemoteMediaUrl(m) && !isColorUrl(m))
+                  ? <IconVideoBadge label="Photo status" />
+                  : <IconVideoBadge label="Text status" />}
+              <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {story.content || 'No caption'}
+              </span>
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => { setShowDeleteConfirm(false); setPaused(false) }}
+                style={{
+                  flex: 1, padding: '11px 12px', borderRadius: 12,
+                  border: '1.5px solid #e2e8f0', background: '#fff',
+                  fontSize: 13, fontWeight: 700, color: deleting ? '#94a3b8' : '#475569',
+                  cursor: deleting ? 'default' : 'pointer', fontFamily: 'inherit',
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmDelete}
+                disabled={deleting}
+                style={{
+                  flex: 1, padding: '11px 12px', borderRadius: 12, border: 'none',
+                  background: deleting ? '#fca5a5' : '#ef4444',
+                  fontSize: 13, fontWeight: 800, color: '#fff',
+                  cursor: deleting ? 'default' : 'pointer', fontFamily: 'inherit',
+                }}
+              >
+                {deleting ? 'Deleting…' : 'Delete status'}
+              </button>
+            </div>
+          </Sheet>
+        )}
+
         {/* ── Viewers sheet ── */}
         {showViewers && (
           <Sheet onClose={closeViewers} maxHeight="78vh">
@@ -2000,7 +2245,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
   )
 }
 
-function MenuItem({ label, onClick }) {
+function MenuItem({ label, onClick, danger = false }) {
   return (
     <button
       type="button"
@@ -2008,7 +2253,8 @@ function MenuItem({ label, onClick }) {
       style={{
         display: 'block', width: '100%', textAlign: 'left',
         background: 'none', border: 'none', borderBottom: '1px solid rgba(255,255,255,0.06)',
-        padding: '12px 14px', fontSize: 13, fontWeight: 700, color: '#f1f5f9',
+        padding: '12px 14px', fontSize: 13, fontWeight: 700,
+        color: danger ? '#f87171' : '#f1f5f9',
         cursor: 'pointer', fontFamily: 'inherit',
       }}
     >
