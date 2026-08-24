@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { fetchAllActiveStories } from '../hooks/useStatuses'
 import StoryViewer from '../components/StoryViewer'
 import StatusUploadModal from '../components/StatusUploadModal'
+import { isStatusVideoUrl } from '../utils/statusVideo'
 import { useStatusReplies } from '../components/StatusReplies'
 import SokoNav from '../components/SokoNav'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -334,7 +335,7 @@ function StoryCard({ s, index, isOwn, viewedIds, onClick, nearBadge }) {
   const name   = s.profiles?.full_name || 'Seller'
   const avatar = s.profiles?.avatar_url
   const media  = s.media_urls?.[0]
-  const isVideo = media && (/\.(mp4|mov|webm)(\?|$)/i.test(media) || media.includes('video'))
+  const isVideo = media && isStatusVideoUrl(media)
   const initial = name[0]?.toUpperCase() || 'S'
   const isUrgent = s.content?.toLowerCase().includes('price drop') ||
                    s.content?.toLowerCase().includes('first to confirm') ||

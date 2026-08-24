@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useStatusReplies } from './StatusReplies'
+import { isStatusVideoUrl, parseClipWindow } from '../utils/statusVideo'
 
 /**
  * Status / story viewer — product-first layout (reference design).
@@ -210,7 +211,7 @@ function isRemoteMediaUrl(url) {
 }
 
 function isVideoUrl(url) {
-  return !!url?.match(/\.(mp4|mov|webm|m4v)(\?|$)/i)
+  return isStatusVideoUrl(url)
 }
 
 /**
@@ -409,6 +410,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
   const toastRef = useRef()
   const mediaGenRef = useRef(0)
   const videoRef = useRef(null)
+  const clipRef = useRef(null) // #t=start,end window of the current video (meta trims)
   const activeBarRef = useRef(null)
   const rafRef = useRef(null)
   const loggedViewsRef = useRef(new Set())
@@ -488,9 +490,17 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
     setMediaError(null)
     setProgress(0)
 
+    // Meta-trimmed videos carry a #t=start,end window. Keep it: cached blob
+    // URLs lose the fragment, so re-attach it and also enforce it via JS below.
+    const clip = kind === 'video' ? parseClipWindow(remote) : null
+    clipRef.current = clip
+
     // Prefer cached blob if we already have it; otherwise stream remote URL
     const cached = mediaBlobCache.get(remote)
-    const src = cached?.blobUrl || remote
+    let src = cached?.blobUrl || remote
+    if (src && clip?.end != null && !String(src).includes('#t=')) {
+      src = `${String(src).split('#')[0]}#t=${clip.start.toFixed(3)},${clip.end.toFixed(3)}`
+    }
     setMediaSrc(src)
     // Images can show as soon as src is set; videos wait for canplay (handled by element)
     if (kind === 'image') {
@@ -564,27 +574,42 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
       const v = videoRef.current
       const start = Date.now()
       let done = false
+      // Meta-trimmed clips play only [clipStart, clipEnd] of the file
+      const clip = clipRef.current
+      const clipStart = clip ? clip.start : 0
+      const clipEnd = clip?.end != null ? clip.end : null
+
+      function finish() {
+        if (done) return
+        done = true
+        setProgress(100)
+        advance()
+      }
 
       function tick() {
         if (done) return
-        const dur = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : VIDEO_FALLBACK_MS / 1000
-        const p = Math.min(100, (v.currentTime / dur) * 100)
+        const fullDur = Number.isFinite(v.duration) && v.duration > 0 ? v.duration : VIDEO_FALLBACK_MS / 1000
+        const end = clipEnd != null ? Math.min(clipEnd, Number.isFinite(v.duration) && v.duration > 0 ? v.duration : clipEnd) : fullDur
+        const windowLen = Math.max(0.001, end - clipStart)
+        const p = Math.min(100, Math.max(0, ((v.currentTime - clipStart) / windowLen) * 100))
         if (activeBarRef.current) activeBarRef.current.style.width = `${p}%`
 
+        // Advance when the clip window ends — covers browsers that pause
+        // without firing 'ended', and browsers that ignore the fragment end.
+        if (clipEnd != null && v.currentTime >= end - 0.02) {
+          finish()
+          return
+        }
+
         if (Date.now() - start >= VIDEO_MAX_MS) {
-          done = true
-          setProgress(100)
-          advance()
+          finish()
           return
         }
         rafRef.current = requestAnimationFrame(tick)
       }
 
       function onEnded() {
-        if (done) return
-        done = true
-        setProgress(100)
-        advance()
+        finish()
       }
 
       rafRef.current = requestAnimationFrame(tick)
@@ -992,6 +1017,15 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                 muted={muted}
                 playsInline
                 preload="auto"
+                onLoadedMetadata={() => {
+                  // Enforce the clip window start even when the src lost its
+                  // #t= fragment (e.g. playing from a cached blob URL).
+                  const clip = clipRef.current
+                  const el = videoRef.current
+                  if (clip && el && Math.abs((el.currentTime || 0) - clip.start) > 0.35) {
+                    try { el.currentTime = clip.start } catch { /* ignore */ }
+                  }
+                }}
                 onLoadedData={() => setMediaReady(true)}
                 onCanPlay={() => setMediaReady(true)}
                 onError={() => {

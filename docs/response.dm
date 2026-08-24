@@ -247,3 +247,78 @@ Added ability for admins to manually verify/unverify users without requiring a v
 - Run `supabase migration up` to activate DB functions
 - Test modal in AdminVerifiedSellers page
 - Verify audit entries in `verification_audit_log`
+
+## UI Completion (commit 2b0a7ad)
+- Added manual verify modal with fields: User ID, Verification type, Justification, Admin note
+- Added unverify button/mode with Reason field
+- Both actions include confirmation dialogs and toast feedback
+- Build passes cleanly
+
+---
+
+# Manual Verification: Search users by name/email/phone (not just ID) — IMPLEMENTED
+
+## Problem
+The manual verify/unverify modal only accepted a raw user UUID. Admins had no way to look a user up by name, email, or phone.
+
+## Changes
+
+### 1. New DB RPC — `supabase/migrations/20260824_admin_search_users.sql` (NEW)
+- `admin_search_users(p_query, p_limit)` (SECURITY DEFINER, admin-only via `public.is_admin()`).
+- Searches `profiles` by `full_name`, `email`, `phone`, `city` (ILIKE), with prefix matches ranked first.
+- Also accepts a full UUID directly (backwards-compatible).
+- Empty query returns the most recent profiles as a fallback list.
+- Returns lightweight rows: `id, full_name, email, phone, city, avatar_url, is_verified, verification_status, created_at`.
+- `GRANT EXECUTE ... TO authenticated` (RLS/admin-check inside the function).
+
+### 2. `src/lib/verification.js`
+- Added `adminSearchUsers(query, limit)` wrapper around the RPC, plus its export.
+
+### 3. `src/components/AdminVerifiedSellers.jsx`
+- Modal now leads with a **"Find user"** search box (debounced 300ms) instead of forcing a UUID.
+- Typing a name/email/phone fetches matching users with `adminSearchUsers` and shows a scrollable result list (avatar, name, verified badge, email/phone/city).
+- Clicking a result auto-fills the **Selected user ID** field; admins can still paste a raw UUID.
+- Search state (query, results, loading, error) resets on open, cancel, overlay-click, and after a successful verify/unverify.
+
+## Validation
+- `esbuild` transform of `AdminVerifiedSellers.jsx` passes cleanly.
+- ESLint on the edited files shows no new errors (only pre-existing ones remain).
+- Run `supabase migration up` to activate the new RPC, then test the manual-verify modal search.
+
+---
+
+# Trimmed status videos fail to play in the viewer — FIXED
+
+## Problem
+Videos trimmed with the "meta trim" strategy keep the original file bytes and carry the clip window as a media fragment (`...mp4#t=10.000,25.000`). The status surfaces treated those URLs as non-videos and broke playback:
+
+1. **Viewer misclassified trimmed videos as images** — `StoryViewer.isVideoUrl` used `/\.(mp4|mov|webm|m4v)(\?|$)/i`, which fails when the URL ends with `#t=…`. The video was rendered inside an `<img>` ? failed to load ("Couldn't load media").
+2. **Publishing was crashing entirely** — the last commit (`acafb95`) added `trimMode: result.trimMode` to the publish snapshot, but `result` does not exist in `handlePublish` scope ? `ReferenceError` on every Publish.
+3. **Re-encoded clips got double-trimmed** — without a correct `trimMode`, a `#t=` fragment could be appended to an already re-encoded clip, making the wrong segment play.
+4. **Clip window lost on cached playback** — when media was served from the blob cache, the `#t=` fragment was stripped, so the clip played from the start with the wrong progress bar.
+5. Same fragment-blind detection existed in `StatusPage` (story tiles + feed cards), `PublicProfile`, and `SavedStatusesPage`.
+
+## Changes
+
+### 1. `src/components/StoryViewer.jsx`
+- `isVideoUrl` now delegates to `isStatusVideoUrl` (strips `#…` fragments and query strings before checking the extension).
+- Parses the `#t=start,end` clip window for the current video (`parseClipWindow`), keeps it in a ref, and re-attaches it when serving from a cached blob URL.
+- New `onLoadedMetadata` handler seeks to the clip start (covers blob/cached sources that lost the fragment).
+- Progress bar + auto-advance are now clip-aware: progress maps `[start,end]` ? 0–100% and the story advances when the clip window ends — works whether the browser honors the fragment end, pauses without `ended`, or ignores the end entirely.
+
+### 2. `src/components/StatusUploadModal.jsx`
+- New `trimMode` state set from `trimStatusVideo` results (`applyUserTrim`), reset on file change/clear/annotate-bake.
+- Snapshot now carries the real `trimMode` state (fixes the `result is not defined` ReferenceError that broke every publish).
+- `runBackgroundPublish` tracks `effectiveTrimMode`: the fresh `trimMode` when re-trimming at publish time, and `'reencoded'` after compression — so a `#t=` fragment is only appended for true meta trims.
+
+### 3. Fragment-aware video detection elsewhere
+- `src/pages/StatusPage.jsx` — story tiles + feed cards now use `isStatusVideoUrl`.
+- `src/pages/PublicProfile.jsx` — `isVideoUrl` strips `#…` before extension checks.
+- `src/pages/SavedStatusesPage.jsx` — saved-status thumbnails use `isStatusVideoUrl`.
+
+### 4. `src/utils/statusVideo.js`
+- `pickRecorderMime` now prefers `video/mp4` (AVC1/AAC) when `MediaRecorder` supports it (Safari) before falling back to WebM — re-encoded trims are playable on iOS.
+
+## Validation
+- `npm run build` — PASS (4.6s, no errors).
+- ESLint on all touched files — only pre-existing errors remain; no new issues introduced.

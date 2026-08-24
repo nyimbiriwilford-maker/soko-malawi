@@ -33,7 +33,8 @@ function getOnlineStatus(lastSeen) {
 }
 
 function isVideoUrl(url, mediaType) {
-  const u = String(url || '')
+  // Strip media-fragment (#t=start,end from trimmed status videos) before checking
+  const u = String(url || '').split('#')[0]
   if (/\.(mp4|mov|webm)(\?|$)/i.test(u)) return true
   if (/\.(jpe?g|png|gif|webp|avif)(\?|$)/i.test(u)) return false
   return mediaType === 'video'

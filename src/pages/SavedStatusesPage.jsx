@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { isStatusVideoUrl } from '../utils/statusVideo'
 import StoryViewer from '../components/StoryViewer'
 
 export default function SavedStatusesPage() {
@@ -131,7 +132,7 @@ export default function SavedStatusesPage() {
                       onClick={() => setViewing(i)}
                       style={{ width: '100%', height: 140, overflow: 'hidden', position: 'relative', background: '#000' }}
                     >
-                      {/^https?:\/\/\S+\.(mp4|webm|mov|m4v)(\?|$)/i.test(media) ? (
+                      {isStatusVideoUrl(media) ? (
                         <video src={media} muted playsInline preload="metadata" style={{
                           width: '100%', height: '100%', objectFit: 'cover',
                         }} />

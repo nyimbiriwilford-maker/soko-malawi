@@ -152,6 +152,7 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
   // Updated only when drag ends (onCommit) or trim is applied — never during drag.
   const [committedStart, setCommittedStart] = useState(0)
   const [committedSeconds, setCommittedSeconds] = useState(() => getPreferredClipSeconds())
+  const [trimMode, setTrimMode] = useState(null) // 'meta' | 'reencoded' — how the current mediaFile was produced
   const [tagItems, setTagItems] = useState([])
   const [taggedId, setTaggedId] = useState(null)
   const [taggedKind, setTaggedKind] = useState(null)
@@ -221,6 +222,7 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
     setSourceDuration(null)
     setClipStart(0)
     setTrimDirty(false)
+    setTrimMode(null)
     setSourceFile(null)
     setOverlayFile(null)
     setAnnotateNote('')
@@ -311,6 +313,7 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
 
       // Always meta trim: keep original bytes + clip window
       setMediaFile(result.file)
+      setTrimMode(result.trimMode || null)
       if (!mediaPreview) {
         setMediaPreview(URL.createObjectURL(result.file))
       }
@@ -410,6 +413,7 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
     setTrimPct(0)
     setClipStart(0)
     setTrimDirty(false)
+    setTrimMode(null)
     setOverlayFile(null)
     setAnnotateNote('')
     setShowAnnotator(false)
@@ -427,6 +431,7 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
     if (result.mode === 'baked' && result.file) {
       setMediaFile(result.file)
       setSourceFile(null) // image is final
+      setTrimMode(null)
       if (mediaPreview?.startsWith?.('blob:')) URL.revokeObjectURL(mediaPreview)
       setMediaPreview(result.previewUrl || URL.createObjectURL(result.file))
       setMediaType('image')
@@ -501,7 +506,7 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
       sourceDuration,
       trimDirty,
       overlayFile,
-      trimMode: result.trimMode,
+      trimMode,
     }
 
     // Dismiss the picker instantly; trim + posting keep running in the background.
@@ -527,6 +532,7 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
       let publishClipStart = s.mediaType === 'video' ? s.clipStart : 0
       let publishClipDur = s.mediaType === 'video' ? s.clipSeconds : null
       let publishOrigDur = s.sourceDuration
+      let effectiveTrimMode = s.trimMode
 
       // Apply user trim prefs on publish if still dirty (or over hard max)
       if (
@@ -544,6 +550,7 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
         publishClipStart = result.startSeconds
         publishClipDur = result.durationSeconds
         publishOrigDur = result.originalDuration
+        effectiveTrimMode = result.trimMode || null
         updateStatusPublish(token, { phase: 'trimming', pct: 45, message: 'Trim applied' })
       }
       if (!fileToUpload) throw new Error('Add a photo or video first')
@@ -566,6 +573,7 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
           publishClipStart = 0
           publishClipDur = null
           publishOrigDur = null
+          effectiveTrimMode = 'reencoded'
         } else {
           throw new Error('Video is too large. Choose a shorter length or smaller file.')
         }
@@ -576,7 +584,7 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
       if (
         s.mediaType === 'video'
         && publishClipDur != null
-        && s.trimMode !== 'reencoded'
+        && effectiveTrimMode !== 'reencoded'
         && needsClipFragment(publishClipStart, publishClipDur, publishOrigDur)
       ) {
         url = applyClipToMediaUrl(url, publishClipStart, publishClipDur)
