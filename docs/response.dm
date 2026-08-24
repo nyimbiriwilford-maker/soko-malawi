@@ -361,3 +361,24 @@ The status caption chip was absolutely positioned at `bottom: 12` of the media s
 ## Validation
 - `npm run build` — PASS.
 - ESLint — no new errors. Not committed yet.
+
+---
+
+# Text-only statuses readable on the home page — IMPLEMENTED
+
+## Problem
+Text-only statuses store their background colour as `media_urls[0]` (e.g. `"#0f766e"`). Every preview surface treated that entry as an image URL and rendered `<img src="#0f766e">` — a broken/black tile with no way to read the message.
+
+## Changes
+- **`src/utils/statusVideo.js`** — new `isStatusColorBoard(url)` helper (detects `#rgb`/`#rrggbb`/`#rrggbbaa` board entries).
+- **`src/components/StatusTextBoard.jsx` (NEW)** — reusable board preview: the status's background colour with its words rendered on top, WhatsApp-style auto text sizing (short text bigger, long text smaller + 5-line clamp), centred, white bold with text-shadow.
+- **`src/components/HomeStatusSection.jsx`** — home page story tiles (mobile + desktop variants) now render `StatusTextBoard` for text statuses instead of a broken image; the bottom label no longer duplicates the words already shown on the board.
+- **`src/pages/StatusPage.jsx`** — same treatment in the cinematic story tiles and the feed cards (larger text scale there). Also fixed a leftover stale regex in the feed card's video detection (missed by the earlier replaceAll) — it now uses `isStatusVideoUrl` too.
+- **`src/pages/SavedStatusesPage.jsx`** — saved-status banners render the board colour + words.
+
+## Result
+A text status now looks like a real picture everywhere (home, status page, saved list): background colour visible, words readable at a glance. Opening the viewer still shows the full-screen text board.
+
+## Validation
+- `npm run build` — PASS.
+- ESLint on touched files — only pre-existing errors. Not committed yet.

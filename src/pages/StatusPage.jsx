@@ -4,7 +4,8 @@ import { supabase } from '../lib/supabase'
 import { fetchAllActiveStories } from '../hooks/useStatuses'
 import StoryViewer from '../components/StoryViewer'
 import StatusUploadModal from '../components/StatusUploadModal'
-import { isStatusVideoUrl } from '../utils/statusVideo'
+import { isStatusVideoUrl, isStatusColorBoard } from '../utils/statusVideo'
+import StatusTextBoard from '../components/StatusTextBoard'
 import { useStatusReplies } from '../components/StatusReplies'
 import SokoNav from '../components/SokoNav'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -334,8 +335,9 @@ function StoryRingItem({ s, isOwn, viewedIds, onClick, label }) {
 function StoryCard({ s, index, isOwn, viewedIds, onClick, nearBadge }) {
   const name   = s.profiles?.full_name || 'Seller'
   const avatar = s.profiles?.avatar_url
-  const media  = s.media_urls?.[0]
-  const isVideo = media && isStatusVideoUrl(media)
+  const media      = s.media_urls?.[0]
+  const isVideo    = media && isStatusVideoUrl(media)
+  const boardColor = isStatusColorBoard(media) ? media : null
   const initial = name[0]?.toUpperCase() || 'S'
   const isUrgent = s.content?.toLowerCase().includes('price drop') ||
                    s.content?.toLowerCase().includes('first to confirm') ||
@@ -372,7 +374,9 @@ function StoryCard({ s, index, isOwn, viewedIds, onClick, nearBadge }) {
       {media
         ? (isVideo
             ? <video src={media} muted playsInline preload="metadata" className="st-story-tile-media" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
-            : <img src={media} alt="" className="st-story-tile-media" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+            : boardColor
+              ? <StatusTextBoard color={boardColor} text={s.content} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+              : <img src={media} alt="" className="st-story-tile-media" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
           )
         : avatar
           ? <img src={avatar} alt="" className="st-story-tile-media" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: 'brightness(0.88) saturate(1.1)', transform: 'scale(1.06)' }} />
@@ -510,7 +514,8 @@ function StatusFeedCard({ s, onOpen, currentUserId, metrics, onLike }) {
   const initial    = name[0]?.toUpperCase() || 'S'
   const isVerified = s.profiles?.is_verified || false
   const media      = s.media_urls?.[0]
-  const isVideo    = media && (/\.(mp4|mov|webm)(\?|$)/i.test(media) || media.includes('video'))
+  const isVideo    = media && isStatusVideoUrl(media)
+  const boardColor = isStatusColorBoard(media) ? media : null
   const ago        = timeAgo(s.created_at)
   const expires    = expiresInLabel(s.expires_at)
   const rawContent = (s.content || '').trim()
@@ -602,7 +607,9 @@ function StatusFeedCard({ s, onOpen, currentUserId, metrics, onLike }) {
           <button type="button" className="st-feed-media" onClick={onOpen} aria-label="Open status">
             {isVideo
               ? <video src={media} muted playsInline preload="metadata" />
-              : <img src={media} alt="" loading="lazy" />
+              : boardColor
+                ? <StatusTextBoard color={boardColor} text={s.content} sizeScale={1.5} />
+                : <img src={media} alt="" loading="lazy" />
             }
             {isVideo && <span className="st-feed-play" aria-hidden>▶</span>}
             <div className="st-feed-media-fade" aria-hidden />

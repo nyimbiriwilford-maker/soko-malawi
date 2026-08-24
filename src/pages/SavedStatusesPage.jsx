@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { isStatusVideoUrl } from '../utils/statusVideo'
+import { isStatusVideoUrl, isStatusColorBoard } from '../utils/statusVideo'
 import StoryViewer from '../components/StoryViewer'
+import StatusTextBoard from '../components/StatusTextBoard'
 
 export default function SavedStatusesPage() {
   const navigate = useNavigate()
@@ -136,6 +137,8 @@ export default function SavedStatusesPage() {
                         <video src={media} muted playsInline preload="metadata" style={{
                           width: '100%', height: '100%', objectFit: 'cover',
                         }} />
+                      ) : isStatusColorBoard(media) ? (
+                        <StatusTextBoard color={media} text={s.content} />
                       ) : (
                         <img src={media} alt="" style={{
                           width: '100%', height: '100%', objectFit: 'cover',

@@ -125,6 +125,11 @@ export function isStatusVideoUrl(url) {
   return /\.(mp4|mov|webm|m4v)$/i.test(base)
 }
 
+/** True if the media entry is a text-board background colour (e.g. "#0f766e"). */
+export function isStatusColorBoard(url) {
+  return typeof url === 'string' && /^#([0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i.test(url.trim())
+}
+
 function pickRecorderMime() {
   const candidates = [
     'video/mp4;codecs=avc1.42E01E,mp4a.40.2',

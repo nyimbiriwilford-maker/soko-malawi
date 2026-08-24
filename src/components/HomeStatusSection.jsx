@@ -2,7 +2,8 @@ import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { ChevronRight, MapPin, ShoppingBag, Store, Briefcase, Wrench } from 'lucide-react'
 import { STATUS_META } from '../constants/homeConstants'
 import { supabase } from '../lib/supabase'
-import { isStatusVideoUrl } from '../utils/statusVideo'
+import { isStatusVideoUrl, isStatusColorBoard } from '../utils/statusVideo'
+import StatusTextBoard from './StatusTextBoard'
 
 const G = {
   green: '#0F9D58', greenLight: '#e8f5ee', greenMid: '#0a7a44',
@@ -293,6 +294,7 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
   const avatar = s.profiles?.avatar_url
   const media = s.media_urls?.[0]
   const isVideo = media && isStatusVideoUrl(media)
+  const boardColor = isStatusColorBoard(media) ? media : null
   const initial = name[0]?.toUpperCase() || 'S'
   const isVerified = s.profiles?.is_verified || s.profiles?.verified || false
   const group = s._ownGroup || [s]
@@ -300,7 +302,8 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
   const ringItems = group.map(st => ({ id: st.id, viewed: viewedIds.has(st.id) }))
   const unseen = !allViewed && !isOwn
   const tagged = s.tagged || {}
-  const title = tagged?.title || tagged?.name || s.content || null
+  // Text boards already show the words on the tile — don't repeat them in the label
+  const title = tagged?.title || tagged?.name || (boardColor ? null : s.content) || null
   const price = tagged?.price != null ? `MK${Number(tagged.price).toLocaleString()}` : tagged?.rate || tagged?.salary || null
 
   if (isMobile) {
@@ -320,17 +323,24 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
       >
         {media ? (
           <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
-            <LazyMedia src={media} isVideo={isVideo}
-              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
-            {isVideo && (
-              <div style={{
-                position: 'absolute', bottom: 8, right: 8, zIndex: 5,
-                width: 20, height: 20, borderRadius: '50%',
-                background: 'rgba(0,0,0,0.55)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="#fff"><polygon points="6,3 20,12 6,21" /></svg>
-              </div>
+            {boardColor ? (
+              <StatusTextBoard color={boardColor} text={s.content}
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+            ) : (
+              <>
+                <LazyMedia src={media} isVideo={isVideo}
+                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+                {isVideo && (
+                  <div style={{
+                    position: 'absolute', bottom: 8, right: 8, zIndex: 5,
+                    width: 20, height: 20, borderRadius: '50%',
+                    background: 'rgba(0,0,0,0.55)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="#fff"><polygon points="6,3 20,12 6,21" /></svg>
+                  </div>
+                )}
+              </>
             )}
           </div>
         ) : avatar ? (
@@ -446,17 +456,24 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
     >
 {media ? (
           <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
-            <LazyMedia src={media} isVideo={isVideo}
-              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
-            {isVideo && (
-              <div style={{
-                position: 'absolute', bottom: 8, right: 8, zIndex: 5,
-                width: 20, height: 20, borderRadius: '50%',
-                background: 'rgba(0,0,0,0.55)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="#fff"><polygon points="6,3 20,12 6,21" /></svg>
-              </div>
+            {boardColor ? (
+              <StatusTextBoard color={boardColor} text={s.content}
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+            ) : (
+              <>
+                <LazyMedia src={media} isVideo={isVideo}
+                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+                {isVideo && (
+                  <div style={{
+                    position: 'absolute', bottom: 8, right: 8, zIndex: 5,
+                    width: 20, height: 20, borderRadius: '50%',
+                    background: 'rgba(0,0,0,0.55)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="#fff"><polygon points="6,3 20,12 6,21" /></svg>
+                  </div>
+                )}
+              </>
             )}
           </div>
       ) : avatar ? (
