@@ -454,3 +454,20 @@ Fixed the mobile bugs found in the audit above. One audit item turned out to hav
 
 ## Validation
 - `npm run build` — PASS (Vite/build succeeds).
+---
+
+# Shop page: Message/Follow no longer hide products — IMPLEMENTED (`src/pages/ShopPage.jsx`)
+
+Problem: the fixed mobile Message/Follow bar floated over the product grid and hid shop content. Replaced it with professional inline placement.
+
+## Changes
+- **Removed the floating `.sp-mobile-cta` fixed bar** (JSX + all CSS + `showVisitorSticky` + `has-sticky-cta` class/hooks).
+- **Visitor Message/Follow buttons now render inline in the shop header** next to the shop info — same treatment the page already used for shop owners (`.sp-owner-bar`). On mobile the action row becomes a full-width 2-column grid (`Message | Follow`), and the follower count sits centered beneath the buttons.
+- **Page bottom padding** no longer needs the extra `has-sticky-cta` space (nothing floats over content now); the normal measured `--sp-bottom-nav-offset` bottom gap is kept so the global bottom nav never covers content.
+- **De-duplicated followers**: mob follower count now shows only once (under the buttons); the duplicate copy in the meta line stays hidden.
+
+## Result
+On mobile the product grid is never overlapped — the actions live compactly in the header card.
+
+## Validation
+- `npm run build` — PASS.

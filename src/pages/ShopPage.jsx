@@ -893,20 +893,12 @@ const css = `
     }
   }
 
-  /* Sticky mobile CTA bar (visitors) */
-  .sp-mobile-cta {
-    display: none;
-  }
-
   /* mobile shop layout */
   @media (max-width: 900px) {
     .sp-root {
       /* Bottom gap = real mobile bottom-nav height (measured, incl. safe-area)
          + a little air. Falls back to 72px until the hook measures it. */
       padding-bottom: calc(var(--sp-bottom-nav-offset, 72px) + 16px);
-    }
-    .sp-root.has-sticky-cta {
-      padding-bottom: calc(var(--sp-bottom-nav-offset, 72px) + 76px);
     }
 
     .sp-breadcrumb {
@@ -976,10 +968,32 @@ const css = `
     .sp-tag-pill { font-size: 11px; padding: 3px 9px; }
     .sp-shop-meta { font-size: 12px; margin-top: 6px; gap: 5px; }
     .sp-shop-meta .meta-joined { display: none; }
-    .sp-shop-meta .meta-followers-inline { display: inline !important; }
+    /* Follower count is shown once, under the Message/Follow buttons in the
+       header action column — keep the meta-line copy hidden to avoid dupes. */
+    .sp-shop-meta .meta-followers-inline { display: none !important; }
 
-    /* Desktop action row hidden; sticky bar used instead for visitors */
-    .sp-shophead-right.visitor-actions { display: none; }
+    /* Visitor actions live inline in the header (like the owner bar) so no
+       floating bar ever covers the product grid on mobile. */
+    .sp-shophead-right.visitor-actions {
+      width: 100%; align-items: stretch; display: flex;
+    }
+    .sp-shophead-right.visitor-actions .sp-action-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      width: 100%;
+    }
+    .sp-shophead-right.visitor-actions .sp-btn-msg,
+    .sp-shophead-right.visitor-actions .sp-btn-follow {
+      width: 100%;
+      min-height: 46px;
+      font-size: 13.5px;
+      padding: 0 6px;
+    }
+    .sp-shophead-right.visitor-actions .sp-followers-count {
+      justify-content: center;
+      padding-top: 2px;
+    }
     .sp-shophead-right.owner-actions {
       width: 100%; align-items: stretch; display: flex;
     }
@@ -1105,7 +1119,6 @@ const css = `
       top: auto;
       margin-top: 8px;
     }
-    .sp-root.has-sticky-cta .sp-similar-wrap { margin-bottom: 0; }
     .sp-similar { padding: 12px 12px 14px; }
     .sp-similar-head h3 { font-size: 14px; }
     .sp-similar-card { padding: 10px; border-radius: 12px; gap: 10px; }
@@ -1115,31 +1128,6 @@ const css = `
 
     .sp-empty-products { padding: 36px 16px; border-radius: 14px; }
     .sp-viewall { min-height: 46px; font-size: 13px; border-radius: 11px; }
-
-    /* Sticky bottom Message / Follow */
-    .sp-mobile-cta {
-      display: flex;
-      position: fixed;
-      left: 0; right: 0;
-      /* Sit just above the real mobile bottom-nav (measured via
-         --sp-bottom-nav-offset) so buttons never tuck underneath it. */
-      bottom: calc(var(--sp-bottom-nav-offset, 72px) + 8px);
-      z-index: 90;
-      gap: 8px;
-      padding: 10px 12px;
-      background: rgba(255,255,255,.96);
-      backdrop-filter: blur(14px);
-      -webkit-backdrop-filter: blur(14px);
-      border-top: 1px solid ${T.border};
-      box-shadow: 0 -4px 20px rgba(0,0,0,.06);
-    }
-    .sp-mobile-cta .sp-btn-msg,
-    .sp-mobile-cta .sp-btn-follow {
-      flex: 1;
-      min-height: 46px;
-      border-radius: 12px;
-      font-size: 14px;
-    }
 
     .sp-verify-banner-wrap { padding: 0 10px !important; margin-top: 10px !important; }
     .sp-verify-banner-inner {
@@ -1153,7 +1141,6 @@ const css = `
 
   @media (min-width: 901px) {
     .sp-shop-search { display: block; }
-    .sp-mobile-cta { display: none !important; }
   }
 
   @media (max-width: 600px) {
@@ -2347,8 +2334,6 @@ if (!shop) {
   const followerCount = shop.follower_count ?? 0
   const activeTheme = resolveShopTheme(shop.theme)
 
-  const showVisitorSticky = !isOwner && currentUserId !== shop?.owner_id
-
   async function applyShopTheme(nextTheme) {
     if (!shop?.id || !SHOP_THEMES[nextTheme]) return
     setThemeError(null)
@@ -2368,7 +2353,7 @@ if (!shop) {
   return (
     <div
       ref={rootRef}
-      className={`sp-root sp-theme-${activeTheme.id}${showVisitorSticky ? ' has-sticky-cta' : ''}`}
+      className={`sp-root sp-theme-${activeTheme.id}`}
       style={{
         '--theme': activeTheme.color,
         '--theme-dark': activeTheme.dark,
@@ -3523,23 +3508,6 @@ if (!shop) {
               )}
             </div>
           </div>
-        </div>
-      )}
-
-      {/* ── MOBILE STICKY CTA (visitors) ── */}
-      {showVisitorSticky && (
-        <div className="sp-mobile-cta" role="region" aria-label="Shop actions">
-          <button type="button" className="sp-btn-msg" onClick={handleMessageOwner}>
-            <Icon.Msg /> Message
-          </button>
-          <button
-            type="button"
-            className={`sp-btn-follow${isFollowing ? ' following' : ''}`}
-            onClick={handleFollowToggle}
-            disabled={followLoading}
-          >
-            {isFollowing ? 'Following' : 'Follow'}
-          </button>
         </div>
       )}
 
