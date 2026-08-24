@@ -226,3 +226,24 @@ Completed the Level 2 credibility pass across the buyer surface. All planned tas
 - `orders.js` alias keeps `formatMWK` available for out-of-scope consumers (OrderManager, ShopDashboard) as planned.
 - "Open since"/"New shop" is guarded by a `created_at` null-check per the plan.
 - Manual walkthrough recommended per plan item 3 to eyeball the green-accent swap on a live listing.
+
+---
+
+# Admin Manual User Verification — IMPLEMENTED & DEPLOYED
+
+## Summary
+Added ability for admins to manually verify/unverify users without requiring a verification request. Useful for VIP sellers, staff accounts, and emergency verifications.
+
+## Files Changed
+- `supabase/migrations/20260824_admin_manual_verify_user.sql` (NEW) — DB functions with audit trail
+- `src/lib/verification.js` — Added `adminManualVerifyUser` and `adminManualUnverifyUser`
+- `src/components/AdminVerifiedSellers.jsx` — Added modal UI with justification/note fields
+
+## Deployment
+- Committed and pushed to `master` (commit `00f9e44`)
+- Vercel deployment triggered automatically
+
+## Next Steps
+- Run `supabase migration up` to activate DB functions
+- Test modal in AdminVerifiedSellers page
+- Verify audit entries in `verification_audit_log`

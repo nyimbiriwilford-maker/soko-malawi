@@ -33,6 +33,7 @@ export default function AdminVerifiedSellers({ adminName = '', onToast, onOpenRe
   const [error, setError] = useState('')
   const [syncing, setSyncing] = useState(false)
   const [showManualVerifyModal, setShowManualVerifyModal] = useState(false)
+  const [manualVerifyMode, setManualVerifyMode] = useState('verify')
   const [manualVerifyForm, setManualVerifyForm] = useState({
     userId: '',
     verificationType: 'seller',
@@ -182,6 +183,45 @@ export default function AdminVerifiedSellers({ adminName = '', onToast, onOpenRe
     }
   }
 
+  async function handleManualUnverify() {
+    const userId = manualVerifyForm.userId.trim()
+    const reason = note.trim()
+
+    if (!userId) {
+      toast('❌ Enter a user ID first')
+      return
+    }
+    if (!reason) {
+      toast('❌ Enter a reason in the admin note field above')
+      return
+    }
+    if (!window.confirm(`Remove verification from user ${userId}? This action is logged.`)) {
+      return
+    }
+
+    setManualVerifyBusy(true)
+    try {
+      const result = await adminManualUnverifyUser({
+        userId,
+        reason,
+      })
+
+      toast(`✅ Verification removed for user ${userId}`)
+      setShowManualVerifyModal(false)
+      setManualVerifyForm((f) => ({ ...f, userId: '' }))
+      setNote('')
+      await load()
+    } catch (e) {
+      const raw = e?.message || e?.error_description || ''
+      const friendly = friendlyVerificationError(e)
+      const msg = friendly || raw || 'Unverify failed'
+      toast(`❌ ${msg}`)
+      console.error('adminManualUnverifyUser failed', e)
+    } finally {
+      setManualVerifyBusy(false)
+    }
+  }
+
   return (
     <div style={{ padding: '0 0 24px' }}>
       <div style={{
@@ -208,7 +248,7 @@ export default function AdminVerifiedSellers({ adminName = '', onToast, onOpenRe
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button
               type="button"
-              onClick={() => setShowManualVerifyModal(true)}
+              onClick={() => { setManualVerifyMode('verify'); setShowManualVerifyModal(true) }}
               style={{
                 padding: '7px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
                 fontSize: 12, fontWeight: 700, background: '#fef3c7', color: '#b45309',
@@ -217,6 +257,19 @@ export default function AdminVerifiedSellers({ adminName = '', onToast, onOpenRe
               title="Manually verify a user without a verification request"
             >
               ⚡ Manual verify user
+            </button>
+            <button
+              type="button"
+              onClick={() => { setManualVerifyMode('unverify'); setShowManualVerifyModal(true) }}
+              disabled={manualVerifyBusy}
+              style={{
+                padding: '7px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                fontSize: 12, fontWeight: 700, background: '#fee2e2', color: '#991b1b',
+                fontFamily: 'inherit',
+              }}
+              title="Remove verification from a user"
+            >
+              {manualVerifyBusy ? '…' : '✕ Unverify user'}
             </button>
             <button
               type="button"
@@ -447,6 +500,145 @@ export default function AdminVerifiedSellers({ adminName = '', onToast, onOpenRe
           </div>
         )}
       </div>
+
+      {showManualVerifyModal && (
+        <div style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 16,
+        }} onClick={() => setShowManualVerifyModal(false)}>
+          <div style={{
+            background: '#fff', borderRadius: 16, width: '100%', maxWidth: 480,
+            maxHeight: '90vh', overflow: 'auto', padding: 20,
+          }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ fontSize: 16, fontWeight: 800, color: '#111', marginBottom: 4 }}>
+              {manualVerifyMode === 'verify' ? 'Manual user verification' : 'Remove user verification'}
+            </div>
+            <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 12 }}>
+              {manualVerifyMode === 'verify'
+                ? 'Verify a user directly without a verification request. This creates an audit trail.'
+                : 'Remove verification status from a user. This action is logged and cannot be undone automatically.'}
+            </div>
+
+            <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 4 }}>
+              User ID
+            </label>
+            <input
+              value={manualVerifyForm.userId}
+              onChange={(e) => setManualVerifyForm((f) => ({ ...f, userId: e.target.value }))}
+              placeholder="UUID of the user"
+              style={{
+                width: '100%', boxSizing: 'border-box', border: '1.5px solid #e0e8e2', borderRadius: 10,
+                padding: '10px 12px', fontSize: 13, fontFamily: 'inherit', marginBottom: 10,
+              }}
+            />
+
+            {manualVerifyMode === 'verify' && (
+              <>
+                <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 4 }}>
+                  Verification type
+                </label>
+                <select
+                  value={manualVerifyForm.verificationType}
+                  onChange={(e) => setManualVerifyForm((f) => ({ ...f, verificationType: e.target.value }))}
+                  style={{
+                    width: '100%', boxSizing: 'border-box', border: '1.5px solid #e0e8e2', borderRadius: 10,
+                    padding: '10px 12px', fontSize: 13, fontFamily: 'inherit', marginBottom: 10,
+                  }}
+                >
+                  <option value="seller">Seller</option>
+                  <option value="shop">Shop / Business</option>
+                  <option value="individual">Individual</option>
+                </select>
+
+                <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 4 }}>
+                  Justification <span style={{ color: '#dc2626' }}>*</span>
+                </label>
+                <textarea
+                  value={manualVerifyForm.justification}
+                  onChange={(e) => setManualVerifyForm((f) => ({ ...f, justification: e.target.value }))}
+                  rows={3}
+                  placeholder="Required. Explain why this user is being manually verified."
+                  style={{
+                    width: '100%', boxSizing: 'border-box', border: '1.5px solid #e0e8e2', borderRadius: 10,
+                    padding: '10px 12px', fontSize: 13, fontFamily: 'inherit', resize: 'vertical', marginBottom: 10,
+                  }}
+                />
+
+                <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 4 }}>
+                  Admin note (optional)
+                </label>
+                <textarea
+                  value={manualVerifyForm.adminNote}
+                  onChange={(e) => setManualVerifyForm((f) => ({ ...f, adminNote: e.target.value }))}
+                  rows={2}
+                  placeholder="Optional internal note"
+                  style={{
+                    width: '100%', boxSizing: 'border-box', border: '1.5px solid #e0e8e2', borderRadius: 10,
+                    padding: '10px 12px', fontSize: 13, fontFamily: 'inherit', resize: 'vertical', marginBottom: 12,
+                  }}
+                />
+              </>
+            )}
+
+            {manualVerifyMode === 'unverify' && (
+              <>
+                <label style={{ fontSize: 12, fontWeight: 700, color: '#374151', display: 'block', marginBottom: 4 }}>
+                  Reason <span style={{ color: '#dc2626' }}>*</span>
+                </label>
+                <textarea
+                  value={manualVerifyForm.justification}
+                  onChange={(e) => setManualVerifyForm((f) => ({ ...f, justification: e.target.value }))}
+                  rows={3}
+                  placeholder="Required. Explain why verification is being removed (fraud, policy violation, user request, etc.)."
+                  style={{
+                    width: '100%', boxSizing: 'border-box', border: '1.5px solid #e0e8e2', borderRadius: 10,
+                    padding: '10px 12px', fontSize: 13, fontFamily: 'inherit', resize: 'vertical', marginBottom: 12,
+                  }}
+                />
+              </>
+            )}
+
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                type="button"
+                disabled={manualVerifyBusy}
+                onClick={() => setShowManualVerifyModal(false)}
+                style={{
+                  padding: '9px 14px', borderRadius: 10, border: '1.5px solid #e5e7eb', cursor: 'pointer',
+                  fontSize: 13, fontWeight: 700, background: '#fff', color: '#374151', fontFamily: 'inherit',
+                }}
+              >
+                Cancel
+              </button>
+              {manualVerifyMode === 'verify' ? (
+                <button
+                  type="button"
+                  disabled={manualVerifyBusy}
+                  onClick={handleManualVerify}
+                  style={{
+                    padding: '9px 14px', borderRadius: 10, border: 'none', cursor: 'pointer',
+                    fontSize: 13, fontWeight: 700, background: '#1a7a4a', color: '#fff', fontFamily: 'inherit',
+                  }}
+                >
+                  {manualVerifyBusy ? 'Verifying…' : 'Verify user'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={manualVerifyBusy}
+                  onClick={handleManualUnverify}
+                  style={{
+                    padding: '9px 14px', borderRadius: 10, border: 'none', cursor: 'pointer',
+                    fontSize: 13, fontWeight: 700, background: '#dc2626', color: '#fff', fontFamily: 'inherit',
+                  }}
+                >
+                  {manualVerifyBusy ? 'Removing…' : 'Remove verification'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
