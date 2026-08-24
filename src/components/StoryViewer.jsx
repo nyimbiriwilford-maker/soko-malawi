@@ -944,7 +944,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
   const name = story.profiles?.full_name || 'Seller'
   const avatar = story.profiles?.avatar_url
   const initial = (name[0] || 'S').toUpperCase()
-  const isOwn = story.user_id === currentUserId
+  const isOwn = !!currentUserId && !!story?.user_id && String(story.user_id) === String(currentUserId)
   const createdAgo = timeAgoFn(story.created_at)
 
   const mediaList = getMediaList(story)
