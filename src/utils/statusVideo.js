@@ -519,7 +519,12 @@ export async function trimStatusVideo(file, opts = {}) {
   }
 
   // Re-encode to H.264/AAC MP4 for universal compatibility
-  const encoded = await encodeClipRealtime(file, start, clipLen, () => {})
+  let encoded
+  try {
+    encoded = await encodeClipRealtime(file, start, clipLen, () => {})
+  } catch {
+    encoded = null
+  }
   if (encoded && encoded.size > 0) {
     return {
       file: encoded,
