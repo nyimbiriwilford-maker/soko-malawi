@@ -210,7 +210,7 @@ export function getClipLengthOptions(videoDuration) {
  *
  * Prefer meta trim whenever the original fits under the upload cap.
  */
-async function encodeClipRealtime(file, start, clipLen, onProgress) {
+export async function encodeClipRealtime(file, start, clipLen, onProgress) {
   const mimeType = pickRecorderMime()
   if (!mimeType || typeof MediaRecorder === 'undefined') return null
 
@@ -448,13 +448,9 @@ async function encodeClipRealtime(file, start, clipLen, onProgress) {
 /**
  * Trim video from startSeconds for durationSeconds (user preference).
  *
- * Always uses meta-trim: the original file bytes are kept and a clip window
- * (#t=start,end) is stored instead. This guarantees perfect A/V sync, no
- * quality loss, and no frame timing changes — the selected range is preserved
- * exactly as recorded.
- *
- * If the file is too large for upload, the caller should detect the upload
- * failure and call compressForUpload() to produce a smaller version.
+ * Re-encodes to H.264/AAC MP4 when a clip window is applied, ensuring
+ * universal browser compatibility. Original bytes are kept only when no
+ * trimming is needed (full video within max duration).
  *
  * @param {File} file
  * @param {object} [opts]
@@ -463,11 +459,10 @@ async function encodeClipRealtime(file, start, clipLen, onProgress) {
  * @returns {Promise<{
  *   file: File,
  *   trimmed: boolean,
- *   trimMode: 'meta',
+ *   trimMode: 'reencoded'|'meta',
  *   originalDuration: number,
  *   startSeconds: number,
  *   durationSeconds: number,
- *   note?: string,
  * }>}
  */
 export async function trimStatusVideo(file, opts = {}) {
@@ -523,6 +518,20 @@ export async function trimStatusVideo(file, opts = {}) {
     }
   }
 
+  // Re-encode to H.264/AAC MP4 for universal compatibility
+  const encoded = await encodeClipRealtime(file, start, clipLen, () => {})
+  if (encoded && encoded.size > 0) {
+    return {
+      file: encoded,
+      trimmed: true,
+      trimMode: 'reencoded',
+      originalDuration: clipLen,
+      startSeconds: start,
+      durationSeconds: clipLen,
+    }
+  }
+
+  // Fall back to meta trim if re-encoding fails
   return {
     file,
     trimmed: true,
