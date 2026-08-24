@@ -2041,6 +2041,21 @@ export async function adminScanAnomalies() {
   return typeof data === 'number' ? data : 0
 }
 
+/**
+ * Manually trigger auto-expiry of overdue verification requests.
+ * Returns { count: number, requestIds: uuid[] }
+ */
+export async function adminAutoExpireOverdueRequests() {
+  const { data, error } = await supabase.rpc('auto_expire_overdue_verification_requests')
+  if (error) throw error
+  if (!data || data.length === 0) return { count: 0, requestIds: [] }
+  const row = Array.isArray(data) ? data[0] : data
+  return {
+    count: row.expired_count || 0,
+    requestIds: row.request_ids || [],
+  }
+}
+
 export async function getVerificationAnomalies({ status = 'open', limit = 200, requestId = null } = {}) {
   let q = supabase
     .from('verification_anomalies')
@@ -4567,6 +4582,7 @@ export default {
   adminOverrideStatus,
   reportVerificationAnomaly,
   adminScanAnomalies,
+  adminAutoExpireOverdueRequests,
   getVerificationAnomalies,
   adminUpdateAnomaly,
   adminUpdateVerificationSettings,

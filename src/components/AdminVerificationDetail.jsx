@@ -26,6 +26,7 @@ import {
   getVerificationAnomalies,
   stageOfStatus,
   ADMIN_OVERRIDE_TARGETS,
+  adminAutoExpireOverdueRequests,
 } from '../lib/verification'
 
 /**
@@ -284,6 +285,18 @@ export default function AdminVerificationDetail({
     return run('waive-all', async () => {
       const n = await resolveOpenIssuesForRequest(detail.request.id, 'waived')
       setActionMsg(`Waived ${n} open issue${n === 1 ? '' : 's'}.`)
+    })
+  }
+
+  function handleAutoExpireThis() {
+    if (!detail) return
+    return run('auto-expire', async () => {
+      const result = await adminAutoExpireOverdueRequests()
+      if (result.requestIds.includes(detail.request.id)) {
+        setActionMsg('This request has been expired due to missed deadline.')
+      } else {
+        setActionMsg(`Expired ${result.count} overdue request${result.count === 1 ? '' : 's'} (this one may not have qualified).`)
+      }
     })
   }
 
@@ -1169,6 +1182,45 @@ export default function AdminVerificationDetail({
               {!isFinal && (
                 <section style={styles.card}>
                   <h3 style={styles.sectionTitle}>Admin actions</h3>
+
+                  {/* Overdue deadline warning */}
+                  {req.status === VERIFICATION_STATUSES.ADDITIONAL_INFO_REQUIRED
+                    && req.additional_info_deadline_at
+                    && new Date(req.additional_info_deadline_at) < new Date() && (
+                    <div style={{
+                      background: '#fee2e2',
+                      border: '1px solid #fecaca',
+                      color: '#b91c1c',
+                      borderRadius: 10,
+                      padding: '10px 12px',
+                      fontSize: 13,
+                      fontWeight: 700,
+                      marginBottom: 12,
+                    }}>
+                      ⚠ Deadline passed: {new Date(req.additional_info_deadline_at).toLocaleString()}
+                      <p style={{ margin: '6px 0 0', fontSize: 12, fontWeight: 600 }}>
+                        Seller has not resubmitted after the deadline. Take action below.
+                      </p>
+                      <div style={{ display: 'flex', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                        <button
+                          type="button"
+                          style={styles.dangerBtn}
+                          disabled={!!busy}
+                          onClick={handleAutoExpireThis}
+                        >
+                          {busy === 'auto-expire' ? 'Expiring…' : 'Auto-expire this request'}
+                        </button>
+                        <button
+                          type="button"
+                          style={styles.secondaryBtn}
+                          disabled={!!busy}
+                          onClick={handleExtendDeadline}
+                        >
+                          {busy === 'extend-deadline' ? '…' : 'Extend deadline +3 days'}
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   <label style={styles.label}>
                     Approve note (optional)

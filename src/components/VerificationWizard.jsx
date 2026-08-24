@@ -241,6 +241,23 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
   const openIssues = issues.filter((i) => i.status === 'open' || i.status === 'needs_recheck')
   const deadlineAt = request?.additional_info_deadline_at || null
 
+  // Calculate deadline status
+  const deadlineStatus = useMemo(() => {
+    if (!deadlineAt) return null
+    const deadline = new Date(deadlineAt)
+    const now = new Date()
+    const hoursRemaining = (deadline - now) / (1000 * 60 * 60)
+
+    if (hoursRemaining < 0) {
+      return { status: 'expired', message: 'Deadline has passed', color: '#b91c1c', bg: '#fee2e2' }
+    } else if (hoursRemaining < 24) {
+      return { status: 'urgent', message: `Less than ${Math.floor(hoursRemaining)} hours remaining`, color: '#c2410c', bg: '#ffedd5' }
+    } else if (hoursRemaining < 72) {
+      return { status: 'soon', message: `${Math.floor(hoursRemaining / 24)} days remaining`, color: '#b45309', bg: '#fef3c7' }
+    }
+    return { status: 'ok', message: `Deadline: ${deadline.toLocaleString()}`, color: '#9a3412', bg: null }
+  }, [deadlineAt])
+
   // Display status for seller (never "payment pending" when payment is confirmed / need-info)
   const displayStatus = useMemo(
     () => getSellerDisplayStatus(request, payments),
@@ -1254,9 +1271,20 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
                   <p style={{ margin: '6px 0 0' }}>
                     {request.additional_info_message || 'Please update the items below and resubmit.'}
                   </p>
-                  {deadlineAt && (
-                    <p style={{ margin: '4px 0 0', fontSize: 12, fontWeight: 700, color: '#9a3412' }}>
-                      Deadline: {new Date(deadlineAt).toLocaleString()}
+                  {deadlineAt && deadlineStatus && (
+                    <p style={{
+                      margin: '4px 0 0',
+                      fontSize: 12,
+                      fontWeight: 700,
+                      color: deadlineStatus.color,
+                      padding: deadlineStatus.bg ? '4px 8px' : 0,
+                      background: deadlineStatus.bg || 'transparent',
+                      borderRadius: deadlineStatus.bg ? 6 : 0,
+                      display: 'inline-block',
+                    }}>
+                      {deadlineStatus.status === 'expired' && '⚠ '}
+                      {deadlineStatus.message}
+                      {deadlineStatus.status === 'expired' && ' — your request may be auto-expired'}
                     </p>
                   )}
                   {request.reviewed_at && (
@@ -1799,9 +1827,20 @@ export default function VerificationWizard({ user, onClose, onSuccess }) {
                               || request.admin_note
                               || 'Please upload clearer documents or complete the missing items.'}
                           </p>
-                          {deadlineAt && (
-                            <p style={{ margin: '6px 0 0', fontSize: 12, fontWeight: 700, color: '#9a3412' }}>
-                              Deadline: {new Date(deadlineAt).toLocaleString()}
+                          {deadlineAt && deadlineStatus && (
+                            <p style={{
+                              margin: '6px 0 0',
+                              fontSize: 12,
+                              fontWeight: 700,
+                              color: deadlineStatus.color,
+                              padding: deadlineStatus.bg ? '6px 10px' : 0,
+                              background: deadlineStatus.bg || 'transparent',
+                              borderRadius: deadlineStatus.bg ? 8 : 0,
+                              display: 'inline-block',
+                            }}>
+                              {deadlineStatus.status === 'expired' && '⚠ '}
+                              {deadlineStatus.message}
+                              {deadlineStatus.status === 'expired' && ' — submit quickly to avoid auto-expiry'}
                             </p>
                           )}
                           <p className="vw-fine" style={{ marginTop: 8, color: '#9a3412' }}>
