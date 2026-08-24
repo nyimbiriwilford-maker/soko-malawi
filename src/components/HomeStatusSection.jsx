@@ -679,6 +679,23 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
   const hasStories = storyGroups.length > 0
   const activeCount = rankedStories.length
 
+  // Auto-scroll past Create Status button when there are more than 2 statuses
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el || rankedStories.length <= 2) return
+
+    const timer = setTimeout(() => {
+      // Calculate width of Create Status button + gap
+      const buttonWidth = isMobile ? 150 : (windowWidth < 1024 ? 190 : 220)
+      const gap = isMobile ? 10 : 16
+      const scrollAmount = buttonWidth + gap
+
+      el.scrollLeft = scrollAmount
+    }, 100)
+
+    return () => clearTimeout(timer)
+  }, [rankedStories.length, isMobile, windowWidth, activeCategory])
+
   function openStoryGroup(s) {
     const ids = s._ownGroup ? s._ownGroup.map(x => x.id) : [s.id]
     setViewedIds(prev => {
