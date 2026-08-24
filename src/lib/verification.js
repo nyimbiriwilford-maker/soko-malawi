@@ -2056,6 +2056,54 @@ export async function adminAutoExpireOverdueRequests() {
   }
 }
 
+/**
+ * Manually verify a user without requiring a verification request.
+ * Admin only. Requires justification for audit trail.
+ */
+export async function adminManualVerifyUser({
+  userId,
+  verificationType = 'seller',
+  adminNote = null,
+  justification,
+}) {
+  if (!userId) throw new Error('User ID is required')
+  if (!justification || !justification.trim()) {
+    throw new Error('Justification is required for manual verification')
+  }
+
+  const { data, error } = await supabase.rpc('admin_manual_verify_user', {
+    p_user_id: userId,
+    p_verification_type: verificationType,
+    p_admin_note: adminNote,
+    p_justification: justification.trim(),
+  })
+
+  if (error) throw error
+  return data
+}
+
+/**
+ * Remove verification from a user. Admin only.
+ * Requires reason for audit trail.
+ */
+export async function adminManualUnverifyUser({
+  userId,
+  reason,
+}) {
+  if (!userId) throw new Error('User ID is required')
+  if (!reason || !reason.trim()) {
+    throw new Error('Reason is required for removing verification')
+  }
+
+  const { data, error } = await supabase.rpc('admin_manual_unverify_user', {
+    p_user_id: userId,
+    p_reason: reason.trim(),
+  })
+
+  if (error) throw error
+  return data
+}
+
 export async function getVerificationAnomalies({ status = 'open', limit = 200, requestId = null } = {}) {
   let q = supabase
     .from('verification_anomalies')
@@ -4583,6 +4631,8 @@ export default {
   reportVerificationAnomaly,
   adminScanAnomalies,
   adminAutoExpireOverdueRequests,
+  adminManualVerifyUser,
+  adminManualUnverifyUser,
   getVerificationAnomalies,
   adminUpdateAnomaly,
   adminUpdateVerificationSettings,

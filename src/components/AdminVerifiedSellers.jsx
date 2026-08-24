@@ -4,6 +4,8 @@ import {
   adminManualVerificationAction,
   adminSyncVerifiedBadgesFromRequests,
   getLatestRequestIdForSeller,
+  adminManualVerifyUser,
+  adminManualUnverifyUser,
   statusLabel,
   friendlyVerificationError,
 } from '../lib/verification'
@@ -30,6 +32,14 @@ export default function AdminVerifiedSellers({ adminName = '', onToast, onOpenRe
   const [selected, setSelected] = useState(null)
   const [error, setError] = useState('')
   const [syncing, setSyncing] = useState(false)
+  const [showManualVerifyModal, setShowManualVerifyModal] = useState(false)
+  const [manualVerifyForm, setManualVerifyForm] = useState({
+    userId: '',
+    verificationType: 'seller',
+    justification: '',
+    adminNote: '',
+  })
+  const [manualVerifyBusy, setManualVerifyBusy] = useState(false)
 
   const toast = (m) => onToast?.(m)
 
@@ -126,6 +136,52 @@ export default function AdminVerifiedSellers({ adminName = '', onToast, onOpenRe
     }
   }
 
+  async function handleManualVerify() {
+    const { userId, verificationType, justification, adminNote } = manualVerifyForm
+
+    if (!userId.trim()) {
+      toast('❌ User ID is required')
+      return
+    }
+
+    if (!justification.trim()) {
+      toast('❌ Justification is required')
+      return
+    }
+
+    if (!window.confirm(`Manually verify user ${userId}? This bypasses the normal verification flow.`)) {
+      return
+    }
+
+    setManualVerifyBusy(true)
+    try {
+      const result = await adminManualVerifyUser({
+        userId: userId.trim(),
+        verificationType,
+        adminNote: adminNote.trim() || null,
+        justification: justification.trim(),
+      })
+
+      toast(`✅ User verified successfully (request ID: ${result.request_id})`)
+      setShowManualVerifyModal(false)
+      setManualVerifyForm({
+        userId: '',
+        verificationType: 'seller',
+        justification: '',
+        adminNote: '',
+      })
+      await load()
+    } catch (e) {
+      const raw = e?.message || e?.error_description || ''
+      const friendly = friendlyVerificationError(e)
+      const msg = friendly || raw || 'Manual verification failed'
+      toast(`❌ ${msg}`)
+      console.error('adminManualVerifyUser failed', e)
+    } finally {
+      setManualVerifyBusy(false)
+    }
+  }
+
   return (
     <div style={{ padding: '0 0 24px' }}>
       <div style={{
@@ -150,6 +206,18 @@ export default function AdminVerifiedSellers({ adminName = '', onToast, onOpenRe
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => setShowManualVerifyModal(true)}
+              style={{
+                padding: '7px 12px', borderRadius: 8, border: 'none', cursor: 'pointer',
+                fontSize: 12, fontWeight: 700, background: '#fef3c7', color: '#b45309',
+                fontFamily: 'inherit',
+              }}
+              title="Manually verify a user without a verification request"
+            >
+              ⚡ Manual verify user
+            </button>
             <button
               type="button"
               onClick={syncBadges}
