@@ -430,6 +430,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
   const [mediaError, setMediaError] = useState(null)
   const [toast, setToast] = useState('')
   const [muted, setMuted] = useState(false)
+  const [captionExpanded, setCaptionExpanded] = useState(false)
 
   const timerRef = useRef()
   const holdRef = useRef()
@@ -566,6 +567,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
     setMuted(false)
     setShowEditCaption(false)
     setShowDeleteConfirm(false)
+    setCaptionExpanded(false)
   }, [story?.id])
 
   // ── Stream media right away (no download % UI) ─────────────────────────────
@@ -1000,6 +1002,14 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
     shop: 'Shop',
     request: 'Looking for',
   })[taggedKind] || 'Tagged'
+
+  // Caption shown on the media — skip auto-generated placeholders ("Photo update")
+  const statusCaption = (() => {
+    const raw = String(story.content || '').replace(/\s+/g, ' ').trim()
+    if (!raw || /^(photo|video|status) update$/i.test(raw)) return null
+    return raw
+  })()
+  const captionIsLong = !!statusCaption && statusCaption.length > 80
 
   // Progress bars: one per media item in this user's current story group,
   // or fall back to per-story-in-user-group
@@ -1508,20 +1518,8 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
               </div>
             )}
 
-            {/* Caption on media only when no product card (avoid double text) */}
-            {!tagged && mediaReady && story.content && media0 && !isTextOnlyStage && (
-              <div style={{
-                position: 'absolute', left: 14, right: 14, bottom: 12, zIndex: 20,
-                background: 'rgba(10,20,14,0.82)',
-                backdropFilter: 'blur(14px)',
-                border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: 16, padding: '12px 14px',
-              }}>
-                <p style={{ margin: 0, fontSize: 14, fontWeight: 600, color: '#f1f5f9', lineHeight: 1.45 }}>
-                  {story.content}
-                </p>
-              </div>
-            )}
+            {/* Caption now lives inside the bottom chrome (stacked above the
+                engagement row) so it never collides with the action bar */}
 
             {/* Tap zones — full height, chrome now floats over the media */}
             <div
@@ -1641,6 +1639,48 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                   </div>
                   <IconChevronRight size={16} color="rgba(255,255,255,0.6)" />
                 </button>
+              )}
+
+              {/* Caption — IG-style chip stacked above the engagement row */}
+              {mediaReady && statusCaption && media0 && !isTextOnlyStage && (
+                <div
+                  role={captionIsLong ? 'button' : undefined}
+                  onClick={captionIsLong ? () => setCaptionExpanded(v => !v) : undefined}
+                  style={{
+                    background: 'rgba(0,0,0,0.38)',
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
+                    border: '1px solid rgba(255,255,255,0.09)',
+                    borderRadius: 13,
+                    padding: '9px 12px',
+                    cursor: captionIsLong ? 'pointer' : 'default',
+                    maxWidth: '100%',
+                    transition: 'background 0.2s ease',
+                  }}
+                >
+                  <p style={{
+                    margin: 0,
+                    fontSize: 13.5, fontWeight: 600, lineHeight: 1.45,
+                    color: 'rgba(255,255,255,0.97)',
+                    textShadow: '0 1px 3px rgba(0,0,0,0.65)',
+                    wordBreak: 'break-word',
+                    display: '-webkit-box',
+                    WebkitLineClamp: captionExpanded ? 12 : 2,
+                    WebkitBoxOrient: 'vertical',
+                    overflow: 'hidden',
+                  }}>
+                    {statusCaption}
+                  </p>
+                  {captionIsLong && (
+                    <span style={{
+                      display: 'inline-block', marginTop: 2,
+                      fontSize: 11.5, fontWeight: 800, letterSpacing: 0.3,
+                      color: 'rgba(255,255,255,0.55)',
+                    }}>
+                      {captionExpanded ? 'less' : 'more'}
+                    </span>
+                  )}
+                </div>
               )}
 
               {/* Engagement */}

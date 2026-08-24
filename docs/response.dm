@@ -343,3 +343,21 @@ No migration needed: existing RLS (`20260711_security_hardening.sql`) already al
 - `npm run build` — PASS.
 - ESLint on `StoryViewer.jsx` — no new errors (same pre-existing set as before).
 - Note: changes not committed yet — say the word and I'll push to master.
+
+---
+
+# Professional caption display on status media — IMPLEMENTED
+
+## Problem
+The status caption chip was absolutely positioned at `bottom: 12` of the media stage — directly **underneath** the floating bottom chrome (engagement row + CTA buttons), so it overlapped/was buried. It was also hidden entirely on tagged-product statuses, and auto-placeholder captions ("Photo update") rendered as noise.
+
+## Changes — `src/components/StoryViewer.jsx`
+- **Caption moved into the bottom chrome**, stacked between the product card and the engagement row (IG/WhatsApp style) — always readable over the chrome's gradient scrim, never collides with the action bar.
+- **Professional chip styling**: soft translucent black `rgba(0,0,0,0.38)` + 12px blur, hairline border, 13px radius, 13.5px/600 white text with text-shadow for legibility on any frame.
+- **2-line clamp with more/less**: long captions (>80 chars) clamp to 2 lines; tap expands the full text, resets per story.
+- **Placeholder suppression**: generic auto-captions ("Photo update"/"Video update"/"Status update") are not shown; real captions now appear even on tagged-product statuses.
+- Removed the old conflicting `bottom: 12` caption block.
+
+## Validation
+- `npm run build` — PASS.
+- ESLint — no new errors. Not committed yet.
