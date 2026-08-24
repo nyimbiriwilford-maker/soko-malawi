@@ -502,6 +502,8 @@ const css = `
     box-shadow: 0 2px 8px rgba(0,0,0,.08); touch-action: manipulation;
   }
   .sp-fav-btn:hover { color: #ea4335; }
+  .sp-fav-btn.saved { color: #ea4335; }
+  .sp-fav-btn:disabled { opacity: .8; cursor: default; }
   .sp-listing-body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
   .sp-listing-title {
     font-size: 13px; font-weight: 600; color: ${T.text}; line-height: 1.35;
@@ -899,10 +901,12 @@ const css = `
   /* mobile shop layout */
   @media (max-width: 900px) {
     .sp-root {
-      padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+      /* Bottom gap = real mobile bottom-nav height (measured, incl. safe-area)
+         + a little air. Falls back to 72px until the hook measures it. */
+      padding-bottom: calc(var(--sp-bottom-nav-offset, 72px) + 16px);
     }
     .sp-root.has-sticky-cta {
-      padding-bottom: calc(148px + env(safe-area-inset-bottom, 0px));
+      padding-bottom: calc(var(--sp-bottom-nav-offset, 72px) + 76px);
     }
 
     .sp-breadcrumb {
@@ -1080,14 +1084,28 @@ const css = `
     .sp-side-card { padding: 14px; border-radius: 12px; }
     .sp-desktop-sidebar-title { font-size: 13.5px; }
 
+    /* Sticky tab bar on mobile — pins below the top nav so users can switch
+       Listings / About / Reviews / Policies without scrolling all the way up. */
+    .sp-tabs {
+      position: sticky;
+      top: calc(var(--sp-nav-offset) - 8px);
+      z-index: 40;
+      background: ${T.offwhite};
+      box-shadow: 0 2px 10px rgba(0,0,0,.06);
+      margin-left: 0;
+      margin-right: 0;
+      max-width: none;
+      padding-left: 12px;
+      padding-right: 12px;
+    }
+    /* Similar-shops rail scrolls normally on mobile (not sticky) so it
+       never floats over the product grid or the pinned tab bar. */
     .sp-similar-wrap {
-      /* sit under sticky tabs (~100px) when both stick on mobile */
-      top: calc(var(--sp-nav-offset) + 0px);
+      position: static;
+      top: auto;
+      margin-top: 8px;
     }
-    .sp-root.has-sticky-cta .sp-similar-wrap {
-      /* keep above mobile Message/Follow + bottom nav */
-      margin-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
-    }
+    .sp-root.has-sticky-cta .sp-similar-wrap { margin-bottom: 0; }
     .sp-similar { padding: 12px 12px 14px; }
     .sp-similar-head h3 { font-size: 14px; }
     .sp-similar-card { padding: 10px; border-radius: 12px; gap: 10px; }
@@ -1103,7 +1121,9 @@ const css = `
       display: flex;
       position: fixed;
       left: 0; right: 0;
-      bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+      /* Sit just above the real mobile bottom-nav (measured via
+         --sp-bottom-nav-offset) so buttons never tuck underneath it. */
+      bottom: calc(var(--sp-bottom-nav-offset, 72px) + 8px);
       z-index: 90;
       gap: 8px;
       padding: 10px 12px;
@@ -1332,7 +1352,7 @@ const Icon = {
   Search: () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,
   Grid: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>,
   List: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3" y2="6"/><line x1="3" y1="12" x2="3" y2="12"/><line x1="3" y1="18" x2="3" y2="18"/></svg>,
-  Heart: () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z"/></svg>,
+  Heart: (filled = false) => <svg width="15" height="15" viewBox="0 0 24 24" fill={filled ? '#ea4335' : 'none'} stroke={filled ? '#ea4335' : 'currentColor'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z"/></svg>,
   Pin: () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 6-9 13-9 13s-9-7-9-13a9 9 0 1 1 18 0Z"/><circle cx="12" cy="10" r="3"/></svg>,
   Star: () => <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26"/></svg>,
   Users: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
@@ -1396,15 +1416,28 @@ export default function ShopPage() {
   const [featuringId, setFeaturingId] = useState(null)
   const [featureToast, setFeatureToast] = useState(null)
   const rootRef = useRef(null)
+  // Saved listings (listing_saves) — mirrors the Home/Listings save flow.
+  const [savedIds, setSavedIds] = useState(() => new Set())
+  const [saveBusyId, setSaveBusyId] = useState(null)
 
   // Keep sidebar sticky offset = real SokoNav height so nothing sits under the nav
   useEffect(() => {
     function measureNav() {
       const nav = document.querySelector('.soko-nav-glass')
-      if (!nav || !rootRef.current) return
-      const h = Math.ceil(nav.getBoundingClientRect().height)
-      // Small gap under nav so the rail isn’t flush against the header
-      rootRef.current.style.setProperty('--sp-nav-offset', `${Math.max(h + 8, 72)}px`)
+      const root = rootRef.current
+      if (nav && root) {
+        const h = Math.ceil(nav.getBoundingClientRect().height)
+        // Small gap under nav so the rail isn’t flush against the header
+        root.style.setProperty('--sp-nav-offset', `${Math.max(h + 8, 72)}px`)
+      }
+      // Real mobile bottom-nav height (BottomNav). The sticky Message/Follow
+      // bar and the page's bottom spacing are positioned from this — measured,
+      // not guessed, so buttons never tuck under the nav.
+      if (root) {
+        const bar = document.querySelector('.sbn-bar')
+        const hb = bar ? Math.ceil(bar.getBoundingClientRect().height) : 0
+        root.style.setProperty('--sp-bottom-nav-offset', `${hb || 72}px`)
+      }
     }
     measureNav()
     window.addEventListener('resize', measureNav)
@@ -1419,6 +1452,66 @@ export default function ShopPage() {
       ro?.disconnect()
     }
   }, [loading, shop?.id])
+  // Load the signed-in user's saved listings so the heart buttons reflect them.
+  useEffect(() => {
+    if (!currentUserId) { setSavedIds(new Set()); return }
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { data, error } = await supabase
+          .from('listing_saves')
+          .select('listing_id')
+          .eq('user_id', currentUserId)
+          .limit(500)
+        if (cancelled || error) return
+        setSavedIds(new Set((data || []).map(r => r.listing_id).filter(Boolean)))
+      } catch { /* table may not exist on older envs */ }
+    })()
+    return () => { cancelled = true }
+  }, [currentUserId])
+
+  // Toggle a listing's saved state (optimistic UI + server RPC + revert on error).
+  async function toggleListingSave(listingId) {
+    if (!listingId) return
+    if (!currentUserId) {
+      try {
+        sessionStorage.setItem('soko_post_login', JSON.stringify({ type: 'save', listingId }))
+      } catch { /* ignore */ }
+      navigate('/login')
+      return
+    }
+    if (saveBusyId === listingId) return
+    const wasSaved = savedIds.has(listingId)
+    setSaveBusyId(listingId)
+    // Optimistic UI
+    setSavedIds(prev => {
+      const next = new Set(prev)
+      if (wasSaved) next.delete(listingId)
+      else next.add(listingId)
+      return next
+    })
+    try {
+      const { data, error } = await supabase.rpc('toggle_listing_save', { p_listing_id: listingId })
+      if (error) throw error
+      // RPC returns true when now saved, false when removed
+      setSavedIds(prev => {
+        const next = new Set(prev)
+        if (data === true) next.add(listingId)
+        else if (data === false) next.delete(listingId)
+        return next
+      })
+    } catch {
+      // Revert on failure
+      setSavedIds(prev => {
+        const next = new Set(prev)
+        if (wasSaved) next.add(listingId)
+        else next.delete(listingId)
+        return next
+      })
+    } finally {
+      setSaveBusyId(null)
+    }
+  }
 
   useEffect(() => {
     let active = true
@@ -2856,6 +2949,16 @@ if (!shop) {
                                   <span className={promo.includes('Sale') || promo === 'Sale' ? 'sp-sale-badge' : 'sp-featured-badge'}>{promo}</span>
                                 </div>
                               )}
+                              <button
+                                type="button"
+                                className={`sp-fav-btn${savedIds.has(item.id) ? ' saved' : ''}`}
+                                aria-pressed={savedIds.has(item.id)}
+                                aria-label={savedIds.has(item.id) ? 'Remove from saved' : 'Save listing'}
+                                disabled={saveBusyId === item.id}
+                                onClick={e => { e.stopPropagation(); toggleListingSave(item.id) }}
+                              >
+                                <Icon.Heart filled={savedIds.has(item.id)} />
+                              </button>
                             </div>
                             <div className="sp-list-body">
                               <div className="sp-listing-title">{item.title}</div>
@@ -2919,11 +3022,13 @@ if (!shop) {
                               </div>
                               <button
                                 type="button"
-                                className="sp-fav-btn"
-                                aria-label="Save"
-                                onClick={e => e.stopPropagation()}
+                                className={`sp-fav-btn${savedIds.has(item.id) ? ' saved' : ''}`}
+                                aria-pressed={savedIds.has(item.id)}
+                                aria-label={savedIds.has(item.id) ? 'Remove from saved' : 'Save listing'}
+                                disabled={saveBusyId === item.id}
+                                onClick={e => { e.stopPropagation(); toggleListingSave(item.id) }}
                               >
-                                <Icon.Heart />
+                                <Icon.Heart filled={savedIds.has(item.id)} />
                               </button>
                             </div>
                             <div className="sp-listing-body">
@@ -3011,7 +3116,8 @@ if (!shop) {
                         style={{ cursor: 'pointer', transition: 'fill 0.1s' }}
                         onMouseEnter={() => setReviewHoverRating(n)}
                         onMouseLeave={() => setReviewHoverRating(0)}
-                        onClick={() => setReviewRating(n)}
+                        onTouchStart={() => setReviewHoverRating(n)}
+                        onClick={() => { setReviewHoverRating(0); setReviewRating(n) }}
                       >
                         <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26" />
                       </svg>

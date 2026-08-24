@@ -181,7 +181,7 @@ Executed the Phase 1 roadmap from `.kilo/plans/1787129912737-sokomw-shop-page-ro
 
 ---
 
-# Buyer-Surface Premium UI Credibility Pass (Level 2) — IMPLEMENTED
+# Buyer-Surface Premium UI Credibility Pass (Level 2) ï¿½ IMPLEMENTED
 
 Plan: `.kilo\plans\1787130020826-premium-shop-ui-credibility.md`
 
@@ -198,7 +198,7 @@ Completed the Level 2 credibility pass across the buyer surface. All planned tas
 - Deleted `PLACEHOLDER_LISTINGS` and `PLACEHOLDER_SIMILAR_SHOPS` dead arrays.
 - Stats bar reordered to Shop Rating -> Listings -> Followers; amber "Unverified" slot fully replaced with **"Open since <Mon YYYY>"** (from `shops.created_at`) or neutral gray "New shop" when `created_at` is absent. Positive-only verification remains via the header logo pill.
 - Verify-banner benefit icons `? ?? ??` replaced with lucide `ShieldCheck`, `TrendingUp`, `Lock`.
-- Both empty-policy states (tab + sidebar) now show one honest line with an info icon: *"Delivery and returns aren't listed — ask the shop in chat before ordering."* (owner variant appends a pointer; no invented policy text).
+- Both empty-policy states (tab + sidebar) now show one honest line with an info icon: *"Delivery and returns aren't listed ï¿½ ask the shop in chat before ordering."* (owner variant appends a pointer; no invented policy text).
 - Both `alert()` calls removed: feature failure keeps the inline featureToast; theme-update failure now uses a local `themeError` inline message near both swatch rows.
 
 ### 3. `ListingDetail.jsx`
@@ -206,7 +206,7 @@ Completed the Level 2 credibility pass across the buyer surface. All planned tas
 - Brand-accent green literals unified `#1a7a4a` -> `#0F9D58` (and shadow `rgba(26,122,74,.28)` -> `rgba(15,157,88,.28)`), restricted to complete accent sites; `CAT_META` / `CONDITION_META` / category color fallbacks and reds left untouched.
 - All currency sites converted to `formatPrice(...)` (flash, bulk, booking, price row, total, Place Order CTA, sticky bars, related listings).
 - Both feature-listing `alert()` calls replaced with inline `featureError` line inside the desktop/mobile sticky bars (auto-clears after 5s).
-- Fact-based assurance strip added below the Place Order CTA in the sidebar: `Banknote` "Pay on delivery", `Eye` "Inspect before paying", `Star` "Rate after delivery" — no escrow claims.
+- Fact-based assurance strip added below the Place Order CTA in the sidebar: `Banknote` "Pay on delivery", `Eye` "Inspect before paying", `Star` "Rate after delivery" ï¿½ no escrow claims.
 
 ### 4. `OrdersPage.jsx`
 - Emoji glyphs swapped to lucide: `ShoppingBag` (empty state), `Package` (thumb fallback), `MapPin` (address), `Star` (rate button), `MessageCircle` (chat button).
@@ -218,8 +218,8 @@ Completed the Level 2 credibility pass across the buyer surface. All planned tas
 - Condensed one-line assurance strip (`Banknote`/`Eye`/`Star`) added above the total row.
 
 ## Validation
-- `npm run build` — PASS; scope chunks roughly unchanged (ListingDetail 101.5 kB, ShopPage 130.8 kB, OrdersPage small).
-- ESLint on the 6 scope files: 12 problems (9 errors / 3 warnings) vs pre-change baseline of 14 (11 / 3) — all remaining are pre-existing; no new errors introduced.
+- `npm run build` ï¿½ PASS; scope chunks roughly unchanged (ListingDetail 101.5 kB, ShopPage 130.8 kB, OrdersPage small).
+- ESLint on the 6 scope files: 12 problems (9 errors / 3 warnings) vs pre-change baseline of 14 (11 / 3) ï¿½ all remaining are pre-existing; no new errors introduced.
 - Greps: zero `alert(` in scope files; zero `MWK ` string literals in scope; zero emoji-as-icons (`??????????????`) in the four buyer files; no `PLACEHOLDER_` remnants; no `formatMWK` references remain in scope files.
 
 ## Notes
@@ -229,15 +229,15 @@ Completed the Level 2 credibility pass across the buyer surface. All planned tas
 
 ---
 
-# Admin Manual User Verification — IMPLEMENTED & DEPLOYED
+# Admin Manual User Verification ï¿½ IMPLEMENTED & DEPLOYED
 
 ## Summary
 Added ability for admins to manually verify/unverify users without requiring a verification request. Useful for VIP sellers, staff accounts, and emergency verifications.
 
 ## Files Changed
-- `supabase/migrations/20260824_admin_manual_verify_user.sql` (NEW) — DB functions with audit trail
-- `src/lib/verification.js` — Added `adminManualVerifyUser` and `adminManualUnverifyUser`
-- `src/components/AdminVerifiedSellers.jsx` — Added modal UI with justification/note fields
+- `supabase/migrations/20260824_admin_manual_verify_user.sql` (NEW) ï¿½ DB functions with audit trail
+- `src/lib/verification.js` ï¿½ Added `adminManualVerifyUser` and `adminManualUnverifyUser`
+- `src/components/AdminVerifiedSellers.jsx` ï¿½ Added modal UI with justification/note fields
 
 ## Deployment
 - Committed and pushed to `master` (commit `00f9e44`)
@@ -256,14 +256,14 @@ Added ability for admins to manually verify/unverify users without requiring a v
 
 ---
 
-# Manual Verification: Search users by name/email/phone (not just ID) — IMPLEMENTED
+# Manual Verification: Search users by name/email/phone (not just ID) ï¿½ IMPLEMENTED
 
 ## Problem
 The manual verify/unverify modal only accepted a raw user UUID. Admins had no way to look a user up by name, email, or phone.
 
 ## Changes
 
-### 1. New DB RPC — `supabase/migrations/20260824_admin_search_users.sql` (NEW)
+### 1. New DB RPC ï¿½ `supabase/migrations/20260824_admin_search_users.sql` (NEW)
 - `admin_search_users(p_query, p_limit)` (SECURITY DEFINER, admin-only via `public.is_admin()`).
 - Searches `profiles` by `full_name`, `email`, `phone`, `city` (ILIKE), with prefix matches ranked first.
 - Also accepts a full UUID directly (backwards-compatible).
@@ -287,98 +287,170 @@ The manual verify/unverify modal only accepted a raw user UUID. Admins had no wa
 
 ---
 
-# Trimmed status videos fail to play in the viewer — FIXED
+# Trimmed status videos fail to play in the viewer ï¿½ FIXED
 
 ## Problem
 Videos trimmed with the "meta trim" strategy keep the original file bytes and carry the clip window as a media fragment (`...mp4#t=10.000,25.000`). The status surfaces treated those URLs as non-videos and broke playback:
 
-1. **Viewer misclassified trimmed videos as images** — `StoryViewer.isVideoUrl` used `/\.(mp4|mov|webm|m4v)(\?|$)/i`, which fails when the URL ends with `#t=…`. The video was rendered inside an `<img>` ? failed to load ("Couldn't load media").
-2. **Publishing was crashing entirely** — the last commit (`acafb95`) added `trimMode: result.trimMode` to the publish snapshot, but `result` does not exist in `handlePublish` scope ? `ReferenceError` on every Publish.
-3. **Re-encoded clips got double-trimmed** — without a correct `trimMode`, a `#t=` fragment could be appended to an already re-encoded clip, making the wrong segment play.
-4. **Clip window lost on cached playback** — when media was served from the blob cache, the `#t=` fragment was stripped, so the clip played from the start with the wrong progress bar.
+1. **Viewer misclassified trimmed videos as images** ï¿½ `StoryViewer.isVideoUrl` used `/\.(mp4|mov|webm|m4v)(\?|$)/i`, which fails when the URL ends with `#t=ï¿½`. The video was rendered inside an `<img>` ? failed to load ("Couldn't load media").
+2. **Publishing was crashing entirely** ï¿½ the last commit (`acafb95`) added `trimMode: result.trimMode` to the publish snapshot, but `result` does not exist in `handlePublish` scope ? `ReferenceError` on every Publish.
+3. **Re-encoded clips got double-trimmed** ï¿½ without a correct `trimMode`, a `#t=` fragment could be appended to an already re-encoded clip, making the wrong segment play.
+4. **Clip window lost on cached playback** ï¿½ when media was served from the blob cache, the `#t=` fragment was stripped, so the clip played from the start with the wrong progress bar.
 5. Same fragment-blind detection existed in `StatusPage` (story tiles + feed cards), `PublicProfile`, and `SavedStatusesPage`.
 
 ## Changes
 
 ### 1. `src/components/StoryViewer.jsx`
-- `isVideoUrl` now delegates to `isStatusVideoUrl` (strips `#…` fragments and query strings before checking the extension).
+- `isVideoUrl` now delegates to `isStatusVideoUrl` (strips `#ï¿½` fragments and query strings before checking the extension).
 - Parses the `#t=start,end` clip window for the current video (`parseClipWindow`), keeps it in a ref, and re-attaches it when serving from a cached blob URL.
 - New `onLoadedMetadata` handler seeks to the clip start (covers blob/cached sources that lost the fragment).
-- Progress bar + auto-advance are now clip-aware: progress maps `[start,end]` ? 0–100% and the story advances when the clip window ends — works whether the browser honors the fragment end, pauses without `ended`, or ignores the end entirely.
+- Progress bar + auto-advance are now clip-aware: progress maps `[start,end]` ? 0ï¿½100% and the story advances when the clip window ends ï¿½ works whether the browser honors the fragment end, pauses without `ended`, or ignores the end entirely.
 
 ### 2. `src/components/StatusUploadModal.jsx`
 - New `trimMode` state set from `trimStatusVideo` results (`applyUserTrim`), reset on file change/clear/annotate-bake.
 - Snapshot now carries the real `trimMode` state (fixes the `result is not defined` ReferenceError that broke every publish).
-- `runBackgroundPublish` tracks `effectiveTrimMode`: the fresh `trimMode` when re-trimming at publish time, and `'reencoded'` after compression — so a `#t=` fragment is only appended for true meta trims.
+- `runBackgroundPublish` tracks `effectiveTrimMode`: the fresh `trimMode` when re-trimming at publish time, and `'reencoded'` after compression ï¿½ so a `#t=` fragment is only appended for true meta trims.
 
 ### 3. Fragment-aware video detection elsewhere
-- `src/pages/StatusPage.jsx` — story tiles + feed cards now use `isStatusVideoUrl`.
-- `src/pages/PublicProfile.jsx` — `isVideoUrl` strips `#…` before extension checks.
-- `src/pages/SavedStatusesPage.jsx` — saved-status thumbnails use `isStatusVideoUrl`.
+- `src/pages/StatusPage.jsx` ï¿½ story tiles + feed cards now use `isStatusVideoUrl`.
+- `src/pages/PublicProfile.jsx` ï¿½ `isVideoUrl` strips `#ï¿½` before extension checks.
+- `src/pages/SavedStatusesPage.jsx` ï¿½ saved-status thumbnails use `isStatusVideoUrl`.
 
 ### 4. `src/utils/statusVideo.js`
-- `pickRecorderMime` now prefers `video/mp4` (AVC1/AAC) when `MediaRecorder` supports it (Safari) before falling back to WebM — re-encoded trims are playable on iOS.
+- `pickRecorderMime` now prefers `video/mp4` (AVC1/AAC) when `MediaRecorder` supports it (Safari) before falling back to WebM ï¿½ re-encoded trims are playable on iOS.
 
 ## Validation
-- `npm run build` — PASS (4.6s, no errors).
-- ESLint on all touched files — only pre-existing errors remain; no new issues introduced.
+- `npm run build` ï¿½ PASS (4.6s, no errors).
+- ESLint on all touched files ï¿½ only pre-existing errors remain; no new issues introduced.
 
 ---
 
-# Edit caption & delete status for owners — IMPLEMENTED
+# Edit caption & delete status for owners ï¿½ IMPLEMENTED
 
 ## Problem
-Once a status was published, the owner could not change its caption or remove it — it had to run its full 24h expiry.
+Once a status was published, the owner could not change its caption or remove it ï¿½ it had to run its full 24h expiry.
 
-## Changes — `src/components/StoryViewer.jsx`
+## Changes ï¿½ `src/components/StoryViewer.jsx`
 No migration needed: existing RLS (`20260711_security_hardening.sql`) already allows owners to UPDATE/DELETE their own `user_statuses` rows.
 
 - **Owner menu** (? on your own status) gains two items: **Edit caption** and **Delete status** (red, two-step confirm).
 - **Edit caption sheet**: pre-filled textarea (180-char limit + live counter), Save/Cancel. Saves via `update` on `user_statuses`, updates `localStories` in place so the caption changes instantly everywhere in the viewer (caption chip, text boards), toast confirmation.
-- **Delete confirm sheet**: shows the status type (Video/Photo/Text) + caption preview, Delete/Cancel with busy state. Deletes the row, best-effort removes the uploaded media files from Supabase storage (parses `…/storage/v1/object/public/<bucket>/<path>` out of `media_urls`), removes the story from the local list and auto-advances to the next one (closes the viewer if none remain).
+- **Delete confirm sheet**: shows the status type (Video/Photo/Text) + caption preview, Delete/Cancel with busy state. Deletes the row, best-effort removes the uploaded media files from Supabase storage (parses `ï¿½/storage/v1/object/public/<bucket>/<path>` out of `media_urls`), removes the story from the local list and auto-advances to the next one (closes the viewer if none remain).
 - Sheets pause playback/auto-advance while open and reset when switching stories.
 - Added `IconTrash` + `IconVideoBadge` helpers; `MenuItem` supports a `danger` style.
 
 ## Validation
-- `npm run build` — PASS.
-- ESLint on `StoryViewer.jsx` — no new errors (same pre-existing set as before).
-- Note: changes not committed yet — say the word and I'll push to master.
+- `npm run build` ï¿½ PASS.
+- ESLint on `StoryViewer.jsx` ï¿½ no new errors (same pre-existing set as before).
+- Note: changes not committed yet ï¿½ say the word and I'll push to master.
 
 ---
 
-# Professional caption display on status media — IMPLEMENTED
+# Professional caption display on status media ï¿½ IMPLEMENTED
 
 ## Problem
-The status caption chip was absolutely positioned at `bottom: 12` of the media stage — directly **underneath** the floating bottom chrome (engagement row + CTA buttons), so it overlapped/was buried. It was also hidden entirely on tagged-product statuses, and auto-placeholder captions ("Photo update") rendered as noise.
+The status caption chip was absolutely positioned at `bottom: 12` of the media stage ï¿½ directly **underneath** the floating bottom chrome (engagement row + CTA buttons), so it overlapped/was buried. It was also hidden entirely on tagged-product statuses, and auto-placeholder captions ("Photo update") rendered as noise.
 
-## Changes — `src/components/StoryViewer.jsx`
-- **Caption moved into the bottom chrome**, stacked between the product card and the engagement row (IG/WhatsApp style) — always readable over the chrome's gradient scrim, never collides with the action bar.
+## Changes ï¿½ `src/components/StoryViewer.jsx`
+- **Caption moved into the bottom chrome**, stacked between the product card and the engagement row (IG/WhatsApp style) ï¿½ always readable over the chrome's gradient scrim, never collides with the action bar.
 - **Professional chip styling**: soft translucent black `rgba(0,0,0,0.38)` + 12px blur, hairline border, 13px radius, 13.5px/600 white text with text-shadow for legibility on any frame.
 - **2-line clamp with more/less**: long captions (>80 chars) clamp to 2 lines; tap expands the full text, resets per story.
 - **Placeholder suppression**: generic auto-captions ("Photo update"/"Video update"/"Status update") are not shown; real captions now appear even on tagged-product statuses.
 - Removed the old conflicting `bottom: 12` caption block.
 
 ## Validation
-- `npm run build` — PASS.
-- ESLint — no new errors. Not committed yet.
+- `npm run build` ï¿½ PASS.
+- ESLint ï¿½ no new errors. Not committed yet.
 
 ---
 
-# Text-only statuses readable on the home page — IMPLEMENTED
+# Text-only statuses readable on the home page ï¿½ IMPLEMENTED
 
 ## Problem
-Text-only statuses store their background colour as `media_urls[0]` (e.g. `"#0f766e"`). Every preview surface treated that entry as an image URL and rendered `<img src="#0f766e">` — a broken/black tile with no way to read the message.
+Text-only statuses store their background colour as `media_urls[0]` (e.g. `"#0f766e"`). Every preview surface treated that entry as an image URL and rendered `<img src="#0f766e">` ï¿½ a broken/black tile with no way to read the message.
 
 ## Changes
-- **`src/utils/statusVideo.js`** — new `isStatusColorBoard(url)` helper (detects `#rgb`/`#rrggbb`/`#rrggbbaa` board entries).
-- **`src/components/StatusTextBoard.jsx` (NEW)** — reusable board preview: the status's background colour with its words rendered on top, WhatsApp-style auto text sizing (short text bigger, long text smaller + 5-line clamp), centred, white bold with text-shadow.
-- **`src/components/HomeStatusSection.jsx`** — home page story tiles (mobile + desktop variants) now render `StatusTextBoard` for text statuses instead of a broken image; the bottom label no longer duplicates the words already shown on the board.
-- **`src/pages/StatusPage.jsx`** — same treatment in the cinematic story tiles and the feed cards (larger text scale there). Also fixed a leftover stale regex in the feed card's video detection (missed by the earlier replaceAll) — it now uses `isStatusVideoUrl` too.
-- **`src/pages/SavedStatusesPage.jsx`** — saved-status banners render the board colour + words.
+- **`src/utils/statusVideo.js`** ï¿½ new `isStatusColorBoard(url)` helper (detects `#rgb`/`#rrggbb`/`#rrggbbaa` board entries).
+- **`src/components/StatusTextBoard.jsx` (NEW)** ï¿½ reusable board preview: the status's background colour with its words rendered on top, WhatsApp-style auto text sizing (short text bigger, long text smaller + 5-line clamp), centred, white bold with text-shadow.
+- **`src/components/HomeStatusSection.jsx`** ï¿½ home page story tiles (mobile + desktop variants) now render `StatusTextBoard` for text statuses instead of a broken image; the bottom label no longer duplicates the words already shown on the board.
+- **`src/pages/StatusPage.jsx`** ï¿½ same treatment in the cinematic story tiles and the feed cards (larger text scale there). Also fixed a leftover stale regex in the feed card's video detection (missed by the earlier replaceAll) ï¿½ it now uses `isStatusVideoUrl` too.
+- **`src/pages/SavedStatusesPage.jsx`** ï¿½ saved-status banners render the board colour + words.
 
 ## Result
 A text status now looks like a real picture everywhere (home, status page, saved list): background colour visible, words readable at a glance. Opening the viewer still shows the full-screen text board.
 
 ## Validation
-- `npm run build` — PASS.
-- ESLint on touched files — only pre-existing errors. Not committed yet.
+- `npm run build` ï¿½ PASS.
+- ESLint on touched files ï¿½ only pre-existing errors. Not committed yet.
+---
+
+# Mobile audit of the shop page (`/shop/:slug`) â€” BUGS FOUND (no code changed)
+
+Requested: "go to shop and find any bug that affects mobile view and mobile friendliness of the shop page."
+Scope: `src/pages/ShopPage.jsx` (the single-shop storefront route `/shop/:slug`). Audited only â€” no code changed.
+
+## Mobile bugs found
+
+### 1. Product-card "Save" (heart) button is a dead button â€” no save logic
+- `src/pages/ShopPage.jsx` ~L2920â€“2927 (grid view). The `.sp-fav-btn` renders an `aria-label="Save"` heart with:
+  `onClick={e => e.stopPropagation()}` and nothing else.
+- There is **no** save handler, no saved-state, no persistence (compare Home.jsx / ListingsPage.jsx / SearchPage.jsx which all implement real `onToggleSave`).
+- Grid cards show a dead heart (no feedback, does nothing); list-view cards have no save affordance at all â€” inconsistent and misleading on mobile where it's a large 30â€“34px touch target.
+- Fix direction (not applied): wire real save toggle + `aria-pressed` state, or remove the button.
+
+### 2. "More shops you might like" rail is sticky but the tab bar it's designed to sit under is NOT sticky
+- `.sp-similar-wrap` is `position: sticky; top: var(--sp-nav-offset); z-index: 35` at ALL widths, including mobile (L813â€“817).
+- The `.sp-tabs` bar (Listings / About / Reviews / Policies) is **never** made sticky â€” there is no `position: sticky` rule for it anywhere.
+- The mobile CSS comment (L1084) says the rail should "sit under sticky tabs (~100px)" â€” those sticky tabs don't exist, so the intent is unimplemented.
+- Mobile-result: while scrolling products, the blurred white "More shops you might like" bar pins just below the top nav and floats **over** the product grid, while the tab switcher scrolls away. Users on mobile get a floating rail that covers listings and no way to switch shop tabs without scrolling to the top.
+
+### 3. Shop rating tooltip is hover-only â€” invisible on touch
+- `.sp-rating-tip` (L1153â€“1199) only appears via `.sp-rating-tip-wrap:hover` / `:focus` (L1194â€“1199). On mobile there is no hover, so the rating breakdown tooltip can never be seen.
+- Also `hover`-only on desktop; touch users get nothing.
+
+### 4. Star-rating preview is mouse-only
+- Shop review stars use `onMouseEnter`/`onMouseLeave` for the hover preview (`setReviewHoverRating`) with no touch fallback (L3005â€“3018). On touch devices the live preview never lights up; tapping still sets the rating but there is no live feedback while choosing.
+
+### 5. Sticky mobile Message/Follow bar can tuck under the global bottom nav
+- `.sp-mobile-cta` is `position: fixed; bottom: calc(64px + env(safe-area-inset-bottom))`, `z-index: 90` (L1102â€“1115).
+- The global mobile bottom nav (`.sbn-bar`, BottomNav.jsx L257â€“284) is also `position: fixed; bottom: 0`, `z-index: 100`, effective height â‰ˆ 70px + safe-area (8px pad + ~52px content + 10px pad).
+- On mobile both are mounted at once â†’ the CTA bar's hard-coded `64px` sits ~6px lower than the nav's real top edge, so the bottom of the Message/Follow buttons (z-index 90 < 100) is clipped behind the nav. The 64px constant is a hard-coded guess and isn't derived from the real nav height (which includes a FAB / safe-area variations).
+
+### 6. (Minor, non-mobile) Currency label `MK` is non-standard / inconsistent
+- Prices render as `MK 1,000` (L2218, L2221, L3406) though Malawi uses **MWK** (`Kwacha`). There was a plan to unify via `formatPrice` from `src/lib/format.js`, but ShopPage defines its own local `formatPrice` that still emits `MK`. Cosmetic but user-facing.
+
+## Quick wins (when you choose to fix)
+- Real save (fav) toggle on product cards.
+- Make `.sp-tabs` sticky on mobile and drop the similar-rail sticky (or tuck it under the sticky tabs).
+- Add a media-query/tap fallback for the rating tooltip and star hover preview.
+- Compute the mobile CTA position from the nav height instead of hard-coding 64px.
+---
+
+# Shop page mobile fixes â€” IMPLEMENTED (`src/pages/ShopPage.jsx`)
+
+Fixed the mobile bugs found in the audit above. One audit item turned out to have no markup (see note below).
+
+## Changes
+1. **Save (heart) button now works** â€” grid + list view product cards have a real save toggle:
+   - New `savedIds` (Set) + `saveBusyId` state, mirrors the Home/Listings flow: load from `listing_saves`, optimistic toggle via `toggle_listing_save` RPC, revert on error, redirect to `/login` (post-login save) when not signed in.
+   - `Icon.Heart` now accepts `filled` and renders a red filled heart when saved; button gains `aria-pressed` + `saved` class + busy `disabled`.
+   - List-view cards (which had no save button at all) now get the same heart.
+
+2. **Sticky tab bar + similar-shops rail (mobile):**
+   - `.sp-tabs` is now `position: sticky` on mobile (`top: calc(var(--sp-nav-offset) - 8px)`, z-index 40, full-width off-white bg) so Listings/About/Reviews/Policies stay reachable while scrolling.
+   - `.sp-similar-wrap` is no longer sticky on mobile (`position: static`) so the "More shops you might like" rail no longer floats over the product grid. Removed the `has-sticky-cta` margin hack.
+
+3. **Star-rating preview works on touch:** each rating star now also sets the preview via `onTouchStart` (previously mouse-hover only; click still commits).
+
+4. **Sticky Message/Follow bar & page bottom spacing no longer guess the nav height:**
+   - New measured CSS var `--sp-bottom-nav-offset` (from `.sbn-bar` `getBoundingClientRect().height`) set in the existing nav-measure effect.
+   - `.sp-mobile-cta` bottom = `calc(var(--sp-bottom-nav-offset, 72px) + 8px)` (was a hard-coded `64px` that let buttons tuck under the taller bottom nav).
+   - `.sp-root` mobile bottom padding uses the var too (plain + has-sticky-cta).
+
+## Notes
+- **Rating tooltip**: the `.sp-rating-tip` CSS has no matching `.sp-rating-tip-wrap` markup anywhere in ShopPage (it's leftover from the other pages / `homerrr` scratch). So there was no tooltip to make touch-friendly â€” left untouched.
+- **Currency (`MK` vs `MWK`)**: intentionally not changed here (non-mobile cosmetic; would touch pricing strings in several files).
+- **Desktop `.sp-similar-wrap`**: stays sticky (unchanged); the fix above targets the reported mobile behaviour.
+
+## Validation
+- `npm run build` â€” PASS (Vite/build succeeds).
