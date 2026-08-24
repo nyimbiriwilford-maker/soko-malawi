@@ -501,6 +501,7 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
       sourceDuration,
       trimDirty,
       overlayFile,
+      trimMode: result.trimMode,
     }
 
     // Dismiss the picker instantly; trim + posting keep running in the background.
@@ -575,6 +576,7 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
       if (
         s.mediaType === 'video'
         && publishClipDur != null
+        && s.trimMode !== 'reencoded'
         && needsClipFragment(publishClipStart, publishClipDur, publishOrigDur)
       ) {
         url = applyClipToMediaUrl(url, publishClipStart, publishClipDur)
