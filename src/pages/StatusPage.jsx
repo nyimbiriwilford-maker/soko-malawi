@@ -11,7 +11,7 @@ import { useStatusComments } from '../hooks/useStatusComments'
 import { formatPrice } from '../lib/format'
 import SokoNav from '../components/SokoNav'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Heart, MessageCircle, Share2, Clock } from 'lucide-react'
+import { Heart, MessageCircle, Share2, Clock, MapPin, Eye } from 'lucide-react'
 
 // ─────────────────────────────────────────────
 // Design tokens — aligned with Home / Looking For / Shops
@@ -68,17 +68,6 @@ function fmtCount(n) {
 // ─────────────────────────────────────────────
 // Modern presentation primitives
 // ─────────────────────────────────────────────
-function Badge({ children, color = T.green, bg }) {
-  return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center',
-      background: bg || T.greenLight,
-      color, borderRadius: 999, padding: '3px 9px',
-      fontSize: 10.5, fontWeight: 700, lineHeight: 1.3, letterSpacing: 0.2,
-    }}>{children}</span>
-  )
-}
-
 function VerifiedBadge() {
   return (
     <svg width="14" height="14" viewBox="0 0 13 13" fill="none" style={{ flexShrink: 0 }} aria-hidden>
@@ -268,22 +257,20 @@ function StatusFeedCard({ s, onOpen, currentUserId, metrics, onLike }) {
               <div className="st-feed-name-row">
                 <span className="st-feed-name">{name}</span>
                 {isVerified && <VerifiedBadge />}
+                {badgeLabel && <span className="st-feed-kind">{badgeLabel}</span>}
               </div>
               <div className="st-feed-meta">
-                {badgeLabel && (
-                  <Badge color={T.green} bg={T.greenLight}>
-                    {badgeLabel}
-                  </Badge>
-                )}
-                <span className="st-feed-time">{ago} ago · {fmtCount(m.views)} views</span>
+                <span className="st-feed-meta-item">
+                  <Clock size={11} /> {ago} ago
+                </span>
                 {s.location_hint && (
-                  <span className="st-feed-loc">
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
-                    </svg>
-                    {s.location_hint}
+                  <span className="st-feed-meta-item">
+                    <MapPin size={11} /> {s.location_hint}
                   </span>
                 )}
+                <span className="st-feed-meta-item">
+                  <Eye size={11} /> {fmtCount(m.views)} views
+                </span>
               </div>
             </div>
           </button>
@@ -794,21 +781,28 @@ function StatusPageInner({ user, navigate }) {
         }
         .st-feed-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
         .st-feed-who { min-width: 0; flex: 1; }
-        .st-feed-name-row { display: flex; align-items: center; gap: 5px; min-width: 0; }
+        .st-feed-name-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
         .st-feed-name {
           font-size: 13.5px; font-weight: 800; color: ${T.text};
           overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
         }
+        .st-feed-kind {
+          flex-shrink: 0;
+          font-size: 9px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;
+          color: ${T.greenMid}; background: ${T.greenLight};
+          border: 1px solid rgba(15,157,88,0.16);
+          border-radius: 999px; padding: 3px 8px; line-height: 1; white-space: nowrap;
+        }
         .st-feed-meta {
-          display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+          display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
           margin-top: 4px; font-size: 11px; color: ${T.textMuted}; font-weight: 600;
         }
-        .st-feed-time { white-space: nowrap; }
-        .st-feed-loc {
-          display: inline-flex; align-items: center; gap: 3px;
-          max-width: 110px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-          color: ${T.textMuted};
+        .st-feed-meta-item {
+          display: inline-flex; align-items: center; gap: 3.5px;
+          white-space: nowrap; color: ${T.textMuted};
+          max-width: 130px; overflow: hidden; text-overflow: ellipsis;
         }
+        .st-feed-meta-item svg { flex-shrink: 0; opacity: 0.9; }
         .st-feed-expires {
           display: inline-flex; align-items: center; gap: 4px;
           flex-shrink: 0;

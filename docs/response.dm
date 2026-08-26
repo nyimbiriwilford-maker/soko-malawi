@@ -1,3 +1,20 @@
+# Task: Status feed — standardized professional card header (2026-08-26)
+
+## Request
+Standardize the card's top section so it feels uniform and professional: date, location and views styled the same way, and the generated badge placed appropriately.
+
+## Changes — `src/pages/StatusPage.jsx` (`StatusFeedCard`)
+- **Unified meta row under the name**: time (Clock), location (MapPin) and views (Eye) now render as matching icon + text items — same size, weight, muted colour and spacing (10px gaps, lucide icons), so the whole line reads as one consistent strip.
+- **Kind badge repositioned professionally**: the Product/Service/Job/Looking-for/Shop pill now sits inline in the name row — right after the name and verified seal — as a compact uppercase green chip (small, bordered, no clutter in the meta row). The amber expiry chip keeps its top-right corner slot.
+- Removed the old mixed meta styling (`.st-feed-time` / `.st-feed-loc` / ad-hoc location SVG) and the now-unused `Badge` primitive.
+
+## Verification
+- `npx eslint src/pages/StatusPage.jsx` → 5 findings, all pre-existing, none new.
+- `npm run build` → success (~3.9s).
+- Committed and pushed to `master` (Vercel auto-deploys from master).
+
+---
+
 # Task: Status feed — badge by tagged entity kind (Product/Service/Job/Looking for) (2026-08-26)
 
 ## Request
