@@ -1,3 +1,22 @@
+# Task: Status viewer — TikTok-style vertical actions + fitted emoji row (2026-08-26)
+
+## Request
+Arrange like, comment and share vertically on the right side like TikTok. The quick-emoji row must fit properly on its row and not interrupt/overlap the tagged product, etc.
+
+## What changed — `src/components/StoryViewer.jsx`
+- Replaced the horizontal engagement row with a two-column action row at the bottom:
+  - **Left column** — quick-emoji row + reply bar (or the owner "See who viewed" button).
+  - **Right rail (TikTok-style)** — Like (heart + count), Comment (bubble + count) and Share stacked vertically as round glass buttons with count/label underneath.
+- Compacted the emoji row: 32px chips (was 40px), tighter 6px gap, `flexWrap: nowrap` — the six quick emojis now fit on a single row beside the rail on small screens and no longer spill toward or cover the tagged product card (which stays full-width above the action row).
+- No behavior changes: like/comment/share/open-replies/quick-emoji/reply all keep their existing handlers and toasts.
+
+## Verification
+- `npx eslint src/components/StoryViewer.jsx` → only pre-existing findings.
+- `npm run build` → success (~3.5s).
+- Committed and pushed to `master` (Vercel auto-deploys from master).
+
+---
+
 # Task: Status viewer — remove "Message Seller", keep reply + add quick emoji reactions (2026-08-26)
 
 ## Request

@@ -1686,56 +1686,9 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                 </div>
               )}
 
-              {/* Engagement */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 18, padding: '0 2px' }}>
-                <button
-                  type="button"
-                  className="sv-tap"
-                  onClick={handleLove}
-                  disabled={reacting || isOwn}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 6,
-                    background: 'none', border: 'none', padding: 0,
-                    cursor: isOwn ? 'default' : 'pointer', fontFamily: 'inherit',
-                  }}
-                >
-                  <IconHeart size={20} filled={myReaction === 'love'} />
-                  <span style={{ fontSize: 14, fontWeight: 800, color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>
-                    {fmtK(loveCount)}
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  className="sv-tap"
-                  onClick={openReplies}
-                  aria-label="View replies"
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 6,
-                    background: 'none', border: 'none', padding: 0,
-                    cursor: 'pointer', fontFamily: 'inherit',
-                  }}
-                >
-                  <IconComment size={19} color="#fff" />
-                  <span style={{ fontSize: 14, fontWeight: 800, color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>
-                    {fmtK(replyCount)}
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  className="sv-tap"
-                  onClick={openShare}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 6,
-                    background: 'none', border: 'none', padding: 0,
-                    cursor: 'pointer', fontFamily: 'inherit', marginLeft: 'auto',
-                  }}
-                >
-                  <IconShare size={18} color="#fff" />
-                  <span style={{ fontSize: 13, fontWeight: 700, color: 'rgba(255,255,255,0.85)', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>Share</span>
-                </button>
-              </div>
+              {/* Action row — TikTok style: emoji + reply on the left, vertical like/comment/share rail on the right */}
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
+                <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
 
               {/* CTA — owner only; buyers reply via the reply bar below */}
               {isOwn && (
@@ -1761,9 +1714,9 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                 </button>
               )}
 
-              {/* Quick emoji reactions */}
+              {/* Quick emoji reactions — compact row fitted beside the action rail */}
               {!isOwn && (
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'nowrap', overflow: 'hidden' }}>
                   {QUICK_EMOJIS.map(e => (
                     <button
                       key={e}
@@ -1773,11 +1726,11 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                       disabled={commentsApi.posting}
                       aria-label={`React ${e}`}
                       style={{
-                        width: 40, height: 40, borderRadius: '50%',
+                        width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
                         border: '1.5px solid rgba(255,255,255,0.22)',
                         background: 'rgba(255,255,255,0.12)',
                         backdropFilter: 'blur(8px)',
-                        fontSize: 19, lineHeight: 1,
+                        fontSize: 16, lineHeight: 1,
                         cursor: commentsApi.posting ? 'default' : 'pointer',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         padding: 0, fontFamily: 'inherit',
@@ -1846,6 +1799,78 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                   </button>
                 </div>
               )}
+                </div>
+
+                {/* Vertical action rail — TikTok-style like / comment / share */}
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                    <button
+                      type="button"
+                      className="sv-tap"
+                      onClick={handleLove}
+                      disabled={reacting || isOwn}
+                      aria-label="Like status"
+                      style={{
+                        width: 44, height: 44, borderRadius: '50%', padding: 0,
+                        border: '1.5px solid rgba(255,255,255,0.28)',
+                        background: myReaction === 'love' ? 'rgba(234,67,53,0.28)' : 'rgba(255,255,255,0.14)',
+                        backdropFilter: 'blur(8px)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        cursor: isOwn ? 'default' : 'pointer',
+                      }}
+                    >
+                      <IconHeart size={22} filled={myReaction === 'love'} />
+                    </button>
+                    <span style={{ fontSize: 11.5, fontWeight: 800, color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>
+                      {fmtK(loveCount)}
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                    <button
+                      type="button"
+                      className="sv-tap"
+                      onClick={openReplies}
+                      aria-label="View comments"
+                      style={{
+                        width: 44, height: 44, borderRadius: '50%', padding: 0,
+                        border: '1.5px solid rgba(255,255,255,0.28)',
+                        background: 'rgba(255,255,255,0.14)',
+                        backdropFilter: 'blur(8px)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <IconComment size={21} color="#fff" />
+                    </button>
+                    <span style={{ fontSize: 11.5, fontWeight: 800, color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>
+                      {fmtK(replyCount)}
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                    <button
+                      type="button"
+                      className="sv-tap"
+                      onClick={openShare}
+                      aria-label="Share status"
+                      style={{
+                        width: 44, height: 44, borderRadius: '50%', padding: 0,
+                        border: '1.5px solid rgba(255,255,255,0.28)',
+                        background: 'rgba(255,255,255,0.14)',
+                        backdropFilter: 'blur(8px)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <IconShare size={20} color="#fff" />
+                    </button>
+                    <span style={{ fontSize: 10.5, fontWeight: 800, color: 'rgba(255,255,255,0.85)', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>
+                      Share
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
