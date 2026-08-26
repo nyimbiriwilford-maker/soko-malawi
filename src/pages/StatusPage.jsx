@@ -11,7 +11,7 @@ import { useStatusComments } from '../hooks/useStatusComments'
 import { formatPrice } from '../lib/format'
 import SokoNav from '../components/SokoNav'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Heart, MessageCircle, Share2, Clock, MapPin, Eye } from 'lucide-react'
+import { Heart, MessageCircle, Share2, MapPin } from 'lucide-react'
 
 // ─────────────────────────────────────────────
 // Design tokens — aligned with Home / Looking For / Shops
@@ -53,9 +53,9 @@ function expiresInLabel(iso) {
   const ms = new Date(iso) - Date.now()
   if (ms <= 0) return 'Expired'
   const h = ms / 3600000
-  if (h < 1) return 'Expires soon'
-  if (h < 24) return `Expires in ${Math.ceil(h)}h`
-  return `Expires in ${Math.ceil(h / 24)}d`
+  if (h < 1) return '<1h left'
+  if (h < 24) return `${Math.ceil(h)}h left`
+  return `${Math.ceil(h / 24)}d left`
 }
 
 function fmtCount(n) {
@@ -260,20 +260,16 @@ function StatusFeedCard({ s, onOpen, currentUserId, metrics, onLike }) {
                 {badgeLabel && <span className="st-feed-kind">{badgeLabel}</span>}
               </div>
               <div className="st-feed-meta">
-                <span className="st-feed-meta-item">
-                  <Clock size={11} /> {ago} ago
-                </span>
+                <span className="st-feed-meta-item">{ago} ago</span>
                 {s.location_hint && (
                   <span className="st-feed-meta-item">
                     <MapPin size={11} /> {s.location_hint}
                   </span>
                 )}
-                <span className="st-feed-meta-item">
-                  <Eye size={11} /> {fmtCount(m.views)} views
-                </span>
+                <span className="st-feed-meta-item">{fmtCount(m.views)} views</span>
                 {expires && (
                   <span className={`st-feed-meta-item${expires === 'Expired' ? ' is-expired' : ' is-expire'}`}>
-                    <Clock size={11} /> {expires}
+                    {expires}
                   </span>
                 )}
               </div>
@@ -794,7 +790,7 @@ function StatusPageInner({ user, navigate }) {
           border-radius: 999px; padding: 3px 8px; line-height: 1; white-space: nowrap;
         }
         .st-feed-meta {
-          display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+          display: flex; align-items: center; gap: 10px; flex-wrap: nowrap; overflow: hidden;
           margin-top: 4px; font-size: 11px; color: ${T.textMuted}; font-weight: 600;
         }
         .st-feed-meta-item {
@@ -1059,6 +1055,8 @@ function StatusPageInner({ user, navigate }) {
           }
           .st-feed-grid { gap: 10px; }
           .st-feed-media { aspect-ratio: 4 / 3; }
+          .st-feed-meta { gap: 8px; }
+          .st-feed-meta-item { max-width: 104px; }
         }
         @media (max-width: 420px) {
           .st-feed-body { padding: 12px; gap: 9px; }

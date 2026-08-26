@@ -1,3 +1,20 @@
+# Task: Status feed — mobile second line: single row, location icon only, short expiry (2026-08-26)
+
+## Request
+On mobile the second (info) line must never wrap into a third line. Remove all icons except the location pin. "Expires in …" should be written short.
+
+## Changes — `src/pages/StatusPage.jsx` (`StatusFeedCard`)
+- **Second line is locked to one row**: meta strip is now `flex-wrap: nowrap` + `overflow: hidden`; on mobile the gap tightens (8px) and long locations ellipsize at 104px instead of wrapping.
+- **Icons stripped except location**: time ("5m ago"), views ("12 views") and expiry now render as plain text; only the location keeps its MapPin icon. Removed the now-unused `Clock`/`Eye` imports.
+- **Short expiry**: "Expires in 5h" → **"5h left"**, "Expires in 2d" → **"2d left"**, "Expires soon" → **"<1h left"** (amber colour kept; "Expired" stays red).
+
+## Verification
+- `npx eslint src/pages/StatusPage.jsx` → 5 findings, all pre-existing, none new.
+- `npm run build` → success (~4s).
+- Committed and pushed to `master` (Vercel auto-deploys from master).
+
+---
+
 # Task: Status feed — two-line header: name + badge on line 1, quiet info on line 2 (2026-08-26)
 
 ## Request
