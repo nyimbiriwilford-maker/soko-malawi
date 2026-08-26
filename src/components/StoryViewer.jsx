@@ -1685,13 +1685,13 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                       aria-label={`React ${q.emoji}`}
                       style={{
                         width: 42, height: 42, borderRadius: '50%', flexShrink: 0,
-                        border: '1.5px solid rgba(255,255,255,0.22)',
-                        background: 'rgba(255,255,255,0.12)',
-                        backdropFilter: 'blur(8px)',
-                        fontSize: 20, lineHeight: 1,
+                        border: 'none',
+                        background: 'transparent',
+                        fontSize: 24, lineHeight: 1,
                         cursor: commentsApi.posting ? 'default' : 'pointer',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         padding: 0, fontFamily: 'inherit',
+                        filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.55))',
                         opacity: commentsApi.posting ? 0.55 : 1,
                         animationDelay: `${i * 0.07}s`,
                       }}
@@ -1767,7 +1767,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
               {/* Vertical action rail — TikTok-style like / comment / share + product anchor, floated upward on the right */}
               <div style={{
                 position: 'absolute', right: 10,
-                bottom: 'calc(112px + env(safe-area-inset-bottom, 0px))',
+                bottom: 'calc(128px + env(safe-area-inset-bottom, 0px))',
                 display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 16,
               }}>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>

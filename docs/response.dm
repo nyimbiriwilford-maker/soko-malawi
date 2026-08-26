@@ -1,3 +1,19 @@
+# Task: Status viewer — spacing between product anchor and emoji row + clean transparent emojis (2026-08-26)
+
+## Request
+No space between the tagged-product circular image and the quick-emoji row at the bottom-right — fix with standard spacing. Also remove the circles around the emojis — clean and transparent.
+
+## Changes — `src/components/StoryViewer.jsx`
+- **Standard spacing under the rail**: raised the vertical action rail's bottom offset `112px → 128px` (+16px, the standard spacing step), so the product anchor circle no longer crowds the quick-emoji row at the bottom-right corner.
+- **Emojis freed from their circles**: removed the glass-circle chrome (border + translucent background + blur) from all six quick-emoji buttons — now transparent, borderless emojis (bumped 20→24px for presence) with a soft drop-shadow for legibility on any frame. Same 42px touch targets, same pop-in/idle/squish animations.
+
+## Verification
+- `npx eslint src/components/StoryViewer.jsx` → 13 findings, identical pre-existing baseline.
+- `npm run build` → success (~4s).
+- Committed and pushed to `master` (Vercel auto-deploys from master).
+
+---
+
 # Task: Status viewer — volume toggle in the header before the three-dot menu (2026-08-26)
 
 ## Request
