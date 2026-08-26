@@ -1,3 +1,20 @@
+# Task: Status feed — one horizontal meta line; badge takes the expiry corner (2026-08-26)
+
+## Request
+Place time ago, location, views and expiry time professionally in one horizontal line. Remove the standalone expiry chip but keep its colour. The badge should go where the expiry chip was.
+
+## Changes — `src/pages/StatusPage.jsx` (`StatusFeedCard`)
+- **Single unified meta row**: time ago (Clock), location (MapPin), views (Eye) and **expiry time (Clock)** now sit together in one horizontal icon strip with identical styling.
+- **Expiry keeps its colour**: the amber `#b45309` (red `#b91c1c` when expired) is preserved on the expiry item itself — but the old boxed chip in the top-right corner is gone.
+- **Badge relocated**: the Product/Service/Job/Looking-for/Shop pill now occupies the top-right corner of the header — exactly where the expiry chip used to be.
+
+## Verification
+- `npx eslint src/pages/StatusPage.jsx` → 5 findings, all pre-existing, none new.
+- `npm run build` → success (~4s).
+- Committed and pushed to `master` (Vercel auto-deploys from master).
+
+---
+
 # Task: Status feed — standardized professional card header (2026-08-26)
 
 ## Request

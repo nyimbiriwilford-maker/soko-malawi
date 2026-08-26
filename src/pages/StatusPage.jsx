@@ -257,7 +257,6 @@ function StatusFeedCard({ s, onOpen, currentUserId, metrics, onLike }) {
               <div className="st-feed-name-row">
                 <span className="st-feed-name">{name}</span>
                 {isVerified && <VerifiedBadge />}
-                {badgeLabel && <span className="st-feed-kind">{badgeLabel}</span>}
               </div>
               <div className="st-feed-meta">
                 <span className="st-feed-meta-item">
@@ -271,14 +270,15 @@ function StatusFeedCard({ s, onOpen, currentUserId, metrics, onLike }) {
                 <span className="st-feed-meta-item">
                   <Eye size={11} /> {fmtCount(m.views)} views
                 </span>
+                {expires && (
+                  <span className={`st-feed-meta-item${expires === 'Expired' ? ' is-expired' : ' is-expire'}`}>
+                    <Clock size={11} /> {expires}
+                  </span>
+                )}
               </div>
             </div>
           </button>
-          {expires && (
-            <span className={`st-feed-expires${expires === 'Expired' ? ' is-expired' : ''}`}>
-              <Clock size={11} /> {expires}
-            </span>
-          )}
+          {badgeLabel && <span className="st-feed-kind">{badgeLabel}</span>}
         </div>
 
         {media && (
@@ -803,14 +803,8 @@ function StatusPageInner({ user, navigate }) {
           max-width: 130px; overflow: hidden; text-overflow: ellipsis;
         }
         .st-feed-meta-item svg { flex-shrink: 0; opacity: 0.9; }
-        .st-feed-expires {
-          display: inline-flex; align-items: center; gap: 4px;
-          flex-shrink: 0;
-          font-size: 10.5px; font-weight: 800; color: #b45309;
-          background: #fef3c7; border: 1px solid rgba(245,158,11,0.28);
-          border-radius: 999px; padding: 5px 9px; line-height: 1; white-space: nowrap;
-        }
-        .st-feed-expires.is-expired { color: #b91c1c; background: #fee2e2; border-color: rgba(220,38,38,0.28); }
+        .st-feed-meta-item.is-expire { color: #b45309; }
+        .st-feed-meta-item.is-expired { color: #b91c1c; }
         .st-feed-open {
           flex-shrink: 0;
           width: 28px; height: 28px; border-radius: 50%;
