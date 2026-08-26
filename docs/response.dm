@@ -1,3 +1,36 @@
+# Task: Product view — map error for other users + mobile action buttons placement (2026-08-26)
+
+## Request
+On the product view, the map was showing an error message to other users. Also the mobile action buttons were floating and hindering a clear view.
+
+## Root cause of the map error
+The listing page embeds Google Maps in an `<iframe>`, but the production Content-Security-Policy in `vercel.json` only allowed `frame-src https://challenges.cloudflare.com`. So in production the browser blocked the Google Maps frame ("refused to connect"), which is exactly what other users saw. It looked fine locally because the CSP headers aren't applied in the dev server.
+
+### Fix — `vercel.json`
+- Extended `frame-src` to also allow the Google Maps embed origins:
+  `frame-src https://challenges.cloudflare.com https://www.google.com https://maps.google.com`
+
+### Hardening — `src/pages/ListingDetail.jsx`
+- Added `hasValidCoords` validation (non-empty, finite, non-`0,0`) before using `latitude`/`longitude`.
+- Built `mapSrc` (embed) and `mapLink` (Open-in-Google-Maps) once and reused both, with `hl=en` and `referrerPolicy="no-referrer-when-downgrade"` on the iframe. This prevents malformed/blank queries (e.g. listings with no coords) from producing a broken frame.
+
+## Mobile action buttons — `src/pages/ListingDetail.jsx`
+Removed the floating fixed footer (`position: fixed; bottom: 60`) on mobile and replaced it with an **in-flow CTA card placed directly under the gallery**:
+- New shared `buyerCtas` (Order / Chat / Call / WhatsApp / Email / Favorites) and `ownerCtas()` (Feature / Edit / Delete) stacks.
+- New `.ld-mobile-cta` card renders title + price + the CTA stack right below the photos in the content flow (not floating), shown only on mobile (≤900px).
+- The duplicate sidebar price/title block (`.ld-mobile-dup`) and the sidebar CTA group (`.ld-sidebar-cta`) are hidden on mobile to avoid overlap; on desktop they stay unchanged.
+- Added a single shared `handleFeature()` replacing two duplicated inline feature handlers.
+- Removed the now-unused `mobileBar`/`mobileCallBtn`/`mobileChatBtn` styles and the old mobile sticky footer JSX.
+
+## Verification
+- `npx eslint src/pages/ListingDetail.jsx` → only the same pre-existing findings (no new issues introduced).
+- `npm run build` → success (built in ~4s).
+
+## Next step for you
+Push `master` to deploy. After deploy, confirm the map now loads for other users on the live site.
+
+---
+
 # Task: Host app via master push to Vercel (2026-08-26)
 
 ## Request

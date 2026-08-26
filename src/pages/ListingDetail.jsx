@@ -274,6 +274,24 @@ export default function ListingDetail() {
     }
   }
 
+  async function handleFeature() {
+    if (!currentUser || featuring) return
+    setFeaturing(true)
+    try {
+      const result = await featureExistingListing({
+        listing,
+        user: currentUser,
+        profileName: seller?.full_name || seller?.name,
+      })
+      if (result?.free) await loadListing()
+    } catch (e) {
+      setFeatureError(e?.message || 'Could not feature listing')
+      setTimeout(() => setFeatureError(null), 5000)
+    } finally {
+      setFeaturing(false)
+    }
+  }
+
   async function deleteListing() {
     setDeleting(true)
     await supabase.from('listings').delete().eq('id', id)
@@ -351,6 +369,20 @@ export default function ListingDetail() {
   const hasBulk       = listing.price_tiers && listing.price_tiers.length > 0
   const orderable     = !isOwner && Number(listing.price) > 0 && (listing.status === 'active' || listing.status === 'published') && listing.availability_status !== 'not_available' && !(listing.stock_qty != null && Number(listing.stock_qty) <= 0)
 
+  const latNum = Number(listing.latitude)
+  const lngNum = Number(listing.longitude)
+  const hasValidCoords =
+    listing.latitude != null && listing.longitude != null &&
+    `${listing.latitude}`.trim() !== '' && `${listing.longitude}`.trim() !== '' &&
+    Number.isFinite(latNum) && Number.isFinite(lngNum) && (latNum !== 0 || lngNum !== 0)
+  const mapQueryText = ((listing.area ? listing.area + ', ' : '') + (listing.city || '') + ', Malawi')
+  const mapSrc = hasValidCoords
+    ? `https://www.google.com/maps?q=${latNum},${lngNum}&z=17&output=embed&hl=en`
+    : `https://www.google.com/maps?q=${encodeURIComponent(mapQueryText)}&z=14&output=embed&hl=en`
+  const mapLink = hasValidCoords
+    ? `https://maps.google.com/?q=${latNum},${lngNum}`
+    : `https://maps.google.com/?q=${encodeURIComponent(mapQueryText)}`
+
   const activeTier = hasBulk
     ? [...listing.price_tiers].filter(t => parseInt(t.min_qty) <= quantity)
         .sort((a, b) => b.min_qty - a.min_qty)[0]
@@ -409,6 +441,88 @@ export default function ListingDetail() {
   const extraCount = allMedia.length > THUMB_SHOW ? allMedia.length - THUMB_SHOW : 0
   const visibleThumbs = allMedia.slice(0, THUMB_SHOW)
 
+  // Shared CTA stacks — rendered in the sidebar (desktop) and in the
+  // in-flow mobile CTA card (mobile). No fixed/floating bar on mobile.
+  const buyerCtas = (
+    <>
+      {orderable && (
+        <button className="ld-btn-hover" style={S.orderBtn} onClick={() => setShowOrderModal(true)}>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
+          Place Order · {formatPrice(effectiveUnitPrice * quantity)}
+        </button>
+      )}
+      {orderable && (
+        <div style={S.assureRow}>
+          <span style={S.assureItem}><span style={S.assureIcon}><Banknote size={13} strokeWidth={2.2} /></span>Pay on delivery</span>
+          <span style={S.assureItem}><span style={S.assureIcon}><Eye size={13} strokeWidth={2.2} /></span>Inspect before paying</span>
+          <span style={S.assureItem}><span style={S.assureIcon}><Star size={13} strokeWidth={2.2} /></span>Rate after delivery</span>
+        </div>
+      )}
+      <button className="ld-btn-hover" style={S.chatBtn} onClick={handleChatWithSeller}>
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        Chat with Seller
+      </button>
+
+      {(listing.contact_methods || []).includes('call') && listing.call_number && (
+        <button className="ld-btn-hover" style={S.callBtn} onClick={() => window.location.href = `tel:${listing.call_number}`}>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2.2" strokeLinecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.4 2 2 0 0 1 3.58 1.22h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          Call Seller
+        </button>
+      )}
+
+      {(listing.contact_methods || []).includes('whatsapp') && listing.whatsapp_number && (
+        <a className="ld-btn-hover" style={{ ...S.callBtn, textDecoration: 'none', color: '#15803d', borderColor: '#bbf7d0' }}
+          href={`https://wa.me/${listing.whatsapp_number.replace(/\D/g, '')}?text=${encodeURIComponent('Hi, I saw your listing "' + listing.title + '" on SokoMW')}`}
+          target="_blank" rel="noopener noreferrer">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="#15803d"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347"/></svg>
+          WhatsApp Seller
+        </a>
+      )}
+
+      {(listing.contact_methods || []).includes('email') && listing.seller_email && (
+        <a className="ld-btn-hover" style={{ ...S.callBtn, textDecoration: 'none' }}
+          href={`mailto:${listing.seller_email}?subject=${encodeURIComponent('Re: ' + listing.title)}`}>
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2.2" strokeLinecap="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg>
+          Email Seller
+        </a>
+      )}
+
+      <button className="ld-btn-hover" style={S.favBtn} onClick={() => setIsFavorited(f => !f)}>
+        <svg width="17" height="17" viewBox="0 0 24 24"
+          fill={isFavorited ? '#dc2626' : 'none'}
+          stroke={isFavorited ? '#dc2626' : '#374151'}
+          strokeWidth="2" strokeLinecap="round">
+          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
+        </svg>
+        Add to Favorites
+      </button>
+    </>
+  )
+
+  const ownerCtas = (featureLabel) => (
+    <>
+      {featureError && <div style={S.featureErrorInline}>{featureError}</div>}
+      {!isListingFeatured(listing) && (
+        <button
+          className="ld-btn-hover"
+          style={{ ...S.callBtn, color: '#b45309', borderColor: '#fde68a', background: '#fffbeb' }}
+          disabled={featuring}
+          onClick={handleFeature}
+        >
+          {featuring ? '…' : featureLabel}
+        </button>
+      )}
+      <button className="ld-btn-hover" style={S.chatBtn} onClick={() => navigate('/post/edit/' + listing.id)}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        Edit Listing
+      </button>
+      <button className="ld-btn-hover" style={{ ...S.callBtn, color: '#dc2626', borderColor: '#fecaca' }} onClick={() => setShowDeleteConfirm(true)}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+        Delete Listing
+      </button>
+    </>
+  )
+
   return (
     <div style={S.page}>
       <style>{`
@@ -433,19 +547,20 @@ export default function ListingDetail() {
 
         /* Two column layout breakpoints */
         @media (max-width: 900px) {
-          .ld-two-col { flex-direction: column !important; }
-          .ld-sidebar { width: 100% !important; position: static !important; }
+          .ld-two-col { flex-direction: column !important; padding-bottom: 32px !important; }
+          .ld-sidebar { width: 100% !important; position: static !important; max-height: none !important; overflow: visible !important; }
           .ld-main-col { width: 100% !important; }
           .ld-desktop-bar { display: none !important; }
-          .ld-mobile-bar { display: flex !important; }
+          .ld-mobile-cta { display: block !important; }
+          .ld-sidebar-cta { display: none !important; }
+          .ld-mobile-dup { display: none !important; }
           .ld-topnav { display: none !important; }
           .ld-tabnav { display: none !important; }
           .ld-breadcrumb { display: none !important; }
           .ld-back { display: flex !important; }
         }
         @media (min-width: 901px) {
-          .ld-mobile-bar { display: none !important; }
-          .ld-mobile-topnav { display: none !important; }
+          .ld-mobile-cta { display: none !important; }
           .ld-back { display: flex; }
         }
       `}</style>
@@ -582,6 +697,29 @@ export default function ListingDetail() {
                   )}
                 </div>
               )}
+            </div>
+
+            {/* ── MOBILE CTA (in-flow, replaces the floating bar) ── */}
+            <div className="ld-mobile-cta" style={{ ...S.card, display: 'none' }}>
+              <h1 style={{ fontSize: 18, fontWeight: 800, color: '#111827', lineHeight: 1.35, marginBottom: 8 }}>{listing.title}</h1>
+              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                {listing.price_type === 'free' ? (
+                  <span style={S.freePrice}>FREE 🎁</span>
+                ) : (
+                  <>
+                    <span style={{ ...S.bigPrice, fontSize: 24, ...(flash ? { color: '#dc2626' } : {}) }}>
+                      {formatPrice(effectiveUnitPrice)}
+                    </span>
+                    {flash && <span style={S.strikePrice}>{formatPrice(listing.price)}</span>}
+                    {listing.price_type === 'negotiable' && !flash && (
+                      <span style={S.negTag}>Negotiable</span>
+                    )}
+                  </>
+                )}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {!isOwner ? buyerCtas : ownerCtas('⭐ Feature this listing')}
+              </div>
             </div>
 
             {/* ── OVERVIEW / SPECS ── */}
@@ -761,10 +899,7 @@ export default function ListingDetail() {
                   </div>
                   <button
                     style={{ ...S.viewMapLink, display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}
-                    onClick={() => window.open(
-                      listing.latitude && listing.longitude
-                        ? `https://maps.google.com/?q=${listing.latitude},${listing.longitude}`
-                        : `https://maps.google.com/?q=${encodeURIComponent(listing.city + ', Malawi')}`, '_blank')}>
+                    onClick={() => window.open(mapLink, '_blank')}>
                     Open in Google Maps
                     <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0F9D58" strokeWidth="2.3" strokeLinecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                   </button>
@@ -773,14 +908,13 @@ export default function ListingDetail() {
                 {/* Map embed — full width, generous height */}
                 <div style={S.mapBoxLarge}>
                   <iframe
-                    title="location"
+                    title="Listing location map"
                     width="100%"
                     height="100%"
                     style={{ border: 0, display: 'block' }}
                     loading="lazy"
-                    src={listing.latitude && listing.longitude
-                      ? `https://www.google.com/maps?q=${listing.latitude},${listing.longitude}&output=embed&z=17`
-                      : `https://www.google.com/maps?q=${encodeURIComponent((listing.area ? listing.area + ', ' : '') + (listing.city || '') + ', Malawi')}&output=embed&z=14`}
+                    referrerPolicy="no-referrer-when-downgrade"
+                    src={mapSrc}
                   />
                 </div>
               </div>
@@ -835,8 +969,6 @@ export default function ListingDetail() {
             <div style={S.card}>
               <Comments listingId={listing.id} currentUser={currentUser} />
             </div>
-
-            <div style={{ height: 90 }} />
           </div>
 
           {/* ───── RIGHT SIDEBAR ───── */}
@@ -845,6 +977,7 @@ export default function ListingDetail() {
             {/* ── MAIN SIDEBAR CARD ── */}
             <div style={S.sideCard}>
 
+              <div className="ld-mobile-dup">
               {/* Posted time */}
               <p style={S.postedTime}>Posted {timeAgo(listing.created_at)}</p>
 
@@ -901,6 +1034,7 @@ export default function ListingDetail() {
                   Total: <strong>{formatPrice(totalPrice)}</strong> for {quantity} units
                 </div>
               )}
+              </div>
 
               <div style={S.divider} />
 
@@ -937,9 +1071,9 @@ export default function ListingDetail() {
 
               <div style={S.divider} />
 
-              {/* CTA buttons */}
+              {/* CTA buttons — desktop only; mobile uses the in-flow CTA card */}
               {!isOwner ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div className="ld-sidebar-cta" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {orderable && (
                     <button className="ld-btn-hover" style={S.orderBtn} onClick={() => setShowOrderModal(true)}>
                       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
@@ -993,7 +1127,7 @@ export default function ListingDetail() {
                   </button>
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div className="ld-sidebar-cta" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <button className="ld-btn-hover" style={S.chatBtn} onClick={() => navigate('/post/edit/' + listing.id)}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                     Edit Listing
@@ -1252,25 +1386,7 @@ export default function ListingDetail() {
                     className="ld-btn-hover"
                     style={{ ...S.barCallBtn, color: '#b45309', borderColor: '#fde68a', background: '#fffbeb' }}
                     disabled={featuring}
-                    onClick={async () => {
-                      if (!currentUser || featuring) return
-                      setFeaturing(true)
-                      try {
-                        const result = await featureExistingListing({
-                          listing,
-                          user: currentUser,
-                          profileName: seller?.full_name || seller?.name,
-                        })
-                        if (result?.free) {
-                          await loadListing()
-                        }
-                      } catch (e) {
-                        setFeatureError(e?.message || 'Could not feature listing')
-                        setTimeout(() => setFeatureError(null), 5000)
-                      } finally {
-                        setFeaturing(false)
-                      }
-                    }}
+                    onClick={handleFeature}
                   >
                     {featuring ? '…' : `⭐ Feature (${featuredPriceLabel()})`}
                   </button>
@@ -1279,59 +1395,6 @@ export default function ListingDetail() {
                 <button className="ld-btn-hover" style={{ ...S.barCallBtn, color: '#dc2626', borderColor: '#fecaca' }} onClick={() => setShowDeleteConfirm(true)}>Delete</button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── MOBILE STICKY FOOTER ── */}
-      {!isOwner ? (
-        <div className="ld-mobile-bar" style={S.mobileBar}>
-          {orderable && (
-            <button style={{ ...S.mobileChatBtn, flex: 2 }} onClick={() => setShowOrderModal(true)}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
-              Order
-            </button>
-          )}
-          <button style={S.mobileCallBtn} onClick={() => seller?.phone && (window.location.href = `tel:${seller.phone}`)}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.4 2 2 0 0 1 3.58 1.22h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-            Call
-          </button>
-          <button style={{ ...S.mobileChatBtn, flex: orderable ? 1.4 : 2 }} onClick={handleChatWithSeller}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-            Chat
-          </button>
-        </div>
-      ) : (
-        <div className="ld-mobile-bar" style={{ ...S.mobileBar, flexWrap: 'wrap' }}>
-          {featureError && <div style={{ ...S.featureErrorInline, flex: '1 1 100%' }}>{featureError}</div>}
-          <div style={{ display: 'flex', gap: 10, flex: '1 1 100%' }}>
-            {!isListingFeatured(listing) && (
-              <button
-                style={{ ...S.mobileCallBtn, color: '#b45309', borderColor: '#fde68a' }}
-                disabled={featuring}
-                onClick={async () => {
-                  if (!currentUser || featuring) return
-                  setFeaturing(true)
-                  try {
-                    const result = await featureExistingListing({
-                      listing,
-                      user: currentUser,
-                      profileName: seller?.full_name || seller?.name,
-                    })
-                    if (result?.free) await loadListing()
-                  } catch (e) {
-                    setFeatureError(e?.message || 'Could not feature listing')
-                    setTimeout(() => setFeatureError(null), 5000)
-                  } finally {
-                    setFeaturing(false)
-                  }
-                }}
-              >
-                {featuring ? '…' : '⭐ Feature'}
-              </button>
-            )}
-            <button style={S.mobileCallBtn} onClick={() => navigate('/post/edit/' + listing.id)}>Edit</button>
-            <button style={{ ...S.mobileChatBtn, background: '#dc2626' }} onClick={() => setShowDeleteConfirm(true)}>Delete</button>
           </div>
         </div>
       )}
@@ -1652,11 +1715,6 @@ const S = {
   barNeg:          { fontSize: 11, color: '#6b7280', marginTop: 1 },
   barCallBtn:      { display: 'flex', alignItems: 'center', gap: 7, background: '#fff', border: '1.5px solid #d1d5db', borderRadius: 10, padding: '11px 24px', fontSize: 14, fontWeight: 700, color: '#374151', cursor: 'pointer' },
   barChatBtn:      { display: 'flex', alignItems: 'center', gap: 7, background: '#0F9D58', color: '#fff', border: 'none', borderRadius: 10, padding: '11px 26px', fontSize: 14, fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 12px rgba(15,157,88,.28)' },
-
-  // Mobile footer
-  mobileBar:     { position: 'fixed', bottom: 60, left: 0, right: 0, zIndex: 100, background: '#fff', borderTop: '1px solid #e5e7eb', padding: '10px 14px', paddingBottom: 'calc(10px + env(safe-area-inset-bottom))', display: 'none', gap: 10, boxShadow: '0 -4px 20px rgba(0,0,0,.08)' },
-  mobileCallBtn: { flex: 1, background: '#fff', border: '1.5px solid #d1d5db', borderRadius: 10, padding: '12px', fontSize: 14, fontWeight: 700, color: '#374151', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7 },
-  mobileChatBtn: { flex: 2, background: '#0F9D58', color: '#fff', border: 'none', borderRadius: 10, padding: '12px', fontSize: 14, fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, boxShadow: '0 4px 12px rgba(15,157,88,.28)' },
 
   // Modals
   overlay:     { position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', backdropFilter: 'blur(4px)', zIndex: 200, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' },
