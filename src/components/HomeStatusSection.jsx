@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
+import { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from 'react'
 import { ChevronRight, MapPin, ShoppingBag, Store, Briefcase, Wrench, Plus } from 'lucide-react'
 import { STATUS_META } from '../constants/homeConstants'
 import { supabase } from '../lib/supabase'
@@ -679,22 +679,28 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
   const hasStories = storyGroups.length > 0
   const activeCount = rankedStories.length
 
-  // Auto-scroll past Create Status button when there are more than 2 statuses
-  useEffect(() => {
+  // Create Status card is the first rail item. With 2+ posted statuses it is
+  // scrolled off-screen before first paint so landing/refresh shows only
+  // posted status cards; scrolling back left reveals the create card.
+  // With 0–1 posters it stays visible at the start of the rail so mobile
+  // fills its two visible slots (create + the single posted status).
+  const createCardRef = useRef(null)
+  const hideCreateCard = rankedStories.length > 1
+  const layoutKey = isMobile ? 'm' : windowWidth < 1024 ? 't' : 'd'
+
+  useLayoutEffect(() => {
     const el = scrollRef.current
-    if (!el || rankedStories.length <= 2) return
-
-    const timer = setTimeout(() => {
-      // Calculate width of Create Status button + gap
-      const buttonWidth = isMobile ? 150 : (windowWidth < 1024 ? 190 : 220)
-      const gap = isMobile ? 10 : 16
-      const scrollAmount = buttonWidth + gap
-
-      el.scrollLeft = scrollAmount
-    }, 100)
-
-    return () => clearTimeout(timer)
-  }, [rankedStories.length, isMobile, windowWidth, activeCategory])
+    if (!el) return
+    if (!hideCreateCard) {
+      el.scrollLeft = 0
+      return
+    }
+    const btn = createCardRef.current
+    if (!btn || !btn.offsetWidth) return
+    const cs = window.getComputedStyle(el)
+    const gap = parseFloat(cs.columnGap || cs.gap) || (isMobile ? 10 : 16)
+    el.scrollLeft = btn.offsetWidth + gap
+  }, [hideCreateCard, activeCategory, layoutKey, loading, isMobile])
 
   function openStoryGroup(s) {
     const ids = s._ownGroup ? s._ownGroup.map(x => x.id) : [s.id]
@@ -858,19 +864,21 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
                   )}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <button type="button"
-                    onClick={() => { if (rankedStories.length) openStoryGroup(rankedStories[0]) }}
-                    style={{
-                      border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit',
-                      display: 'inline-flex', alignItems: 'center', gap: 2,
-                      padding: '4px 8px', fontSize: 12, fontWeight: 700, color: G.green,
-                      borderRadius: 999, transition: 'background 0.25s ease',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    View All
-                    <ChevronRight size={13} />
-                  </button>
+                  {rankedStories.length > 0 && (
+                    <button type="button"
+                      onClick={() => { if (rankedStories.length) openStoryGroup(rankedStories[0]) }}
+                      style={{
+                        border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit',
+                        display: 'inline-flex', alignItems: 'center', gap: 2,
+                        padding: '4px 8px', fontSize: 12, fontWeight: 700, color: G.green,
+                        borderRadius: 999, transition: 'background 0.25s ease',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      View All
+                      <ChevronRight size={13} />
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -880,7 +888,7 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
                 onSelect={setActiveCategory}
               />
 
-              {rankedStories.length > 0 ? (
+              {rankedStories.length > 0 || activeCategory === 'All' ? (
                 <div style={{ position: 'relative', paddingTop: 10, paddingBottom: 10, marginTop: 4 }}>
                   <div ref={scrollRef}
                     className="hs-rail"
@@ -892,7 +900,7 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
                       marginTop: -10,
                     }}
                   >
-                    <button type="button" className="hs-add-btn"
+                    <button ref={createCardRef} type="button" className="hs-add-btn"
                       onClick={() => { if (!currentUserId) { navigate?.('/login'); return }; onCreateStory?.() }}
                       style={{
                         flexShrink: 0, borderRadius: isMobile ? 18 : 20, overflow: 'hidden',

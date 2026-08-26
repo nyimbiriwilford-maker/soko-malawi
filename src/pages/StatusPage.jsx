@@ -5,6 +5,8 @@ import { fetchAllActiveStories } from '../hooks/useStatuses'
 import StoryViewer from '../components/StoryViewer'
 import StatusUploadModal from '../components/StatusUploadModal'
 import { isStatusVideoUrl, isStatusColorBoard } from '../utils/statusVideo'
+import { coordsForPlace, haversineKm } from '../utils/lookingFor'
+import { useUserLocation } from '../hooks/useUserLocation'
 import StatusTextBoard from '../components/StatusTextBoard'
 import StatusCommentsPanel from '../components/StatusComments'
 import { useStatusComments } from '../hooks/useStatusComments'
@@ -66,6 +68,32 @@ function fmtCount(n) {
 }
 
 // ─────────────────────────────────────────────
+// Feed ordering — personalised shuffle
+// Every viewer gets their own stable order of the same feed (seeded by
+// their user id), nearby posts float to the top, and posts the viewer
+// already watched sink below unseen ones (survives refresh — views are
+// persisted in status_views).
+// ─────────────────────────────────────────────
+function hash32(str) {
+  let h = 2166136261
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i)
+    h = Math.imul(h, 16777619)
+  }
+  return h >>> 0
+}
+
+/** Stable pseudo-random in [0,1) for a (viewer, status) pair. */
+function seededRandom(viewerId, statusId) {
+  return hash32(`${viewerId}:${statusId}`) / 4294967296
+}
+
+/** Approximate coords of a status — from its location_hint, else the author's city. */
+function statusCoords(s) {
+  return coordsForPlace(s.location_hint || s.profiles?.city || null)
+}
+
+// ─────────────────────────────────────────────
 // Modern presentation primitives
 // ─────────────────────────────────────────────
 function VerifiedBadge() {
@@ -120,15 +148,19 @@ function useStoryFeedMetrics(stories, currentUserId) {
     const ids = idKey ? idKey.split('|') : []
     if (!ids.length) return
 
-    const [reactRes, replyRes, commentRes, viewRes] = await Promise.all([
+    const [reactRes, replyRes, commentRes, viewRes, myViewRes] = await Promise.all([
       supabase.from('status_reactions').select('status_id, user_id, reaction').in('status_id', ids),
       Promise.all(ids.map(id => supabase.from('status_replies').select('id', { count: 'exact', head: true }).eq('status_id', id))),
       Promise.all(ids.map(id => supabase.from('status_comments').select('id', { count: 'exact', head: true }).eq('status_id', id))),
       Promise.all(ids.map(id => supabase.from('status_views').select('id', { count: 'exact', head: true }).eq('status_id', id))),
+      currentUserId
+        ? supabase.from('status_views').select('status_id').eq('viewer_id', currentUserId).in('status_id', ids)
+        : Promise.resolve({ data: [] }),
     ])
 
+    const myViewed = new Set((myViewRes.data || []).map(r => r.status_id))
     const map = {}
-    for (const id of ids) map[id] = { views: 0, likes: 0, myLike: null, replies: 0 }
+    for (const id of ids) map[id] = { views: 0, likes: 0, myLike: null, replies: 0, myView: myViewed.has(id) }
     for (const r of reactRes.data || []) {
       if (map[r.status_id] && r.reaction === 'love') {
         map[r.status_id].likes += 1
@@ -151,6 +183,7 @@ function useStoryFeedMetrics(stories, currentUserId) {
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'status_replies' }, () => refresh())
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'status_reactions' }, () => refresh())
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'status_reactions' }, () => refresh())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'status_views' }, () => refresh())
       .subscribe()
     return () => supabase.removeChannel(ch)
   }, [refresh])
@@ -264,6 +297,12 @@ function StatusFeedCard({ s, onOpen, currentUserId, metrics, onLike }) {
                 {s.location_hint && (
                   <span className="st-feed-meta-item">
                     <MapPin size={11} /> {s.location_hint}
+                  </span>
+                )}
+                {s._distKm != null && (
+                  <span className="st-feed-meta-item">
+                    <MapPin size={11} />
+                    {s._distKm < 1 ? '<1 km away' : `${Math.round(s._distKm)} km away`}
                   </span>
                 )}
                 <span className="st-feed-meta-item">{fmtCount(m.views)} views</span>
@@ -592,12 +631,58 @@ function StatusPageInner({ user, navigate }) {
     return () => supabase.removeChannel(ch)
   }, [user.id])
 
-  // Recent statuses (list view, excluding own)
-  const recentStatuses = stories
-    .filter(s => s.user_id !== user.id)
-    .slice(0, 12)
+  // Status pool (excluding own) — the 30 newest statuses are the pool the
+  // personalised feed is ordered from.
+  const statusPool = useMemo(
+    () => stories.filter(s => s.user_id !== user.id).slice(0, 30),
+    [stories, user.id],
+  )
 
-  const { metrics: feedMetrics, likeStory } = useStoryFeedMetrics(recentStatuses, user.id)
+  const { metrics: feedMetrics, likeStory } = useStoryFeedMetrics(statusPool, user.id)
+
+  // Viewer position: browser geolocation first, else their profile city.
+  const myLocation = useUserLocation()
+  const viewerCoords = useMemo(() => {
+    if (Number.isFinite(myLocation.lat) && Number.isFinite(myLocation.lng)) {
+      return { lat: myLocation.lat, lng: myLocation.lng }
+    }
+    const c = coordsForPlace(user.city || null)
+    return c ? { lat: c.lat, lng: c.lng } : null
+  }, [myLocation.lat, myLocation.lng, user.city])
+
+  // Feed order:
+  //   1. Unseen posts first — a viewed post sinks below unseen ones even
+  //      after a refresh (myView comes from status_views).
+  //   2. Nearby posts first — statuses with a known distance sort closest
+  //      first; posts with no resolvable location come after.
+  //   3. Everything else is shuffled with a seed unique to the viewer, so
+  //      two people see the same feed in different orders.
+  const recentStatuses = useMemo(() => {
+    const ranked = statusPool.map(s => {
+      const from = statusCoords(s)
+      const distKm = viewerCoords && from
+        ? haversineKm(viewerCoords.lat, viewerCoords.lng, from.lat, from.lng)
+        : null
+      return {
+        s,
+        viewed: !!feedMetrics[s.id]?.myView,
+        distKm,
+        rand: seededRandom(user.id, s.id),
+      }
+    })
+    ranked.sort((a, b) => {
+      if (a.viewed !== b.viewed) return a.viewed ? 1 : -1
+      const aHas = a.distKm != null
+      const bHas = b.distKm != null
+      if (aHas !== bHas) return aHas ? -1 : 1
+      if (aHas) {
+        if (Math.abs(a.distKm - b.distKm) > 2) return a.distKm - b.distKm
+        return a.rand - b.rand
+      }
+      return a.rand - b.rand
+    })
+    return ranked.slice(0, 12).map(r => ({ ...r.s, _distKm: r.distKm }))
+  }, [statusPool, feedMetrics, viewerCoords, user.id])
 
   async function openFeedStory(s) {
     const { data } = await supabase.from('user_statuses')
