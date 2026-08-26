@@ -1,3 +1,26 @@
+# Task: Status viewer — per-emoji personality animations (2026-08-26)
+
+## Request
+Animations should be based on individual emojis — the laugh one really laughing, fire shooting, etc.
+
+## What changed — `src/components/StoryViewer.jsx`
+- `QUICK_EMOJIS` is now emoji + animation pairs: 😂 laugh, 🔥 fire, 😍 heart-eyes, 💰 money, 🎉 party, 🙏 pray.
+- Each emoji has its own idle keyframe animation on an inner span (so hover/press scaling on the button still works):
+  - 😂 `svEmojiLaugh` — rolling side to side, shaking with laughter.
+  - 🔥 `svEmojiFire` — flames shooting upward with stretch + hot orange glow (`drop-shadow`).
+  - 😍 `svEmojiHeartEyes` — double heartbeat pulse.
+  - 💰 `svEmojiMoney` — coin-hop bounce with clink tilts.
+  - 🎉 `svEmojiParty` — party wiggle.
+  - 🙏 `svEmojiPray` — gentle bowing sway.
+- Kept the staggered springy pop-in entrance and the hover lift/press squish; removed the old uniform float loop.
+
+## Verification
+- `npx eslint src/components/StoryViewer.jsx` → only pre-existing findings.
+- `npm run build` → success (~3.5s).
+- Committed and pushed to `master` (Vercel auto-deploys from master).
+
+---
+
 # Task: Status viewer — spread & animate emojis, transparent rail buttons (2026-08-26)
 
 ## Request

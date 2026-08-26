@@ -466,7 +466,14 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
     if (ok) setReplyText('')
   }
 
-  const QUICK_EMOJIS = ['👍', '🔥', '😍', '💰', '🙏', '🎉']
+  const QUICK_EMOJIS = [
+    { emoji: '😂', anim: 'laugh' },
+    { emoji: '🔥', anim: 'fire' },
+    { emoji: '😍', anim: 'hearteyes' },
+    { emoji: '💰', anim: 'money' },
+    { emoji: '🎉', anim: 'party' },
+    { emoji: '🙏', anim: 'pray' },
+  ]
 
   async function sendQuickEmoji(emoji) {
     if (commentsApi.posting) return
@@ -1055,28 +1062,68 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
         .sv-hide-scroll::-webkit-scrollbar { display: none; }
         #sv-reply-input::placeholder { color: rgba(255,255,255,0.65); }
 
-        /* Quick emoji reactions — lively staggered pop-in + gentle idle float */
+        /* Quick emoji reactions — lively staggered pop-in + a unique idle animation per emoji */
         @keyframes svEmojiIn {
           0%   { transform: translateY(16px) scale(0.3); opacity: 0; }
           60%  { transform: translateY(-4px) scale(1.15); opacity: 1; }
           100% { transform: translateY(0) scale(1); opacity: 1; }
         }
-        @keyframes svEmojiFloat {
-          0%, 100% { transform: translateY(0) rotate(0deg); }
-          50%      { transform: translateY(-3px) rotate(-2deg); }
-        }
         @keyframes svRailIn {
           0%   { transform: translateX(18px) scale(0.6); opacity: 0; }
           100% { transform: translateX(0) scale(1); opacity: 1; }
         }
+        /* 😂 rolling on the floor laughing */
+        @keyframes svEmojiLaugh {
+          0%, 100% { transform: rotate(-9deg) translateY(0); }
+          25%      { transform: rotate(8deg) translateY(-2px); }
+          50%      { transform: rotate(-8deg) translateY(0.5px); }
+          75%      { transform: rotate(7deg) translateY(-1.5px); }
+        }
+        /* 🔥 flames shooting upward with a hot glow */
+        @keyframes svEmojiFire {
+          0%, 100% { transform: translateY(0) scale(1); filter: drop-shadow(0 0 1px rgba(255,120,0,0)); }
+          30%      { transform: translateY(-3.5px) scale(1.1, 1.24); filter: drop-shadow(0 -3px 6px rgba(255,140,0,0.9)); }
+          60%      { transform: translateY(-1px) scale(0.95, 1.1); filter: drop-shadow(0 -1px 3px rgba(255,80,0,0.55)); }
+        }
+        /* 😍 heartbeat pulses */
+        @keyframes svEmojiHeartEyes {
+          0%, 56%, 100% { transform: scale(1); }
+          14%           { transform: scale(1.2); }
+          28%           { transform: scale(1); }
+          42%           { transform: scale(1.14); }
+        }
+        /* 💰 money bag hop — coins clinking */
+        @keyframes svEmojiMoney {
+          0%, 40%, 70%, 100% { transform: translateY(0) rotate(0deg); }
+          20%                { transform: translateY(-5px) rotate(-7deg); }
+          55%                { transform: translateY(-2.5px) rotate(6deg); }
+        }
+        /* 🎉 party wiggle */
+        @keyframes svEmojiParty {
+          0%, 100% { transform: rotate(0deg) scale(1); }
+          20%      { transform: rotate(-13deg) scale(1.08); }
+          40%      { transform: rotate(11deg) scale(1.02); }
+          60%      { transform: rotate(-8deg) scale(1.06); }
+          80%      { transform: rotate(6deg) scale(1); }
+        }
+        /* 🙏 gentle bowing sway */
+        @keyframes svEmojiPray {
+          0%, 100% { transform: rotate(0deg) translateY(0); }
+          50%      { transform: rotate(6deg) translateY(1.5px); }
+        }
         .sv-emoji {
-          animation:
-            svEmojiIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both,
-            svEmojiFloat 2.8s ease-in-out infinite;
+          animation: svEmojiIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
           transition: transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.16s;
         }
         .sv-emoji:hover { transform: translateY(-4px) scale(1.22); filter: brightness(1.15); }
         .sv-emoji:active { transform: scale(0.85); }
+        .sv-ei { display: inline-block; }
+        .sv-ei-laugh     { animation: svEmojiLaugh 0.9s ease-in-out infinite; }
+        .sv-ei-fire      { animation: svEmojiFire 1.1s ease-in-out infinite; }
+        .sv-ei-hearteyes { animation: svEmojiHeartEyes 1.8s ease-in-out infinite; }
+        .sv-ei-money     { animation: svEmojiMoney 1.6s ease-in-out infinite; }
+        .sv-ei-party     { animation: svEmojiParty 1.9s ease-in-out infinite; }
+        .sv-ei-pray      { animation: svEmojiPray 2.2s ease-in-out infinite; }
         .sv-rail-btn { animation: svRailIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both; transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1); }
         .sv-rail-btn:hover { transform: scale(1.15); }
         .sv-rail-btn:active { transform: scale(0.88); }
@@ -1739,17 +1786,17 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                 </button>
               )}
 
-              {/* Quick emoji reactions — spread across the row, animated */}
+              {/* Quick emoji reactions — spread across the row, each with its own animation */}
               {!isOwn && (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'nowrap', gap: 4 }}>
-                  {QUICK_EMOJIS.map((e, i) => (
+                  {QUICK_EMOJIS.map((q, i) => (
                     <button
-                      key={e}
+                      key={q.emoji}
                       type="button"
                       className="sv-tap sv-emoji"
-                      onClick={() => sendQuickEmoji(e)}
+                      onClick={() => sendQuickEmoji(q.emoji)}
                       disabled={commentsApi.posting}
-                      aria-label={`React ${e}`}
+                      aria-label={`React ${q.emoji}`}
                       style={{
                         width: 42, height: 42, borderRadius: '50%', flexShrink: 0,
                         border: '1.5px solid rgba(255,255,255,0.22)',
@@ -1760,10 +1807,16 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         padding: 0, fontFamily: 'inherit',
                         opacity: commentsApi.posting ? 0.55 : 1,
-                        animationDelay: `${i * 0.07}s, ${1 + i * 0.18}s`,
+                        animationDelay: `${i * 0.07}s`,
                       }}
                     >
-                      {e}
+                      <span
+                        className={`sv-ei sv-ei-${q.anim}`}
+                        style={{ animationDelay: `${0.7 + i * 0.15}s`, display: 'inline-block' }}
+                        aria-hidden
+                      >
+                        {q.emoji}
+                      </span>
                     </button>
                   ))}
                 </div>
