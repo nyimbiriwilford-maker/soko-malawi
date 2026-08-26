@@ -1,3 +1,23 @@
+# Task: Product anchor — auto-withdraw after tap + un-crowded layout + rail icon spacing (2026-08-26)
+
+## Request
+1. When the product card is expanded by tap and no action follows, hide the info again after a few seconds.
+2. Improve the expanded card's horizontal arrangement — content should fit properly, not be compacted.
+3. On the like/comment/share rail, the recorded numbers sit far from their icons — bring each count close to its icon, and give professional spacing between icon groups (like → comment → share).
+
+## Changes — `src/components/StoryViewer.jsx`
+- **Tap-expanded card auto-withdraws**: `toggleProductCard()` now schedules a 4.5s collapse timer whenever a tap opens the card; any further tap (expand/collapse/open product) cancels or resets it. Same rhythm as the intro auto-expand.
+- **Expanded card layout un-crowded**: card `gap` 8→10px, padding 5→`6px 7px`, `max-width` 246→292px, title ellipsis cap 104→128px, CTA pill enlarged (`padding: 7px 13px`, letter-spacing), copy block vertically centered with 2px line gap; collapsed state keeps a symmetric 44px circle (`max-width: 44px; padding: 6px`).
+- **Rail counts hugging icons**: each like/comment/share button's height 44→32px so the icon no longer floats in a tall invisible button; per-item gap 3→2px — the count now reads directly under its icon.
+- **Professional spacing between rail groups**: rail column gap 12→16px (like → comment → share → product anchor).
+
+## Verification
+- `npx eslint src/components/StoryViewer.jsx` → 13 findings, identical pre-existing baseline, none new.
+- `npm run build` → success (~3.5s).
+- Committed and pushed to `master` (Vercel auto-deploys from master).
+
+---
+
 # Task: Verify tagged-product circular anchor below the like rail (2026-08-26)
 
 ## Request

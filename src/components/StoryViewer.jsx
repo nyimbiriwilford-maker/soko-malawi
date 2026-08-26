@@ -496,7 +496,12 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
     productTouchedRef.current = true
     clearTimeout(productTimerRef.current)
     clearTimeout(productIntroRef.current)
-    setProductOpen(o => !o)
+    const opening = !productOpen
+    setProductOpen(opening)
+    // Expanded by tap with no further action → withdraw back to the circle
+    if (opening) {
+      productTimerRef.current = setTimeout(() => setProductOpen(false), 4500)
+    }
   }
 
   function handleProductCardClick() {
@@ -1145,8 +1150,8 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
         }
         .sv-product-card {
           position: relative;
-          display: flex; align-items: center; gap: 8px;
-          padding: 5px;
+          display: flex; align-items: center; gap: 10px;
+          padding: 6px 7px;
           background: rgba(255,255,255,0.1);
           backdrop-filter: blur(12px);
           -webkit-backdrop-filter: blur(12px);
@@ -1155,17 +1160,17 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
           cursor: pointer;
           overflow: hidden;
           white-space: nowrap;
-          max-width: 246px;
+          max-width: 292px;
           box-shadow: 0 2px 12px rgba(0,0,0,0.25);
           animation: svProductRing 2.6s ease-in-out infinite;
           transition: max-width 0.55s cubic-bezier(0.22, 1, 0.36, 1), background 0.2s, transform 0.15s;
         }
-        .sv-product-card.is-collapsed { max-width: 42px; }
+        .sv-product-card.is-collapsed { max-width: 44px; padding: 6px; }
         .sv-product-card:not(.is-collapsed) { animation: none; box-shadow: 0 2px 14px rgba(0,0,0,0.3); }
         .sv-product-card:hover { background: rgba(255,255,255,0.2); }
         .sv-product-card:active { transform: scale(0.95); }
         .sv-product-copy {
-          display: flex; flex-direction: column; gap: 1px; min-width: 0;
+          display: flex; flex-direction: column; justify-content: center; gap: 2px; min-width: 0;
           opacity: 1; transition: opacity 0.3s 0.14s;
         }
         .sv-product-card.is-collapsed .sv-product-copy,
@@ -1174,7 +1179,8 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
           flex-shrink: 0; margin-right: 1px;
           background: ${GREEN}; color: #fff;
           font-size: 11px; font-weight: 800; font-family: inherit;
-          border-radius: 999px; padding: 6px 11px;
+          border-radius: 999px; padding: 7px 13px;
+          letter-spacing: 0.01em;
           opacity: 1; transition: opacity 0.3s 0.14s;
         }
         .sv-rail-btn { animation: svRailIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both; transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1); }
@@ -1755,9 +1761,9 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
               <div style={{
                 position: 'absolute', right: 10,
                 bottom: 'calc(112px + env(safe-area-inset-bottom, 0px))',
-                display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 12,
+                display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 16,
               }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
                     <button
                       type="button"
                       className="sv-tap sv-rail-btn"
@@ -1765,7 +1771,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                       disabled={reacting || isOwn}
                       aria-label="Like status"
                       style={{
-                        width: 48, height: 44, padding: 0,
+                          width: 48, height: 32, padding: 0,
                         border: 'none', background: 'none', borderRadius: 0,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         cursor: isOwn ? 'default' : 'pointer',
@@ -1779,14 +1785,14 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                     </span>
                   </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
                     <button
                       type="button"
                       className="sv-tap sv-rail-btn"
                       onClick={openReplies}
                       aria-label="View comments"
                       style={{
-                        width: 48, height: 44, padding: 0,
+                          width: 48, height: 32, padding: 0,
                         border: 'none', background: 'none', borderRadius: 0,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         cursor: 'pointer',
@@ -1801,14 +1807,14 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                     </span>
                   </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
                     <button
                       type="button"
                       className="sv-tap sv-rail-btn"
                       onClick={openShare}
                       aria-label="Share status"
                       style={{
-                        width: 48, height: 44, padding: 0,
+                          width: 48, height: 32, padding: 0,
                         border: 'none', background: 'none', borderRadius: 0,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         cursor: 'pointer',
@@ -1863,7 +1869,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                       <span className="sv-product-copy">
                         <span style={{
                           fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.97)',
-                          overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 104,
+                          overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 128,
                           textShadow: '0 1px 3px rgba(0,0,0,0.55)',
                         }}>
                           {productTitle}
