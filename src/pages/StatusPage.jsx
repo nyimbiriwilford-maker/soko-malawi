@@ -195,13 +195,16 @@ function StatusFeedCard({ s, onOpen, currentUserId, metrics, onLike }) {
   const ago        = timeAgo(s.created_at)
   const expires    = expiresInLabel(s.expires_at)
   const rawContent = (s.content || '').trim()
-  // Badge: only tagged statuses get one — the tagged item's own category
-  // ("Furniture", "Electronics", "Services", …), nicely capitalized.
-  const badgeLabel = s.tagged?.category
-    ? String(s.tagged.category)
-      .replace(/[_-]+/g, ' ')
-      .trim()
-      .replace(/\b\w/g, c => c.toUpperCase())
+  // Badge: only tagged statuses get one — labelled by the kind of tagged
+  // entity: Product / Service / Job / Looking for / Shop.
+  const badgeLabel = s.tagged || s.tagged_listing_id || s.tagged_ref_id
+    ? ({
+      listing: 'Product',
+      service: 'Service',
+      job: 'Job',
+      request: 'Looking for',
+      shop: 'Shop',
+    })[s.tagged_kind] || 'Product'
     : null
   const m = metrics[s.id] || { views: 0, likes: 0, myLike: null, replies: 0 }
 

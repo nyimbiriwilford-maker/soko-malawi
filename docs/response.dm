@@ -1,3 +1,20 @@
+# Task: Status feed — badge by tagged entity kind (Product/Service/Job/Looking for) (2026-08-26)
+
+## Request
+The badge should be the tagged entity's kind — Product, Service, Job, Looking for, etc.
+
+## Changes — `src/pages/StatusPage.jsx` (`StatusFeedCard`)
+- Badge label now derived from the status's `tagged_kind`: `listing → Product`, `service → Service`, `job → Job`, `request → Looking for`, `shop → Shop`.
+- Legacy rows without an explicit kind but with `tagged_listing_id` fall back to **Product**; untagged statuses still show no badge.
+- Kind is guaranteed on feed rows — `fetchAllActiveStories` hydrates every status with a normalized `tagged_kind` (falling back to `listing` when only `tagged_listing_id` exists) in `src/hooks/useStatuses.js`.
+
+## Verification
+- `npx eslint src/pages/StatusPage.jsx` → 5 findings, all pre-existing, none new.
+- `npm run build` → success (~3.6s).
+- Committed and pushed to `master` (Vercel auto-deploys from master).
+
+---
+
 # Task: Status feed — badge only for tagged statuses, showing their real category (2026-08-26)
 
 ## Request
