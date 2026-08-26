@@ -446,11 +446,21 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
 
   const QUICK_EMOJIS = [
     { emoji: '😂', anim: 'laugh' },
-    { emoji: '🔥', anim: 'fire' },
+    { emoji: '❤️', anim: 'love' },
     { emoji: '😍', anim: 'hearteyes' },
+    { emoji: '🔥', anim: 'fire' },
+    { emoji: '👍', anim: 'thumb' },
     { emoji: '💰', anim: 'money' },
     { emoji: '🎉', anim: 'party' },
     { emoji: '🙏', anim: 'pray' },
+    { emoji: '😮', anim: 'wow' },
+    { emoji: '👏', anim: 'clap' },
+    { emoji: '🙌', anim: 'hands' },
+    { emoji: '🤣', anim: 'laugh' },
+    { emoji: '😢', anim: 'sad' },
+    { emoji: '😡', anim: 'angry' },
+    { emoji: '🤝', anim: 'bob' },
+    { emoji: '💪', anim: 'thumb' },
   ]
 
   // ── Tagged product anchor: circular thumbnail below the action rail that
@@ -1143,6 +1153,41 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
         .sv-ei-money     { animation: svEmojiMoney 1.6s ease-in-out infinite; }
         .sv-ei-party     { animation: svEmojiParty 1.9s ease-in-out infinite; }
         .sv-ei-pray      { animation: svEmojiPray 2.2s ease-in-out infinite; }
+        .sv-ei-love      { animation: svEmojiHeartEyes 1.5s ease-in-out infinite; }
+        .sv-ei-thumb     { animation: svEmojiThumb 1.7s ease-in-out infinite; }
+        .sv-ei-wow       { animation: svEmojiWow 2s ease-in-out infinite; }
+        .sv-ei-clap      { animation: svEmojiClap 0.85s ease-in-out infinite; }
+        .sv-ei-hands     { animation: svEmojiParty 2.1s ease-in-out infinite; }
+        .sv-ei-sad       { animation: svEmojiSad 2.4s ease-in-out infinite; }
+        .sv-ei-angry     { animation: svEmojiAngry 0.55s ease-in-out infinite; }
+        .sv-ei-bob       { animation: svEmojiBob 1.9s ease-in-out infinite; }
+        @keyframes svEmojiThumb {
+          0%, 100% { transform: translateY(0) rotate(0deg); }
+          40%      { transform: translateY(-3.5px) rotate(-12deg); }
+          70%      { transform: translateY(0.5px) rotate(4deg); }
+        }
+        @keyframes svEmojiWow {
+          0%, 100% { transform: scale(1); }
+          50%      { transform: scale(1.16); }
+        }
+        @keyframes svEmojiClap {
+          0%, 100% { transform: rotate(0deg) scale(1); }
+          25%      { transform: rotate(-14deg) scale(1.06); }
+          75%      { transform: rotate(14deg) scale(1.06); }
+        }
+        @keyframes svEmojiSad {
+          0%, 100% { transform: rotate(0deg) translateY(0); }
+          50%      { transform: rotate(-5deg) translateY(1.5px); }
+        }
+        @keyframes svEmojiAngry {
+          0%, 100% { transform: translateX(0); }
+          25%      { transform: translateX(-1.4px) rotate(-2deg); }
+          75%      { transform: translateX(1.4px) rotate(2deg); }
+        }
+        @keyframes svEmojiBob {
+          0%, 100% { transform: translateY(0); }
+          50%      { transform: translateY(-3px); }
+        }
         /* Tagged product anchor — circle below the rail that expands into a long card */
         @keyframes svProductRing {
           0%, 100% { box-shadow: 0 2px 12px rgba(0,0,0,0.25), 0 0 0 0 rgba(255,255,255,0.35); }
@@ -1665,9 +1710,16 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                 </button>
               )}
 
-              {/* Quick emoji reactions — spread across the row, each with its own animation */}
+              {/* Quick emoji reactions — horizontal scroll rail, each with its own animation */}
               {!isOwn && (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'nowrap', gap: 4 }}>
+                <div
+                  className="sv-hide-scroll"
+                  style={{
+                    display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 2,
+                    overflowX: 'auto', overscrollBehaviorX: 'contain', WebkitOverflowScrolling: 'touch',
+                    scrollbarWidth: 'none', padding: '2px 0', margin: '0 -4px',
+                  }}
+                >
                   {QUICK_EMOJIS.map((q, i) => (
                     <button
                       key={q.emoji}
@@ -1686,7 +1738,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                         padding: 0, fontFamily: 'inherit',
                         filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.55))',
                         opacity: commentsApi.posting ? 0.55 : 1,
-                        animationDelay: `${i * 0.07}s`,
+                        animationDelay: `${Math.min(i * 0.05, 0.55)}s`,
                       }}
                     >
                       <span

@@ -1,3 +1,21 @@
+# Task: Status viewer — more quick emojis in a horizontal scroll rail (2026-08-26)
+
+## Request
+Increase the number of emojis on the quick-reaction row, make them scroll horizontally, and load more emojis people like.
+
+## Changes — `src/components/StoryViewer.jsx`
+- **16 popular emojis** (was 6): 😂 ❤️ 😍 🔥 👍 💰 🎉 🙏 😮 👏 🙌 🤣 😢 😡 🤝 💪 — ordered front-loaded with the most-used reactions.
+- **Horizontal scroll rail**: the row is now `overflow-x: auto` with hidden scrollbars (`sv-hide-scroll` + `scrollbar-width: none`), touch momentum scrolling and `overscroll-behavior-x: contain` so swiping the emojis never drags the story.
+- **Per-emoji personality animations extended**: new keyframes — 👍 thumb-nod (`svEmojiThumb`), 😮 wow pop (`svEmojiWow`), 👏 clap tilt (`svEmojiClap`), 😢 droop sway (`svEmojiSad`), 😡 tremble (`svEmojiAngry`), 🤝 soft bob (`svEmojiBob`); ❤️ reuses the heartbeat, 🙌 the party wiggle, 🤣 the laugh roll.
+- Staggered pop-in delay capped at 0.55s so the longer rail still animates in quickly. Same transparent circle-free buttons, drop-shadow, tap squish and one-tap send behavior.
+
+## Verification
+- `npx eslint src/components/StoryViewer.jsx` → 13 findings, identical pre-existing baseline.
+- `npm run build` → success (~3.8s).
+- Committed and pushed to `master` (Vercel auto-deploys from master).
+
+---
+
 # Task: Status viewer — use Home's verification badge next to the poster name (2026-08-26)
 
 ## Request
