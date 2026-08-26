@@ -1,3 +1,28 @@
+# Task: Status section → two sections only (2026-08-26)
+
+## Request
+Make the Status section have two sections only: clone the Home status display and implement it in the Status section, with the status feeds following below it, keeping the existing status feeds implementation.
+
+## What changed — `src/pages/StatusPage.jsx`
+The page now renders exactly two sections under `SokoNav`:
+
+1. **Section 1 — Home status display clone.** Reuses the exact Home component `src/components/HomeStatusSection.jsx` (the one rendered in `src/pages/Home.jsx`), passing the same props Home uses:
+   - `navigate`, `stories`, `loading={!storiesLoaded}`, `onCreateStory` (opens the same `StatusUploadModal`), `currentUserId`, `currentUserProfile`.
+   - This brings the Home look and behavior 1:1: "Status Updates" header with LIVE badge, category chips (All / Nearby / Products / Shops / Jobs / Services), Create Status card, story tiles with view counts, lazy video/image previews, and viewed-ring states.
+2. **Section 2 — Status feed (unchanged).** The pre-existing "Latest updates" feed is maintained verbatim: `StatusFeedCard` with media, captions, tagged-listing chips, views/likes/comments, realtime metrics, comment drawer, skeleton loading, error retry, and empty states.
+
+## Removed (superseded by the two sections)
+- Hero banner, search/category/sort filter bar, IG-style ring strip, "Featured moments" tiles, "Following" rail, and "Near you" rail.
+- Their supporting code: `StoryStatusRing`, `ScrollRail`, `StoryRingItem`, `StoryCard`, `CATEGORY_TABS`, `SORT_OPTIONS`, `CARD_GRADIENTS`, hero image, followed-IDs fetch, search/sort/filter state, and all CSS for removed sections.
+
+## Preserved behavior
+- Stories load via the same `fetchAllActiveStories` hook with realtime INSERT refresh.
+- Deep links still work: `/status/:statusId` and `/status?status=<id>` auto-open the viewer; `/status?compose=1` auto-opens the composer.
+- Feed cards still open the in-page `StoryViewer`; Home-display tiles navigate to `/story/:id` exactly as they do on Home.
+- Net diff: +18 / −829 lines. ESLint reports the same 5 pre-existing findings as before the change (no new issues).
+
+---
+
 # SokoMW (Shoppage) — Strategic Roadmap for Micro-Entrepreneur Empowerment
 
 ## 1. Current State Audit

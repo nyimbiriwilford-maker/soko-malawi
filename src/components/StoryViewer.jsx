@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { useStatusReplies } from './StatusReplies'
+import StatusCommentsPanel from './StatusComments'
+import { useStatusComments } from '../hooks/useStatusComments'
 import { isStatusVideoUrl, parseClipWindow } from '../utils/statusVideo'
 
 /**
@@ -456,24 +457,29 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
     toastRef.current = setTimeout(() => setToast(''), 2200)
   }
 
-  const repliesApi = useStatusReplies({ story, currentUserId, notify: showToast, preload: true })
+  const commentsApi = useStatusComments({ story, currentUserId, notify: showToast, preload: true })
   const {
-    replies, replyCount,
-    loading: repliesLoading,
-    text: replyText, setText: setReplyText,
-    sending: replySending,
+    commentCount: replyCount,
     open: showReplies,
-    submit: handleReply,
     myAvatar,
-  } = repliesApi
+  } = commentsApi
+
+  const [replyText, setReplyText] = useState('')
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- reset quick-reply text on status change
+  useEffect(() => { setReplyText('') }, [story?.id])
+
+  async function handleReply() {
+    const ok = await commentsApi.postComment({ body: replyText })
+    if (ok) setReplyText('')
+  }
 
   function openReplies() {
     setPaused(true)
-    repliesApi.openReplies()
+    commentsApi.openComments()
   }
   function closeReplies() {
     setPaused(false)
-    repliesApi.closeReplies()
+    commentsApi.closeComments()
   }
 
   // ── Owner actions: edit caption / delete status ────────────────────────────
@@ -1822,16 +1828,16 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                     type="button"
                     className="sv-tap"
                     onClick={handleReply}
-                    disabled={!replyText.trim() || replySending}
+                    disabled={!replyText.trim() || commentsApi.posting}
                     aria-label="Send reply"
                     style={{
                       width: 34, height: 34, borderRadius: '50%', border: 'none',
                       background: replyText.trim() ? GREEN : 'transparent',
                       color: replyText.trim() ? '#fff' : 'rgba(255,255,255,0.5)',
-                      cursor: replyText.trim() && !replySending ? 'pointer' : 'default',
+                      cursor: replyText.trim() && !commentsApi.posting ? 'pointer' : 'default',
                       display: 'flex', alignItems: 'center', justifyContent: 'center',
                       transition: 'all 0.15s',
-                      opacity: replySending ? 0.7 : 1,
+                      opacity: commentsApi.posting ? 0.7 : 1,
                     }}
                   >
                     <IconSend size={17} />
@@ -1857,7 +1863,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
           )}
         </div>
 
-        {/* ── Replies sheet (message icon) ── */}
+        {/* ── Comments sheet (message icon) ── */}
         {showReplies && (
           <Sheet onClose={closeReplies} maxHeight="78vh">
             <div style={{
@@ -1867,10 +1873,10 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
               <div>
                 <div style={{ fontSize: 16, fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: 8 }}>
                   <IconComment size={16} />
-                  {replyCount} {replyCount === 1 ? 'reply' : 'replies'}
+                  {replyCount} {replyCount === 1 ? 'comment' : 'comments'}
                 </div>
                 <div style={{ fontSize: 12, color: '#94a3b8', fontWeight: 600, marginTop: 2 }}>
-                  {isOwn ? 'People who replied to your status' : 'Replies on this status'}
+                  {isOwn ? 'Comments on your status' : 'Comments on this status'}
                 </div>
               </div>
               <button
@@ -1886,115 +1892,18 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
               </button>
             </div>
 
-            <div className="sv-hide-scroll" style={{ overflowY: 'auto', maxHeight: '48vh', marginBottom: 10 }}>
-              {repliesLoading ? (
-                <div style={{ padding: 28, textAlign: 'center', color: '#94a3b8', fontSize: 13, fontWeight: 600 }}>
-                  Loading replies…
-                </div>
-              ) : replies.length === 0 ? (
-                <div style={{ padding: 32, textAlign: 'center' }}>
-                  <div style={{
-                    width: 52, height: 52, borderRadius: 16, margin: '0 auto 12px',
-                    background: '#f1f5f9',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    <IconComment size={22} />
-                  </div>
-                  <div style={{ fontSize: 14, fontWeight: 800, color: '#64748b' }}>No replies yet</div>
-                  <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4, fontWeight: 600 }}>
-                    {isOwn ? 'When people reply, they’ll show up here' : 'Be the first to reply below'}
-                  </div>
-                </div>
-              ) : replies.map(r => {
-                const rname = r.author?.full_name || (r.from_user === currentUserId ? 'You' : 'User')
-                const ravatar = r.author?.avatar_url
-                const rinitial = (rname[0] || 'U').toUpperCase()
-                return (
-                  <div key={r.id} style={{
-                    display: 'flex', gap: 10, padding: '10px 2px',
-                    borderBottom: '1px solid #f1f5f9',
-                  }}>
-                    <div style={{
-                      width: 38, height: 38, borderRadius: '50%', overflow: 'hidden', flexShrink: 0,
-                      background: `linear-gradient(135deg,${GREEN},#22c55e)`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 13, fontWeight: 700, color: '#fff',
-                    }}>
-                      {ravatar
-                        ? <img src={ravatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        : rinitial}
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 3 }}>
-                        <span style={{ fontSize: 13, fontWeight: 800, color: '#0f172a' }}>{rname}</span>
-                        <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>
-                          {timeAgoFn(r.created_at)}
-                        </span>
-                      </div>
-                      <div style={{
-                        fontSize: 13, color: '#334155', lineHeight: 1.45, fontWeight: 500,
-                        wordBreak: 'break-word',
-                      }}>
-                        {r.body}
-                      </div>
-                      {/* Seller can open chat with this person if they want */}
-                      {isOwn && r.from_user && r.from_user !== currentUserId && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            closeReplies()
-                            onClose?.()
-                            navigate('/chat/' + r.from_user)
-                          }}
-                          style={{
-                            marginTop: 6, background: 'none', border: 'none', padding: 0,
-                            fontSize: 11, fontWeight: 800, color: GREEN, cursor: 'pointer',
-                            fontFamily: 'inherit',
-                          }}
-                        >
-                          Open chat →
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
+            <div className="sv-hide-scroll" style={{ overflowY: 'auto', maxHeight: '56vh', marginBottom: 10, background: '#f8fafc', borderRadius: 12, padding: '10px 8px' }}>
+              <StatusCommentsPanel
+                api={commentsApi}
+                story={story}
+                currentUserId={currentUserId}
+                onOpenChat={uid => {
+                  closeReplies()
+                  onClose?.()
+                  navigate('/chat/' + uid)
+                }}
+              />
             </div>
-
-            {/* Reply from sheet (viewers) */}
-            {!isOwn && (
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                background: '#f8fafc', border: '1.5px solid #e2e8f0',
-                borderRadius: 999, padding: '6px 8px 6px 12px',
-              }}>
-                <input
-                  value={replyText}
-                  onChange={e => setReplyText(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleReply()}
-                  placeholder="Write a reply…"
-                  maxLength={400}
-                  style={{
-                    flex: 1, border: 'none', outline: 'none', background: 'transparent',
-                    fontSize: 13, color: '#0f172a', fontFamily: 'inherit',
-                  }}
-                />
-                <button
-                  type="button"
-                  onClick={handleReply}
-                  disabled={!replyText.trim() || replySending}
-                  style={{
-                    width: 36, height: 36, borderRadius: '50%', border: 'none',
-                    background: replyText.trim() ? GREEN : '#e2e8f0',
-                    color: replyText.trim() ? '#fff' : '#94a3b8',
-                    cursor: replyText.trim() ? 'pointer' : 'default',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}
-                >
-                  <IconSend size={15} />
-                </button>
-              </div>
-            )}
           </Sheet>
         )}
 

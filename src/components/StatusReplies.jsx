@@ -5,7 +5,7 @@ import { supabase } from '../lib/supabase'
 const avatarCache = new Map()
 let avatarInflight = null
 let avatarInflightUser = null
-function fetchCurrentUserAvatar(currentUserId) {
+export function fetchCurrentUserAvatar(currentUserId) {
   if (avatarCache.has(currentUserId)) return Promise.resolve(avatarCache.get(currentUserId))
   if (avatarInflightUser === currentUserId && avatarInflight) return avatarInflight
   avatarInflightUser = currentUserId
