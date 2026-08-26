@@ -1,3 +1,19 @@
+# Task: Status feed — remove caption row, media covers the card (2026-08-26)
+
+## Request
+Remove the section that shows the status caption / "Tap to open status" and let the posted media occupy that space — increase the media size to cover it.
+
+## Changes — `src/pages/StatusPage.jsx` (`StatusFeedCard`)
+- **Caption row removed**: deleted the `st-feed-text` paragraph (the status caption / "Tap to open status" / "Shared a photo update" line) and its CSS (incl. the mobile font-size override). The caption is still readable inside the status viewer.
+- **Media enlarged to cover the freed space**: card media aspect ratio raised 16/10 → **4/3** (and mobile 16/9 → 4/3), skeleton cards match. The photo/video now dominates the card.
+
+## Verification
+- `npx eslint src/pages/StatusPage.jsx` → 5 findings, all pre-existing, none new.
+- `npm run build` → success (~4.2s).
+- Committed and pushed to `master` (Vercel auto-deploys from master).
+
+---
+
 # Task: Status feed — tagged product as transparent overlay on the card media (2026-08-26)
 
 ## Request

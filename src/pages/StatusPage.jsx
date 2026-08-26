@@ -204,9 +204,6 @@ function StatusFeedCard({ s, onOpen, currentUserId, metrics, onLike }) {
     : s.status_type === 'work_ping' ? 'Work'
     : media && isGenericPhoto ? (isVideo ? 'Video' : 'Photo')
     : s.tagged?.category || (media ? 'Photo' : 'Update')
-  const displayText = isGenericPhoto
-    ? (s.tagged?.title ? `Shared · ${s.tagged.title}` : (isVideo ? 'Shared a video update' : 'Shared a photo update'))
-    : (rawContent || 'Tap to open status')
   const m = metrics[s.id] || { views: 0, likes: 0, myLike: null, replies: 0 }
 
   const [copied, setCopied] = useState(false)
@@ -315,8 +312,6 @@ function StatusFeedCard({ s, onOpen, currentUserId, metrics, onLike }) {
             <div className="st-feed-media-fade" aria-hidden />
           </button>
         )}
-
-        <p className="st-feed-text">{displayText}</p>
 
         {!media && s.tagged && (
           <div className="st-feed-tag">
@@ -802,7 +797,7 @@ function StatusPageInner({ user, navigate }) {
         .st-feed-media {
           position: relative;
           width: 100%;
-          aspect-ratio: 16 / 10;
+          aspect-ratio: 4 / 3;
           border-radius: 14px;
           overflow: hidden;
           background: linear-gradient(145deg, #0f172a, #1e293b);
@@ -866,20 +861,6 @@ function StatusPageInner({ user, navigate }) {
           flex-shrink: 0;
           font-size: 10.5px; font-weight: 800; color: #fff;
           background: ${T.green}; border-radius: 999px; padding: 5px 10px;
-        }
-        .st-feed-text {
-          margin: 0;
-          font-size: 14px;
-          line-height: 1.45;
-          color: ${T.text};
-          font-weight: 600;
-          letter-spacing: -0.01em;
-          display: -webkit-box;
-          -webkit-line-clamp: 3;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
-          min-height: 1.35em;
-          flex: 1;
         }
         .st-feed-tag {
           display: flex; align-items: center; gap: 10px;
@@ -984,7 +965,7 @@ function StatusPageInner({ user, navigate }) {
           background-size: 300% 100%;
           animation: stShimmer 1.3s ease-in-out infinite;
         }
-        .st-feed-skel-media { width: 100%; aspect-ratio: 16 / 10; border-radius: 14px; flex-shrink: 0; }
+        .st-feed-skel-media { width: 100%; aspect-ratio: 4 / 3; border-radius: 14px; flex-shrink: 0; }
         .st-skel-row { height: 13px; border-radius: 7px; }
         .st-skel-w30 { width: 30%; }
         .st-skel-w55 { width: 55%; }
@@ -1039,11 +1020,10 @@ function StatusPageInner({ user, navigate }) {
             gap: 12px !important;
           }
           .st-feed-grid { gap: 10px; }
-          .st-feed-media { aspect-ratio: 16 / 9; }
+          .st-feed-media { aspect-ratio: 4 / 3; }
         }
         @media (max-width: 420px) {
           .st-feed-body { padding: 12px; gap: 9px; }
-          .st-feed-text { font-size: 13.5px; }
         }
       `}</style>
     </div>
