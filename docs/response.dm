@@ -1,3 +1,20 @@
+# Task: Status feed — captions back under media, clamped with "View all" (2026-08-26)
+
+## Request
+Keep the enlarged media size and place captions below it again — but only real photo/video captions, not auto-written placeholders ("Photo update" etc.) or text-on-picture boards. The caption must cover a specific height, and if it has more words, show "View all" to reveal the rest.
+
+## Changes — `src/pages/StatusPage.jsx` (`StatusFeedCard`)
+- **Caption returns below the media** (media keeps its 4:3 size): renders only when the status has media, is not a text color-board, and the content is a real caption — auto placeholders (`Photo/Video/Status update`) are excluded.
+- **Fixed height with "View all"**: caption is clamped to **2 lines** by default; a measured overflow check (`scrollHeight > clientHeight`) shows a green **View all** toggle only when the text actually overflows. Tapping expands to the full caption (toggle becomes **Show less**).
+- Long words break (`word-break: break-word`) so one huge word can't blow out the card.
+
+## Verification
+- `npx eslint src/pages/StatusPage.jsx` → 5 findings, all pre-existing, none new.
+- `npm run build` → success (~4.2s).
+- Committed and pushed to `master` (Vercel auto-deploys from master).
+
+---
+
 # Task: Status feed — remove caption row, media covers the card (2026-08-26)
 
 ## Request

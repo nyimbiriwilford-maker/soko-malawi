@@ -210,6 +210,20 @@ function StatusFeedCard({ s, onOpen, currentUserId, metrics, onLike }) {
   const [commentFeedback, setCommentFeedback] = useState('')
   const feedbackRef = useRef()
 
+  // Caption under the media — only real captions written for a photo/video
+  // (never the auto "Photo/Video/Status update" placeholders or text boards).
+  const captionText = rawContent
+  const showCaption = !!media && !boardColor && !!captionText
+    && !/^(photo|video|status) update$/i.test(captionText)
+  const captionRef = useRef(null)
+  const [captionClamped, setCaptionClamped] = useState(false)
+  const [captionExpanded, setCaptionExpanded] = useState(false)
+  useEffect(() => {
+    const el = captionRef.current
+    if (el) setCaptionClamped(el.scrollHeight > el.clientHeight + 2)
+    else setCaptionClamped(false)
+  }, [captionText, showCaption])
+
   const replies = useStatusComments({
     story: s,
     currentUserId,
@@ -311,6 +325,26 @@ function StatusFeedCard({ s, onOpen, currentUserId, metrics, onLike }) {
 
             <div className="st-feed-media-fade" aria-hidden />
           </button>
+        )}
+
+        {showCaption && (
+          <div className="st-feed-caption-wrap">
+            <p
+              ref={captionRef}
+              className={`st-feed-caption${captionExpanded ? ' is-open' : ''}`}
+            >
+              {captionText}
+            </p>
+            {captionClamped && (
+              <button
+                type="button"
+                className="st-feed-caption-toggle"
+                onClick={() => setCaptionExpanded(v => !v)}
+              >
+                {captionExpanded ? 'Show less' : 'View all'}
+              </button>
+            )}
+          </div>
         )}
 
         {!media && s.tagged && (
@@ -862,6 +896,22 @@ function StatusPageInner({ user, navigate }) {
           font-size: 10.5px; font-weight: 800; color: #fff;
           background: ${T.green}; border-radius: 999px; padding: 5px 10px;
         }
+        .st-feed-caption-wrap { display: flex; flex-direction: column; gap: 3px; }
+        .st-feed-caption {
+          margin: 0;
+          font-size: 13.5px; line-height: 1.45; color: ${T.text}; font-weight: 600;
+          letter-spacing: -0.01em; word-break: break-word;
+          display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+          overflow: hidden;
+        }
+        .st-feed-caption.is-open { display: block; -webkit-line-clamp: unset; overflow: visible; }
+        .st-feed-caption-toggle {
+          align-self: flex-start;
+          border: none; background: none; padding: 0;
+          font-family: inherit; font-size: 12px; font-weight: 800;
+          color: ${T.green}; cursor: pointer;
+        }
+        .st-feed-caption-toggle:hover { text-decoration: underline; }
         .st-feed-tag {
           display: flex; align-items: center; gap: 10px;
           background: linear-gradient(135deg, ${T.greenLight} 0%, #f0fdf4 100%);
