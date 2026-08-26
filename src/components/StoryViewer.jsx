@@ -91,21 +91,6 @@ function IconSend({ size = 18 }) {
     </svg>
   )
 }
-function IconMapPin({ size = 11 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M12 22s7-6.2 7-12a7 7 0 1 0-14 0c0 5.8 7 12 7 12z" />
-      <circle cx="12" cy="10" r="2.2" />
-    </svg>
-  )
-}
-function IconCheck({ size = 11 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M5 12l5 5L20 7" />
-    </svg>
-  )
-}
 function IconEye({ size = 16 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -1124,6 +1109,13 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
         .sv-ei-money     { animation: svEmojiMoney 1.6s ease-in-out infinite; }
         .sv-ei-party     { animation: svEmojiParty 1.9s ease-in-out infinite; }
         .sv-ei-pray      { animation: svEmojiPray 2.2s ease-in-out infinite; }
+        .sv-pill { animation: svPillIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both; transition: transform 0.16s, background 0.16s; }
+        .sv-pill:hover { transform: translateY(-2px) scale(1.03); background: rgba(255,255,255,0.16) !important; }
+        .sv-pill:active { transform: scale(0.96); }
+        @keyframes svPillIn {
+          from { transform: translateY(12px) scale(0.9); opacity: 0; }
+          to   { transform: translateY(0) scale(1); opacity: 1; }
+        }
         .sv-rail-btn { animation: svRailIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both; transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1); }
         .sv-rail-btn:hover { transform: scale(1.15); }
         .sv-rail-btn:active { transform: scale(0.88); }
@@ -1500,102 +1492,6 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
             )}
 
             {/* Product / entity card now lives inside the floating bottom chrome — see below */}
-            {false && tagged && mediaReady && !mediaError && (
-              <div
-                onPointerDown={e => e.stopPropagation()}
-                onPointerUp={e => e.stopPropagation()}
-                style={{
-                  position: 'absolute', left: 12, right: 12, bottom: 12, zIndex: 22,
-                }}
-              >
-                <button
-                  type="button"
-                  className="sv-tap"
-                  onClick={openTaggedEntity}
-                  style={{
-                    width: '100%',
-                    background: 'rgba(255,255,255,0.14)',
-                    backdropFilter: 'blur(8px)',
-                    border: '1.5px solid rgba(255,255,255,0.25)',
-                    borderRadius: 14,
-                    padding: '8px 10px',
-                    textAlign: 'left',
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                  }}
-                >
-                  <div style={{
-                    width: 40, height: 40, borderRadius: 10, flexShrink: 0,
-                    overflow: 'hidden',
-                    background: 'rgba(255,255,255,0.1)',
-                    border: '1px solid rgba(255,255,255,0.14)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    {entityLogo || productImage ? (
-                      <img
-                        src={entityLogo || productImage}
-                        alt=""
-                        style={{
-                          width: '100%', height: '100%',
-                          objectFit: (taggedKind === 'shop' || taggedKind === 'job') ? 'contain' : 'cover',
-                          background: (taggedKind === 'shop' || taggedKind === 'job') ? '#fff' : 'transparent',
-                          padding: (taggedKind === 'shop' || taggedKind === 'job') ? 3 : 0,
-                          boxSizing: 'border-box',
-                        }}
-                      />
-                    ) : (
-                      <IconPackage size={18} />
-                    )}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
-                      <span style={{
-                        fontSize: 13.5, fontWeight: 800, color: '#fff',
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                        textShadow: '0 1px 4px rgba(0,0,0,0.5)',
-                      }}>
-                        {productTitle}
-                      </span>
-                      {productPrice && (
-                        <span style={{
-                          fontSize: 13, fontWeight: 900, color: GOLD,
-                          textShadow: '0 1px 4px rgba(0,0,0,0.5)', flexShrink: 0,
-                        }}>
-                          {typeof productPrice === 'string' && !/^(MK|mk)/.test(productPrice) && Number.isFinite(Number(productPrice))
-                            ? formatPrice(productPrice)
-                            : productPrice}
-                        </span>
-                      )}
-                    </div>
-                    <div style={{
-                      display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap',
-                      fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 600, marginTop: 1,
-                    }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#4ade80' }}>
-                        <IconCheck size={9} />
-                        Verified
-                      </span>
-                      {productCity && (
-                        <>
-                          <span style={{ opacity: 0.4 }}>·</span>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                            <IconMapPin size={9} />
-                            {productCity}
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  <IconChevronRight size={16} color="rgba(255,255,255,0.6)" />
-                </button>
-              </div>
-            )}
-
-            {/* Caption now lives inside the bottom chrome (stacked above the
-                engagement row) so it never collides with the action bar */}
 
             {/* Tap zones — full height, chrome now floats over the media */}
             <div
@@ -1632,32 +1528,37 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
             >
               {/* Tagged product + caption — right-inset so the floating vertical action rail never covers them */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginRight: 58 }}>
-              {/* Tagged product / entity card — now stacks naturally above the actions below */}
+              {/* Tagged product — compact professional glass pill, left-anchored
+                  so it barely covers the posted content */}
               {tagged && mediaReady && !mediaError && (
                 <button
                   type="button"
-                  className="sv-tap"
+                  className="sv-tap sv-pill"
                   onClick={openTaggedEntity}
+                  aria-label={`View ${taggedKind || 'product'}: ${productTitle}`}
                   style={{
-                    width: '100%',
-                    background: 'rgba(255,255,255,0.14)',
-                    backdropFilter: 'blur(8px)',
-                    border: '1.5px solid rgba(255,255,255,0.25)',
-                    borderRadius: 14,
-                    padding: '8px 10px',
+                    alignSelf: 'flex-start',
+                    maxWidth: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    background: 'rgba(255,255,255,0.08)',
+                    backdropFilter: 'blur(12px)',
+                    WebkitBackdropFilter: 'blur(12px)',
+                    border: '1px solid rgba(255,255,255,0.16)',
+                    borderRadius: 999,
+                    padding: '4px 12px 4px 5px',
                     textAlign: 'left',
                     cursor: 'pointer',
                     fontFamily: 'inherit',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
+                    boxShadow: '0 2px 12px rgba(0,0,0,0.22)',
                   }}
                 >
                   <div style={{
-                    width: 40, height: 40, borderRadius: 10, flexShrink: 0,
+                    width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
                     overflow: 'hidden',
-                    background: 'rgba(255,255,255,0.1)',
-                    border: '1px solid rgba(255,255,255,0.14)',
+                    background: 'rgba(255,255,255,0.12)',
+                    border: '1px solid rgba(255,255,255,0.2)',
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
                   }}>
                     {entityLogo || productImage ? (
@@ -1673,49 +1574,28 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                         }}
                       />
                     ) : (
-                      <IconPackage size={18} />
+                      <IconPackage size={14} />
                     )}
                   </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
-                      <span style={{
-                        fontSize: 13.5, fontWeight: 800, color: '#fff',
-                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                        textShadow: '0 1px 4px rgba(0,0,0,0.5)',
-                      }}>
-                        {productTitle}
-                      </span>
-                      {productPrice && (
-                        <span style={{
-                          fontSize: 13, fontWeight: 900, color: GOLD,
-                          textShadow: '0 1px 4px rgba(0,0,0,0.5)', flexShrink: 0,
-                        }}>
-                          {typeof productPrice === 'string' && !/^(MK|mk)/.test(productPrice) && Number.isFinite(Number(productPrice))
-                            ? formatPrice(productPrice)
-                            : productPrice}
-                        </span>
-                      )}
-                    </div>
-                    <div style={{
-                      display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap',
-                      fontSize: 10.5, color: 'rgba(255,255,255,0.65)', fontWeight: 600, marginTop: 1,
+                  <span style={{
+                    fontSize: 12.5, fontWeight: 700, color: 'rgba(255,255,255,0.96)',
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                    minWidth: 0, maxWidth: 180,
+                    textShadow: '0 1px 3px rgba(0,0,0,0.55)',
+                  }}>
+                    {productTitle}
+                  </span>
+                  {productPrice && (
+                    <span style={{
+                      fontSize: 12.5, fontWeight: 900, color: GOLD, flexShrink: 0,
+                      textShadow: '0 1px 3px rgba(0,0,0,0.55)',
                     }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#4ade80' }}>
-                        <IconCheck size={9} />
-                        Verified
-                      </span>
-                      {productCity && (
-                        <>
-                          <span style={{ opacity: 0.4 }}>·</span>
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                            <IconMapPin size={9} />
-                            {productCity}
-                          </span>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  <IconChevronRight size={16} color="rgba(255,255,255,0.6)" />
+                      {typeof productPrice === 'string' && !/^(MK|mk)/.test(productPrice) && Number.isFinite(Number(productPrice))
+                        ? formatPrice(productPrice)
+                        : productPrice}
+                    </span>
+                  )}
+                  <IconChevronRight size={13} color="rgba(255,255,255,0.55)" />
                 </button>
               )}
 

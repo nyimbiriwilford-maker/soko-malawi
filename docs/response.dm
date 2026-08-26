@@ -1,3 +1,23 @@
+# Task: Status viewer — professional, minimal, transparent tagged-product pill (2026-08-26)
+
+## Request
+Present the tagged product professionally, properly placed so it doesn't hide the posted content, and make it more transparent.
+
+## What changed — `src/components/StoryViewer.jsx`
+- Redesigned the tagged product from a chunky full-width card into a compact **professional glass pill**, TikTok product-anchor style:
+  - Left-anchored (`align-self: flex-start`) instead of full-width — it only occupies the space its content needs, so it barely covers the posted media.
+  - More transparent: background dropped to `rgba(255,255,255,0.08)` with stronger `blur(12px)`, a hairline `1px rgba(255,255,255,0.16)` border and soft shadow.
+  - Clean single-line layout: round 30px thumbnail → title (ellipsis-capped 180px) → gold price → chevron. Removed the cluttered "Verified · city" meta row.
+  - Entrance pop-in (`svPillIn`), hover lift + brighten, press scale — consistent with the emoji/rail motion language.
+- Deleted the ~95-line dead `{false && ...}` duplicate of the old card and the now-unused `IconCheck` / `IconMapPin` components.
+
+## Verification
+- `npx eslint src/components/StoryViewer.jsx` → only pre-existing findings.
+- `npm run build` → success (~3.5s).
+- Committed and pushed to `master` (Vercel auto-deploys from master).
+
+---
+
 # Task: Status viewer — per-emoji personality animations (2026-08-26)
 
 ## Request
