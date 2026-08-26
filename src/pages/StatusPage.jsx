@@ -9,7 +9,6 @@ import StatusTextBoard from '../components/StatusTextBoard'
 import StatusCommentsPanel from '../components/StatusComments'
 import { useStatusComments } from '../hooks/useStatusComments'
 import SokoNav from '../components/SokoNav'
-import HomeStatusSection from '../components/HomeStatusSection'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Heart, MessageCircle, Share2, Eye, Clock } from 'lucide-react'
 
@@ -600,17 +599,7 @@ function StatusPageInner({ user, navigate }) {
         display: 'flex', flexDirection: 'column', gap: 16,
       }}>
 
-        {/* ── Section 1: Home status display (cloned from Home) ── */}
-        <HomeStatusSection
-          navigate={navigate}
-          stories={stories}
-          loading={!storiesLoaded}
-          onCreateStory={() => setShowUpload(true)}
-          currentUserId={user.id}
-          currentUserProfile={user ? { avatar_url: user.avatar_url, full_name: user.full_name, is_verified: user.is_verified } : null}
-        />
-
-        {/* ── Section 2: Feed ── */}
+        {/* ── Status feed ── */}
         {storiesError && stories.length === 0 ? (
           <section className="st-feed-section">
             <SectionHeader kicker="Timeline" title="Latest updates" />

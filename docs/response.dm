@@ -1,3 +1,30 @@
+# Task: Status section — comment typing box missing + remove top section (2026-08-26)
+
+## Request
+1. Users don't see the typing box to comment on statuses — fix it.
+2. On the Status section, place only the status feeds and remove the top section.
+
+## Root cause of the missing typing box
+`StatusCommentsPanel` (`src/components/StatusComments.jsx`) early-returned a "No comments yet" screen whenever a status had 0 comments, and never rendered the `CommentComposer` in that state. Since the same panel powers both the feed-card comment drawer (Status page) and the StoryViewer comments sheet, the input box was missing everywhere for statuses without existing comments.
+
+### Fix — `src/components/StatusComments.jsx`
+- Removed the early return for the empty state.
+- The composer (textarea + photo/video buttons + Post) now always renders; the "No comments yet — Be the first to comment below" message is shown above it only when there are no comments.
+- Loading state now only shows the spinner when comments haven't loaded yet, so the box isn't hidden during refetches.
+
+## Top section removed — `src/pages/StatusPage.jsx`
+- Removed the cloned `HomeStatusSection` render (the "Status Updates" header with category chips, Create Status card and story tiles).
+- The Status page now shows only the status feed ("Latest updates" grid of `StatusFeedCard`s), unchanged below `SokoNav`.
+- Removed the now-unused `HomeStatusSection` import.
+- Post/create flows still available via SokoNav's "Post Now → Status" and `/status?compose=1`; story viewer, deep links (`/status/:statusId`, `?status=`, `?comment=`) all preserved.
+
+## Verification
+- `npx eslint src/pages/StatusPage.jsx src/components/StatusComments.jsx` → only pre-existing findings, none introduced.
+- `npm run build` → success (~3.6s).
+- Committed and pushed to `master` (Vercel auto-deploys from master).
+
+---
+
 # Task: Product view — map error for other users + mobile action buttons placement (2026-08-26)
 
 ## Request

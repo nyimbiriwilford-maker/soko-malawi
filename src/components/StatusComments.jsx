@@ -52,21 +52,19 @@ export default function StatusCommentsPanel({ api, story, currentUserId, onOpenC
     setExpanded(e => ({ ...e, [id]: !e[id] }))
   }
 
-  if (api.loading) {
+  if (api.loading && api.comments.length === 0) {
     return <div style={{ padding: 24, textAlign: 'center', color: '#94a3b8', fontSize: 13, fontWeight: 600 }}>Loading comments…</div>
-  }
-
-  if (api.comments.length === 0) {
-    return (
-      <div style={{ padding: '28px 8px', textAlign: 'center' }}>
-        <div style={{ fontSize: 14, fontWeight: 800, color: '#64748b' }}>No comments yet</div>
-        <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4, fontWeight: 600 }}>Be the first to comment below</div>
-      </div>
-    )
   }
 
   return (
     <div>
+      {api.comments.length === 0 && (
+        <div style={{ padding: '16px 8px 12px', textAlign: 'center' }}>
+          <div style={{ fontSize: 14, fontWeight: 800, color: '#64748b' }}>No comments yet</div>
+          <div style={{ fontSize: 12, color: '#94a3b8', marginTop: 4, fontWeight: 600 }}>Be the first to comment below</div>
+        </div>
+      )}
+
       {topLevel.map(c => (
         <CommentNode
           key={c.id}
