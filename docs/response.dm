@@ -1,3 +1,21 @@
+# Task: Status viewer — remove "Message Seller", keep reply + add quick emoji reactions (2026-08-26)
+
+## Request
+In the status viewer, the "Message Seller" and reply buttons felt redundant. Remove the Message Seller button, keep "reply to status", and add a few quick-action emojis inside it.
+
+## What changed — `src/components/StoryViewer.jsx`
+- Removed the green "Message Seller" CTA (buyer view). Chat is still reachable from the seller profile/shop page and the "Open chat →" action inside the comments sheet, so no functionality is lost.
+- Kept the reply bar intact (typing box + send) — replies post as status comments as before.
+- Added a row of six one-tap quick emoji reactions (👍 🔥 😍 💰 🙏 🎉) directly above the reply bar. Tapping one sends it immediately as a reply/comment (with the same toast confirmation); the text input stays free-form for longer messages.
+- Cleaned up the now-dead code that backed the removed button: `goChat()` and `IconMessage`.
+
+## Verification
+- `npx eslint src/components/StoryViewer.jsx` → only pre-existing findings, none introduced by this change.
+- `npm run build` → success (~3.8s).
+- Committed and pushed to `master` (Vercel auto-deploys from master).
+
+---
+
 # Task: Status section — comment typing box missing + remove top section (2026-08-26)
 
 ## Request

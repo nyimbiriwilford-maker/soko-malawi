@@ -83,13 +83,6 @@ function IconShare({ size = 18, color = '#64748b' }) {
     </svg>
   )
 }
-function IconMessage({ size = 16 }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" />
-    </svg>
-  )
-}
 function IconSend({ size = 18 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -471,6 +464,13 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
   async function handleReply() {
     const ok = await commentsApi.postComment({ body: replyText })
     if (ok) setReplyText('')
+  }
+
+  const QUICK_EMOJIS = ['👍', '🔥', '😍', '💰', '🙏', '🎉']
+
+  async function sendQuickEmoji(emoji) {
+    if (commentsApi.posting) return
+    await commentsApi.postComment({ body: emoji })
   }
 
   function openReplies() {
@@ -917,11 +917,6 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
     setShowViewers(false)
     setViewerSearch('')
     setPaused(false)
-  }
-
-  function goChat() {
-    onClose?.()
-    navigate('/chat/' + story.user_id)
   }
 
   function openTaggedEntity() {
@@ -1742,31 +1737,8 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                 </button>
               </div>
 
-              {/* CTAs */}
-              {!isOwn ? (
-                <div style={{ display: 'flex', gap: 10 }}>
-                  <button
-                    type="button"
-                    className="sv-tap"
-                    onClick={goChat}
-                    style={{
-                      flex: 1,
-                      background: GREEN,
-                      border: 'none',
-                      borderRadius: 999,
-                      padding: '12px 12px',
-                      fontSize: 14, fontWeight: 800, color: '#fff',
-                      cursor: 'pointer',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7,
-                      boxShadow: '0 3px 12px rgba(26,122,74,0.3)',
-                      fontFamily: 'inherit',
-                    }}
-                  >
-                    <IconMessage size={15} />
-                    Message Seller
-                  </button>
-                </div>
-              ) : (
+              {/* CTA — owner only; buyers reply via the reply bar below */}
+              {isOwn && (
                 <button
                   type="button"
                   className="sv-tap"
@@ -1787,6 +1759,36 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                   <IconEye size={15} />
                   {fmtK(viewCount)} {viewCount === 1 ? 'view' : 'views'} · See who viewed
                 </button>
+              )}
+
+              {/* Quick emoji reactions */}
+              {!isOwn && (
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  {QUICK_EMOJIS.map(e => (
+                    <button
+                      key={e}
+                      type="button"
+                      className="sv-tap"
+                      onClick={() => sendQuickEmoji(e)}
+                      disabled={commentsApi.posting}
+                      aria-label={`React ${e}`}
+                      style={{
+                        width: 40, height: 40, borderRadius: '50%',
+                        border: '1.5px solid rgba(255,255,255,0.22)',
+                        background: 'rgba(255,255,255,0.12)',
+                        backdropFilter: 'blur(8px)',
+                        fontSize: 19, lineHeight: 1,
+                        cursor: commentsApi.posting ? 'default' : 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        padding: 0, fontFamily: 'inherit',
+                        opacity: commentsApi.posting ? 0.55 : 1,
+                        transition: 'transform 0.12s, background 0.15s',
+                      }}
+                    >
+                      {e}
+                    </button>
+                  ))}
+                </div>
               )}
 
               {/* Reply bar */}
