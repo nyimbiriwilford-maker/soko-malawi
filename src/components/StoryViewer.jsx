@@ -1557,6 +1557,8 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                 gap: 10,
               }}
             >
+              {/* Tagged product + caption — right-inset so the floating vertical action rail never covers them */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginRight: 58 }}>
               {/* Tagged product / entity card — now stacks naturally above the actions below */}
               {tagged && mediaReady && !mediaError && (
                 <button
@@ -1685,10 +1687,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                   )}
                 </div>
               )}
-
-              {/* Action row — TikTok style: emoji + reply on the left, vertical like/comment/share rail on the right */}
-              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 10 }}>
-                <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              </div>
 
               {/* CTA — owner only; buyers reply via the reply bar below */}
               {isOwn && (
@@ -1799,10 +1798,13 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                   </button>
                 </div>
               )}
-                </div>
 
-                {/* Vertical action rail — TikTok-style like / comment / share */}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+              {/* Vertical action rail — TikTok-style like / comment / share, floated upward on the right */}
+              <div style={{
+                position: 'absolute', right: 10,
+                bottom: 'calc(112px + env(safe-area-inset-bottom, 0px))',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+              }}>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
                     <button
                       type="button"
@@ -1870,7 +1872,6 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                     </span>
                   </div>
                 </div>
-              </div>
             </div>
           </div>
 

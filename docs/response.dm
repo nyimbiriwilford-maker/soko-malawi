@@ -1,3 +1,21 @@
+# Task: Status viewer — full-width reply & emojis, raise the vertical actions rail (2026-08-26)
+
+## Request
+The reply bar should fill the whole row, the quick-action emojis should do the same, and the vertical like/comment/share column should move upwards.
+
+## What changed — `src/components/StoryViewer.jsx`
+- Removed the two-column action row. The quick-emoji row and the reply bar now span the **full width** of the bottom chrome.
+- The TikTok-style vertical rail (Like / Comment / Share with counts) is now **floated upward**: absolutely positioned on the right (`bottom: calc(112px + safe-area)`), sitting above the emoji + reply rows instead of squeezing them.
+- Tagged product card and caption are wrapped with a 58px right inset, so the raised rail never overlaps or blocks the product info; the rail clears the reply zone by ~14px.
+- No behavior changes — same handlers for like/comment/share/emojis/reply.
+
+## Verification
+- `npx eslint src/components/StoryViewer.jsx` → only pre-existing findings.
+- `npm run build` → success (~3.5s).
+- Committed and pushed to `master` (Vercel auto-deploys from master).
+
+---
+
 # Task: Status viewer — TikTok-style vertical actions + fitted emoji row (2026-08-26)
 
 ## Request
