@@ -1,3 +1,19 @@
+# Task: Status viewer — standalone volume icon, no circular container (2026-08-26)
+
+## Request
+The volume icon should not sit in a circular container — make it standalone and clean.
+
+## Changes — `src/components/StoryViewer.jsx`
+- **Removed the glass chip** from the header volume toggle (background, border, blur) — it now uses the exact same clean standalone icon treatment as the More/Close header icons (`iconBtnStyle`), with the icon enlarged 17→22px for presence.
+- Hover now scales/brightens the icon instead of revealing a circle; state-flip pop animation (`svVolumePop`) and tap squish kept.
+
+## Verification
+- `npx eslint src/components/StoryViewer.jsx` → 13 findings, identical pre-existing baseline.
+- `npm run build` → success (~4s).
+- Committed and pushed to `master` (Vercel auto-deploys from master).
+
+---
+
 # Task: Status viewer — fully transparent reply bar (2026-08-26)
 
 ## Request

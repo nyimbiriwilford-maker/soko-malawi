@@ -1186,14 +1186,14 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
         .sv-rail-btn { animation: svRailIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both; transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1); }
         .sv-rail-btn:hover { transform: scale(1.15); }
         .sv-rail-btn:active { transform: scale(0.88); }
-        /* Header volume toggle — glass chip that pops when its state flips */
+        /* Header volume toggle — standalone icon that pops when its state flips */
         #sv-reply-input::placeholder { color: rgba(255,255,255,0.62); text-shadow: 0 1px 4px rgba(0,0,0,0.5); }
         @keyframes svVolumePop {
           from { transform: scale(0.55); opacity: 0.3; }
           to   { transform: scale(1);    opacity: 1; }
         }
-        .sv-volume-btn { transition: background 0.2s ease, transform 0.12s ease; }
-        .sv-volume-btn:hover { background: rgba(255,255,255,0.26) !important; }
+        .sv-volume-btn { transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.15s ease; }
+        .sv-volume-btn:hover { transform: scale(1.15); filter: drop-shadow(0 1px 3px rgba(0,0,0,0.45)) brightness(1.25); }
         .sv-volume-btn:active { transform: scale(0.88); }
         .sv-volume-icon { display: flex; align-items: center; justify-content: center; animation: svVolumePop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
       `}</style>
@@ -1466,18 +1466,10 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                     onPointerUp={e => { e.stopPropagation(); setMuted(m => !m) }}
                     aria-label={muted ? 'Unmute video' : 'Mute video'}
                     aria-pressed={!muted}
-                    style={{
-                      ...iconBtnStyle,
-                      width: 34, height: 34,
-                      background: muted ? 'rgba(0,0,0,0.42)' : 'rgba(255,255,255,0.16)',
-                      border: '1px solid rgba(255,255,255,0.22)',
-                      backdropFilter: 'blur(10px)',
-                      WebkitBackdropFilter: 'blur(10px)',
-                      textShadow: 'none', filter: 'none',
-                    }}
+                    style={iconBtnStyle}
                   >
                     <span key={muted ? 'muted' : 'on'} className="sv-volume-icon">
-                      {muted ? <IconMuted size={17} /> : <IconUnmuted size={17} />}
+                      {muted ? <IconMuted size={22} /> : <IconUnmuted size={22} />}
                     </span>
                   </button>
                 )}
