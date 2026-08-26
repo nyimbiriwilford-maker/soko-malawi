@@ -1,3 +1,22 @@
+# Task: Status viewer — use Home's verification badge next to the poster name (2026-08-26)
+
+## Request
+In the status viewer, the verification icon in front of the poster name should be the same icon used on Home.
+
+## Changes — `src/components/StoryViewer.jsx`
+- Replaced `IconVerified` (plain green circle + check) with the exact SVG used by Home's status section (`VerifiedBadge` in `HomeStatusSection.jsx` / `Icon.verify` on Home): the green **scalloped seal with white check** (`#16a34a` fill, `flexShrink: 0`).
+- Same placement — right after the poster name in the viewer header, size 14.
+
+## Note
+The badge currently renders for every poster (pre-existing behavior). Home only shows it when `is_verified`; if you want the same gating in the viewer, say so and I'll add `is_verified` to the story's profile fetch.
+
+## Verification
+- `npx eslint src/components/StoryViewer.jsx` → 13 findings, identical pre-existing baseline.
+- `npm run build` → success (~4.1s).
+- Committed and pushed to `master` (Vercel auto-deploys from master).
+
+---
+
 # Task: Status viewer — standalone volume icon, no circular container (2026-08-26)
 
 ## Request
