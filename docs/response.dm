@@ -15,7 +15,7 @@ Removed 3 now-unused variables flagged by ESLint after the earlier card simplifi
 ## Validation
 - `npx eslint src/components/StoryViewer.jsx` → no new issues.
 - `npm run build` → success (~2.9s).
-- Changes are in the working tree, **not yet committed** — say the word to push to master.
+- Committed as `03f6f86` and pushed to `master` (`fc5a460..03f6f86`) — Vercel auto-deploys from master.
 
 ---
 
