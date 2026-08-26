@@ -1,3 +1,20 @@
+# Task: Status viewer — spread & animate emojis, transparent rail buttons (2026-08-26)
+
+## Request
+Quick-action emojis are too compact — spread them properly and animate them so they feel alive. Make the vertical like/comment/share buttons transparent (no circles).
+
+## What changed — `src/components/StoryViewer.jsx`
+- **Emoji row spread out**: buttons enlarged to 42px and distributed across the full row with `justify-content: space-between` (was a tight 32px cluster).
+- **Emojis feel alive**: new keyframes `svEmojiIn` (staggered springy pop-in, 70ms apart) + `svEmojiFloat` (gentle idle bob with a slight tilt, staggered offsets), hover lift/brighten and press-squish transitions.
+- **Vertical rail buttons are now transparent**: removed the circular backgrounds, borders and blur; icons enlarged (heart 28, comment 27, share 26) with a soft drop-shadow so they stay readable on any media. Added a subtle `svRailIn` entrance animation and hover/press scaling.
+
+## Verification
+- `npx eslint src/components/StoryViewer.jsx` → only pre-existing findings.
+- `npm run build` → success (~3.5s).
+- Committed and pushed to `master` (Vercel auto-deploys from master).
+
+---
+
 # Task: Status viewer — full-width reply & emojis, raise the vertical actions rail (2026-08-26)
 
 ## Request

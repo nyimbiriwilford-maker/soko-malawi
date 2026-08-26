@@ -1054,6 +1054,32 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
         .sv-tap:active { opacity: 0.85; }
         .sv-hide-scroll::-webkit-scrollbar { display: none; }
         #sv-reply-input::placeholder { color: rgba(255,255,255,0.65); }
+
+        /* Quick emoji reactions — lively staggered pop-in + gentle idle float */
+        @keyframes svEmojiIn {
+          0%   { transform: translateY(16px) scale(0.3); opacity: 0; }
+          60%  { transform: translateY(-4px) scale(1.15); opacity: 1; }
+          100% { transform: translateY(0) scale(1); opacity: 1; }
+        }
+        @keyframes svEmojiFloat {
+          0%, 100% { transform: translateY(0) rotate(0deg); }
+          50%      { transform: translateY(-3px) rotate(-2deg); }
+        }
+        @keyframes svRailIn {
+          0%   { transform: translateX(18px) scale(0.6); opacity: 0; }
+          100% { transform: translateX(0) scale(1); opacity: 1; }
+        }
+        .sv-emoji {
+          animation:
+            svEmojiIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both,
+            svEmojiFloat 2.8s ease-in-out infinite;
+          transition: transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.16s;
+        }
+        .sv-emoji:hover { transform: translateY(-4px) scale(1.22); filter: brightness(1.15); }
+        .sv-emoji:active { transform: scale(0.85); }
+        .sv-rail-btn { animation: svRailIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both; transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .sv-rail-btn:hover { transform: scale(1.15); }
+        .sv-rail-btn:active { transform: scale(0.88); }
       `}</style>
 
       <div
@@ -1713,28 +1739,28 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                 </button>
               )}
 
-              {/* Quick emoji reactions — compact row fitted beside the action rail */}
+              {/* Quick emoji reactions — spread across the row, animated */}
               {!isOwn && (
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'nowrap', overflow: 'hidden' }}>
-                  {QUICK_EMOJIS.map(e => (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'nowrap', gap: 4 }}>
+                  {QUICK_EMOJIS.map((e, i) => (
                     <button
                       key={e}
                       type="button"
-                      className="sv-tap"
+                      className="sv-tap sv-emoji"
                       onClick={() => sendQuickEmoji(e)}
                       disabled={commentsApi.posting}
                       aria-label={`React ${e}`}
                       style={{
-                        width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
+                        width: 42, height: 42, borderRadius: '50%', flexShrink: 0,
                         border: '1.5px solid rgba(255,255,255,0.22)',
                         background: 'rgba(255,255,255,0.12)',
                         backdropFilter: 'blur(8px)',
-                        fontSize: 16, lineHeight: 1,
+                        fontSize: 20, lineHeight: 1,
                         cursor: commentsApi.posting ? 'default' : 'pointer',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         padding: 0, fontFamily: 'inherit',
                         opacity: commentsApi.posting ? 0.55 : 1,
-                        transition: 'transform 0.12s, background 0.15s',
+                        animationDelay: `${i * 0.07}s, ${1 + i * 0.18}s`,
                       }}
                     >
                       {e}
@@ -1808,20 +1834,19 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
                     <button
                       type="button"
-                      className="sv-tap"
+                      className="sv-tap sv-rail-btn"
                       onClick={handleLove}
                       disabled={reacting || isOwn}
                       aria-label="Like status"
                       style={{
-                        width: 44, height: 44, borderRadius: '50%', padding: 0,
-                        border: '1.5px solid rgba(255,255,255,0.28)',
-                        background: myReaction === 'love' ? 'rgba(234,67,53,0.28)' : 'rgba(255,255,255,0.14)',
-                        backdropFilter: 'blur(8px)',
+                        width: 48, height: 44, padding: 0,
+                        border: 'none', background: 'none', borderRadius: 0,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         cursor: isOwn ? 'default' : 'pointer',
+                        filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.6))',
                       }}
                     >
-                      <IconHeart size={22} filled={myReaction === 'love'} />
+                      <IconHeart size={28} filled={myReaction === 'love'} />
                     </button>
                     <span style={{ fontSize: 11.5, fontWeight: 800, color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>
                       {fmtK(loveCount)}
@@ -1831,19 +1856,19 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
                     <button
                       type="button"
-                      className="sv-tap"
+                      className="sv-tap sv-rail-btn"
                       onClick={openReplies}
                       aria-label="View comments"
                       style={{
-                        width: 44, height: 44, borderRadius: '50%', padding: 0,
-                        border: '1.5px solid rgba(255,255,255,0.28)',
-                        background: 'rgba(255,255,255,0.14)',
-                        backdropFilter: 'blur(8px)',
+                        width: 48, height: 44, padding: 0,
+                        border: 'none', background: 'none', borderRadius: 0,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         cursor: 'pointer',
+                        filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.6))',
+                        animationDelay: '0.08s',
                       }}
                     >
-                      <IconComment size={21} color="#fff" />
+                      <IconComment size={27} color="#fff" />
                     </button>
                     <span style={{ fontSize: 11.5, fontWeight: 800, color: '#fff', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>
                       {fmtK(replyCount)}
@@ -1853,19 +1878,19 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
                     <button
                       type="button"
-                      className="sv-tap"
+                      className="sv-tap sv-rail-btn"
                       onClick={openShare}
                       aria-label="Share status"
                       style={{
-                        width: 44, height: 44, borderRadius: '50%', padding: 0,
-                        border: '1.5px solid rgba(255,255,255,0.28)',
-                        background: 'rgba(255,255,255,0.14)',
-                        backdropFilter: 'blur(8px)',
+                        width: 48, height: 44, padding: 0,
+                        border: 'none', background: 'none', borderRadius: 0,
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         cursor: 'pointer',
+                        filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.6))',
+                        animationDelay: '0.16s',
                       }}
                     >
-                      <IconShare size={20} color="#fff" />
+                      <IconShare size={26} color="#fff" />
                     </button>
                     <span style={{ fontSize: 10.5, fontWeight: 800, color: 'rgba(255,255,255,0.85)', textShadow: '0 1px 4px rgba(0,0,0,0.5)' }}>
                       Share
