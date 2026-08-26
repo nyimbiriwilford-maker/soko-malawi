@@ -1,3 +1,22 @@
+# Task: Status feed — standardized cards, counts inside the like/comment buttons (2026-08-26)
+
+## Request
+Standardize the status feed card. Don't repeat the bottom icon row for like/comment counts — the comment button itself should show the comment count and open comments on tap; same for the like button.
+
+## Changes — `src/pages/StatusPage.jsx` (`StatusFeedCard`)
+- **Removed the duplicate stats row** (`views / ❤ likes / 💬 replies` under the caption). Icons and counts are no longer repeated under the action buttons.
+- **Like button now carries the count**: ❤ + number when likes > 0 (falls back to the word "Like"); tapping still toggles the like, filled red heart + pop animation when liked.
+- **Comment button now carries the count**: 💬 + number when comments > 0 (falls back to "Comment"); tapping opens/closes the inline comment panel exactly as before.
+- **Views preserved but de-duplicated**: moved into the header meta line as "…ago · N views" instead of its own icon row; removed the now-unused `Eye` import.
+- Standardized spacing: engagement row sits tighter against the content (`margin-top` 6→2px); button counts use tabular numbers for clean alignment.
+
+## Verification
+- `npx eslint src/pages/StatusPage.jsx` → 5 findings, all pre-existing (hooks), none new.
+- `npm run build` → success (~3.9s).
+- Committed and pushed to `master` (Vercel auto-deploys from master).
+
+---
+
 # Task: Fix broken images on status comments with media (2026-08-26)
 
 ## Problem

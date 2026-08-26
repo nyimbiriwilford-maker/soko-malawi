@@ -10,7 +10,7 @@ import StatusCommentsPanel from '../components/StatusComments'
 import { useStatusComments } from '../hooks/useStatusComments'
 import SokoNav from '../components/SokoNav'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Heart, MessageCircle, Share2, Eye, Clock } from 'lucide-react'
+import { Heart, MessageCircle, Share2, Clock } from 'lucide-react'
 
 // ─────────────────────────────────────────────
 // Design tokens — aligned with Home / Looking For / Shops
@@ -258,7 +258,7 @@ function StatusFeedCard({ s, onOpen, currentUserId, metrics, onLike }) {
                 <Badge color={isUrgent ? T.orangeDeep : T.green} bg={isUrgent ? T.orangeLight : T.greenLight}>
                   {category}
                 </Badge>
-                <span className="st-feed-time">{ago} ago</span>
+                <span className="st-feed-time">{ago} ago · {fmtCount(m.views)} views</span>
                 {s.location_hint && (
                   <span className="st-feed-loc">
                     <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
@@ -308,12 +308,6 @@ function StatusFeedCard({ s, onOpen, currentUserId, metrics, onLike }) {
           </div>
         )}
 
-        <div className="st-feed-stats">
-          <span className="st-feed-views"><Eye size={12} /> {fmtCount(m.views)} views</span>
-          <span className="st-feed-stat"><Heart size={12} /> {fmtCount(m.likes)}</span>
-          <span className="st-feed-stat"><MessageCircle size={12} /> {fmtCount(m.replies)}</span>
-        </div>
-
         <div className="st-feed-eng">
           <motion.button
             type="button"
@@ -321,9 +315,10 @@ function StatusFeedCard({ s, onOpen, currentUserId, metrics, onLike }) {
             className={`st-feed-eng-btn${m.myLike ? ' is-liked' : ''}`}
             onClick={() => onLike(s.id)}
             aria-pressed={!!m.myLike}
+            aria-label={m.myLike ? 'Unlike' : 'Like'}
           >
             <Heart size={17} fill={m.myLike ? '#ea4335' : 'none'} strokeWidth={2.2} />
-            <span>{m.myLike ? 'Liked' : 'Like'}</span>
+            <span>{m.likes > 0 ? fmtCount(m.likes) : (m.myLike ? 'Liked' : 'Like')}</span>
           </motion.button>
 
           <motion.button
@@ -332,12 +327,13 @@ function StatusFeedCard({ s, onOpen, currentUserId, metrics, onLike }) {
             className={`st-feed-eng-btn${replies.open ? ' is-active' : ''}`}
             onClick={() => replies.open ? replies.closeComments() : replies.openComments()}
             aria-expanded={replies.open}
+            aria-label="Comments"
           >
             <MessageCircle size={17} />
-            <span>Comment</span>
+            <span>{m.replies > 0 ? fmtCount(m.replies) : 'Comment'}</span>
           </motion.button>
 
-          <motion.button type="button" whileTap={{ scale: 1.28 }} className="st-feed-eng-btn" onClick={handleShare}>
+          <motion.button type="button" whileTap={{ scale: 1.28 }} className="st-feed-eng-btn" onClick={handleShare} aria-label="Share">
             <Share2 size={17} />
             <span>{copied ? 'Copied' : 'Share'}</span>
           </motion.button>
@@ -845,22 +841,10 @@ function StatusPageInner({ user, navigate }) {
           background: #fff; border: 1px solid rgba(15,157,88,0.18);
           border-radius: 999px; padding: 6px 11px; flex-shrink: 0;
         }
-        .st-feed-stats {
-          display: flex; align-items: center; gap: 16px;
-          padding: 9px 0 2px;
-        }
-        .st-feed-views {
-          display: inline-flex; align-items: center; gap: 5px;
-          font-size: 11.5px; font-weight: 700; color: ${T.textMuted};
-        }
-        .st-feed-stat {
-          display: inline-flex; align-items: center; gap: 5px;
-          font-size: 11.5px; font-weight: 700; color: ${T.textMuted};
-        }
         .st-feed-eng {
           display: flex; align-items: stretch;
           border-top: 1px solid ${T.border};
-          margin-top: 6px;
+          margin-top: 2px;
         }
         .st-feed-eng-btn {
           flex: 1;
@@ -870,6 +854,7 @@ function StatusPageInner({ user, navigate }) {
           cursor: pointer; border-radius: 10px; min-height: 44px;
           transition: color 0.15s, background 0.15s;
         }
+        .st-feed-eng-btn span { font-variant-numeric: tabular-nums; font-weight: 800; }
         .st-feed-eng-btn:hover { background: ${T.bg}; color: ${T.text}; }
         .st-feed-eng-btn.is-active { color: ${T.green}; background: ${T.greenLight}; }
         .st-feed-eng-btn.is-liked { color: #ea4335; }
