@@ -102,7 +102,16 @@ function CommentNode({ comment, depth, api, story, currentUserId, onOpenChat, ch
   const name = comment.author?.full_name || 'Anonymous'
   const avatar = comment.author?.avatar_url
   const repliedToName = comment.parent_id ? (nameById[comment.parent_id] || 'someone') : null
-  const media = Array.isArray(comment.media_urls) ? comment.media_urls : []
+  const media = (Array.isArray(comment.media_urls) ? comment.media_urls : [])
+    .map(m => {
+      if (typeof m === 'string') return { url: m, kind: isStatusVideoUrl(m) ? 'video' : 'image' }
+      if (m && typeof m === 'object' && typeof m.url === 'string') {
+        return { url: m.url, kind: m.kind || (isStatusVideoUrl(m.url) ? 'video' : 'image') }
+      }
+      return null
+    })
+    .filter(m => m && /^https?:\/\//i.test(m.url))
+  const hideBroken = e => { e.currentTarget.style.display = 'none' }
 
   const statusId = story?.id
   const [copied, setCopied] = useState(false)
@@ -172,8 +181,8 @@ function CommentNode({ comment, depth, api, story, currentUserId, onOpenChat, ch
         {media.length > 0 && (
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             {media.map((m, i) => m.kind === 'video' || isStatusVideoUrl(m.url)
-              ? <video key={i} src={m.url} controls playsInline style={{ width: 150, height: 96, borderRadius: 8, objectFit: 'cover' }} />
-              : <img key={i} src={m.url} alt="" onClick={() => window.open(m.url, '_blank')} style={{ width: 76, height: 76, objectFit: 'cover', borderRadius: 8, cursor: 'pointer' }} />
+              ? <video key={i} src={m.url} controls playsInline onError={hideBroken} style={{ width: 150, height: 96, borderRadius: 8, objectFit: 'cover' }} />
+              : <img key={i} src={m.url} alt="" onError={hideBroken} onClick={() => window.open(m.url, '_blank')} style={{ width: 76, height: 76, objectFit: 'cover', borderRadius: 8, cursor: 'pointer' }} />
             )}
           </div>
         )}

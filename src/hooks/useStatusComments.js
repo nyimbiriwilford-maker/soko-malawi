@@ -176,6 +176,34 @@ export function useStatusComments({ story, currentUserId, notify, preload = fals
     }
   }, [currentUserId, statusId, story])
 
+  const uploadCommentMedia = useCallback(async (file, kind) => {
+    const rawExt = (file.name || 'media').split('.').pop() || ''
+    const ext = (rawExt.replace(/[^\w]/g, '').slice(0, 8) || (kind === 'video' ? 'mp4' : 'jpg')).toLowerCase()
+    const path = `status-comments/${currentUserId}/${kind}_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`
+    // Story-media (app standard — same pipeline as status uploads) with a
+    // status-media fallback. Supabase storage yields a guaranteed-absolute
+    // public URL that doesn't depend on client env vars.
+    const errors = []
+    for (const bucket of ['story-media', 'status-media']) {
+      const { error } = await supabase.storage
+        .from(bucket)
+        .upload(path, file, { contentType: file.type, upsert: false })
+      if (!error) {
+        const { data } = supabase.storage.from(bucket).getPublicUrl(path)
+        if (data?.publicUrl && /^https?:\/\//i.test(data.publicUrl)) return data.publicUrl
+      }
+      errors.push(`${bucket}: ${error?.message || 'bad public url'}`)
+    }
+    // Last resort: R2 — only accept a real absolute URL (a missing
+    // VITE_R2_PUBLIC_URL would otherwise store an unresolvable "undefined/..." path).
+    try {
+      const r2Url = await uploadToR2(file, path)
+      if (r2Url && /^https?:\/\//i.test(r2Url)) return r2Url
+    } catch { /* fall through */ }
+    console.warn('[StatusComments] media upload failed:', errors.join(' | '))
+    return null
+  }, [currentUserId])
+
   const postComment = useCallback(async ({ body = '', parentId = null, files = [] }) => {
     const text = String(body || '').trim()
     if ((!text && files.length === 0) || posting || !currentUserId || !statusId) return false
@@ -184,8 +212,7 @@ export function useStatusComments({ story, currentUserId, notify, preload = fals
       const media = []
       for (const f of files) {
         const kind = f.type.startsWith('video/') ? 'video' : 'image'
-        const ext = (f.name || 'media').split('.').pop()
-        const url = await uploadToR2(f, `status-comments/${currentUserId}/${kind}_${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`)
+        const url = await uploadCommentMedia(f, kind)
         if (url) media.push({ url, kind })
       }
       const { data, error } = await supabase
@@ -218,7 +245,7 @@ export function useStatusComments({ story, currentUserId, notify, preload = fals
     } finally {
       setPosting(false)
     }
-  }, [posting, currentUserId, statusId, myAvatar, notify, notifyRecipients])
+  }, [posting, currentUserId, statusId, myAvatar, notify, notifyRecipients, uploadCommentMedia])
 
   const toggleLike = useCallback(async (comment) => {
     if (comment._legacy || !currentUserId) return

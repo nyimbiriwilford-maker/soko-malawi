@@ -1,3 +1,30 @@
+# Task: Fix broken images on status comments with media (2026-08-26)
+
+## Problem
+Comments posted with an image on a status showed a broken image ("failed to load").
+
+## Root cause (verified live)
+Comment media was uploaded to Cloudflare R2 and stored via `getR2Url()` = `${VITE_R2_PUBLIC_URL}/<path>`. The production Vercel build is missing/incomplete on the `VITE_R2_*` client env vars, so stored URLs became **relative** paths like `undefined/status-comments/<user>/image_...webp`. Verified against the live site: `https://soko-malawi.vercel.app/undefined/...` returns **HTTP 200 with `text/html`** (the SPA rewrite), so every `<img>` receives HTML instead of an image → broken-image icon. (Status media itself is unaffected because it uploads to Supabase storage, not R2.)
+
+## Fix
+### `src/hooks/useStatusComments.js`
+- New `uploadCommentMedia(file, kind)`: uploads comment images/videos to **Supabase storage** — the same proven pipeline as status uploads (`story-media` bucket, falling back to `status-media`), returning `getPublicUrl()` (a guaranteed-absolute URL that needs no client env vars). R2 is kept only as a last-resort fallback and is rejected unless it returns a real `http(s)://` URL.
+
+### `src/components/StatusComments.jsx`
+- Render now **normalizes** `media_urls` entries (accepts `{url, kind}` objects or plain URL strings) and **filters out anything that isn't an absolute http(s) URL** — existing broken rows from before the fix simply render without media instead of a broken icon.
+- Added `onError` hiding on comment `<img>`/`<video>` so any unforeseen load failure never shows a broken-image glyph.
+
+## If other images are also broken in production
+Anything still uploading through R2 (listing photos, avatars, chat media) needs the R2 env vars added in the **Vercel project settings**, then a redeploy: `VITE_R2_ACCOUNT_ID`, `VITE_R2_ACCESS_KEY_ID`, `VITE_R2_SECRET_ACCESS_KEY`, `VITE_R2_BUCKET`, `VITE_R2_PUBLIC_URL`.
+
+## Verification
+- R2 probe from this machine (PUT + public GET round-trip) passed — the mechanism itself works; the failure is the missing prod env vars.
+- `npx eslint src/hooks/useStatusComments.js src/components/StatusComments.jsx` → clean.
+- `npm run build` → success (~4s).
+- Committed and pushed to `master` (Vercel auto-deploys from master).
+
+---
+
 # Task: Status viewer — more quick emojis in a horizontal scroll rail (2026-08-26)
 
 ## Request
