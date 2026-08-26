@@ -1,3 +1,21 @@
+# Task: Status viewer — volume toggle in the header before the three-dot menu (2026-08-26)
+
+## Request
+Place the volume icon on top (header) before the three-dot dropdown menu on the status viewer, presented in an advanced, professional, clean way.
+
+## Changes — `src/components/StoryViewer.jsx`
+- **Volume toggle moved into the top header**, rendered just before the three-dot (More) button, so it no longer floats mid-screen over the media.
+- Shown only when the current media is a video (volume is irrelevant for photos/text) — keeps the header clean otherwise.
+- **Advanced presentation**: glass chip button (34px circle, blurred translucent background with hairline border) that changes tone with state — brighter glass when sound is on, darker when muted — plus a springy `svVolumePop` icon pop every time the state flips, hover brighten and press-squish. `aria-pressed` reflects the sound state for accessibility.
+- **Removed the old floating mute button** that previously overlapped the media counter zone (right:14, top:78/116) — one control, one place, nothing duplicated.
+
+## Verification
+- `npx eslint src/components/StoryViewer.jsx` → 13 findings, identical pre-existing baseline, none new.
+- `npm run build` → success (~4.4s).
+- Committed and pushed to `master` (Vercel auto-deploys from master).
+
+---
+
 # Task: Product anchor — auto-withdraw after tap + un-crowded layout + rail icon spacing (2026-08-26)
 
 ## Request

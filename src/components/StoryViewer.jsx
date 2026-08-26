@@ -1186,6 +1186,15 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
         .sv-rail-btn { animation: svRailIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both; transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1); }
         .sv-rail-btn:hover { transform: scale(1.15); }
         .sv-rail-btn:active { transform: scale(0.88); }
+        /* Header volume toggle — glass chip that pops when its state flips */
+        @keyframes svVolumePop {
+          from { transform: scale(0.55); opacity: 0.3; }
+          to   { transform: scale(1);    opacity: 1; }
+        }
+        .sv-volume-btn { transition: background 0.2s ease, transform 0.12s ease; }
+        .sv-volume-btn:hover { background: rgba(255,255,255,0.26) !important; }
+        .sv-volume-btn:active { transform: scale(0.88); }
+        .sv-volume-icon { display: flex; align-items: center; justify-content: center; animation: svVolumePop 0.28s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
       `}</style>
 
       <div
@@ -1448,6 +1457,29 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
               </button>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                {mediaKind === 'video' && showMedia && (
+                  <button
+                    type="button"
+                    className="sv-tap sv-volume-btn"
+                    onPointerDown={e => e.stopPropagation()}
+                    onPointerUp={e => { e.stopPropagation(); setMuted(m => !m) }}
+                    aria-label={muted ? 'Unmute video' : 'Mute video'}
+                    aria-pressed={!muted}
+                    style={{
+                      ...iconBtnStyle,
+                      width: 34, height: 34,
+                      background: muted ? 'rgba(0,0,0,0.42)' : 'rgba(255,255,255,0.16)',
+                      border: '1px solid rgba(255,255,255,0.22)',
+                      backdropFilter: 'blur(10px)',
+                      WebkitBackdropFilter: 'blur(10px)',
+                      textShadow: 'none', filter: 'none',
+                    }}
+                  >
+                    <span key={muted ? 'muted' : 'on'} className="sv-volume-icon">
+                      {muted ? <IconMuted size={17} /> : <IconUnmuted size={17} />}
+                    </span>
+                  </button>
+                )}
                 <button
                   type="button"
                   className="sv-tap"
@@ -1531,31 +1563,6 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
               }}>
                 {mediaLabel}
               </div>
-            )}
-
-            {/* Mute / unmute toggle — only for video */}
-            {mediaKind === 'video' && showMedia && (
-              <button
-                type="button"
-                className="sv-tap"
-                onPointerDown={e => e.stopPropagation()}
-                onPointerUp={e => { e.stopPropagation(); setMuted(m => !m) }}
-                aria-label={muted ? 'Unmute video' : 'Mute video'}
-                style={{
-                  position: 'absolute',
-                  right: 14,
-                  top: mediaCount > 1 ? 116 : 78,
-                  zIndex: 20,
-                  width: 34, height: 34, borderRadius: '50%',
-                  background: 'rgba(0,0,0,0.55)', color: '#fff',
-                  border: '1px solid rgba(255,255,255,0.12)',
-                  backdropFilter: 'blur(8px)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: 'pointer',
-                }}
-              >
-                {muted ? <IconMuted size={16} /> : <IconUnmuted size={16} />}
-              </button>
             )}
 
             {/* Product / entity card now lives inside the floating bottom chrome — see below */}
