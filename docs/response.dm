@@ -1,3 +1,19 @@
+# Task: Status feed — premium full-bleed media (2026-08-26)
+
+## Request
+Improve the image size to make the feed card look more premium.
+
+## Changes — `src/pages/StatusPage.jsx` (`StatusFeedCard` CSS)
+- **Full-bleed media**: the photo/video now runs edge-to-edge across the card (negative margins cancel the body padding via a `--st-pad` variable; the card's rounded corners clip it) — Instagram/Facebook style instead of a boxed inset image.
+- **Premium 4:5 ratio** (Instagram-style portrait) everywhere, including the mobile breakpoint; skeleton loading cards match (full width, 4:5, square into the card edges).
+
+## Verification
+- `npx eslint src/pages/StatusPage.jsx` → 5 findings, all pre-existing, none new.
+- `npm run build` → success (~3.8s).
+- Committed and pushed to `master` (Vercel auto-deploys from master).
+
+---
+
 # Task: Status feed — mobile second line: single row, location icon only, short expiry (2026-08-26)
 
 ## Request

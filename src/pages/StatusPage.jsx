@@ -750,7 +750,8 @@ function StatusPageInner({ user, navigate }) {
           outline-offset: 2px;
         }
         .st-feed-body {
-          padding: 14px;
+          --st-pad: 14px;
+          padding: var(--st-pad);
           display: flex;
           flex-direction: column;
           gap: 11px;
@@ -814,9 +815,10 @@ function StatusPageInner({ user, navigate }) {
         }
         .st-feed-media {
           position: relative;
-          width: 100%;
-          aspect-ratio: 4 / 3;
-          border-radius: 14px;
+          width: calc(100% + 2 * var(--st-pad, 14px));
+          margin: 0 calc(-1 * var(--st-pad, 14px));
+          aspect-ratio: 4 / 5;
+          border-radius: 0;
           overflow: hidden;
           background: linear-gradient(145deg, #0f172a, #1e293b);
           flex-shrink: 0;
@@ -999,7 +1001,7 @@ function StatusPageInner({ user, navigate }) {
           background-size: 300% 100%;
           animation: stShimmer 1.3s ease-in-out infinite;
         }
-        .st-feed-skel-media { width: 100%; aspect-ratio: 4 / 3; border-radius: 14px; flex-shrink: 0; }
+        .st-feed-skel-media { width: 100%; aspect-ratio: 4 / 5; border-radius: 0; flex-shrink: 0; }
         .st-skel-row { height: 13px; border-radius: 7px; }
         .st-skel-w30 { width: 30%; }
         .st-skel-w55 { width: 55%; }
@@ -1054,12 +1056,11 @@ function StatusPageInner({ user, navigate }) {
             gap: 12px !important;
           }
           .st-feed-grid { gap: 10px; }
-          .st-feed-media { aspect-ratio: 4 / 3; }
           .st-feed-meta { gap: 8px; }
           .st-feed-meta-item { max-width: 104px; }
         }
         @media (max-width: 420px) {
-          .st-feed-body { padding: 12px; gap: 9px; }
+          .st-feed-body { --st-pad: 12px; gap: 9px; }
         }
       `}</style>
     </div>
