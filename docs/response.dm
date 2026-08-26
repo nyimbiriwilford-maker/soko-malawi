@@ -1,3 +1,18 @@
+# Task: Host app via master push to Vercel (2026-08-26)
+
+## Request
+Host the app on Vercel by pushing to the `master` branch (repo is connected to Vercel).
+
+## What was done
+- Staged and committed all pending changes on `master` as `f22782c` — "Status page: two-section layout with Home status display clone and status comments support" (+810 / −1070 across 7 files: `StatusPage.jsx`, `StoryViewer.jsx`, `StatusReplies.jsx`, new `StatusComments.jsx`, new `useStatusComments.js`, new `status_comments` public-read migration, `docs/response.dm`).
+- Verified no secrets/keys were introduced before committing.
+- Pushed `master` to `origin` (`db00016..f22782c`). The GitHub push triggers the connected Vercel production build and deploy automatically.
+
+## Next step for you
+Watch the build finish in the Vercel dashboard (or run `vercel --prod` to stream logs). If the deploy fails, check the Vercel build logs.
+
+---
+
 # Task: Status section → two sections only (2026-08-26)
 
 ## Request
