@@ -1,3 +1,20 @@
+# Task: Status viewer — fully transparent reply bar (2026-08-26)
+
+## Request
+Make the reply box at the bottom 100% transparent and keep it looking good.
+
+## Changes — `src/components/StoryViewer.jsx`
+- **Reply bar is now 100% transparent**: removed the glass background (`rgba(255,255,255,0.14)`), the blur and the border — the bar floats invisibly over the media; only the avatar circle, typed text and send button remain.
+- Kept it legible on any frame: typed text gets a soft `text-shadow`, and the placeholder now renders in a dedicated `::placeholder` rule (light white 62% + shadow) instead of the browser default.
+- Avatar circle, green send button, layout/spacing and Enter-to-send behavior unchanged.
+
+## Verification
+- `npx eslint src/components/StoryViewer.jsx` → 13 findings, identical pre-existing baseline.
+- `npm run build` → success (~4.8s).
+- Committed and pushed to `master` (Vercel auto-deploys from master).
+
+---
+
 # Task: Status viewer — spacing between product anchor and emoji row + clean transparent emojis (2026-08-26)
 
 ## Request

@@ -1187,6 +1187,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
         .sv-rail-btn:hover { transform: scale(1.15); }
         .sv-rail-btn:active { transform: scale(0.88); }
         /* Header volume toggle — glass chip that pops when its state flips */
+        #sv-reply-input::placeholder { color: rgba(255,255,255,0.62); text-shadow: 0 1px 4px rgba(0,0,0,0.5); }
         @keyframes svVolumePop {
           from { transform: scale(0.55); opacity: 0.3; }
           to   { transform: scale(1);    opacity: 1; }
@@ -1708,15 +1709,14 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                 </div>
               )}
 
-              {/* Reply bar */}
+              {/* Reply bar — fully transparent, floating over the media */}
               {!isOwn && (
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: 10,
-                  background: 'rgba(255,255,255,0.14)',
-                  backdropFilter: 'blur(8px)',
+                  background: 'transparent',
                   borderRadius: 999,
                   padding: '6px 8px 6px 6px',
-                  border: '1.5px solid rgba(255,255,255,0.25)',
+                  border: 'none',
                 }}>
                   <div style={{
                     width: 32, height: 32, borderRadius: '50%', flexShrink: 0,
@@ -1741,6 +1741,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                     style={{
                       flex: 1, border: 'none', outline: 'none', background: 'transparent',
                       fontSize: 14, color: '#fff', fontFamily: 'inherit', minWidth: 0,
+                      textShadow: '0 1px 4px rgba(0,0,0,0.5)',
                     }}
                   />
                   <button
