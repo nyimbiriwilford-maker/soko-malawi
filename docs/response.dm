@@ -1,3 +1,19 @@
+# Task: Status feed — two-line header: name + badge on line 1, quiet info on line 2 (2026-08-26)
+
+## Request
+The header should be two lines: the name and the Product/Job etc. badge on the same first line; all other information quiet on the second line.
+
+## Changes — `src/pages/StatusPage.jsx` (`StatusFeedCard`)
+- **Line 1**: poster name + verified seal + kind badge (Product/Service/Job/Looking for/Shop) all inline in the name row; the badge no longer floats in the top-right corner.
+- **Line 2 (quiet)**: time ago, location, views and expiry remain the unified muted icon strip from the previous task.
+
+## Verification
+- `npx eslint src/pages/StatusPage.jsx` → 5 findings, all pre-existing, none new.
+- `npm run build` → success (~4.6s).
+- Committed and pushed to `master` (Vercel auto-deploys from master).
+
+---
+
 # Task: Status feed — one horizontal meta line; badge takes the expiry corner (2026-08-26)
 
 ## Request

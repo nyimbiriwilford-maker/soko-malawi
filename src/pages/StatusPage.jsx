@@ -257,6 +257,7 @@ function StatusFeedCard({ s, onOpen, currentUserId, metrics, onLike }) {
               <div className="st-feed-name-row">
                 <span className="st-feed-name">{name}</span>
                 {isVerified && <VerifiedBadge />}
+                {badgeLabel && <span className="st-feed-kind">{badgeLabel}</span>}
               </div>
               <div className="st-feed-meta">
                 <span className="st-feed-meta-item">
@@ -278,7 +279,6 @@ function StatusFeedCard({ s, onOpen, currentUserId, metrics, onLike }) {
               </div>
             </div>
           </button>
-          {badgeLabel && <span className="st-feed-kind">{badgeLabel}</span>}
         </div>
 
         {media && (
