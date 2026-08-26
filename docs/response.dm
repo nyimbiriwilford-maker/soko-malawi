@@ -1,3 +1,20 @@
+# Task: Status feed — badge only for tagged statuses, showing their real category (2026-08-26)
+
+## Request
+Fix the badge: place a badge only on tagged statuses, showing the tagged item's own category — "Furniture" for furniture, "Services" for services, etc.
+
+## Changes — `src/pages/StatusPage.jsx` (`StatusFeedCard`)
+- **Badge is now category-driven and tagged-only**: rendered only when the status tags a listing, labelled with the tagged item's actual category (`s.tagged.category`), cleaned up (`_/-` → spaces) and title-cased ("furniture" → "Furniture").
+- **Removed the guesswork badges**: no more "Urgent" (keyword sniffing), "Available", "Work", "Photo", "Video", "Update" labels — untagged statuses show no badge, just name + time/views + location.
+- Removed the now-dead `isUrgent`/`isGenericPhoto`/`category` logic and the unused `.st-feed-card.is-urgent` CSS.
+
+## Verification
+- `npx eslint src/pages/StatusPage.jsx` → 5 findings, all pre-existing, none new.
+- `npm run build` → success (~4s).
+- Committed and pushed to `master` (Vercel auto-deploys from master).
+
+---
+
 # Task: Status feed — captions back under media, clamped with "View all" (2026-08-26)
 
 ## Request

@@ -195,15 +195,14 @@ function StatusFeedCard({ s, onOpen, currentUserId, metrics, onLike }) {
   const ago        = timeAgo(s.created_at)
   const expires    = expiresInLabel(s.expires_at)
   const rawContent = (s.content || '').trim()
-  const isGenericPhoto = /^photo update$/i.test(rawContent) || /^video update$/i.test(rawContent)
-  const isUrgent = rawContent.toLowerCase().includes('price drop') ||
-                   rawContent.toLowerCase().includes('urgent') ||
-                   rawContent.toLowerCase().includes('first to confirm')
-  const category = isUrgent ? 'Urgent'
-    : s.status_type === 'availability' ? 'Available'
-    : s.status_type === 'work_ping' ? 'Work'
-    : media && isGenericPhoto ? (isVideo ? 'Video' : 'Photo')
-    : s.tagged?.category || (media ? 'Photo' : 'Update')
+  // Badge: only tagged statuses get one — the tagged item's own category
+  // ("Furniture", "Electronics", "Services", …), nicely capitalized.
+  const badgeLabel = s.tagged?.category
+    ? String(s.tagged.category)
+      .replace(/[_-]+/g, ' ')
+      .trim()
+      .replace(/\b\w/g, c => c.toUpperCase())
+    : null
   const m = metrics[s.id] || { views: 0, likes: 0, myLike: null, replies: 0 }
 
   const [copied, setCopied] = useState(false)
@@ -268,9 +267,11 @@ function StatusFeedCard({ s, onOpen, currentUserId, metrics, onLike }) {
                 {isVerified && <VerifiedBadge />}
               </div>
               <div className="st-feed-meta">
-                <Badge color={isUrgent ? T.orangeDeep : T.green} bg={isUrgent ? T.orangeLight : T.greenLight}>
-                  {category}
-                </Badge>
+                {badgeLabel && (
+                  <Badge color={T.green} bg={T.greenLight}>
+                    {badgeLabel}
+                  </Badge>
+                )}
                 <span className="st-feed-time">{ago} ago · {fmtCount(m.views)} views</span>
                 {s.location_hint && (
                   <span className="st-feed-loc">
@@ -761,10 +762,6 @@ function StatusPageInner({ user, navigate }) {
         .st-feed-card:focus-visible {
           outline: 2px solid ${T.green};
           outline-offset: 2px;
-        }
-        .st-feed-card.is-urgent {
-          border-color: rgba(230,81,0,0.3);
-          box-shadow: 0 4px 18px rgba(230,81,0,0.08);
         }
         .st-feed-body {
           padding: 14px;
