@@ -124,13 +124,6 @@ function IconPackage({ size = 22 }) {
     </svg>
   )
 }
-function IconChevronRight({ size = 14, color = 'currentColor' }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-      <path d="M9 18l6-6-6-6" />
-    </svg>
-  )
-}
 function IconMuted({ size = 16 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -459,6 +452,57 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
     { emoji: '🎉', anim: 'party' },
     { emoji: '🙏', anim: 'pray' },
   ]
+
+  // ── Tagged product anchor: circular thumbnail below the action rail that
+  // auto-expands into a card shortly after the status starts playing, then
+  // withdraws back to the circle. Tap to expand; tap again to open the product.
+  const [productOpen, setProductOpen] = useState(false)
+  const productTimerRef = useRef(null)
+  const productIntroRef = useRef(null)
+  const productTouchedRef = useRef(false)
+  const hasTagged = Boolean(story?.tagged || story?._taggedEntity)
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset anchor state per status
+    setProductOpen(false)
+    productTouchedRef.current = false
+    clearTimeout(productTimerRef.current)
+    clearTimeout(productIntroRef.current)
+  }, [story?.id])
+
+  useEffect(() => () => {
+    clearTimeout(productTimerRef.current)
+    clearTimeout(productIntroRef.current)
+  }, [])
+
+  useEffect(() => {
+    if (!hasTagged || !mediaReady || mediaError) return
+    clearTimeout(productIntroRef.current)
+    clearTimeout(productTimerRef.current)
+    productIntroRef.current = setTimeout(() => {
+      if (productTouchedRef.current) return
+      setProductOpen(true)
+      productTimerRef.current = setTimeout(() => {
+        if (!productTouchedRef.current) setProductOpen(false)
+      }, 4500)
+    }, 800)
+    return () => {
+      clearTimeout(productIntroRef.current)
+      clearTimeout(productTimerRef.current)
+    }
+  }, [hasTagged, mediaReady, mediaError, story?.id])
+
+  function toggleProductCard() {
+    productTouchedRef.current = true
+    clearTimeout(productTimerRef.current)
+    clearTimeout(productIntroRef.current)
+    setProductOpen(o => !o)
+  }
+
+  function handleProductCardClick() {
+    if (productOpen) openTaggedEntity()
+    else toggleProductCard()
+  }
 
   async function sendQuickEmoji(emoji) {
     if (commentsApi.posting) return
@@ -981,21 +1025,6 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
     || tagged?.cover_image_url
     || tagged?.cover_url
     || null
-  const productCity = tagged?.city || tagged?.district || story.location_hint || story.profiles?.city || null
-  const productDesc = tagged?.description || tagged?.overview || null
-  const shortDesc = productDesc
-    ? String(productDesc).replace(/\s+/g, ' ').trim().slice(0, 90)
-    : (!isTextOnlyStage && story.content
-      ? String(story.content).replace(/\s+/g, ' ').trim().slice(0, 90)
-      : null)
-  const kindLabel = ({
-    listing: 'Product',
-    job: 'Job',
-    service: 'Service',
-    shop: 'Shop',
-    request: 'Looking for',
-  })[taggedKind] || 'Tagged'
-
   // Caption shown on the media — skip auto-generated placeholders ("Photo update")
   const statusCaption = (() => {
     const raw = String(story.content || '').replace(/\s+/g, ' ').trim()
@@ -1109,12 +1138,44 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
         .sv-ei-money     { animation: svEmojiMoney 1.6s ease-in-out infinite; }
         .sv-ei-party     { animation: svEmojiParty 1.9s ease-in-out infinite; }
         .sv-ei-pray      { animation: svEmojiPray 2.2s ease-in-out infinite; }
-        .sv-pill { animation: svPillIn 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) both; transition: transform 0.16s, background 0.16s; }
-        .sv-pill:hover { transform: translateY(-2px) scale(1.03); background: rgba(255,255,255,0.16) !important; }
-        .sv-pill:active { transform: scale(0.96); }
-        @keyframes svPillIn {
-          from { transform: translateY(12px) scale(0.9); opacity: 0; }
-          to   { transform: translateY(0) scale(1); opacity: 1; }
+        /* Tagged product anchor — circle below the rail that expands into a long card */
+        @keyframes svProductRing {
+          0%, 100% { box-shadow: 0 2px 12px rgba(0,0,0,0.25), 0 0 0 0 rgba(255,255,255,0.35); }
+          50%      { box-shadow: 0 2px 12px rgba(0,0,0,0.25), 0 0 0 6px rgba(255,255,255,0); }
+        }
+        .sv-product-card {
+          position: relative;
+          display: flex; align-items: center; gap: 8px;
+          padding: 5px;
+          background: rgba(255,255,255,0.1);
+          backdrop-filter: blur(12px);
+          -webkit-backdrop-filter: blur(12px);
+          border: 1px solid rgba(255,255,255,0.22);
+          border-radius: 999px;
+          cursor: pointer;
+          overflow: hidden;
+          white-space: nowrap;
+          max-width: 246px;
+          box-shadow: 0 2px 12px rgba(0,0,0,0.25);
+          animation: svProductRing 2.6s ease-in-out infinite;
+          transition: max-width 0.55s cubic-bezier(0.22, 1, 0.36, 1), background 0.2s, transform 0.15s;
+        }
+        .sv-product-card.is-collapsed { max-width: 42px; }
+        .sv-product-card:not(.is-collapsed) { animation: none; box-shadow: 0 2px 14px rgba(0,0,0,0.3); }
+        .sv-product-card:hover { background: rgba(255,255,255,0.2); }
+        .sv-product-card:active { transform: scale(0.95); }
+        .sv-product-copy {
+          display: flex; flex-direction: column; gap: 1px; min-width: 0;
+          opacity: 1; transition: opacity 0.3s 0.14s;
+        }
+        .sv-product-card.is-collapsed .sv-product-copy,
+        .sv-product-card.is-collapsed .sv-product-cta { opacity: 0; pointer-events: none; transition: opacity 0.12s; }
+        .sv-product-cta {
+          flex-shrink: 0; margin-right: 1px;
+          background: ${GREEN}; color: #fff;
+          font-size: 11px; font-weight: 800; font-family: inherit;
+          border-radius: 999px; padding: 6px 11px;
+          opacity: 1; transition: opacity 0.3s 0.14s;
         }
         .sv-rail-btn { animation: svRailIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both; transition: transform 0.15s cubic-bezier(0.34, 1.56, 0.64, 1); }
         .sv-rail-btn:hover { transform: scale(1.15); }
@@ -1526,78 +1587,10 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                 gap: 10,
               }}
             >
-              {/* Tagged product + caption — right-inset so the floating vertical action rail never covers them */}
+              {/* Caption — right-inset so the floating vertical action rail never covers it */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginRight: 58 }}>
-              {/* Tagged product — compact professional glass pill, left-anchored
-                  so it barely covers the posted content */}
-              {tagged && mediaReady && !mediaError && (
-                <button
-                  type="button"
-                  className="sv-tap sv-pill"
-                  onClick={openTaggedEntity}
-                  aria-label={`View ${taggedKind || 'product'}: ${productTitle}`}
-                  style={{
-                    alignSelf: 'flex-start',
-                    maxWidth: '100%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 8,
-                    background: 'rgba(255,255,255,0.08)',
-                    backdropFilter: 'blur(12px)',
-                    WebkitBackdropFilter: 'blur(12px)',
-                    border: '1px solid rgba(255,255,255,0.16)',
-                    borderRadius: 999,
-                    padding: '4px 12px 4px 5px',
-                    textAlign: 'left',
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                    boxShadow: '0 2px 12px rgba(0,0,0,0.22)',
-                  }}
-                >
-                  <div style={{
-                    width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
-                    overflow: 'hidden',
-                    background: 'rgba(255,255,255,0.12)',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    {entityLogo || productImage ? (
-                      <img
-                        src={entityLogo || productImage}
-                        alt=""
-                        style={{
-                          width: '100%', height: '100%',
-                          objectFit: (taggedKind === 'shop' || taggedKind === 'job') ? 'contain' : 'cover',
-                          background: (taggedKind === 'shop' || taggedKind === 'job') ? '#fff' : 'transparent',
-                          padding: (taggedKind === 'shop' || taggedKind === 'job') ? 3 : 0,
-                          boxSizing: 'border-box',
-                        }}
-                      />
-                    ) : (
-                      <IconPackage size={14} />
-                    )}
-                  </div>
-                  <span style={{
-                    fontSize: 12.5, fontWeight: 700, color: 'rgba(255,255,255,0.96)',
-                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    minWidth: 0, maxWidth: 180,
-                    textShadow: '0 1px 3px rgba(0,0,0,0.55)',
-                  }}>
-                    {productTitle}
-                  </span>
-                  {productPrice && (
-                    <span style={{
-                      fontSize: 12.5, fontWeight: 900, color: GOLD, flexShrink: 0,
-                      textShadow: '0 1px 3px rgba(0,0,0,0.55)',
-                    }}>
-                      {typeof productPrice === 'string' && !/^(MK|mk)/.test(productPrice) && Number.isFinite(Number(productPrice))
-                        ? formatPrice(productPrice)
-                        : productPrice}
-                    </span>
-                  )}
-                  <IconChevronRight size={13} color="rgba(255,255,255,0.55)" />
-                </button>
-              )}
+              {/* Tagged product now lives as the expanding circle anchor on the
+                  action rail (below Like/Comment/Share) — see sv-product-card */}
 
               {/* Caption — IG-style chip stacked above the engagement row */}
               {mediaReady && statusCaption && media0 && !isTextOnlyStage && (
@@ -1758,11 +1751,11 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                 </div>
               )}
 
-              {/* Vertical action rail — TikTok-style like / comment / share, floated upward on the right */}
+              {/* Vertical action rail — TikTok-style like / comment / share + product anchor, floated upward on the right */}
               <div style={{
                 position: 'absolute', right: 10,
                 bottom: 'calc(112px + env(safe-area-inset-bottom, 0px))',
-                display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+                display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 12,
               }}>
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
                     <button
@@ -1829,6 +1822,66 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                       Share
                     </span>
                   </div>
+
+                  {/* Tagged product anchor — circular image below the rail;
+                      auto-expands into a long card while playing, then withdraws.
+                      Tap to expand, tap again to view the product. */}
+                  {tagged && mediaReady && !mediaError && (
+                    <button
+                      type="button"
+                      className={`sv-tap sv-product-card${productOpen ? '' : ' is-collapsed'}`}
+                      onClick={handleProductCardClick}
+                      aria-expanded={productOpen}
+                      aria-label={`Tagged ${taggedKind || 'product'}: ${productTitle}`}
+                    >
+                      <div
+                        onClick={e => { if (productOpen) { e.stopPropagation(); toggleProductCard() } }}
+                        style={{
+                          width: 30, height: 30, borderRadius: '50%', flexShrink: 0,
+                          overflow: 'hidden',
+                          background: 'rgba(255,255,255,0.12)',
+                          border: '1px solid rgba(255,255,255,0.25)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}
+                      >
+                        {entityLogo || productImage ? (
+                          <img
+                            src={entityLogo || productImage}
+                            alt=""
+                            style={{
+                              width: '100%', height: '100%',
+                              objectFit: (taggedKind === 'shop' || taggedKind === 'job') ? 'contain' : 'cover',
+                              background: (taggedKind === 'shop' || taggedKind === 'job') ? '#fff' : 'transparent',
+                              padding: (taggedKind === 'shop' || taggedKind === 'job') ? 3 : 0,
+                              boxSizing: 'border-box',
+                            }}
+                          />
+                        ) : (
+                          <IconPackage size={14} />
+                        )}
+                      </div>
+                      <span className="sv-product-copy">
+                        <span style={{
+                          fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.97)',
+                          overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 104,
+                          textShadow: '0 1px 3px rgba(0,0,0,0.55)',
+                        }}>
+                          {productTitle}
+                        </span>
+                        {productPrice && (
+                          <span style={{
+                            fontSize: 11.5, fontWeight: 900, color: GOLD,
+                            textShadow: '0 1px 3px rgba(0,0,0,0.55)',
+                          }}>
+                            {typeof productPrice === 'string' && !/^(MK|mk)/.test(productPrice) && Number.isFinite(Number(productPrice))
+                              ? formatPrice(productPrice)
+                              : productPrice}
+                          </span>
+                        )}
+                      </span>
+                      <span className="sv-product-cta">View product</span>
+                    </button>
+                  )}
                 </div>
             </div>
           </div>

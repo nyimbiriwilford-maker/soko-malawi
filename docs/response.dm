@@ -1,3 +1,24 @@
+# Task: Verify tagged-product circular anchor below the like rail (2026-08-26)
+
+## Request
+In the status viewer, place the circular image of the tagged product below the vertical like/comment/share column. When a status starts playing it should expand into a long card with key info, withdraw back to the circle after a few seconds, expand again on tap, and show "View product" when expanded. Verify if it's built.
+
+## Verification — YES, it is built (`src/components/StoryViewer.jsx`, working tree)
+- **Position**: the product anchor is the last child of the right-side vertical rail (`position: absolute; right: 10; bottom: calc(112px + safe-area); flex-direction: column`) — directly under Like / Comment / Share (StoryViewer.jsx:1770, anchor JSX at :1841).
+- **Auto-expand on play**: when the media is ready, a timer expands the circle into the long card after **0.8s** and withdraws it back to the circle after **4.5s** (effect at :478–493). Reset per status; skipped if the user already tapped.
+- **Long card content**: circular thumbnail → product title → gold price → green **"View product"** CTA, animated width expansion (`max-width` 42px → 246px, springy cubic-bezier) with a pulsing ring while collapsed (CSS `.sv-product-card` at :1161).
+- **Tap behavior**: tap collapsed circle → expands; tap expanded card → navigates to the product (`openTaggedEntity`, listing/shop/job/service); tapping the thumbnail while expanded collapses it again (handlers at :495–505).
+
+## Fix applied during verification
+Removed 3 now-unused variables flagged by ESLint after the earlier card simplification: `productCity`, `productDesc`/`shortDesc`, `kindLabel`. ESLint 16 → 13 findings (all remaining are pre-existing react-hooks findings).
+
+## Validation
+- `npx eslint src/components/StoryViewer.jsx` → no new issues.
+- `npm run build` → success (~2.9s).
+- Changes are in the working tree, **not yet committed** — say the word to push to master.
+
+---
+
 # Task: Status viewer — professional, minimal, transparent tagged-product pill (2026-08-26)
 
 ## Request
