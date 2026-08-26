@@ -8,6 +8,7 @@ import { isStatusVideoUrl, isStatusColorBoard } from '../utils/statusVideo'
 import StatusTextBoard from '../components/StatusTextBoard'
 import StatusCommentsPanel from '../components/StatusComments'
 import { useStatusComments } from '../hooks/useStatusComments'
+import { formatPrice } from '../lib/format'
 import SokoNav from '../components/SokoNav'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Heart, MessageCircle, Share2, Clock } from 'lucide-react'
@@ -183,6 +184,7 @@ function useStoryFeedMetrics(stories, currentUserId) {
 
 /** Facebook-style feed card — header → media → caption → engagement row → shared comment drawer */
 function StatusFeedCard({ s, onOpen, currentUserId, metrics, onLike }) {
+  const navigate = useNavigate()
   const name       = s.profiles?.full_name || 'Seller'
   const avatar     = s.profiles?.avatar_url
   const initial    = name[0]?.toUpperCase() || 'S'
@@ -286,13 +288,37 @@ function StatusFeedCard({ s, onOpen, currentUserId, metrics, onLike }) {
                 : <img src={media} alt="" loading="lazy" />
             }
             {isVideo && <span className="st-feed-play" aria-hidden>▶</span>}
+
+            {s.tagged && (
+              <span
+                className="st-feed-media-tag"
+                onClick={e => {
+                  e.stopPropagation()
+                  const id = s.tagged?.id || s.tagged_listing_id
+                  if (id) navigate(`/listing/${id}`)
+                }}
+                role="link"
+                aria-label={`View product: ${s.tagged.title}`}
+              >
+                {s.tagged.images?.[0]
+                  ? <img src={s.tagged.images[0]} alt="" loading="lazy" />
+                  : <span className="st-feed-media-tag-ph">📦</span>
+                }
+                <span className="st-feed-media-tag-copy">
+                  <strong>{s.tagged.title}</strong>
+                  {s.tagged.price != null && <em>{formatPrice(s.tagged.price)}</em>}
+                </span>
+                <span className="st-feed-media-tag-cta">View</span>
+              </span>
+            )}
+
             <div className="st-feed-media-fade" aria-hidden />
           </button>
         )}
 
         <p className="st-feed-text">{displayText}</p>
 
-        {s.tagged && (
+        {!media && s.tagged && (
           <div className="st-feed-tag">
             {s.tagged.images?.[0]
               ? <img src={s.tagged.images[0]} alt="" />
@@ -801,6 +827,45 @@ function StatusPageInner({ user, navigate }) {
           font-size: 13px; border: 1.5px solid rgba(255,255,255,0.4);
           backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
           box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+        }
+        /* Tagged product — transparent glass pill anchored on the media */
+        .st-feed-media-tag {
+          position: absolute; left: 10px; bottom: 10px; z-index: 3;
+          display: inline-flex; align-items: center; gap: 8px;
+          max-width: calc(100% - 20px);
+          padding: 4px 11px 4px 4px;
+          background: rgba(0,0,0,0.38);
+          backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+          border: 1px solid rgba(255,255,255,0.22);
+          border-radius: 999px;
+          box-shadow: 0 2px 12px rgba(0,0,0,0.28);
+          cursor: pointer;
+          transition: background 0.15s ease, transform 0.12s ease;
+        }
+        .st-feed-media-tag:hover { background: rgba(0,0,0,0.55); }
+        .st-feed-media-tag:active { transform: scale(0.96); }
+        .st-feed-media-tag > img,
+        .st-feed-media-tag-ph {
+          width: 30px; height: 30px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+          border: 1px solid rgba(255,255,255,0.35);
+        }
+        .st-feed-media-tag-ph {
+          background: rgba(255,255,255,0.9); display: grid; place-items: center; font-size: 13px;
+        }
+        .st-feed-media-tag-copy { min-width: 0; display: flex; flex-direction: column; gap: 0; line-height: 1.25; }
+        .st-feed-media-tag-copy strong {
+          font-size: 12px; font-weight: 700; color: #fff;
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 140px;
+          text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+        }
+        .st-feed-media-tag-copy em {
+          font-style: normal; font-size: 11.5px; font-weight: 800; color: ${T.orange};
+          text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+        }
+        .st-feed-media-tag-cta {
+          flex-shrink: 0;
+          font-size: 10.5px; font-weight: 800; color: #fff;
+          background: ${T.green}; border-radius: 999px; padding: 5px 10px;
         }
         .st-feed-text {
           margin: 0;

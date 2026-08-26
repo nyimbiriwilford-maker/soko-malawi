@@ -1,3 +1,21 @@
+# Task: Status feed — tagged product as transparent overlay on the card media (2026-08-26)
+
+## Request
+Place the tagged (target) product on the image/video of the feed card, placed properly and transparent.
+
+## Changes — `src/pages/StatusPage.jsx` (`StatusFeedCard`)
+- **Tagged product now overlays the media**: a compact **transparent glass pill** anchored bottom-left of the card's photo/video — round 30px thumbnail → title (ellipsis) → gold price → green "View" CTA, with blur + hairline border, so the media stays visible behind it.
+- Tapping the pill navigates straight to the listing (`/listing/<id>`) via `stopPropagation`, so the rest of the media still opens the status viewer.
+- **Text-only statuses** (no media) keep the existing inline product card below the caption — nothing is lost.
+- Price in the overlay uses the shared `formatPrice` formatter.
+
+## Verification
+- `npx eslint src/pages/StatusPage.jsx` → 5 findings, all pre-existing, none new.
+- `npm run build` → success (~3.6s).
+- Committed and pushed to `master` (Vercel auto-deploys from master).
+
+---
+
 # Task: Status feed — standardized cards, counts inside the like/comment buttons (2026-08-26)
 
 ## Request
