@@ -4,6 +4,8 @@ import { supabase } from '../lib/supabase'
 import { fetchAllActiveStories } from '../hooks/useStatuses'
 import StoryViewer from '../components/StoryViewer'
 import StatusUploadModal from '../components/StatusUploadModal'
+import { useReels } from '../hooks/useReels'
+import { ReelFeedCard, ReelsViewer } from '../components/StatusReels'
 import { isStatusVideoUrl, isStatusColorBoard } from '../utils/statusVideo'
 import { coordsForPlace, haversineKm } from '../utils/lookingFor'
 import { useUserLocation } from '../hooks/useUserLocation'
@@ -299,12 +301,6 @@ function StatusFeedCard({ s, onOpen, currentUserId, metrics, onLike }) {
                     <MapPin size={11} /> {s.location_hint}
                   </span>
                 )}
-                {s._distKm != null && (
-                  <span className="st-feed-meta-item">
-                    <MapPin size={11} />
-                    {s._distKm < 1 ? '<1 km away' : `${Math.round(s._distKm)} km away`}
-                  </span>
-                )}
                 <span className="st-feed-meta-item">{fmtCount(m.views)} views</span>
                 {expires && (
                   <span className={`st-feed-meta-item${expires === 'Expired' ? ' is-expired' : ' is-expire'}`}>
@@ -492,6 +488,7 @@ function StatusPageInner({ user, navigate }) {
   // Auto-open the status composer when arriving via /status?compose=1
   useEffect(() => {
     if (searchParams.get('compose') === '1') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- consume the compose flag once
       setShowUpload(true)
       const next = new URLSearchParams(searchParams)
       next.delete('compose')
@@ -530,6 +527,7 @@ function StatusPageInner({ user, navigate }) {
 
   // Load stories
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- initial stories fetch
     reloadStories()
   }, [user.id])
 
@@ -640,6 +638,10 @@ function StatusPageInner({ user, navigate }) {
 
   const { metrics: feedMetrics, likeStory } = useStoryFeedMetrics(statusPool, user.id)
 
+  // Reels — most-viewed current status videos, interleaved into the feed
+  const { reels, metrics: reelMetrics, toggleLike: likeReel, registerView: registerReelView } = useReels(stories, user.id)
+  const [reelsOpen, setReelsOpen] = useState(false)
+
   // Viewer position: browser geolocation first, else their profile city.
   const myLocation = useUserLocation()
   const viewerCoords = useMemo(() => {
@@ -681,8 +683,28 @@ function StatusPageInner({ user, navigate }) {
       }
       return a.rand - b.rand
     })
-    return ranked.slice(0, 12).map(r => ({ ...r.s, _distKm: r.distKm }))
+    return ranked.slice(0, 12).map(r => r.s)
   }, [statusPool, feedMetrics, viewerCoords, user.id])
+
+  // Feed items = statuses with reel cards placed at viewer-seeded random
+  // positions, so scrolling the timeline surfaces Soko Reels organically.
+  const feedItems = useMemo(() => {
+    const items = recentStatuses.map(s => ({ kind: 'status', key: s.id, s }))
+    if (!reels.length || !items.length) return items
+    const slots = new Set()
+    const r1 = seededRandom(user.id, 'soko-reels-slot-a')
+    slots.add(Math.min(items.length, 2 + Math.floor(r1 * Math.max(1, items.length - 2))))
+    if (items.length >= 7) {
+      const r2 = seededRandom(user.id, 'soko-reels-slot-b')
+      let posB = Math.min(items.length, 5 + Math.floor(r2 * Math.max(1, items.length - 4)))
+      for (const p of slots) if (Math.abs(posB - p) < 3) posB = items.length
+      slots.add(posB)
+    }
+    ;[...slots].sort((a, b) => b - a).forEach(pos => {
+      items.splice(pos, 0, { kind: 'reel', key: `reel-${pos}` })
+    })
+    return items
+  }, [recentStatuses, reels, user.id])
 
   async function openFeedStory(s) {
     const { data } = await supabase.from('user_statuses')
@@ -739,14 +761,21 @@ function StatusPageInner({ user, navigate }) {
           <section className="st-feed-section">
             <SectionHeader kicker="Timeline" title="Latest updates" count={recentStatuses.length} />
             <div className="st-feed-grid">
-              {recentStatuses.map(s => (
+              {feedItems.map(item => item.kind === 'reel' ? (
+                <ReelFeedCard
+                  key={item.key}
+                  reels={reels}
+                  metrics={reelMetrics}
+                  onOpen={() => setReelsOpen(true)}
+                />
+              ) : (
                 <StatusFeedCard
-                  key={s.id}
-                  s={s}
+                  key={item.key}
+                  s={item.s}
                   currentUserId={user.id}
                   metrics={feedMetrics}
                   onLike={likeStory}
-                  onOpen={() => openFeedStory(s)}
+                  onOpen={() => openFeedStory(item.s)}
                 />
               ))}
             </div>
@@ -791,6 +820,18 @@ function StatusPageInner({ user, navigate }) {
           }
         }} />
       )}
+      {/* Reels viewer — most-viewed status videos */}
+      {reelsOpen && reels.length > 0 && (
+        <ReelsViewer
+          reels={reels}
+          metrics={reelMetrics}
+          currentUserId={user.id}
+          onClose={() => setReelsOpen(false)}
+          onToggleLike={likeReel}
+          registerView={registerReelView}
+        />
+      )}
+
       {showUpload && (
         <StatusUploadModal
           user={user}
