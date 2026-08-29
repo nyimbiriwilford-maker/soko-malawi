@@ -35,6 +35,11 @@ import {
   offerExpiresAt,
 } from '../utils/offerMessage'
 import { supabase } from '../lib/supabase'
+import ForwardSheet from '../components/ForwardSheet'
+import {
+  stripForwardMark,
+  canForwardMessage,
+} from '../utils/forwardMessage'
 // ── Image grouping ──────────────────────────────────────────────────────────
 // Messages are grouped by ImageGroupingService (src/lib/imageGroupingService.js).
 // groupedMessages is the render source; messages is the raw DB-row source.
@@ -96,7 +101,10 @@ function encodeReply(body, replyTo) {
 }
 
 function decodeReply(body) {
-  if (!body) return { body, replyPreview: null, replyToId: null }
+  if (!body) return { body, replyPreview: null, replyToId: null, isForwarded: false }
+  // Forwarded marker sits outermost — strip it, then decode whatever is inside
+  const fwd = stripForwardMark(body)
+  if (fwd.isForwarded) return { ...decodeReply(fwd.body), isForwarded: true }
   // New format: \x02[preview|||id]\x03body
   // eslint-disable-next-line no-control-regex
   const match = body.match(/^\x02\[(.+?)\|\|\|([^\]]+)\]\x03(.*)$/s)
@@ -282,6 +290,7 @@ const [lightbox, setLightbox]           = useState(null) // { url, type, caption
 const [showAttach, setShowAttach]       = useState(false)
 const [actionMsg, setActionMsg]         = useState(null) // message under action sheet
 const [imageActionMsg, setImageActionMsg] = useState(null) // individual image under action sheet
+const [forwardMsgs, setForwardMsgs]     = useState(null) // messages queued for forwarding
 const [toast, setToast]                 = useState(null)
 const [reactions, setReactions]         = useState({})
 const [unreadBelow, setUnreadBelow]     = useState(0)
@@ -561,6 +570,7 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
       if (e.key === 'Escape' && showEmoji) { setShowEmoji(false); return }
       if (e.key !== 'Escape') return
       if (lightbox) setLightbox(null)
+      else if (forwardMsgs) setForwardMsgs(null)
       else if (actionMsg) setActionMsg(null)
       else if (showEmoji) setShowEmoji(false)
       else if (showAttach) setShowAttach(false)
@@ -569,7 +579,7 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [lightbox, actionMsg, showEmoji, showAttach, chatSearch, replyTo])
+  }, [lightbox, actionMsg, showEmoji, showAttach, chatSearch, replyTo, forwardMsgs])
 
   // Scroll to specific message if navigated from notification
   useEffect(() => {
@@ -934,6 +944,62 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
       showToast('Could not copy')
     }
     setActionMsg(null)
+  }
+
+  // ── Forwarding ───────────────────────────────────────────────────────────
+  // Strip reply + forwarded markers so the copy lands in the new chat as plain
+  // content (a reply quote would point at a message the recipient can't see).
+  function plainBodyForForward(msg) {
+    if (!msg) return ''
+    return decodeReply(msg.body || '').body || ''
+  }
+
+  function openForward(msg) {
+    if (!canForwardMessage(msg)) {
+      showToast('This message can’t be forwarded')
+      return
+    }
+    // Image groups forward as the individual images they hold
+    const items = msg._isGroup && Array.isArray(msg._imageGroup) ? msg._imageGroup : [msg]
+    const forwardable = items.filter(canForwardMessage)
+    if (!forwardable.length) {
+      showToast('This message can’t be forwarded')
+      return
+    }
+    setActionMsg(null)
+    setImageActionMsg(null)
+    setActionMode('main')
+    setForwardMsgs(forwardable)
+  }
+
+  function onForwarded({ failed, rowsByTarget, targets }) {
+    setForwardMsgs(null)
+
+    // If one of the targets is this very conversation, show the copies now
+    const myKey = currentChatKey()
+    const here = (targets || []).find(t => t.key === myKey)
+    if (here && rowsByTarget?.[here.key]?.length) {
+      const rows = rowsByTarget[here.key]
+      setMessages(prev => {
+        const seen = new Set(prev.map(m => m.id))
+        return [...prev, ...rows.filter(r => !seen.has(r.id))]
+      })
+      setGroupedMessages(prev => rows.reduce((acc, row) => {
+        // Realtime may have delivered the same row already
+        const exists = acc.some(m => (m._isGroup
+          ? m._imageGroup?.some(img => img.id === row.id)
+          : m.id === row.id))
+        return exists ? acc : imageGroupingService.appendMessage(acc, row)
+      }, prev))
+      nearBottomRef.current = true
+      setTimeout(() => scrollToBottom(true), 40)
+    }
+
+    haptic(10)
+    const chats = targets?.length || 0
+    showToast(failed
+      ? `Forwarded to ${chats} chat${chats > 1 ? 's' : ''} · ${failed} failed`
+      : `Forwarded to ${chats} chat${chats > 1 ? 's' : ''}`)
   }
 
   function isMsgHiddenForMe(msg, myId) {
@@ -3734,6 +3800,11 @@ async function uploadAndSend(file, type, caption = '') {
                         <div className="msg-deleted-label">🚫 This message was deleted</div>
                       ) : (
                         <>
+                          {decoded.isForwarded && (
+                            <div className="msg-forwarded-label">
+                              <span aria-hidden>↪</span> Forwarded
+                            </div>
+                          )}
                           {renderMedia(msg, decoded.body)}
                           {hasText && (
                             <div className={hasMedia && !msg.call_type ? 'msg-caption' : 'msg-text'}>
@@ -3901,6 +3972,11 @@ async function uploadAndSend(file, type, caption = '') {
                   <button type="button" onClick={() => copyMessage(actionMsg)}>
                     <span className="chat-action-ico">📋</span> Copy
                   </button>
+                  {canForwardMessage(actionMsg) && (
+                    <button type="button" onClick={() => openForward(actionMsg)}>
+                      <span className="chat-action-ico">↪</span> Forward
+                    </button>
+                  )}
                   {actionMsg.media_url && (
                     <button type="button" onClick={() => { setLightbox({ url: actionMsg.media_url, type: actionMsg.media_type === 'video' ? 'video' : 'image', caption: decodeReply(actionMsg.body).body }); setActionMsg(null) }}>
                       <span className="chat-action-ico">🔍</span> Open media
@@ -4004,6 +4080,13 @@ async function uploadAndSend(file, type, caption = '') {
               >
                 <span className="chat-action-ico" aria-hidden="true">👁️</span> View
               </button>
+              <button
+                type="button"
+                className="chat-action-btn"
+                onClick={() => openForward(imageActionMsg)}
+              >
+                <span className="chat-action-ico" aria-hidden="true">↪</span> Forward
+              </button>
               <a
                 className="chat-action-btn"
                 href={imageActionMsg.media_url}
@@ -4044,6 +4127,19 @@ async function uploadAndSend(file, type, caption = '') {
             </button>
           </div>
         </div>
+      )}
+
+      {/* ── Forward picker sheet ── */}
+      {forwardMsgs?.length > 0 && currentUser?.id && (
+        <ForwardSheet
+          currentUserId={currentUser.id}
+          messages={forwardMsgs}
+          plainBody={plainBodyForForward}
+          currentKey={currentChatKey()}
+          senderName={myProfile?.full_name || 'Someone'}
+          onClose={() => setForwardMsgs(null)}
+          onSent={onForwarded}
+        />
       )}
 
       {/* ── Edit message sheet ── */}

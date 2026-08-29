@@ -14,6 +14,7 @@ import {
 import SafeAvatar from '../components/SafeAvatar'
 import { watchUserOnline, activityTargetsChat } from '../hooks/usePresence'
 import { parseOfferMessage, formatOfferAmount } from '../utils/offerMessage'
+import { stripForwardMark } from '../utils/forwardMessage'
 
 // Some reply-to-image sends appear to save the body as a bare message id
 // with no `\x02[preview|||id]\x03body` wrapper at all — this matches that
@@ -23,7 +24,9 @@ import { parseOfferMessage, formatOfferAmount } from '../utils/offerMessage'
 const BARE_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\]?$/i
 
 function decodeReply(body) {
-  if (!body) return { body, replyPreview: null, replyToId: null }
+  if (!body) return { body, replyPreview: null, replyToId: null, isForwarded: false }
+  const fwd = stripForwardMark(body)
+  if (fwd.isForwarded) return { ...decodeReply(fwd.body), isForwarded: true }
   const match = body.match(/^\x02\[(.+?)\|\|\|([^\]]+)\]\x03(.*)$/s)
   if (match) return { body: match[3], replyPreview: match[1], replyToId: match[2] }
   const fallback = body.match(/^(.+?)\|\|\|([a-f0-9-]{36})\](.*)$/s)
@@ -745,8 +748,8 @@ export default function ChatListPanel() {
     if (!msg) return <span style={{ color: '#aaa' }}>No messages yet</span>
 
     const isMine = msg.from_user === currentUser?.id
-    const prefix = isMine ? 'You: ' : ''
     const decoded = decodeReply(msg.body || '')
+    const prefix = (isMine ? 'You: ' : '') + (decoded.isForwarded ? '↪ ' : '')
     const caption = (decoded.body || '').trim()
 
     const iconRow = (Icon, label) => (
