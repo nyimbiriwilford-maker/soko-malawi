@@ -1,49 +1,28 @@
-TASK: Hide the "Create Status" card on home page statuses section on landing/refresh so only posted status cards are visible; reveal it on scroll, or keep it visible when 0-1 posters (mobile fills its two visible card slots).
+TASK: On the product page, make ordering not visible for users for now. No online ordering — users connect to sellers through in-app chat, WhatsApp link, and call instead.
 
-DONE in src/components/HomeStatusSection.jsx:
+DONE — all ordering UI hidden; contact CTAs (Chat / WhatsApp / Call / Email) are now the only way to reach sellers:
 
-1. Flicker-free hide on landing/refresh
-   - Removed the old setTimeout(100ms) auto-scroll effect (which visibly flashed the create card before jumping).
-   - Added a useLayoutEffect (runs before paint) that measures the create card's real width + rail gap from the DOM and sets the rail's scrollLeft past it. So on landing/refresh the user sees posted status cards only — no flash of the create card.
+1. Product page — src/pages/ListingDetail.jsx (mobile CTA card, desktop sidebar CTA stack, desktop sticky bottom bar)
+   - "Place Order" button removed from all three CTA locations (mobile stack, desktop sidebar, desktop sticky footer bar).
+   - "Pay on delivery / Inspect before paying / Rate after delivery" assurance row removed (it was tied to the order flow).
+   - Quantity stepper (+/−) removed from the Bulk Pricing card, and the "Total: X for N units" line removed — these only fed the order total.
+   - Place Order modal and the "Order Placed! … View My Orders" confirmation overlay fully removed, along with the PlaceOrderModal import and the showOrderModal / orderPlaced / quantity state, orderable and totalPrice computations.
+   - Bulk Pricing table still shows tier discounts (informational only — "Quantity / Price per unit / You save" table headers kept, no order action).
+   - Contact CTAs untouched and now primary: Chat with Seller (in-app chat), WhatsApp Seller (wa.me link), Call Seller (tel:), Email Seller (mailto:), plus Add to Favorites.
 
-2. Visibility rules (cards are grouped per person, so counts are per poster):
-   - 2+ posters: create card is off-screen at position 0. Scroll/swipe left to reveal it. New statuses arriving while scrolled do NOT yank scroll position back.
-   - Exactly 1 poster: rail starts at position 0 showing Create Status card first, the posted status second — fills mobile's two visible card slots.
-   - 0 posters: the create card is shown in the rail (previously a text-only empty state was shown instead). The "No X stories right now" empty message is kept only for non-All category filters.
+2. Buyer side — src/App.jsx
+   - /orders route removed (and the OrdersPage lazy import) so the My Orders page is not reachable anywhere in the app.
 
-3. Header: "View All" button is now hidden when there are no statuses (it was a no-op before).
+3. Notifications — src/pages/Notifications.jsx
+   - Order-related notification taps (order_placed / shipped / delivered / cancelled) no longer deep-link to /orders; they now open the related listing (fallback: the seller's profile).
 
-VERIFIED:
-- npx eslint src/components/HomeStatusSection.jsx — clean (0 errors, 0 warnings).
-- npm run build — built successfully (4.43s).
+4. Seller side — src/pages/ShopDashboard.jsx
+   - "Orders" tab (OrderManager) removed from the shop dashboard tabs.
+   - Overview stats de-orderified: "Orders received" card → "Buyer chats" (distinct people who messaged the seller, counted from the messages table), "Revenue (delivered)" card → "Listing saves", duplicate saves card → "Verification". Low-stock / restock banner kept (it's about products, not orders).
 
-────────────────────────────────────────────────────────────
-
-TASK: Status page — remove distance from the status feed card; add Soko Reels generated from the most-viewed status videos, placed randomly inside the status feed; tapping the reels card plays the current top status videos in a professional, SokoMw-themed reels viewer.
-
-DONE:
-
-1. Distance removed — src/pages/StatusPage.jsx
-   - StatusFeedCard no longer shows "X km away". Location text, time, views and expiry stay unchanged. Distance is still used internally for feed ordering (nearby first) — only the label was removed.
-
-2. Reels data — src/hooks/useReels.js (new)
-   - Filters live statuses down to video posts, ranks by status_views count (ties: newest first), top 12.
-   - Tracks views + likes (with your own like state) and refreshes live via Supabase realtime on new views/reactions.
-   - registerView() records a view in status_views once per session per reel (same upsert pattern as StoryViewer), so watching reels feeds back into the "most viewed" ranking.
-
-3. In-feed reel card — src/components/StatusReels.jsx (new: ReelFeedCard)
-   - Professional SokoMw-styled card: green gradient play icon, "Soko Reels" title, orange Trending pill, total views pill.
-   - Shows the top 3 hottest video thumbnails (#1/#2/#3 rank chips, author + views per thumb) and a "Watch reels · N videos" CTA.
-   - Placed at random-feeling spots in the status feed: positions are seeded by the viewer's user id (same personalisation as the feed shuffle), one card mid-feed and a second one deeper for longer feeds — stable across a session's refreshes, different per person.
-
-4. Reels viewer — src/components/StatusReels.jsx (ReelsViewer)
-   - Full-screen dark vertical swiper (TikTok/IG style): scroll-snap, one reel per screen, only the visible reel plays.
-   - Auto-advances to the next reel when a video ends; tap to pause/resume with pause overlay; green progress bar; mute/unmute control.
-   - Handles trimmed clips (#t= media fragments) correctly for seek, progress and loop; the last reel loops.
-   - Right action rail: Like (live counts, persisted to status_reactions), Comments (opens the shared StatusCommentsPanel bottom sheet — same commenting behaviour as stories/feed), Share (native share on mobile, copy link otherwise).
-   - Author block: avatar, name, verified badge, Reel badge, time, location, views, caption.
-   - Top bar: close button, "Soko Reels" title, position counter. Records a view per watched reel.
+5. Kept for easy re-enabling later ("for now"):
+   - src/components/PlaceOrderModal.jsx, src/components/OrderManager.jsx, src/pages/OrdersPage.jsx and src/lib/orders.js are left in the codebase but are no longer imported/routed by any user-facing page — nothing references them, so they add zero UI. To re-enable ordering later, restore the /orders route, the Orders tab, and the Place Order CTAs.
 
 VERIFIED:
-- npx eslint on StatusReels.jsx / useReels.js / StatusPage.jsx — 0 errors (only 3 pre-existing exhaustive-deps warnings on unstable-function deps, unchanged from before).
-- npm run build — built successfully (4.95s).
+- npx eslint on edited files — only pre-existing issues remain (same unused-var / set-state-in-effect errors exist on HEAD; my removals introduced none).
+- npm run build — success (8.14s), and no OrdersPage/PlaceOrder chunk is emitted in dist/assets, confirming the order flow is fully unwired from the app.

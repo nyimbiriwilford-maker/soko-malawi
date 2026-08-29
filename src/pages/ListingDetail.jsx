@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { MapPin, CheckCircle, Lock, AlertTriangle, ShieldCheck, Banknote, Eye, Star } from 'lucide-react'
+import { MapPin, CheckCircle, Lock, AlertTriangle, ShieldCheck } from 'lucide-react'
 import { formatPrice } from '../lib/format'
 import SokoNav from '../components/SokoNav'
 import Comments from '../components/Comments'
@@ -13,7 +13,6 @@ import { fetchListingStatus, fetchUserActiveStatus } from '../hooks/useStatuses'
 import { isListingFeatured } from '../utils/homeUtils'
 import { featureExistingListing } from '../lib/featureListing'
 import { featuredPriceLabel } from '../constants/featuredPricing'
-import PlaceOrderModal from '../components/PlaceOrderModal'
 
 const CAT_META = {
   Electronics: { color: '#1a7a4a', bg: '#e6f4ec' },
@@ -125,11 +124,8 @@ export default function ListingDetail() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [deleting, setDeleting]     = useState(false)
   const [flashTime, setFlashTime]   = useState('')
-  const [quantity, setQuantity]     = useState(1)
   const [showShareSheet, setShowShareSheet] = useState(false)
   const [copied, setCopied]         = useState(false)
-  const [showOrderModal, setShowOrderModal] = useState(false)
-  const [orderPlaced, setOrderPlaced]       = useState(null)
   const [vouchChain, setVouchChain] = useState(null)
   const [sellerTrust, setSellerTrust] = useState(null)
   const [sellerDeals, setSellerDeals] = useState(0)
@@ -367,7 +363,6 @@ export default function ListingDetail() {
   const catMeta       = CAT_META[listing.category] || { color: '#1a7a4a', bg: '#e6f4ec' }
   const condition     = listing.condition && CONDITION_META[listing.condition]
   const hasBulk       = listing.price_tiers && listing.price_tiers.length > 0
-  const orderable     = !isOwner && Number(listing.price) > 0 && (listing.status === 'active' || listing.status === 'published') && listing.availability_status !== 'not_available' && !(listing.stock_qty != null && Number(listing.stock_qty) <= 0)
 
   const latNum = Number(listing.latitude)
   const lngNum = Number(listing.longitude)
@@ -384,12 +379,11 @@ export default function ListingDetail() {
     : `https://maps.google.com/?q=${encodeURIComponent(mapQueryText)}`
 
   const activeTier = hasBulk
-    ? [...listing.price_tiers].filter(t => parseInt(t.min_qty) <= quantity)
+    ? [...listing.price_tiers].filter(t => parseInt(t.min_qty) <= 1)
         .sort((a, b) => b.min_qty - a.min_qty)[0]
     : null
   const bulkPrice          = activeTier ? Number(activeTier.price) : null
   const effectiveUnitPrice = bulkPrice || displayPrice
-  const totalPrice         = effectiveUnitPrice * quantity
 
   const specFields = [
     listing.brand          && { label: 'Brand',          icon: 'brand',   value: listing.brand },
@@ -445,19 +439,6 @@ export default function ListingDetail() {
   // in-flow mobile CTA card (mobile). No fixed/floating bar on mobile.
   const buyerCtas = (
     <>
-      {orderable && (
-        <button className="ld-btn-hover" style={S.orderBtn} onClick={() => setShowOrderModal(true)}>
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
-          Place Order · {formatPrice(effectiveUnitPrice * quantity)}
-        </button>
-      )}
-      {orderable && (
-        <div style={S.assureRow}>
-          <span style={S.assureItem}><span style={S.assureIcon}><Banknote size={13} strokeWidth={2.2} /></span>Pay on delivery</span>
-          <span style={S.assureItem}><span style={S.assureIcon}><Eye size={13} strokeWidth={2.2} /></span>Inspect before paying</span>
-          <span style={S.assureItem}><span style={S.assureIcon}><Star size={13} strokeWidth={2.2} /></span>Rate after delivery</span>
-        </div>
-      )}
       <button className="ld-btn-hover" style={S.chatBtn} onClick={handleChatWithSeller}>
         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
         Chat with Seller
@@ -818,7 +799,7 @@ export default function ListingDetail() {
                   <div style={{ ...S.bulkRow, background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
                     {['Quantity','Price/unit','You save'].map(h => <span key={h} style={S.bulkHead}>{h}</span>)}
                   </div>
-                  <div style={{ ...S.bulkRow, ...(quantity === 1 && !activeTier ? S.bulkActiveRow : {}) }}>
+                  <div style={{ ...S.bulkRow, ...(!activeTier ? S.bulkActiveRow : {}) }}>
                     <span style={S.bulkCell}>1 unit</span>
                     <span style={{ ...S.bulkCell, fontWeight: 700 }}>{formatPrice(listing.price)}</span>
                     <span style={{ ...S.bulkCell, color: '#9ca3af' }}>—</span>
@@ -839,16 +820,6 @@ export default function ListingDetail() {
                     )
                   })}
                 </div>
-                {listing.price_type !== 'free' && (
-                  <div style={S.qtyRow}>
-                    <span style={{ fontSize: 14, fontWeight: 600, color: '#374151' }}>Quantity</span>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                      <button style={S.qtyBtn} onClick={() => setQuantity(q => Math.max(1, q - 1))}>−</button>
-                      <span style={{ fontSize: 18, fontWeight: 800, color: '#111827', minWidth: 24, textAlign: 'center' }}>{quantity}</span>
-                      <button style={S.qtyBtn} onClick={() => setQuantity(q => Math.min(listing.stock_qty || 999, q + 1))}>+</button>
-                    </div>
-                  </div>
-                )}
               </div>
             )}
 
@@ -1029,11 +1000,6 @@ export default function ListingDetail() {
                   Flash sale ends in <strong style={{ animation: 'timerTick 1s infinite', display: 'inline-block' }}>{flashTime}</strong>
                 </div>
               )}
-              {quantity > 1 && listing.price_type !== 'free' && (
-                <div style={S.totalLine}>
-                  Total: <strong>{formatPrice(totalPrice)}</strong> for {quantity} units
-                </div>
-              )}
               </div>
 
               <div style={S.divider} />
@@ -1074,19 +1040,6 @@ export default function ListingDetail() {
               {/* CTA buttons — desktop only; mobile uses the in-flow CTA card */}
               {!isOwner ? (
                 <div className="ld-sidebar-cta" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                  {orderable && (
-                    <button className="ld-btn-hover" style={S.orderBtn} onClick={() => setShowOrderModal(true)}>
-                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
-                      Place Order · {formatPrice(effectiveUnitPrice * quantity)}
-                    </button>
-                  )}
-                  {orderable && (
-                    <div style={S.assureRow}>
-                      <span style={S.assureItem}><span style={S.assureIcon}><Banknote size={13} strokeWidth={2.2} /></span>Pay on delivery</span>
-                      <span style={S.assureItem}><span style={S.assureIcon}><Eye size={13} strokeWidth={2.2} /></span>Inspect before paying</span>
-                      <span style={S.assureItem}><span style={S.assureIcon}><Star size={13} strokeWidth={2.2} /></span>Rate after delivery</span>
-                    </div>
-                  )}
                   <button className="ld-btn-hover" style={S.chatBtn} onClick={handleChatWithSeller}>
                     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                     Chat with Seller
@@ -1356,14 +1309,7 @@ export default function ListingDetail() {
               {listing.price_type === 'negotiable' && <div style={S.barNeg}>Negotiable</div>}
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
-              {orderable && (
-                <button className="ld-btn-hover" style={S.barChatBtn}
-                  onClick={() => setShowOrderModal(true)}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>
-                  Place Order
-                </button>
-              )}
-              <button className="ld-btn-hover" style={orderable ? S.barCallBtn : S.barChatBtn} onClick={handleChatWithSeller}>
+              <button className="ld-btn-hover" style={S.barChatBtn} onClick={handleChatWithSeller}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                 Chat with Seller
               </button>
@@ -1394,42 +1340,6 @@ export default function ListingDetail() {
                 <button className="ld-btn-hover" style={S.barCallBtn} onClick={() => navigate('/post/edit/' + listing.id)}>Edit Listing</button>
                 <button className="ld-btn-hover" style={{ ...S.barCallBtn, color: '#dc2626', borderColor: '#fecaca' }} onClick={() => setShowDeleteConfirm(true)}>Delete</button>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── PLACE ORDER MODAL ── */}
-      {showOrderModal && orderable && (
-        <PlaceOrderModal
-          listing={listing}
-          quantity={quantity}
-          seller={seller}
-          initialTotal={totalPrice}
-          onQtyChange={(delta) => setQuantity(q => Math.max(1, Math.min(listing.stock_qty || 999, q + delta)))}
-          onClose={() => setShowOrderModal(false)}
-          onPlaced={(result) => {
-            setShowOrderModal(false)
-            setOrderPlaced(result)
-          }}
-        />
-      )}
-
-      {/* ── ORDER PLACED CONFIRMATION ── */}
-      {orderPlaced && (
-        <div style={S.overlay} onClick={() => setOrderPlaced(null)}>
-          <div style={{ ...S.modal, paddingBottom: 28, textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: 44, marginBottom: 10 }}>✅</div>
-            <div style={S.modalTitle}>Order Placed!</div>
-            <div style={S.modalSub}>
-              Order <strong>{orderPlaced.order_number}</strong> was sent to the seller.
-              You can track it in <strong>My Orders</strong>.
-            </div>
-            <div style={{ display: 'flex', gap: 10 }}>
-              <button style={S.modalCancel} onClick={() => setOrderPlaced(null)}>Keep Browsing</button>
-              <button style={{ ...S.modalDelete, background: '#0F9D58' }} onClick={() => navigate('/orders')}>
-                View My Orders
-              </button>
             </div>
           </div>
         </div>

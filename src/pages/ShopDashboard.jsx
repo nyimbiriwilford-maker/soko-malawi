@@ -2,8 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { uploadToR2 } from '../lib/r2'
-import OrderManager from '../components/OrderManager'
-import { fetchShopAnalytics, fetchPendingCount } from '../lib/orders'
+import { fetchShopAnalytics } from '../lib/orders'
 
 const T = {
   green: '#2e7d32',
@@ -239,19 +238,15 @@ export default function ShopDashboard() {
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState(null)
 
-  // Orders & analytics state
+  // Analytics state
   const [analytics, setAnalytics] = useState(null)
-  const [pendingOrders, setPendingOrders] = useState(0)
+  const [chatCount, setChatCount] = useState(0)
 
-  const refreshOrdersStats = async (shop) => {
+  const refreshAnalytics = async (shop) => {
     const target = shop || null
     if (!target) return
-    const [stats, pending] = await Promise.all([
-      fetchShopAnalytics(target.id),
-      fetchPendingCount(target.id),
-    ])
+    const stats = await fetchShopAnalytics(target.id)
     setAnalytics(stats)
-    setPendingOrders(pending)
   }
 
   useEffect(() => {
@@ -296,8 +291,23 @@ export default function ShopDashboard() {
       if (active) setListings(listingData || [])
       setLoading(false)
 
-      // Orders + analytics (best-effort; migration may not be applied yet)
-      refreshOrdersStats(shopData).catch(() => {})
+      // Analytics (best-effort; migration may not be applied yet)
+      refreshAnalytics(shopData).catch(() => {})
+
+      // Buyer chats — distinct people who messaged this seller (best-effort)
+      try {
+        const { data: chatRows } = await supabase
+          .from('messages')
+          .select('from_user, to_user')
+          .or(`from_user.eq.${user.id},to_user.eq.${user.id}`)
+          .limit(500)
+        if (active && chatRows) {
+          const people = new Set(
+            chatRows.map(m => (m.from_user === user.id ? m.to_user : m.from_user))
+          )
+          setChatCount(people.size)
+        }
+      } catch { /* non-fatal */ }
     }
     init()
     return () => { active = false }
@@ -431,10 +441,6 @@ export default function ShopDashboard() {
 
         <div className="sd-tabs">
           <button className={`sd-tab ${tab === 'overview' ? 'active' : ''}`} onClick={() => setTab('overview')}>Overview</button>
-          <button className={`sd-tab ${tab === 'orders' ? 'active' : ''}`} onClick={() => setTab('orders')}>
-            Orders
-            {pendingOrders > 0 && <span className="sd-order-badge">{pendingOrders}</span>}
-          </button>
           <button className={`sd-tab ${tab === 'products' ? 'active' : ''}`} onClick={() => setTab('products')}>Products</button>
           <button className={`sd-tab ${tab === 'edit' ? 'active' : ''}`} onClick={() => setTab('edit')}>Edit Shop Info</button>
         </div>
@@ -449,8 +455,8 @@ export default function ShopDashboard() {
               </div>
               <div className="sd-stat-card">
                 <div className="sd-stat-icon" style={{ background: T.greenLight }}>🛒</div>
-                <div className="sd-stat-num">{analytics?.orders_total ?? pendingOrders}</div>
-                <div className="sd-stat-label">{pendingOrders > 0 ? `${pendingOrders} pending order${pendingOrders === 1 ? '' : 's'}` : 'Orders received'}</div>
+                <div className="sd-stat-num">{chatCount}</div>
+                <div className="sd-stat-label">Buyer chats</div>
               </div>
               <div className="sd-stat-card">
                 <div className="sd-stat-icon" style={{ background: '#e3f2fd' }}>👀</div>
@@ -458,9 +464,9 @@ export default function ShopDashboard() {
                 <div className="sd-stat-label">Product views</div>
               </div>
               <div className="sd-stat-card">
-                <div className="sd-stat-icon" style={{ background: '#fef3e2' }}>💰</div>
-                <div className="sd-stat-num">{analytics ? `MK ${Number(analytics.revenue || 0).toLocaleString()}` : '—'}</div>
-                <div className="sd-stat-label">Revenue (delivered)</div>
+                <div className="sd-stat-icon" style={{ background: '#fee2e2' }}>🔖</div>
+                <div className="sd-stat-num">{analytics?.saves ?? '—'}</div>
+                <div className="sd-stat-label">Listing saves</div>
               </div>
             </div>
 
@@ -481,9 +487,9 @@ export default function ShopDashboard() {
                 <div className="sd-stat-label">Active listings</div>
               </div>
               <div className="sd-stat-card">
-                <div className="sd-stat-icon" style={{ background: '#fee2e2' }}>🔖</div>
-                <div className="sd-stat-num">{analytics?.saves ?? '—'}</div>
-                <div className="sd-stat-label">Listing saves</div>
+                <div className="sd-stat-icon" style={{ background: '#f1edff' }}>💰</div>
+                <div className="sd-stat-num">{shop.is_verified ? '✓' : '—'}</div>
+                <div className="sd-stat-label">Verification</div>
               </div>
             </div>
 
@@ -505,10 +511,6 @@ export default function ShopDashboard() {
               <li>✓ Share your shop link on WhatsApp groups</li>
             </ul>
           </>
-        )}
-
-        {tab === 'orders' && (
-          <OrderManager shopId={shop.id} pendingBadge={() => refreshOrdersStats(shop).catch(() => {})} />
         )}
 
         {tab === 'products' && (

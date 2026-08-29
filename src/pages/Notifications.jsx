@@ -2689,8 +2689,8 @@ export default function Notifications() {
       case 'order_shipped':
       case 'order_delivered':
       case 'order_cancelled':
-        if (data.order_id) navigate(`/orders/${data.order_id}`)
-        else navigate('/orders')
+        if (data.listing_id) navigate(`/listing/${data.listing_id}`)
+        else if (data.seller_id) navigate(`/profile/${data.seller_id}`)
         break
       case 'verification_submitted':
       case 'verification_payment_confirmed':
