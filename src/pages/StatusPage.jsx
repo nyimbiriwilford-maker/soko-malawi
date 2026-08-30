@@ -150,28 +150,33 @@ function useStoryFeedMetrics(stories, currentUserId) {
     const ids = idKey ? idKey.split('|') : []
     if (!ids.length) return
 
+    // Each group is wrapped so one missing table / RLS denial can never
+    // take the whole metrics refresh down (page renders with zero counts
+    // rather than erroring).
+    const safe = p => p.then(r => r).catch(() => ({ data: [], count: null, error: { message: 'skipped' } }))
     const [reactRes, replyRes, commentRes, viewRes, myViewRes] = await Promise.all([
-      supabase.from('status_reactions').select('status_id, user_id, reaction').in('status_id', ids),
-      Promise.all(ids.map(id => supabase.from('status_replies').select('id', { count: 'exact', head: true }).eq('status_id', id))),
-      Promise.all(ids.map(id => supabase.from('status_comments').select('id', { count: 'exact', head: true }).eq('status_id', id))),
-      Promise.all(ids.map(id => supabase.from('status_views').select('id', { count: 'exact', head: true }).eq('status_id', id))),
-      currentUserId
+      safe(supabase.from('status_reactions').select('status_id, user_id, reaction').in('status_id', ids)),
+      safe(Promise.all(ids.map(id => safe(supabase.from('status_replies').select('id', { count: 'exact', head: true }).eq('status_id', id))))),
+      safe(Promise.all(ids.map(id => safe(supabase.from('status_comments').select('id', { count: 'exact', head: true }).eq('status_id', id))))),
+      safe(Promise.all(ids.map(id => safe(supabase.from('status_views').select('id', { count: 'exact', head: true }).eq('status_id', id))))),
+      safe(currentUserId
         ? supabase.from('status_views').select('status_id').eq('viewer_id', currentUserId).in('status_id', ids)
-        : Promise.resolve({ data: [] }),
+        : Promise.resolve({ data: [] })),
     ])
 
-    const myViewed = new Set((myViewRes.data || []).map(r => r.status_id))
+    const myViewed = new Set(((myViewRes.data) || []).map(r => r.status_id))
     const map = {}
     for (const id of ids) map[id] = { views: 0, likes: 0, myLike: null, replies: 0, myView: myViewed.has(id) }
-    for (const r of reactRes.data || []) {
+    for (const r of (Array.isArray(reactRes.data) ? reactRes.data : []) || []) {
       if (map[r.status_id] && r.reaction === 'love') {
         map[r.status_id].likes += 1
         if (r.user_id === currentUserId) map[r.status_id].myLike = 'love'
       }
     }
-    replyRes.forEach((res, i) => { if (map[ids[i]] && res.count != null) map[ids[i]].replies += res.count })
-    commentRes.forEach((res, i) => { if (map[ids[i]] && res.count != null) map[ids[i]].replies += res.count })
-    viewRes.forEach((res, i) => { if (map[ids[i]] && res.count != null) map[ids[i]].views = res.count })
+    const rowsOf = res => (Array.isArray(res) ? res : [])
+    rowsOf(replyRes).forEach((res, i) => { if (map[ids[i]] && res.count != null) map[ids[i]].replies += res.count })
+    rowsOf(commentRes).forEach((res, i) => { if (map[ids[i]] && res.count != null) map[ids[i]].replies += res.count })
+    rowsOf(viewRes).forEach((res, i) => { if (map[ids[i]] && res.count != null) map[ids[i]].views = res.count })
     setMetrics(map)
   }, [idKey, currentUserId])
 
@@ -451,17 +456,37 @@ function StatusFeedCard({ s, onOpen, currentUserId, metrics, onLike }) {
 export default function StatusPage() {
   const navigate = useNavigate()
   const [user, setUser] = useState(null)
+  const [gate, setGate] = useState('checking') // checking | ready | out
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) { navigate('/login'); return }
-      supabase.from('profiles').select('full_name, avatar_url, city')
-        .eq('id', user.id).maybeSingle()
-        .then(({ data }) => setUser({ ...user, ...data }))
-    })
-  }, [])
+    let cancelled = false
+    supabase.auth.getUser()
+      .then(({ data: { user } }) => {
+        if (cancelled) return
+        if (!user) { setGate('out'); navigate('/login'); return }
+        // Profile enrichment is best-effort — a failed query must never
+        // leave the page stuck blank. The raw auth user is enough to render.
+        supabase.from('profiles').select('full_name, avatar_url, city')
+          .eq('id', user.id).maybeSingle()
+          .then(({ data, error }) => {
+            if (cancelled) return
+            setUser(error ? { ...user } : { ...user, ...(data || {}) })
+            setGate('ready')
+          })
+          .catch(() => {
+            if (cancelled) return
+            setUser({ ...user })
+            setGate('ready')
+          })
+      })
+      .catch(() => {
+        if (cancelled) return
+        setGate('out'); navigate('/login')
+      })
+    return () => { cancelled = true }
+  }, [navigate])
 
-  if (!user) return null
+  if (gate !== 'ready' || !user) return null
   return <StatusPageInner user={user} navigate={navigate} />
 }
 

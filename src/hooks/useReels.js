@@ -31,18 +31,22 @@ export function useReels(stories, currentUserId) {
     const pool = (stories || []).filter(s => ids.includes(s.id))
     for (const s of pool) byId[s.id] = { views: 0, likes: 0, myLike: null }
 
+    // Wrapped so a missing table / RLS denial degrades to zero counts instead
+    // of rejecting the whole refresh.
+    const safe = p => p.then(r => r).catch(() => ({ data: [], count: null, error: { message: 'skipped' } }))
     const [reactRes, viewRes] = await Promise.all([
-      supabase.from('status_reactions').select('status_id, user_id, reaction').in('status_id', ids),
-      Promise.all(ids.map(id => supabase.from('status_views').select('id', { count: 'exact', head: true }).eq('status_id', id))),
+      safe(supabase.from('status_reactions').select('status_id, user_id, reaction').in('status_id', ids)),
+      safe(Promise.all(ids.map(id => safe(supabase.from('status_views').select('id', { count: 'exact', head: true }).eq('status_id', id))))),
     ])
 
-    for (const r of reactRes.data || []) {
+    for (const r of (Array.isArray(reactRes.data) ? reactRes.data : []) || []) {
       if (byId[r.status_id] && r.reaction === 'love') {
         byId[r.status_id].likes += 1
         if (r.user_id === currentUserId) byId[r.status_id].myLike = 'love'
       }
     }
-    viewRes.forEach((res, i) => { if (byId[ids[i]] && res.count != null) byId[ids[i]].views = res.count })
+    const viewRows = Array.isArray(viewRes) ? viewRes : []
+    viewRows.forEach((res, i) => { if (byId[ids[i]] && res.count != null) byId[ids[i]].views = res.count })
 
     const ranked = pool
       .map(s => ({ s, views: byId[s.id]?.views || 0 }))

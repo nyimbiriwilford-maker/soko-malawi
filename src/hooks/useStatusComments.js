@@ -40,7 +40,9 @@ export function useStatusComments({ story, currentUserId, notify, preload = fals
   useEffect(() => {
     if (!currentUserId) return
     let cancelled = false
-    fetchCurrentUserAvatar(currentUserId).then(a => { if (!cancelled) setMyAvatar(a) })
+    fetchCurrentUserAvatar(currentUserId)
+      .then(a => { if (!cancelled) setMyAvatar(a) })
+      .catch(() => { if (!cancelled) setMyAvatar(null) })
     return () => { cancelled = true }
   }, [currentUserId])
 
