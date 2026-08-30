@@ -32,6 +32,7 @@ const SearchPage        = lazy(() => import('./pages/SearchPage'))
 const ExplorePage       = lazy(() => import('./pages/ExplorePage'))
 const ListingsPage      = lazy(() => import('./pages/ListingsPage'))
 const CallBudgetPage    = lazy(() => import('./pages/CallBudget'))
+const SafetyPage        = lazy(() => import('./pages/SafetyPage'))
 
 import ErrorBoundary from './components/ErrorBoundary'
 import OfflinePage from './components/OfflinePage'
@@ -384,6 +385,7 @@ const [installPrompt, setInstallPrompt] = useState(null)
             <Route path="/search"                  element={authed ? <SearchPage />     : <Navigate to="/login" />} />
 <Route path="/explore"                 element={authed ? <ExplorePage />    : <Navigate to="/login" />} />
             <Route path="/listings"                element={authed ? <ListingsPage />   : <Navigate to="/login" />} />
+            <Route path="/safety"                  element={authed ? <SafetyPage />    : <Navigate to="/login" />} />
             <Route path="/call-budget"             element={authed ? <CallBudgetPage /> : <Navigate to="/login" />} />
             <Route path="*"                        element={<Navigate to="/" />} />
           </Routes>

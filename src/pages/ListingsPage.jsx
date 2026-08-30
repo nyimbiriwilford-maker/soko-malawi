@@ -2014,6 +2014,30 @@ export default function SearchPage() {
                 onClick={() => setPage(p => p + 1)}
               />
             )}
+
+            {/* ── Safe trading education banner ── */}
+            {!loading && (
+              <div style={{
+                display:'flex', alignItems:'center', gap:12,
+                background:'linear-gradient(135deg, #f0fdf4, #ecfdf5)',
+                border:`1px solid #bbf7d0`, borderRadius:16,
+                padding:'14px 16px', marginTop:18, cursor:'pointer',
+              }} onClick={() => navigate('/safety')} role="link" tabIndex={0}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') navigate('/safety') }}>
+                <span style={{ width:38, height:38, borderRadius:12, background:T.green, color:'#fff', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>
+                  <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+                </span>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:13.5, fontWeight:800, color:T.greenD || '#0a7a44' }}>Trade safely on SokoMW</div>
+                  <div style={{ fontSize:12.5, color:T.gray600, marginTop:2, lineHeight:1.5 }}>
+                    Meet in public, inspect before paying, never pay in advance. Learn how to spot scams.
+                  </div>
+                </div>
+                <span style={{ fontSize:12.5, fontWeight:700, color:T.green, whiteSpace:'nowrap', flexShrink:0 }}>
+                  Learn more →
+                </span>
+              </div>
+            )}
           </div>
         </div>
       </div>

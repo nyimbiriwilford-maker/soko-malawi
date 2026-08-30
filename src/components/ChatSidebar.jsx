@@ -147,7 +147,7 @@ export default function ChatSidebar({ activeFilter, onFilterChange, counts, prof
           <div style={S.safetyIcon}>{ICONS.shield}</div>
           <div style={S.safetyTitle}>Buy and sell safely</div>
           <div style={S.safetyText}>Chat, meet and pay safely on SokoMw.</div>
-          <a style={S.safetyLink} onClick={() => navigate('/safety')}>Learn more</a>
+          <a role="button" tabIndex={0} style={S.safetyLink} onClick={() => navigate('/safety')} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') navigate('/safety') }}>Learn more about safe trading →</a>
         </div>
       </div>
 
