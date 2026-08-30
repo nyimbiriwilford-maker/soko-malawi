@@ -1,26 +1,27 @@
-TASK: Status page on phone shows white blank page. Console errors: profiles 400 (Bad Request) with district/location/address columns, services 504 (Gateway Timeout), beforeinstallprompt banner warning, web-vitals startTime TypeError.
+TASK: Go on the home page and compact the categories into one horizontal row for desktop view. Do not touch mobile view. Do not change anything else.
 
-ROOT CAUSES:
-1. profiles table has NO district / location / address columns (verified across all supabase/migrations — none ever added them). Client code selecting those columns gets a hard 400 from PostgREST:
-   - ServicesPage.jsx:671 (id, full_name, avatar_url, account_type, district) — the exact 400 seen on the phone.
-   - StoryComposer.jsx:83 (city, district) — runs when posting a status.
-   - The location,address variant in docs/console.md is from an older deploy; its source path was already removed.
-2. services 504 is the app's own service worker (public/sw.js) fallback response when the network fails and nothing is cached — expected offline behaviour, but the deeper problem: the SW caches '/' and '/index.html' at install and never re-fetches them. After a new Vercel deploy purges old hashed bundles, a phone can be served the STALE cached shell that references /assets/index-<old-hash>.js which no longer exists → module fetch fails → blank white page. The auth-gate fix from the previous deploy couldn't help because the page never booted at all.
-3. beforeinstallprompt warning and the VM30 web-vitals "startTime" TypeError are third-party noise — harmless, not related to the blank page.
+WHAT WAS DONE:
+- The "Shop by Category" grid (CategoryGrid -> .soko-cat-grid) in src/pages/Home.jsx previously laid out its 9 tiles (8 quick categories + "More") across multiple rows on desktop (5 columns -> 2 rows, or 4 columns -> 3 rows under 1200px).
+- Added a single CSS block in the GlobalStyles <style> in src/pages/Home.jsx:
 
-FIXES:
-A. src/pages/ServicesPage.jsx — provider profile fetch now falls back to safe columns (id, full_name, avatar_url, account_type) when the district select 400s; provider cards still render with shop name and city.
-B. src/components/StoryComposer.jsx — status composer now selects city only (profiles has no district) and swallows profile fetch failures; location prefill still works.
-C. public/sw.js —
-   1. Cache bumped sokomw-v9 → v10 (activates the new SW on every phone).
-   2. On activate: after purging old caches, re-fetches /index.html with cache:'reload' and re-caches a FRESH shell, so a stale shell can never outlive a deploy.
-   3. Navigate fallback: when online, serves the network shell first; cached shell only when actually offline.
-D. src/main.jsx — stale-shell self-heal: a capture-phase 'error' listener detects failed /assets/*.js|css loads (purged bundle referenced by stale shell) and reloads the page once per 15s window (sessionStorage guard prevents reload loops while a deploy propagates). Flag auto-clears after the page loads fine for 15s.
+  @media (min-width: 769px) {
+    .soko-cat-grid { grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 10px; }
+    .soko-cat-grid .soko-cat-tile { compact padding, no min-height floor, smaller gap }
+    .soko-cat-grid .soko-cat-icon-wrap { 32px icons }
+    .soko-cat-grid .soko-cat-sub { display: none }
+    .soko-cat-grid .soko-cat-label { 11px, nowrap, ellipsis }
+  }
 
-NOT FIXED (intentionally): beforeinstallprompt banner (Chrome PWA heuristic, informational), web-vitals startTime TypeError (injected analytics code, no app impact).
+  This makes all 9 category tiles fit in ONE horizontal row on desktop, in a compact/slim layout.
+
+GUARANTEES:
+- Desktop only: the rule is inside @media (min-width: 769px) (the app's desktop breakpoint — same one SokoNav/BottomNav use).
+- Mobile untouched: all existing @media (max-width: 768px) (and smaller) styles are unchanged; the horizontal-scroll mobile category row still behaves exactly as before.
+- Nothing else changed: only this additive CSS was inserted (26 lines added, no lines removed/modified elsewhere). HomeHeader.jsx was checked and is unused dead code — the only live category section is .soko-cat-grid.
 
 VERIFIED:
-- npx eslint on the three edited files — all remaining errors/warnings pre-exist on master (confirmed via git stash baseline); no new issues introduced.
-- npm run build — success.
+- npx eslint src/pages/Home.jsx — only pre-existing errors (unused imports at line 27, react-hooks warnings, etc.); no errors at the inserted lines.
+- npm run build — success ("built in 3.25s").
+- git diff confirms the sole source change is src/pages/Home.jsx (the temporary dist/index.html build-artifact change was reverted).
 
-DEPLOY: committed and pushed to master (Vercel auto-deploys). NOTE for the phone: after deploy, open the app once with network ON — the new SW (sokomw-v10) activates, clears the stale shell cache, and the blank page is gone for good. If it was installed as a PWA, launch it once while online to let the SW update.
+
