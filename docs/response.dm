@@ -1,29 +1,26 @@
-TASK: On the product page, make it possible for admin to take action when a person has reported a listing. Activate the Report Listing button and give admin power to take appropriate action.
+TASK: All icons on the product page should use modern and premium icons.
 
-DONE — reporting is now a full loop: buyer reports → admin reviews → admin acts on the listing.
+DONE in src/pages/ListingDetail.jsx — every icon on the product page now uses lucide-react (the modern, premium icon set the rest of the codebase already uses). All 73 hand-rolled inline <svg> blocks and every decorative emoji were replaced with consistent, professionally designed lucide components with uniform stroke weights:
 
-1. Product page — Report Listing activated (src/pages/ListingDetail.jsx)
-   - The dead "Report Listing" button in the sidebar now opens a professional report modal:
-     • Reason picker with 6 clearly-labelled options (Scam or fraud, Counterfeit or fake item, Prohibited or illegal item, Misleading description or price, Inappropriate content, Other) as selectable cards with a red selected state.
-     • Optional details textarea (500 char limit).
-     • Submit disabled until a reason is picked; loading state; error alert on failure.
-   - On submit it inserts into the existing `user_reports` table with: reporter_id (current user), reported_user_id (the seller), listing_id, reason, details. No new migration needed — the table and RLS already support this (insert policy: reporter_id = auth.uid()).
-   - Success state: "Report submitted — our admin team has been notified" confirmation.
-   - Anti-spam: after reporting, the button becomes "✓ Reported" and is disabled for the rest of the session (sessionStorage flag keyed by listing id, set both after submit and read on load).
+1. Spec / Overview icons — Monitor (Brand), Star (Model), HardDrive (Storage), Cpu (RAM), Palette (Color), Smartphone (SIM), Wifi (Network), BatteryCharging (Battery).
 
-2. Admin — full action power on reported listings (src/pages/Admin.jsx, Safety tab → User reports)
-   - Report cards for listing reports now show the reported product inline: thumbnail, title, live listing status, and a "View →" link to the product page. If the listing was already deleted, it shows "Listing unavailable (may have been deleted)".
-   - New admin actions directly on the reported listing:
-     • 🚫 Remove Listing — sets the listing to inactive (hidden from the marketplace immediately)
-     • ↩ Restore — re-activates a deactivated listing
-     • 🗑 Delete — permanently deletes the listing (with confirm)
-   - Existing ✓ Resolve / ✕ Dismiss report-status actions unchanged; listing actions work independently of report status so admins can act first, then resolve.
-   - The Safety tab badge already counts open listing reports (it counts all open user_reports) so admins see pending listing reports at a glance.
+2. CTA buttons (mobile + desktop sidebar + sticky bar) — MessageCircle (Chat/WhatsApp), Phone (Call), Mail (Email), Heart with dynamic fill state (Favorites), Pencil (Edit), Trash2 (Delete).
 
-3. Backend — nothing new required
-   - `user_reports` table (listing_id, reported_user_id, reason, details, status, admin_note) already existed with proper RLS: users insert their own reports; admins (public.is_admin()) can read all and update status.
-   - Admin listing updates/deletes already allowed by the `listings_update_own` / delete policies via is_admin().
+3. Gallery — Star (Featured badge), Heart (favorite overlay), ChevronRight rotated (gallery arrows + breadcrumb separators), Home (Marketplace crumb), Video (video tag), Play (video thumb overlay), Package (no-photo placeholder + "You may also like" fallbacks).
+
+4. Section headers — Sparkles (Key Features), Zap (Flash Sale), Boxes (Bulk Pricing), Wrench (Booking Rates), ShieldCheck (Buy with Confidence / deposit notice / condition), MapPin (Location + seller city + related-item rows), Bell (buyer-alerts cross-link), Flag (Report listing), ArrowUpRight (Open in Google Maps).
+
+5. Listing Details rows — Tag (Category), SlidersHorizontal (Subcategory), ShieldCheck (Condition), Calendar (Posted), FileText (Listing ID), Eye (Views), Package (Availability), BadgeCheck (Status).
+
+6. Seller card — BadgeCheck (verified), Zap (responsive), Clock (member since), ChevronRight (profile chevron).
+
+7. Share — Copy/Check (Copy Link), MessageCircle (WhatsApp), Facebook, Twitter (Post on X), MoreHorizontal (More), Link2 + Check (share sheet rows).
+
+8. Modals — Flag (report), CheckCircle (report submitted), Trash2 (delete confirm); report reasons got meaningful lucide icons (AlertTriangle scam, Package counterfeit, Ban prohibited, CircleAlert misleading, EyeOff inappropriate, FileText other). Availability chips: Check / Clock / X. FREE price uses Gift. Flash timer uses Flame.
+
+Icon consistency: uniform stroke widths (2–2.5 for UI, 1.8 for spec tiles), colors preserved exactly as before (brand green #0F9D58, WhatsApp green, Facebook blue, etc.) so the design language is unchanged — only the icon geometry is now modern, crisp and coherent.
 
 VERIFIED:
-- npx eslint on ListingDetail.jsx + Admin.jsx — same 19 pre-existing problems as on HEAD (0 new issues).
-- npm run build — built successfully.
+- 0 inline <svg> and 0 emoji icons remain on the page (verified by search).
+- npx eslint — 4 problems, all pre-existing (actually 1 fewer than before this change: ShieldCheck unused-import error resolved).
+- npm run build — success (fixed one missing-export: SimCard → Smartphone for lucide 0.400).

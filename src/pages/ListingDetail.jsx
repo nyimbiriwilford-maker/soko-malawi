@@ -1,7 +1,16 @@
 import { useEffect, useState, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { MapPin, CheckCircle, Lock, AlertTriangle, ShieldCheck } from 'lucide-react'
+import {
+  MapPin, CheckCircle, Lock, AlertTriangle, ShieldCheck,
+  MessageCircle, Phone, Mail, Heart, Star, Pencil, Trash2,
+  ChevronRight, Home, Package, Monitor, Cpu, HardDrive,
+  Palette, Smartphone, Wifi, BatteryCharging, Clock, Wrench, Calendar,
+  Eye, Tag, FileText, BadgeCheck, Boxes, Zap, Copy, Check,
+  Video, Facebook, Twitter, MoreHorizontal, SlidersHorizontal, Sparkles,
+  TrendingUp, Bell, X, Play, Link2, ArrowUpRight, Gift, Ban,
+  CircleAlert, EyeOff, Flame, Flag,
+} from 'lucide-react'
 import { formatPrice } from '../lib/format'
 import SokoNav from '../components/SokoNav'
 import Comments from '../components/Comments'
@@ -102,10 +111,7 @@ function StarRow({ rating = 0, count = 0 }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
       {[1,2,3,4,5].map(i => (
-        <svg key={i} width="13" height="13" viewBox="0 0 24 24"
-          fill={i <= Math.round(rating) ? '#f59e0b' : '#d1d5db'}>
-          <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>
-        </svg>
+        <Star key={i} size={13} color={i <= Math.round(rating) ? '#f59e0b' : '#d1d5db'} fill={i <= Math.round(rating) ? '#f59e0b' : '#d1d5db'} />
       ))}
       {count > 0 && <span style={{ fontSize: 12, color: '#374151', fontWeight: 600, marginLeft: 3 }}>{rating.toFixed(1)} ({count} reviews)</span>}
     </div>
@@ -450,16 +456,16 @@ export default function ListingDetail() {
     if (listing?.seller_id) navigate('/profile/' + listing.seller_id)
   }
 
-  // Icons for spec fields
+  // Icons for spec fields — modern lucide icons
   const SPEC_ICONS = {
-    brand:   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="1.7" strokeLinecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>,
-    model:   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="1.7" strokeLinecap="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>,
-    storage: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="1.7" strokeLinecap="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>,
-    ram:     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="1.7" strokeLinecap="round"><rect x="2" y="7" width="20" height="10" rx="2"/><path d="M6 7V5M10 7V5M14 7V5M18 7V5M6 17v2M10 17v2M14 17v2M18 17v2"/></svg>,
-    color:   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="1.7" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20"/></svg>,
-    sim:     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="1.7" strokeLinecap="round"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M15 2v5h-6V2"/></svg>,
-    network: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="1.7" strokeLinecap="round"><path d="M5 12.55a11 11 0 0 1 14.08 0"/><path d="M1.42 9a16 16 0 0 1 21.16 0"/><path d="M8.53 16.11a6 6 0 0 1 6.95 0"/><circle cx="12" cy="20" r="1" fill="#6b7280"/></svg>,
-    battery: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6b7280" strokeWidth="1.7" strokeLinecap="round"><rect x="2" y="7" width="16" height="10" rx="2"/><path d="M22 11v2"/><path d="M6 11h6"/></svg>,
+    brand:   <Monitor size={16} strokeWidth={1.8} color="#6b7280" />,
+    model:   <Star size={16} strokeWidth={1.8} color="#6b7280" />,
+    storage: <HardDrive size={16} strokeWidth={1.8} color="#6b7280" />,
+    ram:     <Cpu size={16} strokeWidth={1.8} color="#6b7280" />,
+    color:   <Palette size={16} strokeWidth={1.8} color="#6b7280" />,
+    sim:     <Smartphone size={16} strokeWidth={1.8} color="#6b7280" />,
+    network: <Wifi size={16} strokeWidth={1.8} color="#6b7280" />,
+    battery: <BatteryCharging size={16} strokeWidth={1.8} color="#6b7280" />,
   }
 
   // Thumbnail strip — show first 5, then +N
@@ -472,13 +478,13 @@ export default function ListingDetail() {
   const buyerCtas = (
     <>
       <button className="ld-btn-hover" style={S.chatBtn} onClick={handleChatWithSeller}>
-        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+        <MessageCircle size={17} strokeWidth={2.2} color="#fff" />
         Chat with Seller
       </button>
 
       {(listing.contact_methods || []).includes('call') && listing.call_number && (
         <button className="ld-btn-hover" style={S.callBtn} onClick={() => window.location.href = `tel:${listing.call_number}`}>
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2.2" strokeLinecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.4 2 2 0 0 1 3.58 1.22h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+          <Phone size={17} strokeWidth={2.2} color="#374151" />
           Call Seller
         </button>
       )}
@@ -487,7 +493,7 @@ export default function ListingDetail() {
         <a className="ld-btn-hover" style={{ ...S.callBtn, textDecoration: 'none', color: '#15803d', borderColor: '#bbf7d0' }}
           href={`https://wa.me/${listing.whatsapp_number.replace(/\D/g, '')}?text=${encodeURIComponent('Hi, I saw your listing "' + listing.title + '" on SokoMW')}`}
           target="_blank" rel="noopener noreferrer">
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="#15803d"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347"/></svg>
+          <MessageCircle size={17} strokeWidth={2.2} color="#15803d" />
           WhatsApp Seller
         </a>
       )}
@@ -495,18 +501,13 @@ export default function ListingDetail() {
       {(listing.contact_methods || []).includes('email') && listing.seller_email && (
         <a className="ld-btn-hover" style={{ ...S.callBtn, textDecoration: 'none' }}
           href={`mailto:${listing.seller_email}?subject=${encodeURIComponent('Re: ' + listing.title)}`}>
-          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2.2" strokeLinecap="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg>
+          <Mail size={17} strokeWidth={2.2} color="#374151" />
           Email Seller
         </a>
       )}
 
       <button className="ld-btn-hover" style={S.favBtn} onClick={() => setIsFavorited(f => !f)}>
-        <svg width="17" height="17" viewBox="0 0 24 24"
-          fill={isFavorited ? '#dc2626' : 'none'}
-          stroke={isFavorited ? '#dc2626' : '#374151'}
-          strokeWidth="2" strokeLinecap="round">
-          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-        </svg>
+        <Heart size={17} strokeWidth={2} color={isFavorited ? '#dc2626' : '#374151'} fill={isFavorited ? '#dc2626' : 'none'} />
         Add to Favorites
       </button>
     </>
@@ -526,11 +527,11 @@ export default function ListingDetail() {
         </button>
       )}
       <button className="ld-btn-hover" style={S.chatBtn} onClick={() => navigate('/post/edit/' + listing.id)}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        <Pencil size={16} strokeWidth={2.2} color="#fff" />
         Edit Listing
       </button>
       <button className="ld-btn-hover" style={{ ...S.callBtn, color: '#dc2626', borderColor: '#fecaca' }} onClick={() => setShowDeleteConfirm(true)}>
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+        <Trash2 size={16} strokeWidth={2.2} color="#dc2626" />
         Delete Listing
       </button>
     </>
@@ -571,6 +572,44 @@ export default function ListingDetail() {
           .ld-tabnav { display: none !important; }
           .ld-breadcrumb { display: none !important; }
           .ld-back { display: flex !important; }
+
+          /* Tighter page padding on phones — more room for content */
+          .ld-page-body { padding-left: 14px !important; padding-right: 14px !important; }
+
+          /* Specs grid — 2 per row on phones (was 4, cramped) */
+          .ld-specs-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 0 !important; }
+          .ld-spec-item { padding: 10px 12px !important; border: none !important; background: #fff !important; }
+          .ld-spec-item:nth-child(odd) { background: #fafafa !important; border-right: 1px solid #f3f4f6 !important; }
+          .ld-spec-value { font-size: 12.5px !important; word-break: break-word; }
+
+          /* Bulk pricing — 3 columns still fit on tablets/large phones */
+          .ld-bulk-row { padding: 10px 12px !important; }
+          .ld-bulk-cell { font-size: 12px !important; }
+        }
+
+        /* Small phones — bulk rows stack to compact 2-line key/value cells */
+        @media (max-width: 480px) {
+          .ld-spec-item { padding: 9px 10px !important; }
+
+          .ld-bulk-headrow { display: none !important; }
+          .ld-bulk-row {
+            display: grid !important;
+            grid-template-columns: 1fr 1fr !important;
+            align-items: center !important;
+            gap: 4px 10px !important;
+            padding: 10px 12px !important;
+          }
+          .ld-bulk-cell { font-size: 12.5px !important; }
+          .ld-bulk-row .ld-bulk-cell:nth-child(1) { grid-column: 1 / -1; font-weight: 700; color: #111827 !important; }
+          .ld-bulk-row .ld-bulk-cell:nth-child(2) { justify-self: start; }
+          .ld-bulk-row .ld-bulk-cell:nth-child(3) { justify-self: end; text-align: right; }
+          .ld-bulk-head { display: none !important; }
+        }
+
+        /* Very small phones — keep spec values readable, never clipped */
+        @media (max-width: 360px) {
+          .ld-spec-value { font-size: 12px !important; }
+          .ld-bulk-cell { font-size: 11.5px !important; }
         }
         @media (min-width: 901px) {
           .ld-mobile-cta { display: none !important; }
@@ -582,29 +621,27 @@ export default function ListingDetail() {
       <SokoNav navigate={navigate} user={currentUser} search={ldSearch} setSearch={setLdSearch} />
 
       {/* ── PAGE BODY ── */}
-
-      {/* ── PAGE BODY ── */}
-      <div style={S.pageBody}>
+      <div className="ld-page-body" style={S.pageBody}>
 
         {/* Breadcrumb */}
         <div className="ld-breadcrumb" style={S.breadcrumb}>
           <span style={S.bcLink} onClick={() => navigate('/')}>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="#6b7280"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+            <Home size={12} color="#6b7280" />
             Marketplace
           </span>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+          <ChevronRight size={12} color="#9ca3af" />
           <span style={S.bcLink} onClick={() => navigate(`/?category=${listing.category}`)}>{listing.category}</span>
           {listing.subcategory && <>
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><polyline points="9 18 15 12 9 6"/></svg>
+            <ChevronRight size={12} color="#9ca3af" />
             <span style={S.bcLink}>{listing.subcategory}</span>
           </>}
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+          <ChevronRight size={12} color="#9ca3af" />
           <span style={S.bcCurrent}>{listing.title}</span>
         </div>
 
         {/* Back to results */}
         <button className="ld-back" style={S.backToResults} onClick={() => navigate(-1)}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+          <ChevronRight size={14} strokeWidth={2.5} color="currentColor" style={{ transform: 'rotate(180deg)' }} />
           Back to results
         </button>
 
@@ -619,7 +656,7 @@ export default function ListingDetail() {
               {/* featured badge only */}
               {isListingFeatured(listing) && (
                 <div style={{ ...S.galleryBadge, top: 12, background: '#0F9D58', display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <svg width="11" height="11" viewBox="0 0 24 24" fill="white"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
+                  <Star size={11} fill="#fff" color="#fff" />
                   Featured
                 </div>
               )}
@@ -628,12 +665,7 @@ export default function ListingDetail() {
                   style={{ ...S.favOverlay, background: isFavorited ? '#fee2e2' : 'white' }}
                   onClick={() => setIsFavorited(f => !f)}
                 >
-                  <svg width="18" height="18" viewBox="0 0 24 24"
-                    fill={isFavorited ? '#dc2626' : 'none'}
-                    stroke={isFavorited ? '#dc2626' : '#9ca3af'}
-                    strokeWidth="2" strokeLinecap="round">
-                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                  </svg>
+                  <Heart size={18} strokeWidth={2} color={isFavorited ? '#dc2626' : '#9ca3af'} fill={isFavorited ? '#dc2626' : 'none'} />
                 </button>
               )}
 
@@ -649,11 +681,11 @@ export default function ListingDetail() {
                       <>
                         <button style={{ ...S.arrowBtn, left: 10 }}
                           onClick={() => setMediaIndex(i => (i - 1 + allMedia.length) % allMedia.length)}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2.5" strokeLinecap="round"><polyline points="15 18 9 12 15 6"/></svg>
+                          <ChevronRight size={14} strokeWidth={2.5} color="#374151" style={{ transform: 'rotate(180deg)' }} />
                         </button>
                         <button style={{ ...S.arrowBtn, right: 10 }}
                           onClick={() => setMediaIndex(i => (i + 1) % allMedia.length)}>
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+                          <ChevronRight size={14} strokeWidth={2.5} color="#374151" />
                         </button>
                       </>
                     )}
@@ -662,14 +694,14 @@ export default function ListingDetail() {
                     )}
                     {allMedia[mediaIndex].type === 'video' && (
                       <div style={S.videoTag}>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="white"><path d="M4 4h12a2 2 0 0 1 2 2v2.5l4-2.5v12l-4-2.5V18a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/></svg>
+                        <Video size={12} color="#fff" fill="#fff" />
                         Video
                       </div>
                     )}
                   </>
                 ) : (
                   <div style={S.noImg}>
-                    <span style={{ fontSize: 60 }}>{listing.category === 'Vehicles' ? '🚗' : listing.category === 'Property' ? '🏠' : '📦'}</span>
+                    <Package size={60} strokeWidth={1.2} color="#9ca3af" />
                     <span style={{ fontSize: 13, color: '#9ca3af', marginTop: 8 }}>No photos</span>
                   </div>
                 )}
@@ -699,7 +731,7 @@ export default function ListingDetail() {
                             background: 'rgba(0,0,0,0.25)',
                             display: 'flex', alignItems: 'center', justifyContent: 'center',
                           }}>
-                            <svg width="22" height="22" viewBox="0 0 24 24" fill="white"><circle cx="12" cy="12" r="11" fill="rgba(0,0,0,0.4)"/><path d="M10 8l6 4-6 4V8z"/></svg>
+                            <Play size={22} color="#fff" fill="#fff" />
                           </div>
                         </>
                       )}
@@ -717,7 +749,7 @@ export default function ListingDetail() {
               <h1 style={{ fontSize: 18, fontWeight: 800, color: '#111827', lineHeight: 1.35, marginBottom: 8 }}>{listing.title}</h1>
               <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
                 {listing.price_type === 'free' ? (
-                  <span style={S.freePrice}>FREE 🎁</span>
+                  <span style={{ ...S.freePrice, display: 'inline-flex', alignItems: 'center', gap: 6 }}>FREE <Gift size={18} strokeWidth={2.2} color="#0F9D58" /></span>
                 ) : (
                   <>
                     <span style={{ ...S.bigPrice, fontSize: 24, ...(flash ? { color: '#dc2626' } : {}) }}>
@@ -731,7 +763,7 @@ export default function ListingDetail() {
                 )}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                {!isOwner ? buyerCtas : ownerCtas('⭐ Feature this listing')}
+                {!isOwner ? buyerCtas : ownerCtas('Feature this listing')}
               </div>
             </div>
 
@@ -742,12 +774,12 @@ export default function ListingDetail() {
                 <p style={S.overviewBlurb}>{listing.description.split('\n')[0]}</p>
               )}
               {specFields.length > 0 && (
-                <div style={S.specsGrid}>
+                <div className="ld-specs-grid" style={S.specsGrid}>
                   {specFields.map(({ label, icon, value }) => (
-                    <div key={label} style={S.specItem}>
+                    <div key={label} className="ld-spec-item" style={S.specItem}>
                       <div style={S.specIcon}>{SPEC_ICONS[icon]}</div>
                       <div style={S.specLabel}>{label}</div>
-                      <div style={S.specValue}>{value}</div>
+                      <div className="ld-spec-value" style={S.specValue}>{value}</div>
                     </div>
                   ))}
                 </div>
@@ -764,7 +796,7 @@ export default function ListingDetail() {
                       {line.startsWith('-') || line.startsWith('•') ? (
                         <>
                           <span style={S.descCheck}>
-                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+                            <Check size={11} strokeWidth={3} color="#fff" />
                           </span>
                           <span>{line.replace(/^[-•]\s*/, '')}</span>
                         </>
@@ -787,12 +819,12 @@ export default function ListingDetail() {
             {/* ── KEY FEATURES ── */}
             {listing.key_features && (
               <div style={S.card}>
-                <div style={S.cardH2}>✨ Key Features</div>
+                <div style={{ ...S.cardH2, display: 'flex', alignItems: 'center', gap: 7 }}><Sparkles size={16} strokeWidth={2.2} color="#f59e0b" /> Key Features</div>
                 <div style={S.descBlock}>
                   {listing.key_features.split('\n').filter(Boolean).map((line, i) => (
                     <div key={i} style={S.descLine}>
                       <span style={{ ...S.descCheck, background: '#f59e0b' }}>
-                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
+                        <Check size={10} strokeWidth={3} color="#fff" />
                       </span>
                       <span>{line.replace(/^[-•]\s*/, '')}</span>
                     </div>
@@ -805,7 +837,7 @@ export default function ListingDetail() {
             {flash && (
               <div style={S.flashSection}>
                 <div style={S.flashSectionHdr}>
-                  <span>⚡ Flash Sale</span>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Zap size={15} strokeWidth={2.4} color="#dc2626" fill="#dc2626" /> Flash Sale</span>
                   <span style={{ fontSize: 13, color: '#dc2626', fontWeight: 700 }}>{flashTime} remaining</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-around' }}>
@@ -826,15 +858,15 @@ export default function ListingDetail() {
             {/* ── BULK PRICING ── */}
             {hasBulk && (
               <div style={S.card}>
-                <div style={S.cardH2}>📦 Bulk Pricing · Order more, save more</div>
-                <div style={S.bulkTable}>
-                  <div style={{ ...S.bulkRow, background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-                    {['Quantity','Price/unit','You save'].map(h => <span key={h} style={S.bulkHead}>{h}</span>)}
+                <div style={{ ...S.cardH2, display: 'flex', alignItems: 'center', gap: 7 }}><Boxes size={16} strokeWidth={2.2} color="#0F9D58" /> Bulk Pricing · Order more, save more</div>
+                <div className="ld-bulk-table" style={S.bulkTable}>
+                  <div className="ld-bulk-row ld-bulk-headrow" style={{ ...S.bulkRow, background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                    {['Quantity','Price/unit','You save'].map(h => <span key={h} className="ld-bulk-head" style={S.bulkHead}>{h}</span>)}
                   </div>
-                  <div style={{ ...S.bulkRow, ...(!activeTier ? S.bulkActiveRow : {}) }}>
-                    <span style={S.bulkCell}>1 unit</span>
-                    <span style={{ ...S.bulkCell, fontWeight: 700 }}>{formatPrice(listing.price)}</span>
-                    <span style={{ ...S.bulkCell, color: '#9ca3af' }}>—</span>
+                  <div className="ld-bulk-row" style={{ ...S.bulkRow, ...(!activeTier ? S.bulkActiveRow : {}) }}>
+                    <span className="ld-bulk-cell" style={S.bulkCell}>1 unit</span>
+                    <span className="ld-bulk-cell" style={{ ...S.bulkCell, fontWeight: 700 }}>{formatPrice(listing.price)}</span>
+                    <span className="ld-bulk-cell" style={{ ...S.bulkCell, color: '#9ca3af' }}>—</span>
                   </div>
                   {[...listing.price_tiers].sort((a, b) => a.min_qty - b.min_qty).map((tier, i) => {
                     const tp = Number(tier.price)
@@ -842,10 +874,10 @@ export default function ListingDetail() {
                     const pct = Math.round((1 - tp / listing.price) * 100)
                     const isAct = activeTier && parseInt(tier.min_qty) === parseInt(activeTier.min_qty)
                     return (
-                      <div key={i} style={{ ...S.bulkRow, ...(isAct ? S.bulkActiveRow : {}) }}>
-                        <span style={S.bulkCell}>{tier.min_qty}+ units {isAct && <span style={S.bulkPill}>✓ Active</span>}</span>
-                        <span style={{ ...S.bulkCell, fontWeight: 700, color: '#0F9D58' }}>{formatPrice(tp)}</span>
-                        <span style={{ ...S.bulkCell, color: '#dc2626', fontWeight: 600 }}>
+                      <div key={i} className="ld-bulk-row" style={{ ...S.bulkRow, ...(isAct ? S.bulkActiveRow : {}) }}>
+                        <span className="ld-bulk-cell" style={S.bulkCell}>{tier.min_qty}+ units {isAct && <span style={S.bulkPill}>✓ Active</span>}</span>
+                        <span className="ld-bulk-cell" style={{ ...S.bulkCell, fontWeight: 700, color: '#0F9D58' }}>{formatPrice(tp)}</span>
+                        <span className="ld-bulk-cell" style={{ ...S.bulkCell, color: '#dc2626', fontWeight: 600 }}>
                           {formatPrice(sv)}/ea <span style={S.discPill}>-{pct}%</span>
                         </span>
                       </div>
@@ -858,12 +890,12 @@ export default function ListingDetail() {
             {/* ── BOOKING PRICING ── */}
             {(listing.booking_hourly || listing.booking_daily || listing.booking_weekly) && (
               <div style={S.card}>
-                <div style={S.cardH2}>🛠 Booking Rates</div>
+                <div style={{ ...S.cardH2, display: 'flex', alignItems: 'center', gap: 7 }}><Wrench size={16} strokeWidth={2.2} color="#0F9D58" /> Booking Rates</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(120px,1fr))', gap: 10, marginBottom: listing.booking_deposit_required ? 12 : 0 }}>
                   {[
-                    { label: 'Hourly', value: listing.booking_hourly, icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0F9D58" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> },
-                    { label: 'Daily',  value: listing.booking_daily,  icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0F9D58" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg> },
-                    { label: 'Weekly', value: listing.booking_weekly, icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0F9D58" strokeWidth="2" strokeLinecap="round"><path d="M3 3v18h18"/><path d="M18.7 8l-5.5 5.5-3-3L4 16.5"/></svg> },
+                    { label: 'Hourly', value: listing.booking_hourly, icon: <Clock size={16} strokeWidth={2} color="#0F9D58" /> },
+                    { label: 'Daily',  value: listing.booking_daily,  icon: <Calendar size={16} strokeWidth={2} color="#0F9D58" /> },
+                    { label: 'Weekly', value: listing.booking_weekly, icon: <TrendingUp size={16} strokeWidth={2} color="#0F9D58" /> },
                   ].filter(r => r.value).map(({ label, value, icon }) => (
                     <div key={label} style={{ border: '1px solid #f3f4f6', borderRadius: 10, padding: '12px 10px', textAlign: 'center', background: '#fafafa' }}>
                       <div style={{ marginBottom: 6, display: 'flex', justifyContent: 'center' }}>{icon}</div>
@@ -874,7 +906,7 @@ export default function ListingDetail() {
                 </div>
                 {listing.booking_deposit_required && (
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#b45309', background: '#fef3c7', borderRadius: 8, padding: '8px 10px' }}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#b45309" strokeWidth="2" strokeLinecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    <ShieldCheck size={14} strokeWidth={2} color="#b45309" />
                     A deposit is required to confirm this booking
                   </div>
                 )}
@@ -889,9 +921,7 @@ export default function ListingDetail() {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 10, marginBottom: 14 }}>
                   <div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 15, fontWeight: 700, color: '#111827', marginBottom: listing.meetup_note ? 4 : 0 }}>
-                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0F9D58" strokeWidth="2.2" strokeLinecap="round" style={{ flexShrink: 0 }}>
-                        <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z"/><circle cx="12" cy="10" r="3"/>
-                      </svg>
+                      <MapPin size={16} strokeWidth={2.2} color="#0F9D58" style={{ flexShrink: 0 }} />
                       {formatLocationLine(listing)}
                     </div>
                     {listing.meetup_note && (
@@ -904,7 +934,7 @@ export default function ListingDetail() {
                     style={{ ...S.viewMapLink, display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}
                     onClick={() => window.open(mapLink, '_blank')}>
                     Open in Google Maps
-                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#0F9D58" strokeWidth="2.3" strokeLinecap="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                    <ArrowUpRight size={13} strokeWidth={2.3} color="#0F9D58" />
                   </button>
                 </div>
 
@@ -940,14 +970,14 @@ export default function ListingDetail() {
                   <div key={label} style={S.detailRow}>
                     <div style={S.detailLeft}>
                       <span style={S.detailIcon}>
-                        {icon === 'cat'  && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>}
-                        {icon === 'sub'  && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round"><path d="M4 6h16M4 10h16M4 14h8"/></svg>}
-                        {icon === 'cond' && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>}
-                        {icon === 'cal'  && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>}
-                        {icon === 'id'   && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>}
-                        {icon === 'eye'  && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>}
-                        {icon === 'avail'&& <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M16 3v8M8 3v8"/></svg>}
-                        {icon === 'stat' && <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>}
+                        {icon === 'cat'  && <Tag size={13} strokeWidth={2} color="#9ca3af" />}
+                        {icon === 'sub'  && <SlidersHorizontal size={13} strokeWidth={2} color="#9ca3af" />}
+                        {icon === 'cond' && <ShieldCheck size={13} strokeWidth={2} color="#9ca3af" />}
+                        {icon === 'cal'  && <Calendar size={13} strokeWidth={2} color="#9ca3af" />}
+                        {icon === 'id'   && <FileText size={13} strokeWidth={2} color="#9ca3af" />}
+                        {icon === 'eye'  && <Eye size={13} strokeWidth={2} color="#9ca3af" />}
+                        {icon === 'avail'&& <Package size={13} strokeWidth={2} color="#9ca3af" />}
+                        {icon === 'stat' && <BadgeCheck size={13} strokeWidth={2} color="#9ca3af" />}
                       </span>
                       <span style={S.detailLabel}>{label}</span>
                     </div>
@@ -999,11 +1029,9 @@ export default function ListingDetail() {
                     <span style={{ ...S.condChip, display: 'inline-flex', alignItems: 'center', gap: 4,
                       background: AVAILABILITY_META[listing.availability_status].bg,
                       color: AVAILABILITY_META[listing.availability_status].color }}>
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                        {listing.availability_status === 'in_stock' && <polyline points="20 6 9 17 4 12"/>}
-                        {listing.availability_status === 'made_to_order' && <><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></>}
-                        {listing.availability_status === 'not_available' && <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>}
-                      </svg>
+                      {listing.availability_status === 'in_stock' && <Check size={11} strokeWidth={2.5} color="currentColor" />}
+                      {listing.availability_status === 'made_to_order' && <Clock size={11} strokeWidth={2.5} color="currentColor" />}
+                      {listing.availability_status === 'not_available' && <X size={11} strokeWidth={2.5} color="currentColor" />}
                       {AVAILABILITY_META[listing.availability_status].label}
                     </span>
                   )}
@@ -1013,7 +1041,7 @@ export default function ListingDetail() {
               {/* Price */}
               <div style={S.priceRow}>
                 {listing.price_type === 'free' ? (
-                  <span style={S.freePrice}>FREE 🎁</span>
+                  <span style={{ ...S.freePrice, display: 'inline-flex', alignItems: 'center', gap: 6 }}>FREE <Gift size={20} strokeWidth={2.2} color="#0F9D58" /></span>
                 ) : (
                   <>
                     <span style={{ ...S.bigPrice, ...(flash ? { color: '#dc2626' } : {}) }}>
@@ -1028,7 +1056,7 @@ export default function ListingDetail() {
               </div>
               {flash && flashTime && (
                 <div style={S.flashTimerLine}>
-                  <span style={{ animation: 'flashPulse 1s infinite' }}>🔥</span>
+                  <span style={{ animation: 'flashPulse 1s infinite', display: 'inline-flex' }}><Flame size={13} strokeWidth={2.4} color="#dc2626" fill="#dc2626" /></span>
                   Flash sale ends in <strong style={{ animation: 'timerTick 1s infinite', display: 'inline-block' }}>{flashTime}</strong>
                 </div>
               )}
@@ -1040,7 +1068,7 @@ export default function ListingDetail() {
               <div style={S.factsRow}>
                 {listing.city && (
                   <div style={S.factCol}>
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="#9ca3af"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+                    <MapPin size={15} color="#9ca3af" />
                     <span style={S.factLabel}>Location</span>
                     <span style={S.factVal}>{listing.city}</span>
                   </div>
@@ -1049,7 +1077,7 @@ export default function ListingDetail() {
                   <>
                     <div style={S.factDivider} />
                     <div style={S.factCol}>
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                      <ShieldCheck size={15} strokeWidth={2} color="#9ca3af" />
                       <span style={S.factLabel}>Condition</span>
                       <span style={S.factVal}>{condition?.label || listing.condition}</span>
                     </div>
@@ -1057,7 +1085,7 @@ export default function ListingDetail() {
                       <>
                         <div style={S.factDivider} />
                         <div style={S.factCol}>
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M16 3v8M8 3v8"/></svg>
+                          <Package size={15} strokeWidth={2} color="#9ca3af" />
                           <span style={S.factLabel}>Availability</span>
                           <span style={S.factVal}>{AVAILABILITY_META[listing.availability_status].label}</span>
                         </div>
@@ -1073,13 +1101,13 @@ export default function ListingDetail() {
               {!isOwner ? (
                 <div className="ld-sidebar-cta" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <button className="ld-btn-hover" style={S.chatBtn} onClick={handleChatWithSeller}>
-                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                    <MessageCircle size={17} strokeWidth={2.2} color="#fff" />
                     Chat with Seller
                   </button>
 
                   {(listing.contact_methods || []).includes('call') && listing.call_number && (
                     <button className="ld-btn-hover" style={S.callBtn} onClick={() => window.location.href = `tel:${listing.call_number}`}>
-                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2.2" strokeLinecap="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.69 12 19.79 19.79 0 0 1 1.61 3.4 2 2 0 0 1 3.58 1.22h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L7.91 8.96a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+                      <Phone size={17} strokeWidth={2.2} color="#374151" />
                       Call Seller
                     </button>
                   )}
@@ -1088,7 +1116,7 @@ export default function ListingDetail() {
                     <a className="ld-btn-hover" style={{ ...S.callBtn, textDecoration: 'none', color: '#15803d', borderColor: '#bbf7d0' }}
                       href={`https://wa.me/${listing.whatsapp_number.replace(/\D/g, '')}?text=${encodeURIComponent('Hi, I saw your listing "' + listing.title + '" on SokoMW')}`}
                       target="_blank" rel="noopener noreferrer">
-                      <svg width="17" height="17" viewBox="0 0 24 24" fill="#15803d"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347"/></svg>
+                      <MessageCircle size={17} strokeWidth={2.2} color="#15803d" />
                       WhatsApp Seller
                     </a>
                   )}
@@ -1096,29 +1124,24 @@ export default function ListingDetail() {
                   {(listing.contact_methods || []).includes('email') && listing.seller_email && (
                     <a className="ld-btn-hover" style={{ ...S.callBtn, textDecoration: 'none' }}
                       href={`mailto:${listing.seller_email}?subject=${encodeURIComponent('Re: ' + listing.title)}`}>
-                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2.2" strokeLinecap="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M22 6l-10 7L2 6"/></svg>
+                      <Mail size={17} strokeWidth={2.2} color="#374151" />
                       Email Seller
                     </a>
                   )}
 
                   <button className="ld-btn-hover" style={S.favBtn} onClick={() => setIsFavorited(f => !f)}>
-                    <svg width="17" height="17" viewBox="0 0 24 24"
-                      fill={isFavorited ? '#dc2626' : 'none'}
-                      stroke={isFavorited ? '#dc2626' : '#374151'}
-                      strokeWidth="2" strokeLinecap="round">
-                      <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-                    </svg>
+                    <Heart size={17} strokeWidth={2} color={isFavorited ? '#dc2626' : '#374151'} fill={isFavorited ? '#dc2626' : 'none'} />
                     Add to Favorites
                   </button>
                 </div>
               ) : (
                 <div className="ld-sidebar-cta" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <button className="ld-btn-hover" style={S.chatBtn} onClick={() => navigate('/post/edit/' + listing.id)}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="2.2" strokeLinecap="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                    <Pencil size={16} strokeWidth={2.2} color="#fff" />
                     Edit Listing
                   </button>
                   <button className="ld-btn-hover" style={{ ...S.callBtn, color: '#dc2626', borderColor: '#fecaca' }} onClick={() => setShowDeleteConfirm(true)}>
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="2.2" strokeLinecap="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+                    <Trash2 size={16} strokeWidth={2.2} color="#dc2626" />
                     Delete Listing
                   </button>
                 </div>
@@ -1148,9 +1171,7 @@ export default function ListingDetail() {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                     <span style={S.sellerName}>{ownerDisplayName}</span>
                     {ownerIsVerified && (
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#0F9D58" strokeWidth="2.5" strokeLinecap="round">
-                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
-                      </svg>
+                      <BadgeCheck size={15} strokeWidth={2.2} color="#0F9D58" />
                     )}
                   </div>
                   {ownerIsShop ? (
@@ -1171,14 +1192,14 @@ export default function ListingDetail() {
                     </div>
                   )}
                 </div>
-                <span style={{ color: '#9ca3af', fontSize: 18, fontWeight: 600, lineHeight: 1, marginTop: 10 }} aria-hidden>›</span>
+                <span style={{ color: '#9ca3af', lineHeight: 1, marginTop: 10 }} aria-hidden><ChevronRight size={18} strokeWidth={2.4} color="#9ca3af" /></span>
               </div>
 
               {/* Seller / shop meta rows */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
                 {!isOwner && !ownerIsShop && seller?.last_seen && (
                   <div style={S.sellerMetaRow}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                    <Zap size={14} strokeWidth={2} color="#9ca3af" />
                     <span style={{ color: getOnlineStatus(seller.last_seen).color, fontWeight: 500 }}>
                       {getOnlineStatus(seller.last_seen).label === 'Online now' ? 'Very responsive' : 'Responsive'}
                     </span>
@@ -1187,13 +1208,13 @@ export default function ListingDetail() {
                 )}
                 {!ownerIsShop && memberSince && (
                   <div style={S.sellerMetaRow}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                    <Clock size={14} strokeWidth={2} color="#9ca3af" />
                     <span>Member since {memberSince}</span>
                   </div>
                 )}
                 {(ownerShop?.city || seller?.city) && (
                   <div style={S.sellerMetaRow}>
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="#9ca3af"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+                    <MapPin size={14} color="#9ca3af" />
                     <span>{ownerShop?.city || seller?.city}</span>
                   </div>
                 )}
@@ -1227,7 +1248,7 @@ export default function ListingDetail() {
             {!isOwner && (
               <div style={S.sideCard}>
                 <div style={S.sideCardHdr}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0F9D58" strokeWidth="2.2" strokeLinecap="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  <ShieldCheck size={16} strokeWidth={2.2} color="#0F9D58" />
                   Buy with Confidence
                 </div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 12 }}>
@@ -1257,8 +1278,8 @@ export default function ListingDetail() {
                 <button className="ld-share-opt" style={S.shareOpt} onClick={copyLink}>
                   <div style={{ ...S.shareOptIcon, background: copied ? '#dcfce7' : '#f3f4f6' }}>
                     {copied
-                      ? <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#15803d" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-                      : <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2" strokeLinecap="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                      ? <Check size={18} strokeWidth={2.5} color="#15803d" />
+                      : <Copy size={18} strokeWidth={2} color="#374151" />
                     }
                   </div>
                   <span style={S.shareOptLabel}>{copied ? 'Copied!' : 'Copy Link'}</span>
@@ -1268,7 +1289,7 @@ export default function ListingDetail() {
                   href={`https://wa.me/?text=${encodeURIComponent(listing.title + ' — ' + window.location.href)}`}
                   target="_blank" rel="noopener noreferrer">
                   <div style={{ ...S.shareOptIcon, background: '#dcfce7' }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="#15803d"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                    <MessageCircle size={18} strokeWidth={2} color="#15803d" />
                   </div>
                   <span style={S.shareOptLabel}>WhatsApp</span>
                 </a>
@@ -1277,14 +1298,14 @@ export default function ListingDetail() {
                   href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}`}
                   target="_blank" rel="noopener noreferrer">
                   <div style={{ ...S.shareOptIcon, background: '#dbeafe' }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="#1d4ed8"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>
+                    <Facebook size={18} color="#1d4ed8" />
                   </div>
                   <span style={S.shareOptLabel}>Facebook</span>
                 </a>
                 {/* More */}
                 <button className="ld-share-opt" style={S.shareOpt} onClick={() => setShowShareSheet(true)}>
                   <div style={{ ...S.shareOptIcon, background: '#f3f4f6' }}>
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="#374151"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg>
+                    <MoreHorizontal size={18} color="#374151" />
                   </div>
                   <span style={S.shareOptLabel}>More</span>
                 </button>
@@ -1295,7 +1316,7 @@ export default function ListingDetail() {
             {listing.buyers_looking_for && (
               <div style={{ ...S.sideCard, background: '#f0fdf4', border: '1px solid #bbf7d0' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, fontWeight: 700, color: '#0F9D58', marginBottom: 6 }}>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0F9D58" strokeWidth="2.2" strokeLinecap="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                  <Bell size={16} strokeWidth={2.2} color="#0F9D58" />
                   This item matches buyer alerts
                 </div>
                 <p style={{ fontSize: 12, color: '#374151', marginBottom: 10, lineHeight: 1.5 }}>
@@ -1311,7 +1332,7 @@ export default function ListingDetail() {
             {!isOwner && (
               <div style={S.sideCard}>
                 <div style={S.reportHdr}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" strokeWidth="2.2" strokeLinecap="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                  <Flag size={14} strokeWidth={2.2} color="#f59e0b" />
                   Report this listing
                 </div>
                 <p style={S.reportSub}>Report if this listing is inappropriate or suspicious.</p>
@@ -1344,7 +1365,7 @@ export default function ListingDetail() {
             </div>
             <div style={{ display: 'flex', gap: 10 }}>
               <button className="ld-btn-hover" style={S.barChatBtn} onClick={handleChatWithSeller}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <MessageCircle size={16} strokeWidth={2.2} color="currentColor" />
                 Chat with Seller
               </button>
             </div>
@@ -1368,7 +1389,7 @@ export default function ListingDetail() {
                     disabled={featuring}
                     onClick={handleFeature}
                   >
-                    {featuring ? '…' : `⭐ Feature (${featuredPriceLabel()})`}
+                    {featuring ? '…' : `Feature (${featuredPriceLabel()})`}
                   </button>
                 )}
                 <button className="ld-btn-hover" style={S.barCallBtn} onClick={() => navigate('/post/edit/' + listing.id)}>Edit Listing</button>
@@ -1385,19 +1406,19 @@ export default function ListingDetail() {
           <div style={{ ...S.modal, maxHeight: '86vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
             {!reportSent ? (
               <>
-                <div style={{ fontSize: 36, textAlign: 'center', marginBottom: 12 }}>🚩</div>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}><Flag size={36} strokeWidth={2} color="#dc2626" /></div>
                 <div style={S.modalTitle}>Report this listing</div>
                 <div style={S.modalSub}>Our admins will review your report. Thanks for keeping SokoMW safe.</div>
 
                 <div style={{ fontSize: 13, fontWeight: 700, color: '#374151', margin: '16px 0 8px' }}>Why are you reporting?</div>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   {[
-                    { value: 'scam_or_fraud',  label: 'Scam or fraud',        icon: '⚠️' },
-                    { value: 'counterfeit',   label: 'Counterfeit or fake item', icon: '📦' },
-                    { value: 'prohibited',    label: 'Prohibited or illegal item', icon: '🚫' },
-                    { value: 'misleading',    label: 'Misleading description or price', icon: '❗' },
-                    { value: 'inappropriate',  label: 'Inappropriate content', icon: '🔞' },
-                    { value: 'other',         label: 'Other',                  icon: '📝' },
+                    { value: 'scam_or_fraud',  label: 'Scam or fraud',        icon: <AlertTriangle size={16} strokeWidth={2.2} color="#dc2626" /> },
+                    { value: 'counterfeit',   label: 'Counterfeit or fake item', icon: <Package size={16} strokeWidth={2.2} color="#b45309" /> },
+                    { value: 'prohibited',    label: 'Prohibited or illegal item', icon: <Ban size={16} strokeWidth={2.2} color="#dc2626" /> },
+                    { value: 'misleading',    label: 'Misleading description or price', icon: <CircleAlert size={16} strokeWidth={2.2} color="#d97706" /> },
+                    { value: 'inappropriate',  label: 'Inappropriate content', icon: <EyeOff size={16} strokeWidth={2.2} color="#7c3aed" /> },
+                    { value: 'other',         label: 'Other',                  icon: <FileText size={16} strokeWidth={2.2} color="#6b7280" /> },
                   ].map(r => (
                     <button key={r.value} onClick={() => setReportReason(r.value)} style={{
                       display: 'flex', alignItems: 'center', gap: 10, width: '100%',
@@ -1406,7 +1427,7 @@ export default function ListingDetail() {
                       background: reportReason === r.value ? '#fef2f2' : '#fff',
                       fontSize: 13.5, fontWeight: 600, color: '#374151', textAlign: 'left', fontFamily: 'inherit',
                     }}>
-                      <span style={{ fontSize: 16 }}>{r.icon}</span> {r.label}
+                      <span style={{ display: 'inline-flex' }}>{r.icon}</span> {r.label}
                       {reportReason === r.value && <span style={{ marginLeft: 'auto', color: '#dc2626' }}>✓</span>}
                     </button>
                   ))}
@@ -1438,7 +1459,7 @@ export default function ListingDetail() {
               </>
             ) : (
               <>
-                <div style={{ fontSize: 44, textAlign: 'center', marginBottom: 10 }}>✅</div>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 10 }}><CheckCircle size={44} strokeWidth={2} color="#0F9D58" /></div>
                 <div style={S.modalTitle}>Report submitted</div>
                 <div style={S.modalSub}>
                   Thank you for helping keep SokoMW safe. Our admin team has been notified and will review this listing.
@@ -1456,7 +1477,7 @@ export default function ListingDetail() {
       {showDeleteConfirm && (
         <div style={S.overlay} onClick={() => setShowDeleteConfirm(false)}>
           <div style={S.modal} onClick={e => e.stopPropagation()}>
-            <div style={{ fontSize: 36, textAlign: 'center', marginBottom: 12 }}>🗑️</div>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 12 }}><Trash2 size={36} strokeWidth={2} color="#dc2626" /></div>
             <div style={S.modalTitle}>Delete this listing?</div>
             <div style={S.modalSub}>This can't be undone. All photos and details will be permanently removed.</div>
             <div style={{ display: 'flex', gap: 10 }}>
@@ -1476,10 +1497,10 @@ export default function ListingDetail() {
             <div style={S.modalTitle}>Share Listing</div>
             <div style={{ padding: '8px 0' }}>
               {[
-                { onClick: () => { copyLink(); setShowShareSheet(false) }, icon: copied ? <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#0F9D58" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg> : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#374151" strokeWidth="2" strokeLinecap="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>, bg: copied ? '#dcfce7' : '#f3f4f6', label: copied ? 'Copied!' : 'Copy link', href: null },
-                { href: `https://wa.me/?text=${encodeURIComponent(listing.title + ' — ' + window.location.href)}`, icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="#15803d"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>, bg: '#dcfce7', label: 'Share on WhatsApp' },
-                { href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}`, icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="#1d4ed8"><path d="M18 2h-3a5 5 0 0 0-5 5v3H7v4h3v8h4v-8h3l1-4h-4V7a1 1 0 0 1 1-1h3z"/></svg>, bg: '#dbeafe', label: 'Share on Facebook' },
-                { href: `https://twitter.com/intent/tweet?text=${encodeURIComponent(listing.title)}&url=${encodeURIComponent(window.location.href)}`, icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="#0ea5e9"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.748l7.73-8.835L1.254 2.25H8.08l4.259 5.63 5.905-5.63zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>, bg: '#f0f9ff', label: 'Post on X' },
+                { onClick: () => { copyLink(); setShowShareSheet(false) }, icon: copied ? <Check size={20} strokeWidth={2.5} color="#0F9D58" /> : <Link2 size={20} strokeWidth={2} color="#374151" />, bg: copied ? '#dcfce7' : '#f3f4f6', label: copied ? 'Copied!' : 'Copy link', href: null },
+                { href: `https://wa.me/?text=${encodeURIComponent(listing.title + ' — ' + window.location.href)}`, icon: <MessageCircle size={20} strokeWidth={2} color="#15803d" />, bg: '#dcfce7', label: 'Share on WhatsApp' },
+                { href: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(window.location.href)}`, icon: <Facebook size={20} color="#1d4ed8" />, bg: '#dbeafe', label: 'Share on Facebook' },
+                { href: `https://twitter.com/intent/tweet?text=${encodeURIComponent(listing.title)}&url=${encodeURIComponent(window.location.href)}`, icon: <Twitter size={20} color="#0ea5e9" />, bg: '#f0f9ff', label: 'Post on X' },
               ].map(({ onClick, href, icon, bg, label }) => {
                 const content = (
                   <>
@@ -1529,7 +1550,7 @@ function YouMayAlsLike({ currentListingId, category, navigate }) {
           <div style={{ width: 56, height: 56, borderRadius: 8, background: '#f3f4f6', overflow: 'hidden', flexShrink: 0, border: '1px solid #e5e7eb' }}>
             {item.images?.[0]
               ? <img src={item.images[0]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
-              : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20 }}>📦</div>
+              : <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Package size={20} strokeWidth={1.6} color="#9ca3af" /></div>
             }
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
@@ -1537,9 +1558,7 @@ function YouMayAlsLike({ currentListingId, category, navigate }) {
             <div style={{ fontSize: 13, fontWeight: 700, color: '#0F9D58', marginTop: 2 }}>{formatPrice(item.price)}</div>
             {item.city && (
               <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}>
-                <svg width="10" height="10" viewBox="0 0 24 24" fill="#9ca3af" style={{ flexShrink: 0 }}>
-                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-                </svg>
+                <MapPin size={10} color="#9ca3af" style={{ flexShrink: 0 }} />
                 <span style={{
                   fontSize: 10.5, color: '#6b7280', fontWeight: 500,
                   overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -1550,9 +1569,7 @@ function YouMayAlsLike({ currentListingId, category, navigate }) {
             )}
           </div>
           <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#d1d5db', padding: 4 }}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-              <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>
-            </svg>
+            <Heart size={16} strokeWidth={2} color="currentColor" />
           </button>
         </div>
       ))}
