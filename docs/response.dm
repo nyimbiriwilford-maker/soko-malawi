@@ -1,28 +1,23 @@
-TASK: On the product page, make ordering not visible for users for now. No online ordering — users connect to sellers through in-app chat, WhatsApp link, and call instead.
+TASK: On the home page, Services and Jobs are presented in mobile view like on the website (horizontal card rails). Fix this — in mobile the view should be like in a mobile app: vertical list (ul) presentation.
 
-DONE — all ordering UI hidden; contact CTAs (Chat / WhatsApp / Call / Email) are now the only way to reach sellers:
+DONE in src/pages/Home.jsx — ShopsJobsServicesRow section (Jobs + Services blocks):
 
-1. Product page — src/pages/ListingDetail.jsx (mobile CTA card, desktop sidebar CTA stack, desktop sticky bottom bar)
-   - "Place Order" button removed from all three CTA locations (mobile stack, desktop sidebar, desktop sticky footer bar).
-   - "Pay on delivery / Inspect before paying / Rate after delivery" assurance row removed (it was tied to the order flow).
-   - Quantity stepper (+/−) removed from the Bulk Pricing card, and the "Total: X for N units" line removed — these only fed the order total.
-   - Place Order modal and the "Order Placed! … View My Orders" confirmation overlay fully removed, along with the PlaceOrderModal import and the showOrderModal / orderPlaced / quantity state, orderable and totalPrice computations.
-   - Bulk Pricing table still shows tier discounts (informational only — "Quantity / Price per unit / You save" table headers kept, no order action).
-   - Contact CTAs untouched and now primary: Chat with Seller (in-app chat), WhatsApp Seller (wa.me link), Call Seller (tel:), Email Seller (mailto:), plus Add to Favorites.
+1. Mobile app-style vertical list (CSS-only, ≤768px breakpoint)
+   - `.soko-sjs-rail` — the horizontal scroll rail used for Jobs and Services — becomes a vertical stacked list on mobile: `flex-direction: column`, no horizontal scrolling, no scroll-snap, full-width items, 10px vertical gaps. Desktop/tablet (>768px) keeps the existing horizontal rail presentation untouched.
+   - Loading skeletons in these rails become full-width list-row placeholders on mobile (height 88px).
 
-2. Buyer side — src/App.jsx
-   - /orders route removed (and the OrdersPage lazy import) so the My Orders page is not reachable anywhere in the app.
+2. Jobs — mobile list item style (`.soko-work-card`)
+   - Full-width compact row card: 88px media thumbnail on the left, text body on the right — the classic mobile-app job list row.
+   - Tighter app-like typography: 1-line title clamp, smaller company/type/salary/location text, slimmer Apply button.
 
-3. Notifications — src/pages/Notifications.jsx
-   - Order-related notification taps (order_placed / shipped / delivered / cancelled) no longer deep-link to /orders; they now open the related listing (fallback: the seller's profile).
+3. Services — mobile list item style (`.soko-service-card`)
+   - The desktop vertical card (image on top) becomes a horizontal row card on mobile: 88px square thumbnail on the left with the category chip overlaid at its top-left, name/location/rate on the right, and the "Book Now" pill as an inline compact chip instead of a full-width bar.
 
-4. Seller side — src/pages/ShopDashboard.jsx
-   - "Orders" tab (OrderManager) removed from the shop dashboard tabs.
-   - Overview stats de-orderified: "Orders received" card → "Buyer chats" (distinct people who messaged the seller, counted from the messages table), "Revenue (delivered)" card → "Listing saves", duplicate saves card → "Verification". Low-stock / restock banner kept (it's about products, not orders).
+4. Job filter chips row
+   - Changed `overflow: visible` to horizontal scroll (`overflow-x: auto`) so the three filter dropdowns (Category / Type / Sort) can't overflow the screen edge on narrow phones; dropdown popouts still open since overflow-y remains visible.
 
-5. Kept for easy re-enabling later ("for now"):
-   - src/components/PlaceOrderModal.jsx, src/components/OrderManager.jsx, src/pages/OrdersPage.jsx and src/lib/orders.js are left in the codebase but are no longer imported/routed by any user-facing page — nothing references them, so they add zero UI. To re-enable ordering later, restore the /orders route, the Orders tab, and the Place Order CTAs.
+No JSX structure or data flow changed — same cards, same click handlers, same filters; only the mobile presentation via the section's media query. Website (desktop) view is unchanged.
 
 VERIFIED:
-- npx eslint on edited files — only pre-existing issues remain (same unused-var / set-state-in-effect errors exist on HEAD; my removals introduced none).
-- npm run build — success (8.14s), and no OrdersPage/PlaceOrder chunk is emitted in dist/assets, confirming the order flow is fully unwired from the app.
+- npx eslint src/pages/Home.jsx — same 68 pre-existing problems as on HEAD (0 new issues introduced).
+- npm run build — built successfully.

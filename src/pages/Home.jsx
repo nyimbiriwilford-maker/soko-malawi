@@ -3698,20 +3698,58 @@ function ShopsJobsServicesRow({ navigate, shops, jobs, services, loading, curren
         @media (max-width: 768px) {
           .soko-shops-jobs-section { padding: 10px 14px 12px !important; }
           .soko-sjs-title { font-size: 16px !important; }
+
+          /* ── Mobile app-style vertical list (not website rails) ── */
           .soko-sjs-rail {
-            margin: 0 -14px;
-            padding-left: 14px !important;
-            padding-right: 14px !important;
-            scroll-padding-inline: 14px;
-            gap: 10px !important;
+            margin: 0;
+            padding: 0 !important;
+            flex-direction: column;
+            gap: 10px;
+            overflow-x: visible;
+            scroll-snap-type: none;
           }
+          .soko-sjs-rail > .skeleton { width: 100% !important; height: 88px !important; }
+
+          /* Jobs — compact row card like a mobile app list item */
           .soko-work-card {
-            width: 288px;
-            max-width: min(288px, 88vw);
-            min-height: 140px;
+            width: 100%;
+            max-width: 100%;
+            min-height: 0;
+            border-radius: 14px;
           }
-          .soko-wc-media { width: 84px; min-width: 84px; }
-          .soko-wc-fallback { width: 48px; height: 48px; }
+          .soko-wc-media { width: 88px; min-width: 88px; }
+          .soko-wc-fallback { width: 44px; height: 44px; }
+          .soko-wc-body { padding: 10px 12px; }
+          .soko-wc-title { font-size: 13px; -webkit-line-clamp: 1; }
+          .soko-wc-company { font-size: 11px; }
+          .soko-wc-type { font-size: 9px; padding: 2px 7px; }
+          .soko-wc-salary { font-size: 10.5px; }
+          .soko-wc-loc { font-size: 10px; }
+          .soko-wc-apply-btn { padding: 5px 0; font-size: 10.5px; }
+
+          /* Services — square-thumbnail row card like a mobile app list item */
+          .soko-service-card {
+            width: 100%;
+            max-width: 100%;
+            border-radius: 14px;
+            flex-direction: row;
+            align-items: stretch;
+          }
+          .soko-sc-top {
+            width: 88px;
+            min-width: 88px;
+            height: auto;
+            min-height: 88px;
+            border-right: 1px solid ${T.gray200};
+          }
+          .soko-sc-img { width: 100%; height: 100%; }
+          .soko-sc-cat { top: 6px; left: 6px; bottom: auto; font-size: 8px; padding: 2px 6px; max-width: calc(100% - 12px); }
+          .soko-sc-body { padding: 10px 12px; gap: 3px; }
+          .soko-sc-name { font-size: 13px; -webkit-line-clamp: 1; }
+          .soko-sc-loc { font-size: 10px; }
+          .soko-sc-rate { font-size: 10px; }
+          .soko-sc-cta-btn { width: auto; align-self: flex-start; padding: 4px 14px; font-size: 10.5px; }
+
           .soko-sjs-block { margin-bottom: 18px; }
         }
       `}</style>
@@ -3874,7 +3912,7 @@ function ShopsJobsServicesRow({ navigate, shops, jobs, services, loading, curren
             </button>
           </div>
           {/* Job filters */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'nowrap', overflow: 'visible', width: '100%' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'nowrap', overflowX: 'auto', overflowY: 'visible', width: '100%', scrollbarWidth: 'none' }}>
             <div ref={jobCatRef} style={{ position: 'relative' }}>
               <button type="button" onClick={() => { setJobCatOpen(v => !v); setJobTypeOpen(false); setJobSortOpen(false) }} style={{
                 display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 999, padding: '7px 13px',
