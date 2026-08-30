@@ -460,33 +460,48 @@ export default function StatusPage() {
 
   useEffect(() => {
     let cancelled = false
-    supabase.auth.getUser()
-      .then(({ data: { user } }) => {
+
+    // getSession() reads the local store — instant, no network round-trip.
+    // (getUser() hits the auth server; on a slow/flaky connection it made the
+    // page open blank and, on failure, bounce to /login and back.)
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
         if (cancelled) return
-        if (!user) { setGate('out'); navigate('/login'); return }
+        const u = session?.user
+        if (!u) { setGate('out'); navigate('/login', { replace: true }); return }
+        setUser({ ...u })
+        setGate('ready')
         // Profile enrichment is best-effort — a failed query must never
-        // leave the page stuck blank. The raw auth user is enough to render.
+        // block or blank the page; the raw auth user is enough to render.
         supabase.from('profiles').select('full_name, avatar_url, city')
-          .eq('id', user.id).maybeSingle()
-          .then(({ data, error }) => {
+          .eq('id', u.id).maybeSingle()
+          .then(({ data }) => {
             if (cancelled) return
-            setUser(error ? { ...user } : { ...user, ...(data || {}) })
-            setGate('ready')
+            setUser(prev => prev ? { ...prev, ...(data || {}) } : { ...u, ...(data || {}) })
           })
-          .catch(() => {
-            if (cancelled) return
-            setUser({ ...user })
-            setGate('ready')
-          })
+          .catch(() => { /* profile optional */ })
       })
       .catch(() => {
         if (cancelled) return
-        setGate('out'); navigate('/login')
+        setGate('out'); navigate('/login', { replace: true })
       })
     return () => { cancelled = true }
   }, [navigate])
 
-  if (gate !== 'ready' || !user) return null
+  if (gate !== 'ready' || !user) {
+    // Branded loader instead of a blank white screen while gating
+    return (
+      <div style={{ minHeight: '100vh', background: '#f6f8f7', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
+        <div style={{
+          width: 42, height: 42, borderRadius: '50%',
+          border: '3px solid #e8f5ee', borderTopColor: '#0F9D58',
+          animation: 'st-gate-spin 0.8s linear infinite',
+        }} />
+        <div style={{ fontSize: 13, color: '#6b7280', fontWeight: 600 }}>Loading statuses…</div>
+        <style>{`@keyframes st-gate-spin { to { transform: rotate(360deg) } }`}</style>
+      </div>
+    )
+  }
   return <StatusPageInner user={user} navigate={navigate} />
 }
 
