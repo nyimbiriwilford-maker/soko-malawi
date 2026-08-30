@@ -80,10 +80,12 @@ export default function StoryComposer({ userId, onDone, onClose }) {
   useEffect(() => {
     if (!userId) return
     loadOwnerTagItems(supabase, userId).then(setTagItems)
-    supabase.from('profiles').select('city, district').eq('id', userId).maybeSingle()
+    // profiles has no district column — city only, ignore failures
+    supabase.from('profiles').select('city').eq('id', userId).maybeSingle()
       .then(({ data }) => {
-        if (data?.city || data?.district) setLocation(data.city || data.district || '')
+        if (data?.city) setLocation(data.city || '')
       })
+      .catch(() => {})
   }, [userId])
 
   useEffect(() => {

@@ -667,10 +667,18 @@ const [sortBy, setSortBy] = useState('newest')
     const providerIds = [...new Set(list.map(s => s.provider_id).filter(Boolean))]
     const profileMap = {}
     if (providerIds.length) {
-      const { data: profiles } = await supabase
+      // profiles has no district column — fall back to safe columns on 400
+      const { data: profiles, error: profErr } = await supabase
         .from('profiles').select('id, full_name, avatar_url, account_type, district')
         .in('id', providerIds)
-      const shopAccountIds = (profiles || [])
+      let rows = profiles
+      if (profErr && /district|column/i.test(profErr.message || '')) {
+        const { data: fallback } = await supabase
+          .from('profiles').select('id, full_name, avatar_url, account_type')
+          .in('id', providerIds)
+        rows = fallback
+      }
+      const shopAccountIds = (rows || [])
         .filter(p => p.account_type === 'shop')
         .map(p => p.id)
       const shopMap = {}
@@ -681,7 +689,7 @@ const [sortBy, setSortBy] = useState('newest')
           .in('owner_id', shopAccountIds)
         ;(shops || []).forEach(s => { shopMap[s.owner_id] = shopMap[s.owner_id] || s.name })
       }
-      ;(profiles || []).forEach(p => { profileMap[p.id] = { ...p, shop_name: shopMap[p.id] || null } })
+      ;(rows || []).forEach(p => { profileMap[p.id] = { ...p, shop_name: shopMap[p.id] || null } })
     }
 
     setServices(list.map(s => ({

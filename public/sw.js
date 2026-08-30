@@ -1,4 +1,4 @@
-const CACHE = 'sokomw-v9'
+const CACHE = 'sokomw-v10'
 const IMAGES_CACHE = 'sokomw-images-v1'
 const MAX_CACHED_IMAGES = 120
 const ASSETS = ['/', '/index.html']
@@ -12,10 +12,21 @@ self.addEventListener('install', e => {
 // ── Activate & clean old caches ──────────────────────────
 self.addEventListener('activate', e => {
   const keep = [CACHE, IMAGES_CACHE]
-  e.waitUntil(caches.keys().then(keys =>
-    Promise.all(keys.filter(k => !keep.includes(k)).map(k => caches.delete(k)))
-  ))
-  self.clients.claim()
+  e.waitUntil(
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(k => !keep.includes(k)).map(k => caches.delete(k))))
+      // Re-cache a fresh app shell so a stale cached index.html can never
+      // reference hashed bundles that no longer exist on the server
+      // (stale shell → 404 bundles → blank white page on mobile).
+      .then(async () => {
+        try {
+          const cache = await caches.open(CACHE)
+          const shell = await fetch('/index.html', { cache: 'reload' })
+          if (shell.ok) await cache.put('/index.html', shell)
+        } catch { /* network unavailable — keep existing shell */ }
+        return self.clients.claim()
+      })
+  )
 })
 
 function isDevBypass(url) {
@@ -108,8 +119,13 @@ self.addEventListener('fetch', e => {
     fetch(e.request).catch(async () => {
       const cached = await caches.match(e.request)
       if (cached) return cached
-      // App shell fallback for navigations only
+      // App shell fallback for navigations — network-fresh shell first,
+      // cached shell only when offline (never a stale shell while online).
       if (e.request.mode === 'navigate') {
+        try {
+          const fresh = await fetch('/index.html', { cache: 'reload' })
+          if (fresh.ok) return fresh
+        } catch { /* offline */ }
         const shell = await caches.match('/index.html')
         if (shell) return shell
       }
