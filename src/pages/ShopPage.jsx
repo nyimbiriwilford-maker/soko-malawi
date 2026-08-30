@@ -299,9 +299,15 @@ const css = `
     content: ''; position: absolute; bottom: -1px; left: 8px; right: 8px; height: 2.5px;
     background: var(--theme); border-radius: 2px 2px 0 0;
   }
-  .sp-tabs-right { display: flex; align-items: center; gap: 8px; padding-bottom: 8px; flex-shrink: 0; }
+  /* Search + filter toolbar — lives above the products inside the listings
+     column (scrolls with the page) so the sticky tab bar stays slim */
+  .sp-listings-toolbar {
+    display: flex; align-items: center; gap: 8px;
+    flex-wrap: wrap; margin: 0 0 14px;
+  }
+  .sp-listings-toolbar .sp-shop-search { flex: 1 1 220px; }
   .sp-shop-search {
-    position: relative; display: none;
+    position: relative; display: block;
   }
   .sp-shop-search input {
     height: 36px; border-radius: 10px; border: 1.5px solid ${T.border};
@@ -1056,15 +1062,14 @@ const css = `
       font-size: 13px;
       min-height: 44px;
     }
-    .sp-tabs-right {
-      width: 100%;
-      padding: 8px 10px 10px;
-      justify-content: flex-start;
+    /* Search + filter toolbar on mobile — in-flow above the products, so the
+       sticky tab bar stays slim and the products keep the viewport. */
+    .sp-listings-toolbar {
+      margin: 0 0 10px;
+      gap: 6px;
       flex-wrap: wrap;
-      gap: 8px;
-      background: ${T.offwhite};
     }
-    .sp-shop-search { display: block; flex: 1 1 100%; }
+    .sp-listings-toolbar .sp-shop-search { flex: 1 1 100%; }
     .sp-shop-search input {
       width: 100%; min-width: 0; font-size: 16px; height: 42px;
       border-radius: 11px;
@@ -1137,10 +1142,6 @@ const css = `
       gap: 12px !important;
     }
     .sp-verify-benefits { display: none !important; }
-  }
-
-  @media (min-width: 901px) {
-    .sp-shop-search { display: block; }
   }
 
   @media (max-width: 600px) {
@@ -2801,47 +2802,6 @@ if (!shop) {
             </button>
           ))}
         </div>
-        {tab === 'listings' && (
-          <div className="sp-tabs-right">
-            <div className="sp-shop-search">
-              <input
-                type="search"
-                placeholder="Search this shop…"
-                value={shopLocalSearch}
-                onChange={e => {
-                  setShopLocalSearch(e.target.value)
-                  setTab('listings')
-                }}
-                enterKeyHint="search"
-                autoComplete="off"
-              />
-              <span className="sp-shop-search-icon"><Icon.Search /></span>
-            </div>
-            <select
-              className="sp-sort-select"
-              value={filterCategory}
-              onChange={e => setFilterCategory(e.target.value)}
-            >
-              <option value="all">All Categories</option>
-              {[...new Set(allListings.map(l => l.category).filter(Boolean))].map(cat => (
-                <option key={cat} value={cat}>{cat}</option>
-              ))}
-            </select>
-            <select
-              className="sp-sort-select"
-              value={sortBy}
-              onChange={e => setSortBy(e.target.value)}
-            >
-              <option value="latest">Latest</option>
-              <option value="price-low">Price: Low to High</option>
-              <option value="price-high">Price: High to Low</option>
-            </select>
-            <div className="sp-view-toggle">
-              <button type="button" className={`sp-view-btn ${viewMode === 'grid' ? 'active' : ''}`} onClick={() => setViewMode('grid')} aria-label="Grid view"><Icon.Grid /></button>
-              <button type="button" className={`sp-view-btn ${viewMode === 'list' ? 'active' : ''}`} onClick={() => setViewMode('list')} aria-label="List view"><Icon.List /></button>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* ── MAIN ── */}
@@ -2849,6 +2809,47 @@ if (!shop) {
         <div className="sp-main-col" ref={listingsRef}>
           {tab === 'listings' && (
             <>
+              {/* Search + filters — in-flow toolbar above the products so the
+                  sticky tab bar stays slim and listings keep the viewport */}
+              <div className="sp-listings-toolbar">
+                <div className="sp-shop-search">
+                  <input
+                    type="search"
+                    placeholder="Search this shop…"
+                    value={shopLocalSearch}
+                    onChange={e => {
+                      setShopLocalSearch(e.target.value)
+                      setTab('listings')
+                    }}
+                    enterKeyHint="search"
+                    autoComplete="off"
+                  />
+                  <span className="sp-shop-search-icon"><Icon.Search /></span>
+                </div>
+                <select
+                  className="sp-sort-select"
+                  value={filterCategory}
+                  onChange={e => setFilterCategory(e.target.value)}
+                >
+                  <option value="all">All Categories</option>
+                  {[...new Set(allListings.map(l => l.category).filter(Boolean))].map(cat => (
+                    <option key={cat} value={cat}>{cat}</option>
+                  ))}
+                </select>
+                <select
+                  className="sp-sort-select"
+                  value={sortBy}
+                  onChange={e => setSortBy(e.target.value)}
+                >
+                  <option value="latest">Latest</option>
+                  <option value="price-low">Price: Low to High</option>
+                  <option value="price-high">Price: High to Low</option>
+                </select>
+                <div className="sp-view-toggle">
+                  <button type="button" className={`sp-view-btn ${viewMode === 'grid' ? 'active' : ''}`} onClick={() => setViewMode('grid')} aria-label="Grid view"><Icon.Grid /></button>
+                  <button type="button" className={`sp-view-btn ${viewMode === 'list' ? 'active' : ''}`} onClick={() => setViewMode('list')} aria-label="List view"><Icon.List /></button>
+                </div>
+              </div>
               {listingsLoading ? (
                 <div className="sp-skel-grid" aria-busy="true" aria-label="Loading products">
                   {Array.from({ length: 6 }).map((_, i) => (
