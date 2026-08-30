@@ -1,25 +1,29 @@
-TASK: On the shop page, the section with the search box and filters takes a lot of space and hides the listings while scrolling — listings get a small visible area. Move the search and other functions to an appropriate place so listings keep proper visibility.
+TASK: On the product page, make it possible for admin to take action when a person has reported a listing. Activate the Report Listing button and give admin power to take appropriate action.
 
-ROOT CAUSE:
-- On mobile the whole tab bar (.sp-tabs) is sticky under the top nav. It contained BOTH the tab pills (Listings / About / Reviews / Policies) AND the search box + two dropdown filters + view toggle (.sp-tabs-right). That pinned block was ~160px tall on phones, permanently covering nearly a third of the screen while scrolling products.
+DONE — reporting is now a full loop: buyer reports → admin reviews → admin acts on the listing.
 
-DONE in src/pages/ShopPage.jsx:
+1. Product page — Report Listing activated (src/pages/ListingDetail.jsx)
+   - The dead "Report Listing" button in the sidebar now opens a professional report modal:
+     • Reason picker with 6 clearly-labelled options (Scam or fraud, Counterfeit or fake item, Prohibited or illegal item, Misleading description or price, Inappropriate content, Other) as selectable cards with a red selected state.
+     • Optional details textarea (500 char limit).
+     • Submit disabled until a reason is picked; loading state; error alert on failure.
+   - On submit it inserts into the existing `user_reports` table with: reporter_id (current user), reported_user_id (the seller), listing_id, reason, details. No new migration needed — the table and RLS already support this (insert policy: reporter_id = auth.uid()).
+   - Success state: "Report submitted — our admin team has been notified" confirmation.
+   - Anti-spam: after reporting, the button becomes "✓ Reported" and is disabled for the rest of the session (sessionStorage flag keyed by listing id, set both after submit and read on load).
 
-1. Sticky tab bar slimmed down
-   - The sticky bar now contains only the four tab pills. It keeps its slim single-row height (~48px), so scrolling listings now get the space the old filter block was stealing.
+2. Admin — full action power on reported listings (src/pages/Admin.jsx, Safety tab → User reports)
+   - Report cards for listing reports now show the reported product inline: thumbnail, title, live listing status, and a "View →" link to the product page. If the listing was already deleted, it shows "Listing unavailable (may have been deleted)".
+   - New admin actions directly on the reported listing:
+     • 🚫 Remove Listing — sets the listing to inactive (hidden from the marketplace immediately)
+     • ↩ Restore — re-activates a deactivated listing
+     • 🗑 Delete — permanently deletes the listing (with confirm)
+   - Existing ✓ Resolve / ✕ Dismiss report-status actions unchanged; listing actions work independently of report status so admins can act first, then resolve.
+   - The Safety tab badge already counts open listing reports (it counts all open user_reports) so admins see pending listing reports at a glance.
 
-2. Search + filters moved into the listings column (new .sp-listings-toolbar)
-   - The search box, Category filter, Sort select and Grid/List view toggle moved out of the tab bar into a compact in-flow toolbar that sits directly above the products inside the listings column.
-   - It scrolls away with the page like the products do (no longer pinned), so nothing overlays the listings while scrolling.
-   - It appears only when the Listings tab is active (same condition as before) and shows above the skeleton, the empty state (so "Clear filters" is right there) and the product grid alike.
-
-3. Layout
-   - Desktop: single row — search flexes to fill (min 220px), selects keep natural width, view toggle at the end; wraps gracefully on narrower widths.
-   - Mobile (≤900px): search takes the full row on its own line (42px tall, 16px font for no iOS zoom), the two selects share the next row, view toggle aligned right — same touch sizes as before.
-
-4. Cleanup
-   - Removed the now-dead .sp-tabs-right styles and the obsolete min-width:901px display override for the search box (it no longer hides on desktop).
+3. Backend — nothing new required
+   - `user_reports` table (listing_id, reported_user_id, reason, details, status, admin_note) already existed with proper RLS: users insert their own reports; admins (public.is_admin()) can read all and update status.
+   - Admin listing updates/deletes already allowed by the `listings_update_own` / delete policies via is_admin().
 
 VERIFIED:
-- npx eslint src/pages/ShopPage.jsx — same 8 pre-existing problems as on HEAD (0 new issues).
+- npx eslint on ListingDetail.jsx + Admin.jsx — same 19 pre-existing problems as on HEAD (0 new issues).
 - npm run build — built successfully.

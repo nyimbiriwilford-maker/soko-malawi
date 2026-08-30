@@ -134,6 +134,14 @@ export default function ListingDetail() {
   const [isFavorited, setIsFavorited]     = useState(false)
   const [featuring, setFeaturing]         = useState(false)
   const [featureError, setFeatureError]   = useState(null)
+  const [showReportModal, setShowReportModal] = useState(false)
+  const [reportReason, setReportReason]    = useState(null)
+  const [reportDetails, setReportDetails] = useState('')
+  const [reportSubmitting, setReportSubmitting] = useState(false)
+  const [reportSent, setReportSent]       = useState(false)
+  const [alreadyReported, setAlreadyReported] = useState(() => {
+    try { return sessionStorage.getItem('soko_reported_' + window.location.pathname.split('/').pop()) === '1' } catch { return false }
+  })
   const [ldSearch, setLdSearch] = useState('')
   const touchStartX = useRef(null)
   const viewNotifSent = useRef(false)
@@ -167,6 +175,30 @@ export default function ListingDetail() {
         p_session_key: sessionKey,
       })
     } catch { /* migration optional */ }
+  }
+
+  async function submitReport() {
+    if (!reportReason || reportSubmitting) return
+    setReportSubmitting(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { navigate('/login'); return }
+      const { error } = await supabase.from('user_reports').insert({
+        reporter_id: user.id,
+        reported_user_id: listing.seller_id || null,
+        listing_id: listing.id,
+        reason: reportReason,
+        details: reportDetails.trim() || null,
+      })
+      if (error) throw error
+      setReportSent(true)
+      setAlreadyReported(true)
+      try { sessionStorage.setItem('soko_reported_' + listing.id, '1') } catch { /* private mode */ }
+    } catch (e) {
+      alert(e?.message || 'Could not submit your report. Please try again.')
+    } finally {
+      setReportSubmitting(false)
+    }
   }
 
   async function loadListing() {
@@ -1283,7 +1315,9 @@ export default function ListingDetail() {
                   Report this listing
                 </div>
                 <p style={S.reportSub}>Report if this listing is inappropriate or suspicious.</p>
-                <button style={S.reportBtn}>Report Listing</button>
+                <button style={alreadyReported ? { ...S.reportBtn, opacity: .55, cursor: 'default' } : S.reportBtn} disabled={alreadyReported} onClick={() => { setShowReportModal(true); setReportSent(false) }}>
+                  {alreadyReported ? '✓ Reported' : 'Report Listing'}
+                </button>
               </div>
             )}
 
@@ -1341,6 +1375,79 @@ export default function ListingDetail() {
                 <button className="ld-btn-hover" style={{ ...S.barCallBtn, color: '#dc2626', borderColor: '#fecaca' }} onClick={() => setShowDeleteConfirm(true)}>Delete</button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── REPORT LISTING MODAL ── */}
+      {showReportModal && (
+        <div style={S.overlay} onClick={() => setShowReportModal(false)}>
+          <div style={{ ...S.modal, maxHeight: '86vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+            {!reportSent ? (
+              <>
+                <div style={{ fontSize: 36, textAlign: 'center', marginBottom: 12 }}>🚩</div>
+                <div style={S.modalTitle}>Report this listing</div>
+                <div style={S.modalSub}>Our admins will review your report. Thanks for keeping SokoMW safe.</div>
+
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#374151', margin: '16px 0 8px' }}>Why are you reporting?</div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {[
+                    { value: 'scam_or_fraud',  label: 'Scam or fraud',        icon: '⚠️' },
+                    { value: 'counterfeit',   label: 'Counterfeit or fake item', icon: '📦' },
+                    { value: 'prohibited',    label: 'Prohibited or illegal item', icon: '🚫' },
+                    { value: 'misleading',    label: 'Misleading description or price', icon: '❗' },
+                    { value: 'inappropriate',  label: 'Inappropriate content', icon: '🔞' },
+                    { value: 'other',         label: 'Other',                  icon: '📝' },
+                  ].map(r => (
+                    <button key={r.value} onClick={() => setReportReason(r.value)} style={{
+                      display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+                      padding: '11px 14px', borderRadius: 10, cursor: 'pointer',
+                      border: reportReason === r.value ? '2px solid #dc2626' : '1.5px solid #e5e7eb',
+                      background: reportReason === r.value ? '#fef2f2' : '#fff',
+                      fontSize: 13.5, fontWeight: 600, color: '#374151', textAlign: 'left', fontFamily: 'inherit',
+                    }}>
+                      <span style={{ fontSize: 16 }}>{r.icon}</span> {r.label}
+                      {reportReason === r.value && <span style={{ marginLeft: 'auto', color: '#dc2626' }}>✓</span>}
+                    </button>
+                  ))}
+                </div>
+
+                <div style={{ fontSize: 13, fontWeight: 700, color: '#374151', margin: '16px 0 8px' }}>Details <span style={{ fontWeight: 500, color: '#9ca3af' }}>(optional)</span></div>
+                <textarea
+                  value={reportDetails}
+                  onChange={e => setReportDetails(e.target.value)}
+                  placeholder="Tell us what happened…"
+                  maxLength={500}
+                  style={{
+                    width: '100%', minHeight: 88, padding: '10px 12px', borderRadius: 10,
+                    border: '1.5px solid #e5e7eb', fontSize: 13, fontFamily: 'inherit',
+                    outline: 'none', resize: 'vertical', boxSizing: 'border-box',
+                  }}
+                />
+
+                <div style={{ display: 'flex', gap: 10, marginTop: 18 }}>
+                  <button style={S.modalCancel} onClick={() => setShowReportModal(false)}>Cancel</button>
+                  <button
+                    style={{ ...S.modalDelete, opacity: reportReason && !reportSubmitting ? 1 : .5, cursor: reportReason && !reportSubmitting ? 'pointer' : 'default' }}
+                    disabled={!reportReason || reportSubmitting}
+                    onClick={submitReport}
+                  >
+                    {reportSubmitting ? 'Sending…' : 'Submit Report'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ fontSize: 44, textAlign: 'center', marginBottom: 10 }}>✅</div>
+                <div style={S.modalTitle}>Report submitted</div>
+                <div style={S.modalSub}>
+                  Thank you for helping keep SokoMW safe. Our admin team has been notified and will review this listing.
+                </div>
+                <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }}>
+                  <button style={{ ...S.modalDelete, background: '#0F9D58', minWidth: 140 }} onClick={() => setShowReportModal(false)}>Done</button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

@@ -431,10 +431,25 @@ async function loadUserSafety() {
         .in('id', [...ids])
       profileMap = Object.fromEntries((profs || []).map(p => [p.id, p]))
     }
+
+    // Attach the reported listing (title/thumb) for listing reports
+    const listingIds = [...new Set((reports || []).map(r => r.listing_id).filter(Boolean))]
+    const listingMap = {}
+    if (listingIds.length > 0) {
+      try {
+        const { data: listingRows } = await supabase
+          .from('listings')
+          .select('id, title, images, status, seller_id')
+          .in('id', listingIds.slice(0, 200))
+        for (const l of listingRows || []) listingMap[l.id] = l
+      } catch (e) { console.warn('Report listings lookup failed:', e) }
+    }
+
     setUserReports((reports || []).map(r => ({
       ...r,
       reporter: profileMap[r.reporter_id] || null,
       reported: profileMap[r.reported_user_id] || null,
+      listing: r.listing_id ? (listingMap[r.listing_id] || null) : null,
     })))
   } catch (e) {
     console.error('User reports error:', e)
@@ -494,6 +509,41 @@ async function handleUserReportAction(id, status) {
     showToast(status === 'resolved' || status === 'reviewed' ? '✅ Report resolved' : '✕ Report dismissed')
   } catch (e) {
     showToast(`❌ ${e.message || 'Update failed'}`)
+  } finally {
+    setSafetyActionLoading(null)
+  }
+}
+
+// Admin actions on the LISTING behind a report (Safety → User reports)
+async function handleReportedListingAction(reportId, listingId, action) {
+  if (!listingId) return
+  if (action === 'delete' && !window.confirm('Delete this listing permanently?')) return
+  setSafetyActionLoading(reportId)
+  try {
+    let patch = null
+    if (action === 'deactivate') {
+      const { error } = await supabase.from('listings').update({ status: 'inactive' }).eq('id', listingId)
+      if (error) throw error
+      patch = { status: 'inactive' }
+      showToast('🚫 Listing deactivated')
+    } else if (action === 'activate') {
+      const { error } = await supabase.from('listings').update({ status: 'active' }).eq('id', listingId)
+      if (error) throw error
+      patch = { status: 'active' }
+      showToast('✅ Listing reactivated')
+    } else if (action === 'delete') {
+      const { error } = await supabase.from('listings').delete().eq('id', listingId)
+      if (error) throw error
+      patch = { deleted: true }
+      showToast('🗑️ Listing deleted')
+    }
+    if (patch) {
+      setUserReports(rs => rs.map(r => r.id === reportId
+        ? { ...r, listing: r.listing ? { ...r.listing, ...patch } : r.listing }
+        : r))
+    }
+  } catch (e) {
+    showToast(`❌ ${e.message || 'Action failed'}`)
   } finally {
     setSafetyActionLoading(null)
   }
@@ -1870,6 +1920,32 @@ async function loadUsers() {
                 <div style={{ fontSize: 11, color: '#dc2626', marginTop: 2, fontWeight: 700, textTransform: 'capitalize' }}>
                   🚩 {(r.reason || 'report').replace(/_/g, ' ')}
                 </div>
+                {/* Reported listing (when the report targets a product) */}
+                {r.listing_id && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, padding: '6px 8px', background: '#f8faf9', borderRadius: 8, maxWidth: 420 }}>
+                    {r.listing?.images?.[0]
+                      ? <img src={r.listing.images[0]} alt="" style={{ width: 32, height: 32, borderRadius: 6, objectFit: 'cover', flexShrink: 0 }} />
+                      : <span style={{ width: 32, height: 32, borderRadius: 6, background: '#e6f4ec', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, flexShrink: 0 }}>📦</span>}
+                    <div style={{ minWidth: 0, flex: 1 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {r.listing ? r.listing.title : 'Listing unavailable'}
+                        {!r.listing && <span style={{ fontSize: 10.5, color: '#9ca3af', fontWeight: 500 }}> (may have been deleted)</span>}
+                      </div>
+                      {r.listing && (
+                        <div style={{ fontSize: 10.5, color: '#9ca3af', fontWeight: 600 }}>
+                          Listing status: <span style={{ color: r.listing.status === 'active' || r.listing.status === 'published' ? '#1a7a4a' : '#b45309', textTransform: 'capitalize' }}>{r.listing.status}</span>
+                        </div>
+                      )}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => navigate(`/listing/${r.listing_id}`)}
+                      style={{ fontSize: 11, fontWeight: 700, color: '#1a7a4a', background: 'none', border: 'none', cursor: 'pointer', flexShrink: 0 }}
+                    >
+                      View →
+                    </button>
+                  </div>
+                )}
                 {r.details && (
                   <div style={{ fontSize: 11.5, color: '#555', marginTop: 3, maxWidth: 520 }}>{r.details}</div>
                 )}
@@ -1895,6 +1971,38 @@ async function loadUsers() {
                   >
                     View profile →
                   </button>
+                )}
+                {/* Listing actions for the admin — act directly on the reported product */}
+                {r.listing && !r.listing.deleted && (
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    {(r.listing.status === 'active' || r.listing.status === 'published') ? (
+                      <button
+                        type="button"
+                        disabled={safetyActionLoading === r.id}
+                        onClick={() => handleReportedListingAction(r.id, r.listing_id, 'deactivate')}
+                        style={{ padding: '5px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, background: '#fef3c7', color: '#b45309' }}
+                      >
+                        {safetyActionLoading === r.id ? '…' : '🚫 Remove Listing'}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={safetyActionLoading === r.id}
+                        onClick={() => handleReportedListingAction(r.id, r.listing_id, 'activate')}
+                        style={{ padding: '5px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, background: '#e6f4ec', color: '#1a7a4a' }}
+                      >
+                        {safetyActionLoading === r.id ? '…' : '↩ Restore'}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      disabled={safetyActionLoading === r.id}
+                      onClick={() => handleReportedListingAction(r.id, r.listing_id, 'delete')}
+                      style={{ padding: '5px 12px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 700, background: '#fee2e2', color: '#dc2626' }}
+                    >
+                      🗑 Delete
+                    </button>
+                  </div>
                 )}
                 {(!r.status || r.status === 'open' || r.status === 'pending') && (
                   <div style={{ display: 'flex', gap: 6 }}>
