@@ -5780,7 +5780,19 @@ export default function Home() {
         <HeroBanner navigate={navigate} onSearch={handleSearch} onNotify={(q) => { setNotifyOpen(true); setNotifyQuery(q) }} />
       </div>
 
-      {/* — Premium Banner → Categories transition — */}
+      {/* Statuses — right after the top banner */}
+      <div className={!storiesLoading ? 'soko-swap-in' : undefined} style={{ background: '#f8f9fa' }}>
+        <HomeStatusSection
+          navigate={navigate}
+          stories={stories}
+          loading={storiesLoading}
+          onCreateStory={handleCreateStory}
+          currentUserId={user?.id}
+          currentUserProfile={user ? { avatar_url: user.avatar_url, full_name: user.full_name, is_verified: user.is_verified } : null}
+        />
+      </div>
+
+      {/* — Statuses → Categories transition — */}
       <div className="bc-bridge" style={{
         display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
         height:40, padding:'0 20px',
@@ -5812,7 +5824,7 @@ export default function Home() {
         <FeaturedRevenueBanner navigate={navigate} user={user} />
       </div>
 
-      {/* — Featured → Stories transition — */}
+      {/* — Featured → Marketplace transition — */}
       <div className="bc-bridge" style={{
         display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
         height:36, padding:'0 20px',
@@ -5822,18 +5834,6 @@ export default function Home() {
           width:'100%', maxWidth:120, height:1, borderRadius:1,
           background:'linear-gradient(90deg, transparent, #D1D5DB, transparent)',
         }} />
-      </div>
-
-      {/* Data sections: skeleton in place → content swap (no remount keys — those stacked thrash) */}
-      <div className={!storiesLoading ? 'soko-swap-in' : undefined} style={{ background: '#f8f9fa' }}>
-        <HomeStatusSection
-          navigate={navigate}
-          stories={stories}
-          loading={storiesLoading}
-          onCreateStory={handleCreateStory}
-          currentUserId={user?.id}
-          currentUserProfile={user ? { avatar_url: user.avatar_url, full_name: user.full_name, is_verified: user.is_verified } : null}
-        />
       </div>
 
       <style>{`
