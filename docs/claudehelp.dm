@@ -43,3 +43,5 @@ On home page statuses section: on landing/refresh do not show the status create 
 On the status page, don't show distance on the status feed card. Also generate reels from the most-viewed status videos. Reels should be placed randomly inside the status section — while scrolling a person should find the reels card, and tapping it should play reels of different current status videos. Make the reels section look professional, use SokoMw theme.
 
 On the same home page. Don't change anything — just change the arrangement. Statuses should come just after the top banner section, followed by the shop categories section.
+
+On the same place a proper transition and distance from where status section ends to where categories section starts.

@@ -1,27 +1,15 @@
-TASK: On the same home page. Don't change anything — just change the arrangement. Statuses should come just after the top banner section, followed by the shop categories section.
+TASK: On the same place (statuses → categories) add a proper transition and distance from where the status section ends to where the categories section starts.
 
 WHAT WAS DONE:
-- Reordered the sections in the Home page's render tree (src/pages/Home.jsx, Home component JSX) — pure arrangement change, no content/style changes.
-- The Statuses section (HomeStatusSection) was moved from below the FeaturedRevenueBanner up to sit immediately after the top/hero banner (HeroBanner).
-- The Shop by Category section (CategoryGrid) now comes immediately after the Statuses section (unchanged CSS/layout).
-- Only transition comments were updated for accuracy (— Statuses → Categories transition, — Featured → Marketplace transition). No rendered text or styles were altered.
-
-NEW SECTION ORDER:
-1. Header (SokoNav)
-2. Top/hero banner (HeroBanner)
-3. Statuses (HomeStatusSection)
-4. Shop by Category (CategoryGrid)
-5. Featured revenue banner (FeaturedRevenueBanner)
-6. Featured listings (FeaturedListingsRow)
-7. Latest listings (LatestListingsSection)
-8. Looking For (LookingForSection)
-9. Shops / Jobs / Services row (ShopsJobsServicesRow)
-10. Sell CTA (SellCtaBanner)
-11. Footer (SokoFooter)
+- Rebuilt the statuses → categories bridge in src/pages/Home.jsx (Home render tree) as a proper transition zone:
+  - Height increased 40px → 52px on desktop for real breathing room between sections.
+  - Smooth 3-stop background blend (#f8f9fa → #FAFBFC → #FFFFFF) so the statuses gray eases into the categories white instead of a hard color jump.
+  - Refined divider: two fading gradient rails (transparent → gray → transparent) joined by a small green Soko accent dot (#0F9D58 at 50% opacity), max-width 300px, centered.
+- Added a mobile override (.status-cat-bridge at max-width 980px → 34px) next to the existing .bc-bridge / .ll-lf-bridge rules so phones get proportionate spacing.
 
 VERIFIED:
-- npx eslint src/pages/Home.jsx — only the same pre-existing errors from before (unused imports at line 27, react-hooks warnings); none at the reordered block.
-- npm run build — success (fresh dist output produced).
-- git diff confirms only src/pages/Home.jsx is changed and it is a pure reorder (14 insertions / 14 deletions — the statuses block net zero moved up). dist/index.html build artifact was reverted.
+- npx eslint src/pages/Home.jsx — no new errors at the edited lines (same pre-existing warnings only).
+- npm run build — success.
+- Other section bridges and all other sections untouched.
 
 

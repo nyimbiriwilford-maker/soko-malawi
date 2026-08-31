@@ -5793,15 +5793,28 @@ export default function Home() {
       </div>
 
       {/* — Statuses → Categories transition — */}
-      <div className="bc-bridge" style={{
+      <div className="bc-bridge status-cat-bridge" style={{
         display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
-        height:40, padding:'0 20px',
-        background:'linear-gradient(180deg, #F8FAFC 0%, #FFFFFF 100%)',
+        height:52, padding:'0 20px',
+        background:'linear-gradient(180deg, #f8f9fa 0%, #FAFBFC 45%, #FFFFFF 100%)',
       }}>
         <div style={{
-          width:'100%', maxWidth:160, height:1, borderRadius:1,
-          background:'linear-gradient(90deg, transparent, #D1D5DB, transparent)',
-        }} />
+          display:'flex', alignItems:'center', gap:10,
+          width:'100%', maxWidth:300, margin:'0 auto',
+        }}>
+          <div style={{
+            flex:1, height:1, borderRadius:1, opacity:.85,
+            background:'linear-gradient(90deg, transparent, #D1D5DB)',
+          }} />
+          <div style={{
+            width:5, height:5, borderRadius:'50%', flexShrink:0,
+            background:'#0F9D58', opacity:.5,
+          }} />
+          <div style={{
+            flex:1, height:1, borderRadius:1, opacity:.85,
+            background:'linear-gradient(90deg, #D1D5DB, transparent)',
+          }} />
+        </div>
       </div>
 
       <div className="soko-settle soko-settle-d3">
@@ -5845,6 +5858,7 @@ export default function Home() {
         @media (max-width: 980px) {
           .bc-bridge { height: 28px !important; }
           .ll-lf-bridge { height: 24px !important; }
+          .status-cat-bridge { height: 34px !important; }
         }
         @media (max-width: 767px) {
           .section-divider { gap: 4px; padding: 6px 0 4px; }
