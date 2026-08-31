@@ -5795,7 +5795,7 @@ export default function Home() {
       {/* — Statuses → Categories transition — */}
       <div className="bc-bridge status-cat-bridge" style={{
         display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
-        height:52, padding:'0 20px',
+        height:36, padding:'0 20px',
         background:'linear-gradient(180deg, #f8f9fa 0%, #FAFBFC 45%, #FFFFFF 100%)',
       }}>
         <div style={{
@@ -5858,7 +5858,7 @@ export default function Home() {
         @media (max-width: 980px) {
           .bc-bridge { height: 28px !important; }
           .ll-lf-bridge { height: 24px !important; }
-          .status-cat-bridge { height: 34px !important; }
+          .status-cat-bridge { height: 28px !important; }
         }
         @media (max-width: 767px) {
           .section-divider { gap: 4px; padding: 6px 0 4px; }

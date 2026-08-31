@@ -45,3 +45,5 @@ On the status page, don't show distance on the status feed card. Also generate r
 On the same home page. Don't change anything — just change the arrangement. Statuses should come just after the top banner section, followed by the shop categories section.
 
 On the same place a proper transition and distance from where status section ends to where categories section starts.
+
+Reduce the distance from status to categories. make it match with the other spacings
