@@ -47,3 +47,5 @@ On the same home page. Don't change anything — just change the arrangement. St
 On the same place a proper transition and distance from where status section ends to where categories section starts.
 
 Reduce the distance from status to categories. make it match with the other spacings
+
+JOBS ARE POSTED IN ADMIN ONLY, BUT WHEN POSTING JOB. IN JOB POST IN ADMIN, IT IS NOT WELL STAYLED. FIX IT. STYLE IT PROPELY

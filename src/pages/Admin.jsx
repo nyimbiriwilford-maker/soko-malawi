@@ -1590,7 +1590,7 @@ async function loadUsers() {
         {tab === 'Jobs' && (
           <div style={S.content}>
             {showPostJobForm ? (
-              <div style={{ marginBottom: 20 }}>
+              <div style={{ maxWidth: 760, margin: '0 auto' }}>
                 <button
                   onClick={() => { setShowPostJobForm(false); loadJobs() }}
                   style={{

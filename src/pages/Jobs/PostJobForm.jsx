@@ -4,6 +4,7 @@ import { uploadToR2, getR2Url, deleteFromR2 } from '../../lib/r2'
 import { invokeApi } from '../../lib/apiServer'
 import { JOB_TYPES, CITIES, CATEGORIES, EMPTY_JOB_FORM } from './jobsConstants'
 import { validateJobForm } from './jobsUtils'
+import './Jobs.css'
 
 async function runJobAiFollowUps(jobId, fields) {
   try {
