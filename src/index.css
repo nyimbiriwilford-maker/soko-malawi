@@ -83,7 +83,7 @@ body {
     -webkit-tap-highlight-color: transparent;
   }
   body {
-    padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
     background: #f3f4f6;
   }
   /* Home shell already sits above the tab bar — avoid double pad */

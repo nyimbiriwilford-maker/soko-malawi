@@ -51,16 +51,13 @@ export const EMPTY_JOB_FORM = {
   salary:          '',
   deadline:        '',
   // Role
-  job_purpose:     '',
   description:     '',
-  responsibilities:'',
-  requirements:    '',
   // Application
   contact:         '',
   contact_name:    '',
   contact_address: '',
   // Media
   cover_image_url: '',
-  // Legal
-  disclaimer:      '',
+  // Admin-defined sections ({ heading, content })
+  custom_sections: [],
 }

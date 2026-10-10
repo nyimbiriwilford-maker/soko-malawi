@@ -4032,7 +4032,7 @@ function ShopsJobsServicesRow({ navigate, shops, jobs, services, loading, curren
               ))}
             </div>
           ) : (
-            <EmptyMini text="No jobs posted yet." cta="Post a Job" onClick={() => navigate('/jobs')} />
+            <EmptyMini text="No jobs posted yet." cta="Browse Jobs" onClick={() => navigate('/jobs')} />
           )}
         </div>
 
@@ -5535,7 +5535,7 @@ export default function Home() {
         try {
           // Jobs use status 'active' (PostJobForm / Jobs index) — not 'published'
           const today = new Date().toISOString().split('T')[0]
-          const jobSelect = 'id, title, company, city, type, category, created_at, deadline, cover_image_url, logo_url, salary, contact, overview, job_purpose, description, responsibilities, requirements, contact_name, contact_address, disclaimer, poster_id, address'
+          const jobSelect = 'id, title, company, city, type, category, created_at, deadline, cover_image_url, logo_url, salary, contact, overview, job_purpose, description, custom_sections, responsibilities, requirements, contact_name, contact_address, disclaimer, poster_id, address'
           let jobsQuery = supabase.from('jobs')
             .select(jobSelect)
             .eq('status', 'active')
@@ -5544,7 +5544,7 @@ export default function Home() {
           let { data, error } = await jobsQuery
             .order('created_at', { ascending: false })
             .limit(8)
-          if (error && /cover_image_url|logo_url|salary|overview|job_purpose|description|responsibilities|requirements|contact_name|contact_address|disclaimer|poster_id|address|column/i.test(error.message || '')) {
+          if (error && /cover_image_url|logo_url|salary|overview|job_purpose|description|custom_sections|responsibilities|requirements|contact_name|contact_address|disclaimer|poster_id|address|column/i.test(error.message || '')) {
             ;({ data, error } = await supabase.from('jobs')
               .select('id, title, company, city, type, created_at, deadline')
               .eq('status', 'active')
@@ -5561,7 +5561,7 @@ export default function Home() {
               .order('created_at', { ascending: false })
               .limit(8)
             if (!alt.error && alt.data?.length) data = alt.data
-            else if (alt.error && /cover_image_url|logo_url|salary|overview|job_purpose|description|responsibilities|requirements|contact_name|contact_address|disclaimer|poster_id|address|column/i.test(alt.error.message || '')) {
+            else if (alt.error && /cover_image_url|logo_url|salary|overview|job_purpose|description|custom_sections|responsibilities|requirements|contact_name|contact_address|disclaimer|poster_id|address|column/i.test(alt.error.message || '')) {
               const bare = await supabase.from('jobs')
                 .select('id, title, company, city, type, created_at, deadline')
                 .in('status', ['active', 'published'])

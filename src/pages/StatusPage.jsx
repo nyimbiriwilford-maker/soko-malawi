@@ -837,17 +837,32 @@ function StatusPageInner({ user, navigate }) {
               ))}
             </div>
           </section>
-        ) : stories.length === 0 ? (
+) : stories.length === 0 ? (
           <div className="st-empty">
             <div className="st-empty-ico">✦</div>
             <h3>No status updates yet</h3>
-            <p>Follow sellers or post a status so buyers can see what’s available right now.</p>
+            <p>Follow sellers or post a status so buyers can see what's available right now.</p>
             <div className="st-empty-actions">
               <button type="button" className="st-secondary-btn" onClick={() => navigate('/shops')}>Browse shops</button>
               <button type="button" className="st-primary-btn" onClick={() => setShowUpload(true)}>Post status</button>
             </div>
           </div>
-        ) : null}
+        ) : <section className="st-feed-section" aria-hidden>
+          <SectionHeader kicker="Timeline" title="Latest updates" />
+          <div className="st-feed-grid">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div className="st-feed-card st-feed-skeleton" key={i}>
+                <div className="st-feed-skel-media" />
+                <div className="st-feed-body">
+                  <div className="st-skel-row st-skel-w30" />
+                  <div className="st-skel-row st-skel-w80" />
+                  <div className="st-skel-row st-skel-w55" />
+                  <div className="st-skel-row st-skel-w70" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>}
       </div>
 
       {/* Story viewer + upload — same components as Home */}

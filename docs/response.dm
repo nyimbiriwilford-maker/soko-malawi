@@ -1,15 +1,9 @@
-TASK: Jobs are posted in Admin only, but when posting a job in the Admin job post form, it is not well styled. Fix it and style it properly.
+TASK: Verify StatusPage.jsx fix and check for similar issues
 
-ROOT CAUSE:
-- The Admin Jobs tab renders the shared PostJobForm component (src/pages/Jobs/PostJobForm.jsx), which styles itself with classes from src/pages/Jobs/Jobs.css (.post-form-card, .form-input, .form-section-title, .img-upload-btn, .post-form-ai-*, .form-submit-btn, etc.).
-- Admin.jsx imported PostJobForm but NOT Jobs.css — only the Jobs page (via Home.jsx / Jobs/index.jsx) imported it. So inside Admin every form class was unstyled: bare inputs, no card, no section dividers, no spacing.
+DIAGNOSIS:
 
-WHAT WAS DONE:
-1. src/pages/Jobs/PostJobForm.jsx — the form now imports its own stylesheet (import './Jobs.css') so it carries its styles wherever it is rendered (Admin, Jobs page, future hosts).
-2. src/pages/Admin.jsx (Jobs tab) — wrapped the PostJobForm view in a centered, readable column (maxWidth 760, margin auto) so the form card doesn't stretch edge-to-edge across the wide Admin content area; the existing Back to Jobs button is kept.
-   No other Admin styles or Jobs page behavior changed.
+1. Fix confirmed: Lines 840-849 of StatusPage.jsx render  No status updates  message with action buttons when stories.length === 0, instead of rendering null/empty. The ternary chain ensures proper fallbacks: error state (line 788) -> feed with recent statuses (line 800) -> skeleton loading (line 823) -> empty state (line 840) -> feed with stories (line 850).
 
-VERIFIED:
-- npx eslint on PostJobForm.jsx and Admin.jsx — only pre-existing errors (unused imports, hook-order warnings); none from these edits.
-- npm run build — success.
-- CSS leak check: the :root variables and .jobs-* classes in Jobs.css are scoped to the Jobs feature (MyJobs/JobModal/PostJobForm are the only var(--...) consumers and all render only under the Jobs page/Admin Jobs tab), so importing it in PostJobForm cannot restyle other Admin tabs or app pages.
+2. Similar issue found: StoryViewerPage.jsx line 56 returns null directly when stories.length === 0 without any fallback UI.
+
+3. No test files found for StatusPage in the project source directory.

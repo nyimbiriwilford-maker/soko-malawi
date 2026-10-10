@@ -38,12 +38,12 @@ async function runJobAiFollowUps(jobId, fields) {
   }
 }
 
-const JOB_FORM_KEYS = Object.keys(EMPTY_JOB_FORM)
+const JOB_FORM_KEYS = Object.keys(EMPTY_JOB_FORM).filter(k => k !== 'custom_sections')
 
 // Only keep keys that exist in EMPTY_JOB_FORM and coerce all values to strings,
 // so an unexpected Gemini shape can never break the form.
 function pickJobFields(data) {
-  const out = {}
+  const out = { custom_sections: [] }
   if (!data || typeof data !== 'object') return out
   for (const k of JOB_FORM_KEYS) {
     if (Object.prototype.hasOwnProperty.call(data, k)) {
@@ -51,6 +51,23 @@ function pickJobFields(data) {
     }
   }
   return out
+}
+
+// Map the legacy fixed fields (job_purpose / responsibilities / requirements /
+// disclaimer) from an AI-generated draft into custom sections with headings.
+function legacyToSections(data) {
+  const map = [
+    ['job_purpose', 'Job Purpose'],
+    ['responsibilities', 'Key Responsibilities'],
+    ['requirements', 'Minimum Qualifications & Experience'],
+    ['disclaimer', 'Disclaimer'],
+  ]
+  const sections = []
+  for (const [key, heading] of map) {
+    const content = String(data?.[key] ?? '').trim()
+    if (content) sections.push({ heading, content })
+  }
+  return sections
 }
 
 function ImageUploadField({ label, hint, value, preview, onFileChange, onRemove, uploading, accept = 'image/*', icon = '🖼️', fieldName }) {
@@ -105,6 +122,33 @@ export default function PostJobForm({ onSuccess }) {
     if (errors[field]) setErrors(e => ({ ...e, [field]: '' }))
   }
 
+  // ── Custom sections (admin-defined headings) ──
+  function addSection() {
+    setForm(f => ({ ...f, custom_sections: [...f.custom_sections, { heading: '', content: '' }] }))
+  }
+
+  function setSection(i, part, value) {
+    setForm(f => ({
+      ...f,
+      custom_sections: f.custom_sections.map((s, idx) => idx === i ? { ...s, [part]: value } : s),
+    }))
+    if (errors[`section_${i}`]) setErrors(e => ({ ...e, [`section_${i}`]: '' }))
+  }
+
+  function removeSection(i) {
+    setForm(f => ({ ...f, custom_sections: f.custom_sections.filter((_, idx) => idx !== i) }))
+  }
+
+  function moveSection(i, dir) {
+    setForm(f => {
+      const next = [...f.custom_sections]
+      const j = i + dir
+      if (j < 0 || j >= next.length) return f
+      ;[next[i], next[j]] = [next[j], next[i]]
+      return { ...f, custom_sections: next }
+    })
+  }
+
   async function handleGenerate() {
     setAiError('')
     if (!aiText.trim()) { setAiError('Paste some raw job text first.'); return }
@@ -119,7 +163,8 @@ export default function PostJobForm({ onSuccess }) {
       })
       if (error) throw new Error(error.message || 'Failed to generate the job.')
       const picked = pickJobFields(data)
-      if (Object.keys(picked).length === 0) throw new Error('No usable fields were generated.')
+      if (Object.keys(picked).length === 1) throw new Error('No usable fields were generated.')
+      picked.custom_sections = legacyToSections(data)
       setForm({ ...EMPTY_JOB_FORM, ...picked })
       setErrors({})
     } catch (err) {
@@ -168,6 +213,17 @@ export default function PostJobForm({ onSuccess }) {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { setPostError('You must be signed in to post a job.'); setPosting(false); return }
 
+    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+    if (profile?.role !== 'admin') {
+      setPostError('Only admins are allowed to post jobs.')
+      setPosting(false)
+      return
+    }
+
+    const cleanSections = (form.custom_sections || [])
+      .map(s => ({ heading: String(s.heading || '').trim(), content: String(s.content || '').trim() }))
+      .filter(s => s.heading && s.content)
+
     const { data: newJob, error } = await supabase.from('jobs').insert({
       poster_id:       user.id,
       title:           form.title.trim(),
@@ -176,9 +232,7 @@ export default function PostJobForm({ onSuccess }) {
       cover_image_url: form.cover_image_url || null,
       overview:        form.overview.trim() || null,
       description:     form.description.trim(),
-      job_purpose:     form.job_purpose.trim() || null,
-      responsibilities:form.responsibilities.trim() || null,
-      requirements:    form.requirements.trim() || null,
+      custom_sections: cleanSections,
       salary:          form.salary.trim() || null,
       type:            form.type,
       category:        form.category || null,
@@ -188,7 +242,6 @@ export default function PostJobForm({ onSuccess }) {
       contact_name:    form.contact_name.trim() || null,
       contact_address: form.contact_address.trim() || null,
       deadline:        form.deadline || null,
-      disclaimer:      form.disclaimer.trim() || null,
       status:          'active'
     }).select('id').single()
 
@@ -198,12 +251,13 @@ export default function PostJobForm({ onSuccess }) {
     // Non-blocking AI follow-up: tag the job, then fire-and-forget CV matching.
     // The job is already live — a slow or failed tag must never block posting.
     if (newJob?.id) {
+      const sectionsText = cleanSections.map(s => `${s.heading}: ${s.content}`).join('\n\n')
       runJobAiFollowUps(newJob.id, {
         poster_id:   user.id,
         title:       form.title,
         overview:    form.overview,
         description: form.description,
-        requirements: form.requirements,
+        requirements: sectionsText,
       })
     }
 
@@ -221,7 +275,7 @@ export default function PostJobForm({ onSuccess }) {
     <div className="post-form-wrap">
       <div className="post-form-card">
         <div className="post-form-title">📢 Post a Job</div>
-        <div className="post-form-sub">Reach thousands of job seekers across Malawi — it's free.</div>
+        <div className="post-form-sub">Admin job posting — reach thousands of job seekers across Malawi. Add sections with your own headings.</div>
 
         {/* ── AI Generate from text ── */}
         <div className="post-form-ai">
@@ -345,19 +399,10 @@ export default function PostJobForm({ onSuccess }) {
         <input className="form-input" type="date" min={today} value={form.deadline} onChange={e => set('deadline', e.target.value)} />
         <p className="form-hint">Leave blank if no specific deadline. The listing auto-expires after this date.</p>
 
-        {/* ── SECTION 3: Job Purpose ── */}
-        <div className="form-section-title">Job Purpose</div>
+        {/* ── SECTION 3: Brief Description ── */}
+        <div className="form-section-title">Brief Description</div>
 
-        <label className="form-label">Role Summary & Reporting Line</label>
-        <textarea
-          className="form-textarea" rows={3}
-          placeholder="e.g. Reporting to the Internal Audit Manager, the Internal Auditor will provide independent assurance on governance, risk management, and internal controls…"
-          value={form.job_purpose}
-          onChange={e => set('job_purpose', e.target.value)}
-        />
-        <p className="form-hint">Who does this role report to? What is its primary objective?</p>
-
-        <label className="form-label">Brief Description <span className="form-required">*</span></label>
+        <label className="form-label">Job Description <span className="form-required">*</span></label>
         <textarea
           className={`form-textarea ${errors.description ? 'error' : ''}`} rows={3}
           placeholder="Short summary of what the role involves day-to-day…"
@@ -369,29 +414,48 @@ export default function PostJobForm({ onSuccess }) {
           <span className="form-char-count">{form.description.length} chars</span>
         </div>
 
-        {/* ── SECTION 4: Responsibilities ── */}
-        <div className="form-section-title">Key Responsibilities</div>
-        <label className="form-label">Responsibilities</label>
-        <textarea
-          className="form-textarea" rows={7}
-          placeholder={"Enter each responsibility on a new line:\n- Plan and execute risk-based audit assignments\n- Review adequacy of accounting systems and internal controls\n- Conduct branch audits, client visits, and loan file reviews"}
-          value={form.responsibilities}
-          onChange={e => set('responsibilities', e.target.value)}
-        />
-        <p className="form-hint">One per line. Bullet points (- or •) are optional — auto-formatted on display.</p>
+        {/* ── SECTION 4: Custom Sections (admin-defined headings) ── */}
+        <div className="form-section-title">
+          Job Sections
+          <span className="form-section-optional">add headings freely</span>
+        </div>
+        <p className="form-hint" style={{ marginTop: 0, marginBottom: 10 }}>
+          Create the sections you want with any headings — e.g. Responsibilities, Qualifications, How to Apply.
+          Each heading and its content will appear on the job listing exactly as you write them.
+        </p>
 
-        {/* ── SECTION 5: Qualifications ── */}
-        <div className="form-section-title">Minimum Qualifications & Experience</div>
-        <label className="form-label">Requirements</label>
-        <textarea
-          className="form-textarea" rows={6}
-          placeholder={"Enter each requirement on a new line:\n- Bachelor's Degree in Accounting, Finance, or related field\n- Minimum 3 years' experience in internal or external audit\n- Strong analytical and report-writing skills\n- Proficiency in Microsoft Office"}
-          value={form.requirements}
-          onChange={e => set('requirements', e.target.value)}
-        />
-        <p className="form-hint">One per line. Bullet points optional.</p>
+        {form.custom_sections.map((section, i) => (
+          <div key={i} className="custom-section-card">
+            <div className="custom-section-head">
+              <input
+                className={`custom-section-heading ${errors[`section_${i}`] ? 'error' : ''}`}
+                placeholder="Section heading — e.g. Key Responsibilities"
+                value={section.heading}
+                onChange={e => setSection(i, 'heading', e.target.value)}
+              />
+              <div className="custom-section-tools">
+                <button type="button" className="custom-section-tool" title="Move up" onClick={() => moveSection(i, -1)} disabled={i === 0}>↑</button>
+                <button type="button" className="custom-section-tool" title="Move down" onClick={() => moveSection(i, 1)} disabled={i === form.custom_sections.length - 1}>↓</button>
+                <button type="button" className="custom-section-tool del" title="Remove section" onClick={() => removeSection(i)}>✕</button>
+              </div>
+            </div>
+            <textarea
+              className={`form-textarea custom-section-content ${errors[`section_${i}`] ? 'error' : ''}`}
+              rows={5}
+              placeholder="Section content — one point per line becomes a bullet list."
+              value={section.content}
+              onChange={e => setSection(i, 'content', e.target.value)}
+            />
+            {errors[`section_${i}`] && <p className="form-error-msg">⚠ {errors[`section_${i}`]}</p>}
+            <p className="form-hint">One point per line. Bullet points (- or •) are optional — auto-formatted on display.</p>
+          </div>
+        ))}
 
-        {/* ── SECTION 6: Application Process ── */}
+        <button type="button" className="custom-section-add-btn" onClick={addSection}>
+          + Add Section
+        </button>
+
+        {/* ── SECTION 5: Application Process ── */}
         <div className="form-section-title">Application Process</div>
 
         <label className="form-label">Contact Person / Department</label>
@@ -419,7 +483,7 @@ export default function PostJobForm({ onSuccess }) {
         />
         <p className="form-hint">Primary contact for applications — email, phone, or website link.</p>
 
-        {/* ── SECTION 7: Cover Image / Artwork ── */}
+        {/* ── SECTION 6: Cover Image / Artwork ── */}
         <div className="form-section-title">
           Cover Image / Artwork
           <span className="form-section-optional">optional</span>
@@ -437,19 +501,6 @@ export default function PostJobForm({ onSuccess }) {
           icon="🎨"
         />
         <p className="form-hint">Upload a job poster, company flyer, event graphic, or any related artwork. It will be shown prominently at the top of your listing.</p>
-
-        {/* ── SECTION 8: Disclaimer ── */}
-        <div className="form-section-title">
-          Disclaimer
-          <span className="form-section-optional">optional</span>
-        </div>
-        <label className="form-label">Important Notice</label>
-        <textarea
-          className="form-textarea" rows={3}
-          placeholder="e.g. We do not charge any fees at any stage of recruitment. Only shortlisted candidates will be contacted."
-          value={form.disclaimer}
-          onChange={e => set('disclaimer', e.target.value)}
-        />
 
         {/* Errors & Success */}
         {postError && <p className="form-error-banner">⚠ {postError}</p>}

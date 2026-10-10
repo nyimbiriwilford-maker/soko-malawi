@@ -119,8 +119,33 @@ export default function JobModal({ job, savedIds, onToggleSave, onClose, fullScr
           </div>
         )}
 
-        {/* ── JOB PURPOSE ── */}
-        {(job.job_purpose || job.description) && (
+        {/* ── BRIEF DESCRIPTION ── */}
+        {job.description && !job.custom_sections?.length && (
+          <div className="modal-section">
+            <div className="modal-section-title">Job Description</div>
+            <p className="modal-text">{job.description}</p>
+          </div>
+        )}
+
+        {/* ── CUSTOM SECTIONS (admin-defined headings) ── */}
+        {Array.isArray(job.custom_sections) && job.custom_sections.map((sec, i) => {
+          const heading = sec?.heading?.trim()
+          const content = sec?.content?.trim()
+          if (!heading || !content) return null
+          const looksLikeDisclaimer = /disclaimer|important notice/i.test(heading)
+          const looksLikeBullets = /responsibilit|requirement|qualification|duties|experience/i.test(heading)
+          return (
+            <div key={i} className={`modal-section${looksLikeDisclaimer ? ' modal-disclaimer' : ''}`}>
+              <div className="modal-section-title">{looksLikeDisclaimer ? `⚠ ${heading}` : heading}</div>
+              {looksLikeBullets && content.includes('\n')
+                ? <BulletList text={content} />
+                : <p className="modal-text">{content}</p>}
+            </div>
+          )
+        })}
+
+        {/* ── LEGACY FIXED SECTIONS (jobs posted before custom sections) ── */}
+        {!job.custom_sections?.length && (job.job_purpose || job.description) && (
           <div className="modal-section">
             <div className="modal-section-title">Job Purpose</div>
             {job.job_purpose && <p className="modal-text">{job.job_purpose}</p>}
@@ -129,20 +154,22 @@ export default function JobModal({ job, savedIds, onToggleSave, onClose, fullScr
             )}
           </div>
         )}
-
-        {/* ── KEY RESPONSIBILITIES ── */}
-        {job.responsibilities && (
+        {!job.custom_sections?.length && job.responsibilities && (
           <div className="modal-section">
             <div className="modal-section-title">Key Responsibilities</div>
             <BulletList text={job.responsibilities} />
           </div>
         )}
-
-        {/* ── QUALIFICATIONS ── */}
-        {job.requirements && (
+        {!job.custom_sections?.length && job.requirements && (
           <div className="modal-section">
             <div className="modal-section-title">Minimum Qualifications &amp; Experience</div>
             <BulletList text={job.requirements} />
+          </div>
+        )}
+        {!job.custom_sections?.length && job.disclaimer && (
+          <div className="modal-section modal-disclaimer">
+            <div className="modal-section-title">⚠ Disclaimer</div>
+            <p className="modal-text">{job.disclaimer}</p>
           </div>
         )}
 
@@ -161,14 +188,6 @@ export default function JobModal({ job, savedIds, onToggleSave, onClose, fullScr
                 {isEmail(contact) ? '📧' : isPhone(contact) ? '📞' : '🌐'} {contact}
               </p>
             )}
-          </div>
-        )}
-
-        {/* ── DISCLAIMER ── */}
-        {job.disclaimer && (
-          <div className="modal-section modal-disclaimer">
-            <div className="modal-section-title">⚠ Disclaimer</div>
-            <p className="modal-text">{job.disclaimer}</p>
           </div>
         )}
 

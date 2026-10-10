@@ -69,5 +69,10 @@ export function validateJobForm(form) {
   if (form.description?.trim().length < 30) errors.description = 'Description must be at least 30 characters'
   if (!form.type) errors.type = 'Please select a job type'
   if (!form.city) errors.city = 'Please select a city'
+  const sections = Array.isArray(form.custom_sections) ? form.custom_sections : []
+  sections.forEach((s, i) => {
+    const label = s.heading?.trim() || `Section ${i + 1}`
+    if (s.heading?.trim() && !s.content?.trim()) errors[`section_${i}`] = `"${label}" has no content — add content or remove the section`
+  })
   return errors
 }

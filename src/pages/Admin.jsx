@@ -21,7 +21,7 @@ import AdminVerifiedSellers from '../components/AdminVerifiedSellers'
 import AdminVerificationHub from '../components/AdminVerificationHub'
 import AdminVerificationAnomalies from '../components/AdminVerificationAnomalies'
 import PostJobForm from './Jobs/PostJobForm'
-import { uploadToR2, getR2Url, deleteFromR2 } from '../lib/r2'
+import { uploadToR2, getR2Url, deleteFromR2, r2PathFromUrl } from '../lib/r2'
 
 // Module-level throttle for the lazy anomaly scan (≥5 min between runs, no pg_cron)
 let _lastAnomalyScanAt = 0
@@ -250,6 +250,12 @@ export default function Admin() {
 
   async function deleteBanner(id) {
     if (!confirm('Delete this banner permanently?')) return
+    const banner = banners.find(b => b.id === id)
+    // Best-effort cleanup of the R2 files (banner row is removed regardless)
+    for (const field of ['image_url', 'mobile_image_url']) {
+      const key = banner?.[field] ? r2PathFromUrl(banner[field]) : null
+      if (key) { try { await deleteFromR2(key) } catch { /* ignore */ } }
+    }
     const { error } = await supabase.from('home_banners').delete().eq('id', id)
     if (error) { showToast(`❌ ${error.message}`); return }
     await loadBanners()
@@ -2607,10 +2613,13 @@ function BannerEditor({ banner, onSave, onCancel, saving }) {
 
     try {
       const compressed = await compressImage(file)
+      // Wrap the compressed blob in a named File and upload straight to R2
+      // (compression already done above — pass { compress: false }).
       const name = `banner_${Date.now()}.webp`
-      const path = `banner-images/${name}`
-
-      const url = await uploadToR2(compressed, 'banners/' + path)
+      const named = compressed instanceof File
+        ? compressed
+        : new File([compressed], name, { type: 'image/webp' })
+      const url = await uploadToR2(named, `banners/banner-images/${name}`, null, { compress: false })
       if (!url) throw new Error('Upload failed')
       set(targetField, url)
     } catch (err) {

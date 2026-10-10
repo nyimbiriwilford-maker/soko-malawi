@@ -77,7 +77,6 @@ async function getSigningKey(secret, date) {
   return hmac(kService, 'aws4_request');
 }
 
-// Upload a file to R2
 // Compress an image before upload
 async function compressImage(file, maxWidth = 1200, quality = 0.78) {
   if (!file.type.startsWith('image/')) return file
@@ -86,13 +85,14 @@ async function compressImage(file, maxWidth = 1200, quality = 0.78) {
     const url = URL.createObjectURL(file)
     img.onload = () => {
       URL.revokeObjectURL(url)
+      const baseName = (typeof file.name === 'string' && file.name) ? file.name : 'upload'
       const scale = Math.min(1, maxWidth / img.width)
       const canvas = document.createElement('canvas')
       canvas.width  = Math.round(img.width  * scale)
       canvas.height = Math.round(img.height * scale)
       canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height)
       canvas.toBlob(
-        (blob) => resolve(new File([blob], file.name.replace(/\.\w+$/, '.webp'), { type: 'image/webp' })),
+        (blob) => resolve(new File([blob], baseName.replace(/\.\w+$/, '.webp'), { type: 'image/webp' })),
         'image/webp',
         quality
       )
@@ -101,9 +101,12 @@ async function compressImage(file, maxWidth = 1200, quality = 0.78) {
   })
 }
 
-// Upload a file to R2
-export async function uploadToR2(file, path, onProgress = null) {
-  if (file.type.startsWith('image/')) {
+// Upload a file to R2.
+// opts.compress (default true): run the generic image compression pipeline.
+// Pass { compress: false } when the caller has already compressed/resized the
+// image itself (e.g. the banner editor) so it is not recompressed.
+export async function uploadToR2(file, path, onProgress = null, { compress = true } = {}) {
+  if (compress && file.type.startsWith('image/')) {
     file = await compressImage(file)
     path = path.replace(/\.\w+$/, '.webp')
   }
@@ -152,4 +155,13 @@ export async function deleteFromR2(path) {
 // Get public URL for a file
 export function getR2Url(path) {
   return `${PUBLIC_URL}/${path}`;
+}
+
+// Extract the object key from a full public R2 URL
+// (e.g. "https://cdn.example.com/banners/banner-images/x.webp" → "banners/banner-images/x.webp").
+// Returns null for URLs that are not from this R2 bucket.
+export function r2PathFromUrl(url) {
+  if (typeof url !== 'string' || !url.startsWith(PUBLIC_URL)) return null;
+  const key = url.slice(PUBLIC_URL.length).replace(/^\/+/, '');
+  return key || null;
 }
