@@ -797,7 +797,7 @@ function StatusPageInner({ user, navigate }) {
               </div>
             </div>
           </section>
-        ) : recentStatuses.length > 0 ? (
+) : recentStatuses.length > 0 ? (
           <section className="st-feed-section">
             <SectionHeader kicker="Timeline" title="Latest updates" count={recentStatuses.length} />
             <div className="st-feed-grid">
@@ -820,6 +820,47 @@ function StatusPageInner({ user, navigate }) {
               ))}
             </div>
           </section>
+        ) : storiesLoaded ? (
+          stories.length > 0 ? (
+            <section className="st-feed-section" aria-hidden>
+              <SectionHeader kicker="Timeline" title="Latest updates" />
+              <div className="st-feed-grid">
+                {recentStatuses.length > 0 ? feedItems.map(item => item.kind === 'reel' ? (
+                  <ReelFeedCard
+                    key={item.key}
+                    reels={reels}
+                    metrics={reelMetrics}
+                    onOpen={() => setReelsOpen(true)}
+                  />
+                ) : (
+                  <StatusFeedCard
+                    key={item.key}
+                    s={item.s}
+                    currentUserId={user.id}
+                    metrics={feedMetrics}
+                    onLike={likeStory}
+                    onOpen={() => openFeedStory(item.s)}
+                  />
+                ) : (
+                  <div className="st-feed-card st-feed-empty">
+                    <div style={{height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b'}}>
+                      No statuses to display
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          ) : (
+            <div className="st-empty">
+              <div className="st-empty-ico">✦</div>
+              <h3>No status updates yet</h3>
+              <p>Follow sellers or post a status so buyers can see what's available right now.</p>
+              <div className="st-empty-actions">
+                <button type="button" className="st-secondary-btn" onClick={() => navigate('/shops')}>Browse shops</button>
+                <button type="button" className="st-primary-btn" onClick={() => setShowUpload(true)}>Post status</button>
+              </div>
+            </div>
+          )
         ) : !storiesLoaded ? (
           <section className="st-feed-section" aria-hidden>
             <SectionHeader kicker="Timeline" title="Latest updates" />
@@ -837,16 +878,6 @@ function StatusPageInner({ user, navigate }) {
               ))}
             </div>
           </section>
-) : stories.length === 0 ? (
-          <div className="st-empty">
-            <div className="st-empty-ico">✦</div>
-            <h3>No status updates yet</h3>
-            <p>Follow sellers or post a status so buyers can see what's available right now.</p>
-            <div className="st-empty-actions">
-              <button type="button" className="st-secondary-btn" onClick={() => navigate('/shops')}>Browse shops</button>
-              <button type="button" className="st-primary-btn" onClick={() => setShowUpload(true)}>Post status</button>
-            </div>
-          </div>
         ) : <section className="st-feed-section" aria-hidden>
           <SectionHeader kicker="Timeline" title="Latest updates" />
           <div className="st-feed-grid">
