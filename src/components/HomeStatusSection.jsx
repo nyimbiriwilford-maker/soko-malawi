@@ -304,7 +304,7 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
           backdropFilter: 'blur(8px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           padding: '0 6px',
-          fontSize: 10, fontWeight: 700, color: '#fff',
+          fontSize: 11, fontWeight: 700, color: '#fff',
         }}>
           {statusCount}
         </div>
@@ -320,9 +320,8 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
                boxShadow: '0 0 0 2px #fff, 0 0 0 4px #0F9D58',
               background: 'linear-gradient(135deg,#0F9D58,#22c55e)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#fff', fontSize: 13, fontWeight: 800,
-              boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-            }}>
+               color: '#fff', fontSize: 13, fontWeight: 800,
+             }}>
               {avatar
                 ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 : initial}
@@ -334,7 +333,7 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
               }}>
-                <VerifiedBadge size={14} />
+                <VerifiedBadge size={12} />
               </div>
             )}
           </div>
@@ -378,7 +377,7 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
            )}
 
           <div style={{
-            fontSize: 7.5, fontWeight: 500, color: 'rgba(255,255,255,0.5)',
+            fontSize: 10.5, fontWeight: 500, color: 'rgba(255,255,255,0.8)',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
             {locationLabel && <span>{locationLabel} · </span>}
@@ -436,7 +435,7 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
         backdropFilter: 'blur(8px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: '0 6px',
-        fontSize: 10, fontWeight: 700, color: '#fff',
+        fontSize: 11, fontWeight: 700, color: '#fff',
       }}>
         {statusCount}
       </div>
@@ -499,7 +498,7 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
               }}>
-                <VerifiedBadge size={14} />
+                <VerifiedBadge size={12} />
               </div>
             )}
           </div>
@@ -716,6 +715,7 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
     <>
       <style>{`
         .hs-rail::-webkit-scrollbar { display: none; }
+        .hs-rail-wrap { width: 100vw; margin-left: calc(50% - 50vw); overflow-x: clip; }
         .hs-story-btn:active { transform: scale(0.97); transition: transform 0.12s ease; }
         .hs-rail-arrow { opacity: 0; transition: opacity 0.2s ease; pointer-events: none; }
         .hs-rail-wrap:hover .hs-rail-arrow { opacity: 1; pointer-events: auto; }
@@ -755,14 +755,14 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
           .hs-tablet-hide { display: none !important; }
           .hs-rail { gap: 10px; }
           .hs-chip { height: 40px; }
-          .hs-section { margin-bottom: 24px !important; }
+          .hs-section { margin-bottom: 24px !important; overflow-x: clip; }
         }
         @media (min-width: 768px) {
           .hs-rail { gap: 12px; padding: 2px 20px 6px; scroll-padding-left: 20px; }
           .hs-story-btn, .hs-add-btn { flex-basis: 170px; width: 170px; }
         }
         @media (min-width: 1100px) {
-          .hs-rail { gap: 14px; }
+          .hs-rail { gap: 14px; padding-left: 24px; padding-right: 24px; scroll-padding-left: 24px; }
           .hs-story-btn, .hs-add-btn { flex-basis: 196px; width: 196px; border-radius: 18px; }
           .hs-story-btn .hs-avatar, .hs-add-btn .hs-avatar { width: 36px; height: 36px; }
           .hs-story-btn .hs-name { font-size: 13px; }
@@ -773,17 +773,13 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
       `}</style>
 
       <section className="hs-section" style={{
-        padding: isMobile ? 0 : '20px 0',
-        marginBottom: isMobile ? 0 : 48,
-        background: isMobile ? 'transparent' : '#FFFFFF',
+        padding: '12px 0 16px',
+        marginBottom: 0,
+        background: 'transparent',
       }}>
         <div style={isMobile ? { padding: '0 20px' } : { maxWidth: 1400, margin: '0 auto', padding: '0 20px' }}>
           {loading ? (
-            <div style={isMobile ? { padding: '20px 0' } : {
-              background: G.surface, border: '1px solid ' + G.gray200, borderRadius: 24,
-              boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.04)',
-              padding: '20px 24px',
-            }}>
+            <div style={isMobile ? { padding: '0' } : { padding: '0' }}>
               <div className="skeleton" style={{ width: 140, height: 16, borderRadius: 6, marginBottom: 12 }} />
               <div style={{ display: 'flex', gap: 12, overflow: 'hidden' }}>
                 {[1, 2, 3, 4, 5, 6].map((_, k) => (
@@ -792,12 +788,8 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
                 ))}
               </div>
             </div>
-          ) : (
-            <div style={isMobile ? {} : {
-              background: G.surface, border: '1px solid ' + G.gray200, borderRadius: 24,
-              boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.04)',
-              padding: '20px 24px',
-            }}>
+            ) : (
+            <div style={isMobile ? {} : {}}>
             {rankedStories.length > 0 ? (
                 <div className="hs-rail-wrap" style={{ position: 'relative', paddingTop: 0, paddingBottom: 10, marginTop: 0 }}>
                   {canScrollLeft && !isMobile && (
@@ -827,7 +819,7 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
                       scrollSnapType: 'x proximity',
                       WebkitOverflowScrolling: 'touch',
                       overscrollBehaviorX: 'contain',
-                      padding: '2px 14px 6px',
+                      padding: '4px 14px 8px',
                       scrollPaddingLeft: '14px',
                       paddingTop: 0, paddingBottom: 4,
                       marginTop: 0,
@@ -848,29 +840,21 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
                       }}
                     >
                       <div style={{
-                        width: isMobile ? 44 : 56, height: isMobile ? 44 : 56,
+                        width: 40, height: 40,
                         borderRadius: '50%',
                         background: 'linear-gradient(135deg, #0F9D58 0%, #16a34a 100%)',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         boxShadow: '0 4px 12px rgba(15,157,88,0.25)',
                       }}>
-                        <Plus size={isMobile ? 24 : 28} color="#fff" strokeWidth={2.5} />
+                        <Plus size={22} color="#fff" strokeWidth={2.5} />
                       </div>
                       <div style={{
-                        fontSize: isMobile ? 11 : 12,
+                        fontSize: 12.5,
                         fontWeight: 700,
                         color: G.text,
                         letterSpacing: -0.2,
                       }}>
                         Create Status
-                      </div>
-                      <div style={{
-                        fontSize: isMobile ? 8.5 : 9,
-                        fontWeight: 500,
-                        color: G.textMuted,
-                        maxWidth: '80%',
-                      }}>
-                        Share your update
                       </div>
                     </button>
                     {rankedStories.slice(0, displayLimit).map(s => (
