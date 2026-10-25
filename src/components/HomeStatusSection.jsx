@@ -261,9 +261,9 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
       <button type="button" className="hs-story-btn"
         onClick={onClick}
         style={{
-          flexShrink: 0, overflow: 'hidden',
-          position: 'relative', cursor: 'pointer', border: 'none', padding: 0, fontFamily: 'inherit',
-          textAlign: 'left', background: '#111',
+flexShrink: 0,
+position: 'relative', cursor: 'pointer', border: 'none', padding: 0, fontFamily: 'inherit',
+textAlign: 'left', background: '#111',
           scrollSnapAlign: 'start',
           boxShadow: unseen
             ? '0 0 0 2px rgba(15,157,88,0.35), 0 4px 12px rgba(0,0,0,0.08)'
@@ -392,7 +392,7 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
     <button type="button" className="hs-story-btn"
       onClick={onClick}
       style={{
-        flexShrink: 0, overflow: 'hidden',
+        flexShrink: 0,
         position: 'relative', cursor: 'pointer', border: 'none', padding: 0, fontFamily: 'inherit',
         textAlign: 'left', background: '#111',
         scrollSnapAlign: 'start',
@@ -715,8 +715,8 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
     <>
       <style>{`
         .hs-rail::-webkit-scrollbar { display: none; }
-        .hs-rail { padding: 20px 14px 28px; margin: 0; scroll-padding-left: 14px; overflow-x: auto; overflow-y: hidden; position: relative; z-index: 1; background: transparent; }
-        .hs-rail-wrap { width: 100vw; margin-left: calc(50% - 50vw); margin-top: 0; padding-top: 0; background: transparent; overflow: visible; position: relative; z-index: 1; }
+        .hs-rail { padding: 24px 14px 32px; margin: 0; scroll-padding-left: 14px; overflow-x: auto; overflow-y: hidden; position: relative; z-index: 1; background: transparent; height: auto; max-height: none; }
+        .hs-rail-wrap { width: 100vw; margin-left: calc(50% - 50vw); margin-top: 0; padding-top: 0; background: transparent; overflow: visible; position: relative; z-index: 2; }
         .hs-story-btn:active { transform: scale(0.97); transition: transform 0.12s ease; }
         .hs-rail-arrow { opacity: 0; transition: opacity 0.2s ease; pointer-events: none; }
         .hs-rail-wrap:hover .hs-rail-arrow { opacity: 1; pointer-events: auto; }
@@ -729,7 +729,7 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
         .hs-rail { flex-wrap: nowrap !important; }
         .hs-chip-rail::-webkit-scrollbar { display: none; }
 
-        .hs-story-btn, .hs-add-btn { flex: 0 0 148px; width: 148px; aspect-ratio: 9 / 14; border-radius: 16px; overflow: hidden; position: relative; scroll-snap-align: start; background: #0f172a; box-shadow: 0 1px 3px rgba(0,0,0,0.10), 0 4px 14px rgba(0,0,0,0.08); cursor: pointer; content-visibility: auto; contain-intrinsic-size: 148px 230px; transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.28s cubic-bezier(0.22, 1, 0.36, 1); will-change: transform; }
+        .hs-story-btn, .hs-add-btn { flex: 0 0 148px; width: 148px; aspect-ratio: 9 / 14; border-radius: 16px; overflow: hidden; position: relative; scroll-snap-align: start; background: #0f172a; box-shadow: 0 1px 3px rgba(0,0,0,0.10), 0 4px 14px rgba(0,0,0,0.08); cursor: pointer; transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.28s cubic-bezier(0.22, 1, 0.36, 1); will-change: transform; }
         .hs-story-btn img, .hs-story-btn video, .hs-story-btn .board { transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
         .hs-story-btn::after { content: ''; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1.5px rgba(15,157,88,0); transition: box-shadow 0.28s ease; pointer-events: none; }
         @media (hover: hover) and (pointer: fine) {
@@ -769,14 +769,14 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
           .hs-tablet-hide { display: none !important; }
           .hs-rail { gap: 10px; }
           .hs-chip { height: 40px; }
-          .hs-section { margin-bottom: 24px !important; overflow-x: clip; }
+          .hs-section { margin-bottom: 24px !important; overflow: visible; }
         }
         @media (min-width: 768px) {
-          .hs-rail { gap: 12px; padding: 20px 20px 28px; scroll-padding-left: 20px; }
+          .hs-rail { gap: 12px; padding: 24px 20px 32px; scroll-padding-left: 20px; }
           .hs-story-btn, .hs-add-btn { flex-basis: 170px; width: 170px; }
         }
         @media (min-width: 1100px) {
-          .hs-rail { gap: 14px; padding: 20px 24px 28px; scroll-padding-left: 24px; }
+          .hs-rail { gap: 14px; padding: 24px 24px 32px; scroll-padding-left: 24px; }
           .hs-story-btn, .hs-add-btn { flex-basis: 196px; width: 196px; border-radius: 18px; }
           .hs-story-btn .hs-avatar, .hs-add-btn .hs-avatar { width: 36px; height: 36px; }
           .hs-story-btn .hs-name { font-size: 13px; }
@@ -834,14 +834,12 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
                       WebkitOverflowScrolling: 'touch',
                       overscrollBehaviorX: 'contain',
                       scrollPaddingLeft: '14px',
-                      paddingTop: 0, paddingBottom: 4,
-                      marginTop: 0,
                     }}
                   >
                     <button ref={createCardRef} type="button" className="hs-add-btn"
                       onClick={() => { if (!currentUserId) { navigate?.('/login'); return }; onCreateStory?.() }}
                       style={{
-                        flexShrink: 0, overflow: 'hidden',
+                        flexShrink: 0,
                         cursor: 'pointer', padding: 0, fontFamily: 'inherit',
                         textAlign: 'center', background: 'linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%)',
                         scrollSnapAlign: 'start',
