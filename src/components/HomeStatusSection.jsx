@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from 'react'
-import { ChevronRight, MapPin, ShoppingBag, Store, Briefcase, Wrench, Plus } from 'lucide-react'
+import { ChevronRight, Plus } from 'lucide-react'
 import { STATUS_META } from '../constants/homeConstants'
 import { supabase } from '../lib/supabase'
 import { isStatusVideoUrl, isStatusColorBoard } from '../utils/statusVideo'
@@ -18,15 +18,6 @@ const G = {
 const RING_ACTIVE = '#0F9D58'
 const RING_VIEWED = '#c4c7c5'
 
-const CATEGORIES = [
-  { key: 'All',       label: 'All',       icon: null },
-  { key: 'Nearby',    label: 'Nearby',    icon: <MapPin size={13} /> },
-  { key: 'Products',  label: 'Products',  icon: <ShoppingBag size={13} /> },
-  { key: 'Shops',     label: 'Shops',     icon: <Store size={13} /> },
-  { key: 'Jobs',      label: 'Jobs',      icon: <Briefcase size={13} /> },
-  { key: 'Services',  label: 'Services',  icon: <Wrench size={13} /> },
-]
-
 function timeAgo(iso) {
   const diff = Date.now() - new Date(iso)
   const h = Math.floor(diff / 3600000)
@@ -35,17 +26,6 @@ function timeAgo(iso) {
   if (h >= 1) return `${h}h`
   if (m < 1) return 'now'
   return `${m}m`
-}
-
-function matchesCategory(s, key) {
-  if (key === 'All') return true
-  const kind = s.tagged_kind
-  if (key === 'Products') return kind === 'listing'
-  if (key === 'Shops') return kind === 'shop'
-  if (key === 'Jobs') return kind === 'job'
-  if (key === 'Services') return kind === 'service'
-  if (key === 'Nearby') return !!(s.location_hint || s.profiles?.city)
-  return true
 }
 
 function getMarketplaceLabel(s) {
@@ -124,39 +104,6 @@ function StoryStatusRing({ items = [], size = 56, children }) {
       }}>
         {children}
       </div>
-    </div>
-  )
-}
-
-function StatusCategoryChips({ categories, active, onSelect }) {
-  return (
-    <div className="hs-chip-rail" style={{
-      display: 'flex', gap: 8, overflowX: 'auto', overflowY: 'hidden',
-      paddingBottom: 4, marginBottom: 0,
-      scrollbarWidth: 'none', msOverflowStyle: 'none', WebkitOverflowScrolling: 'touch',
-      flexWrap: 'nowrap',
-    }}>
-      {categories.map(cat => {
-        const isActive = cat.key === active
-        return (
-          <button key={cat.key} type="button" className="hs-chip"
-            onClick={() => onSelect(cat.key)}
-            aria-pressed={isActive}
-            style={{
-              flexShrink: 0, border: 'none', cursor: 'pointer', fontFamily: 'inherit',
-              background: isActive ? G.green : '#fff', color: isActive ? '#fff' : G.gray700,
-              borderRadius: 999, padding: '6px 14px', fontSize: 12, fontWeight: isActive ? 700 : 600,
-              whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 5,
-              boxShadow: isActive ? '0 2px 10px rgba(15,157,88,0.25)' : '0 1px 2px rgba(0,0,0,0.04)',
-              outline: isActive ? 'none' : '1px solid ' + G.gray200,
-              transition: 'all 0.25s ease',
-            }}
-          >
-            {cat.icon && <span style={{ fontSize: 13, lineHeight: 1 }}>{cat.icon}</span>}
-            {cat.label}
-          </button>
-        )
-      })}
     </div>
   )
 }
@@ -605,7 +552,6 @@ function getInitCount(w) { return w >= 1024 ? 5 : 4 }
 
 export default function HomeStatusSection({ navigate, stories, loading, onCreateStory, currentUserId }) {
   const [viewedIds, setViewedIds] = useState(loadViewedStoryIds)
-  const [activeCategory, setActiveCategory] = useState('All')
   const [windowWidth, setWindowWidth] = useState(window.innerWidth)
   const [loadCount, setLoadCount] = useState(() => getInitCount(window.innerWidth))
   const scrollRef = useRef(null)
@@ -665,19 +611,13 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
   }, [stories, currentUserId])
 
   const rankedStories = useMemo(() => {
-    let filtered = storyGroups
-    if (activeCategory !== 'All') {
-      filtered = storyGroups.filter(s => matchesCategory(s, activeCategory))
-    }
-    const owned = filtered.filter(s => s.user_id === currentUserId)
-    const rest = filtered.filter(s => s.user_id !== currentUserId)
+    const owned = storyGroups.filter(s => s.user_id === currentUserId)
+    const rest = storyGroups.filter(s => s.user_id !== currentUserId)
     const scored = rest.map(s => ({ s, score: scoreStory(s) }))
     scored.sort((a, b) => b.score - a.score)
     return [...owned, ...scored.map(x => x.s)]
-  }, [storyGroups, activeCategory, currentUserId])
+  }, [storyGroups, currentUserId])
 
-  const hasStories = storyGroups.length > 0
-  const activeCount = rankedStories.length
 
   // Create Status card is the first rail item. With 2+ posted statuses it is
   // scrolled off-screen before first paint so landing/refresh shows only
@@ -700,7 +640,7 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
     const cs = window.getComputedStyle(el)
     const gap = parseFloat(cs.columnGap || cs.gap) || (isMobile ? 10 : 16)
     el.scrollLeft = btn.offsetWidth + gap
-  }, [hideCreateCard, activeCategory, layoutKey, loading, isMobile])
+  }, [hideCreateCard, layoutKey, loading, isMobile])
 
   function openStoryGroup(s) {
     const ids = s._ownGroup ? s._ownGroup.map(x => x.id) : [s.id]
@@ -836,68 +776,16 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
               boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.04)',
               padding: '20px 24px',
             }}>
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14,
-              }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-                  <h2 style={{
-                    margin: 0, fontFamily: G.fontDisplay, fontSize: 16, fontWeight: 800,
-                    color: G.text, letterSpacing: -0.3,
-                  }}>
-                    Status Updates
-                  </h2>
-                  {hasStories && (
-                    <span style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 4,
-                      fontSize: 10, fontWeight: 700, letterSpacing: 0.3,
-                      color: '#fff', background: '#dc2626',
-                      borderRadius: 999, padding: '2px 10px 2px 8px',
-                      lineHeight: 1.5,
-                    }}>
-                      <span style={{
-                        display: 'inline-block', width: 6, height: 6, borderRadius: '50%',
-                        background: '#fff',
-                        animation: 'hsPulse 1.6s ease-in-out infinite',
-                      }} />
-                      LIVE · {activeCategory !== 'All' ? activeCategory : activeCount}
-                    </span>
-                  )}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {rankedStories.length > 0 && (
-                    <button type="button"
-                      onClick={() => { if (rankedStories.length) openStoryGroup(rankedStories[0]) }}
-                      style={{
-                        border: 'none', background: 'transparent', cursor: 'pointer', fontFamily: 'inherit',
-                        display: 'inline-flex', alignItems: 'center', gap: 2,
-                        padding: '4px 8px', fontSize: 12, fontWeight: 700, color: G.green,
-                        borderRadius: 999, transition: 'background 0.25s ease',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      View All
-                      <ChevronRight size={13} />
-                    </button>
-                  )}
-                </div>
-              </div>
-
-              <StatusCategoryChips
-                categories={CATEGORIES}
-                active={activeCategory}
-                onSelect={setActiveCategory}
-              />
-
-              {rankedStories.length > 0 || activeCategory === 'All' ? (
-                <div style={{ position: 'relative', paddingTop: 10, paddingBottom: 10, marginTop: 4 }}>
+            {rankedStories.length > 0 ? (
+                <div style={{ position: 'relative', paddingTop: 0, paddingBottom: 10, marginTop: 0 }}>
                   <div ref={scrollRef}
                     className="hs-rail"
                     style={{
                       display: 'flex', gap: 16, overflowX: 'auto', overflowY: 'visible',
                       scrollSnapType: 'x mandatory',
                       WebkitOverflowScrolling: 'touch',
-                      paddingTop: 10, paddingBottom: 4,
-                      marginTop: -10,
+                      paddingTop: 0, paddingBottom: 4,
+                      marginTop: 0,
                     }}
                   >
                     <button ref={createCardRef} type="button" className="hs-add-btn"
@@ -981,9 +869,7 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
                   color: G.textMuted,
                 }}>
                   <p style={{ margin: '0 0 12px', fontSize: 13, fontWeight: 600 }}>
-                    {activeCategory !== 'All'
-                      ? `No ${activeCategory.toLowerCase()} stories right now`
-                      : 'No live stories yet — share the first update.'}
+                    No live stories yet — share the first update.
                   </p>
                   {!loading && (
                     <button type="button"
