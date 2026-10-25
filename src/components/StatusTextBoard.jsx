@@ -7,6 +7,7 @@ export default function StatusTextBoard({
   color,
   text,
   style = {},
+  className,
   fontSize = null,
   sizeScale = 1,
   maxLines = 5,
@@ -26,7 +27,7 @@ export default function StatusTextBoard({
   const size = fontSize || Math.round(auto * sizeScale * 2) / 2
 
   return (
-    <div style={{
+    <div className={className} style={{
       width: '100%', height: '100%',
       background: color || '#0f766e',
       display: 'flex', alignItems: 'center', justifyContent: 'center',

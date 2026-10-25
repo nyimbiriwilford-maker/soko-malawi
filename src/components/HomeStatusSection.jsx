@@ -274,7 +274,7 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
         {media ? (
           <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
             {boardColor ? (
-               <StatusTextBoard color={boardColor} text={s.content} fontSize={14} maxLines={5}
+               <StatusTextBoard color={boardColor} text={s.content} fontSize={14} maxLines={5} className="board"
                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
              ) : (
                <LazyMedia src={media} isVideo={isVideo}
@@ -405,7 +405,7 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
 {media ? (
           <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
             {boardColor ? (
-               <StatusTextBoard color={boardColor} text={s.content} fontSize={14} maxLines={5}
+               <StatusTextBoard color={boardColor} text={s.content} fontSize={14} maxLines={5} className="board"
                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
              ) : (
                <LazyMedia src={media} isVideo={isVideo}
@@ -715,15 +715,30 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
     <>
       <style>{`
         .hs-rail::-webkit-scrollbar { display: none; }
+        .hs-rail { padding: 14px 14px 22px; margin: -10px 0 -14px; scroll-padding-left: 14px; }
         .hs-rail-wrap { width: 100vw; margin-left: calc(50% - 50vw); overflow-x: clip; }
         .hs-story-btn:active { transform: scale(0.97); transition: transform 0.12s ease; }
         .hs-rail-arrow { opacity: 0; transition: opacity 0.2s ease; pointer-events: none; }
         .hs-rail-wrap:hover .hs-rail-arrow { opacity: 1; pointer-events: auto; }
+        @media (prefers-reduced-motion: reduce) {
+          .hs-story-btn, .hs-story-btn img, .hs-story-btn video { transition: none; }
+          .hs-story-btn:hover { transform: none; }
+          .hs-story-btn:hover img, .hs-story-btn:hover video { transform: none; }
+        }
         .hs-rail { -ms-overflow-style: none; scrollbar-width: none; position: relative; }
         .hs-rail { flex-wrap: nowrap !important; }
         .hs-chip-rail::-webkit-scrollbar { display: none; }
 
-        .hs-story-btn, .hs-add-btn { flex: 0 0 148px; width: 148px; aspect-ratio: 9 / 14; border-radius: 16px; overflow: hidden; position: relative; scroll-snap-align: start; background: #0f172a; box-shadow: 0 1px 3px rgba(0,0,0,0.10), 0 4px 14px rgba(0,0,0,0.08); cursor: pointer; content-visibility: auto; contain-intrinsic-size: 148px 230px; }
+        .hs-story-btn, .hs-add-btn { flex: 0 0 148px; width: 148px; aspect-ratio: 9 / 14; border-radius: 16px; overflow: hidden; position: relative; scroll-snap-align: start; background: #0f172a; box-shadow: 0 1px 3px rgba(0,0,0,0.10), 0 4px 14px rgba(0,0,0,0.08); cursor: pointer; content-visibility: auto; contain-intrinsic-size: 148px 230px; transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.28s cubic-bezier(0.22, 1, 0.36, 1); will-change: transform; }
+        .hs-story-btn img, .hs-story-btn video, .hs-story-btn .board { transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
+        .hs-story-btn::after { content: ''; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1.5px rgba(15,157,88,0); transition: box-shadow 0.28s ease; pointer-events: none; }
+        @media (hover: hover) and (pointer: fine) {
+          .hs-story-btn:hover { transform: translateY(-2px); box-shadow: 0 2px 4px rgba(0,0,0,0.08), 0 14px 32px rgba(0,0,0,0.18); }
+          .hs-story-btn:hover img, .hs-story-btn:hover video { transform: scale(1.06); }
+          .hs-story-btn:hover::after { box-shadow: inset 0 0 0 1.5px rgba(15,157,88,0.55); }
+        }
+        .hs-story-btn:active { transform: scale(0.97); transition-duration: 0.12s; }
+        .hs-story-btn:focus-visible { outline: 2px solid #0F9D58; outline-offset: 3px; }
 
         @keyframes hsPulse {
           0%, 100% { opacity: 1; transform: scale(1); }
@@ -734,7 +749,8 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
           100% { background-position: -200% 0; }
         }
         @media (hover: hover) {
-           .hs-story-btn:hover { transform: translateY(-3px); box-shadow: 0 12px 30px rgba(0,0,0,0.15) !important; z-index: 50 !important; }
+           .hs-story-btn:hover img,
+           .hs-story-btn:hover video { transform: scale(1.06); }
           .hs-story-btn img, .hs-story-btn video { transition: transform .35s ease, filter .35s ease; }
           .hs-story-btn:hover img, .hs-story-btn:hover video { transform: scale(1.04); filter: brightness(1.08) contrast(1.05); }
           .hs-story-btn:hover .hs-overlay { background: linear-gradient(180deg, rgba(0,0,0,0.05) 0%, transparent 35%, rgba(0,0,0,0.02) 50%, rgba(0,0,0,0.25) 100%) !important; }
@@ -819,7 +835,6 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
                       scrollSnapType: 'x proximity',
                       WebkitOverflowScrolling: 'touch',
                       overscrollBehaviorX: 'contain',
-                      padding: '4px 14px 8px',
                       scrollPaddingLeft: '14px',
                       paddingTop: 0, paddingBottom: 4,
                       marginTop: 0,
