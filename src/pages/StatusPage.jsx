@@ -316,7 +316,7 @@ function StatusFeedCard({ s, onOpen, currentUserId, metrics, onLike }) {
         </div>
 
         {media && (
-          <button type="button" className="st-feed-media" onClick={onOpen} aria-label="Open status">
+          <button type="button" className={`st-feed-media${boardColor ? ' is-board' : ''}`} onClick={onOpen} aria-label="Open status">
             {isVideo
               ? <video src={media} muted playsInline preload="metadata" />
               : boardColor
@@ -889,9 +889,10 @@ function StatusPageInner({ user, navigate }) {
         .st-feed-grid {
           display: grid;
           grid-template-columns: 1fr;
-          gap: 14px;
-          align-items: stretch;
-          max-width: 640px;
+          gap: 16px;
+          align-items: start;
+          width: 100%;
+          max-width: 560px;
           margin: 0 auto;
         }
         .st-feed-card {
@@ -902,15 +903,18 @@ function StatusPageInner({ user, navigate }) {
           overflow: hidden;
           box-shadow: ${T.shadow};
           transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
-          font-family: inherit;
-          height: 100%;
-          min-height: 0;
-        }
-        .st-feed-card:hover {
-          transform: translateY(-3px);
-          box-shadow: ${T.shadowMd};
-          border-color: rgba(15,157,88,0.22);
-        }
+           font-family: inherit;
+           min-height: 0;
+           content-visibility: auto;
+           contain-intrinsic-size: 560px;
+         }
+         @media (hover: hover) {
+           .st-feed-card:hover {
+             transform: translateY(-3px);
+             box-shadow: ${T.shadowMd};
+             border-color: rgba(15,157,88,0.22);
+           }
+         }
         .st-feed-card:focus-visible {
           outline: 2px solid ${T.green};
           outline-offset: 2px;
@@ -984,16 +988,20 @@ function StatusPageInner({ user, navigate }) {
           width: calc(100% + 2 * var(--st-pad, 14px));
           margin: 0 calc(-1 * var(--st-pad, 14px));
           aspect-ratio: 4 / 5;
+          max-height: min(70vh, 640px);
           border-radius: 0;
           overflow: hidden;
           background: linear-gradient(145deg, #0f172a, #1e293b);
           flex-shrink: 0;
           border: none; padding: 0; cursor: pointer; display: block;
         }
-        .st-feed-media img,
-        .st-feed-media video {
-          width: 100%; height: 100%; object-fit: cover; display: block;
-        }
+         .st-feed-media.is-board { aspect-ratio: 1 / 1; max-height: none; }
+
+         .st-feed-media img,
+         .st-feed-media video {
+           width: 100%; height: 100%; object-fit: cover; display: block;
+         }
+         .st-feed-media video { background: #000; }
         .st-feed-media-fade {
           position: absolute; left: 0; right: 0; bottom: 0; height: 28%;
           background: linear-gradient(to top, rgba(0,0,0,0.18), transparent);
@@ -1167,7 +1175,7 @@ function StatusPageInner({ user, navigate }) {
           background-size: 300% 100%;
           animation: stShimmer 1.3s ease-in-out infinite;
         }
-        .st-feed-skel-media { width: 100%; aspect-ratio: 4 / 5; border-radius: 0; flex-shrink: 0; }
+         .st-feed-skel-media { width: 100%; aspect-ratio: 4 / 5; max-height: min(70vh, 640px); border-radius: 0; flex-shrink: 0; }
         .st-skel-row { height: 13px; border-radius: 7px; }
         .st-skel-w30 { width: 30%; }
         .st-skel-w55 { width: 55%; }
@@ -1221,14 +1229,22 @@ function StatusPageInner({ user, navigate }) {
             padding: 12px 14px 24px !important;
             gap: 12px !important;
           }
-          .st-feed-grid { gap: 10px; }
-          .st-feed-meta { gap: 8px; }
+           .st-feed-grid { gap: 10px; max-width: 100%; }
+           .st-feed-media { max-height: 68vh; }
+           .st-feed-card { border-radius: 14px; }
+           .st-feed-meta { gap: 8px; }
           .st-feed-meta-item { max-width: 104px; }
         }
-        @media (max-width: 420px) {
-          .st-feed-body { --st-pad: 12px; gap: 9px; }
-        }
-      `}</style>
+         @media (max-width: 420px) {
+           .st-feed-body { --st-pad: 12px; gap: 9px; }
+         }
+         @media (min-width: 1100px) {
+           .st-feed-grid { max-width: 600px; }
+           .st-feed-media { max-height: 680px; }
+           .st-feed-caption { font-size: 14.5px; }
+           .st-feed-comments-in { max-height: 380px; }
+         }
+       `}</style>
     </div>
   )
 }
