@@ -219,11 +219,13 @@ function LazyMedia({ src, isVideo, style }) {
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/></svg>
         </div>
       ) : (
-        <img
-          ref={imgRef}
-          src={src}
-          alt=""
-          onLoad={() => setImgLoaded(true)}
+         <img
+           ref={imgRef}
+           src={src}
+           alt=""
+           loading="lazy"
+           decoding="async"
+           onLoad={() => setImgLoaded(true)}
           onError={handleImgError}
           style={{
             width: '100%', height: '100%', objectFit: 'cover',
@@ -250,8 +252,8 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
   const unseen = !allViewed && !isOwn
   const tagged = s.tagged || {}
   // Text boards already show the words on the tile — don't repeat them in the label
-  const title = tagged?.title || tagged?.name || (boardColor ? null : s.content) || null
-  const price = tagged?.price != null ? `MK${Number(tagged.price).toLocaleString()}` : tagged?.rate || tagged?.salary || null
+  const title = tagged?.title || tagged?.name || null
+
   const statusCount = group.length
 
   if (isMobile) {
@@ -259,7 +261,7 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
       <button type="button" className="hs-story-btn"
         onClick={onClick}
         style={{
-          flexShrink: 0, borderRadius: 18, overflow: 'hidden',
+          flexShrink: 0, overflow: 'hidden',
           position: 'relative', cursor: 'pointer', border: 'none', padding: 0, fontFamily: 'inherit',
           textAlign: 'left', background: '#111',
           scrollSnapAlign: 'start',
@@ -272,13 +274,18 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
         {media ? (
           <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
             {boardColor ? (
-              <StatusTextBoard color={boardColor} text={s.content}
-                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
-            ) : (
-              <LazyMedia src={media} isVideo={isVideo}
-                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
-            )}
-          </div>
+               <StatusTextBoard color={boardColor} text={s.content} fontSize={14} maxLines={5}
+                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+             ) : (
+               <LazyMedia src={media} isVideo={isVideo}
+                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+             )}
+             {isVideo && (
+               <div style={{ position: 'absolute', bottom: 8, right: 8, width: 22, height: 22, borderRadius: '50%', background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3 }}>
+                 <svg width="10" height="10" viewBox="0 0 24 24" fill="#fff" aria-hidden><polygon points="8,5 19,12 8,19" /></svg>
+               </div>
+             )}
+           </div>
         ) : avatar ? (
           <img src={avatar} alt=""
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
@@ -287,7 +294,7 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
 
         <div className="hs-overlay" style={{
           position: 'absolute', inset: 0,
-          background: 'linear-gradient(180deg, rgba(0,0,0,0.15) 0%, transparent 35%, rgba(0,0,0,0.05) 50%, rgba(0,0,0,0.55) 100%)',
+          background: 'linear-gradient(0deg, rgba(0,0,0,0.65) 0%, transparent 45%)',
         }} />
 
         <div style={{
@@ -307,10 +314,10 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
           display: 'flex', alignItems: 'center', gap: 8,
           maxWidth: 'calc(100% - 24px)',
         }}>
-          <div style={{ position: 'relative', flexShrink: 0 }}>
-            <div style={{
-              width: 36, height: 36, borderRadius: '50%', overflow: 'hidden',
-              border: '2px solid #fff',
+           <div style={{ position: 'relative', flexShrink: 0 }}>
+             <div className="hs-avatar" style={{
+               width: 32, height: 32, borderRadius: '50%', overflow: 'hidden',
+               boxShadow: '0 0 0 2px #fff, 0 0 0 4px #0F9D58',
               background: 'linear-gradient(135deg,#0F9D58,#22c55e)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               color: '#fff', fontSize: 13, fontWeight: 800,
@@ -357,25 +364,19 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
               {marketplaceLabel.text}
             </div>
           )}
-          {title && (
-            <div style={{
-              fontSize: 9, fontWeight: 700, color: '#fff',
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-              marginBottom: 1,
-              textShadow: '0 1px 4px rgba(0,0,0,0.4)',
-            }}>
-              {title}
-            </div>
-          )}
-          {price && (
-            <div style={{
-              fontSize: 8.5, fontWeight: 800, color: '#fbbf24',
-              textShadow: '0 1px 4px rgba(0,0,0,0.4)',
-              marginBottom: 1,
-            }}>
-              {price}
-            </div>
-          )}
+           {title && (
+             <div style={{
+               display: 'inline-block', marginBottom: 4,
+               fontSize: 10.5, fontWeight: 700, color: '#fff',
+               borderRadius: 999, padding: '3px 9px',
+               background: 'rgba(0,0,0,0.45)',
+               maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+               lineHeight: 1.4,
+             }}>
+               {title}
+             </div>
+           )}
+
           <div style={{
             fontSize: 7.5, fontWeight: 500, color: 'rgba(255,255,255,0.5)',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -392,7 +393,7 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
     <button type="button" className="hs-story-btn"
       onClick={onClick}
       style={{
-        flexShrink: 0, borderRadius: 20, overflow: 'hidden',
+        flexShrink: 0, overflow: 'hidden',
         position: 'relative', cursor: 'pointer', border: 'none', padding: 0, fontFamily: 'inherit',
         textAlign: 'left', background: '#111',
         scrollSnapAlign: 'start',
@@ -405,13 +406,18 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
 {media ? (
           <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
             {boardColor ? (
-              <StatusTextBoard color={boardColor} text={s.content}
-                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
-            ) : (
-              <LazyMedia src={media} isVideo={isVideo}
-                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
-            )}
-          </div>
+               <StatusTextBoard color={boardColor} text={s.content} fontSize={14} maxLines={5}
+                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+             ) : (
+               <LazyMedia src={media} isVideo={isVideo}
+                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+             )}
+             {isVideo && (
+               <div style={{ position: 'absolute', bottom: 8, right: 8, width: 22, height: 22, borderRadius: '50%', background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3 }}>
+                 <svg width="10" height="10" viewBox="0 0 24 24" fill="#fff" aria-hidden><polygon points="8,5 19,12 8,19" /></svg>
+               </div>
+             )}
+           </div>
       ) : avatar ? (
         <img src={avatar} alt=""
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
@@ -420,7 +426,7 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
 
       <div className="hs-overlay" style={{
         position: 'absolute', inset: 0,
-        background: 'linear-gradient(180deg, rgba(0,0,0,0.05) 0%, transparent 40%, rgba(0,0,0,0.55) 100%)',
+        background: 'linear-gradient(0deg, rgba(0,0,0,0.65) 0%, transparent 45%)',
       }} />
 
       <div style={{
@@ -463,15 +469,7 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
           {marketplaceLabel.text}
         </div>
       )}
-      {price && (
-        <div className="hs-tablet-hide" style={{
-          position: 'absolute', top: 10, right: 10, zIndex: 2,
-          fontSize: 10, fontWeight: 800, color: '#fbbf24',
-          textShadow: '0 1px 4px rgba(0,0,0,0.4)',
-        }}>
-          {price}
-        </div>
-      )}
+
 
       <div style={{
         position: 'absolute', bottom: 0, left: 0, right: 0,
@@ -483,9 +481,9 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
         }}>
           <div style={{ position: 'relative' }}>
             <StoryStatusRing items={ringItems} size={40}>
-              <div style={{
-                width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden',
-                background: 'linear-gradient(135deg,#0F9D58,#22c55e)',
+               <div className="hs-avatar" style={{
+                 width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden',
+                 background: 'linear-gradient(135deg,#0F9D58,#22c55e)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 color: '#fff', fontSize: 11, fontWeight: 800,
               }}>
@@ -506,7 +504,7 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
             )}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{
+            <div className="hs-name" style={{
               fontSize: 12, fontWeight: 700, color: '#fff',
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>
@@ -523,9 +521,12 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
         </div>
         {title && (
           <div style={{
-            fontSize: 10.5, fontWeight: 600, color: 'rgba(255,255,255,0.85)',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            marginLeft: 48,
+            display: 'inline-block', marginBottom: 4,
+            fontSize: 10.5, fontWeight: 700, color: '#fff',
+            borderRadius: 999, padding: '3px 9px',
+            background: 'rgba(0,0,0,0.45)',
+            maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            lineHeight: 1.4,
           }}>
             {title}
           </div>
@@ -557,6 +558,7 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
   const scrollRef = useRef(null)
   const loadCountRef = useRef(loadCount)
   const [canScrollRight, setCanScrollRight] = useState(false)
+  const [canScrollLeft, setCanScrollLeft] = useState(false)
 
   useEffect(() => { loadCountRef.current = loadCount }, [loadCount])
 
@@ -615,7 +617,7 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
     const rest = storyGroups.filter(s => s.user_id !== currentUserId)
     const scored = rest.map(s => ({ s, score: scoreStory(s) }))
     scored.sort((a, b) => b.score - a.score)
-    return [...owned, ...scored.map(x => x.s)]
+    return [...owned, ...scored.map(x => x.s)].slice(0, 20)
   }, [storyGroups, currentUserId])
 
 
@@ -663,6 +665,7 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
     const el = scrollRef.current
     if (!el) return
     setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 8)
+    setCanScrollLeft(el.scrollLeft > 8)
   }, [])
 
   useEffect(() => {
@@ -699,8 +702,12 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
   }, [handleRailScroll])
 
   function scrollRight() {
-    const step = window.innerWidth >= 1024 ? 236 : (isMobile ? 166 : 216)
+    const step = (window.innerWidth >= 1100 ? 196 : 148) * 3 + 14
     scrollRef.current?.scrollBy({ left: step, behavior: 'smooth' })
+  }
+  function scrollLeft() {
+    const step = (window.innerWidth >= 1100 ? 196 : 148) * 3 + 14
+    scrollRef.current?.scrollBy({ left: -step, behavior: 'smooth' })
   }
 
   const displayLimit = loadCount
@@ -709,12 +716,14 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
     <>
       <style>{`
         .hs-rail::-webkit-scrollbar { display: none; }
+        .hs-story-btn:active { transform: scale(0.97); transition: transform 0.12s ease; }
+        .hs-rail-arrow { opacity: 0; transition: opacity 0.2s ease; pointer-events: none; }
+        .hs-rail-wrap:hover .hs-rail-arrow { opacity: 1; pointer-events: auto; }
         .hs-rail { -ms-overflow-style: none; scrollbar-width: none; position: relative; }
         .hs-rail { flex-wrap: nowrap !important; }
         .hs-chip-rail::-webkit-scrollbar { display: none; }
 
-        .hs-story-btn, .hs-add-btn { width: 220px; height: 300px; }
-        .hs-add-btn { border-radius: 20px; }
+        .hs-story-btn, .hs-add-btn { flex: 0 0 148px; width: 148px; aspect-ratio: 9 / 14; border-radius: 16px; overflow: hidden; position: relative; scroll-snap-align: start; background: #0f172a; box-shadow: 0 1px 3px rgba(0,0,0,0.10), 0 4px 14px rgba(0,0,0,0.08); cursor: pointer; content-visibility: auto; contain-intrinsic-size: 148px 230px; }
 
         @keyframes hsPulse {
           0%, 100% { opacity: 1; transform: scale(1); }
@@ -725,7 +734,7 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
           100% { background-position: -200% 0; }
         }
         @media (hover: hover) {
-          .hs-story-btn:hover { transform: translateY(-6px) scale(1.02); box-shadow: 0 12px 30px rgba(0,0,0,0.15) !important; z-index: 50 !important; }
+           .hs-story-btn:hover { transform: translateY(-3px); box-shadow: 0 12px 30px rgba(0,0,0,0.15) !important; z-index: 50 !important; }
           .hs-story-btn img, .hs-story-btn video { transition: transform .35s ease, filter .35s ease; }
           .hs-story-btn:hover img, .hs-story-btn:hover video { transform: scale(1.04); filter: brightness(1.08) contrast(1.05); }
           .hs-story-btn:hover .hs-overlay { background: linear-gradient(180deg, rgba(0,0,0,0.05) 0%, transparent 35%, rgba(0,0,0,0.02) 50%, rgba(0,0,0,0.25) 100%) !important; }
@@ -748,6 +757,19 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
           .hs-chip { height: 40px; }
           .hs-section { margin-bottom: 24px !important; }
         }
+        @media (min-width: 768px) {
+          .hs-rail { gap: 12px; padding: 2px 20px 6px; scroll-padding-left: 20px; }
+          .hs-story-btn, .hs-add-btn { flex-basis: 170px; width: 170px; }
+        }
+        @media (min-width: 1100px) {
+          .hs-rail { gap: 14px; }
+          .hs-story-btn, .hs-add-btn { flex-basis: 196px; width: 196px; border-radius: 18px; }
+          .hs-story-btn .hs-avatar, .hs-add-btn .hs-avatar { width: 36px; height: 36px; }
+          .hs-story-btn .hs-name { font-size: 13px; }
+        }
+        @media (min-width: 1600px) {
+          .hs-story-btn, .hs-add-btn { flex-basis: 210px; width: 210px; }
+        }
       `}</style>
 
       <section className="hs-section" style={{
@@ -764,9 +786,9 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
             }}>
               <div className="skeleton" style={{ width: 140, height: 16, borderRadius: 6, marginBottom: 12 }} />
               <div style={{ display: 'flex', gap: 12, overflow: 'hidden' }}>
-                {[1, 2, 3, 4, 5].map((_, k) => (
+                {[1, 2, 3, 4, 5, 6].map((_, k) => (
                   <div key={k} className="skeleton hs-story-btn"
-                    style={{ borderRadius: 20 }} />
+                    style={{ borderRadius: 16 }} />
                 ))}
               </div>
             </div>
@@ -777,13 +799,36 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
               padding: '20px 24px',
             }}>
             {rankedStories.length > 0 ? (
-                <div style={{ position: 'relative', paddingTop: 0, paddingBottom: 10, marginTop: 0 }}>
+                <div className="hs-rail-wrap" style={{ position: 'relative', paddingTop: 0, paddingBottom: 10, marginTop: 0 }}>
+                  {canScrollLeft && !isMobile && (
+                    <button type="button" className="hs-rail-arrow"
+                      onClick={scrollLeft}
+                      style={{
+                        position: 'absolute', top: '50%', left: -4, zIndex: 10,
+                        transform: 'translateY(-50%)',
+                        width: 36, height: 36, borderRadius: '50%',
+                        background: 'rgba(255,255,255,0.96)',
+                        border: '1px solid ' + G.gray200,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        cursor: 'pointer',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                        color: '#374151', padding: 0, fontFamily: 'inherit',
+                        transition: 'all 0.2s ease',
+                      }}
+                      aria-label="Scroll left"
+                    >
+                      <ChevronRight size={16} style={{ transform: 'rotate(180deg)' }} />
+                    </button>
+                  )}
                   <div ref={scrollRef}
                     className="hs-rail"
                     style={{
-                      display: 'flex', gap: 16, overflowX: 'auto', overflowY: 'visible',
-                      scrollSnapType: 'x mandatory',
+                      display: 'flex', gap: 10, overflowX: 'auto', overflowY: 'hidden',
+                      scrollSnapType: 'x proximity',
                       WebkitOverflowScrolling: 'touch',
+                      overscrollBehaviorX: 'contain',
+                      padding: '2px 14px 6px',
+                      scrollPaddingLeft: '14px',
                       paddingTop: 0, paddingBottom: 4,
                       marginTop: 0,
                     }}
@@ -791,10 +836,11 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
                     <button ref={createCardRef} type="button" className="hs-add-btn"
                       onClick={() => { if (!currentUserId) { navigate?.('/login'); return }; onCreateStory?.() }}
                       style={{
-                        flexShrink: 0, borderRadius: isMobile ? 18 : 20, overflow: 'hidden',
-                        cursor: 'pointer', border: '2px dashed ' + G.gray200, padding: 0, fontFamily: 'inherit',
+                        flexShrink: 0, overflow: 'hidden',
+                        cursor: 'pointer', padding: 0, fontFamily: 'inherit',
                         textAlign: 'center', background: 'linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%)',
                         scrollSnapAlign: 'start',
+                        border: '2px dashed ' + G.green,
                         boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
                         transition: 'all 0.25s ease',
                         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
@@ -842,7 +888,7 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
                   </div>
 
                   {canScrollRight && !isMobile && (
-                    <button type="button"
+                    <button type="button" className="hs-rail-arrow"
                       onClick={scrollRight}
                       style={{
                         position: 'absolute', top: '50%', right: -4, zIndex: 10,
