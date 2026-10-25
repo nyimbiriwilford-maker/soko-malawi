@@ -5259,6 +5259,7 @@ export default function Home() {
   // ── Stories (compact LiveStoriesCard + viewer/upload) ─────
   const [stories, setStories] = useState([])
   const [storiesLoading, setStoriesLoading] = useState(true)
+  const [storiesError, setStoriesError] = useState(null)
 
   // ── Animation / location (preserved) ──────────────────────
   const [isFocused, setIsFocused] = useState(false)
@@ -5285,7 +5286,10 @@ export default function Home() {
     if (!user?.id) { setStoriesLoading(false); return }
     let ch
     setStoriesLoading(true)
-    fetchAllActiveStories(user.id, 'All').then(data => { setStories(data); setStoriesLoading(false) })
+    setStoriesError(null)
+    fetchAllActiveStories(user.id, 'All')
+      .then(data => { setStories(data); setStoriesLoading(false) })
+      .catch(err => { setStoriesError(err); setStoriesLoading(false) })
 
     ch = supabase.channel(`home-live-stories-${user.id}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'user_statuses' }, () => {
@@ -5786,6 +5790,8 @@ export default function Home() {
           navigate={navigate}
           stories={stories}
           loading={storiesLoading}
+          error={storiesError}
+          onRetry={() => { setStoriesLoading(true); setStoriesError(null); fetchAllActiveStories(user.id, 'All').then(data => { setStories(data); setStoriesLoading(false) }).catch(err => { setStoriesError(err); setStoriesLoading(false) }) }}
           onCreateStory={handleCreateStory}
           currentUserId={user?.id}
           currentUserProfile={user ? { avatar_url: user.avatar_url, full_name: user.full_name, is_verified: user.is_verified } : null}

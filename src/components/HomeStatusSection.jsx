@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from 'react'
-import { ChevronRight, Plus } from 'lucide-react'
+import { ChevronRight, Plus, Sparkles } from 'lucide-react'
 import { STATUS_META } from '../constants/homeConstants'
 import { supabase } from '../lib/supabase'
 import { isStatusVideoUrl, isStatusColorBoard } from '../utils/statusVideo'
@@ -550,7 +550,7 @@ function persistViewedStoryIds(set) {
 
 function getInitCount(w) { return w >= 1024 ? 5 : 4 }
 
-export default function HomeStatusSection({ navigate, stories, loading, onCreateStory, currentUserId }) {
+export default function HomeStatusSection({ navigate, stories, loading, error, onRetry, onCreateStory, currentUserId }) {
   const [viewedIds, setViewedIds] = useState(loadViewedStoryIds)
   const [windowWidth, setWindowWidth] = useState(window.innerWidth)
   const [loadCount, setLoadCount] = useState(() => getInitCount(window.innerWidth))
@@ -783,7 +783,18 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
         }
         @media (min-width: 1600px) {
           .hs-story-btn, .hs-add-btn { flex-basis: 210px; width: 210px; }
+          .st-empty-card { flex-basis: 210px; width: 210px; }
         }
+        .st-empty-card { flex: 0 0 148px; width: 148px; aspect-ratio: 9 / 14; border-radius: 16px; overflow: hidden; scroll-snap-align: start; }
+        @media (min-width: 768px) { .st-empty-card { flex-basis: 170px; width: 170px; } }
+        @media (min-width: 1100px) { .st-empty-card { flex-basis: 196px; width: 196px; border-radius: 18px; } .st-empty-card .st-empty-title { font-size: 15px; } .st-empty-card .st-empty-sub { font-size: 12.5px; } .st-empty-card .st-empty-icon { width: 56px; height: 56px; } }
+        @keyframes stEmptyFloat { from { transform: translateY(0); } to { transform: translateY(-4px); } }
+        @media (hover: hover) and (pointer: fine) {
+          .st-empty-card:hover { transform: translateY(-2px); box-shadow: 0 2px 4px rgba(0,0,0,0.08), 0 14px 32px rgba(0,0,0,0.18); }
+          .st-empty-card button:hover { background: #0a7a44; }
+        }
+        .st-empty-card button:focus-visible { outline: 2px solid #0F9D58; outline-offset: 3px; }
+        @media (prefers-reduced-motion: reduce) { .st-empty-card [style*="animation"] { animation: none; } }
       `}</style>
 
       <section className="hs-section" style={{
@@ -904,26 +915,108 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
                   )}
                 </div>
               ) : (
-                <div style={{
-                  textAlign: 'center', padding: '40px 16px', marginTop: 8,
-                  border: '1.5px dashed ' + G.gray200, borderRadius: 16,
-                  color: G.textMuted,
-                }}>
-                  <p style={{ margin: '0 0 12px', fontSize: 13, fontWeight: 600 }}>
-                    No live stories yet — share the first update.
-                  </p>
-                  {!loading && (
-                    <button type="button"
+                <div className="hs-rail-wrap" style={{ position: 'relative', padding: 0, margin: 0 }}>
+                  <div ref={scrollRef}
+                    className="hs-rail"
+                    style={{
+                      display: 'flex', gap: 10, overflowX: 'auto', overflowY: 'hidden',
+                      scrollSnapType: 'x proximity',
+                      WebkitOverflowScrolling: 'touch',
+                      overscrollBehaviorX: 'contain',
+                      scrollPaddingLeft: '14px',
+                    }}
+                  >
+                    <button ref={createCardRef} type="button" className="hs-add-btn"
                       onClick={() => { if (!currentUserId) { navigate?.('/login'); return }; onCreateStory?.() }}
                       style={{
-                        border: 'none', background: G.green, color: '#fff', borderRadius: 10,
-                        padding: '9px 16px', fontSize: 12, fontWeight: 800, cursor: 'pointer',
-                        fontFamily: 'inherit', boxShadow: '0 3px 12px rgba(15,157,88,0.25)',
+                        flexShrink: 0,
+                        cursor: 'pointer', padding: 0, fontFamily: 'inherit',
+                        textAlign: 'center', background: 'linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%)',
+                        scrollSnapAlign: 'start',
+                        border: '2px dashed ' + G.green,
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                        transition: 'all 0.25s ease',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                        gap: 8,
                       }}
                     >
-                      Post status
+                      <div style={{
+                        width: 40, height: 40,
+                        borderRadius: '50%',
+                        background: 'linear-gradient(135deg, #0F9D58 0%, #16a34a 100%)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        boxShadow: '0 4px 12px rgba(15,157,88,0.25)',
+                      }}>
+                        <Plus size={22} color="#fff" strokeWidth={2.5} />
+                      </div>
+                      <div style={{
+                        fontSize: 12.5,
+                        fontWeight: 700,
+                        color: G.text,
+                        letterSpacing: -0.2,
+                      }}>
+                        Create Status
+                      </div>
                     </button>
-                  )}
+
+                    {error ? (
+                      <section className="st-empty-card" aria-label="Couldn't load statuses"
+                        style={{
+                          flex: '0 0 148px', width: 148, aspectRatio: '9 / 14', borderRadius: 16,
+                          background: 'linear-gradient(160deg, #e8f5ee 0%, #f0fdf4 55%, #fff8e1 100%)',
+                          border: '1px solid rgba(15,157,88,0.14)',
+                          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                          gap: 10, padding: 16, boxSizing: 'border-box', textAlign: 'center',
+                          scrollSnapAlign: 'start',
+                        }}
+                      >
+                        <div style={{ fontSize: 14, fontWeight: 800, color: '#202124', fontFamily: G.fontDisplay }}>Couldn't load statuses</div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: '#5f6368', lineHeight: 1.45, maxWidth: '100%' }}>Check your connection and try again.</div>
+                        <button type="button"
+                          onClick={() => { if (typeof onRetry === 'function') onRetry() }}
+                          style={{
+                            border: 'none', background: '#0F9D58', color: '#fff', borderRadius: 999,
+                            padding: '8px 14px', fontSize: 12, fontWeight: 800, cursor: 'pointer',
+                            fontFamily: 'inherit', boxShadow: '0 4px 12px rgba(15,157,88,0.28)',
+                          }}
+                        >
+                          Retry
+                        </button>
+                      </section>
+                    ) : (
+                      <section className="st-empty-card" aria-label="No statuses yet"
+                        style={{
+                          flex: '0 0 148px', width: 148, aspectRatio: '9 / 14', borderRadius: 16,
+                          background: 'linear-gradient(160deg, #e8f5ee 0%, #f0fdf4 55%, #fff8e1 100%)',
+                          border: '1px solid rgba(15,157,88,0.14)',
+                          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                          gap: 10, padding: 16, boxSizing: 'border-box', textAlign: 'center',
+                          scrollSnapAlign: 'start',
+                        }}
+                      >
+                        <div className="st-empty-icon" style={{
+                          width: 52, height: 52, borderRadius: '50%', background: '#ffffff',
+                          boxShadow: '0 4px 14px rgba(15,157,88,0.18)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          animation: 'stEmptyFloat 2.4s ease-in-out infinite alternate',
+                        }}>
+                          <Sparkles size={24} color="#0F9D58" />
+                        </div>
+                        <div className="st-empty-title" style={{ fontSize: 14, fontWeight: 800, color: '#202124', fontFamily: G.fontDisplay }}>No statuses yet</div>
+                        <div className="st-empty-sub" style={{ fontSize: 12, fontWeight: 600, color: '#5f6368', lineHeight: 1.45, maxWidth: '100%' }}>Be the first to share what you're selling today.</div>
+                        <button type="button"
+                          onClick={() => { if (!currentUserId) { navigate?.('/login'); return }; onCreateStory?.() }}
+                          style={{
+                            border: 'none', background: '#0F9D58', color: '#fff', borderRadius: 999,
+                            padding: '8px 14px', fontSize: 12, fontWeight: 800, cursor: 'pointer',
+                            fontFamily: 'inherit', boxShadow: '0 4px 12px rgba(15,157,88,0.28)',
+                          }}
+                        >
+                          Post status
+                        </button>
+                      </section>
+                    )}
+                  </div>
                 </div>
               )}
             </div>
