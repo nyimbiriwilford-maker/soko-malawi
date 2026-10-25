@@ -4,8 +4,6 @@ import { supabase } from '../lib/supabase'
 import { fetchAllActiveStories } from '../hooks/useStatuses'
 import StoryViewer from '../components/StoryViewer'
 import StatusUploadModal from '../components/StatusUploadModal'
-import { useReels } from '../hooks/useReels'
-import { ReelFeedCard, ReelsViewer } from '../components/StatusReels'
 import { isStatusVideoUrl, isStatusColorBoard } from '../utils/statusVideo'
 import { coordsForPlace, haversineKm } from '../utils/lookingFor'
 import { useUserLocation } from '../hooks/useUserLocation'
@@ -669,18 +667,14 @@ function StatusPageInner({ user, navigate }) {
     return () => supabase.removeChannel(ch)
   }, [user.id])
 
-  // Status pool (excluding own) — the 30 newest statuses are the pool the
-  // personalised feed is ordered from.
+  // Status pool — the 30 newest statuses are the pool the personalised feed
+  // is ordered from. Include the viewer's own posts so posted statuses show.
   const statusPool = useMemo(
-    () => stories.filter(s => s.user_id !== user.id).slice(0, 30),
-    [stories, user.id],
+    () => stories.slice(0, 30),
+    [stories],
   )
 
   const { metrics: feedMetrics, likeStory } = useStoryFeedMetrics(statusPool, user.id)
-
-  // Reels — most-viewed current status videos, interleaved into the feed
-  const { reels, metrics: reelMetrics, toggleLike: likeReel, registerView: registerReelView } = useReels(stories, user.id)
-  const [reelsOpen, setReelsOpen] = useState(false)
 
   // Viewer position: browser geolocation first, else their profile city.
   const myLocation = useUserLocation()
@@ -726,25 +720,10 @@ function StatusPageInner({ user, navigate }) {
     return ranked.slice(0, 12).map(r => r.s)
   }, [statusPool, feedMetrics, viewerCoords, user.id])
 
-  // Feed items = statuses with reel cards placed at viewer-seeded random
-  // positions, so scrolling the timeline surfaces Soko Reels organically.
-  const feedItems = useMemo(() => {
-    const items = recentStatuses.map(s => ({ kind: 'status', key: s.id, s }))
-    if (!reels.length || !items.length) return items
-    const slots = new Set()
-    const r1 = seededRandom(user.id, 'soko-reels-slot-a')
-    slots.add(Math.min(items.length, 2 + Math.floor(r1 * Math.max(1, items.length - 2))))
-    if (items.length >= 7) {
-      const r2 = seededRandom(user.id, 'soko-reels-slot-b')
-      let posB = Math.min(items.length, 5 + Math.floor(r2 * Math.max(1, items.length - 4)))
-      for (const p of slots) if (Math.abs(posB - p) < 3) posB = items.length
-      slots.add(posB)
-    }
-    ;[...slots].sort((a, b) => b - a).forEach(pos => {
-      items.splice(pos, 0, { kind: 'reel', key: `reel-${pos}` })
-    })
-    return items
-  }, [recentStatuses, reels, user.id])
+  const feedItems = useMemo(
+    () => recentStatuses.map(s => ({ kind: 'status', key: s.id, s })),
+    [recentStatuses],
+  )
 
   async function openFeedStory(s) {
     const { data } = await supabase.from('user_statuses')
@@ -801,14 +780,7 @@ function StatusPageInner({ user, navigate }) {
           <section className="st-feed-section">
             <SectionHeader kicker="Timeline" title="Latest updates" count={recentStatuses.length} />
             <div className="st-feed-grid">
-              {feedItems.map(item => item.kind === 'reel' ? (
-                <ReelFeedCard
-                  key={item.key}
-                  reels={reels}
-                  metrics={reelMetrics}
-                  onOpen={() => setReelsOpen(true)}
-                />
-              ) : (
+              {feedItems.map(item => (
                 <StatusFeedCard
                   key={item.key}
                   s={item.s}
@@ -825,14 +797,7 @@ function StatusPageInner({ user, navigate }) {
             <section className="st-feed-section" aria-hidden>
               <SectionHeader kicker="Timeline" title="Latest updates" />
               <div className="st-feed-grid">
-                {recentStatuses.length > 0 ? feedItems.map(item => item.kind === 'reel' ? (
-                  <ReelFeedCard
-                    key={item.key}
-                    reels={reels}
-                    metrics={reelMetrics}
-                    onOpen={() => setReelsOpen(true)}
-                  />
-                ) : (
+                {recentStatuses.length > 0 ? feedItems.map(item => (
                   <StatusFeedCard
                     key={item.key}
                     s={item.s}
@@ -841,13 +806,13 @@ function StatusPageInner({ user, navigate }) {
                     onLike={likeStory}
                     onOpen={() => openFeedStory(item.s)}
                   />
-                ) : (
+                )) : (
                   <div className="st-feed-card st-feed-empty">
                     <div style={{height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b'}}>
                       No statuses to display
                     </div>
                   </div>
-                ))}
+                )}
               </div>
             </section>
           ) : (
@@ -905,17 +870,6 @@ function StatusPageInner({ user, navigate }) {
             navigate('/', { replace: true })
           }
         }} />
-      )}
-      {/* Reels viewer — most-viewed status videos */}
-      {reelsOpen && reels.length > 0 && (
-        <ReelsViewer
-          reels={reels}
-          metrics={reelMetrics}
-          currentUserId={user.id}
-          onClose={() => setReelsOpen(false)}
-          onToggleLike={likeReel}
-          registerView={registerReelView}
-        />
       )}
 
       {showUpload && (
