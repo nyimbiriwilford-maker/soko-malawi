@@ -58,11 +58,16 @@ export default function SavedStatusesPage() {
   }
 
   return (
-    <div style={{
+    <div className="saved-statuses-page" style={{
       minHeight: '100vh', background: '#f7f8f6',
       fontFamily: "'DM Sans', system-ui, sans-serif",
-      paddingBottom: 100,
     }}>
+      <style>{`
+        .saved-statuses-page { min-height: 100vh; min-height: 100dvh; }
+        @media (max-width: 768px) {
+          .saved-statuses-page { padding-bottom: calc(var(--bottom-nav-h, 60px) + env(safe-area-inset-bottom, 0px) + 16px); }
+        }
+      `}</style>
       {/* Header */}
       <div style={{
         position: 'sticky', top: 0, zIndex: 100,

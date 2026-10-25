@@ -741,7 +741,7 @@ function StatusPageInner({ user, navigate }) {
   }
 
   return (
-    <div className="st-page" style={{ minHeight: '100vh', background: T.bg, fontFamily: T.font, color: T.text, paddingBottom: 88 }}>
+     <div className="st-page" style={{ background: T.bg, fontFamily: T.font, color: T.text }}>
 
       {/* Shared marketplace header (same as Home / Looking For) */}
       <SokoNav
@@ -883,7 +883,7 @@ function StatusPageInner({ user, navigate }) {
         />
       )}
       <style>{`
-        .st-page { -webkit-tap-highlight-color: transparent; }
+         .st-page { -webkit-tap-highlight-color: transparent; min-height: 100vh; min-height: 100dvh; }
 
         .st-feed-section { min-width: 0; }
         .st-feed-grid {
@@ -1229,6 +1229,7 @@ function StatusPageInner({ user, navigate }) {
             padding: 12px 14px 24px !important;
             gap: 12px !important;
           }
+           .st-page { padding-bottom: calc(var(--bottom-nav-h, 60px) + env(safe-area-inset-bottom, 0px) + 16px); }
            .st-feed-grid { gap: 10px; max-width: 100%; }
            .st-feed-media { max-height: 68vh; }
            .st-feed-card { border-radius: 14px; }

@@ -255,14 +255,18 @@ const premiumCss = `
 
   .sbn-bar {
     position: fixed;
-    bottom: 0;
     left: 0;
     right: 0;
-    z-index: 100;
-    padding: 0 0 calc(env(safe-area-inset-bottom, 0px));
+    bottom: 0;
+    margin: 0;
+    z-index: 1000;
+    background: #ffffff;
+    box-sizing: border-box;
+    height: calc(var(--bottom-nav-h, 60px) + env(safe-area-inset-bottom, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    border-top: 1px solid #e8eaed;
     pointer-events: none;
-    transition: transform 0.25s ease, opacity 0.25s ease;
-    will-change: transform;
+    transition: opacity 0.25s ease;
   }
 
   .sbn-bar-inner {
@@ -274,11 +278,12 @@ const premiumCss = `
     justify-content: space-around;
     gap: 0;
     padding: 8px 8px 10px;
+    height: var(--bottom-nav-h, 60px);
+    box-sizing: border-box;
     border-radius: 0;
     background: #ffffff;
     border: none;
-    border-top: 1px solid var(--sbn-line);
-    box-shadow: 0 -4px 20px rgba(15, 23, 42, 0.04);
+    box-shadow: none;
     backdrop-filter: none;
     position: relative;
   }

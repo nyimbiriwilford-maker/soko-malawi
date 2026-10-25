@@ -1523,15 +1523,17 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
         @media (max-width: 1100px) {
           .pl-sidebar { position: static; max-height: none; overflow: visible; padding-right: 0; }
         }
-        @media (max-width: 768px) {
-          .pl-sticky-bar {
-            bottom: calc(60px + env(safe-area-inset-bottom, 0px)) !important;
-            box-shadow: 0 -6px 20px -8px rgba(15,20,16,0.25) !important;
-          }
-        }
+         @media (max-width: 768px) {
+           .pl-sticky-bar {
+             bottom: calc(60px + env(safe-area-inset-bottom, 0px)) !important;
+             box-shadow: 0 -6px 20px -8px rgba(15,20,16,0.25) !important;
+           }
+           .pl-page { padding-bottom: calc(var(--bottom-nav-h, 60px) + env(safe-area-inset-bottom, 0px) + 16px); }
+         }
         .pl-pulse-ring { animation: plPulse 2.2s ease-in-out infinite; }
         .pl-search-wrap { transition: border-color .15s ease, background .15s ease, box-shadow .15s ease; }
         .pl-search-wrap:focus-within { border-color: ${C.green} !important; background: #fff !important; box-shadow: ${SHADOW.focusRing}; }
+        .pl-page { min-height: 100vh; min-height: 100dvh; }
         .pl-page button, .pl-page input, .pl-page textarea, .pl-page select { font-family: ${DMSANS}; }
         .pl-page button:focus-visible, .pl-page input:focus-visible,
         .pl-page textarea:focus-visible, .pl-page select:focus-visible {
@@ -2350,7 +2352,7 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
    Stylesheet
    ──────────────────────────────────────────────────────────── */
 const S = {
-  page: { minHeight: '100vh', background: C.surface, fontFamily: DMSANS, color: C.dark, fontSize: 15, paddingBottom: 96 },
+  page: { minHeight: '100vh', background: C.surface, fontFamily: DMSANS, color: C.dark, fontSize: 15 },
   // mobile bottom padding handled via .pl-page-mobile-pad class added below
 
   progressBarOuter: { position: 'sticky', top: 0, zIndex: 60, height: 3, background: C.line, overflow: 'hidden' },

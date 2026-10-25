@@ -663,7 +663,7 @@ const myAlertsRef = useRef([])
 
   /* ══════ RENDER ══════ */
   return (
-    <div className="lf-page" style={{ minHeight:'100vh', background: C.bg, color: C.text, fontFamily:"'Inter',sans-serif", paddingBottom: 88 }}>
+    <div className="lf-page" style={{ background: C.bg, color: C.text, fontFamily:"'Inter',sans-serif" }}>
 
       {/* Shared marketplace header (same as Home) — only CTA differs */}
       <SokoNav
@@ -1158,8 +1158,11 @@ const myAlertsRef = useRef([])
 
       {/* Responsive CSS */}
       <style>{`
-        .lf-page { overflow-x: hidden; max-width: 100vw; box-sizing: border-box; }
+        .lf-page { overflow-x: hidden; max-width: 100vw; box-sizing: border-box; min-height: 100vh; min-height: 100dvh; }
         .lf-page *, .lf-page *::before, .lf-page *::after { box-sizing: border-box; }
+        @media (max-width: 768px) {
+          .lf-page { padding-bottom: calc(var(--bottom-nav-h, 60px) + env(safe-area-inset-bottom, 0px) + 16px); }
+        }
         .lf-drawer-close { display: none !important; }
         .lf-mobile-filters-btn { display: none !important; }
         .lf-nav-post-short { display: none !important; }

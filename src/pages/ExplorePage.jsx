@@ -120,7 +120,7 @@ export default function ExplorePage() {
       background: '#fff',
       minHeight: '100dvh',
       fontFamily: "'Inter', 'DM Sans', system-ui, sans-serif",
-      paddingBottom: 'calc(80px + env(safe-area-inset-bottom, 0px))',
+      paddingBottom: 'calc(var(--bottom-nav-h, 60px) + env(safe-area-inset-bottom, 0px) + 16px)',
     }}>
 
       {/* Header */}

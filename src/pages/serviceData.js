@@ -77,7 +77,7 @@ export function formatWhatsApp(number, name, category) {
 
 export const S = {
   // Layout
-  page: { minHeight: '100vh', background: '#f4f8f5', paddingBottom: '80px', fontFamily: 'system-ui, sans-serif' },
+  page: { background: '#f4f8f5', fontFamily: 'system-ui, sans-serif' },
 
   // Header
   header: { background: '#fff', borderBottomWidth: '1px', borderBottomStyle: 'solid', borderBottomColor: '#e8f0eb', boxShadow: '0 2px 8px rgba(0,0,0,0.05)', position: 'sticky', top: 0, zIndex: 50 },

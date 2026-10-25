@@ -3,6 +3,7 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
+  --bottom-nav-h: 60px;
   --green: #1a7a4a;
   --green-mid: #22a05e;
   --green-light: #e6f7ee;
