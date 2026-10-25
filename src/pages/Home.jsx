@@ -5776,12 +5776,12 @@ export default function Home() {
       </div>
 
       {/* Hero banner */}
-      <div className="hero-banner-wrap" style={{ padding: '0 20px', marginTop: 8, width: '100%', boxSizing: 'border-box' }}>
+       <div className="hero-banner-wrap" style={{ padding: '0 20px', marginTop: 8, marginBottom: 0, width: '100%', boxSizing: 'border-box', position: 'relative', zIndex: 0 }}>
         <HeroBanner navigate={navigate} onSearch={handleSearch} onNotify={(q) => { setNotifyOpen(true); setNotifyQuery(q) }} />
       </div>
 
       {/* Statuses — right after the top banner */}
-      <div className={!storiesLoading ? 'soko-swap-in' : undefined} style={{ background: '#f8f9fa' }}>
+       <div className={!storiesLoading ? 'soko-swap-in' : undefined} style={{ background: '#f8f9fa', position: 'relative', zIndex: 0, margin: 0 }}>
         <HomeStatusSection
           navigate={navigate}
           stories={stories}

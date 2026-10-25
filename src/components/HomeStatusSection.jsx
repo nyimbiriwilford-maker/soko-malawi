@@ -715,8 +715,8 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
     <>
       <style>{`
         .hs-rail::-webkit-scrollbar { display: none; }
-        .hs-rail { padding: 14px 14px 22px; margin: -10px 0 -14px; scroll-padding-left: 14px; }
-        .hs-rail-wrap { width: 100vw; margin-left: calc(50% - 50vw); overflow-x: clip; }
+        .hs-rail { padding: 20px 14px 28px; margin: 0; scroll-padding-left: 14px; overflow-x: auto; overflow-y: hidden; position: relative; z-index: 1; background: transparent; }
+        .hs-rail-wrap { width: 100vw; margin-left: calc(50% - 50vw); margin-top: 0; padding-top: 0; background: transparent; overflow: visible; position: relative; z-index: 1; }
         .hs-story-btn:active { transform: scale(0.97); transition: transform 0.12s ease; }
         .hs-rail-arrow { opacity: 0; transition: opacity 0.2s ease; pointer-events: none; }
         .hs-rail-wrap:hover .hs-rail-arrow { opacity: 1; pointer-events: auto; }
@@ -761,12 +761,10 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
         }
 
         @media (max-width: 1023px) and (min-width: 768px) {
-          .hs-story-btn, .hs-add-btn { width: 190px; height: 270px; }
           .hs-tablet-hide { display: none !important; }
         }
 
         @media (max-width: 767px) {
-          .hs-story-btn, .hs-add-btn { width: 150px; height: 230px; scroll-snap-align: start; }
           .hs-add-btn { border-radius: 18px; }
           .hs-tablet-hide { display: none !important; }
           .hs-rail { gap: 10px; }
@@ -774,11 +772,11 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
           .hs-section { margin-bottom: 24px !important; overflow-x: clip; }
         }
         @media (min-width: 768px) {
-          .hs-rail { gap: 12px; padding: 2px 20px 6px; scroll-padding-left: 20px; }
+          .hs-rail { gap: 12px; padding: 20px 20px 28px; scroll-padding-left: 20px; }
           .hs-story-btn, .hs-add-btn { flex-basis: 170px; width: 170px; }
         }
         @media (min-width: 1100px) {
-          .hs-rail { gap: 14px; padding-left: 24px; padding-right: 24px; scroll-padding-left: 24px; }
+          .hs-rail { gap: 14px; padding: 20px 24px 28px; scroll-padding-left: 24px; }
           .hs-story-btn, .hs-add-btn { flex-basis: 196px; width: 196px; border-radius: 18px; }
           .hs-story-btn .hs-avatar, .hs-add-btn .hs-avatar { width: 36px; height: 36px; }
           .hs-story-btn .hs-name { font-size: 13px; }
@@ -807,7 +805,7 @@ export default function HomeStatusSection({ navigate, stories, loading, onCreate
             ) : (
             <div style={isMobile ? {} : {}}>
             {rankedStories.length > 0 ? (
-                <div className="hs-rail-wrap" style={{ position: 'relative', paddingTop: 0, paddingBottom: 10, marginTop: 0 }}>
+                <div className="hs-rail-wrap" style={{ position: 'relative', padding: 0, margin: 0 }}>
                   {canScrollLeft && !isMobile && (
                     <button type="button" className="hs-rail-arrow"
                       onClick={scrollLeft}
