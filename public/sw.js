@@ -1,4 +1,4 @@
-const CACHE = 'sokomw-v10'
+const CACHE = 'sokomw-v11'
 const IMAGES_CACHE = 'sokomw-images-v1'
 const MAX_CACHED_IMAGES = 120
 const ASSETS = ['/', '/index.html']
@@ -55,19 +55,23 @@ function isDevBypass(url) {
 // R2/CDN image URLs carry uuid filenames and immutable Cache-Control,
 // so serving already-downloaded images first saves data on mobile networks.
 async function cacheFirstImage(request) {
-  const cache = await caches.open(IMAGES_CACHE)
-  const hit = await cache.match(request)
-  if (hit) return hit
-  const response = await fetch(request)
-  if (response.ok || response.type === 'opaque') {
-    cache.put(request, response.clone()).catch(() => {})
-    // Bound the image cache (LRU by insertion order)
-    const keys = await cache.keys()
-    if (keys.length > MAX_CACHED_IMAGES) {
-      await Promise.all(keys.slice(0, keys.length - MAX_CACHED_IMAGES).map(k => cache.delete(k)))
+  try {
+    const cache = await caches.open(IMAGES_CACHE)
+    const hit = await cache.match(request)
+    if (hit) return hit
+    const response = await fetch(request)
+    if (response.ok || response.type === 'opaque') {
+      cache.put(request, response.clone()).catch(() => {})
+      // Bound the image cache (LRU by insertion order)
+      const keys = await cache.keys()
+      if (keys.length > MAX_CACHED_IMAGES) {
+        await Promise.all(keys.slice(0, keys.length - MAX_CACHED_IMAGES).map(k => cache.delete(k)))
+      }
     }
+    return response
+  } catch {
+    return fetch(request)
   }
-  return response
 }
 
 // ── Fetch (network first, cache fallback) ────────────────
@@ -83,12 +87,21 @@ self.addEventListener('fetch', e => {
 
   // Cache-first for cross-origin CDN listing/shop images (saves data, works offline)
   if (url.origin !== self.location.origin) {
+    // Skip caching for hosts we don't own/manage (e.g. Google profile images
+    // from lh3.googleusercontent.com) — let the browser load them normally.
+    const host = url.hostname
+    const allowedHost =
+      host === self.location.hostname ||
+      host.endsWith('.supabase.co') ||
+      host.endsWith('.r2.dev') ||
+      host.endsWith('.r2.cloudflarestorage.com')
+    if (!allowedHost) return
     if (e.request.destination === 'image' || /\.(webp|jpe?g|png|gif|avif)(\?|$)/i.test(url.pathname)) {
       e.respondWith(
         cacheFirstImage(e.request).catch(async () => {
           const cached = await caches.match(e.request)
           if (cached) return cached
-          return Response.error()
+          return fetch(e.request).catch(() => Response.error())
         })
       )
       return
