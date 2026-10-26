@@ -1,4 +1,5 @@
 import { Component } from 'react'
+import SokoLoader from './SokoLoader'
 
 export default class ErrorBoundary extends Component {
   constructor(props) {
@@ -23,6 +24,42 @@ export default class ErrorBoundary extends Component {
   }
   render() {
     if (this.state.error) {
+      const msg = String(this.state.error?.message || this.state.error || '')
+      const isStale = /dynamically imported module|Failed to fetch|Importing a module script failed/i.test(msg)
+      if (isStale) {
+        return (
+          <div style={{ minHeight: '100dvh', background: '#f6f8f7' }}>
+            <SokoLoader label="Updating…" />
+            <div style={{ position: 'fixed', bottom: 24, left: 0, right: 0, display: 'flex', justifyContent: 'center' }}>
+              <button
+                onClick={async () => {
+                  try {
+                    if ('serviceWorker' in navigator) {
+                      const regs = await navigator.serviceWorker.getRegistrations()
+                      await Promise.all(regs.map(r => r.unregister()))
+                    }
+                  } catch { /* ignore */ }
+                  try {
+                    if (window.caches) {
+                      const keys = await caches.keys()
+                      await Promise.all(keys.map(k => caches.delete(k)))
+                    }
+                  } catch { /* ignore */ }
+                  try { sessionStorage.removeItem('chunk-reloaded') } catch { /* ignore */ }
+                  window.location.reload()
+                }}
+                style={{
+                  background: '#0F9D58', color: '#fff', border: 'none', borderRadius: 12,
+                  padding: '10px 24px', fontSize: 14, fontWeight: 700, cursor: 'pointer',
+                  fontFamily: 'inherit',
+                }}
+              >
+                Reload
+              </button>
+            </div>
+          </div>
+        )
+      }
       return (
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center',

@@ -1,38 +1,39 @@
-import { useEffect, useState, lazy, Suspense } from 'react'
+/* global __BUILD_ID__ */
+import { useEffect, useState, useRef, lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { supabase, isSupabaseConfigured } from './lib/supabase'
 import BottomNav from './components/BottomNav'
-const StatusPage          = lazy(() => import('./pages/StatusPage'))
-const StoryViewerPage     = lazy(() => import('./pages/StoryViewerPage'))
-const SavedStatusesPage   = lazy(() => import('./pages/SavedStatusesPage'))
-const LookingFor = lazy(() => import('./pages/LookingFor/LookingFor'))
+const StatusPage          = lazyRetry(() => import('./pages/StatusPage'))
+const StoryViewerPage     = lazyRetry(() => import('./pages/StoryViewerPage'))
+const SavedStatusesPage   = lazyRetry(() => import('./pages/SavedStatusesPage'))
+const LookingFor = lazyRetry(() => import('./pages/LookingFor/LookingFor'))
 
 // ── Eagerly loaded (needed immediately on first paint) ────
 import Login        from './pages/Login'
 import AuthCallback from './pages/AuthCallback'
 
 // ── Lazy loaded (only fetched when route is visited) ──────
-const Home          = lazy(() => import('./pages/Home'))
-const ListingDetail = lazy(() => import('./pages/ListingDetail'))
-const PostListing   = lazy(() => import('./pages/PostListing'))
-const ChatsLayout   = lazy(() => import('./pages/ChatsLayout'))
-const Profile       = lazy(() => import('./pages/Profile'))
-const Jobs          = lazy(() => import('./pages/Jobs'))
-const Services      = lazy(() => import('./pages/ServicesPage'))
-const Admin         = lazy(() => import('./pages/Admin'))
-const PublicProfile = lazy(() => import('./pages/PublicProfile'))
-const ResetPassword   = lazy(() => import('./pages/ResetPassword'))
-const Notifications   = lazy(() => import('./pages/Notifications'))
-const VerifyPayment   = lazy(() => import('./pages/VerifyPayment'))
-const Onboarding       = lazy(() => import('./pages/Onboarding'))
-const ShopSetup        = lazy(() => import('./pages/ShopSetup'))
-const ShopPage          = lazy(() => import('./pages/ShopPage'))
-const ShopsPage         = lazy(() => import('./pages/ShopsPage'))
-const SearchPage        = lazy(() => import('./pages/SearchPage'))
-const ExplorePage       = lazy(() => import('./pages/ExplorePage'))
-const ListingsPage      = lazy(() => import('./pages/ListingsPage'))
-const CallBudgetPage    = lazy(() => import('./pages/CallBudget'))
-const SafetyPage        = lazy(() => import('./pages/SafetyPage'))
+const Home          = lazyRetry(() => import('./pages/Home'))
+const ListingDetail = lazyRetry(() => import('./pages/ListingDetail'))
+const PostListing   = lazyRetry(() => import('./pages/PostListing'))
+const ChatsLayout   = lazyRetry(() => import('./pages/ChatsLayout'))
+const Profile       = lazyRetry(() => import('./pages/Profile'))
+const Jobs          = lazyRetry(() => import('./pages/Jobs'))
+const Services      = lazyRetry(() => import('./pages/ServicesPage'))
+const Admin         = lazyRetry(() => import('./pages/Admin'))
+const PublicProfile = lazyRetry(() => import('./pages/PublicProfile'))
+const ResetPassword   = lazyRetry(() => import('./pages/ResetPassword'))
+const Notifications   = lazyRetry(() => import('./pages/Notifications'))
+const VerifyPayment   = lazyRetry(() => import('./pages/VerifyPayment'))
+const Onboarding       = lazyRetry(() => import('./pages/Onboarding'))
+const ShopSetup        = lazyRetry(() => import('./pages/ShopSetup'))
+const ShopPage          = lazyRetry(() => import('./pages/ShopPage'))
+const ShopsPage         = lazyRetry(() => import('./pages/ShopsPage'))
+const SearchPage        = lazyRetry(() => import('./pages/SearchPage'))
+const ExplorePage       = lazyRetry(() => import('./pages/ExplorePage'))
+const ListingsPage      = lazyRetry(() => import('./pages/ListingsPage'))
+const CallBudgetPage    = lazyRetry(() => import('./pages/CallBudget'))
+const SafetyPage        = lazyRetry(() => import('./pages/SafetyPage'))
 
 import ErrorBoundary from './components/ErrorBoundary'
 import OfflinePage from './components/OfflinePage'
@@ -93,6 +94,149 @@ function playRingtone() {
   } catch (e) {
     console.log('[ringtone] error:', e)
   }
+}
+
+async function recoverStaleBuild() {
+  try {
+    if (sessionStorage.getItem('chunk-reloaded') === '1') return false
+    sessionStorage.setItem('chunk-reloaded', '1')
+  } catch { /* ignore */ }
+  try {
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations()
+      await Promise.all(regs.map(r => r.unregister()))
+    }
+  } catch { /* ignore */ }
+  try {
+    if (window.caches) {
+      const keys = await caches.keys()
+      await Promise.all(keys.map(k => caches.delete(k)))
+    }
+  } catch { /* ignore */ }
+  try { location.reload() } catch { /* ignore */ }
+  return true
+}
+
+function isStaleChunkError(err) {
+  const msg = String(err?.message || err || '')
+  return /dynamically imported module|Failed to fetch|Importing a module script failed/i.test(msg)
+}
+
+function lazyRetry(factory) {
+  return lazy(async () => {
+    try {
+      const mod = await factory()
+      try { sessionStorage.removeItem('chunk-reloaded') } catch { /* ignore */ }
+      return mod
+    } catch {
+      await new Promise(r => setTimeout(r, 300))
+      try {
+        const mod = await factory()
+        try { sessionStorage.removeItem('chunk-reloaded') } catch { /* ignore */ }
+        return mod
+      } catch (secondErr) {
+        if (isStaleChunkError(secondErr)) {
+          const reloaded = await recoverStaleBuild()
+          if (reloaded) {
+            return new Promise(() => {})
+          }
+        }
+        throw secondErr
+      }
+    }
+  })
+}
+
+function VersionWatcher() {
+  const location = useLocation()
+  const [updateAvailable, setUpdateAvailable] = useState(false)
+  const shownRef = useRef(false)
+  const reloadedRef = useRef(false)
+
+  useEffect(() => {
+    const BUILD_ID = __BUILD_ID__
+    let interval
+    const check = async () => {
+      try {
+        const res = await fetch('/version.json', { cache: 'no-store' })
+        if (!res.ok) return
+        const data = await res.json()
+        if (data?.buildId && data.buildId !== BUILD_ID && !shownRef.current) {
+          shownRef.current = true
+          setUpdateAvailable(true)
+        }
+      } catch { /* ignore */ }
+    }
+    check()
+    interval = setInterval(check, 5 * 60 * 1000)
+    const onFocus = () => check()
+    const onVis = () => { if (document.visibilityState === 'visible') check() }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      clearInterval(interval)
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVis)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!updateAvailable || reloadedRef.current) return
+    reloadedRef.current = true
+    // auto-reload on next route navigation
+  }, [location.pathname, updateAvailable])
+
+  // trigger reload on navigation
+  useEffect(() => {
+    if (!updateAvailable || !reloadedRef.current) return
+    // already handled by setting reloadedRef; reload now
+  }, [location.pathname])
+
+  // We need actual reload when navigating after update:
+  const prevPathRef = useRef(location.pathname)
+  useEffect(() => {
+    if (updateAvailable && location.pathname !== prevPathRef.current && !reloadedRef.current) {
+      reloadedRef.current = true
+      reloadAll()
+    }
+    prevPathRef.current = location.pathname
+  }, [location.pathname, updateAvailable])
+
+  async function reloadAll() {
+    try {
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations()
+        await Promise.all(regs.map(r => r.unregister()))
+      }
+    } catch { /* ignore */ }
+    try {
+      if (window.caches) {
+        const keys = await caches.keys()
+        await Promise.all(keys.map(k => caches.delete(k)))
+      }
+    } catch { /* ignore */ }
+    try { sessionStorage.removeItem('chunk-reloaded') } catch { /* ignore */ }
+    window.location.reload()
+  }
+
+  if (!updateAvailable) return null
+  return (
+    <div style={{
+      position: 'fixed', bottom: 80, left: '50%', transform: 'translateX(-50%)',
+      zIndex: 9999, background: '#0f1410', color: '#fff',
+      padding: '10px 14px', borderRadius: 12, display: 'flex', gap: 10,
+      alignItems: 'center', boxShadow: '0 8px 24px rgba(0,0,0,0.3)',
+      fontFamily: "'DM Sans', system-ui, sans-serif", fontSize: 13,
+    }}>
+      <span>New version available. Reload</span>
+      <button
+        onClick={reloadAll}
+        style={{ background: '#0F9D58', color: '#fff', border: 'none', borderRadius: 8, padding: '6px 12px', cursor: 'pointer', fontWeight: 700, fontFamily: 'inherit' }}
+      >
+        Reload
+      </button>
+    </div>
+  )
 }
 
 export default function App() {
@@ -311,7 +455,8 @@ const [installPrompt, setInstallPrompt] = useState(null)
           </div>
         </div>
       )}
-      <BrowserRouter>
+       <BrowserRouter>
+        <VersionWatcher />
         {authed && <GlobalCallListener />}
 {authed && <FloatingIncomingCall />}
 {authed && <NotificationToast />}
