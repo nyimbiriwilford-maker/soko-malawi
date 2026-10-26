@@ -4,8 +4,8 @@
   "description": "Buy, Sell, Find Jobs & Services in Malawi",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#1a7a4a",
+  "background_color": "#f6f8f7",
+  "theme_color": "#0F9D58",
   "orientation": "portrait",
   "screenshots": [
     {

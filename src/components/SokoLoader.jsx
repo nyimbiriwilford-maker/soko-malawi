@@ -21,14 +21,14 @@ export default function SokoLoader({ label = 'Loading…', size = 72, inline = f
           <stop offset="0" stopColor="#F9AB00" /><stop offset="1" stopColor="#ffd05a" />
         </linearGradient>
       </defs>
-      <circle className="sk-track" cx="36" cy="36" r="31" />
+      <circle className="sk-track" cx="36" cy="36" r="31" fill="none" />
       <g className="sk-inner">
-        <circle className="sk-inner-arc" cx="36" cy="36" r="25" />
+        <circle className="sk-inner-arc" cx="36" cy="36" r="25" fill="none" />
       </g>
       <g className="sk-outer">
-        <circle className="sk-seg sk1" cx="36" cy="36" r="31" stroke={`url(#${g1})`} />
-        <circle className="sk-seg sk2" cx="36" cy="36" r="31" stroke={`url(#${g2})`} />
-        <circle className="sk-seg sk3" cx="36" cy="36" r="31" stroke={`url(#${g3})`} />
+        <circle className="sk-seg sk1" cx="36" cy="36" r="31" fill="none" stroke={`url(#${g1})`} />
+        <circle className="sk-seg sk2" cx="36" cy="36" r="31" fill="none" stroke={`url(#${g2})`} />
+        <circle className="sk-seg sk3" cx="36" cy="36" r="31" fill="none" stroke={`url(#${g3})`} />
       </g>
       <g className="sk-core">
         <circle cx="36" cy="36" r="15" fill="#ffffff" />
