@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from 'react'
-import { ChevronRight, Plus, Check } from 'lucide-react'
+import { ChevronRight, Plus, ChevronLeft } from 'lucide-react'
 import { STATUS_META } from '../constants/homeConstants'
 import { supabase } from '../lib/supabase'
 import { isStatusVideoUrl, isStatusColorBoard } from '../utils/statusVideo'
@@ -289,20 +289,6 @@ textAlign: 'left', background: '#111',
           position: 'absolute', inset: 0,
           background: 'linear-gradient(0deg, rgba(0,0,0,0.65) 0%, transparent 45%)',
         }} />
-        {!isOwn && (
-          <div style={{
-            position: 'absolute', top: 10, right: 10, zIndex: 6,
-            fontSize: 10, fontWeight: isViewedCard ? 700 : 800, textTransform: 'uppercase',
-            color: '#fff',
-            background: isViewedCard ? 'rgba(0,0,0,0.45)' : '#0F9D58',
-            borderRadius: 999, padding: '3px 8px',
-            display: 'flex', alignItems: 'center', gap: 4,
-            backdropFilter: 'blur(8px)',
-          }}>
-            {isViewedCard ? <><Check size={12} /> Viewed</> : 'New'}
-          </div>
-        )}
-
         <div style={{
           position: 'absolute', bottom: 8, right: 8, zIndex: 5,
           minWidth: 24, height: 20, borderRadius: 10,
@@ -443,20 +429,6 @@ textAlign: 'left', background: '#111',
         position: 'absolute', inset: 0,
         background: 'linear-gradient(0deg, rgba(0,0,0,0.65) 0%, transparent 45%)',
       }} />
-
-      {!isOwn && (
-        <div style={{
-          position: 'absolute', top: 10, right: 10, zIndex: 6,
-          fontSize: 10, fontWeight: isViewedCard ? 700 : 800, textTransform: 'uppercase',
-          color: '#fff',
-          background: isViewedCard ? 'rgba(0,0,0,0.45)' : '#0F9D58',
-          borderRadius: 999, padding: '3px 8px',
-          display: 'flex', alignItems: 'center', gap: 4,
-          backdropFilter: 'blur(8px)',
-        }}>
-          {isViewedCard ? <><Check size={12} /> Viewed</> : 'New'}
-        </div>
-      )}
 
       <div style={{
         position: 'absolute', bottom: 8, right: 8, zIndex: 5,
@@ -704,20 +676,28 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
   const checkScroll = useCallback(() => {
     const el = scrollRef.current
     if (!el) return
-    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 8)
-    setCanScrollLeft(el.scrollLeft > 8)
+    const overflow = el.scrollWidth > el.clientWidth + 4
+    setCanScrollRight(overflow && el.scrollLeft + el.clientWidth < el.scrollWidth - 4)
+    setCanScrollLeft(overflow && el.scrollLeft > 4)
   }, [])
 
   useEffect(() => {
     const el = scrollRef.current
     if (!el) return
+    let raf = 0
+    const onScroll = () => {
+      if (raf) return
+      raf = requestAnimationFrame(() => { raf = 0; checkScroll() })
+    }
+    el.addEventListener('scroll', onScroll, { passive: true })
+    const ro = new ResizeObserver(() => checkScroll())
+    ro.observe(el)
     const t = setTimeout(checkScroll, 80)
-    el.addEventListener('scroll', checkScroll, { passive: true })
-    window.addEventListener('resize', checkScroll)
     return () => {
       clearTimeout(t)
-      el.removeEventListener('scroll', checkScroll)
-      window.removeEventListener('resize', checkScroll)
+      el.removeEventListener('scroll', onScroll)
+      ro.disconnect()
+      if (raf) cancelAnimationFrame(raf)
     }
   }, [checkScroll, rankedStories.length])
 
@@ -741,14 +721,133 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
     return () => el.removeEventListener('scroll', handleRailScroll)
   }, [handleRailScroll])
 
-  function scrollRight() {
-    const step = (window.innerWidth >= 1100 ? 196 : 148) * 3 + 14
-    scrollRef.current?.scrollBy({ left: step, behavior: 'smooth' })
+  // Mouse wheel horizontal scrolling (hover devices only)
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const hover = window.matchMedia('(hover: hover) and (pointer: fine)').matches
+    if (!hover) return
+    const onWheel = (e) => {
+      if (Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return
+      const atStart = el.scrollLeft <= 4
+      const atEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 4
+      if (e.deltaY > 0 && atEnd) return
+      if (e.deltaY < 0 && atStart) return
+      e.preventDefault()
+      el.scrollLeft += e.deltaY
+    }
+    el.addEventListener('wheel', onWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onWheel)
+  }, [])
+
+  // Click-and-drag (mouse only)
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const hover = window.matchMedia('(hover: hover) and (pointer: fine)').matches
+    if (!hover) return
+    let startX = 0
+    let startScroll = 0
+    let moved = false
+    let pointerId = null
+    const onDown = (e) => {
+      if (e.pointerType !== 'mouse') return
+      moved = false
+      startX = e.clientX
+      startScroll = el.scrollLeft
+      pointerId = e.pointerId
+      try { el.setPointerCapture(e.pointerId) } catch { /* ignore */ }
+    }
+    const onMove = (e) => {
+      if (pointerId === null || e.pointerId !== pointerId) return
+      const dx = e.clientX - startX
+      if (!moved && Math.abs(dx) > 6) {
+        moved = true
+        el.style.cursor = 'grabbing'
+        el.style.userSelect = 'none'
+        el.style.scrollSnapType = 'none'
+        el.style.scrollBehavior = 'auto'
+      }
+      if (moved) {
+        el.scrollLeft = startScroll - dx
+      }
+    }
+    const onUp = () => {
+      if (moved) {
+        const suppress = (ev) => { ev.preventDefault(); ev.stopPropagation() }
+        el.addEventListener('click', suppress, { capture: true, once: true })
+      }
+      moved = false
+      pointerId = null
+      el.style.cursor = el.scrollWidth > el.clientWidth + 4 ? 'grab' : ''
+      el.style.userSelect = ''
+      el.style.scrollSnapType = ''
+      el.style.scrollBehavior = ''
+    }
+    el.addEventListener('pointerdown', onDown)
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    el.addEventListener('pointerleave', onUp)
+    const updateCursor = () => {
+      if (!moved) el.style.cursor = el.scrollWidth > el.clientWidth + 4 ? 'grab' : ''
+    }
+    updateCursor()
+    const ro = new ResizeObserver(updateCursor)
+    ro.observe(el)
+    return () => {
+      el.removeEventListener('pointerdown', onDown)
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      el.removeEventListener('pointerleave', onUp)
+      ro.disconnect()
+    }
+  }, [])
+
+  // Keyboard navigation
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const onKeyDown = (e) => {
+      const cards = Array.from(el.querySelectorAll('button.hs-story-btn, button.hs-add-btn'))
+      const idx = cards.indexOf(document.activeElement)
+      if (idx === -1) return
+      if (e.key === 'ArrowRight') {
+        if (idx < cards.length - 1) {
+          e.preventDefault()
+          cards[idx + 1].focus()
+          cards[idx + 1].scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' })
+        }
+      } else if (e.key === 'ArrowLeft') {
+        if (idx > 0) {
+          e.preventDefault()
+          cards[idx - 1].focus()
+          cards[idx - 1].scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' })
+        }
+      } else if (e.key === 'Home') {
+        e.preventDefault()
+        cards[0]?.focus()
+        cards[0]?.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' })
+      } else if (e.key === 'End') {
+        e.preventDefault()
+        const last = cards[cards.length - 1]
+        last?.focus()
+        last?.scrollIntoView({ inline: 'nearest', block: 'nearest', behavior: 'smooth' })
+      }
+    }
+    el.addEventListener('keydown', onKeyDown)
+    return () => el.removeEventListener('keydown', onKeyDown)
+  }, [rankedStories.length])
+
+  function scrollByCards(dir) {
+    const el = scrollRef.current
+    if (!el) return
+    const first = el.querySelector('.hs-add-btn, .hs-story-btn')
+    const cardWidth = first?.offsetWidth || 148
+    const gap = parseFloat(window.getComputedStyle(el).gap) || 10
+    el.scrollBy({ left: dir * 3 * (cardWidth + gap), behavior: 'smooth' })
   }
-  function scrollLeft() {
-    const step = (window.innerWidth >= 1100 ? 196 : 148) * 3 + 14
-    scrollRef.current?.scrollBy({ left: -step, behavior: 'smooth' })
-  }
+  function scrollRight() { scrollByCards(1) }
+  function scrollLeft() { scrollByCards(-1) }
 
   const displayLimit = loadCount
 
@@ -756,12 +855,19 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
     <>
       <style>{`
         .hs-rail::-webkit-scrollbar { display: none; }
-        .hs-rail { padding: 8px 14px 12px; margin: 0; scroll-padding-left: 14px; overflow-x: auto; overflow-y: hidden; position: relative; z-index: 1; background: transparent; height: auto; max-height: none; }
+        .hs-rail { padding: 8px 14px 12px; margin: 0; scroll-padding-left: 14px; overflow-x: auto; overflow-y: hidden; position: relative; z-index: 1; background: transparent; height: auto; max-height: none; scroll-behavior: smooth; scrollbar-width: none; overscroll-behavior-x: contain; }
+        .hs-fade { position: absolute; top: 0; bottom: 0; width: 56px; pointer-events: none; z-index: 2; transition: opacity 0.2s ease; }
+        .hs-fade-left { left: 0; background: linear-gradient(to right, var(--home-bg), transparent); }
+        .hs-fade-right { right: 0; background: linear-gradient(to left, var(--home-bg), transparent); }
+        @media (hover: none), (pointer: coarse) { .hs-fade { display: none !important; } .hs-rail-arrow { display: none !important; } }
         .hs-rail-wrap { width: 100vw; margin-left: calc(50% - 50vw); margin-top: 0; padding-top: 0; background: transparent; overflow: visible; position: relative; z-index: 2; }
         .hs-section { padding-top: 6px; }
         .hs-story-btn:active { transform: scale(0.97); transition: transform 0.12s ease; }
         .hs-rail-arrow { opacity: 0; transition: opacity 0.2s ease; pointer-events: none; }
         .hs-rail-wrap:hover .hs-rail-arrow { opacity: 1; pointer-events: auto; }
+        .hs-rail-arrow:hover { background: #f4fbf7 !important; border-color: #0F9D58 !important; }
+        .hs-rail-arrow:active { transform: translateY(-50%) scale(0.94); }
+        .hs-rail-arrow:focus-visible { outline: 2px solid #0F9D58; outline-offset: 2px; }
         @media (prefers-reduced-motion: reduce) {
           .hs-story-btn, .hs-story-btn img, .hs-story-btn video { transition: none; }
           .hs-story-btn:hover { transform: none; }
@@ -861,26 +967,28 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
             <div style={isMobile ? {} : {}}>
             {rankedStories.length > 0 ? (
                 <div className="hs-rail-wrap" style={{ position: 'relative', padding: 0, margin: 0 }}>
-                  {canScrollLeft && !isMobile && (
-                    <button type="button" className="hs-rail-arrow"
-                      onClick={scrollLeft}
-                      style={{
-                        position: 'absolute', top: '50%', left: -4, zIndex: 10,
-                        transform: 'translateY(-50%)',
-                        width: 36, height: 36, borderRadius: '50%',
-                        background: 'rgba(255,255,255,0.96)',
-                        border: '1px solid ' + G.gray200,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        cursor: 'pointer',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                        color: '#374151', padding: 0, fontFamily: 'inherit',
-                        transition: 'all 0.2s ease',
-                      }}
-                      aria-label="Scroll left"
-                    >
-                      <ChevronRight size={16} style={{ transform: 'rotate(180deg)' }} />
-                    </button>
-                  )}
+                   <div className="hs-fade hs-fade-left" style={{ opacity: (!isMobile && canScrollLeft) ? 1 : 0 }} aria-hidden="true" />
+                   <div className="hs-fade hs-fade-right" style={{ opacity: (!isMobile && canScrollRight) ? 1 : 0 }} aria-hidden="true" />
+                   {canScrollLeft && !isMobile && (
+                     <button type="button" className="hs-rail-arrow"
+                       onClick={scrollLeft}
+                       style={{
+                         position: 'absolute', top: '50%', left: 12, zIndex: 3,
+                         transform: 'translateY(-50%)',
+                         width: 40, height: 40, borderRadius: '50%',
+                         background: '#ffffff',
+                         border: '1px solid #e8eaed',
+                         display: 'flex', alignItems: 'center', justifyContent: 'center',
+                         cursor: 'pointer',
+                         boxShadow: '0 4px 14px rgba(16,24,40,0.16)',
+                         color: '#202124', padding: 0, fontFamily: 'inherit',
+                         transition: 'opacity 0.2s ease, background 0.2s ease, border-color 0.2s ease, transform 0.1s ease',
+                       }}
+                       aria-label="Scroll statuses left"
+                     >
+                       <ChevronLeft size={20} />
+                     </button>
+                   )}
                   <div ref={scrollRef}
                     className="hs-rail"
                     style={{
@@ -954,26 +1062,26 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
                     ))}
                   </div>
 
-                  {canScrollRight && !isMobile && (
-                    <button type="button" className="hs-rail-arrow"
-                      onClick={scrollRight}
-                      style={{
-                        position: 'absolute', top: '50%', right: -4, zIndex: 10,
-                        transform: 'translateY(-50%)',
-                        width: 36, height: 36, borderRadius: '50%',
-                        background: 'rgba(255,255,255,0.96)',
-                        border: '1px solid ' + G.gray200,
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        cursor: 'pointer',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                        color: '#374151', padding: 0, fontFamily: 'inherit',
-                        transition: 'all 0.2s ease',
-                      }}
-                      aria-label="Scroll right"
-                    >
-                      <ChevronRight size={16} />
-                    </button>
-                  )}
+                   {canScrollRight && !isMobile && (
+                     <button type="button" className="hs-rail-arrow"
+                       onClick={scrollRight}
+                       style={{
+                         position: 'absolute', top: '50%', right: 12, zIndex: 3,
+                         transform: 'translateY(-50%)',
+                         width: 40, height: 40, borderRadius: '50%',
+                         background: '#ffffff',
+                         border: '1px solid #e8eaed',
+                         display: 'flex', alignItems: 'center', justifyContent: 'center',
+                         cursor: 'pointer',
+                         boxShadow: '0 4px 14px rgba(16,24,40,0.16)',
+                         color: '#202124', padding: 0, fontFamily: 'inherit',
+                         transition: 'opacity 0.2s ease, background 0.2s ease, border-color 0.2s ease, transform 0.1s ease',
+                       }}
+                       aria-label="Scroll statuses right"
+                     >
+                       <ChevronRight size={20} />
+                     </button>
+                   )}
                 </div>
               ) : (
                 <div className="hs-rail-wrap" style={{ position: 'relative', padding: 0, margin: 0 }}>
