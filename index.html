@@ -77,42 +77,44 @@
     <meta name="twitter:description" content="Soko Malawi — the easiest way to buy, sell, find jobs and services in Malawi." />
     <meta name="twitter:image" content="https://soko-malawi.vercel.app/og-image.png" />
   </head>
-  <body>
-    <div id="root">
-      <div class="app-loader-pre">
-        <div style="font-family:'Sora','Inter',system-ui,sans-serif;font-size:28px;font-weight:800;color:#0F9D58;letter-spacing:-0.5px;line-height:1.1;margin-bottom:28px;">
-          Soko<span style="color:#F9AB00">Mw</span>
-        </div>
-        <div class="soko-glow" aria-hidden="true"></div>
-        <svg class="soko-mark" width="72" height="72" viewBox="0 0 72 72" aria-hidden="true">
-          <defs>
-            <linearGradient id="sk-g1" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stopColor="#0F9D58" /><stop offset="1" stopColor="#34c77a" />
-            </linearGradient>
-            <linearGradient id="sk-g2" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stopColor="#34c77a" /><stop offset="1" stopColor="#0F9D58" stopOpacity="0.55" />
-            </linearGradient>
-            <linearGradient id="sk-g3" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stopColor="#F9AB00" /><stop offset="1" stopColor="#ffd05a" />
-            </linearGradient>
-          </defs>
-          <circle class="sk-track" cx="36" cy="36" r="31" fill="none" />
-          <g class="sk-inner">
-            <circle class="sk-inner-arc" cx="36" cy="36" r="25" fill="none" />
-          </g>
-          <g class="sk-outer">
-            <circle class="sk-seg sk1" cx="36" cy="36" r="31" fill="none" stroke="url(#sk-g1)" />
-            <circle class="sk-seg sk2" cx="36" cy="36" r="31" fill="none" stroke="url(#sk-g2)" />
-            <circle class="sk-seg sk3" cx="36" cy="36" r="31" fill="none" stroke="url(#sk-g3)" />
-          </g>
-          <g class="sk-core">
-            <circle cx="36" cy="36" r="15" fill="#ffffff" />
-            <text x="36" y="42.2" textAnchor="middle" fontFamily="Sora, Inter, system-ui, sans-serif" fontSize="18" fontWeight="800" fill="#0F9D58">S</text>
-          </g>
-        </svg>
-        <div class="soko-loader-label">Loading…<span class="soko-dots" aria-hidden="true"><i>.</i><i>.</i><i>.</i></span></div>
-      </div>
+  <div id="boot-loader" style="position:fixed;inset:0;z-index:99999;background:#f6f8f7;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);box-sizing:border-box;">
+    <div style="font-family:system-ui,-apple-system,sans-serif;font-size:28px;font-weight:800;color:#0F9D58;letter-spacing:-0.5px;line-height:1.1;margin-bottom:28px;">
+      Soko<span style="color:#F9AB00">Mw</span>
     </div>
-    <script type="module" src="/src/main.jsx"></script>
+    <div class="soko-glow" aria-hidden="true" style="position:absolute;width:220px;height:220px;border-radius:50%;background:radial-gradient(circle,rgba(15,157,88,0.14)0%,rgba(15,157,88,0)68%);animation:skGlow 2.4s ease-in-out infinite;pointer-events:none;"></div>
+    <svg class="soko-mark" width="72" height="72" viewBox="0 0 72 72" aria-hidden="true">
+      <defs>
+        <linearGradient id="sk-g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#0F9D58"/><stop offset="1" stopColor="#34c77a"/></linearGradient>
+        <linearGradient id="sk-g2" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#34c77a"/><stop offset="1" stopColor="#0F9D58" stopOpacity="0.55"/></linearGradient>
+        <linearGradient id="sk-g3" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#F9AB00"/><stop offset="1" stopColor="#ffd05a"/></linearGradient>
+      </defs>
+      <circle class="sk-track" cx="36" cy="36" r="31" fill="none" />
+      <g class="sk-inner"><circle class="sk-inner-arc" cx="36" cy="36" r="25" fill="none" /></g>
+      <g class="sk-outer">
+        <circle class="sk-seg sk1" cx="36" cy="36" r="31" fill="none" stroke="url(#sk-g1)" />
+        <circle class="sk-seg sk2" cx="36" cy="36" r="31" fill="none" stroke="url(#sk-g2)" />
+        <circle class="sk-seg sk3" cx="36" cy="36" r="31" fill="none" stroke="url(#sk-g3)" />
+      </g>
+      <g class="sk-core">
+        <circle cx="36" cy="36" r="15" fill="#ffffff" />
+        <text x="36" y="42.2" textAnchor="middle" fontFamily="system-ui,-apple-system,sans-serif" fontSize="18" fontWeight="800" fill="#0F9D58">S</text>
+      </g>
+    </svg>
+    <div class="soko-loader-label" style="font-family:system-ui,-apple-system,sans-serif;">Loading…<span class="soko-dots" aria-hidden="true"><i>.</i><i>.</i><i>.</i></span></div>
+  </div>
+  <div id="root"></div>
+  <script>
+    window.__hideBootLoader = function() {
+      var el = document.getElementById('boot-loader');
+      if (!el || el.dataset.hiding) return;
+      el.dataset.hiding = '1';
+      var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (reduced) { el.remove(); return; }
+      el.style.transition = 'opacity 0.25s ease';
+      el.style.opacity = '0';
+      setTimeout(function(){ if (el.parentNode) el.remove(); }, 260);
+    };
+  </script>
+  <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

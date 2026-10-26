@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
+import { useEffect, useState, useRef, useCallback, useMemo, useLayoutEffect } from 'react'
 import { useNavigate, useSearchParams, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { fetchAllActiveStories } from '../hooks/useStatuses'
@@ -456,6 +456,14 @@ export default function StatusPage() {
   const navigate = useNavigate()
   const [user, setUser] = useState(null)
   const [gate, setGate] = useState('checking') // checking | ready | out
+
+  useLayoutEffect(() => {
+    const hide = window.__hideBootLoader
+    if (typeof hide !== 'function') return
+    let r1 = 0, r2 = 0
+    r1 = requestAnimationFrame(() => { r2 = requestAnimationFrame(() => { hide() }) })
+    return () => { cancelAnimationFrame(r1); cancelAnimationFrame(r2) }
+  }, [])
 
   useEffect(() => {
     let cancelled = false

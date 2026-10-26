@@ -476,7 +476,7 @@ input, textarea, select {
   will-change: auto;
 }
 
-.soko-stage { animation: skFadeIn 0.35s ease 0.15s both; background: radial-gradient(60% 40% at 50% 46%, #eaf6ef 0%, #f6f8f7 70%); }
+.soko-stage { background: radial-gradient(60% 40% at 50% 46%, #eaf6ef 0%, #f6f8f7 70%); }
 .soko-glow { position: absolute; width: 220px; height: 220px; border-radius: 50%; background: radial-gradient(circle, rgba(15,157,88,0.14) 0%, rgba(15,157,88,0) 68%); animation: skGlow 2.4s ease-in-out infinite; pointer-events: none; }
 .soko-mark { position: relative; overflow: visible; }
 .sk-track { fill: none; stroke: rgba(15,157,88,0.10); stroke-width: 5; }

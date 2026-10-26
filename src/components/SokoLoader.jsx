@@ -41,6 +41,10 @@ export default function SokoLoader({ label = 'Loading…', size = 72, inline = f
     return <span className="soko-inline" role="status" aria-label={label}>{svg}</span>
   }
 
+  if (typeof document !== 'undefined' && document.getElementById('boot-loader')) {
+    return null
+  }
+
   return (
     <div className="app-loader soko-stage" role="status" aria-live="polite">
       <div className="soko-glow" aria-hidden="true" />

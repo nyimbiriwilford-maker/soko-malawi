@@ -21,7 +21,7 @@
  */
 
 import React, {
-  useEffect, useState, useMemo, useRef, useCallback,
+  useEffect, useState, useMemo, useRef, useCallback, useLayoutEffect,
 } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { MapPin, Clock, Zap, Eye, MessageCircle, Plus, ChevronRight, Navigation, Sparkles, TrendingUp, Star, UserCheck, AlertTriangle, DollarSign, ArrowRight, ShieldCheck, Search, Heart, Share2, Flag, ExternalLink } from 'lucide-react'
@@ -5109,6 +5109,14 @@ function EarlyAccessStrip() {
 export default function Home() {
   const navigate = useNavigate()
   const { isOffline } = useNetwork()
+
+  useLayoutEffect(() => {
+    const hide = window.__hideBootLoader
+    if (typeof hide !== 'function') return
+    let r1 = 0, r2 = 0
+    r1 = requestAnimationFrame(() => { r2 = requestAnimationFrame(() => { hide() }) })
+    return () => { cancelAnimationFrame(r1); cancelAnimationFrame(r2) }
+  }, [])
 
   // ── Auth & listings (preserved from prior version) ───────
   const [listings,   setListings]   = useState([])
