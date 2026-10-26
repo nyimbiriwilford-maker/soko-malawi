@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from 'react'
-import { ChevronRight, Plus } from 'lucide-react'
+import { ChevronRight, Plus, Check } from 'lucide-react'
 import { STATUS_META } from '../constants/homeConstants'
 import { supabase } from '../lib/supabase'
 import { isStatusVideoUrl, isStatusColorBoard } from '../utils/statusVideo'
@@ -16,7 +16,7 @@ const G = {
 }
 
 const RING_ACTIVE = '#0F9D58'
-const RING_VIEWED = '#c4c7c5'
+const RING_VIEWED = '#c4c7cc'
 
 function timeAgo(iso) {
   const diff = Date.now() - new Date(iso)
@@ -40,19 +40,6 @@ function getMarketplaceLabel(s) {
 
 function getLocationText(s) {
   return s.location_hint || s.profiles?.city || null
-}
-
-function scoreStory(s) {
-  let score = 0
-  const ageHours = (Date.now() - new Date(s.created_at).getTime()) / 3600000
-  score += Math.max(0, 72 - ageHours)
-  if (s.tagged_kind === 'shop') score += 80
-  else if (s.tagged_kind) score += 50
-  if (s._statusCount > 1) score += 20
-  if (s.media_urls?.length > 0) score += 15
-  if (s.location_hint) score += 30
-  if (s.profiles?.city) score += 10
-  return score
 }
 
 function VerifiedBadge({ size = 14 }) {
@@ -247,33 +234,39 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
   const initial = name[0]?.toUpperCase() || 'S'
   const isVerified = s.profiles?.is_verified || s.profiles?.verified || false
   const group = s._ownGroup || [s]
-  const allViewed = group.every(x => viewedIds.has(x.id))
   const ringItems = group.map(st => ({ id: st.id, viewed: viewedIds.has(st.id) }))
-  const unseen = !allViewed && !isOwn
   const tagged = s.tagged || {}
   // Text boards already show the words on the tile — don't repeat them in the label
   const title = tagged?.title || tagged?.name || null
 
   const statusCount = group.length
+  const unseenCount = isOwn ? 0 : group.filter(x => !viewedIds.has(x.id)).length
+  const isViewedCard = !isOwn && unseenCount === 0
 
   if (isMobile) {
     return (
       <button type="button" className="hs-story-btn"
         onClick={onClick}
+        aria-label={isOwn ? name + ', your story' : isViewedCard ? name + ', viewed' : name + ', ' + unseenCount + ' new statuses'}
         style={{
 flexShrink: 0,
 position: 'relative', cursor: 'pointer', border: 'none', padding: 0, fontFamily: 'inherit',
 textAlign: 'left', background: '#111',
           scrollSnapAlign: 'start',
-          boxShadow: unseen
-            ? '0 0 0 2px rgba(15,157,88,0.35), 0 4px 12px rgba(0,0,0,0.08)'
-            : '0 4px 12px rgba(0,0,0,0.08)',
+          boxShadow: isOwn
+            ? '0 4px 12px rgba(0,0,0,0.08)'
+            : isViewedCard
+              ? '0 0 0 1px rgba(0,0,0,0.08)'
+              : '0 0 0 2.5px #0F9D58, 0 0 0 4.5px #e8f5ee',
           transition: 'transform 0.25s ease, box-shadow 0.25s ease',
         }}
       >
-        {media ? (
-          <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
-            {boardColor ? (
+         {media ? (
+           <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', filter: isViewedCard ? 'saturate(0.75)' : undefined }}>
+             {isViewedCard && (
+               <div style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.28)', zIndex: 2, pointerEvents: 'none' }} />
+             )}
+             {boardColor ? (
                <StatusTextBoard color={boardColor} text={s.content} fontSize={14} maxLines={5} className="board"
                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
              ) : (
@@ -296,17 +289,30 @@ textAlign: 'left', background: '#111',
           position: 'absolute', inset: 0,
           background: 'linear-gradient(0deg, rgba(0,0,0,0.65) 0%, transparent 45%)',
         }} />
+        {!isOwn && (
+          <div style={{
+            position: 'absolute', top: 10, right: 10, zIndex: 6,
+            fontSize: 10, fontWeight: isViewedCard ? 700 : 800, textTransform: 'uppercase',
+            color: '#fff',
+            background: isViewedCard ? 'rgba(0,0,0,0.45)' : '#0F9D58',
+            borderRadius: 999, padding: '3px 8px',
+            display: 'flex', alignItems: 'center', gap: 4,
+            backdropFilter: 'blur(8px)',
+          }}>
+            {isViewedCard ? <><Check size={12} /> Viewed</> : 'New'}
+          </div>
+        )}
 
         <div style={{
           position: 'absolute', bottom: 8, right: 8, zIndex: 5,
           minWidth: 24, height: 20, borderRadius: 10,
-          background: 'rgba(0,0,0,0.7)',
+          background: isOwn ? 'rgba(0,0,0,0.7)' : isViewedCard ? 'rgba(0,0,0,0.55)' : '#0F9D58',
           backdropFilter: 'blur(8px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           padding: '0 6px',
           fontSize: 11, fontWeight: 700, color: '#fff',
         }}>
-          {statusCount}
+          {isOwn ? statusCount : isViewedCard ? statusCount : unseenCount}
         </div>
 
         <div style={{
@@ -315,10 +321,14 @@ textAlign: 'left', background: '#111',
           maxWidth: 'calc(100% - 24px)',
         }}>
            <div style={{ position: 'relative', flexShrink: 0 }}>
-             <div className="hs-avatar" style={{
-               width: 32, height: 32, borderRadius: '50%', overflow: 'hidden',
-               boxShadow: '0 0 0 2px #fff, 0 0 0 4px #0F9D58',
-              background: 'linear-gradient(135deg,#0F9D58,#22c55e)',
+              <div className="hs-avatar" style={{
+                width: 32, height: 32, borderRadius: '50%', overflow: 'hidden',
+                boxShadow: isOwn
+                  ? '0 0 0 2px #fff, 0 0 0 4px #0F9D58'
+                  : isViewedCard
+                    ? '0 0 0 2px #fff, 0 0 0 4px #c4c7cc'
+                    : '0 0 0 2px #fff, 0 0 0 4px #0F9D58',
+               background: 'linear-gradient(135deg,#0F9D58,#22c55e)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
                color: '#fff', fontSize: 13, fontWeight: 800,
              }}>
@@ -338,7 +348,7 @@ textAlign: 'left', background: '#111',
             )}
           </div>
           <span style={{
-            fontSize: 9, fontWeight: 700, color: '#fff',
+            fontSize: 9, fontWeight: 700, color: isOwn ? '#fff' : isViewedCard ? 'rgba(255,255,255,0.85)' : '#fff',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             textShadow: '0 1px 4px rgba(0,0,0,0.5)',
           }}>
@@ -388,22 +398,28 @@ textAlign: 'left', background: '#111',
     )
   }
 
-  return (
+   return (
     <button type="button" className="hs-story-btn"
       onClick={onClick}
+      aria-label={isOwn ? name + ', your story' : isViewedCard ? name + ', viewed' : name + ', ' + unseenCount + ' new statuses'}
       style={{
         flexShrink: 0,
         position: 'relative', cursor: 'pointer', border: 'none', padding: 0, fontFamily: 'inherit',
         textAlign: 'left', background: '#111',
         scrollSnapAlign: 'start',
-        boxShadow: unseen
-          ? '0 0 0 2px rgba(15,157,88,0.35), 0 4px 15px rgba(0,0,0,0.08)'
-          : '0 4px 15px rgba(0,0,0,0.08)',
+        boxShadow: isOwn
+          ? '0 4px 15px rgba(0,0,0,0.08)'
+          : isViewedCard
+            ? '0 0 0 1px rgba(0,0,0,0.08)'
+            : '0 0 0 2.5px #0F9D58, 0 0 0 4.5px #e8f5ee',
         transition: 'transform 0.25s ease, box-shadow 0.25s ease',
       }}
     >
 {media ? (
-          <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+          <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', filter: isViewedCard ? 'saturate(0.75)' : undefined }}>
+            {isViewedCard && (
+              <div style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.28)', zIndex: 2, pointerEvents: 'none' }} />
+            )}
             {boardColor ? (
                <StatusTextBoard color={boardColor} text={s.content} fontSize={14} maxLines={5} className="board"
                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
@@ -416,8 +432,8 @@ textAlign: 'left', background: '#111',
                  <svg width="10" height="10" viewBox="0 0 24 24" fill="#fff" aria-hidden><polygon points="8,5 19,12 8,19" /></svg>
                </div>
              )}
-           </div>
-      ) : avatar ? (
+            </div>
+       ) : avatar ? (
         <img src={avatar} alt=""
           style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
           loading="lazy" />
@@ -428,16 +444,30 @@ textAlign: 'left', background: '#111',
         background: 'linear-gradient(0deg, rgba(0,0,0,0.65) 0%, transparent 45%)',
       }} />
 
+      {!isOwn && (
+        <div style={{
+          position: 'absolute', top: 10, right: 10, zIndex: 6,
+          fontSize: 10, fontWeight: isViewedCard ? 700 : 800, textTransform: 'uppercase',
+          color: '#fff',
+          background: isViewedCard ? 'rgba(0,0,0,0.45)' : '#0F9D58',
+          borderRadius: 999, padding: '3px 8px',
+          display: 'flex', alignItems: 'center', gap: 4,
+          backdropFilter: 'blur(8px)',
+        }}>
+          {isViewedCard ? <><Check size={12} /> Viewed</> : 'New'}
+        </div>
+      )}
+
       <div style={{
         position: 'absolute', bottom: 8, right: 8, zIndex: 5,
         minWidth: 24, height: 20, borderRadius: 10,
-        background: 'rgba(0,0,0,0.7)',
+        background: isOwn ? 'rgba(0,0,0,0.7)' : isViewedCard ? 'rgba(0,0,0,0.55)' : '#0F9D58',
         backdropFilter: 'blur(8px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: '0 6px',
         fontSize: 11, fontWeight: 700, color: '#fff',
       }}>
-        {statusCount}
+        {isOwn ? statusCount : isViewedCard ? statusCount : unseenCount}
       </div>
 
       {isVideo && (
@@ -504,13 +534,13 @@ textAlign: 'left', background: '#111',
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div className="hs-name" style={{
-              fontSize: 12, fontWeight: 700, color: '#fff',
+              fontSize: 12, fontWeight: 700, color: isOwn ? '#fff' : isViewedCard ? 'rgba(255,255,255,0.85)' : '#fff',
               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             }}>
               {isOwn ? 'Your story' : name.split(' ')[0]}
             </div>
             <div style={{
-              fontSize: 10, fontWeight: 500, color: 'rgba(255,255,255,0.6)',
+              fontSize: 10, fontWeight: 500, color: isOwn ? 'rgba(255,255,255,0.6)' : isViewedCard ? 'rgba(255,255,255,0.65)' : 'rgba(255,255,255,0.8)',
               display: 'flex', alignItems: 'center', gap: 4,
             }}>
               {locationLabel && <span>{locationLabel} · </span>}
@@ -601,23 +631,34 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
       if (!map.has(s.user_id)) map.set(s.user_id, [])
       map.get(s.user_id).push(s)
     }
-    const cards = Array.from(map.values()).map(group => ({
+    const cards = Array.from(map.entries()).map(([, group], idx) => ({
       ...group[0],
       _ownGroup: group,
       _isCurrentUser: group[0].user_id === currentUserId,
+      _groupIndex: idx,
     }))
-    const own = cards.filter(c => c.user_id === currentUserId)
-    const others = cards.filter(c => c.user_id !== currentUserId)
-    return [...own, ...others]
+    return cards
   }, [stories, currentUserId])
 
   const rankedStories = useMemo(() => {
     const owned = storyGroups.filter(s => s.user_id === currentUserId)
-    const rest = storyGroups.filter(s => s.user_id !== currentUserId)
-    const scored = rest.map(s => ({ s, score: scoreStory(s) }))
-    scored.sort((a, b) => b.score - a.score)
-    return [...owned, ...scored.map(x => x.s)].slice(0, 20)
-  }, [storyGroups, currentUserId])
+    const others = storyGroups.filter(s => s.user_id !== currentUserId)
+    const withMeta = others.map(c => {
+      const unseenCount = (c._ownGroup || []).filter(x => !viewedIds.has(x.id)).length
+      const isViewed = unseenCount === 0
+      const newest = Math.max(0, ...((c._ownGroup || []).map(x => new Date(x.created_at).getTime())))
+      return { c, unseenCount, isViewed, newest }
+    })
+    const unviewed = withMeta.filter(x => !x.isViewed)
+    const viewed = withMeta.filter(x => x.isViewed)
+    const sortFn = (a, b) => {
+      if (b.newest !== a.newest) return b.newest - a.newest
+      return (a.c._groupIndex || 0) - (b.c._groupIndex || 0)
+    }
+    unviewed.sort(sortFn)
+    viewed.sort(sortFn)
+    return [...owned, ...unviewed.map(x => x.c), ...viewed.map(x => x.c)].slice(0, 20)
+  }, [storyGroups, viewedIds, currentUserId])
 
 
   // Create Status card is the first rail item. With 2+ posted statuses it is

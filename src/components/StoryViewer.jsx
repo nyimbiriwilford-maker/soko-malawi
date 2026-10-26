@@ -697,7 +697,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
       supabase.from('status_views').upsert(
         { status_id: story.id, viewer_id: currentUserId },
         { onConflict: 'status_id,viewer_id', ignoreDuplicates: true },
-      )
+      ).then(() => {}, () => {})
     }
     if (story.user_id === currentUserId) {
       supabase.from('status_views')
