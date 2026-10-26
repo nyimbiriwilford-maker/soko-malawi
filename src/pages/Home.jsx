@@ -131,8 +131,9 @@ function GlobalStyles() {
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
       .soko-v3 {
+        --home-bg: #f8f9fa;
         font-family: ${T.font};
-        background: #f8f9fa;
+        background: var(--home-bg);
         color: ${T.gray900};
         min-width: 0;
         overflow-x: clip;
@@ -533,7 +534,9 @@ function GlobalStyles() {
       .soko-cat-tile {
         min-height: 116px;
       }
-      .soko-cat-tile:hover { border-color:${T.gray200} !important; box-shadow:${T.shadow}; transform: translateY(-3px); }
+      @media (hover: hover) and (pointer: fine) {
+        .soko-cat-tile:hover { border-color:${T.gray200} !important; box-shadow:${T.shadow}; transform: translateY(-2px); }
+      }
       .soko-cat-tile:active { transform: translateY(-1px); }
       .soko-cat-icon-wrap {
         box-shadow: inset 0 0 0 1px rgba(255,255,255,0.75), 0 2px 6px rgba(15,23,42,0.08);
@@ -564,12 +567,12 @@ function GlobalStyles() {
           padding: 0 20px;
           margin-bottom: 12px !important;
         }
-        .soko-cat-grid {
-          display: grid !important;
-          grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-          gap: 8px !important;
-          padding: 0 20px 4px !important;
-          margin: 0 !important;
+          .soko-cat-grid {
+            display: grid !important;
+            grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+            gap: 8px !important;
+            padding: 8px 20px 16px !important;
+            margin: 0 !important;
           width: 100% !important;
           max-width: 100% !important;
           overflow: visible !important;
@@ -615,7 +618,7 @@ function GlobalStyles() {
           padding: 0 24px;
         }
         .soko-cat-grid {
-          padding: 0 24px 4px !important;
+          padding: 8px 24px 16px !important;
           grid-template-columns: repeat(9, minmax(0, 1fr)) !important;
           gap: 10px !important;
         }
@@ -663,7 +666,7 @@ function GlobalStyles() {
           scrollbar-width: none;
           -ms-overflow-style: none;
           gap: 8px !important;
-          padding: 0 14px 6px !important;
+          padding: 8px 14px 16px !important;
         }
         .soko-cat-grid::-webkit-scrollbar { display: none !important; }
         .soko-cat-grid .soko-cat-tile {
@@ -680,7 +683,7 @@ function GlobalStyles() {
           min-height: 100dvh;
           overscroll-behavior-y: contain;
           -webkit-tap-highlight-color: transparent;
-          background: #f3f4f6;
+          background: var(--home-bg);
           -webkit-overflow-scrolling: touch;
         }
 
@@ -1067,7 +1070,7 @@ function CategoryGrid({ navigate, onCategoryChange }) {
   }
 
   return (
-    <section className="soko-cat-section" style={{ padding: '0 20px 8px', background: '#f8f9fa' }}>
+    <section className="soko-cat-section" style={{ padding: '0 20px 8px', background: 'transparent' }}>
       <div style={{ maxWidth: 1400, margin: '0 auto' }}>
         {/* — Section header — */}
         <div className="cat-header-row" style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', marginBottom:20 }}>
@@ -1091,7 +1094,7 @@ function CategoryGrid({ navigate, onCategoryChange }) {
           {QUICK_CATEGORIES.map(item => (
             <button key={item.key} onClick={() => handleClick(item)} className="soko-cat-tile" style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10,
-              background: '#fff', border: `1px solid ${T.gray100}`, cursor: 'pointer', padding: '18px 8px 16px',
+              background: '#ffffff', border: '1px solid #e8eaed', boxShadow: '0 1px 2px rgba(16,24,40,0.04), 0 4px 12px rgba(16,24,40,0.05)', cursor: 'pointer', padding: '18px 8px 16px',
               borderRadius: 16, transition: 'border-color .15s, box-shadow .15s, transform .15s',
               boxSizing: 'border-box',
             }}>
@@ -1106,7 +1109,7 @@ function CategoryGrid({ navigate, onCategoryChange }) {
           ))}
           <button onClick={() => navigate('/categories')} className="soko-cat-tile soko-cat-more" style={{
             display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 8,
-            background: '#fdf6e8', border: `1.5px dashed ${T.amber}66`, cursor: 'pointer', padding: '18px 8px 16px',
+            background: '#ffffff', border: '1px solid #e8eaed', boxShadow: '0 1px 2px rgba(16,24,40,0.04), 0 4px 12px rgba(16,24,40,0.05)', cursor: 'pointer', padding: '18px 8px 16px',
             borderRadius: 16, transition: 'border-color .15s, box-shadow .15s, transform .15s',
             boxSizing: 'border-box',
           }}>
@@ -1287,7 +1290,7 @@ function FeaturedRevenueBanner({ navigate, user }) {
   const ctaGold = true
 
   return (
-    <section style={{ padding: '0 20px', background: '#fff' }} aria-label="Get featured pricing">
+    <section style={{ padding: '0 20px', background: 'transparent' }} aria-label="Get featured pricing">
       <div style={{ maxWidth: 1400, margin: '0 auto' }}>
         <div className="soko-featured-banner" style={{
           background: 'linear-gradient(90deg, #fdf6e3, #fdf1d6, #fdf6e3)',
@@ -5800,7 +5803,7 @@ export default function Home() {
       </div>
 
       {/* Statuses — right after the top banner */}
-       <div className={!storiesLoading ? 'soko-swap-in' : undefined} style={{ background: '#f8f9fa', position: 'relative', zIndex: 0, margin: 0 }}>
+       <div className={!storiesLoading ? 'soko-swap-in' : undefined} style={{ background: 'linear-gradient(180deg, #ffffff 0%, #f3faf6 55%, var(--home-bg) 100%)', position: 'relative', zIndex: 0, margin: 0, paddingBottom: 40 }}>
         <HomeStatusSection
           navigate={navigate}
           stories={forceEmptyStatus ? [] : stories}
@@ -5822,13 +5825,8 @@ export default function Home() {
       <div className="bc-bridge" style={{
         display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
         height:32, padding:'0 20px',
-        background:'#fff',
-      }}>
-        <div style={{
-          width:'100%', maxWidth:120, height:1, borderRadius:1,
-          background:'linear-gradient(90deg, transparent, #D1D5DB, transparent)',
-        }} />
-      </div>
+        background:'transparent',
+      }} />
 
       <div className="soko-settle soko-settle-d3">
         <FeaturedRevenueBanner navigate={navigate} user={user} />
@@ -5838,13 +5836,8 @@ export default function Home() {
       <div className="bc-bridge" style={{
         display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
         height:36, padding:'0 20px',
-        background:'linear-gradient(180deg, #FFFFFF 0%, #f8f9fa 100%)',
-      }}>
-        <div style={{
-          width:'100%', maxWidth:120, height:1, borderRadius:1,
-          background:'linear-gradient(90deg, transparent, #D1D5DB, transparent)',
-        }} />
-      </div>
+        background:'transparent',
+      }} />
 
       <style>{`
         .section-divider { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 0 8px; }
