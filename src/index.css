@@ -476,26 +476,40 @@ input, textarea, select {
   will-change: auto;
 }
 
-.soko-ring { animation: sokoSpin 1.6s linear infinite; }
-.soko-seg {
-  fill: none;
-  stroke-width: 5;
-  stroke-linecap: round;
-  transform-origin: 32px 32px;
-  stroke-dasharray: 46.08 92.15;
-  animation: sokoBreak 2.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+.soko-stage { animation: skFadeIn 0.35s ease 0.15s both; background: radial-gradient(60% 40% at 50% 46%, #eaf6ef 0%, #f6f8f7 70%); }
+.soko-glow { position: absolute; width: 220px; height: 220px; border-radius: 50%; background: radial-gradient(circle, rgba(15,157,88,0.14) 0%, rgba(15,157,88,0) 68%); animation: skGlow 2.4s ease-in-out infinite; pointer-events: none; }
+.soko-mark { position: relative; overflow: visible; }
+.sk-track { fill: none; stroke: rgba(15,157,88,0.10); stroke-width: 5; }
+.sk-outer { transform-origin: 36px 36px; animation: skSpin 1.8s linear infinite; }
+.sk-inner { transform-origin: 36px 36px; animation: skSpinRev 3.2s linear infinite; }
+.sk-inner-arc { fill: none; stroke: rgba(15,157,88,0.28); stroke-width: 1.5; stroke-linecap: round; stroke-dasharray: 22 135; }
+.sk-seg { fill: none; stroke-width: 5; stroke-linecap: round; transform-origin: 36px 36px; stroke-dasharray: 64.9 129.8; animation: skBreak 2.4s cubic-bezier(0.65, 0, 0.35, 1) infinite; }
+.sk-seg.sk1 { transform: rotate(-90deg); }
+.sk-seg.sk2 { transform: rotate(30deg); }
+.sk-seg.sk3 { transform: rotate(150deg); }
+.sk-core { transform-origin: 36px 36px; animation: skPulse 2.4s ease-in-out infinite; filter: drop-shadow(0 2px 6px rgba(15,157,88,0.22)); }
+.soko-loader-label { font-size: 13px; font-weight: 600; color: #5f6368; letter-spacing: 0.3px; margin-top: 4px; }
+.soko-dots i { font-style: normal; animation: skDot 1.2s infinite; opacity: 0.25; }
+.soko-dots i:nth-child(2) { animation-delay: 0.2s; }
+.soko-dots i:nth-child(3) { animation-delay: 0.4s; }
+.soko-inline { display: inline-flex; vertical-align: middle; }
+.soko-inline .sk-core, .soko-inline .sk-core text { display: none; }
+.soko-inline .sk-track { stroke-width: 6; }
+@keyframes skSpin { to { transform: rotate(360deg); } }
+@keyframes skSpinRev { to { transform: rotate(-360deg); } }
+@keyframes skBreak {
+  0%, 18%   { stroke-dasharray: 64.9 129.8; stroke-dashoffset: 0; }
+  50%, 64%  { stroke-dasharray: 20 174.7;   stroke-dashoffset: -22.5; }
+  94%, 100% { stroke-dasharray: 64.9 129.8; stroke-dashoffset: 0; }
 }
-.soko-seg.s1 { stroke: #0F9D58; transform: rotate(-90deg); }
-.soko-seg.s2 { stroke: #34c77a; transform: rotate(30deg); }
-.soko-seg.s3 { stroke: #F9AB00; transform: rotate(150deg); }
-@keyframes sokoSpin { to { transform: rotate(360deg); } }
-@keyframes sokoBreak {
-  0%, 20%   { stroke-dasharray: 46.08 92.15; stroke-dashoffset: 0; }
-  50%, 65%  { stroke-dasharray: 14 124.23;   stroke-dashoffset: -16.04; }
-  95%, 100% { stroke-dasharray: 46.08 92.15; stroke-dashoffset: 0; }
-}
-.soko-loader-label { font-size: 13px; font-weight: 600; color: #6b7280; letter-spacing: 0.2px; }
+@keyframes skPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.07); } }
+@keyframes skGlow { 0%, 100% { opacity: 0.55; transform: scale(0.95); } 50% { opacity: 1; transform: scale(1.06); } }
+@keyframes skDot { 0%, 100% { opacity: 0.25; } 40% { opacity: 1; } }
+@keyframes skFadeIn { from { opacity: 0; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) {
-  .soko-ring { animation-duration: 4s; }
-  .soko-seg { animation: none; }
+  .sk-outer { animation-duration: 5s; }
+  .sk-inner, .sk-seg, .sk-core, .soko-glow, .soko-dots i { animation: none; }
+  .soko-dots i { opacity: 1; }
+  .soko-stage { animation: none; }
 }
+.has-preloader .soko-stage { animation-delay: 0s; }
