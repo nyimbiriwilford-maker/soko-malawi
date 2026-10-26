@@ -42,6 +42,7 @@ import NotificationToast from './components/NotificationToast'
 import PersistentCallShell from './components/PersistentCallShell'
 import MiniCallBar from './components/MiniCallBar'
 import StatusPublishRing from './components/StatusPublishRing'
+import SokoLoader from './components/SokoLoader'
 import { CallProvider }   from './context/CallContext'
 import { NetworkProvider } from './context/NetworkContext'
 import { useGlobalPresence } from './hooks/usePresence'
@@ -49,31 +50,7 @@ import { registerPushNotifications, listenForServiceWorkerMessages } from './lib
 
 // ── Branded page loader ────────────────────────────────────
 function PageLoader() {
-  return (
-    <div className="app-loader" style={{ background: '#f6f8f7' }}>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{
-          fontFamily: "'Sora', 'Inter', system-ui, sans-serif",
-          fontSize: 28, fontWeight: 800,
-          color: '#0F9D58', letterSpacing: '-0.5px', lineHeight: 1.1,
-          marginBottom: 28,
-        }}>
-          Soko<span style={{ color: '#F9AB00' }}>Mw</span>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
-          {[0, 1, 2].map(i => (
-            <div key={i} style={{
-              width: 6, height: 6, borderRadius: '50%',
-              background: i === 1 ? '#F9AB00' : '#0F9D58',
-              animation: 'sokoBounce 1.6s ease-in-out infinite',
-              animationDelay: `${i * 0.15}s`,
-            }} />
-          ))}
-        </div>
-        <style>{`@keyframes sokoBounce { 0%,100% { transform: translateY(0); opacity: 0.25; } 50% { transform: translateY(-5px); opacity: 1; } }`}</style>
-      </div>
-    </div>
-  )
+  return <SokoLoader />
 }
 
 /** Home-style bottom nav for mobile across authenticated marketplace pages */

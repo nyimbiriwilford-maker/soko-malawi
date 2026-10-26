@@ -8,6 +8,7 @@ import { isStatusVideoUrl, isStatusColorBoard } from '../utils/statusVideo'
 import { coordsForPlace, haversineKm } from '../utils/lookingFor'
 import { useUserLocation } from '../hooks/useUserLocation'
 import StatusTextBoard from '../components/StatusTextBoard'
+import SokoLoader from '../components/SokoLoader'
 import StatusCommentsPanel from '../components/StatusComments'
 import { useStatusComments } from '../hooks/useStatusComments'
 import { formatPrice } from '../lib/format'
@@ -489,15 +490,7 @@ export default function StatusPage() {
   if (gate !== 'ready' || !user) {
     // Branded loader instead of a blank white screen while gating
     return (
-      <div className="app-loader">
-        <div style={{
-          width: 42, height: 42, borderRadius: '50%',
-          border: '3px solid #e8f5ee', borderTopColor: '#0F9D58',
-          animation: 'st-gate-spin 0.8s linear infinite',
-        }} />
-        <div style={{ fontSize: 13, color: '#6b7280', fontWeight: 600 }}>Loading statuses…</div>
-        <style>{`@keyframes st-gate-spin { to { transform: rotate(360deg) } }`}</style>
-      </div>
+      <SokoLoader label="Loading statuses…" />
     )
   }
   return <StatusPageInner user={user} navigate={navigate} />

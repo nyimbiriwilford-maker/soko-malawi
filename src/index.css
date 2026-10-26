@@ -475,3 +475,27 @@ input, textarea, select {
   transform: translateZ(0);
   will-change: auto;
 }
+
+.soko-ring { animation: sokoSpin 1.6s linear infinite; }
+.soko-seg {
+  fill: none;
+  stroke-width: 5;
+  stroke-linecap: round;
+  transform-origin: 32px 32px;
+  stroke-dasharray: 46.08 92.15;
+  animation: sokoBreak 2.4s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+.soko-seg.s1 { stroke: #0F9D58; transform: rotate(-90deg); }
+.soko-seg.s2 { stroke: #34c77a; transform: rotate(30deg); }
+.soko-seg.s3 { stroke: #F9AB00; transform: rotate(150deg); }
+@keyframes sokoSpin { to { transform: rotate(360deg); } }
+@keyframes sokoBreak {
+  0%, 20%   { stroke-dasharray: 46.08 92.15; stroke-dashoffset: 0; }
+  50%, 65%  { stroke-dasharray: 14 124.23;   stroke-dashoffset: -16.04; }
+  95%, 100% { stroke-dasharray: 46.08 92.15; stroke-dashoffset: 0; }
+}
+.soko-loader-label { font-size: 13px; font-weight: 600; color: #6b7280; letter-spacing: 0.2px; }
+@media (prefers-reduced-motion: reduce) {
+  .soko-ring { animation-duration: 4s; }
+  .soko-seg { animation: none; }
+}
