@@ -5260,6 +5260,9 @@ export default function Home() {
   const [stories, setStories] = useState([])
   const [storiesLoading, setStoriesLoading] = useState(true)
   const [storiesError, setStoriesError] = useState(null)
+  // Temporary testing flags: ?emptyStatus=1 / ?errorStatus=1
+  const forceEmptyStatus = new URLSearchParams(window.location.search).get('emptyStatus') === '1'
+  const forceErrorStatus = new URLSearchParams(window.location.search).get('errorStatus') === '1'
 
   // ── Animation / location (preserved) ──────────────────────
   const [isFocused, setIsFocused] = useState(false)
@@ -5788,9 +5791,9 @@ export default function Home() {
        <div className={!storiesLoading ? 'soko-swap-in' : undefined} style={{ background: '#f8f9fa', position: 'relative', zIndex: 0, margin: 0 }}>
         <HomeStatusSection
           navigate={navigate}
-          stories={stories}
-          loading={storiesLoading}
-          error={storiesError}
+          stories={forceEmptyStatus ? [] : stories}
+          loading={forceEmptyStatus || forceErrorStatus ? false : storiesLoading}
+          error={forceErrorStatus ? new Error('forced') : (forceEmptyStatus ? null : storiesError)}
           onRetry={() => { setStoriesLoading(true); setStoriesError(null); fetchAllActiveStories(user.id, 'All').then(data => { setStories(data); setStoriesLoading(false) }).catch(err => { setStoriesError(err); setStoriesLoading(false) }) }}
           onCreateStory={handleCreateStory}
           currentUserId={user?.id}
