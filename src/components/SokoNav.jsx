@@ -246,8 +246,8 @@ export default function SokoNav({
           backdrop-filter: blur(20px) saturate(1.8);
           -webkit-backdrop-filter: blur(20px) saturate(1.8);
           background: rgba(255,255,255,.92);
-          border-bottom: 1px solid rgba(0,0,0,.07);
-          box-shadow: 0 1px 0 rgba(0,0,0,.04), 0 4px 20px rgba(0,0,0,.04);
+           border-bottom: 1px solid #eef0f2;
+           box-shadow: none;
         }
         .soko-nav-mobile { display: none; }
         .soko-scroll { scrollbar-width: none; }
@@ -274,8 +274,8 @@ export default function SokoNav({
               radial-gradient(120% 120% at 100% -20%, rgba(15,157,88,0.10) 0%, rgba(15,157,88,0) 42%),
               radial-gradient(90% 90% at -10% 120%, rgba(249,171,0,0.07) 0%, rgba(249,171,0,0) 46%),
               linear-gradient(180deg, #ffffff 0%, #fcfdfc 100%) !important;
-            border-bottom: 1px solid rgba(15,157,88,0.08) !important;
-            box-shadow: 0 1px 0 rgba(0,0,0,0.03), 0 6px 18px rgba(15,157,88,0.05) !important;
+             border-bottom: 1px solid #eef0f2 !important;
+             box-shadow: none !important;
           }
           .soko-nav-mobile::before,
           .soko-nav-mobile::after {

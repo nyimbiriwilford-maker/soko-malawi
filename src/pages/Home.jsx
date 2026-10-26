@@ -4517,13 +4517,14 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
   if (!slide) return null
 
   return (
-    <section className="hero-banner" style={{
-      position: 'relative', zIndex: 1,
-      background: '#fff',
-      borderRadius: 24,
-      margin: '0 auto',
-      maxWidth: 1400,
-    }}>
+    <div className="hero-banner-wrap" style={{ padding: '0 20px', margin: 0, width: '100%', boxSizing: 'border-box', position: 'relative', zIndex: 0 }}>
+      <section className="hero-banner" style={{
+        position: 'relative', zIndex: 1,
+        background: '#fff',
+        borderRadius: 24,
+        margin: '0 auto',
+        maxWidth: 1400,
+      }}>
       <style>{`
         @keyframes heroFadeSlide {
           from { opacity: 0; transform: translateY(20px); }
@@ -4956,9 +4957,9 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
         </div>
       )}
     </section>
+    </div>
   )
 }
-
 function SellCtaBanner({ navigate }) {
   const perks = [
     { label: 'Free to list', icon: Icon.plus },
@@ -5800,10 +5801,8 @@ export default function Home() {
         <EarlyAccessStrip />
       </div>
 
-      {/* Hero banner */}
-       <div className="hero-banner-wrap" style={{ padding: '0 20px', marginTop: 8, marginBottom: 0, width: '100%', boxSizing: 'border-box', position: 'relative', zIndex: 0 }}>
-        <HeroBanner navigate={navigate} onSearch={handleSearch} onNotify={(q) => { setNotifyOpen(true); setNotifyQuery(q) }} />
-      </div>
+       {/* Hero banner */}
+       <HeroBanner navigate={navigate} onSearch={handleSearch} onNotify={(q) => { setNotifyOpen(true); setNotifyQuery(q) }} />
 
       {/* Statuses — right after the top banner */}
        <div className={!storiesLoading ? 'soko-swap-in' : undefined} style={{ background: 'linear-gradient(180deg, #ffffff 0%, #f3faf6 60%, var(--home-bg) 100%)', position: 'relative', zIndex: 0, margin: 0 }}>

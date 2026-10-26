@@ -715,8 +715,9 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
     <>
       <style>{`
         .hs-rail::-webkit-scrollbar { display: none; }
-        .hs-rail { padding: 24px 14px 12px; margin: 0; scroll-padding-left: 14px; overflow-x: auto; overflow-y: hidden; position: relative; z-index: 1; background: transparent; height: auto; max-height: none; }
+        .hs-rail { padding: 8px 14px 12px; margin: 0; scroll-padding-left: 14px; overflow-x: auto; overflow-y: hidden; position: relative; z-index: 1; background: transparent; height: auto; max-height: none; }
         .hs-rail-wrap { width: 100vw; margin-left: calc(50% - 50vw); margin-top: 0; padding-top: 0; background: transparent; overflow: visible; position: relative; z-index: 2; }
+        .hs-section { padding-top: 6px; }
         .hs-story-btn:active { transform: scale(0.97); transition: transform 0.12s ease; }
         .hs-rail-arrow { opacity: 0; transition: opacity 0.2s ease; pointer-events: none; }
         .hs-rail-wrap:hover .hs-rail-arrow { opacity: 1; pointer-events: auto; }
@@ -769,14 +770,16 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
           .hs-tablet-hide { display: none !important; }
           .hs-rail { gap: 10px; }
           .hs-chip { height: 40px; }
-          .hs-section { margin-bottom: 0 !important; overflow: visible; }
+          .hs-section { margin-bottom: 0 !important; padding-top: 6px !important; overflow: visible; }
         }
         @media (min-width: 768px) {
-          .hs-rail { gap: 12px; padding: 24px 20px 12px; scroll-padding-left: 20px; }
+          .hs-rail { gap: 12px; padding: 8px 20px 12px; scroll-padding-left: 20px; }
+          .hs-section { padding-top: 10px; }
           .hs-story-btn, .hs-add-btn { flex-basis: 170px; width: 170px; }
         }
         @media (min-width: 1100px) {
-          .hs-rail { gap: 14px; padding: 24px 24px 12px; scroll-padding-left: 24px; }
+          .hs-rail { gap: 14px; padding: 8px 24px 12px; scroll-padding-left: 24px; }
+          .hs-section { padding-top: 14px; }
           .hs-story-btn, .hs-add-btn { flex-basis: 196px; width: 196px; border-radius: 18px; }
           .hs-story-btn .hs-avatar, .hs-add-btn .hs-avatar { width: 36px; height: 36px; }
           .hs-story-btn .hs-name { font-size: 13px; }
@@ -797,11 +800,11 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
         }
       `}</style>
 
-      <section className="hs-section" style={{
-        padding: '12px 0 0',
-        marginBottom: 0,
-        background: 'transparent',
-      }}>
+       <section className="hs-section" style={{
+         padding: '0',
+         marginBottom: 0,
+         background: 'transparent',
+       }}>
         <div style={isMobile ? { padding: '0 20px' } : { maxWidth: 1400, margin: '0 auto', padding: '0 20px' }}>
           {loading ? (
             <div style={isMobile ? { padding: '0' } : { padding: '0' }}>
