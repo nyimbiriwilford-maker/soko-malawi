@@ -715,7 +715,7 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
     <>
       <style>{`
         .hs-rail::-webkit-scrollbar { display: none; }
-        .hs-rail { padding: 24px 14px 32px; margin: 0; scroll-padding-left: 14px; overflow-x: auto; overflow-y: hidden; position: relative; z-index: 1; background: transparent; height: auto; max-height: none; }
+        .hs-rail { padding: 24px 14px 24px; margin: 0; scroll-padding-left: 14px; overflow-x: auto; overflow-y: hidden; position: relative; z-index: 1; background: transparent; height: auto; max-height: none; }
         .hs-rail-wrap { width: 100vw; margin-left: calc(50% - 50vw); margin-top: 0; padding-top: 0; background: transparent; overflow: visible; position: relative; z-index: 2; }
         .hs-story-btn:active { transform: scale(0.97); transition: transform 0.12s ease; }
         .hs-rail-arrow { opacity: 0; transition: opacity 0.2s ease; pointer-events: none; }
@@ -798,7 +798,7 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
       `}</style>
 
       <section className="hs-section" style={{
-        padding: '12px 0 16px',
+        padding: '12px 0 0',
         marginBottom: 0,
         background: 'transparent',
       }}>
