@@ -31,6 +31,7 @@ const css = `
   .ob-root {
     font-family: 'Inter', system-ui, sans-serif;
     min-height: 100vh;
+    min-height: 100dvh;
     background: ${T.offwhite};
     display: flex;
     flex-direction: column;

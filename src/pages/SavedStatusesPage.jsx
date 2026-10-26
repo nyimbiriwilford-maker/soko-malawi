@@ -59,7 +59,7 @@ export default function SavedStatusesPage() {
 
   return (
     <div className="saved-statuses-page" style={{
-      minHeight: '100vh', background: '#f7f8f6',
+      minHeight: '100dvh', background: '#f7f8f6',
       fontFamily: "'DM Sans', system-ui, sans-serif",
     }}>
       <style>{`

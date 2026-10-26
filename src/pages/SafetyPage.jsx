@@ -50,7 +50,7 @@ export default function SafetyPage() {
   const goHome = () => navigate('/')
 
   return (
-    <div style={{ minHeight: '100vh', background: '#f6f8f7', fontFamily: "'Inter', system-ui, sans-serif" }}>
+    <div style={{ minHeight: '100dvh', background: '#f6f8f7', fontFamily: "'Inter', system-ui, sans-serif" }}>
       <style>{`
         .sf-card:hover { transform: translateY(-2px); }
         .sf-card { transition: transform .15s ease; }

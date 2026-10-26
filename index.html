@@ -12,7 +12,16 @@
 
     <!-- PWA -->
     <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#1a7a4a" />
+    <meta name="theme-color" content="#f6f8f7" />
+    <style>
+      .app-loader-pre {
+        position: fixed; inset: 0; width: 100%; height: 100vh; height: 100dvh;
+        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+        background: #f6f8f7; overflow: hidden; overscroll-behavior: none; z-index: 9999;
+        padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
+        box-sizing: border-box; touch-action: none;
+      }
+    </style>
     <meta name="mobile-web-app-capable" content="yes" />
 
     <!-- iOS -->
@@ -42,7 +51,19 @@
     <meta name="twitter:image" content="https://soko-malawi.vercel.app/og-image.png" />
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="app-loader-pre">
+        <div style="font-family:'Sora','Inter',system-ui,sans-serif;font-size:28px;font-weight:800;color:#0F9D58;letter-spacing:-0.5px;line-height:1.1;margin-bottom:28px;">
+          Soko<span style="color:#F9AB00">Mw</span>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:center;gap:5px;">
+          <div style="width:6px;height:6px;border-radius:50%;background:#0F9D58;animation:sokoBounce 1.6s ease-in-out infinite;"></div>
+          <div style="width:6px;height:6px;border-radius:50%;background:#F9AB00;animation:sokoBounce 1.6s ease-in-out infinite;animation-delay:.15s;"></div>
+          <div style="width:6px;height:6px;border-radius:50%;background:#0F9D58;animation:sokoBounce 1.6s ease-in-out infinite;animation-delay:.3s;"></div>
+        </div>
+      </div>
+      <style>@keyframes sokoBounce{0%,100%{transform:translateY(0);opacity:.25}50%{transform:translateY(-5px);opacity:1}}</style>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

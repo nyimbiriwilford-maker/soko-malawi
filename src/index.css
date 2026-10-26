@@ -16,20 +16,45 @@
   --white: #ffffff;
 }
 
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+}
 html {
   /* App-like scroll + safe areas on mobile browsers / PWA */
-  height: 100%;
   -webkit-text-size-adjust: 100%;
 }
-
 body {
   font-family: 'DM Sans', sans-serif;
-  background: var(--surface);
+  background: #f6f8f7;
   color: var(--dark);
   font-size: 15px;
   line-height: 1.6;
-  min-height: 100%;
+  min-height: 100vh;
   min-height: 100dvh;
+  overscroll-behavior-y: none;
+}
+
+.app-loader {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100vh;
+  height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  background: #f6f8f7;
+  overflow: hidden;
+  overscroll-behavior: none;
+  z-index: 9999;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  box-sizing: border-box;
+  touch-action: none;
 }
 
 /* ── Desktop layout shell ── */
@@ -85,7 +110,7 @@ body {
   }
   body {
     padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
-    background: #f3f4f6;
+    background: #f6f8f7;
   }
   /* Home shell already sits above the tab bar — avoid double pad */
   .soko-v3 {

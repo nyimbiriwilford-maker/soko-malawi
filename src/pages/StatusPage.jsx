@@ -489,7 +489,7 @@ export default function StatusPage() {
   if (gate !== 'ready' || !user) {
     // Branded loader instead of a blank white screen while gating
     return (
-      <div style={{ minHeight: '100vh', background: '#f6f8f7', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14 }}>
+      <div className="app-loader">
         <div style={{
           width: 42, height: 42, borderRadius: '50%',
           border: '3px solid #e8f5ee', borderTopColor: '#0F9D58',

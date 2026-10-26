@@ -50,10 +50,7 @@ import { registerPushNotifications, listenForServiceWorkerMessages } from './lib
 // ── Branded page loader ────────────────────────────────────
 function PageLoader() {
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      height: '100vh', background: '#0f1410',
-    }}>
+    <div className="app-loader" style={{ background: '#f6f8f7' }}>
       <div style={{ textAlign: 'center' }}>
         <div style={{
           fontFamily: "'Sora', 'Inter', system-ui, sans-serif",

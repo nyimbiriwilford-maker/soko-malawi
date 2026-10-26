@@ -79,11 +79,8 @@ export default function AuthCallback() {
 
   return (
     <div
+      className="app-loader"
       style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '100vh',
         color: '#637068',
         fontFamily: 'Inter, system-ui, sans-serif',
         fontSize: 15,

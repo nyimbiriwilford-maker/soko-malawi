@@ -360,7 +360,7 @@ export default function VerifyPayment() {
 
   return (
     <div style={{
-      minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      minHeight: '100dvh', display: 'flex', alignItems: 'center', justifyContent: 'center',
       background: `radial-gradient(circle at 20% 10%, ${C.greenTint} 0%, transparent 45%),
                    radial-gradient(circle at 85% 90%, ${C.amberBg} 0%, transparent 40%),
                    ${C.surface}`,

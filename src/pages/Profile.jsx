@@ -6100,8 +6100,8 @@ const css = `
 
     width: 100%;
     min-width: 0;
-    min-height: 100dvh;
     min-height: 100vh;
+    min-height: 100dvh;
     background:
       radial-gradient(ellipse 90% 42% at 50% -12%, rgba(15, 157, 88, 0.11), transparent 58%),
       radial-gradient(ellipse 48% 28% at 100% 18%, rgba(249, 171, 0, 0.07), transparent 52%),

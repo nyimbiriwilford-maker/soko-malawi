@@ -168,7 +168,7 @@ export default function ChatSidebar({ activeFilter, onFilterChange, counts, prof
 const S = {
   sidebar: {
     width: '290px', flexShrink: 0, background: '#fff', borderRight: '1px solid #eef2ef',
-    height: '100vh', position: 'sticky', top: 0, display: 'flex', flexDirection: 'column',
+    height: '100dvh', position: 'sticky', top: 0, display: 'flex', flexDirection: 'column',
     fontFamily: 'system-ui, sans-serif',
   },
   top: { padding: '22px 20px 14px' },

@@ -1578,10 +1578,10 @@ function YouMayAlsLike({ currentListingId, category, navigate }) {
 }
 
 const S = {
-  page:       { minHeight: '100vh', background: '#f3f4f6', fontFamily: "'DM Sans', 'Sora', system-ui, sans-serif" },
-  loadWrap:   { display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh' },
+  page:       { minHeight: '100dvh', background: '#f3f4f6', fontFamily: "'DM Sans', 'Sora', system-ui, sans-serif" },
+  loadWrap:   { display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100dvh' },
   loadSpinner:{ width: 36, height: 36, border: '3px solid #e5e7eb', borderTop: '3px solid #0F9D58', borderRadius: '50%', animation: 'spin .8s linear infinite' },
-  notFound:   { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', gap: 8, color: '#374151' },
+  notFound:   { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100dvh', gap: 8, color: '#374151' },
   notFoundBtn:{ marginTop: 16, background: '#0F9D58', color: '#fff', border: 'none', borderRadius: 10, padding: '10px 24px', fontSize: 14, fontWeight: 700, cursor: 'pointer' },
 
   // ── TOP NAV ──

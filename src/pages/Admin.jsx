@@ -2784,7 +2784,7 @@ const i = {
 // ── Styles ───────────────────────────────────────────────
 const S = {
   shell:       { display: 'flex', minHeight: '100vh', background: '#f4f7f5', fontFamily: "'DM Sans', system-ui, sans-serif" },
-  loadWrap:    { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', background: '#f4f7f5' },
+  loadWrap:    { display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100dvh', background: '#f4f7f5' },
   spinner:     { width: 30, height: 30, border: '3px solid #e0ebe3', borderTopColor: '#1a7a4a', borderRadius: '50%', animation: 'spin 0.8s linear infinite' },
   miniSpinner: { width: 13, height: 13, border: '2px solid rgba(255,255,255,0.35)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.7s linear infinite' },
 

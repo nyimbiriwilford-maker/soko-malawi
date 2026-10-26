@@ -135,7 +135,7 @@ export default function ResetPassword() {
 }
 
 const styles = {
-  page:    { minHeight: '100vh', background: '#0f1410', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' },
+  page:    { minHeight: '100dvh', background: '#0f1410', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '24px' },
   logoWrap:{ textAlign: 'center', marginBottom: '40px' },
   logo:    { fontSize: '32px', fontWeight: '800', color: '#5de89e', letterSpacing: '-1px' },
   tagline: { color: 'rgba(255,255,255,0.4)', fontSize: '14px', marginTop: '6px' },

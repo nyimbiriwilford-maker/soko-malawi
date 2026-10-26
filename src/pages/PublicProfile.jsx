@@ -774,10 +774,10 @@ const PP_CSS = `
 @keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-.pp-page{min-height:100vh;background:#f7f8fa;font-family:Inter,system-ui,sans-serif;max-width:480px;margin:0 auto;padding-bottom:60px}
+.pp-page{min-height:100vh;min-height:100dvh;background:#f7f8fa;font-family:Inter,system-ui,sans-serif;max-width:480px;margin:0 auto;padding-bottom:60px}
 @media (min-width:640px){.pp-page{max-width:720px}}
 @media (min-width:1024px){.pp-page{max-width:1100px}}
-.pp-loading,.pp-notfound{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;background:#fff;font-family:system-ui,sans-serif}
+.pp-loading,.pp-notfound{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;height:100dvh;background:#fff;font-family:system-ui,sans-serif}
 .pp-spinner{width:28px;height:28px;border:2.5px solid #e5e7eb;border-top-color:#0F9D58;border-radius:50%;animation:spin .8s linear infinite}
 .pp-notfound-title{font-size:17px;font-weight:700;color:#111}
 .pp-btn-primary{margin-top:16px;background:#0F9D58;color:#fff;border:none;border-radius:10px;padding:10px 24px;font-size:14px;font-weight:600;cursor:pointer}
