@@ -484,11 +484,11 @@ input, textarea, select {
 .sk-inner { transform-origin: 36px 36px; animation: skSpinRev 3.2s linear infinite; }
 .sk-inner-arc { fill: none; stroke: rgba(15,157,88,0.28); stroke-width: 1.5; stroke-linecap: round; stroke-dasharray: 22 135; }
 .sk-seg { fill: none; stroke-width: 5; stroke-linecap: round; transform-origin: 36px 36px; stroke-dasharray: 64.9 129.8; animation: skBreak 2.4s cubic-bezier(0.65, 0, 0.35, 1) infinite; }
-.sk-seg.sk1 { transform: rotate(-90deg); }
-.sk-seg.sk2 { transform: rotate(30deg); }
-.sk-seg.sk3 { transform: rotate(150deg); }
+.sk-seg.sk1 { stroke: #0F9D58; transform: rotate(-90deg); }
+.sk-seg.sk2 { stroke: #34c77a; transform: rotate(30deg); }
+.sk-seg.sk3 { stroke: #F9AB00; transform: rotate(150deg); }
 .sk-core { transform-origin: 36px 36px; animation: skPulse 2.4s ease-in-out infinite; filter: drop-shadow(0 2px 6px rgba(15,157,88,0.22)); }
-.soko-loader-label { font-size: 13px; font-weight: 600; color: #5f6368; letter-spacing: 0.3px; margin-top: 4px; }
+.soko-loader-label { font-size: 13px; font-weight: 600; color: #5f6368; letter-spacing: 0.3px; margin-top: 4px; font-family: system-ui, -apple-system, sans-serif; }
 .soko-dots i { font-style: normal; animation: skDot 1.2s infinite; opacity: 0.25; }
 .soko-dots i:nth-child(2) { animation-delay: 0.2s; }
 .soko-dots i:nth-child(3) { animation-delay: 0.4s; }
