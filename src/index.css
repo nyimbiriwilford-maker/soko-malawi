@@ -513,3 +513,24 @@ input, textarea, select {
   .soko-stage { animation: none; }
 }
 .has-preloader .soko-stage { animation-delay: 0s; }
+
+.sk-shimmer {
+  background: linear-gradient(100deg, #eceff1 20%, #f7f9fa 40%, #eceff1 60%);
+  background-size: 220% 100%;
+  animation: skShimmer 1.6s ease-in-out infinite;
+  background-attachment: fixed;
+}
+.sk-shimmer--dark {
+  background: linear-gradient(100deg, #1e293b 20%, #2c3a50 40%, #1e293b 60%);
+  background-size: 220% 100%;
+  animation: skShimmer 1.6s ease-in-out infinite;
+  background-attachment: fixed;
+}
+@keyframes skShimmer { 0% { background-position: 120% 0; } 100% { background-position: -120% 0; } }
+.sk-reveal { opacity: 0; transform: translateY(6px); animation: skReveal 0.28s ease-out forwards; }
+@keyframes skReveal { to { opacity: 1; transform: translateY(0); } }
+.sk-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .sk-shimmer, .sk-shimmer--dark { animation: none; background: #eceff1; }
+  .sk-reveal { animation: none; opacity: 1; transform: none; }
+}
