@@ -557,7 +557,7 @@ function GlobalStyles() {
 
         .soko-cat-section {
           padding: 0 0 8px !important;
-          margin-top: 4px;
+          margin-top: 8px;
         }
         .soko-cat-section > div {
           max-width: none !important;
@@ -609,10 +609,13 @@ function GlobalStyles() {
         .soko-cat-grid { grid-template-columns: repeat(6, minmax(0, 1fr)) !important; }
       }
 /* ── Desktop only: compact all categories into ONE horizontal row (mobile untouched) ── */
+      @media (min-width: 768px) {
+        .soko-cat-section { margin-top: 16px !important; }
+      }
       @media (min-width: 769px) {
         .soko-cat-section {
           padding: 0 24px 8px !important;
-          margin-top: 12px;
+          margin-top: 20px !important;
         }
         .cat-header-row {
           padding: 0 24px;
@@ -5803,7 +5806,7 @@ export default function Home() {
       </div>
 
       {/* Statuses — right after the top banner */}
-       <div className={!storiesLoading ? 'soko-swap-in' : undefined} style={{ background: 'linear-gradient(180deg, #ffffff 0%, #f3faf6 55%, var(--home-bg) 100%)', position: 'relative', zIndex: 0, margin: 0, paddingBottom: 40 }}>
+       <div className={!storiesLoading ? 'soko-swap-in' : undefined} style={{ background: 'linear-gradient(180deg, #ffffff 0%, #f3faf6 60%, var(--home-bg) 100%)', position: 'relative', zIndex: 0, margin: 0 }}>
         <HomeStatusSection
           navigate={navigate}
           stories={forceEmptyStatus ? [] : stories}
