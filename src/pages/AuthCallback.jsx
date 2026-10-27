@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import SokoLoader from '../components/SokoLoader'
 
 /**
  * OAuth / magic-link callback.
@@ -77,18 +78,5 @@ export default function AuthCallback() {
     }
   }, [navigate])
 
-  return (
-    <div
-      className="app-loader"
-      style={{
-        color: '#637068',
-        fontFamily: 'Inter, system-ui, sans-serif',
-        fontSize: 15,
-      }}
-      role="status"
-      aria-live="polite"
-    >
-      {status}
-    </div>
-  )
+  return <SokoLoader label={status} />
 }
