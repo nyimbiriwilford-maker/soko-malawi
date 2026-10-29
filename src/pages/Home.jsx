@@ -556,8 +556,9 @@ function GlobalStyles() {
         .soko-featured-stories-grid { grid-template-columns: 1fr !important; }
 
         .soko-cat-section {
-          padding: 0 0 8px !important;
+          padding: 0 0 0 !important;
           margin-top: 8px;
+          margin-bottom: 0 !important;
         }
         .soko-cat-section > div {
           max-width: none !important;
@@ -610,12 +611,13 @@ function GlobalStyles() {
       }
 /* ── Desktop only: compact all categories into ONE horizontal row (mobile untouched) ── */
       @media (min-width: 768px) {
-        .soko-cat-section { margin-top: 16px !important; }
+        .soko-cat-section { margin-top: 16px !important; margin-bottom: 0 !important; }
       }
       @media (min-width: 769px) {
         .soko-cat-section {
-          padding: 0 24px 8px !important;
+          padding: 0 24px 0 !important;
           margin-top: 20px !important;
+          margin-bottom: 0 !important;
         }
         .cat-header-row {
           padding: 0 24px;
@@ -835,7 +837,7 @@ function GlobalStyles() {
           padding: 12px 16px !important;
         }
         section[aria-label="Get featured pricing"] {
-          padding: 12px 14px 0 !important;
+          padding: 0 14px !important;
         }
 
         /* Featured rail: no double padding inside section-pad */
@@ -897,7 +899,7 @@ function GlobalStyles() {
 
         /* Featured revenue banner — compact app strip */
         section[aria-label="Get featured pricing"] {
-          padding: 8px 14px 0 !important;
+          padding: 0 14px !important;
         }
         .soko-featured-banner {
           border-radius: 12px !important;
@@ -1073,7 +1075,7 @@ function CategoryGrid({ navigate, onCategoryChange }) {
   }
 
   return (
-    <section className="soko-cat-section" style={{ padding: '0 20px 8px', background: 'transparent' }}>
+    <section className="soko-cat-section" style={{ padding: '0 20px 0', background: 'transparent', marginBottom: 0 }}>
       <div style={{ maxWidth: 1400, margin: '0 auto' }}>
         {/* — Section header — */}
         <div className="cat-header-row" style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', marginBottom:20 }}>
@@ -1293,7 +1295,7 @@ function FeaturedRevenueBanner({ navigate, user }) {
   const ctaGold = true
 
   return (
-    <section style={{ padding: '0 20px', background: 'transparent' }} aria-label="Get featured pricing">
+    <section style={{ padding: '0 24px', background: 'transparent' }} aria-label="Get featured pricing">
       <div style={{ maxWidth: 1400, margin: '0 auto' }}>
         <div className="soko-featured-banner" style={{
           background: 'linear-gradient(90deg, #fdf6e3, #fdf1d6, #fdf6e3)',
@@ -5832,12 +5834,6 @@ export default function Home() {
       </div>
 
       {/* — Categories → Featured transition — */}
-      <div className="bc-bridge" style={{
-        display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
-        height:32, padding:'0 20px',
-        background:'transparent',
-      }} />
-
       <div className="soko-settle soko-settle-d3">
         <FeaturedRevenueBanner navigate={navigate} user={user} />
       </div>
@@ -5850,6 +5846,9 @@ export default function Home() {
       }} />
 
       <style>{`
+        .soko-featured-banner { margin-top: 8px !important; }
+        @media (min-width: 768px) { .soko-featured-banner { margin-top: 16px !important; } }
+        @media (min-width: 1100px) { .soko-featured-banner { margin-top: 24px !important; } }
         .section-divider { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 0 8px; }
         .section-gradient { height: 32px; background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%); pointer-events: none; }
         .divider-desk { display: inline; }
