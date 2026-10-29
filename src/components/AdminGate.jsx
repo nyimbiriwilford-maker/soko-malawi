@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useLayoutEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 const Admin = lazy(() => import('../pages/Admin'))
@@ -9,6 +9,15 @@ export default function AdminGate() {
   const [user, setUser] = useState(null)
   const [error, setError] = useState(null)
   const [retryKey, setRetryKey] = useState(0)
+
+  useLayoutEffect(() => {
+    let r1 = 0, r2 = 0
+    r1 = requestAnimationFrame(() => { r2 = requestAnimationFrame(() => {
+      const hide = window.__hideBootLoader
+      if (typeof hide === 'function') hide()
+    }) })
+    return () => { cancelAnimationFrame(r1); cancelAnimationFrame(r2) }
+  }, [])
 
   useEffect(() => {
     let cancelled = false

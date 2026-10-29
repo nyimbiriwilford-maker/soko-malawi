@@ -267,10 +267,8 @@ export default function App() {
   const [isRecovery, setIsRecovery] = useState(false)
 const [installPrompt, setInstallPrompt] = useState(null)
 
-  // Central boot-loader hide: fires once after first commit of any route/gate state.
+  // Central boot-loader hide: fires after first commit of any route/gate state.
   useLayoutEffect(() => {
-    if (window.__bootLoaderHidden) return
-    window.__bootLoaderHidden = true
     let r1 = 0, r2 = 0
     r1 = requestAnimationFrame(() => {
       r2 = requestAnimationFrame(() => {
