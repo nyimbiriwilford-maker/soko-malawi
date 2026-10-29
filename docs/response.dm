@@ -1,1 +1,1 @@
-Featured-to-latest gap fixed: scroll bottom padding 12px, latest margin-top 16/36/44. Commit e8e2aab. Build passed.
+Featured cards now show seller avatar, name, verified tick/pill, location. Commit 34fa8d0. Build passed.
