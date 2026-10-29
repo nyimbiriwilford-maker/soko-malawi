@@ -5858,7 +5858,7 @@ export default function Home() {
         @media (min-width: 1100px) { .soko-featured-banner { margin-top: 24px !important; margin-bottom: 0 !important; } }
         .soko-featured-section { margin-top: 8px !important; }
         .soko-banner-featured-wrap:has(.soko-featured-banner) .soko-featured-section { margin-top: 24px !important; }
-        .soko-latest-section { margin-top: 28px !important; }
+        .soko-latest-section { margin-top: 16px !important; }
         @media (min-width: 768px) { .soko-latest-section { margin-top: 36px !important; } }
         @media (min-width: 1100px) { .soko-latest-section { margin-top: 44px !important; } }
         @media (min-width: 768px) {

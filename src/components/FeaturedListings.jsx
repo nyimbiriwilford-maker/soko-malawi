@@ -192,7 +192,7 @@ function FeaturedListingsRow({ listings, navigate, loading }) {
           overscroll-behavior-x: contain;
           scrollbar-width: none;
           -ms-overflow-style: none;
-          padding: 8px 14px;
+          padding: 12px 14px;
           scroll-padding-left: 14px;
         }
         .soko-featured-scroll::-webkit-scrollbar { display: none; }
