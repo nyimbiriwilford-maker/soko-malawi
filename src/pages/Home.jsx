@@ -5834,11 +5834,6 @@ export default function Home() {
       </div>
 
       {/* — Categories → Featured transition — */}
-      <div className="soko-settle soko-settle-d3">
-        <FeaturedRevenueBanner navigate={navigate} user={user} />
-      </div>
-
-      {/* — Featured → Marketplace transition — */}
       <div className="soko-banner-featured-wrap">
       <div className="soko-settle soko-settle-d3">
         <FeaturedRevenueBanner navigate={navigate} user={user} />
