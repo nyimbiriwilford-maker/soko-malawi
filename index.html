@@ -95,6 +95,7 @@
   <div id="root"></div>
   <script>
     window.__hideBootLoader = function() {
+      if (window.__bootLoaderTimer) { clearTimeout(window.__bootLoaderTimer); window.__bootLoaderTimer = null; }
       var el = document.getElementById('boot-loader');
       if (!el || el.dataset.hiding) return;
       el.dataset.hiding = '1';
@@ -110,6 +111,12 @@
       var t = setTimeout(function() {
         var el = document.getElementById('boot-loader');
         if (!el) return;
+        var root = document.getElementById('root');
+        var hasContent = !!(root && root.children && root.children.length > 0);
+        if (hasContent) {
+          if (typeof window.__hideBootLoader === 'function') window.__hideBootLoader();
+          return;
+        }
         if (el.querySelector('.boot-reload')) return;
         var btn = document.createElement('button');
         btn.className = 'boot-reload';

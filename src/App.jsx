@@ -1,5 +1,5 @@
 /* global __BUILD_ID__ */
-import { useEffect, useState, useRef, lazy, Suspense } from 'react'
+import { useEffect, useLayoutEffect, useState, useRef, lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { supabase, isSupabaseConfigured } from './lib/supabase'
 import BottomNav from './components/BottomNav'
@@ -36,6 +36,7 @@ const CallBudgetPage    = lazyRetry(() => import('./pages/CallBudget'))
 const SafetyPage        = lazyRetry(() => import('./pages/SafetyPage'))
 
 import ErrorBoundary from './components/ErrorBoundary'
+import AdminGate from './components/AdminGate'
 import OfflinePage from './components/OfflinePage'
 import GlobalCallListener from './components/GlobalCallListener'
 import FloatingIncomingCall from './components/FloatingIncomingCall'
@@ -52,6 +53,27 @@ import { registerPushNotifications, listenForServiceWorkerMessages } from './lib
 // ── Branded page loader ────────────────────────────────────
 function PageLoader() {
   return <SokoLoader />
+}
+
+function BootLoaderHider() {
+  const location = useLocation()
+  useEffect(() => {
+    const hide = window.__hideBootLoader
+    if (typeof hide !== 'function') return
+    let r1 = 0, r2 = 0
+    r1 = requestAnimationFrame(() => { r2 = requestAnimationFrame(() => { hide() }) })
+    if (import.meta.env.DEV) {
+      const path = location.pathname
+      setTimeout(() => {
+        const el = document.getElementById('boot-loader')
+        if (el && !el.dataset.hiding) {
+          console.warn('[SokoMw] route rendered without hiding boot loader:', path)
+        }
+      }, 1000)
+    }
+    return () => { cancelAnimationFrame(r1); cancelAnimationFrame(r2) }
+  }, [location.pathname])
+  return null
 }
 
 /** Home-style bottom nav for mobile across authenticated marketplace pages */
@@ -244,6 +266,20 @@ export default function App() {
   const [role,       setRole]       = useState(undefined)
   const [isRecovery, setIsRecovery] = useState(false)
 const [installPrompt, setInstallPrompt] = useState(null)
+
+  // Central boot-loader hide: fires once after first commit of any route/gate state.
+  useLayoutEffect(() => {
+    if (window.__bootLoaderHidden) return
+    window.__bootLoaderHidden = true
+    let r1 = 0, r2 = 0
+    r1 = requestAnimationFrame(() => {
+      r2 = requestAnimationFrame(() => {
+        const hide = window.__hideBootLoader
+        if (typeof hide === 'function') hide()
+      })
+    })
+    return () => { cancelAnimationFrame(r1); cancelAnimationFrame(r2) }
+  }, [])
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -456,6 +492,7 @@ const [installPrompt, setInstallPrompt] = useState(null)
         </div>
       )}
        <BrowserRouter>
+        <BootLoaderHider />
         <VersionWatcher />
         {authed && <GlobalCallListener />}
 {authed && <FloatingIncomingCall />}
@@ -472,11 +509,7 @@ const [installPrompt, setInstallPrompt] = useState(null)
             <Route path="/reset-password" element={<ResetPassword />} />
 
             {/* ── Admin ─────────────────────────────────── */}
-            <Route path="/admin/*" element={
-              !authed ? <Navigate to="/login" /> :
-              isAdmin ? <Admin />               :
-                        <Navigate to="/" />
-            } />
+            <Route path="/admin/*" element={<AdminGate />} />
 
             {/* ── Protected routes ──────────────────────── */}
             <Route path="/"                        element={authed ? (isAdmin ? <Navigate to="/admin" /> : <Home />)      : <Navigate to="/login" />} />
