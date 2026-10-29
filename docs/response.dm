@@ -1,1 +1,1 @@
-Duplicate banner removed; one remains between category and featured. Commit 070032c. Build passed.
+Featured/latest spacing and headings standardized. Commit 9de538d. Build passed.
