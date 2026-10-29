@@ -5432,7 +5432,7 @@ export default function Home() {
 
       let featuredQuery = supabase
         .from('listings')
-        .select(LISTING_SELECT + ', profiles:seller_id ( id, full_name, avatar_url, is_verified )')
+        .select(LISTING_SELECT)
         .in('status', LIVE)
         .gt('featured_until', nowIso)
       let recentQuery = supabase
@@ -5478,13 +5478,30 @@ export default function Home() {
           }))
         }
         if (sellerIds.length > 0) {
-          const { data: profilesData } = await supabase.from('profiles').select('id, is_verified').in('id', sellerIds)
-          const profileMap = {}
-          profilesData?.forEach(p => { profileMap[p.id] = p })
+          let profileMap = {}
+          try {
+            const { data: profilesData, error: profilesError } = await supabase.from('profiles').select('id, full_name, avatar_url, is_verified').in('id', sellerIds)
+            if (profilesError) {
+              console.error('[Home] profiles fetch failed', profilesError)
+              try {
+                const { data: fallbackData } = await supabase.from('profiles').select('id, full_name, avatar_url').in('id', sellerIds)
+                fallbackData?.forEach(p => { profileMap[p.id] = { ...p, is_verified: false } })
+              } catch (e) {
+                console.error('[Home] profiles fallback failed', e)
+              }
+            } else {
+              profilesData?.forEach(p => { profileMap[p.id] = p })
+            }
+          } catch (e) {
+            console.error('[Home] profiles fetch threw', e)
+          }
           withShopRatings = withShopRatings.map(l => ({
             ...l,
-            seller_verified: l.seller_id ? profileMap[l.seller_id]?.is_verified : false,
+            seller_verified: l.seller_id ? (profileMap[l.seller_id]?.is_verified === true) : false,
+            seller_profile: l.seller_id ? (profileMap[l.seller_id] || null) : null,
           }))
+        } else {
+          withShopRatings = withShopRatings.map(l => ({ ...l, seller_profile: null }))
         }
 
         let blocked = []
@@ -5505,12 +5522,11 @@ export default function Home() {
       const withPromoTier = featuredActive.map(l => {
         const promo = promoMap[l.id]
         const hasPromo = promo && promo.status === 'active'
-        const profile = Array.isArray(l.profiles) ? l.profiles[0] : l.profiles
         return {
           ...l,
           _promoTier: hasPromo ? (promo.price_mwk > 0 ? 0 : 1) : 2,
           _isPaidPromo: hasPromo && promo.price_mwk > 0,
-          seller_profile: profile || null,
+          seller_profile: l.seller_profile || null,
         }
       })
       setFeaturedListings(
