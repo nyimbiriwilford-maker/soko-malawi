@@ -1,1 +1,1 @@
-EOF crash fix: removed stray EOF from src/components/AdminGate.jsx. Introduced by commit bf598c7. Added scripts/check-source.js prebuild safety check, no-undef error in eslint config. Build passed, preview / and /admin OK. Commit f80ffcd. Deployed bundle still index-D7PIX138.js (pending).
+Admin boot loader: removed guard that could skip hide; AdminGate now calls hide directly. Commit e03da04. Build passed. Deployed bundle pending.
