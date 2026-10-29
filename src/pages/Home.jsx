@@ -842,7 +842,7 @@ function GlobalStyles() {
 
         /* Featured rail: no double padding inside section-pad */
         .soko-featured-section {
-          padding-top: 16px !important;
+          padding-top: 0 !important;
           padding-bottom: 8px !important;
         }
         .soko-featured-section .soko-featured-rail {
@@ -5839,56 +5839,35 @@ export default function Home() {
       </div>
 
       {/* — Featured → Marketplace transition — */}
-      <div className="bc-bridge" style={{
-        display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
-        height:36, padding:'0 20px',
-        background:'transparent',
-      }} />
+      <div className="soko-banner-featured-wrap">
+      <div className="soko-settle soko-settle-d3">
+        <FeaturedRevenueBanner navigate={navigate} user={user} />
+      </div>
 
       <style>{`
-        .soko-featured-banner { margin-top: 8px !important; }
-        @media (min-width: 768px) { .soko-featured-banner { margin-top: 16px !important; } }
-        @media (min-width: 1100px) { .soko-featured-banner { margin-top: 24px !important; } }
-        .section-divider { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 12px 0 8px; }
-        .section-gradient { height: 32px; background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%); pointer-events: none; }
-        .divider-desk { display: inline; }
-        .divider-mob { display: none; }
-        .bridge-divider { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 0 12px; background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%); }
-        @media (max-width: 980px) {
-          .bc-bridge { height: 28px !important; }
-          .ll-lf-bridge { height: 24px !important; }
-
+        .soko-featured-banner { margin-top: 8px !important; margin-bottom: 0 !important; }
+        @media (min-width: 768px) { .soko-featured-banner { margin-top: 16px !important; margin-bottom: 0 !important; } }
+        @media (min-width: 1100px) { .soko-featured-banner { margin-top: 24px !important; margin-bottom: 0 !important; } }
+        .soko-featured-section { margin-top: 8px !important; }
+        .soko-banner-featured-wrap:has(.soko-featured-banner) .soko-featured-section { margin-top: 24px !important; }
+        @media (min-width: 768px) {
+          .soko-featured-section { margin-top: 16px !important; }
+          .soko-banner-featured-wrap:has(.soko-featured-banner) .soko-featured-section { margin-top: 32px !important; }
         }
+        @media (min-width: 1100px) {
+          .soko-featured-section { margin-top: 24px !important; }
+          .soko-banner-featured-wrap:has(.soko-featured-banner) .soko-featured-section { margin-top: 40px !important; }
+        }
+        .bridge-divider { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 0 12px; background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%); }
         @media (max-width: 767px) {
-          .section-divider { gap: 4px; padding: 6px 0 4px; }
-          .section-gradient { height: 16px; }
-          .divider-desk { display: none; }
-          .divider-mob { display: inline; }
           .bridge-divider { display: none; }
         }
       `}</style>
-      <div className="section-divider">
-        <div style={{
-          width: 40, height: 1.5, borderRadius: 1,
-          background: 'linear-gradient(90deg, transparent, #16A34A, transparent)',
-          opacity: 0.4,
-        }} />
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          fontSize: 11, fontWeight: 600, color: '#9CA3AF', letterSpacing: '0.04em',
-        }}>
-          <span style={{ opacity: 0.5 }}>&#9734;</span>
-          <span className="divider-desk">From stories to marketplace</span>
-          <span className="divider-mob">Marketplace picks</span>
-          <span style={{ opacity: 0.5 }}>&#9734;</span>
-        </div>
-      </div>
-
-      <div className="section-gradient" />
       <div className={!loading ? 'soko-swap-in' : undefined}>
         <FeaturedListingsRow
           listings={featuredListings} navigate={navigate} loading={loading}
         />
+      </div>
       </div>
 
       <div className="bridge-divider">

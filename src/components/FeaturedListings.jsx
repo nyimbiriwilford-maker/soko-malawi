@@ -175,7 +175,7 @@ function FeaturedListingsRow({ listings, navigate, loading }) {
   }
 
   return (
-    <section className="soko-featured-section" style={{ padding: '28px 20px 24px', background: '#fff', boxShadow: '0 1px 0 rgba(0,0,0,0.04), inset 0 1px 0 rgba(0,0,0,0.02)' }}>
+    <section className="soko-featured-section" style={{ padding: '0 24px 24px', background: 'transparent' }}>
       <style>{`
         .soko-featured-grid {
           display: grid;
@@ -192,8 +192,8 @@ function FeaturedListingsRow({ listings, navigate, loading }) {
           overscroll-behavior-x: contain;
           scrollbar-width: none;
           -ms-overflow-style: none;
-          padding: 8px 20px;
-          scroll-padding-left: 20px;
+          padding: 8px 14px;
+          scroll-padding-left: 14px;
         }
         .soko-featured-scroll::-webkit-scrollbar { display: none; }
         .soko-featured-scroll-card {
@@ -208,7 +208,7 @@ function FeaturedListingsRow({ listings, navigate, loading }) {
           .soko-featured-grid { display: none; }
           .soko-featured-scroll { display: flex; }
           .soko-featured-scroll-card { flex: 0 0 min(280px, 68vw); }
-          .soko-featured-section { padding: 24px 0 20px !important; }
+          .soko-featured-section { padding: 0 14px 20px !important; }
         }
         @media (max-width: 400px) {
           .soko-featured-scroll-card { flex: 0 0 min(220px, 72vw); }
