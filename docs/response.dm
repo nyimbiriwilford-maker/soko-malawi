@@ -1,1 +1,1 @@
-Admin boot loader: removed guard that could skip hide; AdminGate now calls hide directly. Commit e03da04. Build passed. Deployed bundle pending.
+Banner-to-featured fix: removed bc-bridge, section-divider, section-gradient. FeaturedListings background transparent, padding-top 0, side 14/24. Gap via featured margin-top 8/16/24 (no banner) or 24/32/40 (with banner) using :has. Commit d122111. Build passed.
