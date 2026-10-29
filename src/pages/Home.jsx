@@ -1080,8 +1080,8 @@ function CategoryGrid({ navigate, onCategoryChange }) {
         {/* — Section header — */}
         <div className="cat-header-row" style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', marginBottom:20 }}>
           <div>
-            <div style={{ fontFamily:T.fontDisplay, fontSize:20, fontWeight:800, color:T.gray900, letterSpacing:'-0.3px', lineHeight:1.2 }}>Shop by Category</div>
-            <div style={{ fontSize:13, color:T.gray600, marginTop:4, fontWeight:500, lineHeight:1.3 }}>Trusted categories for faster discovery</div>
+            <div className="soko-std-title" style={{ fontFamily:T.fontDisplay, fontSize:20, fontWeight:800, color:'#202124', letterSpacing:-0.3, lineHeight:1.2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>Shop by Category</div>
+            <div style={{ fontSize:13, color:'#5f6368', fontWeight:500, marginTop:4, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>Trusted categories for faster discovery</div>
           </div>
           <button type="button" onClick={() => navigate('/categories')}
             style={{ background:'none', border:'none', padding:0, fontSize:13, fontWeight:700, color:T.green, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:4 }}>
@@ -1769,7 +1769,7 @@ function LatestListingsSection({ listings, navigate, loading, user, savedIds, on
   if (!loading && latest.length === 0) return null
 
   return (
-    <section className="soko-latest-section" style={{ padding: '0 20px clamp(4px,0.5vw,8px) 20px', background: '#F8FAFC' }}>
+    <section className="soko-latest-section" aria-labelledby="latest-listings-title" style={{ padding: '0 24px clamp(4px,0.5vw,8px) 24px', background: 'transparent' }}>
       <style>{`
         @keyframes latestFadeSlide {
           from { opacity: 0; transform: translateY(20px); }
@@ -1778,7 +1778,11 @@ function LatestListingsSection({ listings, navigate, loading, user, savedIds, on
         .latest-animate-in {
           animation: latestFadeSlide 0.5s ease forwards;
         }
+        @media (min-width: 1100px) {
+          .soko-std-title { font-size: 22px !important; }
+        }
         @media (max-width: 768px) {
+          .soko-latest-section { padding-left: 14px !important; padding-right: 14px !important; }
           .soko-latest-head {
             margin-bottom: 12px !important;
             align-items: center !important;
@@ -1803,25 +1807,34 @@ function LatestListingsSection({ listings, navigate, loading, user, savedIds, on
       <div style={{ maxWidth: 1400, margin: '0 auto', minWidth: 0 }}>
         <div className="soko-latest-head latest-animate-in" style={{
           display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
-          marginBottom: 28, flexWrap: 'wrap', gap: 12,
+          marginBottom: 14, flexWrap: 'wrap', gap: 12,
         }}>
           <div style={{ minWidth: 0, flex: '1 1 180px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-              <span style={{ width: 5, height: 5, borderRadius: '50%', background: '#16A34A', boxShadow: '0 0 6px rgba(22,163,74,0.5)' }} />
-              <span style={{ fontSize: 9.5, fontWeight: 600, color: T.gray500, letterSpacing: 0.5, textTransform: 'uppercase' }}>Updated daily</span>
-              <span style={{ width: 20, height: 1, background: T.gray300 }} />
-            </div>
-            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-              <div style={{ width: 3, height: 28, borderRadius: 2, background: `linear-gradient(180deg, ${T.green}, ${T.greenD})`, flexShrink: 0, marginTop: 4 }} />
-              <div>
-                <h2 style={{ fontFamily: T.fontDisplay, fontSize: 'clamp(20px, 2.6vw, 27px)', fontWeight: 800, color: T.gray900, letterSpacing: '-0.6px', margin: 0 }}>
-                  Latest Listings
-                </h2>
-                <p style={{ fontSize: 13, color: T.gray500, marginTop: 4, marginBottom: 0 }}>Fresh products added across Malawi</p>
-              </div>
-            </div>
+            <h2 id="latest-listings-title" className="soko-std-title" style={{
+              fontFamily: T.fontDisplay, fontSize: 20, fontWeight: 800, color: '#202124',
+              letterSpacing: -0.3, lineHeight: 1.2, margin: 0,
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}>
+              Latest Listings
+            </h2>
+            <p style={{ fontSize: 13, color: '#5f6368', fontWeight: 500, marginTop: 4, marginBottom: 0,
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              Freshly posted near you
+            </p>
           </div>
-
+          <button
+            type="button"
+            onClick={() => navigate('/listings')}
+            style={{
+              border: 'none', background: 'transparent', cursor: 'pointer',
+              fontFamily: 'inherit', padding: 0,
+              fontSize: 13, fontWeight: 700, color: '#0F9D58',
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+            }}
+          >
+            View all
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
+          </button>
         </div>
 
         <div className="soko-latest-grid">
@@ -5845,6 +5858,9 @@ export default function Home() {
         @media (min-width: 1100px) { .soko-featured-banner { margin-top: 24px !important; margin-bottom: 0 !important; } }
         .soko-featured-section { margin-top: 8px !important; }
         .soko-banner-featured-wrap:has(.soko-featured-banner) .soko-featured-section { margin-top: 24px !important; }
+        .soko-latest-section { margin-top: 28px !important; }
+        @media (min-width: 768px) { .soko-latest-section { margin-top: 36px !important; } }
+        @media (min-width: 1100px) { .soko-latest-section { margin-top: 44px !important; } }
         @media (min-width: 768px) {
           .soko-featured-section { margin-top: 16px !important; }
           .soko-banner-featured-wrap:has(.soko-featured-banner) .soko-featured-section { margin-top: 32px !important; }
@@ -5853,10 +5869,7 @@ export default function Home() {
           .soko-featured-section { margin-top: 24px !important; }
           .soko-banner-featured-wrap:has(.soko-featured-banner) .soko-featured-section { margin-top: 40px !important; }
         }
-        .bridge-divider { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 16px 0 12px; background: linear-gradient(180deg, #FFFFFF 0%, #F8FAFC 100%); }
-        @media (max-width: 767px) {
-          .bridge-divider { display: none; }
-        }
+
       `}</style>
       <div className={!loading ? 'soko-swap-in' : undefined}>
         <FeaturedListingsRow
@@ -5865,18 +5878,7 @@ export default function Home() {
       </div>
       </div>
 
-      <div className="bridge-divider">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9CA3AF" strokeWidth="2" strokeLinecap="round">
-          <polyline points="6 9 12 15 18 9"/>
-        </svg>
-        <span style={{ fontSize: 11, fontWeight: 600, color: '#9CA3AF', letterSpacing: '0.04em' }}>
-          Explore More Products
-        </span>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-          <span style={{ width: 4, height: 4, borderRadius: '50%', background: '#F9AB00' }} />
-          <span style={{ fontSize: 9.5, fontWeight: 700, color: '#9CA3AF', letterSpacing: 0.4, textTransform: 'uppercase' }}>Updated daily</span>
-        </div>
-      </div>
+
       <div className={!loading ? 'soko-swap-in' : undefined}>
         <LatestListingsSection
           listings={listings}

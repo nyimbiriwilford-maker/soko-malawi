@@ -175,7 +175,7 @@ function FeaturedListingsRow({ listings, navigate, loading }) {
   }
 
   return (
-    <section className="soko-featured-section" style={{ padding: '0 24px 24px', background: 'transparent' }}>
+    <section className="soko-featured-section" aria-labelledby="featured-listings-title" style={{ padding: '0 24px 0', background: 'transparent', marginBottom: 0 }}>
       <style>{`
         .soko-featured-grid {
           display: grid;
@@ -243,54 +243,51 @@ function FeaturedListingsRow({ listings, navigate, loading }) {
         .featured-animate-in {
           animation: featuredFadeSlide 0.5s ease forwards;
         }
+        @media (min-width: 1100px) {
+          .soko-std-title { font-size: 22px !important; }
+        }
       `}</style>
       <div className="featured-animate-in" style={{
         maxWidth: 1400, margin: '0 auto', minWidth: 0,
       }}>
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          marginBottom: 16, gap: 12,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-            <div style={{
-              width: 4, height: 18,
-              borderRadius: 2,
-              background: '#0a7a44',
-              flexShrink: 0,
-            }} />
-            <div style={{ minWidth: 0 }}>
-              <h2 style={{
-                margin: 0,
-                fontFamily: "'Sora', 'Inter', system-ui, sans-serif",
-                fontSize: headingSize,
-                fontWeight: 800,
-                color: '#111827',
-                letterSpacing: -0.3,
-              }}>
-                Featured Listings
-              </h2>
-              <p style={{
-                margin: '2px 0 0', fontSize: 13, fontWeight: 500,
-                color: '#6B7280', whiteSpace: 'nowrap', overflow: 'hidden',
-                textOverflow: 'ellipsis',
-              }}>
-                Curated picks from trusted sellers across Malawi
-              </p>
-            </div>
+          marginBottom: 14, gap: 12,
+        }} id="featured-listings-heading-row">
+          <div style={{ minWidth: 0 }}>
+            <h2 id="featured-listings-title" className="soko-std-title" style={{
+              margin: 0,
+              fontFamily: "'Sora', 'Inter', system-ui, sans-serif",
+              fontSize: 20,
+              fontWeight: 800,
+              color: '#202124',
+              letterSpacing: -0.3,
+              lineHeight: 1.2,
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}>
+              Featured Listings
+            </h2>
+            <p style={{
+              margin: '4px 0 0', fontSize: 13, fontWeight: 500,
+              color: '#5f6368', whiteSpace: 'nowrap', overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}>
+              Top picks from verified sellers
+            </p>
           </div>
-          {!isMobile && total > 0 && (
+          {total > 0 && (
             <button
               type="button"
               onClick={() => navigate('/listings')}
               style={{
                 border: 'none', background: 'transparent', cursor: 'pointer',
-                fontFamily: 'inherit', padding: '4px 8px',
+                fontFamily: 'inherit', padding: 0,
                 fontSize: 13, fontWeight: 700, color: '#0F9D58',
-                borderRadius: 999,
-                transition: 'background 0.25s ease',
+                display: 'inline-flex', alignItems: 'center', gap: 4,
               }}
             >
               View all
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="9 18 15 12 9 6"/></svg>
             </button>
           )}
         </div>
