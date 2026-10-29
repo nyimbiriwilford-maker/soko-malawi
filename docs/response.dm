@@ -1,1 +1,1 @@
-Banner-to-featured fix: removed bc-bridge, section-divider, section-gradient. FeaturedListings background transparent, padding-top 0, side 14/24. Gap via featured margin-top 8/16/24 (no banner) or 24/32/40 (with banner) using :has. Commit d122111. Build passed.
+Duplicate banner removed; one remains between category and featured. Commit 070032c. Build passed.
