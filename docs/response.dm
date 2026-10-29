@@ -1,1 +1,1 @@
-Featured cards now show seller avatar, name, verified tick/pill, location. Commit 34fa8d0. Build passed.
+Featured seller profile 400 fixed: removed bad join, batch fetch profiles. Commit 4dffd3c. Build passed.
