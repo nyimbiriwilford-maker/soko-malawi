@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react'
+import { MapPin } from 'lucide-react'
 import { isListingFeatured, imageUrlLoaded, markImageUrlLoaded } from '../utils/homeUtils'
 
 export const FEATURED_POOL_SIZE = 40
@@ -102,47 +103,117 @@ function FeaturedCard({ listing, onClick }) {
         )}
       </div>
 
-      <div style={{
-        padding: '16px 16px 18px',
+      <div className="soko-featured-card-body" style={{
+        padding: 12,
         display: 'flex',
         flexDirection: 'column',
         flex: 1,
+        gap: 6,
+        containerType: 'inline-size',
       }}>
-        <div className="soko-featured-card-title" style={{
-          fontSize: 14,
-          fontWeight: 600,
-          color: '#202124',
-          lineHeight: 1.35,
+        <div className="soko-featured-card-price" style={{
+          fontSize: 16,
+          fontWeight: 800,
+          color: '#0F9D58',
+          letterSpacing: -0.2,
+          lineHeight: 1.3,
+          whiteSpace: 'nowrap',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-          marginBottom: 8,
-        }}>
-          {listing.title}
-        </div>
-
-        <div className="soko-featured-card-price" style={{
-          fontSize: 17,
-          fontWeight: 800,
-          color: '#0a7a44',
-          lineHeight: 1.3,
-          marginBottom: 6,
         }}>
           {formatPrice(price)}
         </div>
 
+        <div className="soko-featured-card-title" style={{
+          fontSize: 13.5,
+          fontWeight: 600,
+          color: '#202124',
+          lineHeight: 1.35,
+          minHeight: 36,
+          overflow: 'hidden',
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical',
+        }}>
+          {listing.title}
+        </div>
+
+        {(() => {
+          const profile = listing.seller_profile
+          const name = profile?.full_name || 'Seller'
+          const verified = profile?.is_verified === true
+          return (
+            <div style={{
+              marginTop: 2,
+              paddingTop: 8,
+              borderTop: '1px solid #f1f3f4',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 7,
+              minWidth: 0,
+            }}>
+              {profile?.avatar_url ? (
+                <img
+                  src={profile.avatar_url}
+                  alt=""
+                  loading="lazy"
+                  decoding="async"
+                  style={{
+                    width: 24, height: 24, borderRadius: '50%',
+                    objectFit: 'cover', flexShrink: 0,
+                    boxShadow: '0 0 0 1.5px #e8f5ee',
+                  }}
+                />
+              ) : (
+                <div style={{
+                  width: 24, height: 24, borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #0F9D58, #34c77a)',
+                  color: '#fff', fontSize: 11, fontWeight: 800,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0,
+                }}>
+                  {name.charAt(0).toUpperCase()}
+                </div>
+              )}
+              <span style={{
+                fontSize: 12, fontWeight: 600, color: '#3c4043',
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                flex: 1, minWidth: 0,
+              }}>
+                {name}
+              </span>
+              {verified && (
+                <>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-label="Verified seller" style={{ flexShrink: 0 }}>
+                    <circle cx="12" cy="12" r="10" fill="#1A73E8" />
+                    <path d="M8 12l3 3 5-5" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  <span className="soko-verified-pill" style={{
+                    fontSize: 10, fontWeight: 700, color: '#1A73E8',
+                    background: '#e8f0fe', borderRadius: 999,
+                    padding: '2px 7px', lineHeight: 1.2,
+                    flexShrink: 0, whiteSpace: 'nowrap',
+                  }}>
+                    Verified
+                  </span>
+                </>
+              )}
+            </div>
+          )
+        })()}
+
         <div style={{
-          fontSize: 11,
-          fontWeight: 400,
-          color: '#9aa0a6',
+          fontSize: 11.5,
+          fontWeight: 500,
+          color: '#80868b',
           display: 'flex',
           alignItems: 'center',
           gap: 4,
-          marginTop: 'auto',
+          whiteSpace: 'nowrap',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
         }}>
-          <svg width="9" height="9" viewBox="0 0 24 24" fill="#9aa0a6" aria-hidden>
-            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
-          </svg>
+          <MapPin size={12} />
           {listing.city || 'Malawi'}
         </div>
       </div>
@@ -245,6 +316,10 @@ function FeaturedListingsRow({ listings, navigate, loading }) {
         }
         @media (min-width: 1100px) {
           .soko-std-title { font-size: 22px !important; }
+          .soko-featured-card-body { padding: 14px !important; }
+        }
+        @container (max-width: 149px) {
+          .soko-verified-pill { display: none; }
         }
       `}</style>
       <div className="featured-animate-in" style={{
@@ -301,10 +376,14 @@ function FeaturedListingsRow({ listings, navigate, loading }) {
                   boxShadow: '0 1px 3px rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.04)',
                 }}>
                   <div className="skeleton-soft" style={{ width: '100%', aspectRatio: '3/2' }} />
-                  <div style={{ padding: '16px 16px 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <div className="skeleton" style={{ height: 14, width: '85%', borderRadius: 6 }} />
-                    <div className="skeleton" style={{ height: 17, width: '50%', borderRadius: 6 }} />
-                    <div className="skeleton" style={{ height: 10, width: '35%', borderRadius: 6 }} />
+                  <div style={{ padding: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    <div className="skeleton" style={{ height: 16, width: '50%', borderRadius: 6 }} />
+                    <div className="skeleton" style={{ height: 13.5, width: '85%', borderRadius: 6 }} />
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 2, paddingTop: 8, borderTop: '1px solid #f1f3f4' }}>
+                      <div className="skeleton" style={{ width: 24, height: 24, borderRadius: '50%' }} />
+                      <div className="skeleton" style={{ height: 12, width: '55%', borderRadius: 6 }} />
+                    </div>
+                    <div className="skeleton" style={{ height: 11.5, width: '35%', borderRadius: 6 }} />
                   </div>
                 </div>
               ))}

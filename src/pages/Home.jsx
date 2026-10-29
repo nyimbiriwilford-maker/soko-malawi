@@ -5432,7 +5432,7 @@ export default function Home() {
 
       let featuredQuery = supabase
         .from('listings')
-        .select(LISTING_SELECT)
+        .select(LISTING_SELECT + ', profiles:seller_id ( id, full_name, avatar_url, is_verified )')
         .in('status', LIVE)
         .gt('featured_until', nowIso)
       let recentQuery = supabase
@@ -5505,10 +5505,12 @@ export default function Home() {
       const withPromoTier = featuredActive.map(l => {
         const promo = promoMap[l.id]
         const hasPromo = promo && promo.status === 'active'
+        const profile = Array.isArray(l.profiles) ? l.profiles[0] : l.profiles
         return {
           ...l,
           _promoTier: hasPromo ? (promo.price_mwk > 0 ? 0 : 1) : 2,
           _isPaidPromo: hasPromo && promo.price_mwk > 0,
+          seller_profile: profile || null,
         }
       })
       setFeaturedListings(
