@@ -4343,13 +4343,21 @@ const BOTTOM_BANNER_CSS = `
      priority    → priority
      status      → status
 ───────────────────────────────────────────────────────────────────────────── */
+function resolveBannerImageUrl(url) {
+  if (!url) return ''
+  if (/^https?:\/\//i.test(url)) return url
+  const base = (import.meta.env.VITE_R2_PUBLIC_URL || '').replace(/\/+$/, '')
+  if (base && !String(url).startsWith('/')) return `${base}/${url}`
+  return url
+}
+
 function mapBanner(row) {
   return {
     id: row.id,
     title: row.title,
     desc: row.description || '',
-    image: row.image_url,
-    mobileImage: row.mobile_image_url || '',
+    image: resolveBannerImageUrl(row.image_url),
+    mobileImage: resolveBannerImageUrl(row.mobile_image_url || ''),
     imagePos: row.image_pos || 'center center',
     cta: row.button_text || 'Learn More',
     path: row.button_link || '/',
@@ -4378,6 +4386,7 @@ function getActiveSlides(slides) {
 function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
   const [fetchedSlides, setFetchedSlides] = useState([])
   const [dbLoaded, setDbLoaded] = useState(false)
+  const [imgFailed, setImgFailed] = useState(false)
   const [searchFocused, setSearchFocused] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [liveResults, setLiveResults] = useState(null)
@@ -4469,8 +4478,8 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
         .or(`end_date.is.null,end_date.gte.${now}`)
         .order('priority', { ascending: true })
       setFetchedSlides((data || []).map(mapBanner))
-    } catch {
-      // table may not exist yet — silently fall back to empty
+    } catch (e) {
+      console.error('fetchBanners failed:', e)
     }
     setDbLoaded(true)
   }, [])
@@ -4529,7 +4538,8 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
   }, [idx, isDbSource, fetchedSlides, currentSlideId])
 
   const slide = slides[idx]
-  if (!slide) return null
+  useEffect(() => { setImgFailed(false) }, [idx, slide?.id])
+  if (!slide || imgFailed) return null
 
   return (
     <div className="hero-banner-wrap" style={{ padding: '0 20px', margin: 0, width: '100%', boxSizing: 'border-box', position: 'relative', zIndex: 0 }}>
@@ -4948,7 +4958,8 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
                 src={slide.image}
                 alt=""
                 aria-hidden="true"
-                loading={idx === 0 ? 'eager' : 'lazy'}
+                loading="eager"
+                onError={() => setImgFailed(true)}
                 style={{ objectPosition: slide.imagePos || 'center center' }}
               />
             </picture>

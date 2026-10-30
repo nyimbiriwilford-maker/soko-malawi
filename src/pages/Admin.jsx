@@ -218,10 +218,12 @@ export default function Admin() {
     setBannerSaving(true)
     const isNew = !b.id
     const payload = {
-      title: b.title,
+      title: b.title || '',
       description: b.description || '',
       image_url: b.image_url,
+      image_key: r2PathFromUrl(b.image_url) || b.image_key || null,
       mobile_image_url: b.mobile_image_url || null,
+      mobile_image_key: r2PathFromUrl(b.mobile_image_url) || b.mobile_image_key || null,
       button_text: b.button_text || 'Learn More',
       button_link: b.button_link || '/',
       priority: b.priority ?? 5,
@@ -234,42 +236,57 @@ export default function Admin() {
       end_date: b.end_date ? `${b.end_date}T23:59:59.999Z` : null,
       ...(isNew && adminUserId ? { created_by: adminUserId } : {}),
     }
-    if (isNew) {
-      const { error } = await supabase.from('home_banners').insert(payload)
-      if (error) { showToast(`❌ ${error.message}`); setBannerSaving(false); return }
-    } else {
-      const { error } = await supabase.from('home_banners').update(payload).eq('id', b.id)
-      if (error) { showToast(`❌ ${error.message}`); setBannerSaving(false); return }
+    try {
+      if (isNew) {
+        const { error } = await supabase.from('home_banners').insert(payload)
+        if (error) throw error
+      } else {
+        const { error } = await supabase.from('home_banners').update(payload).eq('id', b.id)
+        if (error) throw error
+      }
+      await loadBanners()
+      loadBannerAnalytics()
+      setBannerEditor(null)
+      showToast(isNew ? 'Banner created' : 'Banner updated')
+    } catch (err) {
+      console.error('saveBanner failed:', err)
+      showToast(`Failed: ${err?.message || err}`)
+    } finally {
+      setBannerSaving(false)
     }
-    await loadBanners()
-    loadBannerAnalytics()
-    setBannerEditor(null)
-    setBannerSaving(false)
-    showToast(isNew ? '✅ Banner created' : '✅ Banner updated')
   }
 
   async function deleteBanner(id) {
     if (!confirm('Delete this banner permanently?')) return
     const banner = banners.find(b => b.id === id)
-    // Best-effort cleanup of the R2 files (banner row is removed regardless)
     for (const field of ['image_url', 'mobile_image_url']) {
       const key = banner?.[field] ? r2PathFromUrl(banner[field]) : null
-      if (key) { try { await deleteFromR2(key) } catch { /* ignore */ } }
+      if (key) { try { await deleteFromR2(key) } catch (e) { console.error('deleteFromR2 failed:', e) } }
     }
-    const { error } = await supabase.from('home_banners').delete().eq('id', id)
-    if (error) { showToast(`❌ ${error.message}`); return }
-    await loadBanners()
-    loadBannerAnalytics()
-    showToast('🗑️ Banner deleted')
+    try {
+      const { error } = await supabase.from('home_banners').delete().eq('id', id)
+      if (error) throw error
+      await loadBanners()
+      loadBannerAnalytics()
+      showToast('Banner deleted')
+    } catch (err) {
+      console.error('deleteBanner failed:', err)
+      showToast(`Failed: ${err?.message || err}`)
+    }
   }
 
   async function toggleBannerStatus(id, current) {
     const next = current === 'active' ? 'inactive' : 'active'
-    const { error } = await supabase.from('home_banners').update({ status: next }).eq('id', id)
-    if (error) { showToast(`❌ ${error.message}`); return }
-    await loadBanners()
-    loadBannerAnalytics()
-    showToast(next === 'active' ? '✅ Banner activated' : '⏸️ Banner deactivated')
+    try {
+      const { error } = await supabase.from('home_banners').update({ status: next }).eq('id', id)
+      if (error) throw error
+      await loadBanners()
+      loadBannerAnalytics()
+      showToast(next === 'active' ? 'Banner activated' : 'Banner deactivated')
+    } catch (err) {
+      console.error('toggleBannerStatus failed:', err)
+      showToast(`Failed: ${err?.message || err}`)
+    }
   }
 
  async function loadListings() {
@@ -1116,6 +1133,7 @@ async function loadUsers() {
                     <table style={S.table}>
                       <thead>
                         <tr>
+                          <th style={S.th}>Image</th>
                           <th style={S.th}>Priority</th>
                           <th style={S.th}>Title</th>
                           <th style={S.th}>Status</th>
@@ -1126,6 +1144,13 @@ async function loadUsers() {
                       <tbody>
                         {banners.map(b => (
                           <tr key={b.id} style={S.tr}>
+                            <td style={S.td}>
+                              {b.image_url ? (
+                                <img src={b.image_url} alt="" style={{ width: 48, height: 32, objectFit: 'cover', borderRadius: 6 }} />
+                              ) : (
+                                <div style={{ width: 48, height: 32, background: '#f3f4f6', borderRadius: 6 }} />
+                              )}
+                            </td>
                             <td style={S.td}>
                               <span style={{
                                 display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -1142,7 +1167,7 @@ async function loadUsers() {
                               </div>
                             </td>
                             <td style={S.td}>
-                              <StatusBadge status={b.status} />
+                              <StatusBadge status={bannerStatusLabel(b)} />
                             </td>
                             <td style={{ ...S.td, fontSize: 12, color: '#666' }}>
                               {b.start_date ? new Date(b.start_date).toLocaleDateString() : '—'}
@@ -2411,8 +2436,20 @@ async function loadUsers() {
 
 // ── Sub-components ───────────────────────────────────────
 
+function bannerStatusLabel(b) {
+  if (b.status !== 'active') return 'Off'
+  const now = Date.now()
+  if (b.start_date && new Date(b.start_date).getTime() > now) return 'Scheduled'
+  if (b.end_date && new Date(b.end_date).getTime() < now) return 'Expired'
+  return 'Active'
+}
+
 function StatusBadge({ status }) {
   const map = {
+    Active: { bg: '#e6f4ec', color: '#1a7a4a' },
+    Scheduled: { bg: '#e0f2fe', color: '#0369a1' },
+    Expired: { bg: '#fef3c7', color: '#b45309' },
+    Off: { bg: '#fee2e2', color: '#dc2626' },
     active: { bg: '#e6f4ec', color: '#1a7a4a' },
     inactive: { bg: '#fee2e2', color: '#dc2626' },
     sold: { bg: '#ede9fe', color: '#7c3aed' },
@@ -2565,11 +2602,13 @@ function BannerEditor({ banner, onSave, onCancel, saving }) {
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   const compressImage = (file) => new Promise((resolve, reject) => {
-    const MAX_DIM = 1920
-    const MAX_FILE = 5 * 1024 * 1024
-
-    if (file.size > MAX_FILE) {
-      reject(new Error(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max 5MB.`))
+    const ALLOWED = ['image/jpeg', 'image/png', 'image/webp']
+    if (!ALLOWED.includes(file.type)) {
+      reject(new Error('Only JPEG, PNG or WebP images are allowed.'))
+      return
+    }
+    if (file.size > 3 * 1024 * 1024) {
+      reject(new Error(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max 3MB.`))
       return
     }
 
@@ -2577,15 +2616,10 @@ function BannerEditor({ banner, onSave, onCancel, saving }) {
     const url = URL.createObjectURL(file)
     img.onload = () => {
       URL.revokeObjectURL(url)
-      if (img.width < 400 || img.height < 200) {
-        reject(new Error(`Image too small: ${img.width}×${img.height}. Minimum 400×200.`))
-        return
-      }
-
       let w = img.width, h = img.height
-      if (w > MAX_DIM || h > MAX_DIM) {
-        const ratio = Math.min(MAX_DIM / w, MAX_DIM / h)
-        w = Math.round(w * ratio)
+      if (w > 1600) {
+        const ratio = 1600 / w
+        w = 1600
         h = Math.round(h * ratio)
       }
 
@@ -2605,31 +2639,39 @@ function BannerEditor({ banner, onSave, onCancel, saving }) {
     img.src = url
   })
 
+
   const handleFilePick = async (e, targetField, setUploadingFn, setUploadErrorFn) => {
     const file = e.target.files?.[0]
     if (!file) return
     setUploadErrorFn('')
     setUploadingFn(true)
 
+    const oldUrl = form[targetField]
     try {
       const compressed = await compressImage(file)
-      // Wrap the compressed blob in a named File and upload straight to R2
-      // (compression already done above — pass { compress: false }).
-      const name = `banner_${Date.now()}.webp`
+      const name = `banner_${Date.now()}_${Math.random().toString(36).slice(2)}.webp`
       const named = compressed instanceof File
         ? compressed
         : new File([compressed], name, { type: 'image/webp' })
-      const url = await uploadToR2(named, `banners/banner-images/${name}`, null, { compress: false })
+      const path = `banners/${Date.now()}-${Math.random().toString(36).slice(2)}.webp`
+      const url = await uploadToR2(named, path, null, { compress: false })
       if (!url) throw new Error('Upload failed')
+      // Remove old file from R2 (best effort)
+      if (oldUrl) {
+        const key = r2PathFromUrl(oldUrl)
+        if (key) { try { await deleteFromR2(key) } catch (err) { console.error('deleteFromR2 failed:', err) } }
+      }
       set(targetField, url)
     } catch (err) {
-      setUploadErrorFn(err.message)
+      console.error('handleFilePick failed:', err)
+      setUploadErrorFn(err?.message || String(err))
     }
     setUploadingFn(false)
+    if (e.target) e.target.value = ''
   }
 
+
   const handleSave = () => {
-    if (!form.title.trim()) { alert('Title is required'); return }
     if (!form.image_url.trim()) { alert('Please upload a desktop image'); return }
     onSave({ ...form, id: banner?.id })
   }
@@ -2745,14 +2787,12 @@ function BannerEditor({ banner, onSave, onCancel, saving }) {
               onChange={e => set('priority', Number(e.target.value))} style={i} />
           </div>
           <div>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>STATUS</div>
-            <select value={form.status} onChange={e => set('status', e.target.value)}
-              style={{ ...i, appearance: 'auto' }}>
-              <option value="active">Active</option>
-              <option value="draft">Draft</option>
-              <option value="inactive">Inactive</option>
-              <option value="expired">Expired</option>
-            </select>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>ACTIVE</div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, height: 42 }}>
+              <input type="checkbox" checked={form.status === 'active'}
+                onChange={e => set('status', e.target.checked ? 'active' : 'inactive')} />
+              <span style={{ fontSize: 13, color: '#555' }}>{form.status === 'active' ? 'Active' : 'Inactive'}</span>
+            </label>
           </div>
         </div>
 
