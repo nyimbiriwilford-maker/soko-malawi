@@ -234,8 +234,10 @@ export default function Admin() {
       desktop_image_key: r2PathFromUrl(b.desktop_image_url) || b.desktop_image_key || null,
       mobile_image_url: b.mobile_image_url || null,
       mobile_image_key: r2PathFromUrl(b.mobile_image_url) || b.mobile_image_key || null,
-      button_text: b.button_text || 'Learn More',
-      button_link: b.button_link || '/',
+      button_text: b.listing_id
+        ? (b.ctaTouched ? (b.cta_label || 'Shop now') : 'Shop now')
+        : (b.button_text || 'Explore Marketplace'),
+      button_link: b.listing_id ? `/listing/${b.listing_id}` : (b.button_link || '/'),
       listing_id: b.listing_id || null,
       cta_label: b.ctaTouched ? (b.cta_label || null) : null,
       priority: b.priority ?? 5,
