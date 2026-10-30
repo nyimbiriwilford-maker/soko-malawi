@@ -855,13 +855,13 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
     <>
       <style>{`
         .hs-rail::-webkit-scrollbar { display: none; }
-        .hs-rail { padding: 8px 14px 12px; margin: 0; scroll-padding-left: 14px; overflow-x: auto; overflow-y: hidden; position: relative; z-index: 1; background: transparent; height: auto; max-height: none; scroll-behavior: smooth; scrollbar-width: none; overscroll-behavior-x: contain; }
+        .hs-rail { padding: 8px 14px 12px; margin: 0; scroll-padding-left: 14px; overflow-x: auto; overflow-y: hidden; position: relative; z-index: 1; background: transparent !important; height: auto; max-height: none; scroll-behavior: smooth; scrollbar-width: none; overscroll-behavior-x: contain; }
         .hs-fade { position: absolute; top: 0; bottom: 0; width: 56px; pointer-events: none; z-index: 2; transition: opacity 0.2s ease; }
         .hs-fade-left { left: 0; background: linear-gradient(to right, var(--home-bg), transparent); }
         .hs-fade-right { right: 0; background: linear-gradient(to left, var(--home-bg), transparent); }
         @media (hover: none), (pointer: coarse) { .hs-fade { display: none !important; } .hs-rail-arrow { display: none !important; } }
-        .hs-rail-wrap { width: 100vw; margin-left: calc(50% - 50vw); margin-top: 0; padding-top: 0; background: transparent; overflow: visible; position: relative; z-index: 2; }
-        .hs-section { padding-top: 6px; }
+        .hs-rail-wrap { width: 100vw; margin-left: calc(50% - 50vw); margin-top: 0; padding-top: 0; background: transparent !important; overflow: visible; position: relative; z-index: 2; }
+        .hs-section { padding-top: 6px; background: transparent !important; }
         .hs-story-btn:active { transform: scale(0.97); transition: transform 0.12s ease; }
         .hs-rail-arrow { opacity: 0; transition: opacity 0.2s ease; pointer-events: none; }
         .hs-rail-wrap:hover .hs-rail-arrow { opacity: 1; pointer-events: auto; }

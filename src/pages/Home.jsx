@@ -4545,10 +4545,12 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
     <div className="hero-banner-wrap" style={{ width: '100%', boxSizing: 'border-box', position: 'relative', zIndex: 0 }}>
       <section className="hero-banner" style={{
         position: 'relative', zIndex: 1,
-        background: '#fff',
-        borderRadius: 24,
+        background: 'transparent',
+        borderRadius: 0,
         margin: '0 auto',
         maxWidth: 1400,
+        border: 'none',
+        boxShadow: 'none',
       }}>
       <style>{`
         @keyframes heroFadeSlide {
@@ -4565,11 +4567,13 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
         @keyframes spin {
           to { transform: rotate(360deg); }
         }
-        .hero-banner {
+        .hero-banner, .hero-inner, .hero-visual, .hero-image-wrapper, .hero-content, .hero-dots {
           background: transparent !important;
-          border-radius: 16px !important;
-          box-shadow: none !important;
           border: none !important;
+          box-shadow: none !important;
+        }
+        .hero-banner {
+          border-radius: 0 !important;
           overflow: visible;
         }
         @media (min-width: 1100px) {
@@ -4708,7 +4712,7 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
           .hero-image-wrapper {
             overflow: hidden;
             border-radius: 16px;
-            background: #F8FAFC;
+            background: transparent !important;
             width: 100%;
             height: 100%;
             box-shadow: 0 4px 14px rgba(16,24,40,0.08);
@@ -5888,7 +5892,7 @@ export default function Home() {
         <EarlyAccessStrip />
       </div>
 
-       <div className="home-top-zone" style={{ background: 'linear-gradient(180deg, #ffffff 0%, #f3faf6 55%, var(--home-bg) 100%)', position: 'relative', zIndex: 0, margin: 0 }}>
+       <div className="home-top-zone" style={{ background: 'linear-gradient(180deg, #ffffff 0%, #f3faf6 40%, var(--home-bg) 100%)', padding: 0, margin: 0, border: 'none', boxShadow: 'none', borderRadius: 0, position: 'relative', zIndex: 0, width: '100%' }}>
          {/* Hero banner */}
          <HeroBanner navigate={navigate} onSearch={handleSearch} onNotify={(q) => { setNotifyOpen(true); setNotifyQuery(q) }} />
 
