@@ -2657,27 +2657,27 @@ function BannerEditor({ banner, listings = [], adminUserId = null, onSave, onCan
       const q = pickerQueryDebounced.trim()
       const idMatch = q.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)
 
-      let query = supabase.from('listings').select('id,title,price,images,category,created_at,status,user_id,is_featured')
+      let query = supabase.from('listings').select('id,title,price,images,category,created_at,status,seller_id,is_featured')
       if (idMatch) {
         query = query.eq('id', idMatch[0])
       } else {
         query = query.eq('status', 'active')
         if (q) query = query.ilike('title', `%${q}%`)
         if (pickerFilter === 'featured') query = query.eq('is_featured', true)
-        if (pickerFilter === 'mine') query = query.eq('user_id', adminUserId)
+        if (pickerFilter === 'mine') query = query.eq('seller_id', adminUserId)
         if (pickerCategory) query = query.eq('category', pickerCategory)
         query = query.order('created_at', { ascending: false })
       }
       const { data, error } = await query.range(offset, offset + 11)
       if (error) throw error
       const rows = data || []
-      const ids = [...new Set(rows.map(r => r.user_id).filter(Boolean))]
+      const ids = [...new Set(rows.map(r => r.seller_id).filter(Boolean))]
       let profileMap = {}
       if (ids.length) {
         const { data: profs } = await supabase.from('profiles').select('id,full_name,is_verified').in('id', ids)
         ;(profs || []).forEach(p => { profileMap[p.id] = p })
       }
-      const enriched = rows.map(r => ({ ...r, seller_profile: profileMap[r.user_id] || null }))
+      const enriched = rows.map(r => ({ ...r, seller_profile: profileMap[r.seller_id] || null }))
       if (append) setPickerItems(prev => [...prev, ...enriched])
       else setPickerItems(enriched)
       setPickerHasMore(rows.length === 12)
