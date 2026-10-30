@@ -4542,7 +4542,7 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
   if (!slide || imgFailed) return null
 
   return (
-    <div className="hero-banner-wrap" style={{ padding: '0 20px', margin: 0, width: '100%', boxSizing: 'border-box', position: 'relative', zIndex: 0 }}>
+    <div className="hero-banner-wrap" style={{ width: '100%', boxSizing: 'border-box', position: 'relative', zIndex: 0 }}>
       <section className="hero-banner" style={{
         position: 'relative', zIndex: 1,
         background: '#fff',
@@ -4566,7 +4566,32 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
           to { transform: rotate(360deg); }
         }
         .hero-banner {
-          box-shadow: 0 1px 3px rgba(0,0,0,0.04), 0 8px 24px rgba(0,0,0,0.04);
+          border-radius: 16px !important;
+          box-shadow: 0 4px 14px rgba(16,24,40,0.08) !important;
+          border: none !important;
+          overflow: hidden;
+        }
+        @media (min-width: 1100px) {
+          .hero-banner { border-radius: 18px !important; }
+        }
+        .hero-banner-wrap {
+          padding: 0 14px !important;
+          margin-top: 12px !important;
+          margin-bottom: 8px !important;
+        }
+        @media (min-width: 768px) {
+          .hero-banner-wrap {
+            padding: 0 14px !important;
+            margin-top: 16px !important;
+            margin-bottom: 12px !important;
+          }
+        }
+        @media (min-width: 1100px) {
+          .hero-banner-wrap {
+            padding: 0 24px !important;
+            margin-top: 20px !important;
+            margin-bottom: 16px !important;
+          }
         }
         .hero-inner {
           border-radius: 24px;
@@ -5853,21 +5878,23 @@ export default function Home() {
         <EarlyAccessStrip />
       </div>
 
-       {/* Hero banner */}
-       <HeroBanner navigate={navigate} onSearch={handleSearch} onNotify={(q) => { setNotifyOpen(true); setNotifyQuery(q) }} />
+       <div className="home-top-zone" style={{ background: 'linear-gradient(180deg, #ffffff 0%, #f3faf6 55%, var(--home-bg) 100%)', position: 'relative', zIndex: 0, margin: 0 }}>
+         {/* Hero banner */}
+         <HeroBanner navigate={navigate} onSearch={handleSearch} onNotify={(q) => { setNotifyOpen(true); setNotifyQuery(q) }} />
 
-      {/* Statuses — right after the top banner */}
-       <div className={!storiesLoading ? 'soko-swap-in' : undefined} style={{ background: 'linear-gradient(180deg, #ffffff 0%, #f3faf6 60%, var(--home-bg) 100%)', position: 'relative', zIndex: 0, margin: 0 }}>
-        <HomeStatusSection
-          navigate={navigate}
-          stories={forceEmptyStatus ? [] : stories}
-          loading={forceEmptyStatus || forceErrorStatus ? false : storiesLoading}
-          error={forceErrorStatus ? new Error('forced') : (forceEmptyStatus ? null : storiesError)}
-          onRetry={() => { setStoriesLoading(true); setStoriesError(null); fetchAllActiveStories(user.id, 'All').then(data => { setStories(data); setStoriesLoading(false) }).catch(err => { setStoriesError(err); setStoriesLoading(false) }) }}
-          onCreateStory={handleCreateStory}
-          currentUserId={user?.id}
-          currentUserProfile={user ? { avatar_url: user.avatar_url, full_name: user.full_name, is_verified: user.is_verified } : null}
-        />
+        {/* Statuses — right after the top banner */}
+         <div className={!storiesLoading ? 'soko-swap-in' : undefined} style={{ background: 'transparent', position: 'relative', zIndex: 0, margin: 0 }}>
+          <HomeStatusSection
+            navigate={navigate}
+            stories={forceEmptyStatus ? [] : stories}
+            loading={forceEmptyStatus || forceErrorStatus ? false : storiesLoading}
+            error={forceErrorStatus ? new Error('forced') : (forceEmptyStatus ? null : storiesError)}
+            onRetry={() => { setStoriesLoading(true); setStoriesError(null); fetchAllActiveStories(user.id, 'All').then(data => { setStories(data); setStoriesLoading(false) }).catch(err => { setStoriesError(err); setStoriesLoading(false) }) }}
+            onCreateStory={handleCreateStory}
+            currentUserId={user?.id}
+            currentUserProfile={user ? { avatar_url: user.avatar_url, full_name: user.full_name, is_verified: user.is_verified } : null}
+          />
+        </div>
       </div>
 
       {/* — Statuses → Categories transition — */}
