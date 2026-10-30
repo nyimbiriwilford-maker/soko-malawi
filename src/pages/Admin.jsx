@@ -244,7 +244,7 @@ export default function Admin() {
       mobile_image_url: b.mobile_image_url || null,
       mobile_image_key: r2PathFromUrl(b.mobile_image_url) || b.mobile_image_key || null,
       button_text: b.listing_id
-        ? (b.ctaTouched ? (b.cta_label || 'Shop now') : 'Shop now')
+        ? (b.ctaTouched ? (b.cta_label || 'View product') : 'View product')
         : (b.button_text || 'Explore Marketplace'),
       button_link: b.listing_id ? `/listing/${b.listing_id}` : (b.button_link || '/'),
       listing_id: b.listing_id || null,
@@ -2809,7 +2809,7 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
     setForm(f => ({
       ...f,
       title: f.title || l.title || '',
-      description: f.description || (l.price != null ? `MK ${Number(l.price).toLocaleString()}` : ''),
+      description: f.description || (l.category || ''),
     }))
   }, [banner?.listing_id, listings])
 
@@ -3157,7 +3157,7 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
                             set('button_link', `/listing/${l.id}`)
                             if (!form.image_url && l.images?.[0]) set('image_url', l.images[0])
                             if (!form.title.trim()) set('title', l.title || '')
-                            if (!form.description.trim() && l.price != null) set('description', `MK ${Number(l.price).toLocaleString()}`)
+                            if (!form.description.trim() && l.category) set('description', l.category)
                             setPickerOpen(false)
                           }}
                           onMouseEnter={() => setPickerActiveIndex(idx)}
@@ -3209,7 +3209,7 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>BUTTON LABEL (optional)</div>
           <input type="text" maxLength={24} value={form.cta_label} onChange={e => { set('cta_label', e.target.value); setCtaTouched(true) }}
-            placeholder={form.listing_id ? 'Shop now' : 'Explore Marketplace'} style={i} />
+            placeholder={form.listing_id ? 'View product' : 'Explore Marketplace'} style={i} />
           {form.listing_id && (
             <div style={{ marginTop: 6, fontSize: 12, color: '#888' }}>
               Preview: <span style={{ display: 'inline-block', padding: '4px 10px', borderRadius: 8, background: '#1a7a4a', color: '#fff', fontWeight: 700, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>

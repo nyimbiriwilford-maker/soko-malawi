@@ -4355,7 +4355,15 @@ function mapBanner(row) {
   return {
     id: row.id,
     title: row.title,
-    desc: row.description || '',
+    desc: (() => {
+      let d = row.description || ''
+      const l = row.listings
+      if (l && isListingActive(l) && l.price != null) {
+        const priceText = `MK ${Number(l.price).toLocaleString()}`
+        d = d.split(priceText).join('').replace(/\s{2,}/g, ' ').trim()
+      }
+      return d
+    })(),
     image: resolveBannerImageUrl(row.image_url || row.desktop_image_url || row.mobile_image_url),
     desktopImage: resolveBannerImageUrl(row.desktop_image_url || row.image_url || row.mobile_image_url),
     mobileImage: resolveBannerImageUrl(row.mobile_image_url || row.image_url || row.desktop_image_url),
@@ -4987,7 +4995,7 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
 
           {slide?.listing && isListingActive(slide?.listing) && slide?.listing?.price != null && (
             <div style={{ marginTop: 12 }}>
-              <span style={{ fontSize: 13, fontWeight: 800, color: '#0F9D58', background: '#e8f5ee', borderRadius: 999, padding: '4px 10px', display: 'inline-block' }}>
+              <span style={{ fontSize: 13, fontWeight: 800, color: '#0F9D58', background: '#e8f5ee', borderRadius: 999, padding: '4px 10px', display: 'inline-block', marginBottom: 10 }}>
                 MK {Number(slide.listing.price).toLocaleString()}
               </span>
             </div>

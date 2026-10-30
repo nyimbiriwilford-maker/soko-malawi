@@ -416,5 +416,5 @@ export function isListingActive(listing) {
 export function getBannerCta(linked, customLabel) {
   if (customLabel && String(customLabel).trim()) return String(customLabel).trim()
   if (!linked) return 'Explore Marketplace'
-  return 'Shop now'
+  return 'View product'
 }
