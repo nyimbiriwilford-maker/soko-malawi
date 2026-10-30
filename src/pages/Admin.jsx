@@ -259,9 +259,10 @@ export default function Admin() {
       return null
     }
 
+    const REQUIRED = new Set(['image_url', 'title', 'status', 'priority'])
     let attemptPayload = { ...payload }
     try {
-      for (let attempt = 0; attempt < 2; attempt++) {
+      for (let attempt = 0; attempt < 6; attempt++) {
         let error = null
         if (isNew) {
           const res = await supabase.from('home_banners').insert(attemptPayload)
@@ -272,7 +273,7 @@ export default function Admin() {
         }
         if (!error) break
         const col = missingColumn(error)
-        if (attempt === 0 && col && Object.prototype.hasOwnProperty.call(attemptPayload, col)) {
+        if (col && Object.prototype.hasOwnProperty.call(attemptPayload, col) && !REQUIRED.has(col)) {
           if (process.env.NODE_ENV !== 'production') console.warn('Dropping missing column:', col)
           delete attemptPayload[col]
           continue
