@@ -2630,6 +2630,7 @@ function BannerEditor({ banner, listings = [], adminUserId = null, onSave, onCan
   const [pickerHasMore, setPickerHasMore] = useState(false)
   const [pickerOffset, setPickerOffset] = useState(0)
   const [pickerFilter, setPickerFilter] = useState('newest')
+  const [pickerMine, setPickerMine] = useState(false)
   const [pickerCategory, setPickerCategory] = useState('')
   const [pickerQuery, setPickerQuery] = useState('')
   const [pickerQueryDebounced, setPickerQueryDebounced] = useState('')
@@ -2661,10 +2662,10 @@ function BannerEditor({ banner, listings = [], adminUserId = null, onSave, onCan
       if (idMatch) {
         query = query.eq('id', idMatch[0])
       } else {
-        query = query.eq('status', 'active')
-        if (q) query = query.ilike('title', `%${q}%`)
+        query = query.in('status', ['published', 'active'])
+        if (q) query = query.or(`title.ilike.%${q}%,category.ilike.%${q}%`)
         if (pickerFilter === 'featured') query = query.eq('is_featured', true)
-        if (pickerFilter === 'mine') query = query.eq('seller_id', adminUserId)
+        if (pickerMine) query = query.eq('seller_id', adminUserId)
         if (pickerCategory) query = query.eq('category', pickerCategory)
         query = query.order('created_at', { ascending: false })
       }
@@ -2691,11 +2692,17 @@ function BannerEditor({ banner, listings = [], adminUserId = null, onSave, onCan
     } finally {
       setPickerLoading(false)
     }
-  }, [pickerQueryDebounced, pickerFilter, pickerCategory, adminUserId])
+  }, [pickerQueryDebounced, pickerFilter, pickerCategory, pickerMine, adminUserId])
 
   useEffect(() => {
     if (!pickerOpen) return
-    const useCache = !pickerQueryDebounced && pickerFilter === 'newest' && !pickerCategory && pickerCache
+    setPickerQuery('')
+    setPickerQueryDebounced('')
+    setPickerFilter('newest')
+    setPickerCategory('')
+    setPickerMine(false)
+    const useCache = false
+    if (false && useCache)
     if (useCache) {
       setPickerItems(pickerCache)
       setPickerHasMore(pickerCache.length === 12)
@@ -2706,7 +2713,7 @@ function BannerEditor({ banner, listings = [], adminUserId = null, onSave, onCan
     setPickerOffset(0)
     setPickerHasMore(false)
     loadPicker(0, false)
-  }, [pickerOpen, pickerFilter, pickerCategory, pickerQueryDebounced, pickerCache, loadPicker])
+  }, [pickerOpen, pickerFilter, pickerCategory, pickerMine, pickerQueryDebounced, pickerCache, loadPicker])
 
   // outside click
   useEffect(() => {
@@ -2955,13 +2962,19 @@ function BannerEditor({ banner, listings = [], adminUserId = null, onSave, onCan
               {pickerOpen && (
                 <div style={{ marginTop: 8, border: '1px solid #e0e8e2', borderRadius: 12, background: '#fff', maxHeight: '70vh', overflowY: 'auto', position: 'relative' }}>
                   {/* Filter chips */}
-                  <div style={{ display: 'flex', gap: 6, padding: 8, flexWrap: 'wrap', borderBottom: '1px solid #f0f0f0' }}>
-                    {['newest','featured','mine'].map(f => (
-                      <button key={f} type="button" onClick={() => setPickerFilter(f)}
-                        style={{ padding: '4px 10px', borderRadius: 999, border: '1px solid #ddd', background: pickerFilter === f ? '#1a7a4a' : '#fff', color: pickerFilter === f ? '#fff' : '#555', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                        {f === 'newest' ? 'Newest' : f === 'featured' ? 'Featured' : 'My listings'}
-                      </button>
-                    ))}
+                  <div style={{ display: 'flex', gap: 6, padding: 8, flexWrap: 'wrap', borderBottom: '1px solid #f0f0f0', alignItems: 'center' }}>
+                    <button type="button" onClick={() => setPickerFilter('newest')}
+                      style={{ padding: '4px 10px', borderRadius: 999, border: '1px solid #ddd', background: pickerFilter === 'newest' ? '#1a7a4a' : '#fff', color: pickerFilter === 'newest' ? '#fff' : '#555', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                      Newest
+                    </button>
+                    <button type="button" onClick={() => setPickerFilter('featured')}
+                      style={{ padding: '4px 10px', borderRadius: 999, border: '1px solid #ddd', background: pickerFilter === 'featured' ? '#1a7a4a' : '#fff', color: pickerFilter === 'featured' ? '#fff' : '#555', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                      Featured
+                    </button>
+                    <button type="button" onClick={() => setPickerMine(m => !m)}
+                      style={{ padding: '4px 10px', borderRadius: 999, border: '1px solid #ddd', background: pickerMine ? '#1a7a4a' : '#fff', color: pickerMine ? '#fff' : '#555', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                      My listings
+                    </button>
                     <select value={pickerCategory} onChange={e => setPickerCategory(e.target.value)}
                       style={{ padding: '4px 8px', borderRadius: 8, border: '1px solid #ddd', fontSize: 12 }}>
                       <option value="">All categories</option>
@@ -2985,9 +2998,22 @@ function BannerEditor({ banner, listings = [], adminUserId = null, onSave, onCan
                   )}
 
                   {!pickerLoading && !pickerError && pickerItems.length === 0 && (
-                    <div style={{ padding: 16, textAlign: 'center', color: '#aaa', fontSize: 13 }}>No active products yet</div>
+                    <div style={{ padding: 16, textAlign: 'center', color: '#aaa', fontSize: 13 }}>
+                      {pickerQuery || pickerCategory || pickerMine || pickerFilter === 'featured'
+                        ? `No products match${pickerQuery ? ` '${pickerQuery}'` : ''}${pickerCategory ? ` in ${pickerCategory}` : ''}`
+                        : 'No active products yet'}
+                      {(pickerQuery || pickerCategory || pickerMine || pickerFilter === 'featured') && (
+                        <div style={{ marginTop: 8 }}>
+                          <button type="button" onClick={() => { setPickerQuery(''); setPickerCategory(''); setPickerMine(false); setPickerFilter('newest') }}
+                            style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #ddd', background: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                            Clear filters
+                          </button>
+                        </div>
+                      )}
+                    </div>
                   )}
 
+                  <div style={{ padding: '4px 8px', fontSize: 12, color: '#888', fontWeight: 700 }}>{pickerItems.length} products</div>
                   <div role="listbox" style={{ padding: 8 }}>
                     {pickerItems.map((l, idx) => {
                       const img = l.images?.[0]
