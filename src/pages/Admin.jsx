@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { isListingFeatured } from '../utils/homeUtils'
+import { isListingFeatured, isListingActive } from '../utils/homeUtils'
 import {
   adminTransitionVerification,
   ADMIN_ACTIONABLE_STATUSES,
@@ -164,7 +164,15 @@ export default function Admin() {
       .from('home_banners')
       .select('*')
       .order('priority', { ascending: true })
-    if (data) setBanners(data)
+    if (data) {
+      const ids = [...new Set(data.map(b => b.listing_id).filter(Boolean))]
+      let listingMap = {}
+      if (ids.length) {
+        const { data: ldata } = await supabase.from('listings').select('id,title,price,images,status').in('id', ids)
+        ;(ldata || []).forEach(l => { listingMap[l.id] = l })
+      }
+      setBanners(data.map(b => ({ ...b, linked_listing: b.listing_id ? listingMap[b.listing_id] || null : null })))
+    }
     setBannerLoading(false)
   }
 
@@ -1195,9 +1203,10 @@ async function loadUsers() {
                               {b.listing_id && (
                                 <div style={{ marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 999, background: '#e8f5ee', color: '#0F9D58' }}>
                                   {(() => {
-                                    const l = listings.find(x => x.id === b.listing_id)
-                                    const unavailable = !l || l.status !== 'active'
-                                    if (unavailable) return <span style={{ background: '#fee2e2', color: '#dc2626', padding: '2px 6px', borderRadius: 999 }}>Product unavailable</span>
+                                    if (bannerLoading) return <span style={{ color: '#888' }}>Loading...</span>
+                                    const l = b.linked_listing
+                                    if (!l) return <span style={{ background: '#fee2e2', color: '#dc2626', padding: '2px 6px', borderRadius: 999 }}>Product unavailable</span>
+                                    if (!isListingActive(l)) return <span style={{ background: '#fee2e2', color: '#dc2626', padding: '2px 6px', borderRadius: 999 }}>Product unavailable</span>
                                     return (
                                       <>
                                         {l.images?.[0] && <img src={l.images[0]} alt="" style={{ width: 18, height: 18, borderRadius: 4, objectFit: 'cover' }} />}

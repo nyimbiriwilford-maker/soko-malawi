@@ -406,3 +406,8 @@ function _searchRelevance(listing, searchHistory) {
   })
   return Math.min(score, 1)
 }
+
+export function isListingActive(listing) {
+  if (!listing) return false
+  return ['published', 'active'].includes(listing.status)
+}

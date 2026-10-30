@@ -49,7 +49,7 @@ import {
   ALL_CATEGORIES,
 } from '../constants/homeConstants'
 import {
-  isFlashActive, isListingFeatured, prioritizeFeatured, rotateFeaturedFairly,
+  isFlashActive, isListingFeatured, isListingActive, prioritizeFeatured, rotateFeaturedFairly,
   sortProductsSmart, trackSearch, imageUrlLoaded, markImageUrlLoaded,
 } from '../utils/homeUtils'
 import { buildChatPath } from '../utils/chatSources'
@@ -4984,7 +4984,7 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
             </div>
           )}
 
-          {slide?.listing && slide?.listing?.status === 'active' && slide?.listing?.price != null && (
+          {slide?.listing && isListingActive(slide?.listing) && slide?.listing?.price != null && (
             <div style={{ marginTop: 12 }}>
               <span style={{ fontSize: 13, fontWeight: 800, color: '#0F9D58', background: '#e8f5ee', borderRadius: 999, padding: '4px 10px', display: 'inline-block' }}>
                 MK {Number(slide.listing.price).toLocaleString()}
@@ -4994,7 +4994,7 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
           <div style={{ marginTop: 16 }}>
             <button
               type="button"
-              aria-label={slide?.listing && slide?.listing?.status === 'active' ? `Open ${slide.listing.title}` : undefined}
+              aria-label={slide?.listing && isListingActive(slide?.listing) ? `Open ${slide.listing.title}` : undefined}
               onClick={() => {
                 if (isDbSource && slide) {
                   supabase.rpc('increment_banner_metric', {
@@ -5002,7 +5002,7 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
                     p_metric: 'click',
                   }).then(() => {}).catch(() => {})
                 }
-                if (slide?.listing && slide?.listing?.status === 'active') {
+                if (slide?.listing && isListingActive(slide?.listing)) {
                   navigate('/listing/' + slide.listing.id)
                 } else {
                   navigate(slide?.button_link || slide?.path || '/listings')
@@ -5024,7 +5024,7 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
               onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = `0 6px 20px ${slide.accent}44` }}
               onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = `0 4px 14px ${slide.accent}33` }}
             >
-              {slide?.listing && slide?.listing?.status === 'active'
+              {slide?.listing && isListingActive(slide?.listing)
                 ? (slide?.cta_label || 'View product')
                 : (slide?.button_text || slide?.cta || 'Explore Marketplace')}
             </button>
