@@ -226,6 +226,8 @@ export default function Admin() {
       mobile_image_key: r2PathFromUrl(b.mobile_image_url) || b.mobile_image_key || null,
       button_text: b.button_text || 'Learn More',
       button_link: b.button_link || '/',
+      listing_id: b.listing_id || null,
+      cta_label: b.cta_label || null,
       priority: b.priority ?? 5,
       status: b.status || 'draft',
       accent: b.accent || '#0F9D58',
@@ -1100,6 +1102,7 @@ async function loadUsers() {
             {bannerEditor !== null ? (
               <BannerEditor
                 banner={bannerEditor}
+                listings={listings}
                 onSave={saveBanner}
                 onCancel={() => setBannerEditor(null)}
                 saving={bannerSaving}
@@ -1165,6 +1168,21 @@ async function loadUsers() {
                               <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 {b.description}
                               </div>
+                              {b.listing_id && (
+                                <div style={{ marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 999, background: '#e8f5ee', color: '#0F9D58' }}>
+                                  {(() => {
+                                    const l = listings.find(x => x.id === b.listing_id)
+                                    const unavailable = !l || l.status !== 'active'
+                                    if (unavailable) return <span style={{ background: '#fee2e2', color: '#dc2626', padding: '2px 6px', borderRadius: 999 }}>Product unavailable</span>
+                                    return (
+                                      <>
+                                        {l.images?.[0] && <img src={l.images[0]} alt="" style={{ width: 18, height: 18, borderRadius: 4, objectFit: 'cover' }} />}
+                                        <span style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.title}</span>
+                                      </>
+                                    )
+                                  })()}
+                                </div>
+                              )}
                             </td>
                             <td style={S.td}>
                               <StatusBadge status={bannerStatusLabel(b)} />
@@ -1591,6 +1609,16 @@ async function loadUsers() {
                               ? <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
                               : <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                             }
+                          </ActionBtn>
+                          <ActionBtn
+                            title="Feature on banner"
+                            bg="#e6f4ec" color="#1a7a4a"
+                            onClick={() => setBannerEditor({ listing_id: l.id })}
+                          >
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+                              <rect x="3" y="3" width="18" height="18" rx="2" />
+                              <path d="M3 9h18" />
+                            </svg>
                           </ActionBtn>
                           <ActionBtn
                             title="Delete"
@@ -2579,7 +2607,7 @@ function ActionBtn({ children, bg, color, onClick, disabled, title }) {
   )
 }
 
-function BannerEditor({ banner, onSave, onCancel, saving }) {
+function BannerEditor({ banner, listings = [], onSave, onCancel, saving }) {
   const [form, setForm] = useState({
     title: banner?.title || '',
     description: banner?.description || '',
@@ -2591,13 +2619,56 @@ function BannerEditor({ banner, onSave, onCancel, saving }) {
     status: banner?.status || 'active',
     start_date: banner?.start_date ? banner.start_date.slice(0, 10) : '',
     end_date: banner?.end_date ? banner.end_date.slice(0, 10) : '',
+    listing_id: banner?.listing_id || null,
+    cta_label: banner?.cta_label || '',
   })
+  const [listingQuery, setListingQuery] = useState('')
+  const [listingResults, setListingResults] = useState([])
+  const [listingSearching, setListingSearching] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [mobileUploading, setMobileUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [mobileUploadError, setMobileUploadError] = useState('')
   const fileRef = useRef(null)
   const mobileFileRef = useRef(null)
+
+  useEffect(() => {
+    const q = listingQuery.trim()
+    if (!q) { setListingResults([]); return }
+    // Support pasting an id or url
+    const idMatch = q.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)
+    if (idMatch) {
+      ;(async () => {
+        setListingSearching(true)
+        try {
+          const { data } = await supabase.from('listings').select('id,title,price,images,status,seller_id').eq('id', idMatch[0]).limit(1)
+          setListingResults(data || [])
+        } catch (e) { console.error(e) }
+        setListingSearching(false)
+      })()
+      return
+    }
+    const t = setTimeout(async () => {
+      setListingSearching(true)
+      try {
+        const { data } = await supabase.from('listings').select('id,title,price,images,status,seller_id').ilike('title', `%${q}%`).eq('status','active').limit(8)
+        setListingResults(data || [])
+      } catch (e) { console.error(e) }
+      setListingSearching(false)
+    }, 300)
+    return () => clearTimeout(t)
+  }, [listingQuery])
+
+  useEffect(() => {
+    if (!banner?.listing_id) return
+    const l = listings.find(x => x.id === banner.listing_id)
+    if (!l) return
+    setForm(f => ({
+      ...f,
+      title: f.title || l.title || '',
+      description: f.description || (l.price != null ? `MK ${Number(l.price).toLocaleString()}` : ''),
+    }))
+  }, [banner?.listing_id, listings])
 
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
@@ -2767,6 +2838,88 @@ function BannerEditor({ banner, onSave, onCancel, saving }) {
           <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>BUTTON LINK</div>
           <input type="text" value={form.button_link} onChange={e => set('button_link', e.target.value)}
             placeholder="/listings" style={i} />
+        </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>LINK A PRODUCT (optional)</div>
+          {form.listing_id ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 10, border: '1px solid #e0e8e2', borderRadius: 10, background: '#f8fafc' }}>
+              {(() => {
+                const l = listings.find(x => x.id === form.listing_id) || listingResults.find(x => x.id === form.listing_id)
+                const img = l?.images?.[0]
+                return (
+                  <>
+                    {img ? <img src={img} alt="" style={{ width: 44, height: 44, borderRadius: 8, objectFit: 'cover' }} /> : <div style={{ width: 44, height: 44, borderRadius: 8, background: '#eee' }} />}
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l?.title || form.listing_id}</div>
+                      <div style={{ fontSize: 12, color: '#1a7a4a', fontWeight: 700 }}>MK {Number(l?.price || 0).toLocaleString()}</div>
+                    </div>
+                    <button type="button" onClick={() => set('listing_id', null)}
+                      style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #ddd', background: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                      Remove
+                    </button>
+                  </>
+                )
+              })()}
+            </div>
+          ) : (
+            <>
+              <input type="text" value={listingQuery} onChange={e => setListingQuery(e.target.value)}
+                placeholder="Search product title or paste listing ID/URL" style={i} />
+              {listingSearching && <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>Searching...</div>}
+              {listingResults.length > 0 && (
+                <div style={{ marginTop: 8, border: '1px solid #e0e8e2', borderRadius: 10, maxHeight: 220, overflowY: 'auto' }}>
+                  {listingResults.map(l => {
+                    const seller = listings.find(x => x.id === l.seller_id)?.profiles?.full_name || ''
+                    return (
+                      <div key={l.id} onClick={() => {
+                        set('listing_id', l.id)
+                        setListingQuery('')
+                        setListingResults([])
+                        // Prefill if empty
+                        if (!form.title.trim()) set('title', l.title || '')
+                        if (!form.description.trim() && l.price != null) set('description', `MK ${Number(l.price).toLocaleString()}`)
+                        if (!form.image_url && l.images?.[0]) {
+                          // offer use product photo
+                        }
+                      }}
+                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 8, cursor: 'pointer', borderBottom: '1px solid #f0f0f0' }}>
+                        {l.images?.[0] ? <img src={l.images[0]} alt="" style={{ width: 44, height: 44, borderRadius: 8, objectFit: 'cover' }} /> : <div style={{ width: 44, height: 44, borderRadius: 8, background: '#eee' }} />}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.title}</div>
+                          <div style={{ fontSize: 12, color: '#1a7a4a', fontWeight: 700 }}>MK {Number(l.price || 0).toLocaleString()}</div>
+                          {seller && <div style={{ fontSize: 11, color: '#888' }}>{seller}</div>}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </>
+          )}
+        </div>
+
+        {form.listing_id && !form.image_url && (
+          <div style={{ marginBottom: 16 }}>
+            <button type="button" onClick={async () => {
+              const l = listings.find(x => x.id === form.listing_id) || listingResults.find(x => x.id === form.listing_id)
+              const src = l?.images?.[0]
+              if (!src) return
+              try {
+                // reference directly if possible
+                set('image_url', src)
+              } catch (e) { console.error(e) }
+            }}
+              style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #d0ddd5', background: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+              Use product photo
+            </button>
+          </div>
+        )}
+
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>BUTTON LABEL (optional)</div>
+          <input type="text" maxLength={24} value={form.cta_label} onChange={e => set('cta_label', e.target.value)}
+            placeholder="View product" style={i} />
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>

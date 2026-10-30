@@ -2274,7 +2274,7 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
           <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:14, flexWrap:'nowrap', overflow:'visible', width:'100%' }}>
             {/* Nearby filter */}
             <div ref={lfNearbyRef} style={{ position:'relative' }}>
-              <button type="button" onClick={() => { setLfNearbyOpen(!lfNearbyOpen); setLfCatOpen(false); setLfSortOpen(false) }} style={{
+              <button type="button" aria-label={slide.listing && slide.listing.status === 'active' ? `Open ${slide.listing.title}` : undefined} onClick={() => { setLfNearbyOpen(!lfNearbyOpen); setLfCatOpen(false); setLfSortOpen(false) }} style={{
                 display:'inline-flex', alignItems:'center', gap:5, borderRadius:999, padding:'7px 13px',
                 fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap',
                 background:'#fff', border:'1.5px solid #e2e8f0', color:'#475569', transition:'all 0.15s',
@@ -4366,6 +4366,8 @@ function mapBanner(row) {
     badgeIcon: row.badge_icon || '',
     priority: row.priority ?? 5,
     status: row.status || 'draft',
+    listing: row.listings || null,
+    cta_label: row.cta_label || '',
     start_date: row.start_date,
     end_date: row.end_date,
   }
@@ -4470,13 +4472,36 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
   const fetchBanners = useCallback(async () => {
     try {
       const now = new Date().toISOString()
-      const { data } = await supabase
-        .from('home_banners')
-        .select('*')
-        .eq('status', 'active')
-        .or(`start_date.is.null,start_date.lte.${now}`)
-        .or(`end_date.is.null,end_date.gte.${now}`)
-        .order('priority', { ascending: true })
+      let data = null
+      try {
+        const res = await supabase
+          .from('home_banners')
+          .select('*, listings:listing_id ( id, title, price, images, status )')
+          .eq('status', 'active')
+          .or(`start_date.is.null,start_date.lte.${now}`)
+          .or(`end_date.is.null,end_date.gte.${now}`)
+          .order('priority', { ascending: true })
+        if (res.error) throw res.error
+        data = res.data
+      } catch (e) {
+        console.error('fetchBanners relation query failed, falling back:', e)
+        const res2 = await supabase
+          .from('home_banners')
+          .select('*')
+          .eq('status', 'active')
+          .or(`start_date.is.null,start_date.lte.${now}`)
+          .or(`end_date.is.null,end_date.gte.${now}`)
+          .order('priority', { ascending: true })
+        data = res2.data || []
+        // Batched fetch linked listings
+        const ids = [...new Set((data || []).map(b => b.listing_id).filter(Boolean))]
+        let listingMap = {}
+        if (ids.length) {
+          const { data: ldata } = await supabase.from('listings').select('id,title,price,images,status').in('id', ids)
+          ;(ldata || []).forEach(l => { listingMap[l.id] = l })
+        }
+        data = (data || []).map(b => ({ ...b, listings: b.listing_id ? listingMap[b.listing_id] : null }))
+      }
       setFetchedSlides((data || []).map(mapBanner))
     } catch (e) {
       console.error('fetchBanners failed:', e)
@@ -4959,6 +4984,13 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
             </div>
           )}
 
+          {slide.listing && slide.listing.status === 'active' && slide.listing.price != null && (
+            <div style={{ marginTop: 12 }}>
+              <span style={{ fontSize: 13, fontWeight: 800, color: '#0F9D58', background: '#e8f5ee', borderRadius: 999, padding: '4px 10px', display: 'inline-block' }}>
+                MK {Number(slide.listing.price).toLocaleString()}
+              </span>
+            </div>
+          )}
           <div style={{ marginTop: 16 }}>
             <button
               type="button"
@@ -4969,12 +5001,20 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
                     p_metric: 'click',
                   }).then(() => {}).catch(() => {})
                 }
-                navigate(slide.button_link || slide.path)
+                if (slide.listing && slide.listing.status === 'active') {
+                  navigate('/listing/' + slide.listing.id)
+                } else {
+                  navigate(slide.button_link || slide.path || '/listings')
+                }
               }}
               style={{
                 border: 'none', borderRadius: 12,
                 padding: '12px 24px',
                 fontSize: 14, fontWeight: 700,
+                maxWidth: 260,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
                 background: slide.accent, color: '#fff',
                 cursor: 'pointer', fontFamily: 'inherit',
                 transition: 'transform 0.15s, box-shadow 0.15s',
@@ -4983,7 +5023,9 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
               onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = `0 6px 20px ${slide.accent}44` }}
               onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = `0 4px 14px ${slide.accent}33` }}
             >
-              {slide.button_text || slide.cta}
+              {slide.listing && slide.listing.status === 'active'
+                ? (slide.cta_label || 'View product')
+                : (slide.button_text || slide.cta || 'Explore Marketplace')}
             </button>
           </div>
         </div>
