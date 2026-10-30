@@ -238,13 +238,36 @@ export default function Admin() {
       end_date: b.end_date ? `${b.end_date}T23:59:59.999Z` : null,
       ...(isNew && adminUserId ? { created_by: adminUserId } : {}),
     }
+    const missingColumn = (err) => {
+      const msg = err?.message || ''
+      let m = msg.match(/Could not find the '([^']+)' column/)
+      if (m) return m[1]
+      m = msg.match(/column "([^"]+)" does not exist/)
+      if (m) return m[1]
+      m = msg.match(/column ([a-zA-Z0-9_]+) does not exist/)
+      if (m) return m[1]
+      return null
+    }
+
+    let attemptPayload = { ...payload }
     try {
-      if (isNew) {
-        const { error } = await supabase.from('home_banners').insert(payload)
-        if (error) throw error
-      } else {
-        const { error } = await supabase.from('home_banners').update(payload).eq('id', b.id)
-        if (error) throw error
+      for (let attempt = 0; attempt < 2; attempt++) {
+        let error = null
+        if (isNew) {
+          const res = await supabase.from('home_banners').insert(attemptPayload)
+          error = res.error
+        } else {
+          const res = await supabase.from('home_banners').update(attemptPayload).eq('id', b.id)
+          error = res.error
+        }
+        if (!error) break
+        const col = missingColumn(error)
+        if (attempt === 0 && col && Object.prototype.hasOwnProperty.call(attemptPayload, col)) {
+          if (process.env.NODE_ENV !== 'production') console.warn('Dropping missing column:', col)
+          delete attemptPayload[col]
+          continue
+        }
+        throw error
       }
       await loadBanners()
       loadBannerAnalytics()
