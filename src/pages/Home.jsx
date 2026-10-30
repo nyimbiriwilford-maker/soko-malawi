@@ -2274,7 +2274,7 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
           <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:14, flexWrap:'nowrap', overflow:'visible', width:'100%' }}>
             {/* Nearby filter */}
             <div ref={lfNearbyRef} style={{ position:'relative' }}>
-              <button type="button" aria-label={slide.listing && slide.listing.status === 'active' ? `Open ${slide.listing.title}` : undefined} onClick={() => { setLfNearbyOpen(!lfNearbyOpen); setLfCatOpen(false); setLfSortOpen(false) }} style={{
+              <button type="button" onClick={() => { setLfNearbyOpen(!lfNearbyOpen); setLfCatOpen(false); setLfSortOpen(false) }} style={{
                 display:'inline-flex', alignItems:'center', gap:5, borderRadius:999, padding:'7px 13px',
                 fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap',
                 background:'#fff', border:'1.5px solid #e2e8f0', color:'#475569', transition:'all 0.15s',
@@ -4984,7 +4984,7 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
             </div>
           )}
 
-          {slide.listing && slide.listing.status === 'active' && slide.listing.price != null && (
+          {slide?.listing && slide?.listing?.status === 'active' && slide?.listing?.price != null && (
             <div style={{ marginTop: 12 }}>
               <span style={{ fontSize: 13, fontWeight: 800, color: '#0F9D58', background: '#e8f5ee', borderRadius: 999, padding: '4px 10px', display: 'inline-block' }}>
                 MK {Number(slide.listing.price).toLocaleString()}
@@ -4994,6 +4994,7 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
           <div style={{ marginTop: 16 }}>
             <button
               type="button"
+              aria-label={slide?.listing && slide?.listing?.status === 'active' ? `Open ${slide.listing.title}` : undefined}
               onClick={() => {
                 if (isDbSource && slide) {
                   supabase.rpc('increment_banner_metric', {
@@ -5001,10 +5002,10 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
                     p_metric: 'click',
                   }).then(() => {}).catch(() => {})
                 }
-                if (slide.listing && slide.listing.status === 'active') {
+                if (slide?.listing && slide?.listing?.status === 'active') {
                   navigate('/listing/' + slide.listing.id)
                 } else {
-                  navigate(slide.button_link || slide.path || '/listings')
+                  navigate(slide?.button_link || slide?.path || '/listings')
                 }
               }}
               style={{
@@ -5023,9 +5024,9 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
               onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = `0 6px 20px ${slide.accent}44` }}
               onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = `0 4px 14px ${slide.accent}33` }}
             >
-              {slide.listing && slide.listing.status === 'active'
-                ? (slide.cta_label || 'View product')
-                : (slide.button_text || slide.cta || 'Explore Marketplace')}
+              {slide?.listing && slide?.listing?.status === 'active'
+                ? (slide?.cta_label || 'View product')
+                : (slide?.button_text || slide?.cta || 'Explore Marketplace')}
             </button>
           </div>
         </div>
@@ -5213,6 +5214,13 @@ function EarlyAccessStrip() {
    MAIN HOME COMPONENT
    Mobile bottom nav is mounted once in App.jsx (Home / Explore / Sell / Chats / Profile).
 ───────────────────────────────────────────────────────────────────────────── */
+class BannerErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { hasError: false } }
+  static getDerivedStateFromError() { return { hasError: true } }
+  componentDidCatch(err) { console.error('BannerErrorBoundary:', err) }
+  render() { if (this.state.hasError) return null; return this.props.children }
+}
+
 export default function Home() {
   const navigate = useNavigate()
   const { isOffline } = useNetwork()
@@ -5936,7 +5944,9 @@ export default function Home() {
 
        <div className="home-top-zone" style={{ background: 'linear-gradient(180deg, #ffffff 0%, #f3faf6 40%, var(--home-bg) 100%)', padding: 0, margin: 0, border: 'none', boxShadow: 'none', borderRadius: 0, position: 'relative', zIndex: 0, width: '100%' }}>
          {/* Hero banner */}
-         <HeroBanner navigate={navigate} onSearch={handleSearch} onNotify={(q) => { setNotifyOpen(true); setNotifyQuery(q) }} />
+         <BannerErrorBoundary>
+           <HeroBanner navigate={navigate} onSearch={handleSearch} onNotify={(q) => { setNotifyOpen(true); setNotifyQuery(q) }} />
+         </BannerErrorBoundary>
 
         {/* Statuses — right after the top banner */}
          <div className={!storiesLoading ? 'soko-swap-in' : undefined} style={{ background: 'transparent', position: 'relative', zIndex: 0, margin: 0 }}>
