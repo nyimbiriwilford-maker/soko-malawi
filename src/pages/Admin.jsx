@@ -68,6 +68,15 @@ export default function Admin() {
   const [banners, setBanners] = useState([])
   const [bannerLoading, setBannerLoading] = useState(false)
   const [bannerEditor, setBannerEditor] = useState(null) // editing banner obj or null for new
+  const [bannerMode, setBannerMode] = useState('custom')
+  const [bannerChooserOpen, setBannerChooserOpen] = useState(false)
+  const newBannerBtnRef = useRef(null)
+  useEffect(() => {
+    if (!bannerChooserOpen) return
+    const onKey = (e) => { if (e.key === 'Escape') setBannerChooserOpen(false) }
+    document.addEventListener('keydown', onKey)
+    return () => { document.removeEventListener('keydown', onKey); newBannerBtnRef.current?.focus() }
+  }, [bannerChooserOpen])
   const [bannerSaving, setBannerSaving] = useState(false)
   const [bannerAnalytics, setBannerAnalytics] = useState([])
   const [bannerAnalyticsLoading, setBannerAnalyticsLoading] = useState(false)
@@ -1135,20 +1144,44 @@ async function loadUsers() {
 
         {tab === 'Banners' && (
           <div style={S.content}>
+            {bannerChooserOpen && (
+              <div onClick={() => setBannerChooserOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: 16 }}>
+                <div onClick={e => e.stopPropagation()} role="dialog" aria-modal="true" style={{ background: '#fff', borderRadius: 16, maxWidth: 560, width: '100%', padding: 20, boxShadow: '0 20px 60px rgba(0,0,0,0.2)' }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: '#0f1410', marginBottom: 16 }}>New banner</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 12 }}>
+                    <button type="button" onClick={() => { setBannerEditor({}); setBannerMode('custom'); setBannerChooserOpen(false) }}
+                      style={{ textAlign: 'left', padding: 18, borderRadius: 16, border: '1px solid #e8eaed', background: '#fff', cursor: 'pointer' }}>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: '#0f1410', marginBottom: 4 }}>Custom banner</div>
+                      <div style={{ fontSize: 13, color: '#5f6368' }}>Upload your own image, text and link.</div>
+                    </button>
+                    <button type="button" onClick={() => { setBannerEditor({}); setBannerMode('product'); setBannerChooserOpen(false) }}
+                      style={{ textAlign: 'left', padding: 18, borderRadius: 16, border: '1px solid #e8eaed', background: '#fff', cursor: 'pointer' }}>
+                      <div style={{ fontSize: 15, fontWeight: 800, color: '#0f1410', marginBottom: 4 }}>Product banner</div>
+                      <div style={{ fontSize: 13, color: '#5f6368' }}>Pick a posted product. Photo, price and button fill in automatically.</div>
+                    </button>
+                  </div>
+                  <div style={{ marginTop: 16, textAlign: 'center' }}>
+                    <button type="button" onClick={() => setBannerChooserOpen(false)} style={{ border: 'none', background: 'transparent', color: '#5f6368', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Cancel</button>
+                  </div>
+                </div>
+              </div>
+            )}
             {bannerEditor !== null ? (
               <BannerEditor
                 banner={bannerEditor}
+                mode={bannerMode}
                 listings={listings}
                 adminUserId={adminUserId}
                 onSave={saveBanner}
                 onCancel={() => setBannerEditor(null)}
+                onChangeMode={() => { if (window.confirm('Switch banner type? Unsaved changes may be lost.')) setBannerChooserOpen(true) }}
                 saving={bannerSaving}
               />
             ) : (
               <>
                 <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
-                  <button
-                    onClick={() => setBannerEditor({})}
+                  <button ref={newBannerBtnRef}
+                    onClick={() => setBannerChooserOpen(true)}
                     style={{
                       background: '#1a7a4a', color: '#fff', border: 'none',
                       borderRadius: 10, padding: '10px 18px', fontSize: 13, fontWeight: 700,
@@ -1167,7 +1200,11 @@ async function loadUsers() {
                     <div style={{ padding: 40, textAlign: 'center', color: '#999', fontSize: 13 }}>Loading...</div>
                   ) : banners.length === 0 ? (
                     <div style={{ padding: 40, textAlign: 'center', color: '#aaa', fontSize: 13 }}>
-                      No banners yet. Click "+ New Banner" to create one.
+                      No banners yet.
+                      <div style={{ marginTop: 12, display: 'flex', gap: 8, justifyContent: 'center' }}>
+                        <button type="button" onClick={() => { setBannerEditor({}); setBannerMode('custom') }} style={{ padding: '8px 14px', borderRadius: 10, border: '1px solid #d0ddd5', background: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Custom banner</button>
+                        <button type="button" onClick={() => { setBannerEditor({}); setBannerMode('product') }} style={{ padding: '8px 14px', borderRadius: 10, border: '1px solid #d0ddd5', background: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer' }}>Product banner</button>
+                      </div>
                     </div>
                   ) : (
                     <table style={S.table}>
@@ -1205,6 +1242,9 @@ async function loadUsers() {
                               <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 2, maxWidth: 300, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                                 {b.description}
                               </div>
+                              <span style={{ marginTop: 4, display: 'inline-block', fontSize: 10, fontWeight: 700, padding: '2px 7px', borderRadius: 999, background: b.listing_id ? '#e0f2fe' : '#f3f4f6', color: b.listing_id ? '#0369a1' : '#555' }}>
+                                {b.listing_id ? 'Product' : 'Custom'}
+                              </span>
                               {b.listing_id && (
                                 <div style={{ marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 700, padding: '3px 8px', borderRadius: 999, background: '#e8f5ee', color: '#0F9D58' }}>
                                   {(() => {
@@ -1234,7 +1274,7 @@ async function loadUsers() {
                               <div style={{ display: 'flex', gap: 6 }}>
                                 <ActionBtn
                                   bg="#f3f4f6" color="#555"
-                                  onClick={() => setBannerEditor(b)}
+                                  onClick={() => { setBannerEditor(b); setBannerMode(b?.listing_id ? 'product' : 'custom') }}
                                   title="Edit"
                                 >✏️</ActionBtn>
                                 <ActionBtn
@@ -1651,7 +1691,7 @@ async function loadUsers() {
                           <ActionBtn
                             title="Feature on banner"
                             bg="#e6f4ec" color="#1a7a4a"
-                            onClick={() => setBannerEditor({ listing_id: l.id })}
+                            onClick={() => { setBannerEditor({ listing_id: l.id }); setBannerMode('product') }}
                           >
                             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
                               <rect x="3" y="3" width="18" height="18" rx="2" />
@@ -2645,7 +2685,7 @@ function ActionBtn({ children, bg, color, onClick, disabled, title }) {
   )
 }
 
-function BannerEditor({ banner, listings = [], adminUserId = null, onSave, onCancel, saving }) {
+function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = null, onSave, onCancel, onChangeMode, saving }) {
   const [form, setForm] = useState({
     title: banner?.title || '',
     description: banner?.description || '',
@@ -2773,6 +2813,12 @@ function BannerEditor({ banner, listings = [], adminUserId = null, onSave, onCan
     }))
   }, [banner?.listing_id, listings])
 
+  useEffect(() => {
+    if (mode === 'custom') {
+      setForm(f => ({ ...f, listing_id: null, button_link: f.button_link?.startsWith('/listing/') ? '/listings' : f.button_link }))
+    }
+  }, [mode])
+
   const set = (k, v) => setForm(f => ({ ...f, [k]: v }))
 
   const compressImage = (file) => new Promise((resolve, reject) => {
@@ -2846,8 +2892,12 @@ function BannerEditor({ banner, listings = [], adminUserId = null, onSave, onCan
 
 
   const handleSave = () => {
-    if (!form.image_url.trim()) { alert('Please upload a desktop image'); return }
-    onSave({ ...form, id: banner?.id, ctaTouched })
+    if (!form.image_url.trim()) { alert('Please upload an image'); return }
+    if (mode === 'custom') {
+      onSave({ ...form, id: banner?.id, listing_id: null, cta_label: null, ctaTouched: false })
+    } else {
+      onSave({ ...form, id: banner?.id, ctaTouched })
+    }
   }
 
   return (
@@ -2855,8 +2905,16 @@ function BannerEditor({ banner, listings = [], adminUserId = null, onSave, onCan
       <div style={{
         background: '#fff', borderRadius: 16, border: '1px solid #e8f0ec', padding: 28,
       }}>
-        <div style={{ fontSize: 18, fontWeight: 800, color: '#0f1410', marginBottom: 24 }}>
-          {banner?.id ? 'Edit Home Banner' : 'Create Home Banner'}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 24 }}>
+          <div style={{ fontSize: 18, fontWeight: 800, color: '#0f1410' }}>
+            {banner?.id ? 'Edit Home Banner' : 'Create Home Banner'}
+          </div>
+          <span style={{ fontSize: 11, fontWeight: 700, padding: '3px 9px', borderRadius: 20, background: '#e8f5ee', color: '#1a7a4a' }}>
+            {mode === 'product' ? 'Product banner' : 'Custom banner'}
+          </span>
+          <button type="button" onClick={onChangeMode} style={{ border: 'none', background: 'transparent', color: '#0F9D58', fontSize: 12, fontWeight: 700, cursor: 'pointer', padding: 0 }}>
+            Change type
+          </button>
         </div>
 
         <div style={{ marginBottom: 16 }}>
@@ -2873,8 +2931,10 @@ function BannerEditor({ banner, listings = [], adminUserId = null, onSave, onCan
             rows={3} style={{ ...i, resize: 'vertical' }} />
         </div>
 
+{(mode === 'custom' || form.listing_id) && (
+<>
         <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>DESKTOP IMAGE</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>IMAGE</div>
           <input ref={fileRef} type="file" accept="image/*" hidden
             onChange={e => handleFilePick(e, 'image_url', setUploading, setUploadError)} />
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -2973,6 +3033,10 @@ function BannerEditor({ banner, listings = [], adminUserId = null, onSave, onCan
             placeholder="/listings" style={i} />
         </div>
 
+</>
+)}
+
+{mode === 'product' && (
         <div style={{ marginBottom: 16 }} ref={pickerRef}>
           <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>LINK A PRODUCT (optional)</div>
           {form.listing_id ? (
@@ -3123,6 +3187,12 @@ function BannerEditor({ banner, listings = [], adminUserId = null, onSave, onCan
           )}
         </div>
 
+)}
+
+        {mode === 'product' && !form.listing_id && (
+          <div style={{ marginBottom: 16, fontSize: 13, color: '#888' }}>Choose a product to continue</div>
+        )}
+
         {form.listing_id && !form.image_url && (
           <div style={{ marginBottom: 16 }}>
             <button type="button" onClick={() => {
@@ -3149,6 +3219,8 @@ function BannerEditor({ banner, listings = [], adminUserId = null, onSave, onCan
           )}
         </div>
 
+{(mode === 'custom' || form.listing_id) && (
+<>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
           <div>
             <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>START DATE</div>
@@ -3175,6 +3247,9 @@ function BannerEditor({ banner, listings = [], adminUserId = null, onSave, onCan
             </label>
           </div>
         </div>
+
+</>
+        )}
 
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', borderTop: '1px solid #e8f0ec', paddingTop: 20 }}>
           <button onClick={onCancel}
