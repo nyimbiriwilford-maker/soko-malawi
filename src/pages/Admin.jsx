@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useRef } from 'react'
+import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { isListingFeatured } from '../utils/homeUtils'
@@ -1103,6 +1103,7 @@ async function loadUsers() {
               <BannerEditor
                 banner={bannerEditor}
                 listings={listings}
+                adminUserId={adminUserId}
                 onSave={saveBanner}
                 onCancel={() => setBannerEditor(null)}
                 saving={bannerSaving}
@@ -2607,7 +2608,7 @@ function ActionBtn({ children, bg, color, onClick, disabled, title }) {
   )
 }
 
-function BannerEditor({ banner, listings = [], onSave, onCancel, saving }) {
+function BannerEditor({ banner, listings = [], adminUserId = null, onSave, onCancel, saving }) {
   const [form, setForm] = useState({
     title: banner?.title || '',
     description: banner?.description || '',
@@ -2622,9 +2623,21 @@ function BannerEditor({ banner, listings = [], onSave, onCancel, saving }) {
     listing_id: banner?.listing_id || null,
     cta_label: banner?.cta_label || '',
   })
-  const [listingQuery, setListingQuery] = useState('')
-  const [listingResults, setListingResults] = useState([])
-  const [listingSearching, setListingSearching] = useState(false)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [pickerLoading, setPickerLoading] = useState(false)
+  const [pickerError, setPickerError] = useState('')
+  const [pickerItems, setPickerItems] = useState([])
+  const [pickerHasMore, setPickerHasMore] = useState(false)
+  const [pickerOffset, setPickerOffset] = useState(0)
+  const [pickerFilter, setPickerFilter] = useState('newest')
+  const [pickerCategory, setPickerCategory] = useState('')
+  const [pickerQuery, setPickerQuery] = useState('')
+  const [pickerQueryDebounced, setPickerQueryDebounced] = useState('')
+  const [pickerCache, setPickerCache] = useState(null)
+  const [pickerActiveIndex, setPickerActiveIndex] = useState(-1)
+  const [pickerNow] = useState(() => Date.now())
+  const pickerRef = useRef(null)
+  const pickerInputRef = useRef(null)
   const [uploading, setUploading] = useState(false)
   const [mobileUploading, setMobileUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
@@ -2633,31 +2646,78 @@ function BannerEditor({ banner, listings = [], onSave, onCancel, saving }) {
   const mobileFileRef = useRef(null)
 
   useEffect(() => {
-    const q = listingQuery.trim()
-    if (!q) { setListingResults([]); return }
-    // Support pasting an id or url
-    const idMatch = q.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)
-    if (idMatch) {
-      ;(async () => {
-        setListingSearching(true)
-        try {
-          const { data } = await supabase.from('listings').select('id,title,price,images,status,seller_id').eq('id', idMatch[0]).limit(1)
-          setListingResults(data || [])
-        } catch (e) { console.error(e) }
-        setListingSearching(false)
-      })()
+    const t = setTimeout(() => setPickerQueryDebounced(pickerQuery), 300)
+    return () => clearTimeout(t)
+  }, [pickerQuery])
+
+  const loadPicker = useCallback(async (offset, append) => {
+    setPickerLoading(true)
+    setPickerError('')
+    try {
+      const q = pickerQueryDebounced.trim()
+      const idMatch = q.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)
+
+      let query = supabase.from('listings').select('id,title,price,images,category,created_at,status,user_id,is_featured')
+      if (idMatch) {
+        query = query.eq('id', idMatch[0])
+      } else {
+        query = query.eq('status', 'active')
+        if (q) query = query.ilike('title', `%${q}%`)
+        if (pickerFilter === 'featured') query = query.eq('is_featured', true)
+        if (pickerFilter === 'mine') query = query.eq('user_id', adminUserId)
+        if (pickerCategory) query = query.eq('category', pickerCategory)
+        query = query.order('created_at', { ascending: false })
+      }
+      const { data, error } = await query.range(offset, offset + 11)
+      if (error) throw error
+      const rows = data || []
+      const ids = [...new Set(rows.map(r => r.user_id).filter(Boolean))]
+      let profileMap = {}
+      if (ids.length) {
+        const { data: profs } = await supabase.from('profiles').select('id,full_name,is_verified').in('id', ids)
+        ;(profs || []).forEach(p => { profileMap[p.id] = p })
+      }
+      const enriched = rows.map(r => ({ ...r, seller_profile: profileMap[r.user_id] || null }))
+      if (append) setPickerItems(prev => [...prev, ...enriched])
+      else setPickerItems(enriched)
+      setPickerHasMore(rows.length === 12)
+      setPickerOffset(offset + rows.length)
+      if (offset === 0 && !q && pickerFilter === 'newest' && !pickerCategory) {
+        setPickerCache(enriched)
+      }
+    } catch (e) {
+      console.error('picker load failed:', e)
+      setPickerError(e?.message || String(e))
+    } finally {
+      setPickerLoading(false)
+    }
+  }, [pickerQueryDebounced, pickerFilter, pickerCategory, adminUserId])
+
+  useEffect(() => {
+    if (!pickerOpen) return
+    const useCache = !pickerQueryDebounced && pickerFilter === 'newest' && !pickerCategory && pickerCache
+    if (useCache) {
+      setPickerItems(pickerCache)
+      setPickerHasMore(pickerCache.length === 12)
+      setPickerOffset(pickerCache.length)
       return
     }
-    const t = setTimeout(async () => {
-      setListingSearching(true)
-      try {
-        const { data } = await supabase.from('listings').select('id,title,price,images,status,seller_id').ilike('title', `%${q}%`).eq('status','active').limit(8)
-        setListingResults(data || [])
-      } catch (e) { console.error(e) }
-      setListingSearching(false)
-    }, 300)
-    return () => clearTimeout(t)
-  }, [listingQuery])
+    setPickerItems([])
+    setPickerOffset(0)
+    setPickerHasMore(false)
+    loadPicker(0, false)
+  }, [pickerOpen, pickerFilter, pickerCategory, pickerQueryDebounced, pickerCache, loadPicker])
+
+  // outside click
+  useEffect(() => {
+    if (!pickerOpen) return
+    const handler = (e) => {
+      if (pickerRef.current && !pickerRef.current.contains(e.target)) setPickerOpen(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [pickerOpen])
+
 
   useEffect(() => {
     if (!banner?.listing_id) return
@@ -2840,59 +2900,131 @@ function BannerEditor({ banner, listings = [], onSave, onCancel, saving }) {
             placeholder="/listings" style={i} />
         </div>
 
-        <div style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 16 }} ref={pickerRef}>
           <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>LINK A PRODUCT (optional)</div>
           {form.listing_id ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 10, border: '1px solid #e0e8e2', borderRadius: 10, background: '#f8fafc' }}>
               {(() => {
-                const l = listings.find(x => x.id === form.listing_id) || listingResults.find(x => x.id === form.listing_id)
+                const l = listings.find(x => x.id === form.listing_id) || pickerItems.find(x => x.id === form.listing_id)
                 const img = l?.images?.[0]
+                const seller = l?.seller_profile?.full_name
+                const verified = l?.seller_profile?.is_verified
                 return (
                   <>
                     {img ? <img src={img} alt="" style={{ width: 44, height: 44, borderRadius: 8, objectFit: 'cover' }} /> : <div style={{ width: 44, height: 44, borderRadius: 8, background: '#eee' }} />}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 700, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l?.title || form.listing_id}</div>
                       <div style={{ fontSize: 12, color: '#1a7a4a', fontWeight: 700 }}>MK {Number(l?.price || 0).toLocaleString()}</div>
+                      {seller && <div style={{ fontSize: 11, color: '#888' }}>{seller}{verified ? ' ✓' : ''}</div>}
                     </div>
-                    <button type="button" onClick={() => set('listing_id', null)}
-                      style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #ddd', background: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
-                      Remove
-                    </button>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button type="button" onClick={() => { set('listing_id', null); set('button_link', '/listings'); set('cta_label', ''); setPickerOpen(true) }}
+                        style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #ddd', background: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                        Change
+                      </button>
+                      <button type="button" onClick={() => { set('listing_id', null); set('button_link', '/listings'); set('cta_label', '') }}
+                        style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #ddd', background: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                        Remove
+                      </button>
+                    </div>
                   </>
                 )
               })()}
             </div>
           ) : (
             <>
-              <input type="text" value={listingQuery} onChange={e => setListingQuery(e.target.value)}
-                placeholder="Search product title or paste listing ID/URL" style={i} />
-              {listingSearching && <div style={{ fontSize: 12, color: '#888', marginTop: 4 }}>Searching...</div>}
-              {listingResults.length > 0 && (
-                <div style={{ marginTop: 8, border: '1px solid #e0e8e2', borderRadius: 10, maxHeight: 220, overflowY: 'auto' }}>
-                  {listingResults.map(l => {
-                    const seller = listings.find(x => x.id === l.seller_id)?.profiles?.full_name || ''
-                    return (
-                      <div key={l.id} onClick={() => {
-                        set('listing_id', l.id)
-                        setListingQuery('')
-                        setListingResults([])
-                        // Prefill if empty
-                        if (!form.title.trim()) set('title', l.title || '')
-                        if (!form.description.trim() && l.price != null) set('description', `MK ${Number(l.price).toLocaleString()}`)
-                        if (!form.image_url && l.images?.[0]) {
-                          // offer use product photo
-                        }
-                      }}
-                        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 8, cursor: 'pointer', borderBottom: '1px solid #f0f0f0' }}>
-                        {l.images?.[0] ? <img src={l.images[0]} alt="" style={{ width: 44, height: 44, borderRadius: 8, objectFit: 'cover' }} /> : <div style={{ width: 44, height: 44, borderRadius: 8, background: '#eee' }} />}
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.title}</div>
-                          <div style={{ fontSize: 12, color: '#1a7a4a', fontWeight: 700 }}>MK {Number(l.price || 0).toLocaleString()}</div>
-                          {seller && <div style={{ fontSize: 11, color: '#888' }}>{seller}</div>}
+              <input ref={pickerInputRef} type="text" value={pickerQuery} onChange={e => setPickerQuery(e.target.value)}
+                onFocus={() => setPickerOpen(true)} onClick={() => setPickerOpen(true)}
+                onKeyDown={e => {
+                  if (e.key === 'Escape') { setPickerOpen(false); return }
+                  if (!pickerItems.length) return
+                  if (e.key === 'ArrowDown') { e.preventDefault(); setPickerActiveIndex(i => Math.min(i + 1, pickerItems.length - 1)) }
+                  if (e.key === 'ArrowUp') { e.preventDefault(); setPickerActiveIndex(i => Math.max(i - 1, 0)) }
+                  if (e.key === 'Enter' && pickerActiveIndex >= 0) {
+                    e.preventDefault()
+                    const l = pickerItems[pickerActiveIndex]
+                    set('listing_id', l.id)
+                    set('button_link', `/listing/${l.id}`)
+                    if (!form.cta_label || form.cta_label === 'Explore Marketplace') set('cta_label', 'View product')
+                    if (!form.title.trim()) set('title', l.title || '')
+                    if (!form.description.trim() && l.price != null) set('description', `MK ${Number(l.price).toLocaleString()}`)
+                    setPickerOpen(false)
+                  }
+                }}
+                placeholder="Search products or paste listing ID/URL" style={i} />
+              {pickerOpen && (
+                <div style={{ marginTop: 8, border: '1px solid #e0e8e2', borderRadius: 12, background: '#fff', maxHeight: '70vh', overflowY: 'auto', position: 'relative' }}>
+                  {/* Filter chips */}
+                  <div style={{ display: 'flex', gap: 6, padding: 8, flexWrap: 'wrap', borderBottom: '1px solid #f0f0f0' }}>
+                    {['newest','featured','mine'].map(f => (
+                      <button key={f} type="button" onClick={() => setPickerFilter(f)}
+                        style={{ padding: '4px 10px', borderRadius: 999, border: '1px solid #ddd', background: pickerFilter === f ? '#1a7a4a' : '#fff', color: pickerFilter === f ? '#fff' : '#555', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                        {f === 'newest' ? 'Newest' : f === 'featured' ? 'Featured' : 'My listings'}
+                      </button>
+                    ))}
+                    <select value={pickerCategory} onChange={e => setPickerCategory(e.target.value)}
+                      style={{ padding: '4px 8px', borderRadius: 8, border: '1px solid #ddd', fontSize: 12 }}>
+                      <option value="">All categories</option>
+                      {Array.from(new Set(listings.map(l => l.category).filter(Boolean))).map(c => (
+                        <option key={c} value={c}>{c}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {pickerError && (
+                    <div style={{ padding: 12, color: '#dc2626', fontSize: 12 }}>
+                      {pickerError}
+                      <button type="button" onClick={() => loadPicker(0, false)} style={{ marginLeft: 8, padding: '4px 8px', borderRadius: 6, border: '1px solid #ddd', background: '#fff', cursor: 'pointer' }}>Retry</button>
+                    </div>
+                  )}
+
+                  {pickerLoading && pickerItems.length === 0 && (
+                    <div style={{ padding: 12 }}>
+                      {[1,2,3,4].map(k => <div key={k} className="skeleton" style={{ height: 56, borderRadius: 8, marginBottom: 8 }} />)}
+                    </div>
+                  )}
+
+                  {!pickerLoading && !pickerError && pickerItems.length === 0 && (
+                    <div style={{ padding: 16, textAlign: 'center', color: '#aaa', fontSize: 13 }}>No active products yet</div>
+                  )}
+
+                  <div role="listbox" style={{ padding: 8 }}>
+                    {pickerItems.map((l, idx) => {
+                      const img = l.images?.[0]
+                      const seller = l.seller_profile?.full_name
+                      const verified = l.seller_profile?.is_verified
+                      const days = l.created_at ? Math.floor((pickerNow - new Date(l.created_at).getTime()) / 86400000) : 0
+                      return (
+                        <div key={l.id} role="option" aria-selected={pickerActiveIndex === idx}
+                          onClick={() => {
+                            set('listing_id', l.id)
+                            set('button_link', `/listing/${l.id}`)
+                            if (!form.cta_label || form.cta_label === 'Explore Marketplace') set('cta_label', 'View product')
+                            if (!form.title.trim()) set('title', l.title || '')
+                            if (!form.description.trim() && l.price != null) set('description', `MK ${Number(l.price).toLocaleString()}`)
+                            setPickerOpen(false)
+                          }}
+                          onMouseEnter={() => setPickerActiveIndex(idx)}
+                          style={{ display: 'flex', alignItems: 'center', gap: 10, padding: 8, cursor: 'pointer', borderRadius: 8, background: pickerActiveIndex === idx ? '#f0fdf4' : 'transparent' }}>
+                          {img ? <img src={img} alt="" style={{ width: 56, height: 56, borderRadius: 10, objectFit: 'cover' }} /> : <div style={{ width: 56, height: 56, borderRadius: 10, background: '#eee' }} />}
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: '13.5px', fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{l.title}</div>
+                            <div style={{ fontSize: '13px', fontWeight: 800, color: '#1a7a4a' }}>MK {Number(l.price || 0).toLocaleString()}</div>
+                            <div style={{ fontSize: '12px', color: '#888' }}>{seller || 'Seller'}{verified ? ' ✓' : ''} · {days}d ago</div>
+                          </div>
                         </div>
-                      </div>
-                    )
-                  })}
+                      )
+                    })}
+                  </div>
+
+                  {pickerHasMore && (
+                    <div style={{ padding: 8, textAlign: 'center' }}>
+                      <button type="button" disabled={pickerLoading} onClick={() => loadPicker(pickerOffset, true)}
+                        style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #ddd', background: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+                        {pickerLoading ? 'Loading...' : 'Load more'}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
             </>
@@ -2901,14 +3033,10 @@ function BannerEditor({ banner, listings = [], onSave, onCancel, saving }) {
 
         {form.listing_id && !form.image_url && (
           <div style={{ marginBottom: 16 }}>
-            <button type="button" onClick={async () => {
-              const l = listings.find(x => x.id === form.listing_id) || listingResults.find(x => x.id === form.listing_id)
+            <button type="button" onClick={() => {
+              const l = listings.find(x => x.id === form.listing_id) || pickerItems.find(x => x.id === form.listing_id)
               const src = l?.images?.[0]
-              if (!src) return
-              try {
-                // reference directly if possible
-                set('image_url', src)
-              } catch (e) { console.error(e) }
+              if (src) set('image_url', src)
             }}
               style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #d0ddd5', background: '#fff', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
               Use product photo
