@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react'
-import { MapPin } from 'lucide-react'
+import { useState, useMemo, useEffect } from 'react'
+import { MapPin, Clock } from 'lucide-react'
 import { isListingFeatured, imageUrlLoaded, markImageUrlLoaded } from '../utils/homeUtils'
 
 export const FEATURED_POOL_SIZE = 40
@@ -25,11 +25,31 @@ function formatPrice(n) {
   return `MK ${Math.round(num).toLocaleString('en-US')}`
 }
 
-function FeaturedCard({ listing, onClick }) {
+function timeAgo(iso) {
+  if (!iso) return ''
+  const date = new Date(iso)
+  if (isNaN(date.getTime())) return ''
+  const diff = Date.now() - date.getTime()
+  const m = Math.floor(diff / 60000)
+  if (m < 1) return 'Just now'
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(diff / 3600000)
+  if (h < 24) return `${h}h ago`
+  const d = Math.floor(diff / 86400000)
+  if (d < 7) return `${d}d ago`
+  const w = Math.floor(d / 7)
+  if (w < 5) return `${w}w ago`
+  return date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })
+}
+
+function FeaturedCard({ listing, onClick, now }) {
   const [hov, setHov] = useState(false)
   const [imgErr, setImgErr] = useState(false)
   const [imgReady, setImgReady] = useState(() => imageUrlLoaded(listing.images?.[0]))
   const price = listing.price
+  const postedText = timeAgo(listing.created_at)
+  const isRecent24h = !!listing.created_at && (now - new Date(listing.created_at).getTime()) < 86400000
+  const fullDate = listing.created_at ? new Date(listing.created_at).toLocaleString() : ''
 
   return (
       <div
@@ -99,6 +119,26 @@ function FeaturedCard({ listing, onClick }) {
               <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
             </svg>
             Promoted
+          </div>
+        )}
+        {postedText && (
+          <div style={{
+            position: 'absolute', left: 8, bottom: 8, zIndex: 2, pointerEvents: 'none',
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            padding: '4px 8px', borderRadius: 999,
+            background: 'rgba(15,23,42,0.62)',
+            backdropFilter: 'blur(6px)',
+            WebkitBackdropFilter: 'blur(6px)',
+            color: '#fff', fontSize: '10.5px', fontWeight: 700, lineHeight: 1, whiteSpace: 'nowrap',
+          }}>
+            {isRecent24h && (
+              <span style={{
+                width: 6, height: 6, borderRadius: '50%', background: '#34c77a',
+                boxShadow: '0 0 0 3px rgba(52,199,122,0.28)',
+              }} />
+            )}
+            <Clock size={11} strokeWidth={2.4} />
+            <time dateTime={listing.created_at} title={fullDate}>{postedText}</time>
           </div>
         )}
       </div>
@@ -211,13 +251,16 @@ function FeaturedListingsRow({ listings, navigate, loading }) {
   const isDesktop = w >= 1024
   const initCount = isDesktop ? 8 : 4
   const loadInc = isDesktop ? 8 : 6
-  const headingSize = isMobile ? 16 : 18
-
   const allFeatured = useMemo(
     () => (listings || []).filter(l => isListingFeatured(l)),
     [listings],
   )
   const [visibleCount, setVisibleCount] = useState(initCount)
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60000)
+    return () => clearInterval(id)
+  }, [])
 
   if (!loading && allFeatured.length === 0) return null
 
@@ -399,6 +442,7 @@ function FeaturedListingsRow({ listings, navigate, loading }) {
                   key={l.id}
                   listing={l}
                   onClick={() => navigate('/listing/' + l.id)}
+                  now={now}
                 />
               ))}
             </div>
@@ -408,6 +452,7 @@ function FeaturedListingsRow({ listings, navigate, loading }) {
                   <FeaturedCard
                     listing={l}
                     onClick={() => navigate('/listing/' + l.id)}
+                    now={now}
                   />
                 </div>
               ))}
