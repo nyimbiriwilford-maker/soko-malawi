@@ -4566,13 +4566,16 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
           to { transform: rotate(360deg); }
         }
         .hero-banner {
+          background: transparent !important;
           border-radius: 16px !important;
-          box-shadow: 0 4px 14px rgba(16,24,40,0.08) !important;
+          box-shadow: none !important;
           border: none !important;
-          overflow: hidden;
+          overflow: visible;
         }
         @media (min-width: 1100px) {
           .hero-banner { border-radius: 18px !important; }
+          .hero-visual, .hero-image-wrapper, .hero-image-wrapper img, .hero-visual img { border-radius: 18px !important; }
+          .hero-visual { aspect-ratio: 21 / 9; max-height: 360px; }
         }
         .hero-banner-wrap {
           padding: 0 14px !important;
@@ -4594,7 +4597,8 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
           }
         }
         .hero-inner {
-          border-radius: 24px;
+          background: transparent !important;
+          border-radius: 16px;
         }
         .hero-inner {
           display: grid;
@@ -4656,22 +4660,24 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
           display: flex;
           align-items: center;
           justify-content: center;
-          gap: 6px;
-          padding: 0 48px 20px;
+          gap: 5px;
+          padding: 10px 0 0;
+          margin: 0;
         }
         .hero-dot {
-          width: 8px;
-          height: 8px;
-          border-radius: 50%;
+          width: 6px;
+          height: 6px;
+          border-radius: 999px;
           border: none;
           padding: 0;
           cursor: pointer;
-          background: #d1d5db;
+          background: #cfd8d3;
           transition: all 0.25s ease;
         }
         .hero-dot.is-active {
-          width: 28px;
-          border-radius: 4px;
+          width: 22px;
+          height: 6px;
+          border-radius: 999px;
           background: #0F9D58;
         }
         @media (max-width: 900px) {
@@ -4690,21 +4696,25 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
             position: relative;
             inset: auto;
             left: auto;
-            border-radius: 20px;
+            border-radius: 16px;
             overflow: hidden;
-            margin-top: 20px;
+            margin-top: 12px;
             width: 100%;
-            height: 260px;
+            aspect-ratio: 16 / 9;
+            max-height: 360px;
+            height: auto;
           }
-          .hero-visual img { border-radius: 0; }
+          .hero-visual img { border-radius: 16px; }
           .hero-image-wrapper {
             overflow: hidden;
-            border-radius: 20px;
+            border-radius: 16px;
             background: #F8FAFC;
             width: 100%;
             height: 100%;
+            box-shadow: 0 4px 14px rgba(16,24,40,0.08);
           }
-          .hero-image-wrapper img { width: 100%; height: 100%; object-fit: cover; display: block; }
+          .hero-image-wrapper img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 16px; }
+          .hero-dots { padding: 10px 0 0; }
           .hero-search { max-width: 100% !important; height: 56px; border-radius: 16px; }
           .hero-search-input { width: 100%; }
           .hero-dots { padding: 14px 16px 20px; }
