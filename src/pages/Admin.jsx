@@ -2639,6 +2639,8 @@ function BannerEditor({ banner, listings = [], adminUserId = null, onSave, onCan
   const [pickerNow] = useState(() => Date.now())
   const pickerRef = useRef(null)
   const pickerInputRef = useRef(null)
+  const pickerRequestId = useRef(0)
+  const pickerCacheRef = useRef(null)
   const [uploading, setUploading] = useState(false)
   const [mobileUploading, setMobileUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
@@ -2646,12 +2648,19 @@ function BannerEditor({ banner, listings = [], adminUserId = null, onSave, onCan
   const fileRef = useRef(null)
   const mobileFileRef = useRef(null)
 
+  const lastSearchRef = useRef('')
   useEffect(() => {
-    const t = setTimeout(() => setPickerQueryDebounced(pickerQuery), 300)
+    const t = setTimeout(() => {
+      const trimmed = pickerQuery.trim()
+      if (trimmed === lastSearchRef.current) return
+      lastSearchRef.current = trimmed
+      setPickerQueryDebounced(trimmed)
+    }, 300)
     return () => clearTimeout(t)
   }, [pickerQuery])
 
   const loadPicker = useCallback(async (offset, append) => {
+    const reqId = ++pickerRequestId.current
     setPickerLoading(true)
     setPickerError('')
     try {
@@ -2670,6 +2679,7 @@ function BannerEditor({ banner, listings = [], adminUserId = null, onSave, onCan
         query = query.order('created_at', { ascending: false })
       }
       const { data, error } = await query.range(offset, offset + 11)
+      if (reqId !== pickerRequestId.current) return
       if (error) throw error
       const rows = data || []
       const ids = [...new Set(rows.map(r => r.seller_id).filter(Boolean))]
@@ -2679,12 +2689,13 @@ function BannerEditor({ banner, listings = [], adminUserId = null, onSave, onCan
         ;(profs || []).forEach(p => { profileMap[p.id] = p })
       }
       const enriched = rows.map(r => ({ ...r, seller_profile: profileMap[r.seller_id] || null }))
+      if (reqId !== pickerRequestId.current) return
       if (append) setPickerItems(prev => [...prev, ...enriched])
       else setPickerItems(enriched)
       setPickerHasMore(rows.length === 12)
       setPickerOffset(offset + rows.length)
-      if (offset === 0 && !q && pickerFilter === 'newest' && !pickerCategory) {
-        setPickerCache(enriched)
+      if (offset === 0 && !q && pickerFilter === 'newest' && !pickerCategory && !pickerMine) {
+        pickerCacheRef.current = enriched
       }
     } catch (e) {
       console.error('picker load failed:', e)
@@ -2696,24 +2707,9 @@ function BannerEditor({ banner, listings = [], adminUserId = null, onSave, onCan
 
   useEffect(() => {
     if (!pickerOpen) return
-    setPickerQuery('')
-    setPickerQueryDebounced('')
-    setPickerFilter('newest')
-    setPickerCategory('')
-    setPickerMine(false)
-    const useCache = false
-    if (false && useCache)
-    if (useCache) {
-      setPickerItems(pickerCache)
-      setPickerHasMore(pickerCache.length === 12)
-      setPickerOffset(pickerCache.length)
-      return
-    }
-    setPickerItems([])
-    setPickerOffset(0)
-    setPickerHasMore(false)
     loadPicker(0, false)
-  }, [pickerOpen, pickerFilter, pickerCategory, pickerMine, pickerQueryDebounced, pickerCache, loadPicker])
+  }, [pickerOpen, pickerFilter, pickerCategory, pickerMine, pickerQueryDebounced, loadPicker])
+
 
   // outside click
   useEffect(() => {
@@ -2941,7 +2937,7 @@ function BannerEditor({ banner, listings = [], adminUserId = null, onSave, onCan
           ) : (
             <>
               <input ref={pickerInputRef} type="text" value={pickerQuery} onChange={e => setPickerQuery(e.target.value)}
-                onFocus={() => setPickerOpen(true)} onClick={() => setPickerOpen(true)}
+                onFocus={() => { setPickerQuery(''); setPickerQueryDebounced(''); setPickerFilter('newest'); setPickerCategory(''); setPickerMine(false); if (pickerCacheRef.current) { setPickerItems(pickerCacheRef.current); setPickerHasMore(pickerCacheRef.current.length === 12); setPickerOffset(pickerCacheRef.current.length) }; setPickerOpen(true) }} onClick={() => { setPickerQuery(''); setPickerQueryDebounced(''); setPickerFilter('newest'); setPickerCategory(''); setPickerMine(false); if (pickerCacheRef.current) { setPickerItems(pickerCacheRef.current); setPickerHasMore(pickerCacheRef.current.length === 12); setPickerOffset(pickerCacheRef.current.length) }; setPickerOpen(true) }}
                 onKeyDown={e => {
                   if (e.key === 'Escape') { setPickerOpen(false); return }
                   if (!pickerItems.length) return
@@ -2960,7 +2956,7 @@ function BannerEditor({ banner, listings = [], adminUserId = null, onSave, onCan
                 }}
                 placeholder="Search products or paste listing ID/URL" style={i} />
               {pickerOpen && (
-                <div style={{ marginTop: 8, border: '1px solid #e0e8e2', borderRadius: 12, background: '#fff', maxHeight: '70vh', overflowY: 'auto', position: 'relative' }}>
+                <div onMouseDown={e => e.preventDefault()} style={{ marginTop: 8, border: '1px solid #e0e8e2', borderRadius: 12, background: '#fff', maxHeight: '70vh', overflowY: 'auto', position: 'relative' }}>
                   {/* Filter chips */}
                   <div style={{ display: 'flex', gap: 6, padding: 8, flexWrap: 'wrap', borderBottom: '1px solid #f0f0f0', alignItems: 'center' }}>
                     <button type="button" onClick={() => setPickerFilter('newest')}
