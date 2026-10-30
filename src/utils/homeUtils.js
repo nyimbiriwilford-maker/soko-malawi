@@ -411,3 +411,10 @@ export function isListingActive(listing) {
   if (!listing) return false
   return ['published', 'active'].includes(listing.status)
 }
+
+
+export function getBannerCta(linked, customLabel) {
+  if (customLabel && String(customLabel).trim()) return String(customLabel).trim()
+  if (!linked) return 'Explore Marketplace'
+  return 'Shop now'
+}

@@ -49,7 +49,7 @@ import {
   ALL_CATEGORIES,
 } from '../constants/homeConstants'
 import {
-  isFlashActive, isListingFeatured, isListingActive, prioritizeFeatured, rotateFeaturedFairly,
+  isFlashActive, isListingFeatured, isListingActive, getBannerCta, prioritizeFeatured, rotateFeaturedFairly,
   sortProductsSmart, trackSearch, imageUrlLoaded, markImageUrlLoaded,
 } from '../utils/homeUtils'
 import { buildChatPath } from '../utils/chatSources'
@@ -4357,7 +4357,8 @@ function mapBanner(row) {
     title: row.title,
     desc: row.description || '',
     image: resolveBannerImageUrl(row.image_url),
-    mobileImage: resolveBannerImageUrl(row.mobile_image_url || ''),
+    desktopImage: resolveBannerImageUrl(row.desktop_image_url || row.image_url),
+    mobileImage: resolveBannerImageUrl(row.mobile_image_url || row.image_url),
     imagePos: row.image_pos || 'center center',
     cta: row.button_text || 'Learn More',
     path: row.button_link || '/',
@@ -5024,9 +5025,7 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
               onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = `0 6px 20px ${slide.accent}44` }}
               onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = `0 4px 14px ${slide.accent}33` }}
             >
-              {slide?.listing && isListingActive(slide?.listing)
-                ? (slide?.cta_label || 'View product')
-                : (slide?.button_text || slide?.cta || 'Explore Marketplace')}
+              {getBannerCta(slide?.listing && isListingActive(slide?.listing) ? slide.listing : null, slide?.cta_label)}
             </button>
           </div>
         </div>
@@ -5037,7 +5036,7 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
               {slide.mobileImage && <source media="(max-width: 900px)" srcSet={slide.mobileImage} />}
               <img
                 key={slide.id + '-img'}
-                src={slide.image}
+                src={slide.desktopImage || slide.image}
                 alt=""
                 aria-hidden="true"
                 loading="eager"

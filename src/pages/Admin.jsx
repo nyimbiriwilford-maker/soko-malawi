@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, useRef, useCallback } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { isListingFeatured, isListingActive } from '../utils/homeUtils'
+import { isListingFeatured, isListingActive, getBannerCta } from '../utils/homeUtils'
 import {
   adminTransitionVerification,
   ADMIN_ACTIONABLE_STATUSES,
@@ -230,12 +230,14 @@ export default function Admin() {
       description: b.description || '',
       image_url: b.image_url,
       image_key: r2PathFromUrl(b.image_url) || b.image_key || null,
+      desktop_image_url: b.desktop_image_url || null,
+      desktop_image_key: r2PathFromUrl(b.desktop_image_url) || b.desktop_image_key || null,
       mobile_image_url: b.mobile_image_url || null,
       mobile_image_key: r2PathFromUrl(b.mobile_image_url) || b.mobile_image_key || null,
       button_text: b.button_text || 'Learn More',
       button_link: b.button_link || '/',
       listing_id: b.listing_id || null,
-      cta_label: b.cta_label || null,
+      cta_label: b.ctaTouched ? (b.cta_label || null) : null,
       priority: b.priority ?? 5,
       status: b.status || 'draft',
       accent: b.accent || '#0F9D58',
@@ -2645,6 +2647,7 @@ function BannerEditor({ banner, listings = [], adminUserId = null, onSave, onCan
     title: banner?.title || '',
     description: banner?.description || '',
     image_url: banner?.image_url || '',
+    desktop_image_url: banner?.desktop_image_url || '',
     mobile_image_url: banner?.mobile_image_url || '',
     button_text: banner?.button_text || 'Explore Marketplace',
     button_link: banner?.button_link || '/listings',
@@ -2674,6 +2677,8 @@ function BannerEditor({ banner, listings = [], adminUserId = null, onSave, onCan
   const pickerRequestId = useRef(0)
   const pickerCacheRef = useRef(null)
   const [uploading, setUploading] = useState(false)
+  const [useDifferentImages, setUseDifferentImages] = useState(!!(banner?.desktop_image_url || banner?.mobile_image_url))
+  const [ctaTouched, setCtaTouched] = useState(!!banner?.cta_label)
   const [mobileUploading, setMobileUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [mobileUploadError, setMobileUploadError] = useState('')
@@ -2839,7 +2844,7 @@ function BannerEditor({ banner, listings = [], adminUserId = null, onSave, onCan
 
   const handleSave = () => {
     if (!form.image_url.trim()) { alert('Please upload a desktop image'); return }
-    onSave({ ...form, id: banner?.id })
+    onSave({ ...form, id: banner?.id, ctaTouched })
   }
 
   return (
@@ -2893,6 +2898,36 @@ function BannerEditor({ banner, listings = [], adminUserId = null, onSave, onCan
             </div>
           )}
         </div>
+
+        <div style={{ marginBottom: 16 }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#555', cursor: 'pointer' }}>
+            <input type="checkbox" checked={useDifferentImages} onChange={e => {
+              setUseDifferentImages(e.target.checked)
+              if (!e.target.checked) { set('desktop_image_url', ''); set('mobile_image_url', '') }
+            }} />
+            Use a different image for desktop or mobile
+          </label>
+        </div>
+
+        {useDifferentImages && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>DESKTOP IMAGE <span style={{ fontWeight: 400, color: '#aaa' }}>(optional)</span></div>
+            <input ref={desktopFileRef} type="file" accept="image/*" hidden
+              onChange={e => handleFilePick(e, 'desktop_image_url', setUploading, setUploadError)} />
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <button type="button" onClick={() => desktopFileRef.current?.click()} disabled={uploading}
+                style={{ padding: '10px 20px', borderRadius: 10, border: '1px solid #d0ddd5', background: uploading ? '#f0f0f0' : '#fff', fontSize: 13, fontWeight: 700, cursor: uploading ? 'default' : 'pointer', fontFamily: 'inherit' }}>
+                {uploading ? 'Uploading...' : 'Choose File'}
+              </button>
+              {!uploading && form.desktop_image_url && <span style={{ fontSize: 12, color: '#1a7a4a' }}>Ready</span>}
+            </div>
+            {form.desktop_image_url ? (
+              <div style={{ marginTop: 10, borderRadius: 12, overflow: 'hidden', height: 120, background: '#f0f5f1' }}>
+                <img src={form.desktop_image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </div>
+            ) : null}
+          </div>
+        )}
 
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>MOBILE IMAGE <span style={{ fontWeight: 400, color: '#aaa' }}>(optional)</span></div>
@@ -3053,7 +3088,7 @@ function BannerEditor({ banner, listings = [], adminUserId = null, onSave, onCan
                           onClick={() => {
                             set('listing_id', l.id)
                             set('button_link', `/listing/${l.id}`)
-                            if (!form.cta_label || form.cta_label === 'Explore Marketplace') set('cta_label', 'View product')
+                            if (!form.image_url && l.images?.[0]) set('image_url', l.images[0])
                             if (!form.title.trim()) set('title', l.title || '')
                             if (!form.description.trim() && l.price != null) set('description', `MK ${Number(l.price).toLocaleString()}`)
                             setPickerOpen(false)
@@ -3100,8 +3135,15 @@ function BannerEditor({ banner, listings = [], adminUserId = null, onSave, onCan
 
         <div style={{ marginBottom: 16 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>BUTTON LABEL (optional)</div>
-          <input type="text" maxLength={24} value={form.cta_label} onChange={e => set('cta_label', e.target.value)}
-            placeholder="View product" style={i} />
+          <input type="text" maxLength={24} value={form.cta_label} onChange={e => { set('cta_label', e.target.value); setCtaTouched(true) }}
+            placeholder={form.listing_id ? 'Shop now' : 'Explore Marketplace'} style={i} />
+          {form.listing_id && (
+            <div style={{ marginTop: 6, fontSize: 12, color: '#888' }}>
+              Preview: <span style={{ display: 'inline-block', padding: '4px 10px', borderRadius: 8, background: '#1a7a4a', color: '#fff', fontWeight: 700, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
+                {getBannerCta({ id: form.listing_id }, form.cta_label)}
+              </span>
+            </div>
+          )}
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 16 }}>
