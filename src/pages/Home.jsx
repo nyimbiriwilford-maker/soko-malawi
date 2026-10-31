@@ -4718,11 +4718,13 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
         .hero-entrance-title { animation: heroFadeSlide 0.5s cubic-bezier(0.22,1,0.36,1) 0.15s both; }
         .hero-entrance-desc  { animation: heroFadeSlide 0.5s cubic-bezier(0.22,1,0.36,1) 0.25s both; }
         .hero-desc { font-size: 14px; line-height: 1.45; color: #5f6368; margin-top: 8px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; min-width: 0; }
+        .hero-desc.has-price { margin-top: 6px; }
         .hero-price { font-size: 13px; font-weight: 800; color: #0F9D58; margin-top: 8px; white-space: nowrap; }
         .hero-search-wrap { margin-top: 16px; }
         .hero-btn-wrap { margin-top: 12px; align-self: flex-start; }
         @media (min-width: 1100px) {
           .hero-desc { font-size: 15px; margin-top: 10px; }
+          .hero-desc.has-price { margin-top: 8px; }
           .hero-price { font-size: 14px; margin-top: 10px; }
           .hero-search-wrap { margin-top: 20px; }
           .hero-btn-wrap { margin-top: 14px; }
@@ -4838,8 +4840,11 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
           }}>
             {slide.title}
           </h1>
+          {slide?.listing && isListingActive(slide?.listing) && slide?.listing?.price != null && (
+            <div className="hero-price">Price: {formatPrice(slide.listing.price)}</div>
+          )}
           {(slide.description || slide.desc) ? (
-            <p className="hero-entrance-desc hero-desc" style={{ margin: 0 }}>
+            <p className={'hero-entrance-desc hero-desc' + (slide?.listing && isListingActive(slide?.listing) && slide?.listing?.price != null ? ' has-price' : '')} style={{ margin: 0 }}>
               {slide.description || slide.desc}
             </p>
           ) : null}
@@ -5035,9 +5040,6 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
             </div>
           )}
 
-          {slide?.listing && isListingActive(slide?.listing) && slide?.listing?.price != null && (
-            <div className="hero-price">Price: {formatPrice(slide.listing.price)}</div>
-          )}
           <div className="hero-btn-wrap">
             <button
               type="button"
