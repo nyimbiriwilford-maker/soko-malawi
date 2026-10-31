@@ -4485,7 +4485,7 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
       try {
         const res = await supabase
           .from('home_banners')
-          .select('*, listings:listing_id ( id, title, price, images, status )')
+          .select('*, listings:listing_id ( id, title, price, images, status, city, district, area )')
           .eq('status', 'active')
           .or(`start_date.is.null,start_date.lte.${now}`)
           .or(`end_date.is.null,end_date.gte.${now}`)
@@ -4506,7 +4506,7 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
         const ids = [...new Set((data || []).map(b => b.listing_id).filter(Boolean))]
         let listingMap = {}
         if (ids.length) {
-          const { data: ldata } = await supabase.from('listings').select('id,title,price,images,status').in('id', ids)
+          const { data: ldata } = await supabase.from('listings').select('id,title,price,images,status,city,district,area').in('id', ids)
           ;(ldata || []).forEach(l => { listingMap[l.id] = l })
         }
         data = (data || []).map(b => ({ ...b, listings: b.listing_id ? listingMap[b.listing_id] : null }))
@@ -4720,6 +4720,12 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
         .hero-desc { font-size: 14px; line-height: 1.45; color: #5f6368; margin-top: 8px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; min-width: 0; }
         .hero-desc.has-price { margin-top: 6px; }
         .hero-price { font-size: 13px; font-weight: 800; color: #0F9D58; margin-top: 8px; white-space: nowrap; }
+        .hero-loc { display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 600; color: #5f6368; margin-top: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; max-width: 100%; }
+        .hero-loc.has-price { margin-top: 6px; }
+        @media (min-width: 1100px) {
+          .hero-loc { font-size: 14px; margin-top: 10px; }
+          .hero-loc.has-price { margin-top: 8px; }
+        }
         .hero-search-wrap { margin-top: 16px; }
         .hero-btn-wrap { margin-top: 12px; align-self: flex-start; }
         @media (min-width: 1100px) {
@@ -4843,8 +4849,23 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
           {slide?.listing && isListingActive(slide?.listing) && slide?.listing?.price != null && (
             <div className="hero-price">Price: {formatPrice(slide.listing.price)}</div>
           )}
+          {(() => {
+            const l = slide?.listing
+            if (!l || !isListingActive(l)) return null
+            const part1 = l.area || l.district
+            const parts = [part1, l.city].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i)
+            const text = parts.join(', ')
+            if (!text) return null
+            const hasPrice = l.price != null
+            return (
+              <div className={'hero-loc' + (hasPrice ? ' has-price' : '')} title={text}>
+                <MapPin size={14} color="#0F9D58" strokeWidth={2.2} aria-hidden="true" style={{ flexShrink: 0 }} />
+                {text}
+              </div>
+            )
+          })()}
           {(slide.description || slide.desc) ? (
-            <p className={'hero-entrance-desc hero-desc' + (slide?.listing && isListingActive(slide?.listing) && slide?.listing?.price != null ? ' has-price' : '')} style={{ margin: 0 }}>
+            <p className={'hero-entrance-desc hero-desc' + ((slide?.listing && isListingActive(slide?.listing) && (slide.listing.price != null || slide.listing.area || slide.listing.district || slide.listing.city)) ? ' has-price' : '')} style={{ margin: 0 }}>
               {slide.description || slide.desc}
             </p>
           ) : null}
