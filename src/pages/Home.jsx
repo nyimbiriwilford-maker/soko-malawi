@@ -5082,24 +5082,28 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
               </div>
             )}
             {!allFailed && lowRatio && (
-              <img className="hb-blur" src={phoneImageUrls[imgAttempt] || slide.image} alt="" aria-hidden="true" />
+              <img
+                className="hb-blur"
+                src={phoneImageUrls[imgAttempt] || slide.image}
+                alt=""
+                aria-hidden="true"
+                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(24px) saturate(1.1)', transform: 'scale(1.15)', opacity: 0.9, zIndex: 1 }}
+              />
             )}
             {!allFailed && (
-              <picture>
+              <picture style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 2 }}>
                 {slide.desktopImage && <source media="(min-width: 768px)" srcSet={slide.desktopImage} />}
                 {slide.mobileImage && <source media="(max-width: 767px)" srcSet={slide.mobileImage} />}
                 <img
                   key={slide.id + '-img-' + imgAttempt}
-                  className={lowRatio ? 'hb-contain' : ''}
                   src={phoneImageUrls[imgAttempt] || ''}
                   alt=""
                   aria-hidden="true"
                   width="1600"
                   height="700"
-                  decoding="async"
                   fetchPriority="high"
                   loading="eager"
-                  style={{ objectPosition: slide.imagePos || 'center center', objectFit: lowRatio ? 'contain' : 'cover', opacity: 1, filter: 'none' }}
+                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: lowRatio ? 'contain' : 'cover', objectPosition: slide.imagePos || 'center center', opacity: 1, filter: 'none', display: 'block', zIndex: 2 }}
                   onLoad={handleImgLoad}
                   onError={handleImgError}
                 />
