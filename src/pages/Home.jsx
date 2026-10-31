@@ -4574,12 +4574,24 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
   const slide = slides[idx]
   const [imgLoaded, setImgLoaded] = useState(false)
   const [lowRatio, setLowRatio] = useState(false)
-  useEffect(() => { setImgFailed(false); setImgLoaded(false); setLowRatio(false) }, [idx, slide?.id])
+  const [imgAttempt, setImgAttempt] = useState(0)
+  const [allFailed, setAllFailed] = useState(false)
+  const phoneImageUrls = [slide?.mobileImage, slide?.image, slide?.desktopImage].filter(Boolean)
+  useEffect(() => { setImgFailed(false); setImgLoaded(false); setLowRatio(false); setImgAttempt(0); setAllFailed(false) }, [idx, slide?.id])
   const handleImgLoad = (e) => {
     setImgLoaded(true)
     const nw = e?.target?.naturalWidth
     const nh = e?.target?.naturalHeight
     if (nw && nh && nw / nh < 1.3) setLowRatio(true)
+  }
+  const handleImgError = () => {
+    setImgLoaded(true)
+    if (imgAttempt < phoneImageUrls.length - 1) {
+      setImgAttempt(a => a + 1)
+      setImgLoaded(false)
+    } else {
+      setAllFailed(true)
+    }
   }
   if (!slide || imgFailed) return null
 
@@ -5063,29 +5075,36 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
 
         <div className="hero-visual">
           <div className="hero-image-wrapper">
-            {!imgLoaded && <div className="hb-shimmer" />}
-            {lowRatio && (
-              <img className="hb-blur" src={slide.desktopImage || slide.image} alt="" aria-hidden="true" />
+            {!imgLoaded && !allFailed && <div className="hb-shimmer" />}
+            {allFailed && (
+              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, textAlign: 'center', color: '#374151', fontSize: 14, fontWeight: 600, background: '#eceff1' }}>
+                {slide.title}
+              </div>
             )}
-            <picture>
-              {slide.desktopImage && <source media="(min-width: 768px)" srcSet={slide.desktopImage} />}
-              {slide.mobileImage && <source media="(max-width: 767px)" srcSet={slide.mobileImage} />}
-              <img
-                key={slide.id + '-img'}
-                className={lowRatio ? 'hb-contain' : ''}
-                src={slide.mobileImage || slide.image}
-                alt=""
-                aria-hidden="true"
-                width="1600"
-                height="700"
-                decoding="async"
-                fetchPriority={idx === 0 ? 'high' : 'auto'}
-                loading={idx === 0 ? 'eager' : 'lazy'}
-                style={{ objectPosition: slide.imagePos || 'center center', objectFit: lowRatio ? 'contain' : 'cover', opacity: 1, filter: 'none' }}
-                onLoad={handleImgLoad}
-                onError={() => { setImgLoaded(true); setImgFailed(true) }}
-              />
-            </picture>
+            {!allFailed && lowRatio && (
+              <img className="hb-blur" src={phoneImageUrls[imgAttempt] || slide.image} alt="" aria-hidden="true" />
+            )}
+            {!allFailed && (
+              <picture>
+                {slide.desktopImage && <source media="(min-width: 768px)" srcSet={slide.desktopImage} />}
+                {slide.mobileImage && <source media="(max-width: 767px)" srcSet={slide.mobileImage} />}
+                <img
+                  key={slide.id + '-img-' + imgAttempt}
+                  className={lowRatio ? 'hb-contain' : ''}
+                  src={phoneImageUrls[imgAttempt] || ''}
+                  alt=""
+                  aria-hidden="true"
+                  width="1600"
+                  height="700"
+                  decoding="async"
+                  fetchPriority="high"
+                  loading="eager"
+                  style={{ objectPosition: slide.imagePos || 'center center', objectFit: lowRatio ? 'contain' : 'cover', opacity: 1, filter: 'none' }}
+                  onLoad={handleImgLoad}
+                  onError={handleImgError}
+                />
+              </picture>
+            )}
           </div>
         </div>
       </div>
