@@ -4359,7 +4359,7 @@ function mapBanner(row) {
       let d = row.description || ''
       const l = row.listings
       if (l && isListingActive(l) && l.price != null) {
-        const priceText = `MK ${Number(l.price).toLocaleString()}`
+        const priceText = formatPrice(l.price)
         d = d.split(priceText).join('').replace(/\s{2,}/g, ' ').trim()
       }
       return d
@@ -4993,13 +4993,13 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
             </div>
           )}
 
-          {slide?.listing && isListingActive(slide?.listing) && slide?.listing?.price != null && (
-            <div style={{ marginTop: 12 }}>
+          <div style={{ marginTop: 12, minHeight: 31 }}>
+            {slide?.listing && isListingActive(slide?.listing) && slide?.listing?.price != null && (
               <span style={{ fontSize: 13, fontWeight: 800, color: '#0F9D58', background: '#e8f5ee', borderRadius: 999, padding: '4px 10px', display: 'inline-block', marginBottom: 10 }}>
-                MK {Number(slide.listing.price).toLocaleString()}
+                {formatPrice(slide.listing.price)}
               </span>
-            </div>
-          )}
+            )}
+          </div>
           <div style={{ marginTop: 16 }}>
             <button
               type="button"

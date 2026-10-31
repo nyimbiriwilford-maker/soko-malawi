@@ -3084,7 +3084,7 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
                     set('button_link', `/listing/${l.id}`)
                     if (!form.cta_label || form.cta_label === 'Explore Marketplace') set('cta_label', 'View product')
                     if (!form.title.trim()) set('title', l.title || '')
-                    if (!form.description.trim() && l.price != null) set('description', `MK ${Number(l.price).toLocaleString()}`)
+                    if (!form.description.trim() && l.category) set('description', l.category)
                     setPickerOpen(false)
                   }
                 }}

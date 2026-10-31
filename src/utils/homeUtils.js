@@ -416,5 +416,25 @@ export function isListingActive(listing) {
 export function getBannerCta(linked, customLabel) {
   if (customLabel && String(customLabel).trim()) return String(customLabel).trim()
   if (!linked) return 'Explore Marketplace'
+  if (typeof linked === 'string') {
+    const t = linked.toLowerCase()
+    if (t.includes('service')) return 'Book now'
+    if (t.includes('job')) return 'Apply now'
+    if (t.includes('shop')) return 'Visit shop'
+    if (t.includes('request')) return 'View request'
+    return 'View product'
+  }
+  const type = String(
+    linked.type || linked.kind || linked.entityType || linked.entity_type ||
+    linked.__typename || linked.category || ''
+  ).toLowerCase()
+  if (type.includes('service')) return 'Book now'
+  if (type.includes('job')) return 'Apply now'
+  if (type.includes('shop')) return 'Visit shop'
+  if (type.includes('request')) return 'View request'
+  if (linked.rate != null || linked.provider_id != null || linked.providerId != null) return 'Book now'
+  if (linked.company != null || linked.salary != null) return 'Apply now'
+  if (linked.slug != null || linked.logo_url != null || linked.logoUrl != null) return 'Visit shop'
+  if (linked.budget != null) return 'View request'
   return 'View product'
 }
