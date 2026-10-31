@@ -4748,8 +4748,8 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
             overflow: hidden;
             margin-top: 12px;
             width: 100%;
-            aspect-ratio: 4 / 3;
-            max-height: 280px;
+            aspect-ratio: 16 / 9;
+            max-height: 240px;
             height: auto;
           }
           .hero-visual img { border-radius: 16px; }
