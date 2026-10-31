@@ -1648,7 +1648,10 @@ function LatestListingCard({ listing, delay = 0, onClick, user, navigate, saved,
 
       {/* Fixed body structure — same slots on every card so row heights match */}
       <div className="soko-product-card-body soko-latest-body">
-        <div className="soko-product-card-price soko-latest-price" style={{ fontSize: 16, fontWeight: 800, color: isFlash ? T.red : '#0F9D58', letterSpacing: -0.2, lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        <div className="soko-product-card-title soko-latest-title" style={{ fontSize: 15, fontWeight: 700, color: '#202124', lineHeight: 1.3, letterSpacing: -0.1, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', overflowWrap: 'anywhere', margin: 0 }}>
+          {listing.title}
+        </div>
+        <div className="soko-product-card-price soko-latest-price" style={{ fontSize: 17, fontWeight: 800, color: isFlash ? T.red : '#0F9D58', lineHeight: 1.2, letterSpacing: -0.2, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {formatPrice(price)}
           {isFlash && listing.price > price && (
             <span style={{ marginLeft: 5, fontSize: 11, fontWeight: 600, color: T.gray500, textDecoration: 'line-through' }}>
@@ -1656,25 +1659,22 @@ function LatestListingCard({ listing, delay = 0, onClick, user, navigate, saved,
             </span>
           )}
         </div>
-        <div className="soko-product-card-title soko-latest-title" style={{ fontSize: 13.5, fontWeight: 600, color: '#202124', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {listing.title}
-        </div>
-        <div className="soko-latest-footer" style={{ marginTop: 4, paddingTop: 10, borderTop: '1px solid #f1f3f4', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0 }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, minWidth: 0, flex: 1, fontSize: 11.5, fontWeight: 500, color: '#80868b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {Icon.pin(12)} {listing.city || 'Malawi'}
+        <div className="soko-latest-footer" style={{ marginTop: 'auto', paddingTop: 10, borderTop: '1px solid #f1f3f4', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, minWidth: 0 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, minWidth: 0, flex: 1, fontSize: 12, fontWeight: 500, color: '#80868b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {Icon.pin(13)} {listing.city || 'Malawi'}
           </span>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap', flexShrink: 0, fontSize: 11.5, fontWeight: 500, color: '#80868b' }}>
-            {Icon.clock(12)} {timeSincePosted(listing.created_at)}
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, whiteSpace: 'nowrap', flexShrink: 0, fontSize: 12, fontWeight: 500, color: '#80868b' }}>
+            {Icon.clock(13)} {timeSincePosted(listing.created_at)}
           </span>
         </div>
-        <div style={{ marginTop: 2, minHeight: 22, display: 'flex', alignItems: 'center' }}>
-          {isVerif && (
+        {isVerif && (
+          <div style={{ marginTop: 8 }}>
             <span aria-label="Verified seller" style={{ display: 'inline-flex', alignSelf: 'flex-start', alignItems: 'center', gap: 5, padding: '3px 8px', borderRadius: 999, background: '#e8f0fe', color: '#1A73E8', fontSize: 12, fontWeight: 700, lineHeight: 1.2 }}>
               <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true"><path fill="#1A73E8" d="M12 0a4 4 0 0 1 3.2 1.6 4 4 0 0 1 3.6 1 4 4 0 0 1 1 3.6A4 4 0 0 1 21.4 9.4a4 4 0 0 1 0 5.2A4 4 0 0 1 19.8 17.8a4 4 0 0 1-1 3.6 4 4 0 0 1-3.6 1A4 4 0 0 1 12 24a4 4 0 0 1-3.2-1.6 4 4 0 0 1-3.6-1 4 4 0 0 1-1-3.6A4 4 0 0 1 2.6 14.6a4 4 0 0 1 0-5.2A4 4 0 0 1 4.2 6.2a4 4 0 0 1 1-3.6 4 4 0 0 1 3.6-1A4 4 0 0 1 12 0Z"/><path d="m7.5 12.5 3 3 6-7" stroke="#fff" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
               Verified seller
             </span>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   )
@@ -1685,10 +1685,10 @@ function SkeletonLatestCard() {
     <div className="soko-product-card soko-latest-card soko-card-bg" style={{ border: `1px solid ${T.gray100}`, boxShadow: T.shadow }}>
       <div className="soko-product-card-media skeleton" style={{ animation: 'none' }} />
       <div className="soko-product-card-body">
-        <div className="skeleton" style={{ height: 16, width: '46%', borderRadius: 4 }} />
-        <div className="skeleton" style={{ height: 13.5, width: '90%', borderRadius: 4, marginTop: 4 }} />
-        <div className="skeleton" style={{ height: 11.5, width: '55%', borderRadius: 4, marginTop: 4, paddingTop: 10, borderTop: '1px solid #f1f3f4' }} />
-        <div style={{ minHeight: 22, marginTop: 2 }} />
+        <div className="skeleton" style={{ height: 15, width: '90%', borderRadius: 4 }} />
+        <div className="skeleton" style={{ height: 17, width: '46%', borderRadius: 4, marginTop: 4 }} />
+        <div className="skeleton" style={{ height: 12, width: '55%', borderRadius: 4, marginTop: 'auto', paddingTop: 10, borderTop: '1px solid #f1f3f4' }} />
+        <div style={{ minHeight: 22, marginTop: 8 }} />
       </div>
     </div>
   )
@@ -1729,7 +1729,7 @@ function LatestListingsSection({ listings, navigate, loading, user, savedIds, on
         }
         .soko-latest-body {
           padding: 12px;
-          gap: 6px;
+          gap: 0;
           min-height: 0;
           flex: 1 1 auto;
           display: flex;
@@ -1739,7 +1739,7 @@ function LatestListingsSection({ listings, navigate, loading, user, savedIds, on
           .soko-latest-body { padding: 14px; }
         }
         @media (max-width: 768px) {
-          .soko-latest-body { padding: 12px; gap: 6px; }
+          .soko-latest-body { padding: 12px; gap: 0; }
         }
         @media (min-width: 1100px) {
           .soko-std-title { font-size: 22px !important; }
