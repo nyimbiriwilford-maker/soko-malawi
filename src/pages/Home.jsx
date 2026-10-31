@@ -4621,7 +4621,8 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
         @media (min-width: 1100px) {
           .hero-banner { border-radius: 18px !important; }
           .hero-visual, .hero-image-wrapper, .hero-image-wrapper img, .hero-visual img { border-radius: 18px !important; }
-          .hero-visual { aspect-ratio: 21 / 9; max-height: 360px; }
+          .hero-visual { height: 100%; }
+          .hero-image-wrapper { height: 100%; }
         }
         .hero-banner-wrap {
           padding: 0 14px !important;
@@ -4649,9 +4650,10 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
         .hero-inner {
           display: grid;
           grid-template-columns: 1.1fr 0.9fr;
-          min-height: clamp(450px, 36vw, 550px);
+          min-height: 420px;
+          max-height: 560px;
           gap: 0;
-          align-items: center;
+          align-items: stretch;
           box-sizing: border-box;
         }
         .hero-content {
@@ -4746,8 +4748,8 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
             overflow: hidden;
             margin-top: 12px;
             width: 100%;
-            aspect-ratio: 16 / 9;
-            max-height: 240px;
+            aspect-ratio: 4 / 3;
+            max-height: 280px;
             height: auto;
           }
           .hero-visual img { border-radius: 16px; }
@@ -4761,16 +4763,18 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
             position: relative;
           }
           .hero-image-wrapper img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 16px; }
+          .hero-image-wrapper img.hb-contain { object-fit: contain; max-width: 100%; max-height: 100%; width: auto; height: auto; margin: auto; }
           .hb-shimmer { position: absolute; inset: 0; background: #eceff1; }
-          .hb-blur { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: blur(24px) saturate(1.1); transform: scale(1.15); opacity: .9; }
+          .hb-blur { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: blur(24px) saturate(1.1); transform: scale(1.15); opacity: .9; z-index: 0; }
+          .hero-image-wrapper img { position: relative; z-index: 1; }
           .hero-dots { padding: 10px 0 0; }
           .hero-search { max-width: 100% !important; height: 56px; border-radius: 16px; }
           .hero-search-input { width: 100%; }
           .hero-dots { padding: 14px 16px 20px; }
         }
         @media (min-width: 768px) and (max-width: 1099px) {
-          .hero-visual { max-height: 300px; }
-          .hero-image-wrapper { max-height: 300px; }
+          .hero-visual { aspect-ratio: 16 / 10; max-height: 340px; border-radius: 16px; }
+          .hero-image-wrapper { max-height: 340px; border-radius: 16px; }
         }
         @media (max-width: 375px) {
           .hero-visual { height: 230px; }
@@ -5068,6 +5072,7 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
               {slide.mobileImage && <source media="(max-width: 767px)" srcSet={slide.mobileImage} />}
               <img
                 key={slide.id + '-img'}
+                className={lowRatio ? 'hb-contain' : ''}
                 src={slide.mobileImage || slide.image}
                 alt=""
                 aria-hidden="true"
@@ -5076,9 +5081,9 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
                 decoding="async"
                 fetchPriority={idx === 0 ? 'high' : 'auto'}
                 loading={idx === 0 ? 'eager' : 'lazy'}
-                style={{ objectPosition: slide.imagePos || 'center center', objectFit: lowRatio ? 'contain' : 'cover' }}
+                style={{ objectPosition: slide.imagePos || 'center center', objectFit: lowRatio ? 'contain' : 'cover', opacity: 1, filter: 'none' }}
                 onLoad={handleImgLoad}
-                onError={() => setImgFailed(true)}
+                onError={() => { setImgLoaded(true); setImgFailed(true) }}
               />
             </picture>
           </div>
