@@ -4672,6 +4672,9 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
           animation: heroFadeSlide 0.6s ease both;
           max-width: 520px;
           padding: 48px 0 40px 48px;
+          display: flex;
+          flex-direction: column;
+          gap: 0;
         }
         .hero-visual {
           animation: heroScaleIn 0.6s ease 0.05s both;
@@ -4714,6 +4717,16 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
         .hero-entrance-badge { animation: heroFadeSlide 0.5s cubic-bezier(0.22,1,0.36,1) 0.05s both; }
         .hero-entrance-title { animation: heroFadeSlide 0.5s cubic-bezier(0.22,1,0.36,1) 0.15s both; }
         .hero-entrance-desc  { animation: heroFadeSlide 0.5s cubic-bezier(0.22,1,0.36,1) 0.25s both; }
+        .hero-desc { font-size: 14px; line-height: 1.45; color: #5f6368; margin-top: 8px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; min-width: 0; }
+        .hero-price { font-size: 13px; font-weight: 800; color: #0F9D58; margin-top: 8px; white-space: nowrap; }
+        .hero-search-wrap { margin-top: 16px; }
+        .hero-btn-wrap { margin-top: 12px; align-self: flex-start; }
+        @media (min-width: 1100px) {
+          .hero-desc { font-size: 15px; margin-top: 10px; }
+          .hero-price { font-size: 14px; margin-top: 10px; }
+          .hero-search-wrap { margin-top: 20px; }
+          .hero-btn-wrap { margin-top: 14px; }
+        }
         .hero-entrance-search { animation: heroFadeSlide 0.55s cubic-bezier(0.22,1,0.36,1) 0.35s both; }
         .hero-entrance-image { animation: heroScaleIn 0.6s cubic-bezier(0.22,1,0.36,1) 0.1s both; }
         .hero-dots {
@@ -4749,7 +4762,7 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
             padding: 0;
             align-items: start;
           }
-          .hero-content { position: relative; z-index: 1; max-width: 100%; padding: 24px 16px; box-sizing: border-box; }
+          .hero-content { position: relative; z-index: 1; max-width: 100%; padding: 24px 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: 0; }
           .hero-content h1 { font-size: 32px !important; line-height: 1.15 !important; overflow-wrap: break-word; word-break: break-word; hyphens: auto; }
           .hero-content p { font-size: 15px !important; line-height: 1.5 !important; overflow-wrap: break-word; word-break: break-word; hyphens: auto; }
           .hero-visual {
@@ -4812,7 +4825,7 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
             </div>
           )}
           <h1 className="hero-entrance-title" style={{
-            margin: '0 0 10px',
+            margin: 0,
             fontFamily: T.fontDisplay,
             fontSize: 'clamp(24px, 3.2vw, 36px)',
             fontWeight: 800,
@@ -4825,20 +4838,14 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
           }}>
             {slide.title}
           </h1>
-          <p className="hero-entrance-desc" style={{
-            margin: '0 0 20px',
-            fontSize: 14.5,
-            color: '#6B7280',
-            lineHeight: 1.6,
-            fontWeight: 500,
-            overflowWrap: 'anywhere',
-            minWidth: 0,
-          }}>
-            {slide.description || slide.desc}
-          </p>
+          {(slide.description || slide.desc) ? (
+            <p className="hero-entrance-desc hero-desc" style={{ margin: 0 }}>
+              {slide.description || slide.desc}
+            </p>
+          ) : null}
 
           {onSearch && (
-            <div ref={searchRef} className="hero-entrance-search" style={{ maxWidth: 420, position: 'relative', zIndex: 100 }}>
+            <div ref={searchRef} className="hero-entrance-search hero-search-wrap" style={{ maxWidth: 420, position: 'relative', zIndex: 100 }}>
               <div className="hero-search">
                 <div style={{ display: 'flex', alignItems: 'center', height: '100%', borderRadius: 16, overflow: 'hidden', width: '100%' }}>
                   <input
@@ -5028,14 +5035,10 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
             </div>
           )}
 
-          <div style={{ marginTop: 12, minHeight: 31 }}>
-            {slide?.listing && isListingActive(slide?.listing) && slide?.listing?.price != null && (
-              <span style={{ fontSize: 13, fontWeight: 800, color: '#0F9D58', background: '#e8f5ee', borderRadius: 999, padding: '4px 10px', display: 'inline-block', marginBottom: 10 }}>
-                {formatPrice(slide.listing.price)}
-              </span>
-            )}
-          </div>
-          <div style={{ marginTop: 16 }}>
+          {slide?.listing && isListingActive(slide?.listing) && slide?.listing?.price != null && (
+            <div className="hero-price">Price: {formatPrice(slide.listing.price)}</div>
+          )}
+          <div className="hero-btn-wrap">
             <button
               type="button"
               aria-label={slide?.listing && isListingActive(slide?.listing) ? `Open ${slide.listing.title}` : undefined}
