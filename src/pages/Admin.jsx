@@ -3300,16 +3300,18 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
             <button type="button" onClick={() => setPreviewMode('desktop')}
               style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #d0ddd5', background: previewMode === 'desktop' ? '#1a7a4a' : '#fff', color: previewMode === 'desktop' ? '#fff' : '#555', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Desktop</button>
           </div>
-          <div style={{ width: previewMode === 'phone' ? 360 : 768, maxWidth: '100%', margin: '0 auto', position: 'relative', overflow: 'hidden', borderRadius: 16, aspectRatio: previewMode === 'phone' ? '16 / 11' : '21 / 9', maxHeight: previewMode === 'phone' ? 300 : 340, background: '#eceff1' }}>
-            {form.image_url && <img src={form.image_url} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: form.image_pos || 'center center' }} />}
-            <div style={{ position: 'absolute', inset: 0, background: previewMode === 'phone' ? 'linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.35) 55%, transparent 100%)' : 'linear-gradient(to right, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.25) 55%, transparent 80%)' }} />
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', justifyContent: previewMode === 'phone' ? 'flex-end' : 'center', padding: previewMode === 'phone' ? 16 : 24, maxWidth: previewMode === 'phone' ? '100%' : '58%', color: '#fff', textShadow: '0 1px 6px rgba(0,0,0,0.35)' }}>
-              <div style={{ fontSize: previewMode === 'phone' ? 'clamp(18px, 4.6vw, 30px)' : 'clamp(24px, 2.6vw, 38px)', fontWeight: 800, lineHeight: 1.15, marginBottom: 6, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', overflowWrap: 'anywhere' }}>{form.title}</div>
-              <div style={{ fontSize: 'clamp(12.5px, 3.4vw, 15px)', lineHeight: 1.4, color: 'rgba(255,255,255,0.88)', marginBottom: 12, display: '-webkit-box', WebkitLineClamp: previewMode === 'phone' ? 2 : 3, WebkitBoxOrient: 'vertical', overflow: 'hidden', overflowWrap: 'anywhere' }}>{form.description}</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
-                {form.listing_id && <span style={{ fontSize: 13, fontWeight: 800, color: '#0F9D58', background: '#e8f5ee', borderRadius: 999, padding: '4px 10px', marginBottom: 10 }}>{getBannerCta({ id: form.listing_id }, form.cta_label)}</span>}
-                <button type="button" style={{ height: previewMode === 'phone' ? 40 : 44, padding: '0 18px', border: 'none', borderRadius: 12, background: form.accent || '#0F9D58', color: '#fff', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{getBannerCta({ id: form.listing_id }, form.cta_label)}</button>
+          <div style={{ width: previewMode === 'phone' ? 360 : 768, maxWidth: '100%', margin: '0 auto', display: 'grid', gridTemplateColumns: previewMode === 'phone' ? '1fr' : '1.1fr 0.9fr', borderRadius: 16, overflow: 'hidden', background: 'transparent', boxShadow: '0 4px 14px rgba(16,24,40,0.08)' }}>
+            <div style={{ padding: previewMode === 'phone' ? '16px' : '24px 0 24px 24px', color: '#111827' }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: form.accent || '#0F9D58', background: `${form.accent || '#0F9D58'}12`, borderRadius: 999, padding: '3px 10px 3px 8px', marginBottom: 10, display: 'inline-block', textTransform: 'uppercase' }}>{form.badge || ''}</div>
+              <div style={{ fontSize: previewMode === 'phone' ? 18 : 24, fontWeight: 800, lineHeight: 1.2, marginBottom: 6, overflowWrap: 'anywhere', minWidth: 0 }}>{form.title}</div>
+              <div style={{ fontSize: 13, color: '#6B7280', lineHeight: 1.5, marginBottom: 12, overflowWrap: 'anywhere', minWidth: 0 }}>{form.description}</div>
+              <div style={{ marginTop: 8, minHeight: 31 }}>
+                {form.listing_id && <span style={{ fontSize: 13, fontWeight: 800, color: '#0F9D58', background: '#e8f5ee', borderRadius: 999, padding: '4px 10px', display: 'inline-block', marginBottom: 10 }}>{getBannerCta({ id: form.listing_id }, form.cta_label)}</span>}
               </div>
+              <button type="button" style={{ height: previewMode === 'phone' ? 40 : 44, padding: '0 18px', border: 'none', borderRadius: 12, background: form.accent || '#0F9D58', color: '#fff', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{getBannerCta({ id: form.listing_id }, form.cta_label)}</button>
+            </div>
+            <div style={{ position: 'relative', overflow: 'hidden', minHeight: 120, background: '#eceff1' }}>
+              {form.image_url && <img src={form.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: form.image_pos || 'center center' }} />}
             </div>
           </div>
         </div>
