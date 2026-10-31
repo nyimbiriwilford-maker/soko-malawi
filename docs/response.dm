@@ -8,4 +8,4 @@ Changes:
 - Home strips price text from desc at render; single price chip above button using formatPrice, reserved space.
 - Old "Shop now" auto button_text ignored on Home.
 
-Build passed (npm run build). Commit: (see hash)
+Build passed (npm run build). Commit: beee982. Pushed to origin/master.

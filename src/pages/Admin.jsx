@@ -2700,6 +2700,7 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
     end_date: banner?.end_date ? banner.end_date.slice(0, 10) : '',
     listing_id: banner?.listing_id || null,
     cta_label: banner?.cta_label || '',
+    image_pos: banner?.image_pos || 'center center',
   })
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pickerLoading, setPickerLoading] = useState(false)
@@ -2725,6 +2726,8 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
   const [mobileUploading, setMobileUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [mobileUploadError, setMobileUploadError] = useState('')
+  const [imageWarning, setImageWarning] = useState('')
+  const [previewMode, setPreviewMode] = useState('phone')
   const fileRef = useRef(null)
   const mobileFileRef = useRef(null)
 
@@ -2864,6 +2867,21 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
     const file = e.target.files?.[0]
     if (!file) return
     setUploadErrorFn('')
+    setImageWarning('')
+    // dimension check
+    try {
+      const url = URL.createObjectURL(file)
+      const img = new Image()
+      await new Promise((resolve, reject) => {
+        img.onload = resolve
+        img.onerror = reject
+        img.src = url
+      })
+      URL.revokeObjectURL(url)
+      if (img.naturalWidth < 1200) setImageWarning('Image is under 1200px wide. Use a wide image (about 1600 x 700) with the subject near the center.')
+      const ratio = img.naturalWidth / img.naturalHeight
+      if (Math.abs(ratio - 21 / 9) > 0.6) setImageWarning('Aspect ratio is far from 21/9. Use a wide image (about 1600 x 700) with the subject near the center.')
+    } catch (_) {}
     setUploadingFn(true)
 
     const oldUrl = form[targetField]
@@ -2922,6 +2940,7 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
           <input type="text" value={form.title} onChange={e => set('title', e.target.value)}
             placeholder="Buy. Sell. Discover. Everything Malawi."
             style={i} />
+          <div style={{ fontSize: 11, marginTop: 4, color: form.title.length > 48 ? '#b45309' : '#888' }}>{form.title.length}/60</div>
         </div>
 
         <div style={{ marginBottom: 16 }}>
@@ -2929,6 +2948,7 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
           <textarea value={form.description} onChange={e => set('description', e.target.value)}
             placeholder="Supporting text for the banner"
             rows={3} style={{ ...i, resize: 'vertical' }} />
+          <div style={{ fontSize: 11, marginTop: 4, color: form.description.length > 96 ? '#b45309' : '#888' }}>{form.description.length}/120</div>
         </div>
 
 {(mode === 'custom' || form.listing_id) && (
@@ -2960,6 +2980,27 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
               No image selected
             </div>
           )}
+          {imageWarning && (
+            <div style={{ marginTop: 6, fontSize: 12, color: '#b45309' }}>⚠️ {imageWarning}</div>
+          )}
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 6 }}>IMAGE POSITION</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4, maxWidth: 180 }}>
+              {[
+                ['left top','top-left'], ['center top','top'], ['right top','top-right'],
+                ['left center','left'], ['center center','center'], ['right center','right'],
+                ['left bottom','bottom-left'], ['center bottom','bottom'], ['right bottom','bottom-right'],
+              ].map(([val, lbl]) => (
+                <button key={val} type="button" onClick={() => set('image_pos', val)}
+                  style={{
+                    padding: '6px 4px', fontSize: 10, fontWeight: 700, borderRadius: 6, cursor: 'pointer',
+                    border: '1px solid #d0ddd5',
+                    background: (form.image_pos || 'center center') === val ? '#1a7a4a' : '#fff',
+                    color: (form.image_pos || 'center center') === val ? '#fff' : '#555',
+                  }}>{lbl}</button>
+              ))}
+            </div>
+          </div>
         </div>
 
         <div style={{ marginBottom: 16 }}>
@@ -3210,6 +3251,7 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
           <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>BUTTON LABEL (optional)</div>
           <input type="text" maxLength={24} value={form.cta_label} onChange={e => { set('cta_label', e.target.value); setCtaTouched(true) }}
             placeholder={form.listing_id ? 'View product' : 'Explore Marketplace'} style={i} />
+          <div style={{ fontSize: 11, marginTop: 4, color: (form.cta_label || '').length > 19 ? '#b45309' : '#888' }}>{(form.cta_label || '').length}/24</div>
           {form.listing_id && (
             <div style={{ marginTop: 6, fontSize: 12, color: '#888' }}>
               Preview: <span style={{ display: 'inline-block', padding: '4px 10px', borderRadius: 8, background: '#1a7a4a', color: '#fff', fontWeight: 700, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', verticalAlign: 'middle' }}>
@@ -3251,6 +3293,26 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
 </>
         )}
 
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+            <button type="button" onClick={() => setPreviewMode('phone')}
+              style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #d0ddd5', background: previewMode === 'phone' ? '#1a7a4a' : '#fff', color: previewMode === 'phone' ? '#fff' : '#555', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Phone</button>
+            <button type="button" onClick={() => setPreviewMode('desktop')}
+              style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #d0ddd5', background: previewMode === 'desktop' ? '#1a7a4a' : '#fff', color: previewMode === 'desktop' ? '#fff' : '#555', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Desktop</button>
+          </div>
+          <div style={{ width: previewMode === 'phone' ? 360 : 768, maxWidth: '100%', margin: '0 auto', position: 'relative', overflow: 'hidden', borderRadius: 16, aspectRatio: previewMode === 'phone' ? '16 / 11' : '21 / 9', maxHeight: previewMode === 'phone' ? 300 : 340, background: '#eceff1' }}>
+            {form.image_url && <img src={form.image_url} alt="" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', objectPosition: form.image_pos || 'center center' }} />}
+            <div style={{ position: 'absolute', inset: 0, background: previewMode === 'phone' ? 'linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.35) 55%, transparent 100%)' : 'linear-gradient(to right, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.25) 55%, transparent 80%)' }} />
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', justifyContent: previewMode === 'phone' ? 'flex-end' : 'center', padding: previewMode === 'phone' ? 16 : 24, maxWidth: previewMode === 'phone' ? '100%' : '58%', color: '#fff', textShadow: '0 1px 6px rgba(0,0,0,0.35)' }}>
+              <div style={{ fontSize: previewMode === 'phone' ? 'clamp(18px, 4.6vw, 30px)' : 'clamp(24px, 2.6vw, 38px)', fontWeight: 800, lineHeight: 1.15, marginBottom: 6, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', overflowWrap: 'anywhere' }}>{form.title}</div>
+              <div style={{ fontSize: 'clamp(12.5px, 3.4vw, 15px)', lineHeight: 1.4, color: 'rgba(255,255,255,0.88)', marginBottom: 12, display: '-webkit-box', WebkitLineClamp: previewMode === 'phone' ? 2 : 3, WebkitBoxOrient: 'vertical', overflow: 'hidden', overflowWrap: 'anywhere' }}>{form.description}</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, alignItems: 'center' }}>
+                {form.listing_id && <span style={{ fontSize: 13, fontWeight: 800, color: '#0F9D58', background: '#e8f5ee', borderRadius: 999, padding: '4px 10px', marginBottom: 10 }}>{getBannerCta({ id: form.listing_id }, form.cta_label)}</span>}
+                <button type="button" style={{ height: previewMode === 'phone' ? 40 : 44, padding: '0 18px', border: 'none', borderRadius: 12, background: form.accent || '#0F9D58', color: '#fff', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{getBannerCta({ id: form.listing_id }, form.cta_label)}</button>
+              </div>
+            </div>
+          </div>
+        </div>
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', borderTop: '1px solid #e8f0ec', paddingTop: 20 }}>
           <button onClick={onCancel}
             style={{
