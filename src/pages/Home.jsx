@@ -864,7 +864,7 @@ function GlobalStyles() {
         .soko-latest-section {
           padding-left: 14px !important;
           padding-right: 14px !important;
-          padding-bottom: 24px !important;
+          padding-bottom: 0 !important;
         }
         .soko-product-card .soko-latest-badge-stack,
         .soko-product-card-media .soko-latest-badge-stack {
@@ -893,9 +893,9 @@ function GlobalStyles() {
           padding-top: 16px !important;
           padding-bottom: 8px !important;
         }
-        .soko-latest-section {
-          padding-bottom: 16px !important;
-        }
+         .soko-latest-section {
+           padding-bottom: 0 !important;
+         }
 
         /* Featured revenue banner — compact app strip */
         section[aria-label="Get featured pricing"] {
@@ -1722,15 +1722,25 @@ function LatestListingsSection({ listings, navigate, loading, user, savedIds, on
   if (!loading && latest.length === 0) return null
 
   return (
-    <section className="soko-latest-section" aria-labelledby="latest-listings-title" style={{ padding: '0 24px clamp(4px,0.5vw,8px) 24px', background: 'transparent' }}>
+    <section className="soko-latest-section" aria-labelledby="latest-listings-title" style={{ padding: '0 24px 0 24px', background: 'transparent' }}>
       <style>{`
         @keyframes latestFadeSlide {
           from { opacity: 0; transform: translateY(20px); }
           to   { opacity: 1; transform: translateY(0); }
         }
-        .latest-animate-in {
-          animation: latestFadeSlide 0.5s ease forwards;
-        }
+         .latest-animate-in {
+           animation: latestFadeSlide 0.5s ease forwards;
+         }
+         .soko-latest-browse-wrap {
+           margin-top: 20px;
+           margin-bottom: 0;
+         }
+         @media (min-width: 768px) {
+           .soko-latest-browse-wrap { margin-top: 24px; }
+         }
+         @media (min-width: 1100px) {
+           .soko-latest-browse-wrap { margin-top: 28px; }
+         }
         .soko-latest-body {
           padding: 12px;
           gap: 0;
@@ -1849,7 +1859,7 @@ function LatestListingsSection({ listings, navigate, loading, user, savedIds, on
         </div>
 
         {!loading && hasMoreElsewhere && (
-          <div style={{ display: 'flex', justifyContent: 'center', marginTop: 22 }}>
+          <div className="soko-latest-browse-wrap" style={{ display: 'flex', justifyContent: 'center' }}>
             <button
               type="button"
               onClick={() => navigate('/listings')}
@@ -1884,7 +1894,7 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
-function LookingForSection({ navigate, requests, loading, userLat, userLng, activeDistrict, viewerLocation: viewerLocationProp, user }) {
+function LookingForSection({ navigate, requests, loading, userLat, userLng, activeDistrict, viewerLocation: viewerLocationProp, user, browseButtonVisible = false }) {
   const [viewerLoc,    setViewerLoc]    = React.useState(viewerLocationProp || null)
   const [detectingGps, setDetectingGps] = React.useState(!viewerLocationProp)
   const [gpsError,     setGpsError]     = React.useState(null)
@@ -2177,11 +2187,18 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
   }
 
   return (
-    <section className="soko-section-pad" style={{
-      padding: '12px 20px 32px', background: '#f8fafc',
+    <section className={`soko-section-pad lf-section ${browseButtonVisible ? 'lf-spacing-browse' : 'lf-spacing-nobrowse'}`} style={{
+      padding: '0 24px 32px', background: 'transparent',
     }}>
       <style>{`
-        .lfr-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; padding:4px 0 16px; }
+         .lfr-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; padding:4px 0 16px; }
+         .lf-section { padding-top: 0 !important; }
+         .lf-spacing-browse { margin-top: 32px; }
+         @media (min-width: 768px) { .lf-spacing-browse { margin-top: 40px; } }
+         @media (min-width: 1100px) { .lf-spacing-browse { margin-top: 48px; } }
+         .lf-spacing-nobrowse { margin-top: 40px; }
+         @media (min-width: 768px) { .lf-spacing-nobrowse { margin-top: 48px; } }
+         @media (min-width: 1100px) { .lf-spacing-nobrowse { margin-top: 56px; } }
         .lfr-card {
           background:#fff; border-radius:20px; border:1px solid #f1f5f9;
           box-shadow:0 1px 3px rgba(0,0,0,0.04),0 4px 16px rgba(0,0,0,0.04);
@@ -5981,6 +5998,8 @@ export default function Home() {
     () => new Set((featuredListings || []).map(l => l.id).filter(Boolean)),
     [featuredListings],
   )
+  const availableLatest = (listings || []).filter(l => l?.id && !featuredIdSet.has(l.id))
+  const latestHasMore = !loading && availableLatest.length > HOME_LATEST_COUNT
 
   return (
     <div className="soko-v3">
@@ -6093,30 +6112,19 @@ export default function Home() {
         />
       </div>
 
-      <div className="ll-lf-bridge" style={{
-        display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
-        height:40, padding:'0 20px',
-        background: 'linear-gradient(180deg, #F8FAFC 0%, #fafbfa 100%)',
-        opacity: sectionsLoading ? 0 : 1, transition: 'opacity 0.25s ease',
-      }}>
-        <div style={{
-          width:'100%', maxWidth:160, height:1, borderRadius:1,
-          background:'linear-gradient(90deg, transparent, #D1D5DB, transparent)',
-        }} />
-      </div>
-
       {!isOffline && (
         <div className={!sectionsLoading ? 'soko-swap-in' : undefined}>
-          <LookingForSection
-            navigate={navigate}
-            requests={requests}
-            loading={sectionsLoading}
-            userLat={userLat}
-            userLng={userLng}
-            activeDistrict={activeDistrict}
-            viewerLocation={homeGpsLocation}
-            user={user}
-          />
+           <LookingForSection
+             navigate={navigate}
+             requests={requests}
+             loading={sectionsLoading}
+             userLat={userLat}
+             userLng={userLng}
+             activeDistrict={activeDistrict}
+             viewerLocation={homeGpsLocation}
+             user={user}
+             browseButtonVisible={latestHasMore}
+           />
         </div>
       )}
 
