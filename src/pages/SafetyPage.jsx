@@ -30,7 +30,7 @@ const DO = [
 const DONT = [
   { icon: '💸', title: 'Never pay in advance', body: 'No deposit, no "booking fee", no delivery pre-payment to a stranger. A genuine seller will not ask for money before you see the item. Advance-payment requests are the #1 scam pattern.' },
   { icon: '📱', title: 'Never share OTPs or passwords', body: 'No SokoMW staff will ever ask for your password or the code sent to your email. Anyone asking is trying to take over your account — report them immediately.' },
-  { icon: '🎣', title: 'Don\'t trust "too good to be true"', body: 'A brand-new iPhone at a quarter of the price? A job that pays before you work? If it looks too good, it is a scam. Compare prices across listings before you commit.' },
+  { icon: '🎣', title: 'Don\'t trust "too good to be true"', body: 'A brand-new iPhone at a quarter of the price? An offer that pays before you work? If it looks too good, it is a scam. Compare prices across listings before you commit.' },
   { icon: '📦', title: 'Don\'t pay for "delivery" you didn\'t arrange', body: 'If the seller suddenly says an agent will deliver the item and you must pay the agent first, stop. Meet in person instead. Fake courier + advance delivery fee is a common scam.' },
   { icon: '🔗', title: 'Don\'t transact off-platform links', body: 'If a seller sends you to another website to "complete payment", or asks you to click strange links, do not. SokoMW deals are completed in person or via chat — nothing needs an external payment site.' },
   { icon: '⚡', title: 'Don\'t let anyone rush you', body: '"Someone else is buying it right now!" Pressure is a scammer\'s tool. A genuine seller will let you ask questions, inspect the item and think it over.' },

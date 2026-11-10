@@ -2981,7 +2981,7 @@ function HomeWorkCard({
         }
       }}
       className="soko-work-card"
-      aria-label={`Open job details for ${title || 'job'}`}
+      aria-label={`Open details for ${title || 'listing'}`}
     >
       <div className="soko-wc-media" style={{ background: accentBg }}>
         {image ? (
