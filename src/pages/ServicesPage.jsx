@@ -5,7 +5,7 @@ import { SERVICE_CATS, CITIES, avatarColor, initials } from './serviceData'
 import ServiceForm from './ServiceForm'
 import ProviderModal from './ProviderModal'
 import SokoNav from '../components/SokoNav'
-import { Search, X, MapPin, Wrench, Plus, Pencil, Pause, Play, Trash2, Loader2, BadgeCheck } from 'lucide-react'
+import { Search, X, MapPin, Wrench, Pencil, Pause, Play, Trash2, Loader2, BadgeCheck } from 'lucide-react'
 
 const css = `
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -25,34 +25,27 @@ const css = `
   .svc-page {
     max-width: 1280px;
     margin: 0 auto;
-    padding: 0 14px;
+    padding: 16px 14px 0;
     display: flex;
     flex-direction: column;
   }
+  @media (min-width: 768px) {
+    .svc-page { padding-top: 20px; }
+  }
   @media (min-width: 1100px) {
-    .svc-page { padding: 0 24px; }
+    .svc-page { padding: 24px 24px 0; }
   }
 
-  /* Header */
-  .svc-header {
-    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  /* Hero */
+  .svc-hero {
+    display: flex; flex-direction: column; gap: 12px;
     margin-bottom: 14px;
   }
-  @media (min-width: 768px) { .svc-header { margin-bottom: 18px; } }
-  @media (min-width: 1100px) { .svc-header { margin-bottom: 22px; } }
+  @media (min-width: 768px) { .svc-hero { margin-bottom: 16px; } }
+  @media (min-width: 1100px) { .svc-hero { gap: 14px; margin-bottom: 18px; } }
   .svc-title { font-size: 20px; line-height: 22px; font-weight: 800; color: #202124; margin: 0; }
   @media (min-width: 1100px) { .svc-title { font-size: 22px; } }
-  .svc-subtitle { font-size: 13px; color: #5f6368; margin-top: 2px; }
-  .svc-list-btn {
-    display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-    height: 40px; padding: 0 16px; border: none; border-radius: 12px;
-    background: #0F9D58; color: #fff; font-size: 13px; font-weight: 700;
-    cursor: pointer; flex-shrink: 0; font-family: inherit;
-  }
-  @media (max-width: 767px) {
-    .svc-list-btn { width: 40px; padding: 0; }
-    .svc-list-btn .svc-list-btn-text { display: none; }
-  }
+  .svc-subtitle { font-size: 13px; color: #5f6368; margin: 0; }
 
   /* Segmented */
   .svc-segmented {
@@ -72,14 +65,21 @@ const css = `
 
   /* Toolbar */
   .svc-toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
+  @media (min-width: 768px) { .svc-toolbar { margin-bottom: 14px; } }
+  @media (min-width: 1100px) { .svc-toolbar { margin-bottom: 16px; } }
   @media (max-width: 767px) { .svc-toolbar { flex-direction: column; align-items: stretch; } }
   .svc-search {
     flex: 1; display: flex; align-items: center; gap: 10px;
-    height: 44px; padding: 0 12px; border-radius: 12px;
+    height: 48px; padding: 0 12px; border-radius: 12px;
     background: #fff; border: 1px solid #e8eaed;
   }
+  @media (min-width: 1100px) { .svc-search { height: 52px; } }
   .svc-search input { flex: 1; border: none; background: transparent; font-size: 14px; color: #202124; outline: none; height: 100%; font-family: inherit; }
   .svc-search input::placeholder { color: #9aa0a6; }
+  .svc-search-clear {
+    width: 44px; height: 44px; border: none; background: transparent; color: #9aa0a6;
+    display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;
+  }
   .svc-city {
     height: 44px; min-width: 160px; border-radius: 12px; border: 1px solid #e8eaed;
     background: #fff; padding: 0 12px; font-size: 13px; color: #5f6368; font-weight: 600;
@@ -159,17 +159,6 @@ const css = `
     gap: 4px; flex-shrink: 0; font-family: inherit;
   }
   @media (max-width: 767px) { .svc-book-btn { width: 100%; } }
-
-  /* Add tile */
-  .svc-add-tile {
-    border: 1.5px dashed #34c77a; background: #e6f6ed; border-radius: 16px;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 6px; text-align: center; padding: 16px; cursor: pointer;
-    font-family: inherit; min-height: 200px;
-  }
-  .svc-add-tile .svc-add-icon { color: #34c77a; }
-  .svc-add-tile-title { font-size: 14px; font-weight: 700; color: #0F9D58; }
-  .svc-add-tile-sub { font-size: 12px; color: #5f6368; }
 
   /* Empty */
   .svc-empty { text-align: center; padding: 48px 24px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
@@ -392,7 +381,6 @@ export default function Services() {
   const myServices = services.filter(s => s.provider_id === currentUser?.id)
 
   const n = filtered.length
-  const showAddTile = !loading && filtered.length > 0 && filtered.length < 4
 
   return (
     <div className="soko-services">
@@ -410,27 +398,10 @@ export default function Services() {
       />
 
       <div className="svc-page">
-        <div className="svc-header">
-          <div>
-            <h1 className="svc-title">Services</h1>
-            <p className="svc-subtitle">{loading ? 'Loading providers…' : `${n} provider${n !== 1 ? 's' : ''} available in Malawi`}</p>
-          </div>
-          <button type="button" className="svc-list-btn" onClick={() => { setEditingService(null); setTab('post') }}>
-            <Plus size={16} strokeWidth={2.5} />
-            <span className="svc-list-btn-text">List Service</span>
-          </button>
+        <div className="svc-hero">
+          <h1 className="svc-title">Find Trusted Services</h1>
+          <p className="svc-subtitle">Book skilled providers across Malawi</p>
         </div>
-
-        {(tab === 'browse' || tab === 'mine') && (
-          <div className="svc-segmented">
-            <button type="button" className={`svc-seg${tab === 'browse' ? ' active' : ''}`} onClick={() => setTab('browse')}>
-              All Services
-            </button>
-            <button type="button" className={`svc-seg${tab === 'mine' ? ' active' : ''}`} onClick={() => setTab('mine')}>
-              My Services ({myServices.length})
-            </button>
-          </div>
-        )}
 
         {tab === 'browse' && (
           <>
@@ -438,14 +409,14 @@ export default function Services() {
               <div className="svc-search">
                 <Search size={16} strokeWidth={2.2} style={{ color: '#9aa0a6', flexShrink: 0 }} />
                 <input
-                  placeholder="Search services..."
+                  placeholder="What do you need? e.g. plumber, tutor, photographer"
                   value={search}
                   onChange={e => setSearch(e.target.value)}
                   autoComplete="off"
                 />
                 {search && (
-                  <button type="button" onClick={() => setSearch('')} style={{ background: 'none', border: 'none', color: '#9aa0a6', cursor: 'pointer', padding: 0 }}>
-                    <X size={14} strokeWidth={2.5} />
+                  <button type="button" className="svc-search-clear" onClick={() => setSearch('')} aria-label="Clear search">
+                    <X size={16} strokeWidth={2.5} />
                   </button>
                 )}
               </div>
@@ -456,7 +427,18 @@ export default function Services() {
               </select>
             </div>
 
-            <div className="svc-chips-wrap">
+            {(tab === 'browse' || tab === 'mine') && (
+              <div className="svc-segmented">
+                <button type="button" className={`svc-seg${tab === 'browse' ? ' active' : ''}`} onClick={() => setTab('browse')}>
+                  All Services
+                </button>
+                <button type="button" className={`svc-seg${tab === 'mine' ? ' active' : ''}`} onClick={() => setTab('mine')}>
+                  My Services ({myServices.length})
+                </button>
+              </div>
+            )}
+
+              <div className="svc-chips-wrap">
               <div className="svc-chips">
                 <button type="button" className={`svc-chip${activeCat === '' ? ' active' : ''}`} onClick={() => setActiveCat('')}>
                   All <span className="svc-chip-count">{services.length}</span>
@@ -506,13 +488,6 @@ export default function Services() {
                     isMine={false}
                   />
                 ))}
-                {showAddTile && (
-                  <button type="button" className="svc-add-tile" onClick={() => { setEditingService(null); setTab('post') }}>
-                    <Plus size={28} strokeWidth={2} className="svc-add-icon" />
-                    <span className="svc-add-tile-title">Offer your service</span>
-                    <span className="svc-add-tile-sub">Reach customers across Malawi</span>
-                  </button>
-                )}
               </div>
             )}
           </>
@@ -530,6 +505,14 @@ export default function Services() {
 
         {tab === 'mine' && (
           <>
+            <div className="svc-segmented">
+              <button type="button" className={`svc-seg${tab === 'browse' ? ' active' : ''}`} onClick={() => setTab('browse')}>
+                All Services
+              </button>
+              <button type="button" className={`svc-seg${tab === 'mine' ? ' active' : ''}`} onClick={() => setTab('mine')}>
+                My Services ({myServices.length})
+              </button>
+            </div>
             {myServices.length === 0 ? (
               <div className="svc-empty">
                 <div className="svc-empty-icon"><Wrench size={32} strokeWidth={1.5} /></div>
@@ -563,13 +546,6 @@ export default function Services() {
                     }}
                   />
                 ))}
-                {myServices.length < 4 && (
-                  <button type="button" className="svc-add-tile" onClick={() => { setEditingService(null); setTab('post') }}>
-                    <Plus size={28} strokeWidth={2} className="svc-add-icon" />
-                    <span className="svc-add-tile-title">Offer your service</span>
-                    <span className="svc-add-tile-sub">Reach customers across Malawi</span>
-                  </button>
-                )}
               </div>
             )}
           </>
