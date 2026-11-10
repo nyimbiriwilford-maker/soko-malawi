@@ -611,7 +611,7 @@ export default function StatusUploadModal({ user, onClose, onSuccess }) {
     const defaultCaption = s.mediaType === 'video' ? '' : 'Photo update'
 
     const kind = s.taggedKind || (s.taggedId ? 'listing' : null)
-    const statusType = kind === 'job' || kind === 'service'
+    const statusType = kind === 'service'
       ? 'work_ping'
       : kind
         ? 'listing_update'

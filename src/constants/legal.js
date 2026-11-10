@@ -1,7 +1,7 @@
 /**
  * SokoMw legal content — Terms & Conditions and Privacy Policy.
  * Shown on the login page; users must agree before creating an account.
- * Drafted against the app's real features (marketplace, shops, jobs, services,
+ * Drafted against the app's real features (marketplace, shops, services,
  * looking-for, statuses, chats/calls, vouching, featured listings) and the
  * Malawi Data Protection Act, 2024 (MACRA is the data protection authority).
  */
@@ -22,7 +22,7 @@ export const TERMS_SECTIONS = [
     id: 'acceptance',
     title: '1. Acceptance of These Terms',
     body:
-      'Welcome to SokoMw, a digital marketplace that connects buyers, sellers, service providers, job seekers and employers across Malawi. By creating an account, logging in, browsing or using any part of the SokoMw platform (the "Platform"), you agree to be bound by these Terms & Conditions (the "Terms"). If you do not agree with any part of these Terms, you must not create an account or use the Platform. When you tick the "I agree" box during sign-up, that tick forms a legally binding agreement between you and SokoMw.',
+      'Welcome to SokoMw, a digital marketplace that connects buyers, sellers, service providers, users across Malawi. By creating an account, logging in, browsing or using any part of the SokoMw platform (the "Platform"), you agree to be bound by these Terms & Conditions (the "Terms"). If you do not agree with any part of these Terms, you must not create an account or use the Platform. When you tick the "I agree" box during sign-up, that tick forms a legally binding agreement between you and SokoMw.',
   },
   {
     id: 'eligibility',
@@ -40,13 +40,13 @@ export const TERMS_SECTIONS = [
     id: 'platform-use',
     title: '4. Using the Platform',
     body:
-      'SokoMw provides a venue for users to list products, open shops, offer and request services, post and find jobs, publish "Looking For" requests, share status updates, chat, call and confirm deals. You may use the Platform only for lawful, personal and commercial purposes consistent with these Terms. You agree not to misuse the Platform, attempt to access systems you are not authorised for, interfere with other users, or use bots, scrapers or automated tools without our written permission.',
+      'SokoMw provides a venue for users to list products, open shops, offer and request services, publish "Looking For" requests, share status updates, chat, call and confirm deals. You may use the Platform only for lawful, personal and commercial purposes consistent with these Terms. You agree not to misuse the Platform, attempt to access systems you are not authorised for, interfere with other users, or use bots, scrapers or automated tools without our written permission.',
   },
   {
     id: 'user-content',
     title: '5. Your Content & Listings',
     body:
-      'You are solely responsible for everything you post — listings, shop details, job posts, service offers, "Looking For" requests, statuses, photos, videos, reviews, vouches and messages. You confirm that: (a) you own or have permission to use everything you upload; (b) your content is true, accurate and not misleading; (c) items you sell are genuine and lawfully yours; and (d) prices are stated honestly in Malawian Kwacha (MWK). By posting content you grant SokoMw a non-exclusive, royalty-free licence to store, display and process it to operate the Platform. You must remove or correct content that becomes inaccurate.',
+      'You are solely responsible for everything you post — listings, shop details, service offers, "Looking For" requests, statuses, photos, videos, reviews, vouches and messages. You confirm that: (a) you own or have permission to use everything you upload; (b) your content is true, accurate and not misleading; (c) items you sell are genuine and lawfully yours; and (d) prices are stated honestly in Malawian Kwacha (MWK). By posting content you grant SokoMw a non-exclusive, royalty-free licence to store, display and process it to operate the Platform. You must remove or correct content that becomes inaccurate.',
   },
   {
     id: 'prohibited',
@@ -58,7 +58,7 @@ export const TERMS_SECTIONS = [
     id: 'transactions',
     title: '7. Transactions Between Users',
     body:
-      'SokoMw is a platform that facilitates introductions and communication. It is not a party to any sale, hire, service or job contract between users, and does not hold goods or guarantee payments. All agreements, pricing, delivery, payment and performance are between the users directly, at their own risk. Always deal honestly and fairly: only confirm a "deal" when a real transaction has taken place — fake deal confirmations are detected and lead to suspension. When meeting in person, choose a public place, bring someone you trust, inspect goods before paying, and never share your OTP or banking secrets.',
+      'SokoMw is a platform that facilitates introductions and communication. It is not a party to any sale, hire, or service contract between users, and does not hold goods or guarantee payments. All agreements, pricing, delivery, payment and performance are between the users directly, at their own risk. Always deal honestly and fairly: only confirm a "deal" when a real transaction has taken place — fake deal confirmations are detected and lead to suspension. When meeting in person, choose a public place, bring someone you trust, inspect goods before paying, and never share your OTP or banking secrets.',
   },
   {
     id: 'fees',
@@ -157,13 +157,13 @@ export const PRIVACY_SECTIONS = [
     id: 'p-use',
     title: '3. How We Use Your Data',
     body:
-      'We use your data to create and manage your account; allow you to post listings, shops, jobs, services and statuses; connect you with other users through search, chats, calls and notifications; confirm deals and calculate trust scores; prevent fraud and abuse; verify your email (via one-time codes) and secure the Platform (e.g. Cloudflare Turnstile); and to improve our services. We do not sell your personal data.',
+      'We use your data to create and manage your account; allow you to post listings, shops, services and statuses; connect you with other users through search, chats, calls and notifications; confirm deals and calculate trust scores; prevent fraud and abuse; verify your email (via one-time codes) and secure the Platform (e.g. Cloudflare Turnstile); and to improve our services. We do not sell your personal data.',
   },
   {
     id: 'p-share',
     title: '4. Who We Share With',
     body:
-      'Information you make public (listings, shop details, job posts, statuses, profile name and photo) is visible to other Platform users. We share your data with trusted service providers who help operate the Platform, such as our hosting provider (Supabase), email and security services, and payment providers — only to the extent needed, under written contracts that require them to protect your data. We may share data where required by law or to protect the rights and safety of users or the public.',
+      'Information you make public (listings, shop details, statuses, profile name and photo) is visible to other Platform users. We share your data with trusted service providers who help operate the Platform, such as our hosting provider (Supabase), email and security services, and payment providers — only to the extent needed, under written contracts that require them to protect your data. We may share data where required by law or to protect the rights and safety of users or the public.',
   },
   {
     id: 'p-rights',

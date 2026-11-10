@@ -8,7 +8,7 @@
  * All design tokens mirror Home.jsx T object for visual consistency.
  *
  * v2 — multi-pillar search: tabs across Marketplace (listings), Shops,
- * People Looking For (buyer_requests), Jobs, and Services. Each tab queries
+ * People Looking For (buyer_requests), and Services. Each tab queries
  * its own real Supabase table (matching the schemas used in Home.jsx's
  * loadAuxSections) instead of every search only hitting `listings`.
  */
@@ -18,7 +18,7 @@ import React, {
 } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { isListingFeatured, rotateFeaturedFairly } from '../utils/homeUtils'
+import { isListingFeatured, isJobListing, rotateFeaturedFairly } from '../utils/homeUtils'
 import { buildChatPath } from '../utils/chatSources'
 import SokoNav from '../components/SokoNav'
 
@@ -203,7 +203,6 @@ const SEARCH_TABS = [
   { key: 'listings', label: 'Marketplace',        icon: (s) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12l9-9 9 9"/><path d="M5 10v10a1 1 0 0 0 1 1h3v-6h6v6h3a1 1 0 0 0 1-1V10"/></svg> },
   { key: 'shops',    label: 'Shops',               icon: (s) => Icon.shop(s) },
   { key: 'lookingfor', label: 'People Looking For', icon: (s) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0 1 16 0v1"/></svg> },
-  { key: 'jobs',     label: 'Jobs',                icon: (s) => Icon.briefcase(s) },
   { key: 'services', label: 'Services',            icon: (s) => Icon.wrench(s) },
 ]
 
@@ -277,7 +276,6 @@ const CATEGORY_TREE = [
     { key: 'Professional Services',   label: 'Professional Services' },
     { key: 'Other Services',          label: 'Other' },
   ]},
-  { key: 'Jobs',  label: 'Jobs' },
   { key: 'Other', label: 'Other' },
 ]
 
@@ -317,7 +315,6 @@ const PILLARS = [
   { key: 'marketplace', label: 'Marketplace',         path: '/',            icon: (s) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12l9-9 9 9"/><path d="M5 10v10a1 1 0 0 0 1 1h3v-6h6v6h3a1 1 0 0 0 1-1V10"/></svg> },
   { key: 'shops',       label: 'Shops',               path: '/shops',       icon: (s) => Icon.shop(s) },
   { key: 'lookingfor',  label: 'People Looking For',  path: '/looking-for', icon: (s) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a8 8 0 0 1 16 0v1"/></svg> },
-  { key: 'jobs',        label: 'Jobs',                path: '/jobs',        icon: (s) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg> },
   { key: 'services',    label: 'Services',            path: '/services',    icon: (s) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg> },
   { key: 'stories',     label: 'Statuses (Stories)', path: '/status',       icon: (s) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> },
   { key: 'verify',      label: 'Verification',        path: '/profile',     icon: (s) => <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg> },
@@ -1196,26 +1193,6 @@ function ShopResultCard({ shop, delay, onClick }) {
   )
 }
 
-/* ─────────────────────────────────────────────────────────────────────────────
-   JOB RESULT CARD — Jobs tab
-───────────────────────────────────────────────────────────────────────────── */
-function JobResultCard({ job, delay, onClick }) {
-  return (
-    <div className="sp-row-card" style={{ animationDelay:`${delay}s` }} onClick={onClick}>
-      <div style={{ width:42, height:42, borderRadius:10, background:T.blueL, color:T.blue, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>{Icon.briefcase(18)}</div>
-      <div style={{ flex:1, minWidth:0 }}>
-        <div style={{ fontSize:14, fontWeight:700, color:T.gray900 }}>{job.title}</div>
-        <div style={{ display:'flex', alignItems:'center', gap:10, fontSize:11.5, color:T.gray600, marginTop:2, flexWrap:'wrap' }}>
-          {job.company && <span>{job.company}</span>}
-          <span style={{ display:'flex', alignItems:'center', gap:3 }}>{Icon.pin(11)} {job.city || 'Malawi'}</span>
-          <span>{job.type || 'Full-time'}</span>
-          <span style={{ display:'flex', alignItems:'center', gap:3 }}>{Icon.clock(11)} {timeAgo(job.created_at)}</span>
-        </div>
-      </div>
-      {Icon.chevR(16)}
-    </div>
-  )
-}
 
 /* ─────────────────────────────────────────────────────────────────────────────
    SERVICE RESULT CARD — Services tab
@@ -1362,7 +1339,7 @@ export default function SearchPage() {
 
   // ── Active tab ──
   const [activeTab, setActiveTab] = useState('listings')
-  const [tabCounts, setTabCounts] = useState({ listings: null, shops: null, lookingfor: null, jobs: null, services: null })
+  const [tabCounts, setTabCounts] = useState({ listings: null, shops: null, lookingfor: null, services: null })
 
   // ── Results state ──
   const [allResults, setAllResults] = useState([])
@@ -1482,7 +1459,7 @@ export default function SearchPage() {
      tab badges are populated without forcing the user to click each tab. */
   useEffect(() => {
     if (!queryParam) {
-      setTabCounts({ listings: null, shops: null, lookingfor: null, jobs: null, services: null })
+      setTabCounts({ listings: null, shops: null, lookingfor: null, services: null })
       return
     }
     fetchAllTabCounts(queryParam)
@@ -1491,7 +1468,7 @@ export default function SearchPage() {
   async function fetchAllTabCounts(q) {
     const safe = async (fn) => { try { return await fn() } catch { return 0 } }
 
-    const [listingsC, shopsC, lookingforC, jobsC, servicesC] = await Promise.all([
+    const [listingsC, shopsC, lookingforC, servicesC] = await Promise.all([
       safe(async () => {
         const { count } = await supabase.from('listings').select('id', { count:'exact', head:true }).eq('status', 'published').ilike('title', `%${q}%`)
         return count || 0
@@ -1505,7 +1482,6 @@ export default function SearchPage() {
         return count || 0
       }),
       safe(async () => {
-        const { count } = await supabase.from('jobs').select('id', { count:'exact', head:true }).eq('status', 'active').ilike('title', `%${q}%`)
         return count || 0
       }),
       safe(async () => {
@@ -1514,7 +1490,7 @@ export default function SearchPage() {
       }),
     ])
 
-    setTabCounts({ listings: listingsC, shops: shopsC, lookingfor: lookingforC, jobs: jobsC, services: servicesC })
+    setTabCounts({ listings: listingsC, shops: shopsC, lookingfor: lookingforC, services: servicesC })
   }
 
   /* ── doSearch: dispatches to the right table for the active tab ── */
@@ -1525,7 +1501,6 @@ export default function SearchPage() {
       if (tab === 'listings')        await searchListings(filters, currentSort, currentPage)
       else if (tab === 'shops')      await searchShops(currentSort, currentPage)
       else if (tab === 'lookingfor') await searchLookingFor(currentSort, currentPage)
-      else if (tab === 'jobs')       await searchJobs(currentSort, currentPage)
       else if (tab === 'services')   await searchServices(currentSort, currentPage)
     } catch (err) {
       console.error('Search error:', err)
@@ -1576,7 +1551,7 @@ export default function SearchPage() {
     const { data: allData, count, error } = await query
     if (error) throw error
 
-    let rows = allData || []
+    let rows = (allData || []).filter(l => !isJobListing(l))
 
     // Split into featured vs regular; fair multi-seller rotation (Phase 3.2)
     const featured = rows.filter(l => isListingFeatured(l))
@@ -1674,25 +1649,6 @@ export default function SearchPage() {
     setTotalCount(count || 0)
   }
 
-  /* ── Jobs tab — searches jobs.title, scoped to active + non-expired ── */
-  async function searchJobs(currentSort, currentPage) {
-    const today = new Date().toISOString().split('T')[0]
-    let query = supabase
-      .from('jobs')
-      .select('id, title, company, city, type, created_at, deadline', { count: 'exact' })
-      .eq('status', 'active')
-      .or(`deadline.is.null,deadline.gte.${today}`)
-      .ilike('title', `%${queryParam}%`)
-      .order('created_at', { ascending: false })
-
-    query = query.range(0, currentPage * PAGE_SIZE - 1)
-
-    const { data, count, error } = await query
-    if (error) throw error
-
-    setAllResults(data || [])
-    setTotalCount(count || 0)
-  }
 
   /* ── Services tab — searches services.name, scoped to active ── */
   async function searchServices(currentSort, currentPage) {
@@ -1798,7 +1754,6 @@ export default function SearchPage() {
       case 'listings':   return '/listing/' + item.id
       case 'shops':      return '/shop/' + item.slug
       case 'lookingfor': return '/looking-for'
-      case 'jobs':       return '/jobs'
       case 'services':   return '/services'
       default:           return '/'
     }
@@ -1818,7 +1773,7 @@ export default function SearchPage() {
   }
 
   const resultsLabel = {
-    listings: 'listings', shops: 'shops', lookingfor: 'requests', jobs: 'jobs', services: 'services',
+    listings: 'listings', shops: 'shops', lookingfor: 'requests', services: 'services',
   }[activeTab]
 
   return (
@@ -1989,12 +1944,6 @@ export default function SearchPage() {
               <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
                 {allResults.map((r, i) => (
                   <RequestResultCard key={r.id} request={r} delay={Math.min(i, 12) * 0.03} onClick={() => navigate(resultHref('lookingfor', r))} />
-                ))}
-              </div>
-            ) : activeTab === 'jobs' ? (
-              <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-                {allResults.map((j, i) => (
-                  <JobResultCard key={j.id} job={j} delay={Math.min(i, 12) * 0.03} onClick={() => navigate(resultHref('jobs', j))} />
                 ))}
               </div>
             ) : (

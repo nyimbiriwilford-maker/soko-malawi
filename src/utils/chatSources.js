@@ -1,17 +1,16 @@
 /**
  * Unified chat source system for SokoMw.
  *
- * Six ways people start chatting:
+ * Five ways people start chatting:
  *  1. listings   — marketplace product
  *  2. services   — service provider
- *  3. jobs       — job poster
- *  4. shops      — shop owner
- *  5. request    — buyer “Looking For”
- *  6. direct     — people search / profile / status
+ *  3. shops      — shop owner
+ *  4. request    — buyer “Looking For”
+ *  5. direct     — people search / profile / status
  *
  * URL shape:
  *   /chat/:userId                    ?src=direct
- *   /chat/:userId/:contextId         ?src=listing|service|job|shop|request
+ *   /chat/:userId/:contextId         ?src=listing|service|shop|request
  */
 
 export const CHAT_SOURCES = {
@@ -32,15 +31,6 @@ export const CHAT_SOURCES = {
     color: '#7c3aed',
     bg: '#f3e8ff',
     emoji: '🔧',
-  },
-  job: {
-    key: 'job',
-    label: 'Job',
-    short: 'Jobs',
-    filterKey: 'jobs',
-    color: '#2563eb',
-    bg: '#eff6ff',
-    emoji: '💼',
   },
   shop: {
     key: 'shop',
@@ -115,8 +105,6 @@ export function messageContextFields(source, contextId) {
       return { ...base, listing_id: id }
     case 'service':
       return { ...base, service_id: id }
-    case 'job':
-      return { ...base, job_id: id }
     case 'shop':
       return { ...base, shop_id: id }
     case 'request':
@@ -133,7 +121,6 @@ export function conversationKey(otherId, source, contextId) {
   const prefix = {
     listing: 'lst',
     service: 'svc',
-    job: 'job',
     shop: 'shp',
     request: 'req',
   }[src] || 'ctx'
@@ -145,7 +132,7 @@ export function sourceFromMessage(msg) {
   if (!msg) return 'direct'
   if (msg.chat_source && CHAT_SOURCES[msg.chat_source]) return msg.chat_source
   if (msg.service_id) return 'service'
-  if (msg.job_id) return 'job'
+
   if (msg.shop_id) return 'shop'
   if (msg.request_id) return 'request'
   if (msg.listing_id) return 'listing'
@@ -157,7 +144,6 @@ export function contextIdFromMessage(msg) {
   const src = sourceFromMessage(msg)
   switch (src) {
     case 'service': return msg.service_id || null
-    case 'job': return msg.job_id || null
     case 'shop': return msg.shop_id || null
     case 'request': return msg.request_id || null
     case 'listing': return msg.listing_id || null
@@ -171,7 +157,6 @@ export function sourceHref(source, entity) {
   switch (source) {
     case 'listing': return entity.id ? `/listing/${entity.id}` : null
     case 'service': return '/services'
-    case 'job': return '/jobs'
     case 'shop': return entity.slug ? `/shop/${entity.slug}` : '/shops'
     case 'request': return '/looking-for'
     default: return null

@@ -641,7 +641,6 @@ const premiumCss = `
   .sbn-post-ic-listing,
   .sbn-post-ic-looking,
   .sbn-post-ic-service,
-  .sbn-post-ic-job,
   .sbn-post-ic-status {
     background: #f3f4f6;
     color: #374151;

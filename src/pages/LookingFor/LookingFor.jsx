@@ -41,7 +41,7 @@ const C = {
 
 /** @deprecated emoji map — use <CatIcon /> */
 const CAT_ICONS = {
-  All: '📋', Electronics: '📱', Services: '🔧', Jobs: '💼',
+  All: '📋', Electronics: '📱', Services: '🔧', 
   Vehicles: '🚗', Fashion: '👗', Food: '🍱', Property: '🏠', Agriculture: '🌱',
 }
 
@@ -810,7 +810,7 @@ const myAlertsRef = useRef([])
               Buyers post what they need — sellers respond first.
             </div>
             <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', lineHeight: 1.5 }}>
-              Electronics · Jobs · Services · Fashion · Food & more
+              Electronics Ã Services · Fashion · Food & more
             </div>
           </div>
         </div>
@@ -1838,7 +1838,7 @@ function DetailModal({ req, user, myListings, saved, onClose, onOffer, onSave, o
               >
                 {userHasOffered
                   ? <><span style={{ display: 'inline-flex' }}>{Icon.check(15, C.gray2)}</span> Offer sent</>
-                  : <><span style={{ display: 'inline-flex' }}>{Icon.send(15, '#fff')}</span> {req.category === 'Jobs' ? 'Apply now' : 'Submit offer'}</>}
+                  : <><span style={{ display: 'inline-flex' }}>{Icon.send(15, '#fff')}</span> {'Submit offer'}</>}
               </button>
             )}
           </div>

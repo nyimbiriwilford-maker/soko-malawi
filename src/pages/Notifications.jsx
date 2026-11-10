@@ -7,7 +7,6 @@ import {
   Apple,
   Armchair,
   Bell,
-  Briefcase,
   Car,
   Check,
   CheckCircle2,
@@ -114,8 +113,6 @@ const CATEGORY_ICONS = {
   groceries: Apple,
   services: Wrench,
   service: Wrench,
-  jobs: Briefcase,
-  work: Briefcase,
   other: Package,
 }
 
@@ -346,7 +343,6 @@ function matchCategory(notif, category) {
   if (category === 'system') {
     return notif.type === 'system'
       || notif.type === 'warning'
-      || notif.type === 'job_match'
       || String(notif.type || '').startsWith('verification_')
   }
   return true
@@ -429,8 +425,6 @@ function renderSmartBody(notif, sender) {
         ? `Your offer of ${data.amount ? formatAmount(data) : ''} expires in ${horizon}`
         : `The offer of ${data.amount ? formatAmount(data) : ''} expires in ${horizon}`
     }
-    case 'job_match':
-      return notif.body || `A new job "${data.job_title || ''}" matches your keywords`
     default:
       return 'Tap to view details'
   }

@@ -67,8 +67,8 @@ const ICONS = {
 /**
  * Desktop sidebar for the chat screen.
  *
- * `counts` fields `jobs` and `shops` will always read 0 today — the
- * `messages` table (as currently used by ChatList) has no job/shop context
+ * `counts` fields `shops` will always read 0 today — the
+ * `messages` table (as currently used by ChatList) has no shop context
  * column to group on, so there's nothing to count yet. The nav items are
  * built and wired so that as soon as those columns exist (or a request_id
  * for buyer requests, see ChatList.jsx), the counts and filtering start
@@ -82,7 +82,6 @@ export default function ChatSidebar({ activeFilter, onFilterChange, counts, prof
     { key: 'all', label: 'All Chats', icon: ICONS.chat, count: counts.all },
     { key: 'marketplace', label: 'Marketplace', icon: ICONS.bag, count: counts.marketplace },
     { key: 'services', label: 'Services', icon: ICONS.wrench, count: counts.services },
-    { key: 'jobs', label: 'Jobs', icon: ICONS.briefcase, count: counts.jobs },
     { key: 'requests', label: 'People Looking For', icon: ICONS.users, count: counts.requests },
     { key: 'shops', label: 'Shops', icon: ICONS.store, count: counts.shops },
     { key: 'offers', label: 'Offers & Negotiations', icon: ICONS.tag, count: counts.offers },

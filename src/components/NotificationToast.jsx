@@ -6,7 +6,7 @@ import { T } from '../constants/tokens'
 import {
   MessageCircle, Phone, VideoOff, Tag, Eye, MessageSquare, CheckCircle2,
   Heart, X, Handshake, Star, Package, Truck, Bell, AlertTriangle,
-  ArrowLeftRight, Undo2, Clock, CircleDollarSign, PenLine, Briefcase,
+  ArrowLeftRight, Undo2, Clock, CircleDollarSign, PenLine,
 } from 'lucide-react'
 
 const NOTIF_ICON_MAP = {
@@ -20,7 +20,6 @@ const NOTIF_ICON_MAP = {
   deal_declined: X, deal_vouching: Star, new_vouch: Star,
   order_placed: Package, order_shipped: Truck, order_delivered: CheckCircle2,
   order_cancelled: X, system: Bell, warning: AlertTriangle,
-  job_match: Briefcase,
 }
 
 const TYPE_COLORS = {
@@ -29,7 +28,7 @@ const TYPE_COLORS = {
   deal_request: T.amber, deal_confirmed: T.green, deal_declined: T.red,
   offer_new: T.green, offer_counter: T.blue, offer_accepted: T.green,
   offer_declined: T.red, offer_withdrawn: T.gray600, offer_edited: T.blue,
-  offer_expired: T.red, offer_expiring: T.amber, job_match: '#7c3aed',
+  offer_expired: T.red, offer_expiring: T.amber,
 }
 
 function getIcon(type) {
@@ -59,7 +58,6 @@ function getTitle(type) {
   if (type?.startsWith('deal_')) return 'Deal Update'
   if (type?.startsWith('order_')) return 'Order Update'
   if (type === 'system' || type === 'warning') return 'System Alert'
-  if (type === 'job_match') return 'Job Match'
   return 'Notification'
 }
 

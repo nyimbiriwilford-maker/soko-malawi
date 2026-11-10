@@ -72,7 +72,6 @@ const ARCHIVED_KEY = 'soko_archived_chats'
 const CATEGORY_META = {
   marketplace: { label: 'Marketplace', bg: '#e6f7ee', color: '#1a7a4a' },
   services: { label: 'Services', bg: '#f3e8ff', color: '#7c3aed' },
-  jobs: { label: 'Jobs', bg: '#eff6ff', color: '#2563eb' },
   requests: { label: 'People Looking For', bg: '#fef3e0', color: '#c9820a' },
   shops: { label: 'Shops', bg: '#e0f7fa', color: '#0891b2' },
 }
@@ -81,7 +80,6 @@ const PILLS = [
   { key: 'all', label: 'All' },
   { key: 'marketplace', label: 'Marketplace' },
   { key: 'services', label: 'Services' },
-  { key: 'jobs', label: 'Jobs' },
   { key: 'requests', label: 'Requests' },
   { key: 'shops', label: 'Shops' },
 ]
@@ -119,7 +117,7 @@ export default function ChatList() {
   const [loading, setLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState(null)
   const [myProfile, setMyProfile] = useState(null)
-  // 'all' | 'marketplace' | 'services' | 'jobs' | 'requests' | 'shops' | 'starred' | 'unread' | 'offers' | 'archived'
+  // 'all' | 'marketplace' | 'services' | 'requests' | 'shops' | 'starred' | 'unread' | 'offers' | 'archived'
   const [activeFilter, setActiveFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [starred, setStarred] = useState(() => {
@@ -318,8 +316,6 @@ export default function ChatList() {
       all: visible.length,
       marketplace: visible.filter(c => !c.isService && !c.isRequest && c.listing).length,
       services: visible.filter(c => c.isService).length,
-      // No job_id column on `messages` yet — will start counting once one exists.
-      jobs: 0,
       requests: visible.filter(c => c.isRequest).length,
       // No shop_id column on `messages` yet — will start counting once one exists.
       shops: 0,
@@ -342,7 +338,6 @@ export default function ChatList() {
       case 'marketplace': list = pool.filter(c => !c.isService && !c.isRequest && c.listing); break
       case 'services': list = pool.filter(c => c.isService); break
       case 'requests': list = pool.filter(c => c.isRequest); break
-      case 'jobs': list = pool.filter(c => c.isJob); break // always empty until job context exists
       case 'shops': list = pool.filter(c => c.isShop); break // always empty until shop context exists
       case 'starred': list = pool.filter(c => starred.has(c.key)); break
       case 'unread': list = pool.filter(c => c.unread > 0); break
@@ -423,7 +418,6 @@ export default function ChatList() {
       case 'services': return { icon: '🔧', title: 'No service chats yet', sub: 'Book a service and chat with the provider', cta: 'Browse Services', to: '/services' }
       case 'marketplace': return { icon: '🛍️', title: 'No marketplace chats yet', sub: 'Chat with sellers when browsing listings', cta: 'Browse Listings', to: '/' }
       case 'requests': return { icon: '🔎', title: 'No requests yet', sub: 'Conversations from buyer requests will show up here', cta: 'Browse Requests', to: '/looking-for' }
-      case 'jobs': return { icon: '💼', title: 'No job chats yet', sub: 'Job messaging is on its way', cta: 'Browse Jobs', to: '/jobs' }
       case 'shops': return { icon: '🏬', title: 'No shop chats yet', sub: 'Shop messaging is on its way', cta: 'Browse Shops', to: '/shops' }
       case 'starred': return { icon: '⭐', title: 'No starred chats', sub: 'Tap the star on a conversation to pin it here', cta: null }
       case 'unread': return { icon: '💬', title: "You're all caught up", sub: 'No unread conversations right now', cta: null }

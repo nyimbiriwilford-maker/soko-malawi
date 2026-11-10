@@ -220,7 +220,6 @@ export function CatIcon({ category, size = 14, color = 'currentColor' }) {
   const map = {
     Electronics: Icon.phone,
     Services: Icon.wrench,
-    Jobs: Icon.briefcase,
     Vehicles: Icon.car,
     Fashion: Icon.shirt,
     Food: Icon.utensils,

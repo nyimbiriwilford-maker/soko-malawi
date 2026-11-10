@@ -59,7 +59,7 @@ export default function ForwardSheet({
     async function loadTargets() {
       const { data: rows, error: loadErr } = await supabase
         .from('messages')
-        .select('id,from_user,to_user,created_at,chat_source,listing_id,service_id,job_id,shop_id,request_id')
+        .select('id,from_user,to_user,created_at,chat_source,listing_id,service_id,shop_id,request_id')
         .or(`from_user.eq.${currentUserId},to_user.eq.${currentUserId}`)
         .order('created_at', { ascending: false })
 
@@ -99,18 +99,16 @@ export default function ForwardSheet({
       const listingIds = bySource('listing')
       const serviceIds = bySource('service')
       const shopIds = bySource('shop')
-      const jobIds = bySource('job')
       const requestIds = bySource('request')
       const maybe = (cond, q) => (cond.length ? q : Promise.resolve({ data: [] }))
 
-      const [profiles, listings, services, shops, jobs, requests] = await Promise.all([
+      const [profiles, listings, services, shops, requests] = await Promise.all([
         ids.length
           ? supabase.from('profiles').select('id,full_name,avatar_url,is_verified').in('id', ids)
           : Promise.resolve({ data: [] }),
         maybe(listingIds, supabase.from('listings').select('id,title').in('id', listingIds)),
         maybe(serviceIds, supabase.from('services').select('id,name').in('id', serviceIds)),
         maybe(shopIds, supabase.from('shops').select('id,name').in('id', shopIds)),
-        maybe(jobIds, supabase.from('jobs').select('id,title').in('id', jobIds)),
         maybe(requestIds, supabase.from('buyer_requests').select('id,title').in('id', requestIds)),
       ])
 
@@ -121,7 +119,6 @@ export default function ForwardSheet({
         listing: Object.fromEntries((listings.data || []).map(l => [l.id, l.title])),
         service: Object.fromEntries((services.data || []).map(s => [s.id, s.name])),
         shop: Object.fromEntries((shops.data || []).map(s => [s.id, s.name])),
-        job: Object.fromEntries((jobs.data || []).map(j => [j.id, j.title])),
         request: Object.fromEntries((requests.data || []).map(r => [r.id, r.title])),
       }
 

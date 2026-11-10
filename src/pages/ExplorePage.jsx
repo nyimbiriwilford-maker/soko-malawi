@@ -66,11 +66,6 @@ const Icon = {
       <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a3.5 3.5 0 0 1 0 6.74"/>
     </svg>
   ),
-  jobs: (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#1d4ed8" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/>
-    </svg>
-  ),
   services: (
     <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#7c3aed" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.1-3.1a5.5 5.5 0 0 1-7.3 7.3l-6.1 6.1a2.1 2.1 0 0 1-3-3l6.1-6.1a5.5 5.5 0 0 1 7.3-7.3l-3.1 3.1z"/>
@@ -106,7 +101,6 @@ const CATS = [
 
 const PILLARS = [
   { icon: Icon.people,   iconBg: '#e8f5ee', label: 'People Looking For',    sub: 'Find requests and offer help',       path: '/looking-for' },
-  { icon: Icon.jobs,     iconBg: '#dbeafe', label: 'Jobs',                  sub: 'Find jobs near you',                 path: '/jobs' },
   { icon: Icon.services, iconBg: '#ede9fe', label: 'Services',              sub: 'Find and hire experts',              path: '/services' },
   { icon: Icon.stories,  iconBg: '#ffedd5', label: 'Statuses (Stories)',    sub: 'Watch and share stories',            path: '/status' },
   { icon: Icon.verify,   iconBg: '#cffafe', label: 'Verification',          sub: 'Verify your account or business',    path: '/profile' },

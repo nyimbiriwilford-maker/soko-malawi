@@ -232,7 +232,6 @@ export default function Chat() {
   const [listing, setListing]             = useState(null)
   const [service, setService]             = useState(null)
   const [shop, setShop]                   = useState(null)
-  const [job, setJob]                     = useState(null)
   const [request, setRequest]             = useState(null)
   const [chatSource, setChatSource]       = useState(() =>
     resolveChatSource({ searchParams, locationState: location.state, contextId }) || 'direct'
@@ -690,7 +689,7 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
     // Load last_seen from profile on mount
     if (otherProf?.last_seen) setOtherLastSeen(new Date(otherProf.last_seen))
 
-    // ── Resolve chat source (listing / service / job / shop / request / direct) ──
+    // ── Resolve chat source (listing / service / shop / request / direct) ──
     let source = resolveChatSource({
       searchParams,
       locationState: location.state,
@@ -701,7 +700,6 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
     setListing(null)
     setService(null)
     setShop(null)
-    setJob(null)
     setRequest(null)
     setIsServiceChat(false)
     isServiceChatRef.current = false
@@ -741,7 +739,6 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
       ['listing', () => supabase.from('listings').select('id').eq('id', id).maybeSingle()],
       ['service', () => supabase.from('services').select('id').eq('id', id).maybeSingle()],
       ['shop', () => supabase.from('shops').select('id').eq('id', id).maybeSingle()],
-      ['job', () => supabase.from('jobs').select('id').eq('id', id).maybeSingle()],
       ['request', () => supabase.from('buyer_requests').select('id').eq('id', id).maybeSingle()],
     ]
     for (const [src, run] of checks) {
@@ -769,9 +766,6 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
       } else if (source === 'shop') {
         const { data } = await supabase.from('shops').select('*').eq('id', id).maybeSingle()
         if (data) setShop(data)
-      } else if (source === 'job') {
-        const { data } = await supabase.from('jobs').select('*').eq('id', id).maybeSingle()
-        if (data) setJob(data)
       } else if (source === 'request') {
         const { data } = await supabase.from('buyer_requests').select('*').eq('id', id).maybeSingle()
         if (data) {
@@ -789,7 +783,6 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
     switch (source) {
       case 'service': return query.eq('service_id', ctxId)
       case 'listing': return query.eq('listing_id', ctxId)
-      case 'job': return query.eq('job_id', ctxId)
       case 'shop': return query.eq('shop_id', ctxId)
       case 'request': return query.eq('request_id', ctxId)
       default: return query
@@ -804,13 +797,12 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
       // Direct thread: only messages without any context FK
       // (or explicitly chat_source=direct). Keep loose match for legacy rows.
       if (msg.chat_source && msg.chat_source !== 'direct') return false
-      if (msg.listing_id || msg.service_id || msg.job_id || msg.shop_id || msg.request_id) return false
+      if (msg.listing_id || msg.service_id || msg.shop_id || msg.request_id) return false
       return true
     }
     switch (source) {
       case 'service': return msg.service_id === ctxId
       case 'listing': return msg.listing_id === ctxId
-      case 'job': return msg.job_id === ctxId || msg.chat_source === 'job'
       case 'shop': return msg.shop_id === ctxId || msg.chat_source === 'shop'
       case 'request': return msg.request_id === ctxId || msg.chat_source === 'request'
       default: return true
@@ -1452,7 +1444,6 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
         data = (data || []).filter(m => {
           if (source === 'service') return m.service_id === ctxId
           if (source === 'listing') return m.listing_id === ctxId
-          if (source === 'job') return !m.job_id || m.job_id === ctxId || m.chat_source === 'job'
           if (source === 'shop') return !m.shop_id || m.shop_id === ctxId || m.chat_source === 'shop'
           if (source === 'request') return !m.request_id || m.request_id === ctxId || m.chat_source === 'request'
           return true
@@ -1641,14 +1632,13 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
       inserted = res.data
       error = res.error
     }
-    if (error && /chat_source|job_id|shop_id|request_id|column/i.test(error.message || '')) {
+    if (error && /chat_source|shop_id|request_id|column/i.test(error.message || '')) {
       const legacy = { ...msgData }
       delete legacy.chat_source
-      delete legacy.job_id
       delete legacy.shop_id
       delete legacy.request_id
       // Keep listing_id / service_id which already exist
-      if (src === 'job' || src === 'shop' || src === 'request') {
+      if (src === 'shop' || src === 'request') {
         // No FK available — still deliver as person-level message with body
       }
       const res2 = await supabase.from('messages').insert(legacy).select('*').single()
@@ -1683,7 +1673,7 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
 
     const notifContextId = contextId || null
     const callType = extraFields.call_type === 'video' ? 'video' : 'voice'
-    const contextTitle = listing?.title || service?.name || shop?.name || job?.title || request?.title || null
+    const contextTitle = listing?.title || service?.name || shop?.name || request?.title || null
     if (callNotify === 'missed_to_peer') {
       await notifyMissedCall({
         toUserId: userId,
@@ -2736,14 +2726,6 @@ async function uploadAndSend(file, type, caption = '') {
         href: sourceHref('shop', shop),
       }
     }
-    if (chatSource === 'job' && job) {
-      return {
-        title: job.title,
-        sub: [job.company, job.city, job.type].filter(Boolean).join(' · '),
-        img: job.logo_url || job.cover_image_url || null,
-        href: sourceHref('job', job),
-      }
-    }
     if (chatSource === 'request' && request) {
       return {
         title: request.title,
@@ -2876,7 +2858,6 @@ async function uploadAndSend(file, type, caption = '') {
 
       if (src === 'listing' && contextId) del = del.eq('listing_id', contextId)
       else if (src === 'service' && contextId) del = del.eq('service_id', contextId)
-      else if (src === 'job' && contextId) del = del.eq('job_id', contextId)
       else if (src === 'shop' && contextId) del = del.eq('shop_id', contextId)
       else if (src === 'request' && contextId) del = del.eq('request_id', contextId)
 
@@ -2893,7 +2874,6 @@ async function uploadAndSend(file, type, caption = '') {
           .eq('to_user', myId)
         if (src === 'listing' && contextId) del2 = del2.eq('listing_id', contextId)
         else if (src === 'service' && contextId) del2 = del2.eq('service_id', contextId)
-        else if (src === 'job' && contextId) del2 = del2.eq('job_id', contextId)
         else if (src === 'shop' && contextId) del2 = del2.eq('shop_id', contextId)
         else if (src === 'request' && contextId) del2 = del2.eq('request_id', contextId)
         await del2
@@ -3210,7 +3190,7 @@ async function uploadAndSend(file, type, caption = '') {
         </div>
       )}
 
-      {/* ── Source caption (listing / service / job / shop / request / direct) ── */}
+      {/* ── Source caption (listing / service / shop / request / direct) ── */}
       {contextCaption && (
         <div
           className="chat-context-bar"

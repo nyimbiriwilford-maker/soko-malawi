@@ -412,6 +412,12 @@ export function isListingActive(listing) {
   return ['published', 'active'].includes(listing.status)
 }
 
+export function isJobListing(listing) {
+  if (!listing) return false
+  const v = String(listing.type || listing.listing_type || listing.category || listing.kind || '').toLowerCase().trim()
+  return v === 'job' || v === 'jobs'
+}
+
 
 export function getBannerCta(linked, customLabel) {
   if (customLabel && String(customLabel).trim()) return String(customLabel).trim()
@@ -419,7 +425,6 @@ export function getBannerCta(linked, customLabel) {
   if (typeof linked === 'string') {
     const t = linked.toLowerCase()
     if (t.includes('service')) return 'Book now'
-    if (t.includes('job')) return 'Apply now'
     if (t.includes('shop')) return 'Visit shop'
     if (t.includes('request')) return 'View request'
     return 'View product'
@@ -429,11 +434,9 @@ export function getBannerCta(linked, customLabel) {
     linked.__typename || linked.category || ''
   ).toLowerCase()
   if (type.includes('service')) return 'Book now'
-  if (type.includes('job')) return 'Apply now'
   if (type.includes('shop')) return 'Visit shop'
   if (type.includes('request')) return 'View request'
   if (linked.rate != null || linked.provider_id != null || linked.providerId != null) return 'Book now'
-  if (linked.company != null || linked.salary != null) return 'Apply now'
   if (linked.slug != null || linked.logo_url != null || linked.logoUrl != null) return 'Visit shop'
   if (linked.budget != null) return 'View request'
   return 'View product'

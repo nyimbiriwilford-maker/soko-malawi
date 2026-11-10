@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, useMemo } from 'react'
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { uploadToR2, getR2Url, deleteFromR2 } from '../lib/r2'
-import { isListingFeatured } from '../utils/homeUtils'
+import { isListingFeatured, isJobListing } from '../utils/homeUtils'
 import { featureExistingListing } from '../lib/featureListing'
 import { featuredPriceLabel, FEATURED_DURATION_DAYS } from '../constants/featuredPricing'
 import VouchSection from '../components/VouchSection'
@@ -1080,7 +1080,6 @@ export default function Profile() {
     suggestions,
     recommended,
     recentlyViewed,
-    jobApps,
     serviceReqs,
     refresh: refreshDashboard,
     revokeSession,
@@ -1156,7 +1155,7 @@ export default function Profile() {
       .select('*')
       .eq('seller_id', uid)
       .order('created_at', { ascending: false })
-    setListings(data || [])
+    setListings((data || []).filter(l => !isJobListing(l)))
   }
 
   async function loadNetworkCounts(uid) {
@@ -2514,7 +2513,7 @@ export default function Profile() {
     { id: 'sold', icon: 'checkCircle', label: 'Sold', hint: 'Completed sales', count: soldListings.length, keywords: 'sold history completed deals' },
     { id: 'trust', icon: 'shieldCheck', label: 'Trust & Reputation', hint: 'Verification & vouches', keywords: 'verify badge vouch deals score' },
     { id: 'network', icon: 'users', label: 'Network', hint: 'Followers & following', count: followerCount, keywords: 'followers following social' },
-    { id: 'buying', icon: 'shoppingBag', label: 'Buying & Discover', hint: 'Chats, saved, jobs', keywords: 'messages looking for shops services' },
+    { id: 'buying', icon: 'shoppingBag', label: 'Buying & Discover', hint: 'Chats, saved', keywords: 'messages looking for shops services' },
     { id: 'account', icon: 'settings', label: 'Account & Security', hint: 'Sign-in & session', keywords: 'email password logout security member' },
   ]
 
@@ -2560,7 +2559,6 @@ export default function Profile() {
     { id: 'lf', icon: 'search', label: 'Looking for', sub: 'Post what you need · get offers', path: '/looking-for', accent: 'amber', badgeKey: 'lookingFor', onClick: () => navigate('/looking-for') },
     { id: 'saved', icon: 'heart', label: 'Saved items', sub: 'Statuses & items you bookmarked', path: '/saved-statuses', accent: 'blue', badgeKey: 'saved', onClick: () => navigate('/saved-statuses') },
     { id: 'shops', icon: 'store', label: 'Browse shops', sub: 'Local businesses & storefronts', path: '/shops', accent: 'green', onClick: () => navigate('/shops') },
-    { id: 'jobs', icon: 'briefcase', label: 'Jobs', sub: 'Work near you in Malawi', path: '/jobs', accent: 'blue', onClick: () => navigate('/jobs') },
     { id: 'services', icon: 'wrench', label: 'Services', sub: 'Hire or offer skilled help', path: '/services', accent: 'amber', onClick: () => navigate('/services') },
     { id: 'notif', icon: 'bell', label: 'Notifications', sub: 'Alerts, deals & updates', path: '/notifications', accent: 'red', badgeKey: 'notifs', onClick: () => navigate('/notifications') },
   ]
@@ -4681,7 +4679,7 @@ export default function Profile() {
                   : 'Find what you need on SokoMw'}
               </h3>
               <p className="mp-buy-lead">
-                Messages, saved items, shops, jobs, and services — all in one buyer hub.
+                Messages, saved items, shops, and services — all in one buyer hub.
                 {profile.city ? ` Exploring from ${profile.city}.` : ''}
               </p>
             </div>
@@ -4720,17 +4718,6 @@ export default function Profile() {
                 </button>
                 <button
                   type="button"
-                  className={`mp-buy-stat${jobApps == null ? ' is-placeholder' : ''}`}
-                  title={jobApps == null ? 'Table not available yet' : 'Your job applications'}
-                  onClick={() => navigate('/jobs')}
-                >
-                  <span className="mp-buy-stat-ic" aria-hidden="true"><MpIcon name="briefcase" size={18} /></span>
-                  <strong className="mp-buy-stat-n">{jobApps ?? '—'}</strong>
-                  <span className="mp-buy-stat-l">Job applications</span>
-                  {jobApps == null && <em className="mp-buy-stat-soon">Setup</em>}
-                </button>
-                <button
-                  type="button"
                   className={`mp-buy-stat${serviceReqs == null ? ' is-placeholder' : ''}`}
                   title={serviceReqs == null ? 'Table not available yet' : 'Your service requests'}
                   onClick={() => navigate('/services')}
@@ -4753,7 +4740,8 @@ export default function Profile() {
           <section className="mp-buy-section" aria-label="Buyer destinations">
             <div className="mp-buy-section-head">
               <h3 className="mp-buy-section-title">Explore destinations</h3>
-              <p className="mp-buy-section-sub">Jump into chats, saved items, shops, jobs, and more.</p>
+              <p className="mp-buy-section-sub">Jump into chats, saved items, shops, and more.
+</p>
             </div>
             <div className="mp-buy-dest-grid">
               {BUYING_ITEMS.map(item => {
@@ -4979,7 +4967,6 @@ export default function Profile() {
                 </p>
                 <div className="mp-buy-empty-actions">
                   <button type="button" className="mp-btn-primary" onClick={() => navigate('/')}>Browse listings</button>
-                  <button type="button" className="mp-btn-secondary" onClick={() => navigate('/jobs')}>Find jobs</button>
                   <button type="button" className="mp-btn-secondary" onClick={() => navigate('/services')}>Find services</button>
                 </div>
               </div>

@@ -1,5 +1,5 @@
 /**
- * Tag picker for status posts — owner's listings, jobs, services, shops, looking-for.
+ * Tag picker for status posts — owner's listings, services, shops, looking-for.
  */
 import { useMemo, useState } from 'react'
 import { STATUS_COLORS } from '../constants/homeConstants'
@@ -8,7 +8,6 @@ const G = '#1a7a4a'
 
 const KIND_META = {
   listing: { label: 'Products', short: 'Product', color: STATUS_COLORS.listing },
-  job: { label: 'Jobs', short: 'Job', color: STATUS_COLORS.job },
   service: { label: 'Services', short: 'Service', color: STATUS_COLORS.service },
   shop: { label: 'Shops', short: 'Shop', color: STATUS_COLORS.shop },
   request: { label: 'Looking for', short: 'Request', color: '#c9820a' },
@@ -100,7 +99,7 @@ export default function ProductTagPicker({
 
   const kindsPresent = useMemo(() => {
     const set = new Set(allItems.map(i => i.kind).filter(Boolean))
-    return ['listing', 'job', 'service', 'shop', 'request'].filter(k => set.has(k))
+    return ['listing', 'service', 'shop', 'request'].filter(k => set.has(k))
   }, [allItems])
 
   const filtered = useMemo(() => {
@@ -144,7 +143,7 @@ export default function ProductTagPicker({
         </div>
         <div style={{ fontSize: 12, fontWeight: 700, color: '#64748b' }}>Nothing to tag yet</div>
         <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 3 }}>
-          Post a product, job, service, shop, or looking-for request first.
+          Post a product, service, shop, or looking-for request first.
         </div>
       </div>
     )
@@ -170,7 +169,7 @@ export default function ProductTagPicker({
           <div>
             <div style={{ fontSize: 12, fontWeight: 800, color: '#0f172a' }}>Tag your post</div>
             <div style={{ fontSize: 10, color: '#94a3b8', fontWeight: 600 }}>
-              Product · job · service · shop · looking for
+               Product · service · shop · looking for
             </div>
           </div>
         </div>
@@ -448,12 +447,6 @@ export async function loadOwnerTagItems(supabase, userId) {
 
   const results = await Promise.allSettled([
     loadListings(),
-    supabase.from('jobs')
-      .select('id, title, company, city, salary, cover_image_url, logo_url, status')
-      .eq('poster_id', userId)
-      .order('created_at', { ascending: false })
-      .limit(20)
-      .then(r => r.data || []),
     supabase.from('services')
       .select('id, name, category, city, rate, media_urls, status')
       .eq('provider_id', userId)
@@ -496,21 +489,7 @@ export async function loadOwnerTagItems(supabase, userId) {
     })
   }
 
-  const jobs = results[1].status === 'fulfilled' ? (results[1].value || []) : []
-  for (const j of jobs) {
-    const st = (j.status || '').toLowerCase()
-    if (st && blockedOther.has(st)) continue
-    items.push({
-      id: j.id,
-      kind: 'job',
-      title: j.title || 'Job',
-      subtitle: j.salary || j.company || j.city || 'Job',
-      image: j.logo_url || j.cover_image_url || null,
-      meta: j,
-    })
-  }
-
-  const services = results[2].status === 'fulfilled' ? (results[2].value || []) : []
+  const services = results[1].status === 'fulfilled' ? (results[1].value || []) : []
   for (const s of services) {
     const st = (s.status || '').toLowerCase()
     if (st && blockedOther.has(st)) continue
@@ -524,7 +503,7 @@ export async function loadOwnerTagItems(supabase, userId) {
     })
   }
 
-  const shops = results[3].status === 'fulfilled' ? (results[3].value || []) : []
+  const shops = results[2].status === 'fulfilled' ? (results[2].value || []) : []
   for (const s of shops) {
     if (s.is_active === false) continue
     items.push({
@@ -537,7 +516,7 @@ export async function loadOwnerTagItems(supabase, userId) {
     })
   }
 
-  const requests = results[4].status === 'fulfilled' ? (results[4].value || []) : []
+  const requests = results[3].status === 'fulfilled' ? (results[3].value || []) : []
   for (const r of requests) {
     const st = (r.status || '').toLowerCase()
     if (st && blockedOther.has(st)) continue

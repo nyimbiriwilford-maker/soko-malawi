@@ -14,7 +14,6 @@ const CAT_ICON = {
   Food:        { emoji: '🍜', bg: '#fff1f2', fg: '#e11d48' },
   Services:    { emoji: '⚡', bg: '#f8fafc', fg: '#475569' },
   Other:       { emoji: '📦', bg: '#f8fafc', fg: '#64748b' },
-  Jobs:        { emoji: '💼', bg: '#eff6ff', fg: '#2563eb' },
 }
 function catIcon(cat) { return CAT_ICON[cat] || CAT_ICON.Other }
 

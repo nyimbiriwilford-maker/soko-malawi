@@ -29,7 +29,6 @@ export function useProfileDashboard(userId) {
   const [suggestions, setSuggestions] = useState([])
   const [recommended, setRecommended] = useState([])
   const [recentlyViewed, setRecentlyViewed] = useState([])
-  const [jobApps, setJobApps] = useState(null)
   const [serviceReqs, setServiceReqs] = useState(null)
   const [loadingExtra, setLoadingExtra] = useState(false)
   const [ready, setReady] = useState(false)
@@ -171,25 +170,6 @@ export function useProfileDashboard(userId) {
       }
     } catch { /* ignore */ }
 
-    // Job applications / service requests — soft counts
-    try {
-      const { count } = await supabase
-        .from('job_applications')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', userId)
-      setJobApps(count ?? 0)
-    } catch {
-      try {
-        const { count } = await supabase
-          .from('job_applications')
-          .select('id', { count: 'exact', head: true })
-          .eq('applicant_id', userId)
-        setJobApps(count ?? 0)
-      } catch {
-        setJobApps(null)
-      }
-    }
-
     try {
       const { count } = await supabase
         .from('service_requests')
@@ -305,7 +285,6 @@ export function useProfileDashboard(userId) {
     suggestions,
     recommended,
     recentlyViewed,
-    jobApps,
     serviceReqs,
     loadingExtra,
     ready,

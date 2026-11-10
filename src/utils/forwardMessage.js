@@ -67,11 +67,10 @@ export function forwardPreviewLabel(msg, plainBody = '') {
  */
 async function insertForwardRow(row) {
   let res = await supabase.from('messages').insert(row).select('*').single()
-  if (res.error && /chat_source|job_id|shop_id|request_id|column/i.test(res.error.message || '')) {
+  if (res.error && /chat_source|shop_id|request_id|column/i.test(res.error.message || '')) {
     const legacy = { ...row }
     delete legacy.chat_source
-    delete legacy.job_id
-    delete legacy.shop_id
+        delete legacy.shop_id
     delete legacy.request_id
     res = await supabase.from('messages').insert(legacy).select('*').single()
   }

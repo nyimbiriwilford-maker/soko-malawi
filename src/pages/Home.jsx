@@ -1,7 +1,7 @@
 /**
  * SokoMW — Homepage (v3)
  * Full information-architecture rebuild: marketplace discovery hub
- * spanning Listings, Shops, Looking For, Jobs, Services, Stories,
+ * spanning Listings, Shops, Looking For, Services, Stories,
  * and Verification — with monetization (Featured Listing/Shop/Request,
  * Story Promotion, Verification) surfaced as a first-class, non-spammy
  * revenue section rather than scattered upsells.
@@ -31,8 +31,6 @@ import useSearchAnimation        from '../hooks/useSearchAnimation'
 import { useUserLocation }       from '../hooks/useUserLocation'
 import { useNetwork }            from '../context/NetworkContext'
 import ProviderModal              from './ProviderModal'
-import JobModal                   from './Jobs/JobModal'
-import './Jobs/Jobs.css'
 import { fetchAllActiveStories } from '../hooks/useStatuses'
 import VerificationAttentionBanner from '../components/VerificationAttentionBanner'
 import SokoNav from '../components/SokoNav'
@@ -49,7 +47,7 @@ import {
   ALL_CATEGORIES,
 } from '../constants/homeConstants'
 import {
-  isFlashActive, isListingFeatured, isListingActive, getBannerCta, prioritizeFeatured, rotateFeaturedFairly,
+  isFlashActive, isListingFeatured, isListingActive, isJobListing, getBannerCta, prioritizeFeatured, rotateFeaturedFairly,
   sortProductsSmart, trackSearch, imageUrlLoaded, markImageUrlLoaded,
 } from '../utils/homeUtils'
 import { buildChatPath } from '../utils/chatSources'
@@ -117,7 +115,6 @@ const CAT_ICON = {
   Food:        { emoji: '🍜', bg: '#fff1f2', fg: '#e11d48' },
   Services:    { emoji: '⚡', bg: '#f8fafc', fg: '#475569' },
   Other:       { emoji: '📦', bg: '#f8fafc', fg: '#64748b' },
-  Jobs:        { emoji: '💼', bg: '#eff6ff', fg: '#2563eb' },
 }
 function catIcon(cat) { return CAT_ICON[cat] || CAT_ICON.Other }
 
@@ -1042,7 +1039,7 @@ function formatPrice(n) {
 /* ─────────────────────────────────────────────────────────────────────────────
    PRIMARY PILLARS — the 7 things Soko offers. Always visible (desktop: row
    under the header; mobile: horizontal scroll chips). This is the IA fix:
-   Shops / Looking For / Jobs / Services / Stories / Verification are first-
+   Shops / Looking For / Services / Stories / Verification are first-
    class destinations, not buried in a hamburger menu.
 ───────────────────────────────────────────────────────────────────────────── */
 /* SokoNav is shared — see src/components/SokoNav.jsx */
@@ -1050,7 +1047,7 @@ function formatPrice(n) {
 /* ─────────────────────────────────────────────────────────────────────────────
    CATEGORY QUICK ACCESS — one-click entry to every category. Matches the
    reference's fixed 8-tile layout (All Categories, Vehicles, Electronics,
-   Fashion, Property, Agriculture, Jobs, Services) plus a 9th "More" tile
+   Fashion, Property, Agriculture, Services) plus a 9th "More" tile
    that opens the full category list — rather than dumping every category
    from ALL_CATEGORIES into the grid (which duplicated "Services" and had
    no overflow tile).
@@ -1062,13 +1059,11 @@ const QUICK_CATEGORIES = [
   { key: 'Clothing',    label: 'Fashion',        sub: 'Clothes and shoes', icon: Icon.shirt,       fg: '#be185d', bg: '#fce7f3' },
   { key: 'Property',    label: 'Property',       sub: 'Houses and land',   icon: Icon.houseFilled, fg: '#c2410c', bg: '#fff7ed' },
   { key: 'Agriculture', label: 'Agriculture',    sub: 'Farm and produce',  icon: Icon.leaf,        fg: '#0f766e', bg: '#ecfdf5' },
-  { key: 'Jobs',        label: 'Jobs',           sub: 'Work opportunities',icon: Icon.briefcase,   fg: '#1d4ed8', bg: '#eaf2ff', isJobs: true },
   { key: 'Services',    label: 'Services',       sub: 'Trusted experts',   icon: Icon.tools,       fg: '#475569', bg: '#f1f5f9', isServices: true },
 ]
 
 function CategoryGrid({ navigate, onCategoryChange }) {
   function handleClick(item) {
-    if (item.isJobs)      return navigate('/jobs')
     if (item.isServices)  return navigate('/services')
     if (item.isAll) return navigate('/listings')
     navigate(`/listings?cat=${encodeURIComponent(item.key)}`)
@@ -1532,7 +1527,7 @@ function categoryChipLabel(cat) {
   const map = {
     Vehicles: 'Vehicle', Electronics: 'Electronics', Property: 'Property',
     Clothing: 'Fashion', Agriculture: 'Agriculture', Furniture: 'Furniture',
-    Food: 'Food', Services: 'Services', Jobs: 'Jobs',
+    Food: 'Food', Services: 'Services',
   }
   return map[cat] || cat || 'Other'
 }
@@ -2322,7 +2317,7 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
                       fontSize:12, fontWeight: lfCategory===cat ? 700 : 500, color: lfCategory===cat ? '#166534' : '#334155',
                       cursor:'pointer', fontFamily:'inherit', borderRadius:8,
                     }}>
-                      {cat === 'All' ? '📋' : (cat === 'Products' ? '📦' : cat === 'Electronics' ? '📱' : cat === 'Fashion' ? '👗' : cat === 'Vehicles' ? '🚗' : cat === 'Property' ? '🏠' : cat === 'Agriculture' ? '🌾' : cat === 'Services' ? '⚙️' : cat === 'Jobs' ? '💼' : cat === 'Business Partners' ? '🤝' : '📋')}
+                      {cat === 'All' ? '📋' : (cat === 'Products' ? '📦' : cat === 'Electronics' ? '📱' : cat === 'Fashion' ? '👗' : cat === 'Vehicles' ? '🚗' : cat === 'Property' ? '🏠' : cat === 'Agriculture' ? '🌾' : cat === 'Services' ? '⚙️' : cat === 'Business Partners' ? '🤝' : '📋')}
                       {cat}
                     </button>
                   ))}
@@ -2414,7 +2409,7 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
                 if (r.urgency === 'urgent') badges.push({ label:'Urgent', fg:'#dc2626', bg:'#fef2f2', icon: '🔥' })
                 if (r._distanceKm != null && r._distanceKm < 5) badges.push({ label:'Nearby', fg:'#2563eb', bg:'#eff6ff' })
                 if (r.created_at && (Date.now() - new Date(r.created_at).getTime()) < 86400000) badges.push({ label:'New', fg:'#16a34a', bg:'#f0fdf4' })
-                const catEmoji = cat === 'Electronics' ? '📱' : cat === 'Fashion' ? '👗' : cat === 'Vehicles' ? '🚗' : cat === 'Property' ? '🏠' : cat === 'Agriculture' ? '🌾' : cat === 'Services' ? '⚙️' : cat === 'Jobs' ? '💼' : cat === 'Business Partners' ? '🤝' : '📋'
+                const catEmoji = cat === 'Electronics' ? '📱' : cat === 'Fashion' ? '👗' : cat === 'Vehicles' ? '🚗' : cat === 'Property' ? '🏠' : cat === 'Agriculture' ? '🌾' : cat === 'Services' ? '⚙️' : cat === 'Business Partners' ? '🤝' : '📋'
                 const allAreas = r.cities?.length > 0 ? r.cities : (r.city ? [r.city] : [])
                 const extraAreas = allAreas.length - 1
 
@@ -2931,7 +2926,6 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
   )
 }
 
-/** Horizontal media card for jobs / services on Home */
 function HomeWorkCard({
   title,
   sub,
@@ -3118,9 +3112,8 @@ function HomeServiceCard({
   )
 }
 
-function ShopsJobsServicesRow({ navigate, shops, jobs, services, loading, currentUser, onServiceClick, onJobClick, userLat, userLng, activeDistrict }) {
+function ShopsJobsServicesRow({ navigate, shops, services, loading, currentUser, onServiceClick, userLat, userLng, activeDistrict }) {
   const shopsRail = useRef(null)
-  const jobsRail = useRef(null)
   const servicesRail = useRef(null)
 
   const SHOP_INITIAL_COUNT = 6
@@ -3191,37 +3184,6 @@ function ShopsJobsServicesRow({ navigate, shops, jobs, services, loading, curren
     })
   }, [shopDisplayCount])
 
-  const [jobCat, setJobCat] = React.useState('All')
-  const [jobType, setJobType] = React.useState('All')
-  const [jobSort, setJobSort] = React.useState('recent')
-  const [jobCatOpen, setJobCatOpen] = React.useState(false)
-  const [jobTypeOpen, setJobTypeOpen] = React.useState(false)
-  const [jobSortOpen, setJobSortOpen] = React.useState(false)
-  const jobCatRef = React.useRef(null)
-  const jobTypeRef = React.useRef(null)
-  const jobSortRef = React.useRef(null)
-
-  const JOB_CATEGORIES = ['All', 'Technology', 'Education', 'Health', 'Finance', 'Agriculture', 'Construction', 'Transport', 'Hospitality', 'Sales & Marketing', 'Other']
-  const JOB_TYPES = ['All', 'Full-time', 'Part-time', 'Contract', 'Internship', 'Volunteer']
-  const JOB_SORTS = [{ k: 'recent', l: 'Newest' }, { k: 'oldest', l: 'Oldest' }]
-
-  const filteredJobs = React.useMemo(() => {
-    let list = [...jobs]
-    if (jobCat !== 'All') list = list.filter(j => j.category === jobCat)
-    if (jobType !== 'All') list = list.filter(j => j.type === jobType)
-    if (jobSort === 'oldest') list.reverse()
-    return list
-  }, [jobs, jobCat, jobType, jobSort])
-
-  React.useEffect(() => {
-    function handleClick(e) {
-      if (jobCatRef.current && !jobCatRef.current.contains(e.target)) setJobCatOpen(false)
-      if (jobTypeRef.current && !jobTypeRef.current.contains(e.target)) setJobTypeOpen(false)
-      if (jobSortRef.current && !jobSortRef.current.contains(e.target)) setJobSortOpen(false)
-    }
-    document.addEventListener('mousedown', handleClick)
-    return () => document.removeEventListener('mousedown', handleClick)
-  }, [])
 
   return (
     <section className="soko-shops-jobs-section" style={{ padding: '10px 20px 18px', background: '#f8f9fa' }}>
@@ -3948,144 +3910,6 @@ function ShopsJobsServicesRow({ navigate, shops, jobs, services, loading, curren
           )}
         </div>
 
-        {/* ── Shops → Jobs Bridge ── */}
-        <div className="soko-shops-jobs-bridge">
-          <div className="soko-sjb-line" />
-          <div className="soko-sjb-badge">
-            <span className="soko-sjb-icon">{Icon.briefcase(14)}</span>
-            <span className="soko-sjb-label">Jobs</span>
-          </div>
-          <div className="soko-sjb-line" />
-        </div>
-
-        {/* ── Jobs ── */}
-        <div className="soko-sjs-block">
-          <div className="soko-sjs-head">
-            <div>
-              <h2 className="soko-sjs-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 8, background: T.blueL, color: T.blue }}>{Icon.briefcase(14)}</span>
-                Jobs
-                {jobs.length > 0 && (
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: T.blue, borderRadius: 999, padding: '1px 8px', lineHeight: '18px' }}>
-                    {jobs.length}
-                  </span>
-                )}
-              </h2>
-              <p style={{ margin: '2px 0 0', fontSize: 12, color: T.gray500, fontWeight: 500, paddingLeft: 0 }}>Find your next opportunity</p>
-            </div>
-            <button type="button" className="soko-sjs-link" onClick={() => navigate('/jobs')}>
-              View all {Icon.chevR(14)}
-            </button>
-          </div>
-          {/* Job filters */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, flexWrap: 'nowrap', overflowX: 'auto', overflowY: 'visible', width: '100%', scrollbarWidth: 'none' }}>
-            <div ref={jobCatRef} style={{ position: 'relative' }}>
-              <button type="button" onClick={() => { setJobCatOpen(v => !v); setJobTypeOpen(false); setJobSortOpen(false) }} style={{
-                display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 999, padding: '7px 13px',
-                fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
-                background: jobCat !== 'All' ? '#e8f0fe' : '#fff', border: '1.5px solid #e2e8f0',
-                color: jobCat !== 'All' ? '#1A73E8' : '#475569', transition: 'all 0.15s', minHeight: 34,
-              }}>
-                {Icon.grid(12)} {jobCat === 'All' ? 'Category' : jobCat} <span style={{ transform: 'rotate(90deg)', display: 'inline-flex', marginLeft: 2 }}>{Icon.chevR(11)}</span>
-              </button>
-              {jobCatOpen && (
-                <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', zIndex: 20, minWidth: 180, overflow: 'hidden', padding: '4px', maxHeight: 260, overflowY: 'auto' }}>
-                  {JOB_CATEGORIES.map(c => (
-                    <button key={c} type="button" onClick={() => { setJobCat(c); setJobCatOpen(false) }} style={{
-                      display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '8px 12px',
-                      fontSize: 12, fontWeight: jobCat === c ? 700 : 500, color: jobCat === c ? '#1A73E8' : '#334155',
-                      cursor: 'pointer', fontFamily: 'inherit', borderRadius: 8,
-                    }}>
-                      {c === 'All' ? '📋 All Categories' : c}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div ref={jobTypeRef} style={{ position: 'relative' }}>
-              <button type="button" onClick={() => { setJobTypeOpen(v => !v); setJobCatOpen(false); setJobSortOpen(false) }} style={{
-                display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 999, padding: '7px 13px',
-                fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
-                background: jobType !== 'All' ? '#e8f0fe' : '#fff', border: '1.5px solid #e2e8f0',
-                color: jobType !== 'All' ? '#1A73E8' : '#475569', transition: 'all 0.15s', minHeight: 34,
-              }}>
-                {Icon.briefcase(12)} {jobType === 'All' ? 'Job Type' : jobType} <span style={{ transform: 'rotate(90deg)', display: 'inline-flex', marginLeft: 2 }}>{Icon.chevR(11)}</span>
-              </button>
-              {jobTypeOpen && (
-                <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', zIndex: 20, minWidth: 160, overflow: 'hidden', padding: '4px' }}>
-                  {JOB_TYPES.map(t => (
-                    <button key={t} type="button" onClick={() => { setJobType(t); setJobTypeOpen(false) }} style={{
-                      display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '8px 12px',
-                      fontSize: 12, fontWeight: jobType === t ? 700 : 500, color: jobType === t ? '#1A73E8' : '#334155',
-                      cursor: 'pointer', fontFamily: 'inherit', borderRadius: 8,
-                    }}>
-                      {t === 'All' ? '📋 All Types' : t}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div ref={jobSortRef} style={{ position: 'relative' }}>
-              <button type="button" onClick={() => { setJobSortOpen(v => !v); setJobCatOpen(false); setJobTypeOpen(false) }} style={{
-                display: 'inline-flex', alignItems: 'center', gap: 5, borderRadius: 999, padding: '7px 13px',
-                fontSize: 12, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap',
-                background: '#fff', border: '1.5px solid #e2e8f0', color: '#475569', transition: 'all 0.15s', minHeight: 34,
-              }}>
-                {Icon.clock(12)} {JOB_SORTS.find(s => s.k === jobSort)?.l || 'Newest'} <span style={{ transform: 'rotate(90deg)', display: 'inline-flex', marginLeft: 2 }}>{Icon.chevR(11)}</span>
-              </button>
-              {jobSortOpen && (
-                <div style={{ position: 'absolute', top: 'calc(100% + 4px)', left: 0, background: '#fff', borderRadius: 12, border: '1px solid #e2e8f0', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', zIndex: 20, minWidth: 140, overflow: 'hidden', padding: '4px' }}>
-                  {JOB_SORTS.map(s => (
-                    <button key={s.k} type="button" onClick={() => { setJobSort(s.k); setJobSortOpen(false) }} style={{
-                      display: 'block', width: '100%', textAlign: 'left', background: 'none', border: 'none', padding: '8px 12px',
-                      fontSize: 12, fontWeight: jobSort === s.k ? 700 : 500, color: jobSort === s.k ? '#1A73E8' : '#334155',
-                      cursor: 'pointer', fontFamily: 'inherit', borderRadius: 8,
-                    }}>
-                      {s.l}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-          {loading ? (
-            <div className="soko-sjs-rail">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="skeleton" style={{ flexShrink: 0, width: 324, height: 148, borderRadius: 14 }} />
-              ))}
-            </div>
-          ) : filteredJobs.length > 0 ? (
-            <div ref={jobsRail} className="soko-sjs-rail">
-              {filteredJobs.map(j => (
-                <HomeWorkCard
-                  key={j.id}
-                  title={j.title}
-                  sub={[j.company, j.type || 'Full-time', j.salary].filter(Boolean).join(' · ')}
-                  meta={j.city || 'Malawi'}
-                  image={j.cover_image_url || j.logo_url || null}
-                  fallbackIcon={Icon.briefcase(28)}
-                  accentBg={T.blueL}
-                  accentFg={T.blue}
-                  onClick={() => onJobClick(j)}
-                  contact={j.contact}
-                />
-              ))}
-            </div>
-          ) : (
-            <EmptyMini text="No jobs posted yet." cta="Browse Jobs" onClick={() => navigate('/jobs')} />
-          )}
-        </div>
-
-        {/* ── Jobs → Services Bridge ── */}
-        <div className="soko-shops-jobs-bridge">
-          <div className="soko-sjb-line" />
-          <div className="soko-sjb-badge" style={{ background: T.violetL, color: T.violet }}>
-            <span className="soko-sjb-icon">{Icon.wrench(14)}</span>
-            <span className="soko-sjb-label">Services</span>
-          </div>
-          <div className="soko-sjb-line" />
-        </div>
-
         {/* ── Services ── */}
         <div className="soko-sjs-block">
           <div className="soko-shops-head">
@@ -4463,7 +4287,7 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
             .limit(3),
         ])
         setLiveResults({
-          listings: listingsData.data || [],
+          listings: (listingsData.data || []).filter(l => !isJobListing(l)),
           shops: shopsData.data || [],
         })
       } catch (e) {
@@ -5247,7 +5071,7 @@ function SellCtaBanner({ navigate }) {
 function SokoFooter({ navigate }) {
   const links = {
     'Marketplace': [['Buy Listings','/'],['Sell Now','/post'],['Categories','/'],['Shops','/shops'],['Looking For','/looking-for']],
-    'Work':        [['Jobs','/jobs'],['Services','/services'],['Stories','/status'],['Verification','/profile']],
+    'Work':        [['Services','/services'],['Stories','/status'],['Verification','/profile']],
     'Company':     [['About SokoMW','/'],['Contact Us','/'],['Help Center','/']],
     'Legal':       [['Privacy Policy','/'],['Terms of Service','/'],['Safety Tips','/'],['Report Abuse','/']],
   }
@@ -5453,13 +5277,10 @@ export default function Home() {
 
   // ── New sections' data ────────────────────────────────────
   const [shops,    setShops]    = useState([])
-  const [jobs,     setJobs]     = useState([])
   const [services, setServices] = useState([])
   const [requests, setRequests] = useState([])
   const [sectionsLoading, setSectionsLoading] = useState(true)
   const [selectedService, setSelectedService] = useState(null)
-  const [selectedJob, setSelectedJob] = useState(null)
-  const [savedJobIds, setSavedJobIds] = useState([])
   const listingsRequestRef = useRef(0)
   const sectionsRequestRef = useRef(0)
 
@@ -5645,7 +5466,9 @@ export default function Home() {
       featuredQuery = featuredQuery.order('featured_until', { ascending: false }).limit(FEATURED_FETCH)
       recentQuery = recentQuery.order('created_at', { ascending: false }).limit(LATEST_FETCH)
 
-      const [{ data: featuredRows }, { data: recentRows }] = await Promise.all([featuredQuery, recentQuery])
+      const [{ data: featuredRaw }, { data: recentRaw }] = await Promise.all([featuredQuery, recentQuery])
+      const featuredRows = (featuredRaw || []).filter(l => !isJobListing(l))
+      const recentRows = (recentRaw || []).filter(l => !isJobListing(l))
 
       // Fetch promotion data to distinguish paid vs free promotions
       let promoMap = {}
@@ -5750,7 +5573,7 @@ export default function Home() {
     }
   }
 
-  // Auxiliary sections: shops, jobs, services, looking-for requests, trust
+  // Auxiliary sections: shops, services, looking-for requests, trust
   // stats. Each query is wrapped so a missing table (e.g. on a fresh DB, or
   // if a table name differs) can't crash the homepage — it just renders the
   // section's empty state instead.
@@ -5793,55 +5616,6 @@ export default function Home() {
           console.error('shops catch:', e)
           if (requestId !== sectionsRequestRef.current) return
           setShops([])
-        }
-      })(),
-      (async () => {
-        try {
-          // Jobs use status 'active' (PostJobForm / Jobs index) — not 'published'
-          const today = new Date().toISOString().split('T')[0]
-          const jobSelect = 'id, title, company, city, type, category, created_at, deadline, cover_image_url, logo_url, salary, contact, overview, job_purpose, description, custom_sections, responsibilities, requirements, contact_name, contact_address, disclaimer, poster_id, address'
-          let jobsQuery = supabase.from('jobs')
-            .select(jobSelect)
-            .eq('status', 'active')
-            .or(`deadline.is.null,deadline.gte.${today}`)
-          if (activeDistrict !== 'All Districts') jobsQuery = jobsQuery.eq('city', activeDistrict)
-          let { data, error } = await jobsQuery
-            .order('created_at', { ascending: false })
-            .limit(8)
-          if (error && /cover_image_url|logo_url|salary|overview|job_purpose|description|custom_sections|responsibilities|requirements|contact_name|contact_address|disclaimer|poster_id|address|column/i.test(error.message || '')) {
-            ;({ data, error } = await supabase.from('jobs')
-              .select('id, title, company, city, type, created_at, deadline')
-              .eq('status', 'active')
-              .or(`deadline.is.null,deadline.gte.${today}`)
-              .order('created_at', { ascending: false })
-              .limit(8))
-          }
-          // Fallback: include published if any legacy rows use that status
-          if (!error && (!data || data.length === 0)) {
-            const alt = await supabase.from('jobs')
-              .select(jobSelect)
-              .in('status', ['active', 'published'])
-              .or(`deadline.is.null,deadline.gte.${today}`)
-              .order('created_at', { ascending: false })
-              .limit(8)
-            if (!alt.error && alt.data?.length) data = alt.data
-            else if (alt.error && /cover_image_url|logo_url|salary|overview|job_purpose|description|custom_sections|responsibilities|requirements|contact_name|contact_address|disclaimer|poster_id|address|column/i.test(alt.error.message || '')) {
-              const bare = await supabase.from('jobs')
-                .select('id, title, company, city, type, created_at, deadline')
-                .in('status', ['active', 'published'])
-                .or(`deadline.is.null,deadline.gte.${today}`)
-                .order('created_at', { ascending: false })
-                .limit(8)
-              if (!bare.error) data = bare.data
-            }
-          }
-          if (error) console.error('jobs query error:', error)
-          if (requestId !== sectionsRequestRef.current) return
-          setJobs(data || [])
-        } catch (e) {
-          console.error('jobs catch:', e)
-          if (requestId !== sectionsRequestRef.current) return
-          setJobs([])
         }
       })(),
       (async () => {
@@ -6129,7 +5903,7 @@ export default function Home() {
       )}
 
       <div className={!sectionsLoading ? 'soko-swap-in' : undefined}>
-        <ShopsJobsServicesRow navigate={navigate} shops={shops} jobs={jobs} services={services} loading={sectionsLoading} currentUser={user} onServiceClick={setSelectedService} onJobClick={setSelectedJob} userLat={userLat} userLng={userLng} activeDistrict={activeDistrict} />
+        <ShopsJobsServicesRow navigate={navigate} shops={shops} services={services} loading={sectionsLoading} currentUser={user} onServiceClick={setSelectedService} userLat={userLat} userLng={userLng} activeDistrict={activeDistrict} />
       </div>
 
       <div className="soko-settle soko-settle-d8">
@@ -6162,20 +5936,6 @@ export default function Home() {
           provider={selectedService}
           currentUser={user}
           onClose={() => setSelectedService(null)}
-        />
-      )}
-
-      {selectedJob && (
-        <JobModal
-          job={selectedJob}
-          savedIds={savedJobIds}
-          onToggleSave={(id) => {
-            setSavedJobIds(prev =>
-              prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
-            )
-          }}
-          onClose={() => setSelectedJob(null)}
-          fullScreen={true}
         />
       )}
 

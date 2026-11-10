@@ -125,38 +125,20 @@ export async function hydrateStatusTags(rows) {
 async function hydrateTaggedEntities(rows) {
   if (!rows?.length) return rows || []
 
-  const byKind = { listing: new Set(), job: new Set(), service: new Set(), shop: new Set(), request: new Set() }
+  const byKind = { listing: new Set(), service: new Set(), shop: new Set(), request: new Set() }
   for (const s of rows) {
     const kind = s.tagged_kind || (s.tagged_listing_id ? 'listing' : null)
     const id = s.tagged_ref_id || s.tagged_listing_id || s.tagged?.id
     if (kind && id && byKind[kind]) byKind[kind].add(id)
   }
 
-  const maps = { listing: {}, job: {}, service: {}, shop: {}, request: {} }
+  const maps = { listing: {}, service: {}, shop: {}, request: {} }
 
   await Promise.all([
     byKind.listing.size
       ? supabase.from('listings').select('id, title, price, images, category, description, city, district')
         .in('id', [...byKind.listing])
         .then(({ data }) => { for (const r of data || []) maps.listing[r.id] = r })
-      : null,
-    byKind.job.size
-      ? supabase.from('jobs').select('id, title, company, salary, city, cover_image_url, logo_url, description, overview')
-        .in('id', [...byKind.job])
-        .then(({ data }) => {
-          for (const r of data || []) {
-            // Prefer company logo first for branding on status cards
-            const imgs = []
-            if (r.logo_url) imgs.push(r.logo_url)
-            if (r.cover_image_url && r.cover_image_url !== r.logo_url) imgs.push(r.cover_image_url)
-            maps.job[r.id] = {
-              ...r,
-              name: r.title,
-              logo_url: r.logo_url || null,
-              images: imgs,
-            }
-          }
-        })
       : null,
     byKind.service.size
       ? supabase.from('services').select('id, name, rate, category, city, media_urls, description')
@@ -269,7 +251,7 @@ export async function fetchAllActiveStories(currentUserId = null, category = nul
   const applyFilter = (s) => {
     if (!isFiltered) return true
     if (category === 'Availability') return s.status_type === 'availability' && !s.tagged_listing_id && !s.tagged_ref_id
-    if (category === 'Work') return s.status_type === 'work_ping' || s.tagged_kind === 'job' || s.tagged_kind === 'service'
+    if (category === 'Work') return s.status_type === 'work_ping' || s.tagged_kind === 'service'
     if (category === '🔥 Urgent') {
       const c = s.content?.toLowerCase() || ''
       return c.includes('price drop') || c.includes('first to confirm')

@@ -1,11 +1,1 @@
-getBannerCta: src/utils/homeUtils.js:416.
-Home price: subtitle line src/pages/Home.jsx:4799-4802 (slide.desc) and separate price chip src/pages/Home.jsx:4996-5002 (above button).
-Form subtitle prefill: src/pages/Admin.jsx:2812 (useEffect) and :3160 (picker click) and :3087 (Enter handler).
-
-Changes:
-- getBannerCta linked listing label now "View product"; service/job/shop/request labels preserved; custom cta_label wins.
-- Admin no longer prefills subtitle with price; prefills title + category.
-- Home strips price text from desc at render; single price chip above button using formatPrice, reserved space.
-- Old "Shop now" auto button_text ignored on Home.
-
-Build passed (npm run build). Commit: beee982. Pushed to origin/master.
+Jobs feature removed from SokoMW (frontend UI, navigation, search/listing tabs, chat job source, status tagging, notifications, admin job management, Looking For unchanged). Redirects /jobs and /jobs/* to "/". Job listings excluded in listings queries. Banner labels: Book now, Visit shop, View request, Explore Marketplace, View product; custom label wins. Service worker cache bumped to sokomw-v15. DB cleanup script at sql/remove_jobs.sql (not executed). Build passes (vite build). Remaining "job" references are comments, CSS class names, service "jobs done" metrics, and historical migrations/DB.

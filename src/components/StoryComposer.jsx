@@ -117,14 +117,16 @@ export default function StoryComposer({ userId, onDone, onClose }) {
     const kind = taggedKind || (taggedId ? 'listing' : null)
     const { error } = await postStatus({
       content: text.trim() || (mediaFile ? (isVideo ? 'Video update' : 'Photo update') : ''),
-      status_type: kind === 'job' || kind === 'service' ? 'work_ping' : (kind ? 'listing_update' : 'availability'),
+       status_type: kind === 'service' ? 'work_ping' : (kind ? 'listing_update' : 'availability'),
+
       mediaFiles: mediaFile ? [mediaFile] : [],
       tagged_listing_id: kind === 'listing' ? taggedId : null,
       listing_id: kind === 'listing' ? taggedId : null,
       tagged_kind: kind,
       tagged_ref_id: taggedId || null,
       location_hint: location.trim() || null,
-      expiryKey: kind === 'job' || kind === 'service' ? 'work_ping' : 'availability',
+       expiryKey: kind === 'service' ? 'work_ping' : 'availability',
+
     })
     setPosting(false)
     if (!error) onDone?.()

@@ -1,7 +1,7 @@
 {
   "name": "Soko Malawi",
   "short_name": "SokoMw",
-  "description": "Buy, Sell, Find Jobs & Services in Malawi",
+  "description": "Buy, Sell & Services in Malawi",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f6f8f7",

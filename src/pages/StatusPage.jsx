@@ -224,12 +224,12 @@ function StatusFeedCard({ s, onOpen, currentUserId, metrics, onLike }) {
   const expires    = expiresInLabel(s.expires_at)
   const rawContent = (s.content || '').trim()
   // Badge: only tagged statuses get one — labelled by the kind of tagged
-  // entity: Product / Service / Job / Looking for / Shop.
+  // entity: Product / Service / Looking for / Shop.
   const badgeLabel = s.tagged || s.tagged_listing_id || s.tagged_ref_id
     ? ({
       listing: 'Product',
       service: 'Service',
-      job: 'Job',
+
       request: 'Looking for',
       shop: 'Shop',
     })[s.tagged_kind] || 'Product'

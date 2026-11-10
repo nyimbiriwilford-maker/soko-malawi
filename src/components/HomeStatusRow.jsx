@@ -17,8 +17,8 @@ function getCatStyle(category, statusType) {
     return { bg: '#0d9488', text: '#fff', label: 'AGRICULTURE' }
   if (c.includes('electronic') || c.includes('phone') || c.includes('tech'))
     return { bg: '#f97316', text: '#fff', label: 'ELECTRONICS' }
-  if (c.includes('job') || c.includes('service') || c.includes('work'))
-    return { bg: '#22d3ee', text: '#0f172a', label: 'JOBS & SERVICES' }
+  if (c.includes('service') || c.includes('work'))
+    return { bg: '#22d3ee', text: '#0f172a', label: 'SERVICES' }
   if (c.includes('fashion') || c.includes('cloth') || c.includes('wear'))
     return { bg: '#ec4899', text: '#fff', label: 'FASHION' }
   if (c.includes('property') || c.includes('home') || c.includes('house'))

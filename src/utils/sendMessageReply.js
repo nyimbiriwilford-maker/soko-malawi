@@ -60,11 +60,10 @@ export async function sendChatMessage({
     inserted = res.data
     error = res.error
   }
-  if (error && /chat_source|job_id|shop_id|request_id|column/i.test(error.message || '')) {
+  if (error && /chat_source|shop_id|request_id|column/i.test(error.message || '')) {
     const legacy = { ...msgData }
     delete legacy.chat_source
-    delete legacy.job_id
-    delete legacy.shop_id
+        delete legacy.shop_id
     delete legacy.request_id
     const res2 = await supabase.from('messages').insert(legacy).select('*').single()
     inserted = res2.data

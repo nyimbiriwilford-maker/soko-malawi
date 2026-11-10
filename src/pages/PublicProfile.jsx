@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { isListingFeatured } from '../utils/homeUtils'
+import { isListingFeatured, isJobListing } from '../utils/homeUtils'
 import VouchSection from '../components/VouchSection'
 import FollowButton from '../components/FollowButton'
 import FollowersManager from '../components/FollowersManager'
@@ -190,8 +190,8 @@ export default function PublicProfile() {
       }
     }
 
-    let activeListings = listingsRes.data || []
-    let soldFromQuery = Array.isArray(soldListRes.data) ? soldListRes.data : []
+    let activeListings = (listingsRes.data || []).filter(l => !isJobListing(l))
+    let soldFromQuery = Array.isArray(soldListRes.data) ? soldListRes.data.filter(l => !isJobListing(l)) : []
     const soldFromRpc = (!soldRpcRes?.error && Array.isArray(soldRpcRes?.data))
       ? soldRpcRes.data
       : []

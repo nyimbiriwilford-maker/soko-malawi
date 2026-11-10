@@ -1,6 +1,6 @@
 ﻿/**
  * SokoMW - SearchPage.jsx
- * Modern multi-pillar search: Marketplace, Shops, Looking For, Jobs, Services.
+ * Modern multi-pillar search: Marketplace, Shops, Looking For, Services.
  * Reads `?q=` from URL; filters + live overlay; Lucide-style icon system.
  */
 
@@ -9,7 +9,7 @@ import React, {
 } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { isListingFeatured, rotateFeaturedFairly } from '../utils/homeUtils'
+import { isListingFeatured, isJobListing, rotateFeaturedFairly } from '../utils/homeUtils'
 import SokoNav from '../components/SokoNav'
 import NotifyMeModal from '../components/NotifyMeModal'
 
@@ -137,7 +137,6 @@ const SEARCH_TABS = [
   { key: 'listings',   label: 'Marketplace',         icon: Icon.home },
   { key: 'shops',      label: 'Shops',               icon: Icon.shop },
   { key: 'lookingfor', label: 'People Looking For',  icon: Icon.users },
-  { key: 'jobs',       label: 'Jobs',                icon: Icon.briefcase },
   { key: 'services',   label: 'Services',            icon: Icon.wrench },
 ]
 
@@ -209,7 +208,6 @@ const CATEGORY_TREE = [
     { key: 'Professional Services',   label: 'Professional Services' },
     { key: 'Other Services',          label: 'Other' },
   ]},
-  { key: 'Jobs',  label: 'Jobs' },
   { key: 'Other', label: 'Other' },
 ]
 
@@ -1010,27 +1008,6 @@ function ShopResultCard({ shop, delay, onClick }) {
 }
 
 /* -----------------------------------------------------------------------------
-   JOB RESULT CARD - Jobs tab
------------------------------------------------------------------------------ */
-function JobResultCard({ job, delay, onClick }) {
-  return (
-    <div className="sp-row-card" style={{ animationDelay:`${delay}s` }} onClick={onClick}>
-      <div style={{ width:42, height:42, borderRadius:10, background:T.blueL, color:T.blue, display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0 }}>{Icon.briefcase(18)}</div>
-      <div style={{ flex:1, minWidth:0 }}>
-        <div style={{ fontSize:14, fontWeight:700, color:T.gray900 }}>{job.title}</div>
-        <div style={{ display:'flex', alignItems:'center', gap:10, fontSize:11.5, color:T.gray600, marginTop:2, flexWrap:'wrap' }}>
-          {job.company && <span>{job.company}</span>}
-          <span style={{ display:'flex', alignItems:'center', gap:3 }}>{Icon.pin(11)} {job.city || 'Malawi'}</span>
-          <span>{job.type || 'Full-time'}</span>
-          <span style={{ display:'flex', alignItems:'center', gap:3 }}>{Icon.clock(11)} {timeAgo(job.created_at)}</span>
-        </div>
-      </div>
-      {Icon.chevR(16)}
-    </div>
-  )
-}
-
-/* -----------------------------------------------------------------------------
    SERVICE RESULT CARD - Services tab
 ----------------------------------------------------------------------------- */
 function ServiceResultCard({ service, delay, onClick }) {
@@ -1295,7 +1272,7 @@ function LiveSearchOverlay({ liveQuery, setLiveQuery, liveResults, liveLoading, 
     }
   }, [])
 
-  const total = liveResults.listings.length + liveResults.shops.length + liveResults.jobs.length + liveResults.services.length + liveResults.requests.length
+  const total = liveResults.listings.length + liveResults.shops.length + liveResults.services.length + liveResults.requests.length
 
   function MoreHint({ shown, total, label, onClick }) {
     const extra = total - shown
@@ -1329,7 +1306,7 @@ function LiveSearchOverlay({ liveQuery, setLiveQuery, liveResults, liveLoading, 
             value={liveQuery}
             onChange={e => setLiveQuery(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') commit(liveQuery); if (e.key === 'Escape') onClose() }}
-            placeholder="Search listings, shops, jobs..."
+            placeholder="Search listings, shops..."
             enterKeyHint="search"
             autoComplete="off"
             style={{ flex:1, border:'none', outline:'none', fontSize:16, fontWeight:500, color:T.gray900, background:'transparent', minWidth:0 }}
@@ -1411,19 +1388,6 @@ function LiveSearchOverlay({ liveQuery, setLiveQuery, liveResults, liveLoading, 
                     />
                   ))}
                   <MoreHint shown={liveResults.shops.length} total={liveResults.shopsTotal} label="shops" onClick={() => { commit(liveQuery) }} />
-                </Section>
-              )}
-
-              {/* Jobs */}
-              {liveResults.jobs.length > 0 && (
-                <Section label="Jobs" iconNode={Icon.briefcase(14)}>
-                  {liveResults.jobs.map(j => (
-                    <LiveRow key={j.id} onClick={() => { navigate('/jobs'); onClose() }}
-                      avatar={<span style={{ color:T.blue, display:'flex' }}>{Icon.briefcase(18)}</span>}
-                      title={j.title} sub={[j.company, j.city].filter(Boolean).join(' - ')}
-                    />
-                  ))}
-                  <MoreHint shown={liveResults.jobs.length} total={liveResults.jobsTotal} label="jobs" onClick={() => { navigate('/jobs'); onClose() }} />
                 </Section>
               )}
 
@@ -1510,7 +1474,6 @@ const CAT_STYLE = {
   Agriculture:      { color:'#15803d', bg:null },
   Food:             { color:'#c2410c', bg:'#ffedd5' },
   Services:         { color:'#0a7a44', bg:null },
-  Jobs:             { color:'#2563eb', bg:null },
 }
 function catStyle(cat) { return CAT_STYLE[cat] || { color:T.gray600, bg:null } }
 
@@ -1684,7 +1647,7 @@ const locationParam = searchParams.get('location') || ''
 
   // -- Active tab --
   const [activeTab, setActiveTab] = useState('listings')
-  const [tabCounts, setTabCounts] = useState({ listings: null, shops: null, lookingfor: null, jobs: null, services: null })
+  const [tabCounts, setTabCounts] = useState({ listings: null, shops: null, lookingfor: null, services: null })
 
   // -- Results state --
   const [allResults, setAllResults] = useState([])
@@ -1714,7 +1677,7 @@ const locationParam = searchParams.get('location') || ''
   const [latestProducts, setLatestProducts]       = useState([])
   const [searchOpen, setSearchOpen]             = useState(!!searchParams.get('focus'))
   const [liveQuery, setLiveQuery]               = useState(searchParams.get('focus') ? (searchParams.get('q') || '') : '')
-  const [liveResults, setLiveResults]           = useState({ listings:[], listingsTotal:0, shops:[], shopsTotal:0, jobs:[], jobsTotal:0, services:[], servicesTotal:0, requests:[], requestsTotal:0 })
+  const [liveResults, setLiveResults]           = useState({ listings:[], listingsTotal:0, shops:[], shopsTotal:0, services:[], servicesTotal:0, requests:[], requestsTotal:0 })
   const [liveLoading, setLiveLoading]           = useState(false)
   const liveRef                                 = useRef(null)
 
@@ -1798,17 +1761,17 @@ const locationParam = searchParams.get('location') || ''
   /* Live search - fires 300 ms after the user stops typing */
   useEffect(() => {
     if (!liveQuery.trim()) {
-      setLiveResults({ listings:[], shops:[], jobs:[], services:[], requests:[] })
+      setLiveResults({ listings:[], shops:[], services:[], requests:[] })
       return
     }
     const timer = setTimeout(async () => {
       setLiveLoading(true)
       const q = liveQuery.trim()
       const safe = async (fn) => { try { return await fn() } catch { return [] } }
-      const LIMITS = { listings: 4, shops: 3, jobs: 3, services: 3, requests: 3 }
+      const LIMITS = { listings: 4, shops: 3, services: 3, requests: 3 }
 
       const [
-        listingsRes, shopsRes, jobsRes, servicesRes, requestsRes,
+        listingsRes, shopsRes, servicesRes, requestsRes,
       ] = await Promise.all([
         safe(async () => {
           const { data, count } = await supabase.from('listings')
@@ -1817,18 +1780,12 @@ const locationParam = searchParams.get('location') || ''
             .order('featured_until', { ascending: false, nullsFirst: false })
             .order('created_at',  { ascending: false })
             .limit(LIMITS.listings)
-          return { data: data || [], count: count || 0 }
+          return { data: (data || []).filter(l => !isJobListing(l)), count: count || 0 }
         }),
         safe(async () => {
           const { data, count } = await supabase.from('shops')
             .select('id,name,slug,logo_url,city,category', { count: 'exact' })
             .eq('is_active',true).ilike('name',`%${q}%`).limit(LIMITS.shops)
-          return { data: data || [], count: count || 0 }
-        }),
-        safe(async () => {
-          const { data, count } = await supabase.from('jobs')
-            .select('id,title,company,city', { count: 'exact' })
-            .eq('status','active').ilike('title',`%${q}%`).limit(LIMITS.jobs)
           return { data: data || [], count: count || 0 }
         }),
         safe(async () => {
@@ -1847,7 +1804,6 @@ const locationParam = searchParams.get('location') || ''
       setLiveResults({
         listings:      listingsRes.data,  listingsTotal:  listingsRes.count,
         shops:         shopsRes.data,     shopsTotal:     shopsRes.count,
-        jobs:          jobsRes.data,      jobsTotal:      jobsRes.count,
         services:      servicesRes.data,  servicesTotal:  servicesRes.count,
         requests:      requestsRes.data,  requestsTotal:  requestsRes.count,
       })
@@ -1871,7 +1827,7 @@ const locationParam = searchParams.get('location') || ''
      tab badges are populated without forcing the user to click each tab. */
   useEffect(() => {
     if (!queryParam) {
-      setTabCounts({ listings: null, shops: null, lookingfor: null, jobs: null, services: null })
+      setTabCounts({ listings: null, shops: null, lookingfor: null, services: null })
       return
     }
     fetchAllTabCounts(queryParam)
@@ -1880,7 +1836,7 @@ const locationParam = searchParams.get('location') || ''
   async function fetchAllTabCounts(q) {
     const safe = async (fn) => { try { return await fn() } catch { return 0 } }
 
-    const [listingsC, shopsC, lookingforC, jobsC, servicesC] = await Promise.all([
+    const [listingsC, shopsC, lookingforC, servicesC] = await Promise.all([
       safe(async () => {
         const { count } = await supabase.from('listings').select('id', { count:'exact', head:true }).eq('status', 'published').ilike('title', `%${q}%`)
         return count || 0
@@ -1894,7 +1850,6 @@ const locationParam = searchParams.get('location') || ''
         return count || 0
       }),
       safe(async () => {
-        const { count } = await supabase.from('jobs').select('id', { count:'exact', head:true }).eq('status', 'active').ilike('title', `%${q}%`)
         return count || 0
       }),
       safe(async () => {
@@ -1903,7 +1858,7 @@ const locationParam = searchParams.get('location') || ''
       }),
     ])
 
-    setTabCounts({ listings: listingsC, shops: shopsC, lookingfor: lookingforC, jobs: jobsC, services: servicesC })
+    setTabCounts({ listings: listingsC, shops: shopsC, lookingfor: lookingforC, services: servicesC })
   }
 
   /* -- doSearch: dispatches to the right table for the active tab --
@@ -1915,7 +1870,6 @@ const locationParam = searchParams.get('location') || ''
       if (tab === 'listings')        await searchListings(filters, currentSort, currentPage)
       else if (tab === 'shops')      await searchShops(currentSort, currentPage)
       else if (tab === 'lookingfor') await searchLookingFor(currentSort, currentPage)
-      else if (tab === 'jobs')       await searchJobs(currentSort, currentPage)
       else if (tab === 'services')   await searchServices(currentSort, currentPage)
     } catch (err) {
       console.error('Search error:', err)
@@ -1953,7 +1907,7 @@ const locationParam = searchParams.get('location') || ''
     const { data: allData, error } = await query
     if (error) throw error
 
-    let rows = allData || []
+    let rows = (allData || []).filter(l => !isJobListing(l))
 
     // Near Me - compute distance and sort by it, overriding other sort modes
     if (filters.nearMe && filters.userCoords) {
@@ -2085,27 +2039,6 @@ const locationParam = searchParams.get('location') || ''
     setTotalCount(count || 0)
   }
 
-  /* -- Jobs tab - searches jobs.title, scoped to active + non-expired -- */
-  async function searchJobs(currentSort, currentPage) {
-    const today = new Date().toISOString().split('T')[0]
-    let query = supabase
-      .from('jobs')
-      .select('id, title, company, city, type, created_at, deadline', { count: 'exact' })
-      .eq('status', 'active')
-      .or(`deadline.is.null,deadline.gte.${today}`)
-      .ilike('title', `%${queryParam}%`)
-      .order('created_at', { ascending: false })
-
-    query = query.range(0, currentPage * PAGE_SIZE - 1)
-
-    const { data, count, error } = await query
-    if (error) throw error
-
-    setAllResults(data || [])
-    setTotalCount(count || 0)
-  }
-
-  /* -- Services tab - searches services.name, scoped to active -- */
   async function searchServices(currentSort, currentPage) {
     let query = supabase
       .from('services')
@@ -2242,7 +2175,6 @@ const locationParam = searchParams.get('location') || ''
       case 'listings':   return '/listing/' + item.id
       case 'shops':      return '/shop/' + item.slug
       case 'lookingfor': return '/looking-for'
-      case 'jobs':       return '/jobs'
       case 'services':   return '/services'
       default:           return '/'
     }
@@ -2301,7 +2233,7 @@ const locationParam = searchParams.get('location') || ''
   }
 
   const resultsLabel = {
-    listings: 'listings', shops: 'shops', lookingfor: 'requests', jobs: 'jobs', services: 'services',
+    listings: 'listings', shops: 'shops', lookingfor: 'requests', services: 'services',
   }[activeTab]
 
   // Keep live overlay in sync with shared SokoNav search input
@@ -2529,12 +2461,6 @@ const locationParam = searchParams.get('location') || ''
               <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
                 {allResults.map((r, i) => (
                   <RequestResultCard key={r.id} request={r} delay={i * 0.04} onClick={() => navigate(resultHref('lookingfor', r))} />
-                ))}
-              </div>
-            ) : activeTab === 'jobs' ? (
-              <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-                {allResults.map((j, i) => (
-                  <JobResultCard key={j.id} job={j} delay={i * 0.04} onClick={() => navigate(resultHref('jobs', j))} />
                 ))}
               </div>
             ) : (

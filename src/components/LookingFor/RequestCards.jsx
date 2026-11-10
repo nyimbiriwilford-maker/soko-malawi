@@ -58,7 +58,7 @@ export function RequestCard({ req, user, myListings, onOffer, onSave, onNotify, 
   const [hov, setHov] = useState(false)
 
   const categoryEmoji = {
-    Electronics: '📱', Services: '🔧', Jobs: '💼',
+    Electronics: '📱', Services: '🔧'
     Vehicles: '🚗', Fashion: '👗', Food: '🍱',
   }[req.category] || '🛍️'
 

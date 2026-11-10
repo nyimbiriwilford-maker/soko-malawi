@@ -13,7 +13,6 @@ const T = {
 
 const CAT_EMOJI = {
   Electronics: '📱', Vehicles: '🚗', Property: '🏠', Fashion: '👗',
-  Jobs: '💼', Services: '🛠️', Agriculture: '🌽', Furniture: '🪑',
 }
 
 const CAT_COLORS = {
@@ -23,7 +22,6 @@ const CAT_COLORS = {
   Fashion:     { bg: '#ec4899', text: '#fff', label: 'FASHION' },
   Agriculture: { bg: '#0d9488', text: '#fff', label: 'AGRICULTURE' },
   Furniture:   { bg: '#f59e0b', text: '#1a0a00', label: 'HOME' },
-  Jobs:        { bg: '#22d3ee', text: '#0f172a', label: 'JOBS' },
   Services:    { bg: '#10b981', text: '#fff', label: 'SERVICES' },
 }
 
@@ -227,7 +225,7 @@ export default function HeroSection({ listings, navigate, user }) {
 
           <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.72)', lineHeight: 1.6, marginBottom: 18, maxWidth: 380 }}>
             Connect with trusted buyers and sellers across all districts.
-            Vehicles, property, electronics, jobs, services and more.
+            Vehicles, property, electronics, services and more.
           </p>
 
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 20 }}>

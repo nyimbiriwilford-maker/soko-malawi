@@ -443,7 +443,7 @@ export default function LookingForRequestCard({
                   {req.user_has_offered ? (
                     <><span className="lf-card-btn-ico">{Icon.check(12, '#5f6368')}</span> Offered</>
                   ) : (
-                    <><span className="lf-card-btn-ico">{Icon.send(12, '#fff')}</span> {req.category === 'Jobs' ? 'Apply' : 'Offer'}</>
+                    <><span className="lf-card-btn-ico">{Icon.send(12, '#fff')}</span> Offer</>
                   )}
                 </button>
               </>

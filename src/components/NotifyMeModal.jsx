@@ -96,7 +96,6 @@ const CATEGORY_TREE = [
     { key: 'Professional Services',   label: 'Professional Services' },
     { key: 'Other Services',          label: 'Other' },
   ]},
-  { key: 'Jobs',  label: 'Jobs' },
   { key: 'Other', label: 'Other' },
 ]
 

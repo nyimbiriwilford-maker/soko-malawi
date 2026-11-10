@@ -4,7 +4,7 @@ import {
   Search, MessageCircle, Bell, Plus, UploadCloud, X, MapPin,
   RefreshCw, Rocket, Star, TrendingUp, Crown, CheckCircle2,
   ChevronLeft, ChevronRight, Eye, Send, Phone, Info, HelpCircle,
-  Home, Store, Briefcase, Wrench, Clock, ShieldCheck, UserSearch,
+  Home, Store, Wrench, Clock, ShieldCheck, UserSearch,
   User, AlertCircle, Loader, Video, PlayCircle, Film,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
@@ -58,7 +58,6 @@ const NAV_TABS = [
   { label: 'Marketplace', icon: Home, path: '/', active: true },
   { label: 'Shops', icon: Store, path: '/shops' },
   { label: 'People Looking For', icon: UserSearch, path: '/looking-for' },
-  { label: 'Jobs', icon: Briefcase, path: '/jobs' },
   { label: 'Services', icon: Wrench, path: '/services' },
   { label: 'Statuses (Stories)', icon: Clock, path: '/status' },
   { label: 'Verification', icon: ShieldCheck, path: null },

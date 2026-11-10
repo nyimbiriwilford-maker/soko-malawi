@@ -83,7 +83,6 @@ const ARCHIVED_KEY = 'soko_archived_chats'
 const CATEGORY_META = {
   marketplace: { label: 'Marketplace', bg: '#e6f7ee', color: '#1a7a4a' },
   services: { label: 'Services', bg: '#f3e8ff', color: '#7c3aed' },
-  jobs: { label: 'Jobs', bg: '#eff6ff', color: '#2563eb' },
   requests: { label: 'People Looking For', bg: '#fef3e0', color: '#c9820a' },
   shops: { label: 'Shops', bg: '#e0f7fa', color: '#0891b2' },
 }
@@ -92,7 +91,6 @@ const PILL_COLORS = {
   all: { bg: '#eef2ef', color: '#3a443d' },
   marketplace: { bg: '#e6f7ee', color: '#1a7a4a' },
   services: { bg: '#f3e8ff', color: '#7c3aed' },
-  jobs: { bg: '#eff6ff', color: '#2563eb' },
   requests: { bg: '#fef3e0', color: '#c9820a' },
   shops: { bg: '#e0f7fa', color: '#0891b2' },
   unread: { bg: '#e6f7ee', color: '#1a7a4a' },
@@ -109,7 +107,6 @@ const PILLS = [
   { key: 'all', label: 'All' },
   { key: 'marketplace', label: 'Marketplace' },
   { key: 'services', label: 'Services' },
-  { key: 'jobs', label: 'Jobs' },
   { key: 'requests', label: 'Requests' },
   { key: 'shops', label: 'Shops' },
   { key: 'unread', label: 'Unread' },
@@ -165,13 +162,6 @@ function SearchGlassIcon({ size = 16, color = 'currentColor' }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-    </svg>
-  )
-}
-function BriefcaseIcon({ size = 16, color = 'currentColor' }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="7" width="20" height="14" rx="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
     </svg>
   )
 }
@@ -277,7 +267,7 @@ export default function ChatListPanel() {
   const [chats, setChats] = useState([])
   const [loading, setLoading] = useState(true)
   const [currentUser, setCurrentUser] = useState(null)
-  // 'all' | 'marketplace' | 'services' | 'jobs' | 'requests' | 'shops' | 'starred' | 'unread' | 'offers' | 'archived'
+  // 'all' | 'marketplace' | 'services' | 'requests' | 'shops' | 'starred' | 'unread' | 'offers' | 'archived'
   const [activeFilter, setActiveFilter] = useState('all')
   const [search, setSearch] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
@@ -554,7 +544,6 @@ export default function ChatListPanel() {
           contextId,
           isService: source === 'service',
           isRequestCtx: source === 'request',
-          isJob: source === 'job',
           isShop: source === 'shop',
           isDirect: source === 'direct',
           lastMsg: msg,
@@ -576,7 +565,6 @@ export default function ChatListPanel() {
     const serviceIds = conversations.filter(c => c.source === 'service' && c.contextId).map(c => c.contextId)
     const listingIds = conversations.filter(c => c.source === 'listing' && c.contextId).map(c => c.contextId)
     const shopIds = conversations.filter(c => c.source === 'shop' && c.contextId).map(c => c.contextId)
-    const jobIds = conversations.filter(c => c.source === 'job' && c.contextId).map(c => c.contextId)
     const requestIds = conversations.filter(c => c.source === 'request' && c.contextId).map(c => c.contextId)
 
     const [
@@ -584,7 +572,6 @@ export default function ChatListPanel() {
       { data: services },
       { data: listings },
       shopsRes,
-      jobsRes,
       requestsRes,
     ] = await Promise.all([
       supabase.from('profiles').select('id,full_name,avatar_url,city,is_verified').in('id', otherIds),
@@ -597,9 +584,6 @@ export default function ChatListPanel() {
       shopIds.length > 0
         ? supabase.from('shops').select('id,name,slug,logo_url,category,city,district').in('id', shopIds)
         : Promise.resolve({ data: [] }),
-      jobIds.length > 0
-        ? supabase.from('jobs').select('id,title,company,city,type,logo_url,cover_image_url,poster_id').in('id', jobIds)
-        : Promise.resolve({ data: [] }),
       requestIds.length > 0
         ? supabase.from('buyer_requests').select('id,title,budget,city,status').in('id', requestIds)
         : Promise.resolve({ data: [] }),
@@ -609,7 +593,6 @@ export default function ChatListPanel() {
     const servicesMap = Object.fromEntries((services || []).map(s => [s.id, s]))
     const listingsMap = Object.fromEntries((listings || []).map(l => [l.id, l]))
     const shopsMap = Object.fromEntries((shopsRes?.data || []).map(s => [s.id, s]))
-    const jobsMap = Object.fromEntries((jobsRes?.data || []).map(j => [j.id, j]))
     const requestsMap = Object.fromEntries((requestsRes?.data || []).map(r => [r.id, r]))
 
     const enriched = await Promise.all(conversations.map(async c => {
@@ -622,7 +605,6 @@ export default function ChatListPanel() {
       if (c.source === 'service' && c.contextId) unreadQ = unreadQ.eq('service_id', c.contextId)
       else if (c.source === 'listing' && c.contextId) unreadQ = unreadQ.eq('listing_id', c.contextId)
       else if (c.source === 'request' && c.contextId) unreadQ = unreadQ.eq('request_id', c.contextId)
-      else if (c.source === 'job' && c.contextId) unreadQ = unreadQ.eq('job_id', c.contextId)
       else if (c.source === 'shop' && c.contextId) unreadQ = unreadQ.eq('shop_id', c.contextId)
       const { count } = await unreadQ
 
@@ -655,7 +637,6 @@ export default function ChatListPanel() {
         service: c.source === 'service' ? servicesMap[c.contextId] : null,
         listing: c.source === 'listing' ? listingsMap[c.contextId] : null,
         shop: c.source === 'shop' ? shopsMap[c.contextId] : null,
-        job: c.source === 'job' ? jobsMap[c.contextId] : null,
         request: requestEntity,
         unread: count || 0,
       }
@@ -678,7 +659,6 @@ export default function ChatListPanel() {
       all: visible.length,
       marketplace: visible.filter(c => !c.isService && !c.isRequest && c.listing).length,
       services: visible.filter(c => c.isService).length,
-      jobs: visible.filter(c => c.isJob || c.source === 'job').length,
       requests: visible.filter(c => c.isRequest || c.source === 'request').length,
       shops: visible.filter(c => c.isShop || c.source === 'shop').length,
       offers: visible.filter(c => c.hasOffer).length,
@@ -696,7 +676,6 @@ export default function ChatListPanel() {
       all: sum(visible),
       marketplace: sum(visible.filter(c => c.source === 'listing' || (!c.isService && !c.isRequest && c.listing))),
       services: sum(visible.filter(c => c.source === 'service' || c.isService)),
-      jobs: sum(visible.filter(c => c.source === 'job' || c.isJob)),
       requests: sum(visible.filter(c => c.source === 'request' || c.isRequest)),
       shops: sum(visible.filter(c => c.source === 'shop' || c.isShop)),
       unread: sum(visible),
@@ -714,7 +693,6 @@ export default function ChatListPanel() {
       case 'marketplace': list = pool.filter(c => c.source === 'listing' || (!!c.listing && c.source !== 'service')); break
       case 'services': list = pool.filter(c => c.source === 'service' || c.isService); break
       case 'requests': list = pool.filter(c => c.source === 'request' || c.isRequest); break
-      case 'jobs': list = pool.filter(c => c.source === 'job' || c.isJob); break
       case 'shops': list = pool.filter(c => c.source === 'shop' || c.isShop); break
       case 'starred': list = pool.filter(c => starred.has(c.key)); break
       case 'unread': list = pool.filter(c => c.unread > 0); break
@@ -827,7 +805,6 @@ export default function ChatListPanel() {
       case 'services': return { Icon: WrenchIcon, title: 'No service chats yet', sub: 'Book a service and chat with the provider', cta: 'Browse Services', to: '/services', ...PILL_COLORS.services }
       case 'marketplace': return { Icon: BagIcon, title: 'No marketplace chats yet', sub: 'Chat with sellers when browsing listings', cta: 'Browse Listings', to: '/', ...PILL_COLORS.marketplace }
       case 'requests': return { Icon: SearchGlassIcon, title: 'No requests yet', sub: 'Conversations from buyer requests will show up here', cta: 'Browse Requests', to: '/looking-for', ...PILL_COLORS.requests }
-      case 'jobs': return { Icon: BriefcaseIcon, title: 'No job chats yet', sub: 'Job messaging is on its way', cta: 'Browse Jobs', to: '/jobs', ...PILL_COLORS.jobs }
       case 'shops': return { Icon: StoreIcon, title: 'No shop chats yet', sub: 'Shop messaging is on its way', cta: 'Browse Shops', to: '/shops', ...PILL_COLORS.shops }
       case 'starred': return { Icon: StarFilledIcon, title: 'No starred chats', sub: 'Tap the star on a conversation to pin it here', cta: null, ...CHIP_COLORS.starred }
       case 'unread': return { Icon: ChatBubbleIcon, title: "You're all caught up", sub: 'No unread conversations right now', cta: null, ...CHIP_COLORS.unread }
@@ -846,23 +823,20 @@ export default function ChatListPanel() {
       : src === 'request' ? (chat.requestTitle ? `Looking for ${chat.requestTitle}` : 'Buyer Request')
       : src === 'listing' ? (chat.listing?.title || null)
       : src === 'shop' ? (chat.shop?.name || 'Shop')
-      : src === 'job' ? (chat.job?.title || 'Job')
       : null
 
     const contextSub =
       src === 'service' ? [chat.service?.rate, chat.service?.city].filter(Boolean).join(' · ')
       : src === 'listing' && chat.listing?.price ? 'MWK ' + Number(chat.listing.price).toLocaleString()
       : src === 'shop' ? [chat.shop?.category, chat.shop?.city || chat.shop?.district].filter(Boolean).join(' · ')
-      : src === 'job' ? [chat.job?.company, chat.job?.city].filter(Boolean).join(' · ')
       : src === 'request' && chat.request?.budget ? String(chat.request.budget)
       : ''
 
-    // Context image (product / service / shop logo / job logo) — right thumb
+    // Context image (product / service / shop logo) — right thumb
     const productImg =
       src === 'service' ? chat.service?.media_urls?.[0]
       : src === 'listing' ? chat.listing?.images?.[0]
       : src === 'shop' ? chat.shop?.logo_url
-      : src === 'job' ? (chat.job?.logo_url || chat.job?.cover_image_url)
       : null
 
     const profileAvatar = chat.avatarUrl || null

@@ -978,7 +978,6 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
     if (!kind || !id) return
     onClose?.()
     if (kind === 'listing') navigate('/listing/' + id)
-    else if (kind === 'job') navigate('/jobs') // jobs use modal; list is fine fallback
     else if (kind === 'service') navigate('/services')
     else if (kind === 'shop') navigate('/shop/' + id)
     else if (kind === 'request') navigate('/looking-for')
@@ -1026,12 +1025,10 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
       ? formatPrice(tagged.price)
       : tagged.price)
     : (tagged?.rate || tagged?.salary || null)
-  // Prefer logos for shops & jobs (company branding)
+   // Prefer logos for shops (company branding)
   const entityLogo = taggedKind === 'shop'
     ? (tagged?.logo_url || tagged?.images?.[0] || tagged?.cover_url || null)
-    : taggedKind === 'job'
-      ? (tagged?.logo_url || tagged?.images?.[0] || tagged?.cover_image_url || null)
-      : null
+    : null
   const productImage = entityLogo
     || tagged?.images?.[mediaIdx]
     || tagged?.images?.[0]
@@ -1908,9 +1905,10 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
                             alt=""
                             style={{
                               width: '100%', height: '100%',
-                              objectFit: (taggedKind === 'shop' || taggedKind === 'job') ? 'contain' : 'cover',
-                              background: (taggedKind === 'shop' || taggedKind === 'job') ? '#fff' : 'transparent',
-                              padding: (taggedKind === 'shop' || taggedKind === 'job') ? 3 : 0,
+                               objectFit: (taggedKind === 'shop') ? 'contain' : 'cover',
+                               background: (taggedKind === 'shop') ? '#fff' : 'transparent',
+                               padding: (taggedKind === 'shop') ? 3 : 0,
+
                               boxSizing: 'border-box',
                             }}
                           />

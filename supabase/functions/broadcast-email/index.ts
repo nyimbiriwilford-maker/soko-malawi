@@ -40,7 +40,7 @@ function buildEmailHTML(message: string): string {
                 </td>
               </tr>
             </table>
-            <p style="margin:14px 0 0 0;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,0.45);font-weight:600;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">Buy &bull; Sell &bull; Jobs &bull; Services</p>
+            <p style="margin:14px 0 0 0;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,0.45);font-weight:600;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">Buy &bull; Sell &bull; Services</p>
           </td>
           <td align="right" style="vertical-align:top;">
             <span style="font-size:11px;color:rgba(255,255,255,0.3);font-weight:500;letter-spacing:1px;text-transform:uppercase;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">Malawi&apos;s Marketplace</span>
@@ -57,7 +57,7 @@ function buildEmailHTML(message: string): string {
   <tr>
     <td style="background:#166534;padding:32px 40px 36px 40px;border-left:1px solid #14532d;border-right:1px solid #14532d;">
       <p style="margin:0 0 8px 0;font-size:24px;font-weight:800;color:#ffffff;letter-spacing:-0.5px;line-height:1.3;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">Marketplace for Malawi</p>
-      <p style="margin:0 0 24px 0;font-size:15px;color:rgba(255,255,255,0.65);line-height:1.65;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">Buy products, sell anything, discover jobs, and connect with service providers across Malawi.</p>
+      <p style="margin:0 0 24px 0;font-size:15px;color:rgba(255,255,255,0.65);line-height:1.65;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">Buy products, sell anything, and connect with service providers across Malawi.</p>
       <table role="presentation" cellpadding="0" cellspacing="0" border="0">
         <tr>
           <td style="background:#F59E0B;border-radius:10px;padding:0;">
@@ -215,7 +215,7 @@ function buildEmailHTML(message: string): string {
         <tr>
           <td align="center" style="padding-bottom:16px;">
             <span style="font-size:20px;font-weight:900;color:#ffffff;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;letter-spacing:-1px;">Soko</span><span style="font-size:20px;font-weight:900;color:#F59E0B;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;letter-spacing:-1px;">MW</span>
-            <p style="margin:6px 0 0 0;font-size:11px;color:rgba(255,255,255,0.35);letter-spacing:2.5px;text-transform:uppercase;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">Buy &bull; Sell &bull; Jobs &bull; Services</p>
+            <p style="margin:6px 0 0 0;font-size:11px;color:rgba(255,255,255,0.35);letter-spacing:2.5px;text-transform:uppercase;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">Buy &bull; Sell &bull; Services</p>
           </td>
         </tr>
         <tr>
@@ -224,7 +224,6 @@ function buildEmailHTML(message: string): string {
               <tr>
                 <td style="padding:0 10px;"><a href="https://soko-malawi.vercel.app" style="font-size:12px;color:rgba(255,255,255,0.45);text-decoration:none;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">Marketplace</a></td>
                 <td style="font-size:12px;color:rgba(255,255,255,0.15);">|</td>
-                <td style="padding:0 10px;"><a href="https://soko-malawi.vercel.app/jobs" style="font-size:12px;color:rgba(255,255,255,0.45);text-decoration:none;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">Jobs</a></td>
                 <td style="font-size:12px;color:rgba(255,255,255,0.15);">|</td>
                 <td style="padding:0 10px;"><a href="https://soko-malawi.vercel.app/services" style="font-size:12px;color:rgba(255,255,255,0.45);text-decoration:none;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">Services</a></td>
                 <td style="font-size:12px;color:rgba(255,255,255,0.15);">|</td>

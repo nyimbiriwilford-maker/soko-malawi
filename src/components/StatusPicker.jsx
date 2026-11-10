@@ -25,7 +25,6 @@ const LISTING_TEMPLATES = [
 
 const WORK_TEMPLATES = [
   'Available for work this week',
-  'Available for jobs — contact me',
   'Fully booked until next week',
 ]
 

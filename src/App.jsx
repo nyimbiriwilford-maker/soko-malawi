@@ -18,7 +18,6 @@ const ListingDetail = lazyRetry(() => import('./pages/ListingDetail'))
 const PostListing   = lazyRetry(() => import('./pages/PostListing'))
 const ChatsLayout   = lazyRetry(() => import('./pages/ChatsLayout'))
 const Profile       = lazyRetry(() => import('./pages/Profile'))
-const Jobs          = lazyRetry(() => import('./pages/Jobs'))
 const Services      = lazyRetry(() => import('./pages/ServicesPage'))
 const Admin         = lazyRetry(() => import('./pages/Admin'))
 const PublicProfile = lazyRetry(() => import('./pages/PublicProfile'))
@@ -517,7 +516,6 @@ const [installPrompt, setInstallPrompt] = useState(null)
             <Route path="/chat/:userId/:listingId" element={authed ? <ChatsLayout />    : <Navigate to="/login" />} />
             <Route path="/chat/:userId"            element={authed ? <ChatsLayout />    : <Navigate to="/login" />} />
             <Route path="/profile"                 element={authed ? <Profile />        : <Navigate to="/login" />} />
-            <Route path="/jobs"                    element={authed ? <Jobs />           : <Navigate to="/login" />} />
             <Route path="/services"                element={authed ? <Services />       : <Navigate to="/login" />} />
             <Route path="/profile/:id"             element={authed ? <PublicProfile />  : <Navigate to="/login" />} />
             <Route path="/post/edit/:id"           element={authed ? <PostListing />    : <Navigate to="/login" />} />
@@ -537,6 +535,8 @@ const [installPrompt, setInstallPrompt] = useState(null)
             <Route path="/listings"                element={authed ? <ListingsPage />   : <Navigate to="/login" />} />
             <Route path="/safety"                  element={authed ? <SafetyPage />    : <Navigate to="/login" />} />
             <Route path="/call-budget"             element={authed ? <CallBudgetPage /> : <Navigate to="/login" />} />
+            <Route path="/jobs"                    element={<Navigate to="/" replace />} />
+            <Route path="/jobs/*"                  element={<Navigate to="/" replace />} />
             <Route path="*"                        element={<Navigate to="/" />} />
           </Routes>
           </ErrorBoundary>

@@ -2,7 +2,7 @@ import { T } from './tokens'
 
 export const CATEGORIES = [
   'All','Products','Electronics','Fashion','Vehicles',
-  'Property','Agriculture','Services','Jobs','Business Partners','Other',
+  'Property','Agriculture','Services','Business Partners','Other',
 ]
 
 export const CAT_EMOJI = {
@@ -12,7 +12,6 @@ export const CAT_EMOJI = {
   Property: '🏠',
   Agriculture: '🌾',
   Services: '⚙️',
-  Jobs: '💼',
   'Business Partners': '🤝',
   Products: '📦',
   Other: '📋',
