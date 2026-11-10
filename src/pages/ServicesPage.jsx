@@ -1,11 +1,11 @@
-﻿import { useState, useEffect } from 'react'
+﻿import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { SERVICE_CATS, CITIES, avatarColor, initials } from './serviceData'
 import ServiceForm from './ServiceForm'
 import ProviderModal from './ProviderModal'
 import SokoNav from '../components/SokoNav'
-import { Search, X, MapPin, Wrench, Pencil, Pause, Play, Trash2, Loader2, BadgeCheck } from 'lucide-react'
+import { Search, X, MapPin, Wrench, Pencil, Pause, Play, Trash2, Loader2, BadgeCheck, ChevronDown, Filter, ArrowUpDown, LayoutGrid } from 'lucide-react'
 
 const css = `
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -63,13 +63,9 @@ const css = `
   }
   .svc-seg.active { background: #fff; color: #0F9D58; font-weight: 700; box-shadow: 0 1px 2px rgba(0,0,0,.06); }
 
-  /* Toolbar */
-  .svc-toolbar { display: flex; gap: 12px; align-items: center; margin-bottom: 12px; }
-  @media (min-width: 768px) { .svc-toolbar { margin-bottom: 14px; } }
-  @media (min-width: 1100px) { .svc-toolbar { margin-bottom: 16px; } }
-  @media (max-width: 767px) { .svc-toolbar { flex-direction: column; align-items: stretch; } }
+  /* Search */
   .svc-search {
-    flex: 1; display: flex; align-items: center; gap: 10px;
+    display: flex; align-items: center; gap: 10px;
     height: 48px; padding: 0 12px; border-radius: 12px;
     background: #fff; border: 1px solid #e8eaed;
   }
@@ -80,19 +76,68 @@ const css = `
     width: 44px; height: 44px; border: none; background: transparent; color: #9aa0a6;
     display: inline-flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;
   }
-  .svc-city {
-    height: 44px; min-width: 160px; border-radius: 12px; border: 1px solid #e8eaed;
-    background: #fff; padding: 0 12px; font-size: 13px; color: #5f6368; font-weight: 600;
-    font-family: inherit; cursor: pointer;
-  }
-  @media (max-width: 767px) { .svc-city { width: 100%; min-width: 0; } }
 
-  /* Chips */
-  .svc-chips-wrap { position: relative; margin-bottom: 16px; }
-  @media (min-width: 768px) { .svc-chips-wrap { margin-bottom: 20px; } }
-  @media (min-width: 1100px) { .svc-chips-wrap { margin-bottom: 24px; } }
-  .svc-chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
-  .svc-chips::-webkit-scrollbar { display: none; }
+  /* City pill */
+  .svc-city-pill {
+    margin-top: 12px; height: 44px; width: 100%;
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 0 14px; border-radius: 12px; border: 1px solid #e8eaed;
+    background: #fff; color: #5f6368; font-size: 13px; font-weight: 600;
+    cursor: pointer; font-family: inherit; justify-content: space-between;
+  }
+  .svc-city-pill:active { opacity: .85; transform: scale(.98); }
+
+  /* City picker */
+  .svc-city-wrap { position: relative; }
+  .svc-city-backdrop { position: fixed; inset: 0; z-index: 250; background: rgba(0,0,0,.35); }
+  @media (min-width: 1100px) { .svc-city-backdrop { background: transparent; } }
+  .svc-city-panel {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 251;
+    background: #fff; border-radius: 16px 16px 0 0; max-height: 70vh;
+    display: flex; flex-direction: column; gap: 8px;
+    padding: 12px 12px calc(12px + env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -4px 24px rgba(0,0,0,.12);
+  }
+  @media (min-width: 1100px) {
+    .svc-city-panel {
+      position: absolute; top: calc(100% + 8px); left: 0; right: auto; bottom: auto;
+      width: 280px; max-height: 320px; border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.12); padding: 12px;
+    }
+  }
+  .svc-city-search {
+    height: 40px; padding: 0 12px; border-radius: 10px; border: 1px solid #e8eaed;
+    background: #f8f9fa; font-size: 14px; color: #202124; outline: none; font-family: inherit;
+    width: 100%;
+  }
+  .svc-city-list { overflow-y: auto; flex: 1; display: flex; flex-direction: column; gap: 2px; }
+  .svc-city-item {
+    height: 44px; width: 100%; text-align: left; border: none; background: none;
+    font-size: 14px; color: #202124; padding: 0 10px; border-radius: 8px; cursor: pointer;
+    font-family: inherit;
+  }
+  .svc-city-item:active { opacity: .85; }
+  .svc-city-item.active { color: #0F9D58; font-weight: 700; background: #e6f6ed; }
+
+  /* Category tiles */
+  .svc-tiles-wrap { position: relative; margin-top: 16px; margin-bottom: 16px; }
+  @media (min-width: 768px) { .svc-tiles-wrap { margin-top: 18px; } }
+  @media (min-width: 1100px) { .svc-tiles-wrap { margin-top: 20px; } }
+  .svc-tiles { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; padding-bottom: 2px; }
+  .svc-tiles::-webkit-scrollbar { display: none; }
+  .svc-tile { flex: 0 0 auto; display: flex; flex-direction: column; align-items: center; gap: 6px; background: none; border: none; cursor: pointer; scroll-snap-align: start; padding: 0; font-family: inherit; }
+  .svc-tile:active { opacity: .85; transform: scale(.98); }
+  .svc-tile-square {
+    width: 56px; height: 56px; border-radius: 16px; background: #e6f6ed;
+    display: flex; align-items: center; justify-content: center; color: #0F9D58;
+  }
+  .svc-tile.active .svc-tile-square { background: #0F9D58; color: #fff; }
+  .svc-tile-label { font-size: 12px; font-weight: 600; color: #202124; max-width: 72px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .svc-tile.active .svc-tile-label { color: #0F9D58; }
+  .svc-tile-count { font-size: 11px; color: #80868b; }
+  .svc-tiles-fade { position: absolute; top: 0; right: 0; bottom: 0; width: 40px; pointer-events: none; background: linear-gradient(to right, transparent, #f4f6f5); }
+
+  /* Chips (filter sheet) */
   .svc-chip {
     height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid #e8eaed;
     background: #fff; color: #5f6368; font-size: 13px; font-weight: 600;
@@ -101,12 +146,49 @@ const css = `
   }
   .svc-chip.active { background: #0F9D58; border-color: #0F9D58; color: #fff; }
   .svc-chip-count { font-size: 11px; font-weight: 700; opacity: .85; }
-  .svc-chips-fade { position: absolute; top: 0; right: 0; bottom: 0; width: 40px; pointer-events: none; background: linear-gradient(to right, transparent, #f4f6f5); }
+  .svc-chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+  .svc-chips::-webkit-scrollbar { display: none; }
+
+  /* Toolbar (under tiles) */
+  .svc-toolbar2 { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; margin-bottom: 12px; flex-wrap: wrap; }
+  @media (min-width: 768px) { .svc-toolbar2 { margin-bottom: 16px; } }
+  @media (min-width: 1100px) { .svc-toolbar2 { margin-bottom: 20px; } }
+  .svc-result-text { font-size: 13px; font-weight: 600; color: #5f6368; }
+  .svc-toolbar-left { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .svc-toolbar-right { display: flex; align-items: center; gap: 8px; }
+  .svc-tool-btn {
+    height: 40px; padding: 0 12px; border-radius: 12px; border: 1px solid #e8eaed;
+    background: #fff; color: #5f6368; font-size: 13px; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-family: inherit;
+    position: relative;
+  }
+  .svc-tool-btn:active { opacity: .85; transform: scale(.98); }
+  .svc-filter-dot { width: 6px; height: 6px; border-radius: 50%; background: #0F9D58; margin-left: 2px; }
+  .svc-verified-chip {
+    height: 40px; padding: 0 12px; border-radius: 999px; border: 1px solid #e8eaed;
+    background: #fff; color: #5f6368; font-size: 13px; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-family: inherit;
+  }
+  .svc-verified-chip.on { background: #e6f6ed; border-color: #0F9D58; color: #0F9D58; }
+  .svc-verified-chip:active { opacity: .85; transform: scale(.98); }
+  .svc-sort-inline {
+    height: 40px; padding: 0 12px; border-radius: 12px; border: 1px solid #e8eaed;
+    background: #fff; color: #5f6368; font-size: 13px; font-weight: 600;
+    font-family: inherit; cursor: pointer; outline: none;
+  }
+  .svc-sheet-triggers { display: flex; gap: 8px; }
+  .svc-desktop-controls { display: flex; gap: 8px; align-items: center; }
+  @media (min-width: 1100px) {
+    .svc-sheet-triggers { display: none; }
+  }
+  @media (max-width: 1099px) {
+    .svc-desktop-controls { display: none; }
+  }
 
   /* Grid */
-  .svc-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-  @media (min-width: 768px) { .svc-grid { grid-template-columns: repeat(3, 1fr); gap: 16px; } }
-  @media (min-width: 1100px) { .svc-grid { grid-template-columns: repeat(4, 1fr); gap: 20px; } }
+  .svc-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
+  @media (min-width: 768px) { .svc-grid { grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 16px; } }
+  @media (min-width: 1100px) { .svc-grid { grid-template-columns: repeat(4, 1fr); gap: 20px; margin-top: 20px; } }
 
   /* Card */
   .svc-card {
@@ -159,6 +241,56 @@ const css = `
     gap: 4px; flex-shrink: 0; font-family: inherit;
   }
   @media (max-width: 767px) { .svc-book-btn { width: 100%; } }
+
+  /* Bottom sheets */
+  .svc-sheet-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 300; }
+  .svc-filter-sheet, .svc-sort-sheet {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 301;
+    background: #fff; border-radius: 16px 16px 0 0;
+    max-height: 85vh; display: flex; flex-direction: column;
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px));
+    box-shadow: 0 -4px 24px rgba(0,0,0,.12);
+  }
+  .svc-sheet-handle { width: 40px; height: 4px; border-radius: 2px; background: #dadce0; margin: 8px auto 4px; flex-shrink: 0; }
+  .svc-sheet-title { font-size: 18px; font-weight: 700; color: #202124; padding: 8px 16px; }
+  .svc-sheet-body { overflow-y: auto; flex: 1; padding: 8px 16px; display: flex; flex-direction: column; gap: 16px; }
+  .svc-sheet-section { display: flex; flex-direction: column; gap: 8px; }
+  .svc-sheet-section-title { font-size: 13px; font-weight: 700; color: #5f6368; }
+  .svc-toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; }
+  .svc-toggle-label { font-size: 14px; color: #202124; font-weight: 500; }
+  .svc-toggle-track {
+    width: 44px; height: 24px; border-radius: 999px; background: #e8eaed;
+    position: relative; cursor: pointer; flex-shrink: 0; border: none;
+  }
+  .svc-toggle-track.on { background: #0F9D58; }
+  .svc-toggle-thumb {
+    position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%;
+    background: #fff; transition: left .2s; box-shadow: 0 1px 3px rgba(0,0,0,.2);
+  }
+  .svc-toggle-track.on .svc-toggle-thumb { left: 23px; }
+  .svc-sheet-footer { display: flex; align-items: center; gap: 12px; padding: 12px 16px calc(12px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid #e8eaed; }
+  .svc-clear-text { background: none; border: none; color: #5f6368; font-size: 14px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .svc-apply-btn { flex: 1; height: 48px; border: none; border-radius: 12px; background: #0F9D58; color: #fff; font-size: 15px; font-weight: 700; cursor: pointer; font-family: inherit; }
+  .svc-apply-btn:active { opacity: .85; transform: scale(.98); }
+
+  /* Sort sheet rows */
+  .svc-sort-row {
+    height: 52px; display: flex; align-items: center; gap: 12px; border: none; background: none;
+    width: 100%; cursor: pointer; font-family: inherit; padding: 0 4px; text-align: left;
+    border-bottom: 1px solid #f1f3f4;
+  }
+  .svc-sort-row:active { opacity: .85; }
+  .svc-radio {
+    width: 20px; height: 20px; border-radius: 50%; border: 2px solid #dadce0;
+    display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .svc-sort-row.on .svc-radio { border-color: #0F9D58; }
+  .svc-radio-dot { width: 10px; height: 10px; border-radius: 50%; background: #0F9D58; }
+  .svc-sort-label { font-size: 14px; color: #202124; font-weight: 500; }
+  .svc-sort-row.on .svc-sort-label { color: #0F9D58; font-weight: 600; }
+
+  /* City list in filter */
+  .svc-city-list-filter { display: flex; flex-direction: column; gap: 2px; max-height: 200px; overflow-y: auto; }
 
   /* Empty */
   .svc-empty { text-align: center; padding: 48px 24px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
@@ -294,9 +426,36 @@ export default function Services() {
   const [search, setSearch] = useState('')
   const [activeCat, setActiveCat] = useState('')
   const [activeCity, setActiveCity] = useState('All')
+  const [verifiedOnly, setVerifiedOnly] = useState(false)
+  const [sortBy, setSortBy] = useState('newest')
   const [togglingId, setTogglingId] = useState(null)
 
+  const [cityOpen, setCityOpen] = useState(false)
+  const [cityQuery, setCityQuery] = useState('')
+  const [filterOpen, setFilterOpen] = useState(false)
+  const [sortOpen, setSortOpen] = useState(false)
+  const [draftVerified, setDraftVerified] = useState(false)
+  const [draftCat, setDraftCat] = useState('')
+  const [draftCity, setDraftCity] = useState('All')
+  const [isMobile, setIsMobile] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 1100 : true))
+
+  const touchStartY = useRef(0)
+
   useEffect(() => { init() }, [])
+
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 1100)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+
+  useEffect(() => {
+    if (isMobile && (filterOpen || sortOpen || cityOpen)) {
+      const prev = document.body.style.overflow
+      document.body.style.overflow = 'hidden'
+      return () => { document.body.style.overflow = prev }
+    }
+  }, [isMobile, filterOpen, sortOpen, cityOpen])
 
   async function init() {
     const { data: { user } } = await supabase.auth.getUser()
@@ -362,6 +521,7 @@ export default function Services() {
   let filtered = services.filter(s => {
     if (activeCat && s.category !== activeCat) return false
     if (activeCity !== 'All' && s.city !== activeCity) return false
+    if (verifiedOnly && !(s.verified || s.profile?.verified)) return false
     if (search) {
       const q = search.toLowerCase()
       const hit = (s.name || '').toLowerCase().includes(q)
@@ -373,6 +533,16 @@ export default function Services() {
     }
     return true
   })
+  if (sortBy === 'verified') {
+    filtered = [...filtered].sort((a, b) => {
+      const av = (a.verified || a.profile?.verified) ? 1 : 0
+      const bv = (b.verified || b.profile?.verified) ? 1 : 0
+      if (bv !== av) return bv - av
+      return new Date(b.created_at) - new Date(a.created_at)
+    })
+  } else {
+    filtered = [...filtered].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+  }
 
   const catCounts = {}
   services.forEach(s => { catCounts[s.category] = (catCounts[s.category] || 0) + 1 })
@@ -381,6 +551,26 @@ export default function Services() {
   const myServices = services.filter(s => s.provider_id === currentUser?.id)
 
   const n = filtered.length
+  const resultText = `${n} service${n !== 1 ? 's' : ''}${activeCity !== 'All' ? ` in ${activeCity}` : ''}`
+  const filterActive = verifiedOnly || activeCat !== '' || activeCity !== 'All'
+
+  function openFilter() {
+    setDraftVerified(verifiedOnly)
+    setDraftCat(activeCat)
+    setDraftCity(activeCity)
+    setFilterOpen(true)
+  }
+  function applyFilter() {
+    setVerifiedOnly(draftVerified)
+    setActiveCat(draftCat)
+    setActiveCity(draftCity)
+    setFilterOpen(false)
+  }
+  function clearFilterDraft() {
+    setDraftVerified(false)
+    setDraftCat('')
+    setDraftCity('All')
+  }
 
   return (
     <div className="soko-services">
@@ -405,26 +595,64 @@ export default function Services() {
 
         {tab === 'browse' && (
           <>
-            <div className="svc-toolbar">
-              <div className="svc-search">
-                <Search size={16} strokeWidth={2.2} style={{ color: '#9aa0a6', flexShrink: 0 }} />
-                <input
-                  placeholder="What do you need? e.g. plumber, tutor, photographer"
-                  value={search}
-                  onChange={e => setSearch(e.target.value)}
-                  autoComplete="off"
-                />
-                {search && (
-                  <button type="button" className="svc-search-clear" onClick={() => setSearch('')} aria-label="Clear search">
-                    <X size={16} strokeWidth={2.5} />
-                  </button>
-                )}
-              </div>
-              <select className="svc-city" value={activeCity} onChange={e => setActiveCity(e.target.value)}>
-                {CITIES.filter(c => c === 'All' || cityCounts[c] > 0 || c === activeCity).map(c => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
+            <div className="svc-search">
+              <Search size={16} strokeWidth={2.2} style={{ color: '#9aa0a6', flexShrink: 0 }} />
+              <input
+                placeholder="What do you need? e.g. plumber, tutor, photographer"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                autoComplete="off"
+              />
+              {search && (
+                <button type="button" className="svc-search-clear" onClick={() => setSearch('')} aria-label="Clear search">
+                  <X size={16} strokeWidth={2.5} />
+                </button>
+              )}
+            </div>
+
+            <div className="svc-city-wrap">
+              <button type="button" className="svc-city-pill" onClick={() => setCityOpen(v => !v)}>
+                <MapPin size={16} strokeWidth={2.2} />
+                <span>{activeCity === 'All' ? 'All cities' : activeCity}</span>
+                <ChevronDown size={16} strokeWidth={2.2} />
+              </button>
+              {cityOpen && (
+                <>
+                  <div className="svc-city-backdrop" onClick={() => setCityOpen(false)} />
+                  <div
+                    className="svc-city-panel"
+                    onTouchStart={e => { touchStartY.current = e.touches[0].clientY }}
+                    onTouchEnd={e => { if (e.changedTouches[0].clientY - touchStartY.current > 60) setCityOpen(false) }}
+                  >
+                    <input
+                      className="svc-city-search"
+                      placeholder="Search cities..."
+                      value={cityQuery}
+                      onChange={e => setCityQuery(e.target.value)}
+                      autoFocus
+                    />
+                    <div className="svc-city-list">
+                      <button
+                        type="button"
+                        className={`svc-city-item${activeCity === 'All' ? ' active' : ''}`}
+                        onClick={() => { setActiveCity('All'); setCityOpen(false); setCityQuery('') }}
+                      >
+                        All cities
+                      </button>
+                      {CITIES.filter(c => c !== 'All' && c.toLowerCase().includes(cityQuery.toLowerCase())).map(c => (
+                        <button
+                          type="button"
+                          key={c}
+                          className={`svc-city-item${activeCity === c ? ' active' : ''}`}
+                          onClick={() => { setActiveCity(c); setCityOpen(false); setCityQuery('') }}
+                        >
+                          {c}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
             {(tab === 'browse' || tab === 'mine') && (
@@ -438,23 +666,73 @@ export default function Services() {
               </div>
             )}
 
-              <div className="svc-chips-wrap">
-              <div className="svc-chips">
-                <button type="button" className={`svc-chip${activeCat === '' ? ' active' : ''}`} onClick={() => setActiveCat('')}>
-                  All <span className="svc-chip-count">{services.length}</span>
+            <div className="svc-tiles-wrap">
+              <div className="svc-tiles">
+                <button
+                  type="button"
+                  className={`svc-tile${activeCat === '' ? ' active' : ''}`}
+                  onClick={() => setActiveCat('')}
+                >
+                  <span className="svc-tile-square"><LayoutGrid size={24} strokeWidth={2} /></span>
+                  <span className="svc-tile-label">All</span>
+                  <span className="svc-tile-count">{services.length}</span>
                 </button>
                 {SERVICE_CATS.filter(c => catCounts[c.name]).map(c => {
                   const Icon = c.icon
                   return (
-                    <button type="button" key={c.name} className={`svc-chip${activeCat === c.name ? ' active' : ''}`} onClick={() => setActiveCat(c.name)}>
-                      <Icon size={14} strokeWidth={2.2} />
-                      {c.name}
-                      <span className="svc-chip-count">{catCounts[c.name]}</span>
+                    <button
+                      type="button"
+                      key={c.name}
+                      className={`svc-tile${activeCat === c.name ? ' active' : ''}`}
+                      onClick={() => setActiveCat(c.name)}
+                    >
+                      <span className="svc-tile-square"><Icon size={24} strokeWidth={2} /></span>
+                      <span className="svc-tile-label">{c.name}</span>
+                      <span className="svc-tile-count">{catCounts[c.name]}</span>
                     </button>
                   )
                 })}
               </div>
-              <div className="svc-chips-fade" />
+              <div className="svc-tiles-fade" />
+            </div>
+
+            <div className="svc-toolbar2">
+              <div className="svc-toolbar-left">
+                <span className="svc-result-text">{resultText}</span>
+                {!isMobile && (
+                  <button
+                    type="button"
+                    className={`svc-verified-chip${verifiedOnly ? ' on' : ''}`}
+                    onClick={() => setVerifiedOnly(v => !v)}
+                  >
+                    Verified only
+                  </button>
+                )}
+              </div>
+              <div className="svc-toolbar-right">
+                {isMobile ? (
+                  <div className="svc-sheet-triggers">
+                    <button type="button" className="svc-tool-btn" onClick={openFilter}>
+                      <Filter size={16} strokeWidth={2.2} /> Filter
+                      {filterActive && <span className="svc-filter-dot" />}
+                    </button>
+                    <button type="button" className="svc-tool-btn" onClick={() => setSortOpen(true)}>
+                      <ArrowUpDown size={16} strokeWidth={2.2} /> Sort
+                    </button>
+                  </div>
+                ) : (
+                  <div className="svc-desktop-controls">
+                    <select
+                      className="svc-sort-inline"
+                      value={sortBy}
+                      onChange={e => setSortBy(e.target.value)}
+                    >
+                      <option value="newest">Newest</option>
+                      <option value="verified">Verified first</option>
+                    </select>
+                  </div>
+                )}
+              </div>
             </div>
 
             {loading && (
@@ -551,6 +829,120 @@ export default function Services() {
           </>
         )}
       </div>
+
+      {filterOpen && isMobile && (
+        <>
+          <div className="svc-sheet-backdrop" onClick={() => setFilterOpen(false)} />
+          <div
+            className="svc-filter-sheet"
+            onTouchStart={e => { touchStartY.current = e.touches[0].clientY }}
+            onTouchEnd={e => { if (e.changedTouches[0].clientY - touchStartY.current > 60) setFilterOpen(false) }}
+          >
+            <div className="svc-sheet-handle" />
+            <div className="svc-sheet-title">Filters</div>
+            <div className="svc-sheet-body">
+              <div className="svc-sheet-section">
+                <div className="svc-toggle-row">
+                  <span className="svc-toggle-label">Verified providers only</span>
+                  <button
+                    type="button"
+                    className={`svc-toggle-track${draftVerified ? ' on' : ''}`}
+                    onClick={() => setDraftVerified(v => !v)}
+                    role="switch"
+                    aria-checked={draftVerified}
+                  >
+                    <span className="svc-toggle-thumb" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="svc-sheet-section">
+                <span className="svc-sheet-section-title">Category</span>
+                <div className="svc-chips">
+                  <button
+                    type="button"
+                    className={`svc-chip${draftCat === '' ? ' active' : ''}`}
+                    onClick={() => setDraftCat('')}
+                  >
+                    All
+                  </button>
+                  {SERVICE_CATS.filter(c => catCounts[c.name]).map(c => {
+                    const Icon = c.icon
+                    return (
+                      <button
+                        type="button"
+                        key={c.name}
+                        className={`svc-chip${draftCat === c.name ? ' active' : ''}`}
+                        onClick={() => setDraftCat(c.name)}
+                      >
+                        <Icon size={14} strokeWidth={2.2} />
+                        {c.name}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <div className="svc-sheet-section">
+                <span className="svc-sheet-section-title">City</span>
+                <div className="svc-city-list-filter">
+                  <button
+                    type="button"
+                    className={`svc-city-item${draftCity === 'All' ? ' active' : ''}`}
+                    onClick={() => setDraftCity('All')}
+                  >
+                    All cities
+                  </button>
+                  {CITIES.filter(c => c !== 'All').map(c => (
+                    <button
+                      type="button"
+                      key={c}
+                      className={`svc-city-item${draftCity === c ? ' active' : ''}`}
+                      onClick={() => setDraftCity(c)}
+                    >
+                      {c}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="svc-sheet-footer">
+              <button type="button" className="svc-clear-text" onClick={clearFilterDraft}>Clear</button>
+              <button type="button" className="svc-apply-btn" onClick={applyFilter}>Apply</button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {sortOpen && isMobile && (
+        <>
+          <div className="svc-sheet-backdrop" onClick={() => setSortOpen(false)} />
+          <div
+            className="svc-sort-sheet"
+            onTouchStart={e => { touchStartY.current = e.touches[0].clientY }}
+            onTouchEnd={e => { if (e.changedTouches[0].clientY - touchStartY.current > 60) setSortOpen(false) }}
+          >
+            <div className="svc-sheet-handle" />
+            <button
+              type="button"
+              className={`svc-sort-row${sortBy === 'newest' ? ' on' : ''}`}
+              onClick={() => { setSortBy('newest'); setSortOpen(false) }}
+            >
+              <span className="svc-radio">{sortBy === 'newest' && <span className="svc-radio-dot" />}</span>
+              <span className="svc-sort-label">Newest</span>
+            </button>
+            <button
+              type="button"
+              className={`svc-sort-row${sortBy === 'verified' ? ' on' : ''}`}
+              onClick={() => { setSortBy('verified'); setSortOpen(false) }}
+            >
+              <span className="svc-radio">{sortBy === 'verified' && <span className="svc-radio-dot" />}</span>
+              <span className="svc-sort-label">Verified first</span>
+            </button>
+          </div>
+        </>
+      )}
 
       {selectedProvider && (
         <ProviderModal provider={selectedProvider} currentUser={currentUser} onClose={() => setSelectedProvider(null)} />

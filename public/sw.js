@@ -1,4 +1,4 @@
-const CACHE_VERSION = 'sokomw-v17'
+const CACHE_VERSION = 'sokomw-v18'
 const CACHE = CACHE_VERSION
 const IMAGES_CACHE = 'sokomw-images-v1'
 const MAX_CACHED_IMAGES = 120

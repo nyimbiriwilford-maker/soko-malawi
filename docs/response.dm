@@ -1,1 +1,1 @@
-Rewrote src/pages/ServicesPage.jsx: removed sidebar/layout, implemented spec layout (header, segmented control, toolbar, category chips, responsive grid, new card, empty/few-results tiles). Preserved data logic. SW cache sokomw-v16. Build passes.
+Implemented Services phase 2: verifiedOnly state/filtering, city pill + picker (bottom sheet/popover), category tiles, toolbar with result text + Filter/Sort, filter/sort sheets, desktop verified chip + inline sort, spacing, tap targets, SW cache v18. Removed unused CSS. Build passes (npm run build).
