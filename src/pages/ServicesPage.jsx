@@ -1,11 +1,11 @@
 ﻿import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { SERVICE_CATS, CITIES, avatarColor, initials } from './serviceData'
+import { SERVICE_CATS, CITIES } from './serviceData'
 import ServiceForm from './ServiceForm'
 import ProviderModal from './ProviderModal'
 import SokoNav from '../components/SokoNav'
-import { Search, X, MapPin, Wrench, Pencil, Pause, Play, Trash2, Loader2, BadgeCheck, ChevronDown, Filter, ArrowUpDown, LayoutGrid } from 'lucide-react'
+import { Search, X, MapPin, Wrench, BadgeCheck, ChevronDown, Filter, ArrowUpDown, LayoutGrid, MessageCircle } from 'lucide-react'
 
 const css = `
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -19,7 +19,7 @@ const css = `
     min-height: 100vh; min-height: 100dvh;
     color: #202124;
     -webkit-tap-highlight-color: transparent;
-    padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(var(--bottom-nav-h, 60px) + env(safe-area-inset-bottom, 0px) + 24px);
   }
 
   .svc-page {
@@ -186,61 +186,126 @@ const css = `
   }
 
   /* Grid */
-  .svc-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; }
+  .svc-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px; align-items: stretch; }
   @media (min-width: 768px) { .svc-grid { grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 16px; } }
   @media (min-width: 1100px) { .svc-grid { grid-template-columns: repeat(4, 1fr); gap: 20px; margin-top: 20px; } }
 
   /* Card */
   .svc-card {
     background: #fff; border: 1px solid #e8eaed; border-radius: 16px;
-    box-shadow: 0 1px 3px rgba(0,0,0,.04); overflow: visible;
-    transition: transform .2s ease, box-shadow .2s ease;
+    overflow: hidden; transition: transform .2s ease, box-shadow .2s ease;
     display: flex; flex-direction: column; text-align: left;
     font-family: inherit; cursor: pointer; animation: svc-fadeUp .4s ease both;
-    padding: 0;
+    padding: 0; height: 100%;
   }
-  .svc-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,.08); }
-  .svc-card:active { transform: translateY(0); }
+  @media (max-width: 767px) {
+    .svc-card:active { transform: scale(.98); }
+  }
+  @media (min-width: 1100px) {
+    .svc-card:hover { transform: translateY(-2px); box-shadow: 0 4px 16px rgba(0,0,0,.08); }
+  }
   .svc-card-img {
-    position: relative; width: 100%; aspect-ratio: 16 / 10; overflow: hidden;
-    border-radius: 16px 16px 0 0; background: linear-gradient(135deg, #e6f6ed, #f8f9fa);
+    position: relative; width: 100%; aspect-ratio: 4 / 3; overflow: hidden;
+    background: linear-gradient(135deg, #e6f6ed, #f8f9fa);
     display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  @media (min-width: 1100px) {
+    .svc-card-img { aspect-ratio: 16 / 10; }
   }
   .svc-card-img img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .svc-card-icon { color: #0F9D58; opacity: .7; }
+  .svc-card-shimmer {
+    position: absolute; inset: 0;
+    background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+    background-size: 400px 100%; animation: svc-shimmer 1.4s infinite;
+  }
+  .svc-card-img.loaded .svc-card-shimmer { display: none; }
+  .svc-card-icon { color: #0F9D58; }
   .svc-cat-pill {
-    position: absolute; bottom: 8px; left: 8px;
-    background: rgba(255,255,255,.85); color: #0F9D58;
+    position: absolute; bottom: 8px; left: 8px; z-index: 2;
+    background: rgba(255,255,255,.92); color: #0F9D58;
     font-size: 11px; font-weight: 700; padding: 4px 8px; border-radius: 999px;
-    backdrop-filter: blur(4px); max-width: calc(100% - 16px);
+    max-width: calc(100% - 16px);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .svc-card-body { padding: 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-  .svc-card-title { font-size: 15px; font-weight: 700; color: #202124; line-height: 1.3; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .svc-provider { display: flex; align-items: center; gap: 8px; min-width: 0; }
-  .svc-avatar {
-    width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 9px; font-weight: 800; color: #fff; overflow: hidden;
-    background: #0F9D58;
+  .svc-new-badge {
+    position: absolute; top: 8px; left: 8px; z-index: 2;
+    background: #F9AB00; color: #202124;
+    font-size: 11px; font-weight: 800; padding: 4px 8px; border-radius: 999px;
   }
-  .svc-avatar img { width: 100%; height: 100%; object-fit: cover; }
-  .svc-provider-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
-  .svc-provider-name { font-size: 12px; color: #5f6368; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .svc-card-body {
+    padding: 10px; display: flex; flex-direction: column; gap: 4px;
+    min-width: 0; flex: 1;
+  }
+  @media (min-width: 1100px) {
+    .svc-card-body { padding: 12px; gap: 8px; }
+  }
+  .svc-card-title {
+    font-size: 14px; font-weight: 700; color: #202124; line-height: 1.3; margin: 0;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden; min-height: 2.6em;
+  }
+  @media (min-width: 1100px) {
+    .svc-card-title { font-size: 15px; }
+  }
+  .svc-card-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .svc-provider-name {
+    font-size: 12px; color: #5f6368; display: inline-flex; align-items: center; gap: 4px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
   .svc-verified { color: #1A73E8; display: inline-flex; align-items: center; }
-  .svc-location { font-size: 12px; color: #80868b; display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .svc-location svg { flex-shrink: 0; }
-  .svc-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  @media (max-width: 767px) { .svc-card-footer { flex-direction: column; align-items: stretch; } }
-  .svc-price { font-size: 15px; font-weight: 700; color: #202124; }
-  .svc-price-unit { font-size: 12px; color: #80868b; margin-left: 2px; font-weight: 500; }
-  .svc-book-btn {
-    height: 34px; padding: 0 14px; border: none; border-radius: 10px;
-    background: #0F9D58; color: #fff; font-size: 13px; font-weight: 700;
-    cursor: pointer; display: inline-flex; align-items: center; justify-content: center;
-    gap: 4px; flex-shrink: 0; font-family: inherit;
+  .svc-location {
+    font-size: 12px; color: #80868b; display: inline-flex; align-items: center; gap: 4px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
-  @media (max-width: 767px) { .svc-book-btn { width: 100%; } }
+  .svc-location svg { flex-shrink: 0; }
+  .svc-price { font-size: 15px; font-weight: 800; color: #202124; }
+  .svc-price-unit { font-size: 12px; color: #80868b; margin-left: 2px; font-weight: 500; }
+  .svc-price-contact { font-size: 13px; color: #5f6368; }
+  .svc-card-actions { display: flex; gap: 8px; align-items: center; margin-top: auto; }
+  .svc-card-book-wrap {
+    flex: 1; min-height: 44px;
+    display: flex; align-items: center; padding: 4px 0;
+    background: transparent; border: none;
+  }
+  .svc-card-book {
+    flex: 1; height: 36px; border: none; border-radius: 10px;
+    background: #0F9D58; color: #fff; font-size: 13px; font-weight: 700;
+    cursor: pointer; font-family: inherit;
+    display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  }
+  @media (min-width: 1100px) {
+    .svc-card-book { height: 38px; }
+  }
+  .svc-card-chat-wrap {
+    min-height: 44px; min-width: 44px;
+    display: flex; align-items: center; justify-content: center; padding: 4px;
+    background: transparent; border: none;
+  }
+  .svc-card-chat {
+    width: 36px; height: 36px; border: 1px solid #e8eaed; border-radius: 10px;
+    background: #fff; color: #0F9D58;
+    display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+    font-family: inherit;
+  }
+  .svc-card-yours { font-size: 13px; color: #5f6368; padding: 4px 0; }
+
+  /* Skeleton cards */
+  .svc-skeleton-card {
+    background: #fff; border: 1px solid #e8eaed; border-radius: 16px; overflow: hidden;
+    display: flex; flex-direction: column; height: 100%;
+  }
+  .svc-skeleton-img { width: 100%; aspect-ratio: 4 / 3; }
+  @media (min-width: 1100px) { .svc-skeleton-img { aspect-ratio: 16 / 10; } }
+  .svc-skeleton-body { padding: 10px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
+  @media (min-width: 1100px) { .svc-skeleton-body { padding: 12px; gap: 8px; } }
+  .svc-skeleton-line { height: 14px; border-radius: 6px; width: 100%; }
+  .svc-skeleton-line.short { width: 60%; }
+  .svc-skeleton-line.price { width: 40%; height: 18px; }
+  .svc-skeleton-shimmer {
+    background: linear-gradient(90deg, #f3f4f6 25%, #e5e7eb 50%, #f3f4f6 75%);
+    background-size: 400px 100%; animation: svc-shimmer 1.4s infinite;
+  }
 
   /* Bottom sheets */
   .svc-sheet-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 300; }
@@ -325,17 +390,34 @@ const css = `
 `
 
 function formatPrice(rate) {
-  if (!rate) return { amount: '', unit: '' }
+  if (!rate && rate !== 0) return null
   const s = String(rate).trim()
+  if (!s) return null
   const slashIdx = s.indexOf('/')
   const amountPart = slashIdx >= 0 ? s.slice(0, slashIdx).trim() : s
   const unitPart = slashIdx >= 0 ? '/' + s.slice(slashIdx + 1).trim() : ''
-  const formattedAmount = amountPart.replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1,')
+  const cleaned = amountPart.replace(/mwk|mk/gi, '').trim()
+  const numMatch = cleaned.match(/[\\d,]+/)
+  let formattedAmount
+  if (numMatch) {
+    const digits = numMatch[0].replace(/,/g, '')
+    if (/^\d+$/.test(digits)) {
+      formattedAmount = 'MK ' + Number(digits).toLocaleString()
+    } else {
+      formattedAmount = 'MK ' + cleaned
+    }
+  } else if (cleaned) {
+    formattedAmount = 'MK ' + cleaned
+  } else {
+    return null
+  }
   return { amount: formattedAmount, unit: unitPart }
 }
 
-function ServiceCard({ svc, delay, onClick, onBook, isMine, onEdit, onToggle, toggling, onDelete }) {
+function ServiceCard({ svc, delay, onClick, onBook, onChat, isMine, onEdit }) {
   const [imgErr, setImgErr] = useState(false)
+  const [imgLoaded, setImgLoaded] = useState(false)
+  const [now] = useState(() => Date.now())
   const profile = svc.profile
   const catUi = SERVICE_CATS.find(c => c.name === svc.category)
   const heroMedia = svc.media_urls?.[0]
@@ -343,70 +425,75 @@ function ServiceCard({ svc, delay, onClick, onBook, isMine, onEdit, onToggle, to
   const providerName = profile?.shop_name || profile?.full_name
   const title = rawTitle || providerName || 'Service'
   const showProvider = !!rawTitle && !!providerName
-  const avatarUrl = profile?.avatar_url
-  const avatarName = providerName || title
-  const avatarInitials = initials(avatarName)
-  const avatarBg = avatarColor(avatarName)
   const verified = svc.verified || profile?.verified
   const districtLabel = profile?.district || svc.city || 'Malawi'
   const price = formatPrice(svc.rate)
 
-  function handleBook(e) {
-    e.stopPropagation()
-    if (onBook) onBook(e)
-  }
+  const isNew = !!svc.created_at && (now - new Date(svc.created_at).getTime()) <= 7 * 24 * 60 * 60 * 1000
+
+  function handleBook(e) { e.stopPropagation(); if (onBook) onBook(e) }
+  function handleChat(e) { e.stopPropagation(); if (onChat) onChat(e) }
+  function handleManage(e) { e.stopPropagation(); if (onEdit) onEdit() }
 
   return (
     <button type="button" className="svc-card" style={{ animationDelay: `${delay}s` }} onClick={onClick}>
-      <div className="svc-card-img">
+      <div className={`svc-card-img${imgLoaded ? ' loaded' : ''}`}>
         {heroMedia && !imgErr ? (
-          <img src={heroMedia} alt="" loading="lazy" onError={() => setImgErr(true)} />
+          <>
+            {!imgLoaded && <div className="svc-card-shimmer" />}
+            <img src={heroMedia} alt="" loading="lazy" onLoad={() => setImgLoaded(true)} onError={() => setImgErr(true)} />
+          </>
         ) : (
           <div className="svc-card-icon">
-            {catUi ? <catUi.icon size={32} strokeWidth={1.8} /> : <Wrench size={32} strokeWidth={2} />}
+            {catUi ? <catUi.icon size={32} strokeWidth={1.8} color="#0F9D58" /> : <Wrench size={32} strokeWidth={2} color="#0F9D58" />}
           </div>
         )}
         {svc.category && <span className="svc-cat-pill">{svc.category}</span>}
+        {isNew && <span className="svc-new-badge">New</span>}
       </div>
       <div className="svc-card-body">
         <h3 className="svc-card-title">{title}</h3>
         {showProvider && (
-          <div className="svc-provider">
-            <div className="svc-avatar" style={{ background: avatarUrl ? 'transparent' : avatarBg }}>
-              {avatarUrl ? <img src={avatarUrl} alt="" /> : avatarInitials}
-            </div>
-            <div className="svc-provider-info">
-              <span className="svc-provider-name">
-                {providerName}
-                {verified && <span className="svc-verified"><BadgeCheck size={12} strokeWidth={2.5} /></span>}
-              </span>
-              <span className="svc-location"><MapPin size={12} strokeWidth={2.2} /> {districtLabel}</span>
-            </div>
+          <div className="svc-card-meta">
+            <span className="svc-provider-name">
+              {providerName}
+              {verified && <span className="svc-verified"><BadgeCheck size={12} strokeWidth={2.5} color="#1A73E8" /></span>}
+            </span>
+            <span className="svc-location">
+              <MapPin size={12} strokeWidth={2.2} color="#80868b" /> {districtLabel}
+            </span>
           </div>
         )}
-        <div className="svc-card-footer">
-          <div className="svc-price">
-            {price.amount}
-            {price.unit && <span className="svc-price-unit">{price.unit}</span>}
-          </div>
-          {!isMine && (
-            <button type="button" className="svc-book-btn" onClick={handleBook}>Book now</button>
+        <div className="svc-card-price">
+          {price ? (
+            <>
+              <span className="svc-price">{price.amount}</span>
+              {price.unit && <span className="svc-price-unit">{price.unit}</span>}
+            </>
+          ) : (
+            <span className="svc-price-contact">Contact for price</span>
           )}
         </div>
-        {isMine && (
-          <div className="svc-card-actions">
-            <button type="button" className="svc-action svc-action-edit" onClick={(e) => { e.stopPropagation(); onEdit?.() }}>
-              <Pencil size={12} /> Edit
-            </button>
-            <button type="button" className="svc-action svc-action-pause" onClick={(e) => { e.stopPropagation(); onToggle?.() }} disabled={toggling}>
-              {toggling ? <Loader2 size={12} style={{ animation: 'spin 1s linear infinite' }} /> : (svc.status === 'active' ? <Pause size={12} /> : <Play size={12} />)}
-              {svc.status === 'active' ? 'Pause' : 'Activate'}
-            </button>
-            <button type="button" className="svc-action svc-action-delete" onClick={(e) => { e.stopPropagation(); onDelete?.() }}>
-              <Trash2 size={12} /> Delete
-            </button>
-          </div>
-        )}
+        <div className="svc-card-actions">
+          {isMine ? (
+            onEdit ? (
+              <button type="button" className="svc-card-book-wrap" onClick={handleManage} aria-label="Manage">
+                <span className="svc-card-book">Manage</span>
+              </button>
+            ) : (
+              <span className="svc-card-yours">Your service</span>
+            )
+          ) : (
+            <>
+              <button type="button" className="svc-card-book-wrap" onClick={handleBook} aria-label="Book now">
+                <span className="svc-card-book">Book now</span>
+              </button>
+              <button type="button" className="svc-card-chat-wrap" onClick={handleChat} aria-label="Chat">
+                <span className="svc-card-chat"><MessageCircle size={18} strokeWidth={2.2} /></span>
+              </button>
+            </>
+          )}
+        </div>
       </div>
     </button>
   )
@@ -428,8 +515,6 @@ export default function Services() {
   const [activeCity, setActiveCity] = useState('All')
   const [verifiedOnly, setVerifiedOnly] = useState(false)
   const [sortBy, setSortBy] = useState('newest')
-  const [togglingId, setTogglingId] = useState(null)
-
   const [cityOpen, setCityOpen] = useState(false)
   const [cityQuery, setCityQuery] = useState('')
   const [filterOpen, setFilterOpen] = useState(false)
@@ -737,7 +822,16 @@ export default function Services() {
 
             {loading && (
               <div className="svc-grid">
-                {[1, 2, 3, 4, 5, 6].map(i => <div key={i} className="skeleton" />)}
+                {[1, 2, 3, 4, 5, 6].map(i => (
+                  <div key={i} className="svc-skeleton-card">
+                    <div className="svc-skeleton-shimmer svc-skeleton-img" />
+                    <div className="svc-skeleton-body">
+                      <div className="svc-skeleton-shimmer svc-skeleton-line" />
+                      <div className="svc-skeleton-shimmer svc-skeleton-line short" />
+                      <div className="svc-skeleton-shimmer svc-skeleton-line price" />
+                    </div>
+                  </div>
+                ))}
               </div>
             )}
 
@@ -763,7 +857,11 @@ export default function Services() {
                     onBook={() => {
                       if (currentUser) navigate(`/chat/${svc.provider_id}/${svc.id}?src=service`, { state: { source: 'service' } })
                     }}
-                    isMine={false}
+                    onChat={() => {
+                      if (currentUser) navigate(`/chat/${svc.provider_id}/${svc.id}?src=service`, { state: { source: 'service' } })
+                    }}
+                    isMine={svc.provider_id === currentUser?.id}
+                    onEdit={() => { setEditingService(svc); setTab('post') }}
                   />
                 ))}
               </div>
@@ -810,18 +908,6 @@ export default function Services() {
                     onClick={() => setSelectedProvider(svc)}
                     isMine={true}
                     onEdit={() => { setEditingService(svc); setTab('post') }}
-                    onToggle={async () => {
-                      setTogglingId(svc.id)
-                      const ns = svc.status === 'active' ? 'paused' : 'active'
-                      await supabase.from('services').update({ status: ns }).eq('id', svc.id)
-                      setTogglingId(null)
-                      loadServices()
-                    }}
-                    toggling={togglingId === svc.id}
-                    onDelete={async () => {
-                      await supabase.from('services').delete().eq('id', svc.id)
-                      loadServices()
-                    }}
                   />
                 ))}
               </div>
