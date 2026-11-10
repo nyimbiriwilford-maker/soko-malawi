@@ -229,7 +229,7 @@ export default function ProviderModal({ provider, currentUser, onClose }) {
 
               {/* How to connect tip */}
               <div style={{ background: '#fffbe6', borderWidth: '1px', borderStyle: 'solid', borderColor: '#fde68a', borderRadius: '12px', padding: '12px 14px', fontSize: '12px', color: '#7a5a00', lineHeight: '1.7', marginBottom: '8px', display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-                <Lightbulb size={15} style={{ flexShrink: 0, marginTop: 1 }} /> <span><strong>How to connect:</strong> Message or call {provider.name} directly to discuss your needs, agree on a price, and arrange the job.</span>
+                <Lightbulb size={15} style={{ flexShrink: 0, marginTop: 1 }} /> <span><strong>How to connect:</strong> Message or call {provider.name} directly to discuss your needs, agree on a price, and arrange the work.</span>
               </div>
             </>
           )}
