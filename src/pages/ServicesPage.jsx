@@ -392,6 +392,26 @@ const css = `
 
   .svc-form-wrap { max-width: 600px; margin: 20px auto; padding: 0 16px; }
 
+  .svc-featured-wrap { position: relative; margin-bottom: 20px; }
+  @media (min-width: 768px) { .svc-featured-wrap { margin-bottom: 24px; } }
+  @media (min-width: 1100px) { .svc-featured-wrap { margin-bottom: 28px; } }
+  .svc-featured-header { margin-bottom: 12px; }
+  .svc-featured-title { font-size: 20px; font-weight: 800; color: #202124; margin: 0; }
+  @media (min-width: 1100px) { .svc-featured-title { font-size: 22px; } }
+  .svc-featured-sub { font-size: 13px; color: #5f6368; margin: 2px 0 0; }
+  .svc-featured-rail { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; padding-bottom: 2px; }
+  .svc-featured-rail::-webkit-scrollbar { display: none; }
+  .svc-featured-card { flex: 0 0 240px; scroll-snap-align: start; }
+  @media (min-width: 1100px) { .svc-featured-card { flex: 0 0 280px; } }
+  .svc-rail-arrow { position: absolute; top: 50%; transform: translateY(-50%); width: 40px; height: 40px; border-radius: 50%; border: 1px solid #e8eaed; background: #fff; color: #5f6368; cursor: pointer; z-index: 3; display: none; align-items: center; justify-content: center; font-size: 18px; line-height: 1; }
+  @media (min-width: 1100px) { .svc-rail-arrow { display: inline-flex; } }
+  .svc-rail-arrow-left { left: 4px; }
+  .svc-rail-arrow-right { right: 4px; }
+  .svc-rail-fade { position: absolute; top: 0; bottom: 0; width: 48px; pointer-events: none; z-index: 2; display: none; }
+  @media (min-width: 1100px) { .svc-rail-fade { display: block; } }
+  .svc-rail-fade-left { left: 0; background: linear-gradient(to right, #f4f6f5, transparent); }
+  .svc-rail-fade-right { right: 0; background: linear-gradient(to left, #f4f6f5, transparent); }
+
   .soko-services *:focus-visible { outline: 2px solid #0F9D58; outline-offset: 2px; }
   @media (prefers-reduced-motion: reduce) {
     .soko-services * { animation: none !important; transition: none !important; }
@@ -426,7 +446,7 @@ function formatPrice(rate) {
   return { amount: formattedAmount, unit: unitPart }
 }
 
-function ServiceCard({ svc, delay, onClick, onBook, onChat, isMine, onEdit, showCounters }) {
+function ServiceCard({ svc, delay, onClick, onBook, onChat, isMine, onEdit, showCounters, featuredBadge }) {
   const [imgErr, setImgErr] = useState(false)
   const [imgLoaded, setImgLoaded] = useState(false)
   const [now] = useState(() => Date.now())
@@ -461,7 +481,7 @@ function ServiceCard({ svc, delay, onClick, onBook, onChat, isMine, onEdit, show
           </div>
         )}
         {svc.category && <span className="svc-cat-pill">{svc.category}</span>}
-        {isNew && <span className="svc-new-badge">New</span>}
+        {featuredBadge ? <span className="svc-new-badge">Featured</span> : (isNew && <span className="svc-new-badge">New</span>)}
       </div>
       <div className="svc-card-body">
         <h3 className="svc-card-title">{title}</h3>
@@ -548,6 +568,13 @@ export default function Services() {
   const [isMobile, setIsMobile] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 1100 : true))
 
   const touchStartY = useRef(0)
+  const railRef = useRef(null)
+  function scrollRail(dir) {
+    const el = railRef.current
+    if (!el) return
+    const amount = (isMobile ? 240 : 280) + 12
+    el.scrollBy({ left: dir * amount, behavior: 'smooth' })
+  }
 
   useEffect(() => { init() }, [])
 
@@ -726,6 +753,20 @@ export default function Services() {
   const resultText = `${n} service${n !== 1 ? 's' : ''}${activeCity !== 'All' ? ` in ${activeCity}` : ''}`
   const filterActive = verifiedOnly || activeCat !== '' || activeCity !== 'All'
   const noFiltersActive = !search && !activeCat && activeCity === 'All' && !verifiedOnly && sortBy === 'newest'
+  const hasFeaturedCol = services.length > 0 && services.some(s => Object.prototype.hasOwnProperty.call(s, 'is_featured'))
+  const railCandidates = hasFeaturedCol
+    ? services.filter(s => (s.is_featured || s.verified || s.profile?.verified))
+    : []
+  const featuredRail = [...railCandidates].sort((a, b) => {
+    const af = a.is_featured ? 1 : 0
+    const bf = b.is_featured ? 1 : 0
+    if (bf !== af) return bf - af
+    const av = (a.verified || a.profile?.verified) ? 1 : 0
+    const bv = (b.verified || b.profile?.verified) ? 1 : 0
+    if (bv !== av) return bv - av
+    return new Date(b.created_at) - new Date(a.created_at)
+  }).slice(0, 8)
+  const showRail = hasFeaturedCol && featuredRail.length >= 2 && noFiltersActive
 
   function openFilter() {
     setDraftVerified(verifiedOnly)
@@ -872,6 +913,43 @@ export default function Services() {
               </div>
               <div className="svc-tiles-fade" />
             </div>
+
+            {showRail && (
+              <div className="svc-featured-wrap">
+                <div className="svc-featured-header">
+                  <h2 className="svc-featured-title">Featured Providers</h2>
+                  <p className="svc-featured-sub">Verified providers near you</p>
+                </div>
+                <div className="svc-featured-rail" ref={railRef}>
+                  {featuredRail.map((svc) => (
+                    <div className="svc-featured-card" key={svc.id}>
+                      <ServiceCard
+                        svc={svc}
+                        delay={0}
+                        onClick={() => setSelectedProvider(svc)}
+                        onBook={() => {
+                          if (currentUser) navigate(`/chat/${svc.provider_id}/${svc.id}?src=service`, { state: { source: 'service' } })
+                        }}
+                        onChat={() => {
+                          if (currentUser) navigate(`/chat/${svc.provider_id}/${svc.id}?src=service`, { state: { source: 'service' } })
+                        }}
+                        isMine={svc.provider_id === currentUser?.id}
+                        onEdit={() => { setEditingService(svc); setTab('post') }}
+                        featuredBadge={!!svc.is_featured}
+                      />
+                    </div>
+                  ))}
+                </div>
+                {!isMobile && (
+                  <>
+                    <button type="button" className="svc-rail-arrow svc-rail-arrow-left" onClick={() => scrollRail(-1)} aria-label="Previous featured">‹</button>
+                    <button type="button" className="svc-rail-arrow svc-rail-arrow-right" onClick={() => scrollRail(1)} aria-label="Next featured">›</button>
+                    <div className="svc-rail-fade svc-rail-fade-left" />
+                    <div className="svc-rail-fade svc-rail-fade-right" />
+                  </>
+                )}
+              </div>
+            )}
 
             <div className="svc-toolbar2">
               <div className="svc-toolbar-left">
