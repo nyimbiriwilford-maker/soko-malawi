@@ -41,7 +41,7 @@ import {
   withDistanceToBuyer,
   fmtMWK,
 } from '../utils/lookingFor'
-import { CATEGORIES, SORT_OPTIONS } from '../constants/lookingFor'
+import { SORT_OPTIONS } from '../constants/lookingFor'
 import NotifyMeModal from '../components/NotifyMeModal'
 import {
   ALL_CATEGORIES,
@@ -2000,7 +2000,6 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
     }
   }, [activeDistrict])
 
-  const [lfCategory, setLfCategory] = React.useState('All')
   const [lfSort, setLfSort] = React.useState('recent')
   const lfSessionSeed = React.useRef(Math.floor(Math.random() * 1000)).current
 
@@ -2019,7 +2018,7 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
       if (r.deleted === true) return false
       if (r.expires_at && new Date(r.expires_at).getTime() <= now) return false
       if (r.created_at && (now - new Date(r.created_at).getTime()) > thirtyDays) return false
-      if (lfCategory !== 'All' && r.category !== lfCategory) return false
+
       return true
     })
     const loc = viewerLoc
@@ -2062,10 +2061,10 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
       return b._tiebreak - a._tiebreak
     })
     return withScore
-  }, [requests, viewerLoc, userLat, userLng, activeDistrict, lfCategory, lfSort])
+    }, [requests, viewerLoc, userLat, userLng, activeDistrict, lfSort])
 
   const [lfShowMore, setLfShowMore] = React.useState(0)
-  React.useEffect(() => { setLfShowMore(0) }, [lfCategory, lfSort])
+  React.useEffect(() => { setLfShowMore(0) }, [lfSort])
   const displayCount = LF_INITIAL_COUNT + lfShowMore
   const hasMoreLf = ranked.length > displayCount
   const shown = hasMoreLf ? ranked.slice(0, displayCount) : ranked
@@ -2083,10 +2082,8 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
 
   const [lfNearby, setLfNearby] = React.useState('All')
   const [lfNearbyOpen, setLfNearbyOpen] = React.useState(false)
-  const [lfCatOpen, setLfCatOpen] = React.useState(false)
   const [lfSortOpen, setLfSortOpen] = React.useState(false)
   const lfNearbyRef = React.useRef(null)
-  const lfCatRef = React.useRef(null)
   const lfSortRef = React.useRef(null)
 
   const [lfLightbox, setLfLightbox] = React.useState(null)
@@ -2124,7 +2121,6 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
   React.useEffect(() => {
     function handleClick(e) {
       if (lfNearbyRef.current && !lfNearbyRef.current.contains(e.target)) setLfNearbyOpen(false)
-      if (lfCatRef.current && !lfCatRef.current.contains(e.target)) setLfCatOpen(false)
       if (lfSortRef.current && !lfSortRef.current.contains(e.target)) setLfSortOpen(false)
     }
     document.addEventListener('mousedown', handleClick)
@@ -2273,10 +2269,10 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
           </h2>
 
           {/* Filter row */}
-          <div style={{ display:'flex', alignItems:'center', gap:8, marginTop:14, flexWrap:'nowrap', overflow:'visible', width:'100%' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10, marginTop:14, flexWrap:'nowrap', overflowX:'auto', width:'100%', scrollbarWidth:'none' }}>
             {/* Nearby filter */}
             <div ref={lfNearbyRef} style={{ position:'relative' }}>
-              <button type="button" onClick={() => { setLfNearbyOpen(!lfNearbyOpen); setLfCatOpen(false); setLfSortOpen(false) }} style={{
+                              <button type="button" onClick={() => { setLfNearbyOpen(!lfNearbyOpen); setLfSortOpen(false) }} style={{
                 display:'inline-flex', alignItems:'center', gap:5, borderRadius:999, padding:'7px 13px',
                 fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap',
                 background:'#fff', border:'1.5px solid #e2e8f0', color:'#475569', transition:'all 0.15s',
@@ -2299,35 +2295,10 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
               )}
             </div>
 
-            {/* Category filter */}
-            <div ref={lfCatRef} style={{ position:'relative' }}>
-              <button type="button" onClick={() => { setLfCatOpen(!lfCatOpen); setLfNearbyOpen(false); setLfSortOpen(false) }} style={{
-                display:'inline-flex', alignItems:'center', gap:5, borderRadius:999, padding:'7px 13px',
-                fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap',
-                background: lfCategory !== 'All' ? '#f0fdf4' : '#fff', border:'1.5px solid #e2e8f0', color: lfCategory !== 'All' ? '#166534' : '#475569',
-                transition:'all 0.15s', minHeight:34,
-              }}>
-                <Search size={12} /> {lfCategory === 'All' ? 'All Categories' : lfCategory} <ChevronRight size={12} style={{ transform:'rotate(90deg)', marginLeft:2 }} />
-              </button>
-              {lfCatOpen && (
-                <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, background:'#fff', borderRadius:12, border:'1px solid #e2e8f0', boxShadow:'0 8px 24px rgba(0,0,0,0.1)', zIndex:20, minWidth:180, overflow:'hidden', padding:'4px', maxHeight:280, overflowY:'auto' }}>
-                  {CATEGORIES.map(cat => (
-                    <button key={cat} type="button" onClick={() => { setLfCategory(cat); setLfCatOpen(false) }} style={{
-                      display:'flex', alignItems:'center', gap:8, width:'100%', textAlign:'left', background:'none', border:'none', padding:'8px 12px',
-                      fontSize:12, fontWeight: lfCategory===cat ? 700 : 500, color: lfCategory===cat ? '#166534' : '#334155',
-                      cursor:'pointer', fontFamily:'inherit', borderRadius:8,
-                    }}>
-                      {cat === 'All' ? '📋' : (cat === 'Products' ? '📦' : cat === 'Electronics' ? '📱' : cat === 'Fashion' ? '👗' : cat === 'Vehicles' ? '🚗' : cat === 'Property' ? '🏠' : cat === 'Agriculture' ? '🌾' : cat === 'Services' ? '⚙️' : cat === 'Business Partners' ? '🤝' : '📋')}
-                      {cat}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
 
             {/* Sort filter */}
             <div ref={lfSortRef} style={{ position:'relative' }}>
-              <button type="button" onClick={() => { setLfSortOpen(!lfSortOpen); setLfNearbyOpen(false); setLfCatOpen(false) }} style={{
+                              <button type="button" onClick={() => { setLfSortOpen(!lfSortOpen); setLfNearbyOpen(false) }} style={{
                 display:'inline-flex', alignItems:'center', gap:5, borderRadius:999, padding:'7px 13px',
                 fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap',
                 background:'#fff', border:'1.5px solid #e2e8f0', color:'#475569', transition:'all 0.15s',
