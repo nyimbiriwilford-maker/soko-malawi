@@ -361,8 +361,9 @@ const css = `
   .svc-offline-banner { background: #fff8e6; color: #7a5a00; font-size: 13px; font-weight: 600; padding: 8px 12px; border-radius: 10px; margin-bottom: 12px; text-align: center; }
 
   .svc-retry-btn { height: 44px; padding: 0 20px; border: none; border-radius: 10px; background: #0F9D58; color: #fff; font-size: 14px; font-weight: 700; cursor: pointer; margin-top: 8px; font-family: inherit; }
-  .svc-card-counters { font-size: 12px; color: #5f6368; display: flex; align-items: center; gap: 6px; margin-top: 2px; }
-  .svc-card-counters svg { color: #5f6368; }
+  .svc-card-counters { display: flex; align-items: center; gap: 14px; flex-wrap: nowrap; margin-top: 2px; }
+  .svc-card-stat { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; font-weight: 700; color: #202124; }
+  .svc-card-stat svg { color: #80868b; flex-shrink: 0; }
   .svc-empty-title { font-size: 16px; font-weight: 700; color: #202124; }
   .svc-empty-sub { font-size: 13px; color: #5f6368; }
   .svc-clear-btn {
@@ -480,6 +481,12 @@ const css = `
   input, select { font-family: inherit; }
 `
 
+function formatCount(n) {
+  const v = Number(n) || 0
+  if (v > 999) return '999+'
+  return v.toLocaleString()
+}
+
 function formatPrice(rate) {
   if (!rate && rate !== 0) return null
   const s = String(rate).trim()
@@ -558,9 +565,16 @@ function ServiceCard({ svc, delay, onClick, onBook, onChat, isMine, onEdit, show
         {svc.description && <p className="svc-card-desc">{svc.description}</p>}
         {showCounters && isMine && (svc.views != null || svc.chats_count != null || svc.chats != null) && (
           <div className="svc-card-counters">
-            {svc.views != null && <span><Eye size={12} strokeWidth={2.2} /> {svc.views} views</span>}
-            {svc.views != null && (svc.chats_count != null || svc.chats != null) && <span>�</span>}
-            {(svc.chats_count != null || svc.chats != null) && <span><MessageCircle size={12} strokeWidth={2.2} /> {svc.chats_count != null ? svc.chats_count : svc.chats} chats</span>}
+            {svc.views != null && (
+              <span className="svc-card-stat" aria-label={`${svc.views} view${svc.views === 1 ? '' : 's'}`} title={`${svc.views} view${svc.views === 1 ? '' : 's'}`}>
+                <Eye size={14} strokeWidth={2.2} color="#80868b" /> {formatCount(svc.views)}
+              </span>
+            )}
+            {(svc.chats_count != null || svc.chats != null) && (
+              <span className="svc-card-stat" aria-label={`${svc.chats_count != null ? svc.chats_count : svc.chats} chat${(svc.chats_count != null ? svc.chats_count : svc.chats) === 1 ? '' : 's'}`} title={`${svc.chats_count != null ? svc.chats_count : svc.chats} chat${(svc.chats_count != null ? svc.chats_count : svc.chats) === 1 ? '' : 's'}`}>
+                <MessageCircle size={14} strokeWidth={2.2} color="#80868b" /> {formatCount(svc.chats_count != null ? svc.chats_count : svc.chats)}
+              </span>
+            )}
           </div>
         )}
         <div className="svc-card-price">
