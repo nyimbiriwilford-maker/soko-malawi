@@ -6,7 +6,7 @@ import { SERVICE_CATS, CITIES } from './serviceData'
 import ServiceForm from './ServiceForm'
 import ProviderModal from './ProviderModal'
 import SokoNav from '../components/SokoNav'
-import { Search, X, MapPin, Wrench, BadgeCheck, ChevronDown, Filter, ArrowUpDown, LayoutGrid, MessageCircle, Eye } from 'lucide-react'
+import { Search, X, MapPin, Wrench, BadgeCheck, ChevronDown, Filter, ArrowUpDown, LayoutGrid, MessageCircle, Eye, Star } from 'lucide-react'
 
 const css = `
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -290,6 +290,11 @@ const css = `
     font-family: inherit;
   }
   .svc-card-yours { font-size: 13px; color: #5f6368; padding: 4px 0; }
+  .svc-card-desc { font-size: 13px; color: #5f6368; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: none; }
+  @media (min-width: 1100px) { .svc-card-desc { display: block; } }
+  .svc-card-rating { font-size: 12px; color: #5f6368; display: none; align-items: center; gap: 4px; }
+  @media (min-width: 1100px) { .svc-card-rating { display: inline-flex; } }
+  @media (max-width: 767px) { .svc-provider-name { display: none; } }
 
   /* Skeleton cards */
   .svc-skeleton-card {
@@ -375,6 +380,11 @@ const css = `
     color: #0F9D58; border-radius: 10px; font-size: 13px; font-weight: 700;
     cursor: pointer; margin-top: 8px; font-family: inherit;
   }
+  .svc-load-more {
+    height: 44px; padding: 0 20px; border: 1.5px solid #0F9D58; background: transparent;
+    color: #0F9D58; border-radius: 12px; font-size: 14px; font-weight: 700;
+    cursor: pointer; font-family: inherit;
+  }
 
   /* Mine actions */
   .svc-card-actions { display: flex; gap: 8px; padding-top: 8px; border-top: 1px solid #e8eaed; margin-top: 4px; flex-wrap: wrap; }
@@ -447,7 +457,7 @@ function formatPrice(rate) {
   return { amount: formattedAmount, unit: unitPart }
 }
 
-function ServiceCard({ svc, delay, onClick, onBook, onChat, isMine, onEdit, showCounters, featuredBadge }) {
+function ServiceCard({ svc, delay, onClick, onBook, onChat, isMine, onEdit, showCounters, featuredBadge, priority }) {
   const [imgErr, setImgErr] = useState(false)
   const [imgLoaded, setImgLoaded] = useState(false)
   const [now] = useState(() => Date.now())
@@ -474,7 +484,7 @@ function ServiceCard({ svc, delay, onClick, onBook, onChat, isMine, onEdit, show
         {heroMedia && !imgErr ? (
           <>
             {!imgLoaded && <div className="svc-card-shimmer" />}
-            <img src={heroMedia} alt="" loading="lazy" onLoad={() => setImgLoaded(true)} onError={() => setImgErr(true)} />
+            <img src={heroMedia} alt="" width="400" height="300" loading={priority ? 'eager' : 'lazy'} decoding="async" fetchPriority={priority ? 'high' : 'auto'} onLoad={() => setImgLoaded(true)} onError={() => setImgErr(true)} />
           </>
         ) : (
           <div className="svc-card-icon">
@@ -497,6 +507,10 @@ function ServiceCard({ svc, delay, onClick, onBook, onChat, isMine, onEdit, show
             </span>
           </div>
         )}
+        {svc.description && <p className="svc-card-desc">{svc.description}</p>}
+        {svc.rating ? (
+          <div className="svc-card-rating"><Star size={12} strokeWidth={2.2} color="#F9AB00" fill="#F9AB00" /> {svc.rating}</div>
+        ) : null}
         <div className="svc-card-price">
           {price ? (
             <>
@@ -568,9 +582,14 @@ export default function Services() {
   const [draftCat, setDraftCat] = useState('')
   const [draftCity, setDraftCity] = useState('All')
   const [isMobile, setIsMobile] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 1100 : true))
+  const [isPhone, setIsPhone] = useState(() => (typeof window !== 'undefined' ? window.innerWidth < 768 : true))
+  const [pageSize, setPageSize] = useState(() => (typeof window !== 'undefined' ? (window.innerWidth >= 1100 ? 16 : window.innerWidth >= 768 ? 12 : 10) : 10))
+  const [displayCount, setDisplayCount] = useState(() => (typeof window !== 'undefined' ? (window.innerWidth >= 1100 ? 16 : window.innerWidth >= 768 ? 12 : 10) : 10))
+  const pageSizeRef = useRef(pageSize)
 
   const touchStartY = useRef(0)
   const railRef = useRef(null)
+  const sentinelRef = useRef(null)
   const seed = useMemo(() => {
     try {
       let s = sessionStorage.getItem('soko_svc_seed')
@@ -593,10 +612,27 @@ export default function Services() {
   useEffect(() => { init() }, [])
 
   useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth < 1100)
+    const onResize = () => { setIsMobile(window.innerWidth < 1100); setIsPhone(window.innerWidth < 768); setPageSize(window.innerWidth >= 1100 ? 16 : window.innerWidth >= 768 ? 12 : 10) }
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
+
+  useEffect(() => { pageSizeRef.current = pageSize }, [pageSize])
+
+  useEffect(() => { setDisplayCount(pageSizeRef.current) }, [search, activeCat, activeCity, verifiedOnly, sortBy])
+
+  useEffect(() => {
+    if (!isPhone) return
+    const el = sentinelRef.current
+    if (!el) return
+    const obs = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) {
+        setDisplayCount(c => (c < filtered.length ? Math.min(c + pageSize, filtered.length) : c))
+      }
+    }, { rootMargin: '400px' })
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [isPhone, displayCount, filtered.length, pageSize])
 
   useEffect(() => {
     const t = setTimeout(() => setSearch(searchInput), 250)
@@ -1060,24 +1096,37 @@ export default function Services() {
             )}
 
             {!loading && filtered.length > 0 && (
-              <div className="svc-grid">
-                {filtered.map((svc, i) => (
-                  <ServiceCard
-                    key={svc.id}
-                    svc={svc}
-                    delay={i * 0.03}
-                    onClick={() => setSelectedProvider(svc)}
-                    onBook={() => {
-                      if (currentUser) navigate(`/chat/${svc.provider_id}/${svc.id}?src=service`, { state: { source: 'service' } })
-                    }}
-                    onChat={() => {
-                      if (currentUser) navigate(`/chat/${svc.provider_id}/${svc.id}?src=service`, { state: { source: 'service' } })
-                    }}
-                    isMine={svc.provider_id === currentUser?.id}
-                    onEdit={() => { setEditingService(svc); setTab('post') }}
-                  />
-                ))}
-              </div>
+              <>
+                <div className="svc-grid">
+                  {filtered.slice(0, displayCount).map((svc, i) => (
+                    <ServiceCard
+                      key={svc.id}
+                      svc={svc}
+                      delay={i * 0.03}
+                      priority={i < 4}
+                      onClick={() => setSelectedProvider(svc)}
+                      onBook={() => {
+                        if (currentUser) navigate(`/chat/${svc.provider_id}/${svc.id}?src=service`, { state: { source: 'service' } })
+                      }}
+                      onChat={() => {
+                        if (currentUser) navigate(`/chat/${svc.provider_id}/${svc.id}?src=service`, { state: { source: 'service' } })
+                      }}
+                      isMine={svc.provider_id === currentUser?.id}
+                      onEdit={() => { setEditingService(svc); setTab('post') }}
+                    />
+                  ))}
+                </div>
+                {isPhone && displayCount < filtered.length && (
+                  <div ref={sentinelRef} style={{ height: 1 }} />
+                )}
+                {!isPhone && displayCount < filtered.length && (
+                  <div style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
+                    <button type="button" className="svc-load-more" onClick={() => setDisplayCount(c => Math.min(c + pageSize, filtered.length))}>
+                      Load more services
+                    </button>
+                  </div>
+                )}
+              </>
             )}
 
             {!loading && !error && filtered.length > 0 && filtered.length < 4 && noFiltersActive && (
