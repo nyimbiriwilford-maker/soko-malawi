@@ -24,7 +24,7 @@ import React, {
   useEffect, useState, useMemo, useRef, useCallback, useLayoutEffect,
 } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MapPin, Clock, Zap, Eye, MessageCircle, Plus, ChevronRight, Navigation, Sparkles, TrendingUp, Star, UserCheck, AlertTriangle, DollarSign, ArrowRight, ShieldCheck, Search, Heart, Share2, Flag, ExternalLink } from 'lucide-react'
+import { MapPin, Clock, Zap, Eye, MessageCircle, Plus, ChevronRight, Navigation, Sparkles, TrendingUp, Star, UserCheck, AlertTriangle, DollarSign, ArrowRight, ShieldCheck, Search, Heart, Share2, Flag, ExternalLink, Check } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { supabase }              from '../lib/supabase'
 import useSearchAnimation        from '../hooks/useSearchAnimation'
@@ -39,6 +39,7 @@ import {
   getGPSLocation,
   sortRequestsByViewerLocation,
   withDistanceToBuyer,
+  buyerCoords,
   fmtMWK,
 } from '../utils/lookingFor'
 import { SORT_OPTIONS } from '../constants/lookingFor'
@@ -1992,6 +1993,10 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
   }, [viewerLocationProp])
 
   React.useEffect(() => {
+    const hasLoc = !!(viewerLoc && (viewerLoc.lat != null || viewerLoc.district || viewerLoc.city || (activeDistrict && activeDistrict !== 'All Districts')))
+    if (hasLoc && !lfNearbyPickedRef.current && lfNearby === 'all') setLfNearby('near')
+  }, [viewerLoc, activeDistrict])
+  React.useEffect(() => {
     if (viewerLoc?.lat != null) return
     if (activeDistrict && activeDistrict !== 'All Districts') {
       setViewerLoc(prev => prev?.district === activeDistrict ? prev : {
@@ -2018,7 +2023,24 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
       if (r.deleted === true) return false
       if (r.expires_at && new Date(r.expires_at).getTime() <= now) return false
       if (r.created_at && (now - new Date(r.created_at).getTime()) > thirtyDays) return false
-
+      if (lfNearby === 'near') {
+        const userCity = (viewerLoc?.city || viewerLoc?.district || (activeDistrict && activeDistrict !== 'All Districts' ? activeDistrict : '') || '').trim().toLowerCase()
+        const reqCity = (r.city || r.detected_city || '').trim().toLowerCase()
+        let keep = false
+        if (userCity && reqCity && reqCity === userCity) keep = true
+        if (!keep && viewerLoc?.lat != null && viewerLoc?.lng != null) {
+          const to = buyerCoords(r)
+          if (to) {
+            const km = haversineKm(viewerLoc.lat, viewerLoc.lng, to.lat, to.lng)
+            if (km != null && km <= 25) keep = true
+          }
+        }
+        if (!keep) return false
+      } else if (lfNearby !== 'all') {
+        const target = String(lfNearby).trim().toLowerCase()
+        const reqCity = (r.city || r.detected_city || '').trim().toLowerCase()
+        if (reqCity !== target) return false
+      }
       return true
     })
     const loc = viewerLoc
@@ -2061,7 +2083,7 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
       return b._tiebreak - a._tiebreak
     })
     return withScore
-    }, [requests, viewerLoc, userLat, userLng, activeDistrict, lfSort])
+    }, [requests, viewerLoc, userLat, userLng, activeDistrict, lfSort, lfNearby])
 
   const [lfShowMore, setLfShowMore] = React.useState(0)
   React.useEffect(() => { setLfShowMore(0) }, [lfSort])
@@ -2080,7 +2102,8 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
   const filtered = ranked
   const placeLabel = viewerLoc?.district || viewerLoc?.city || viewerLoc?.label || (activeDistrict && activeDistrict !== 'All Districts' ? activeDistrict : null)
 
-  const [lfNearby, setLfNearby] = React.useState('All')
+  const [lfNearby, setLfNearby] = React.useState('all')
+  const lfNearbyPickedRef = React.useRef(false)
   const [lfNearbyOpen, setLfNearbyOpen] = React.useState(false)
   const [lfSortOpen, setLfSortOpen] = React.useState(false)
   const lfNearbyRef = React.useRef(null)
@@ -2278,21 +2301,30 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
                 background:'#fff', border:'1.5px solid #e2e8f0', color:'#475569', transition:'all 0.15s',
                 minHeight:34,
               }}>
-                <MapPin size={13} /> {lfNearby === 'All' ? 'Near You' : lfNearby} <ChevronRight size={12} style={{ transform:'rotate(90deg)', marginLeft:2 }} />
+                <MapPin size={13} /> {lfNearby === 'near' ? 'Near You' : lfNearby === 'all' ? 'All Malawi' : lfNearby} <ChevronRight size={12} style={{ transform:'rotate(90deg)', marginLeft:2 }} />
               </button>
-              {lfNearbyOpen && (
-                <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, background:'#fff', borderRadius:12, border:'1px solid #e2e8f0', boxShadow:'0 8px 24px rgba(0,0,0,0.1)', zIndex:20, minWidth:160, overflow:'hidden', padding:'4px' }}>
-                  {[{ v:'All', l: placeLabel ? `${placeLabel} (Near You)` : 'All Locations' }, { v:'All', l:'All Locations' }].filter((x,i,a) => a.findIndex(y=>y.v===x.v)===i).map(opt => (
-                    <button key={opt.v} type="button" onClick={() => { setLfNearby(opt.v); setLfNearbyOpen(false) }} style={{
-                      display:'block', width:'100%', textAlign:'left', background:'none', border:'none', padding:'8px 12px',
+            {lfNearbyOpen && (
+              <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, background:'#fff', borderRadius:12, border:'1px solid #e2e8f0', boxShadow:'0 8px 24px rgba(0,0,0,0.1)', zIndex:20, minWidth:160, overflow:'hidden', padding:'4px' }}>
+                {(() => {
+                  const hasLoc = !!(placeLabel || (viewerLoc && (viewerLoc.lat != null || viewerLoc.district || viewerLoc.city)))
+                  const opts = []
+                  if (hasLoc) opts.push({ v:'near', l:'Near You' })
+                  opts.push({ v:'all', l:'All Malawi' })
+                  const districts = [...new Set((requests || []).map(r => (r.city || r.detected_city || '').trim()).filter(Boolean))].sort((a,b) => a.localeCompare(b))
+                  districts.forEach(d => opts.push({ v:d, l:d }))
+                  return opts.map(opt => (
+                    <button key={opt.v} type="button" onClick={() => { lfNearbyPickedRef.current = true; setLfNearby(opt.v); setLfNearbyOpen(false) }} style={{
+                      display:'flex', alignItems:'center', gap:8, width:'100%', textAlign:'left', background:'none', border:'none', padding:'8px 12px',
                       fontSize:12, fontWeight: lfNearby===opt.v ? 700 : 500, color: lfNearby===opt.v ? '#166534' : '#334155',
                       cursor:'pointer', fontFamily:'inherit', borderRadius:8,
                     }}>
+                      {lfNearby === opt.v && <Check size={12} strokeWidth={3} color="#166534" />}
                       {opt.l}
                     </button>
-                  ))}
-                </div>
-              )}
+                  ))
+                })()}
+              </div>
+            )}
             </div>
 
 
@@ -2627,6 +2659,16 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
             }}>
               <Plus size={14} strokeWidth={3} /> Post Request
             </button>
+            {lfNearby !== 'all' && (
+              <button type="button" onClick={() => { lfNearbyPickedRef.current = true; setLfNearby('all') }} style={{
+                display:'inline-flex', alignItems:'center', gap:6, borderRadius:12, padding:'0 16px',
+                fontSize:13, fontWeight:700, cursor:'pointer', fontFamily:'inherit',
+                background:'transparent', border:'1.5px solid #0F9D58', color:'#0F9D58',
+                height:44, marginTop:8,
+              }}>
+                Show all Malawi
+              </button>
+            )}
           </div>
         )}
 
