@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { rankServices, isServiceVerified } from '../lib/serviceRanking'
@@ -6,7 +6,7 @@ import { SERVICE_CATS, CITIES } from './serviceData'
 import ServiceForm from './ServiceForm'
 import ProviderModal from './ProviderModal'
 import SokoNav from '../components/SokoNav'
-import { Search, X, MapPin, Wrench, BadgeCheck, ChevronDown, Filter, ArrowUpDown, LayoutGrid, MessageCircle, Eye } from 'lucide-react'
+import { Search, X, MapPin, Wrench, BadgeCheck, ChevronDown, Filter, ArrowUpDown, LayoutGrid, MessageCircle, Eye, Check, Plus } from 'lucide-react'
 
 const css = `
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -359,9 +359,7 @@ const css = `
   .svc-empty { text-align: center; padding: 48px 24px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
   .svc-empty-icon { color: #80868b; margin-bottom: 4px; }
   .svc-offline-banner { background: #fff8e6; color: #7a5a00; font-size: 13px; font-weight: 600; padding: 8px 12px; border-radius: 10px; margin-bottom: 12px; text-align: center; }
-  .svc-low-supply { width: 100%; background: #e6f6ed; border: 1px dashed #34c77a; border-radius: 14px; padding: 14px; margin-top: 12px; }
-  .svc-low-supply-title { font-size: 14px; font-weight: 700; color: #202124; }
-  .svc-low-supply-sub { font-size: 13px; color: #5f6368; margin-top: 2px; }
+
   .svc-retry-btn { height: 44px; padding: 0 20px; border: none; border-radius: 10px; background: #0F9D58; color: #fff; font-size: 14px; font-weight: 700; cursor: pointer; margin-top: 8px; font-family: inherit; }
   .svc-card-counters { font-size: 12px; color: #5f6368; display: flex; align-items: center; gap: 6px; margin-top: 2px; }
   .svc-card-counters svg { color: #5f6368; }
@@ -394,6 +392,64 @@ const css = `
   .skeleton { background: linear-gradient(90deg,#f3f4f6 25%,#e5e7eb 50%,#f3f4f6 75%); background-size:400px 100%; animation: svc-shimmer 1.4s infinite; border-radius:16px; height: 260px; }
 
   .svc-form-wrap { max-width: 600px; margin: 20px auto; padding: 0 16px; }
+
+  .svc-cta {
+    position: relative; overflow: hidden; border-radius: 20px;
+    background: linear-gradient(135deg, #0F9D58 0%, #0b7a44 100%);
+    box-shadow: 0 8px 24px rgba(15,157,88,0.18);
+    margin-top: 24px; padding: 20px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  @media (min-width: 768px) { .svc-cta { padding: 28px; gap: 16px; } }
+  @media (min-width: 1100px) { .svc-cta { padding: 40px; gap: 18px; border-radius: 24px; } }
+  .svc-cta-deco { position: absolute; border-radius: 50%; pointer-events: none; }
+  .svc-cta-deco-tr { top: -40px; right: -40px; width: 160px; height: 160px; background: rgba(255,255,255,0.08); }
+  .svc-cta-deco-bl { bottom: -60px; left: -60px; width: 200px; height: 200px; background: rgba(249,171,0,0.14); }
+  .svc-cta-left { position: relative; z-index: 1; display: flex; flex-direction: column; gap: 14px; }
+  @media (min-width: 768px) { .svc-cta-left { gap: 16px; } }
+  @media (min-width: 1100px) { .svc-cta-left { gap: 18px; } }
+  .svc-cta-pill {
+    display: inline-flex; align-items: center; gap: 6px; width: fit-content;
+    font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em;
+    color: #fff; background: rgba(255,255,255,0.16); border-radius: 999px; padding: 6px 12px;
+  }
+  .svc-cta-headline {
+    font-size: 20px; font-weight: 800; color: #fff; line-height: 1.2; margin: 0; max-width: 520px;
+  }
+  @media (min-width: 768px) { .svc-cta-headline { font-size: 24px; } }
+  @media (min-width: 1100px) { .svc-cta-headline { font-size: 28px; } }
+  .svc-cta-sub {
+    font-size: 13px; color: rgba(255,255,255,0.85); margin: 0; max-width: 480px;
+  }
+  @media (min-width: 1100px) { .svc-cta-sub { font-size: 14px; } }
+  .svc-cta-benefits {
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  @media (min-width: 768px) { .svc-cta-benefits { flex-direction: row; gap: 20px; flex-wrap: wrap; } }
+  .svc-cta-benefit {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; color: #fff;
+  }
+  .svc-cta-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    height: 48px; padding: 0 22px; border: none; border-radius: 12px;
+    background: #fff; color: #0F9D58; font-size: 14px; font-weight: 800; cursor: pointer; font-family: inherit;
+    width: 100%;
+  }
+  @media (min-width: 768px) { .svc-cta-btn { width: auto; } }
+  .svc-cta-btn:active { transform: scale(0.98); }
+  @media (min-width: 1100px) { .svc-cta-btn:hover { background: #f1f8f4; } }
+  .svc-cta-btn:focus-visible { outline: 2px solid #F9AB00; outline-offset: 2px; }
+  .svc-cta-stat {
+    position: relative; z-index: 1; background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.2); border-radius: 16px; padding: 20px;
+    width: 240px; display: flex; flex-direction: column; gap: 4px;
+  }
+  .svc-cta-stat-num { font-size: 32px; font-weight: 800; color: #fff; line-height: 1; }
+  .svc-cta-stat-label { font-size: 12px; color: rgba(255,255,255,0.85); }
+  @media (min-width: 1100px) {
+    .svc-cta { flex-direction: row; align-items: center; justify-content: space-between; }
+    .svc-cta-left { flex: 1; }
+  }
 
   .svc-featured-wrap { position: relative; margin-bottom: 20px; }
   @media (min-width: 768px) { .svc-featured-wrap { margin-bottom: 24px; } }
@@ -503,7 +559,7 @@ function ServiceCard({ svc, delay, onClick, onBook, onChat, isMine, onEdit, show
         {showCounters && isMine && (svc.views != null || svc.chats_count != null || svc.chats != null) && (
           <div className="svc-card-counters">
             {svc.views != null && <span><Eye size={12} strokeWidth={2.2} /> {svc.views} views</span>}
-            {svc.views != null && (svc.chats_count != null || svc.chats != null) && <span>·</span>}
+            {svc.views != null && (svc.chats_count != null || svc.chats != null) && <span>�</span>}
             {(svc.chats_count != null || svc.chats != null) && <span><MessageCircle size={12} strokeWidth={2.2} /> {svc.chats_count != null ? svc.chats_count : svc.chats} chats</span>}
           </div>
         )}
@@ -821,6 +877,42 @@ export default function Services() {
     return () => obs.disconnect()
   }, [isPhone, displayCount, filtered.length, pageSize])
 
+  function renderCta() {
+    const headline = myServices.length > 0 ? 'Grow your reach.' : 'Offer your skills. Get found across Malawi.'
+    const buttonLabel = myServices.length > 0 ? 'Post another service' : 'Post a Service'
+    const showStat = !isMobile && services.length >= 5
+    return (
+      <div className="svc-cta">
+        <div className="svc-cta-deco svc-cta-deco-tr" aria-hidden="true" />
+        <div className="svc-cta-deco svc-cta-deco-bl" aria-hidden="true" />
+        <div className="svc-cta-left">
+          <span className="svc-cta-pill"><BadgeCheck size={14} strokeWidth={2.5} color="#F9AB00" /> For service providers</span>
+          <h2 className="svc-cta-headline">{headline}</h2>
+          <p className="svc-cta-sub">List your service in minutes and reach customers in your city.</p>
+          <div className="svc-cta-benefits">
+            <span className="svc-cta-benefit"><Check size={16} strokeWidth={2.5} color="#fff" /> Free to list</span>
+            <span className="svc-cta-benefit"><Check size={16} strokeWidth={2.5} color="#fff" /> Chat directly with customers</span>
+            <span className="svc-cta-benefit"><Check size={16} strokeWidth={2.5} color="#fff" /> Get a verified badge</span>
+          </div>
+          <button
+            type="button"
+            className="svc-cta-btn"
+            onClick={() => { setEditingService(null); setTab('post') }}
+            aria-label="Post a service"
+          >
+            <Plus size={16} strokeWidth={2.5} /> {buttonLabel}
+          </button>
+        </div>
+        {showStat && (
+          <div className="svc-cta-stat">
+            <div className="svc-cta-stat-num">{services.length}</div>
+            <div className="svc-cta-stat-label">services listed on SokoMw</div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
   const catCounts = {}
   services.forEach(s => { catCounts[s.category] = (catCounts[s.category] || 0) + 1 })
   const cityCounts = {}
@@ -1036,8 +1128,8 @@ export default function Services() {
                 </div>
                 {!isMobile && (
                   <>
-                    <button type="button" className="svc-rail-arrow svc-rail-arrow-left" onClick={() => scrollRail(-1)} aria-label="Previous featured">â€¹</button>
-                    <button type="button" className="svc-rail-arrow svc-rail-arrow-right" onClick={() => scrollRail(1)} aria-label="Next featured">â€º</button>
+                    <button type="button" className="svc-rail-arrow svc-rail-arrow-left" onClick={() => scrollRail(-1)} aria-label="Previous featured">‹</button>
+                    <button type="button" className="svc-rail-arrow svc-rail-arrow-right" onClick={() => scrollRail(1)} aria-label="Next featured">›</button>
                     <div className="svc-rail-fade svc-rail-fade-left" />
                     <div className="svc-rail-fade svc-rail-fade-right" />
                   </>
@@ -1108,14 +1200,17 @@ export default function Services() {
             )}
 
             {!loading && !error && filtered.length === 0 && (
-              <div className="svc-empty">
-                <div className="svc-empty-icon"><Search size={40} strokeWidth={1.5} color="#80868b" /></div>
-                <p className="svc-empty-title">No services found</p>
-                <p className="svc-empty-sub">Try another category or city</p>
-                <button type="button" className="svc-clear-btn" onClick={() => { setSearchInput(''); setSearch(''); setActiveCat(''); setActiveCity('All'); setVerifiedOnly(false); setSortBy('newest') }}>
-                  Clear filters
-                </button>
-              </div>
+              <>
+                <div className="svc-empty">
+                  <div className="svc-empty-icon"><Search size={40} strokeWidth={1.5} color="#80868b" /></div>
+                  <p className="svc-empty-title">No services found</p>
+                  <p className="svc-empty-sub">Try another category or city</p>
+                  <button type="button" className="svc-clear-btn" onClick={() => { setSearchInput(''); setSearch(''); setActiveCat(''); setActiveCity('All'); setVerifiedOnly(false); setSortBy('newest') }}>
+                    Clear filters
+                  </button>
+                </div>
+                {renderCta()}
+              </>
             )}
 
             {!loading && filtered.length > 0 && (
@@ -1149,15 +1244,11 @@ export default function Services() {
                     </button>
                   </div>
                 )}
+              {!(loading || error) && renderCta()}
               </>
             )}
 
-            {!loading && !error && filtered.length > 0 && filtered.length < 4 && noFiltersActive && (
-              <div className="svc-low-supply">
-                <div className="svc-low-supply-title">Are you a service provider?</div>
-                <div className="svc-low-supply-sub">Tap Post Now to list your service and get found.</div>
-              </div>
-            )}
+
           </>
         )}
 
@@ -1202,6 +1293,7 @@ export default function Services() {
                 ))}
               </div>
             )}
+            {renderCta()}
           </>
         )}
       </div>
