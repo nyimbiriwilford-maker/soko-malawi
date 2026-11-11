@@ -521,11 +521,11 @@ function ServiceCard({ svc, delay, onClick, onBook, onChat, isMine, onEdit, show
             <span className="svc-price-contact">Contact for price</span>
           )}
         </div>
-        {showCounters && isMine && (svc.views != null || svc.chats != null) && (
+        {showCounters && isMine && (svc.views != null || svc.chats_count != null || svc.chats != null) && (
           <div className="svc-card-counters">
             {svc.views != null && <span><Eye size={12} strokeWidth={2.2} /> {svc.views} views</span>}
-            {svc.views != null && svc.chats != null && <span>·</span>}
-            {svc.chats != null && <span><MessageCircle size={12} strokeWidth={2.2} /> {svc.chats} chats</span>}
+            {svc.views != null && (svc.chats_count != null || svc.chats != null) && <span>·</span>}
+            {(svc.chats_count != null || svc.chats != null) && <span><MessageCircle size={12} strokeWidth={2.2} /> {svc.chats_count != null ? svc.chats_count : svc.chats} chats</span>}
           </div>
         )}
         <div className="svc-card-actions">
@@ -665,6 +665,17 @@ export default function Services() {
     const meta = document.querySelector('meta[name="description"]')
     if (meta) meta.setAttribute('content', 'Find and book trusted service providers across Malawi on SokoMw.')
   }, [])
+
+  useEffect(() => {
+    if (!selectedProvider) return
+    if (selectedProvider.provider_id === currentUser?.id) return
+    const key = `svc_viewed_${selectedProvider.id}`
+    try {
+      if (sessionStorage.getItem(key)) return
+      sessionStorage.setItem(key, '1')
+    } catch { return }
+    supabase.rpc('increment_service_stat', { p_service_id: selectedProvider.id, p_stat: 'views' }).then(() => {}).catch(() => {})
+  }, [selectedProvider, currentUser])
 
   useEffect(() => {
     if (!filterOpen && !sortOpen && !cityOpen) return
@@ -813,6 +824,16 @@ export default function Services() {
   const cityCounts = {}
   services.forEach(s => { if (s.city) cityCounts[s.city] = (cityCounts[s.city] || 0) + 1 })
   const myServices = services.filter(s => s.provider_id === currentUser?.id)
+
+  function trackServiceChat(svc) {
+    if (!svc || svc.provider_id === currentUser?.id) return
+    const key = `svc_chatted_${svc.id}`
+    try {
+      if (sessionStorage.getItem(key)) return
+      sessionStorage.setItem(key, '1')
+    } catch { return }
+    supabase.rpc('increment_service_stat', { p_service_id: svc.id, p_stat: 'chats_count' }).then(() => {}).catch(() => {})
+  }
 
   useEffect(() => {
     if (activeCity && activeCity !== 'All') {
@@ -1001,9 +1022,9 @@ export default function Services() {
                         onBook={() => {
                           if (currentUser) navigate(`/chat/${svc.provider_id}/${svc.id}?src=service`, { state: { source: 'service' } })
                         }}
-                        onChat={() => {
-                          if (currentUser) navigate(`/chat/${svc.provider_id}/${svc.id}?src=service`, { state: { source: 'service' } })
-                        }}
+                    onChat={() => {
+                      if (currentUser) { trackServiceChat(svc); navigate(`/chat/${svc.provider_id}/${svc.id}?src=service`, { state: { source: 'service' } }) }
+                    }}
                         isMine={svc.provider_id === currentUser?.id}
                         onEdit={() => { setEditingService(svc); setTab('post') }}
                         featuredBadge={!!svc.is_featured}
@@ -1109,7 +1130,7 @@ export default function Services() {
                         if (currentUser) navigate(`/chat/${svc.provider_id}/${svc.id}?src=service`, { state: { source: 'service' } })
                       }}
                       onChat={() => {
-                        if (currentUser) navigate(`/chat/${svc.provider_id}/${svc.id}?src=service`, { state: { source: 'service' } })
+                        if (currentUser) { trackServiceChat(svc); navigate(`/chat/${svc.provider_id}/${svc.id}?src=service`, { state: { source: 'service' } }) }
                       }}
                       isMine={svc.provider_id === currentUser?.id}
                       onEdit={() => { setEditingService(svc); setTab('post') }}

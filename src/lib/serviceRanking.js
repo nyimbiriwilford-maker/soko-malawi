@@ -54,7 +54,7 @@ export function rankServices(services, ctx) {
     }
 
     const rating = Number(s.rating)
-    const count = Number(s.jobs_done != null ? s.jobs_done : (s.review_count != null ? s.review_count : 0))
+    const count = Number(s.completed_count != null ? s.completed_count : (s.jobs_done != null ? s.jobs_done : (s.review_count != null ? s.review_count : 0)))
     let quality
     if (Number.isFinite(rating) && rating > 0 && count > 0) {
       const smoothed = (rating * count + 4.0 * 5) / (count + 5)
@@ -65,10 +65,11 @@ export function rankServices(services, ctx) {
 
     const verified = (s.verified || s.profile?.verified) ? 1 : 0
 
+    const chatsVal = s.chats_count != null ? s.chats_count : s.chats
     let engagement
-    if (s.views != null && s.chats != null) {
+    if (s.views != null && chatsVal != null) {
       const views = Number(s.views)
-      const chats = Number(s.chats)
+      const chats = Number(chatsVal)
       engagement = Math.min(1, (chats / Math.max(views, 10)) * 5)
     } else {
       engagement = 0.5

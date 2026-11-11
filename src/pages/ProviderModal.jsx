@@ -18,15 +18,28 @@ export default function ProviderModal({ provider, currentUser, onClose }) {
   const heroMedia = media[0]
   const isOwner = currentUser?.id === provider.provider_id
 
-  // Track view on open
+  // Track view on open (deduped per session, skip own)
   useEffect(() => {
-    supabase.from('services')
-      .update({ views: (provider.views || 0) + 1 })
-      .eq('id', provider.id)
-  }, [])
+    if (isOwner) return
+    const key = `svc_viewed_${provider.id}`
+    try {
+      if (sessionStorage.getItem(key)) return
+      sessionStorage.setItem(key, '1')
+    } catch { return }
+    supabase.rpc('increment_service_stat', { p_service_id: provider.id, p_stat: 'views' }).then(() => {}).catch(() => {})
+  }, [provider.id, isOwner])
 
   function goChat() {
     if (!currentUser) return
+    if (!isOwner) {
+      const key = `svc_chatted_${provider.id}`
+      try {
+        if (!sessionStorage.getItem(key)) {
+          sessionStorage.setItem(key, '1')
+          supabase.rpc('increment_service_stat', { p_service_id: provider.id, p_stat: 'chats_count' }).then(() => {}).catch(() => {})
+        }
+      } catch {}
+    }
     navigate(`/chat/${provider.provider_id}/${provider.id}?src=service`, {
       state: { source: 'service' },
     })
