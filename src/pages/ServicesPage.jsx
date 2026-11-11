@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+﻿import { useState, useEffect, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { rankServices, isServiceVerified } from '../lib/serviceRanking'
@@ -6,7 +6,7 @@ import { SERVICE_CATS, CITIES } from './serviceData'
 import ServiceForm from './ServiceForm'
 import ProviderModal from './ProviderModal'
 import SokoNav from '../components/SokoNav'
-import { Search, X, MapPin, Wrench, BadgeCheck, ChevronDown, Filter, ArrowUpDown, LayoutGrid, MessageCircle, Eye, Star } from 'lucide-react'
+import { Search, X, MapPin, Wrench, BadgeCheck, ChevronDown, Filter, ArrowUpDown, LayoutGrid, MessageCircle, Eye } from 'lucide-react'
 
 const css = `
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -235,7 +235,7 @@ const css = `
     font-size: 11px; font-weight: 800; padding: 4px 8px; border-radius: 999px;
   }
   .svc-card-body {
-    padding: 10px; display: flex; flex-direction: column; gap: 4px;
+    padding: 10px; display: flex; flex-direction: column; gap: 6px;
     min-width: 0; flex: 1;
   }
   @media (min-width: 1100px) {
@@ -243,8 +243,7 @@ const css = `
   }
   .svc-card-title {
     font-size: 14px; font-weight: 700; color: #202124; line-height: 1.3; margin: 0;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-    overflow: hidden; min-height: 2.6em;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   @media (min-width: 1100px) {
     .svc-card-title { font-size: 15px; }
@@ -252,14 +251,18 @@ const css = `
   .svc-card-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
   .svc-provider-name {
     font-size: 12px; color: #5f6368; display: inline-flex; align-items: center; gap: 4px;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    min-width: 0; max-width: 100%;
   }
-  .svc-verified { color: #1A73E8; display: inline-flex; align-items: center; }
+  .svc-provider-name-text {
+    flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .svc-verified { color: #1A73E8; display: inline-flex; align-items: center; flex-shrink: 0; }
   .svc-location {
     font-size: 12px; color: #80868b; display: inline-flex; align-items: center; gap: 4px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .svc-location svg { flex-shrink: 0; }
+  .svc-card-price { margin-top: auto; }
   .svc-price { font-size: 15px; font-weight: 800; color: #202124; }
   .svc-price-unit { font-size: 12px; color: #80868b; margin-left: 2px; font-weight: 500; }
   .svc-price-contact { font-size: 13px; color: #5f6368; }
@@ -270,24 +273,13 @@ const css = `
     background: transparent; border: none;
   }
   .svc-card-book {
-    flex: 1; height: 36px; border: none; border-radius: 10px;
+    flex: 1; height: 38px; border: none; border-radius: 10px;
     background: #0F9D58; color: #fff; font-size: 13px; font-weight: 700;
     cursor: pointer; font-family: inherit;
     display: inline-flex; align-items: center; justify-content: center; gap: 4px;
   }
   @media (min-width: 1100px) {
-    .svc-card-book { height: 38px; }
-  }
-  .svc-card-chat-wrap {
-    min-height: 44px; min-width: 44px;
-    display: flex; align-items: center; justify-content: center; padding: 4px;
-    background: transparent; border: none;
-  }
-  .svc-card-chat {
-    width: 36px; height: 36px; border: 1px solid #e8eaed; border-radius: 10px;
-    background: #fff; color: #0F9D58;
-    display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
-    font-family: inherit;
+    .svc-card-book { height: 40px; }
   }
   .svc-card-yours { font-size: 13px; color: #5f6368; padding: 4px 0; }
   .svc-card-desc { font-size: 13px; color: #5f6368; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: none; }
@@ -372,8 +364,6 @@ const css = `
   .svc-low-supply-sub { font-size: 13px; color: #5f6368; margin-top: 2px; }
   .svc-retry-btn { height: 44px; padding: 0 20px; border: none; border-radius: 10px; background: #0F9D58; color: #fff; font-size: 14px; font-weight: 700; cursor: pointer; margin-top: 8px; font-family: inherit; }
   .svc-card-counters { font-size: 12px; color: #5f6368; display: flex; align-items: center; gap: 6px; margin-top: 2px; }
-  .svc-verified-pill { display: none; font-size: 11px; font-weight: 700; color: #1A73E8; background: #e8f0fe; border-radius: 999px; padding: 2px 8px; margin-top: 2px; width: fit-content; }
-  @media (min-width: 768px) { .svc-verified-pill { display: inline-block; } }
   .svc-card-counters svg { color: #5f6368; }
   .svc-empty-title { font-size: 16px; font-weight: 700; color: #202124; }
   .svc-empty-sub { font-size: 13px; color: #5f6368; }
@@ -498,11 +488,10 @@ function ServiceCard({ svc, delay, onClick, onBook, onChat, isMine, onEdit, show
       </div>
       <div className="svc-card-body">
         <h3 className="svc-card-title">{title}</h3>
-        {verified && <span className="svc-verified-pill">Verified</span>}
         {showProvider && (
           <div className="svc-card-meta">
             <span className="svc-provider-name">
-              {providerName}
+              <span className="svc-provider-name-text">{providerName}</span>
               {verified && <span className="svc-verified" aria-label="Verified provider"><BadgeCheck size={14} strokeWidth={2.5} color="#1A73E8" /></span>}
             </span>
             <span className="svc-location">
@@ -511,9 +500,13 @@ function ServiceCard({ svc, delay, onClick, onBook, onChat, isMine, onEdit, show
           </div>
         )}
         {svc.description && <p className="svc-card-desc">{svc.description}</p>}
-        {svc.rating ? (
-          <div className="svc-card-rating"><Star size={12} strokeWidth={2.2} color="#F9AB00" fill="#F9AB00" /> {svc.rating}</div>
-        ) : null}
+        {showCounters && isMine && (svc.views != null || svc.chats_count != null || svc.chats != null) && (
+          <div className="svc-card-counters">
+            {svc.views != null && <span><Eye size={12} strokeWidth={2.2} /> {svc.views} views</span>}
+            {svc.views != null && (svc.chats_count != null || svc.chats != null) && <span>·</span>}
+            {(svc.chats_count != null || svc.chats != null) && <span><MessageCircle size={12} strokeWidth={2.2} /> {svc.chats_count != null ? svc.chats_count : svc.chats} chats</span>}
+          </div>
+        )}
         <div className="svc-card-price">
           {price ? (
             <>
@@ -524,13 +517,6 @@ function ServiceCard({ svc, delay, onClick, onBook, onChat, isMine, onEdit, show
             <span className="svc-price-contact">Contact for price</span>
           )}
         </div>
-        {showCounters && isMine && (svc.views != null || svc.chats_count != null || svc.chats != null) && (
-          <div className="svc-card-counters">
-            {svc.views != null && <span><Eye size={12} strokeWidth={2.2} /> {svc.views} views</span>}
-            {svc.views != null && (svc.chats_count != null || svc.chats != null) && <span>·</span>}
-            {(svc.chats_count != null || svc.chats != null) && <span><MessageCircle size={12} strokeWidth={2.2} /> {svc.chats_count != null ? svc.chats_count : svc.chats} chats</span>}
-          </div>
-        )}
         <div className="svc-card-actions">
           {isMine ? (
             onEdit ? (
@@ -540,15 +526,10 @@ function ServiceCard({ svc, delay, onClick, onBook, onChat, isMine, onEdit, show
             ) : (
               <span className="svc-card-yours">Your service</span>
             )
-          ) : (
-            <>
-              <button type="button" className="svc-card-book-wrap" onClick={handleBook} aria-label="Book now">
-                <span className="svc-card-book">Book now</span>
-              </button>
-              <button type="button" className="svc-card-chat-wrap" onClick={handleChat} aria-label="Chat">
-                <span className="svc-card-chat"><MessageCircle size={18} strokeWidth={2.2} /></span>
-              </button>
-            </>
+           ) : (
+            <button type="button" className="svc-card-book-wrap" onClick={handleBook} aria-label="Book now">
+              <span className="svc-card-book">Book now</span>
+            </button>
           )}
         </div>
       </div>
@@ -1055,8 +1036,8 @@ export default function Services() {
                 </div>
                 {!isMobile && (
                   <>
-                    <button type="button" className="svc-rail-arrow svc-rail-arrow-left" onClick={() => scrollRail(-1)} aria-label="Previous featured">‹</button>
-                    <button type="button" className="svc-rail-arrow svc-rail-arrow-right" onClick={() => scrollRail(1)} aria-label="Next featured">›</button>
+                    <button type="button" className="svc-rail-arrow svc-rail-arrow-left" onClick={() => scrollRail(-1)} aria-label="Previous featured">â€¹</button>
+                    <button type="button" className="svc-rail-arrow svc-rail-arrow-right" onClick={() => scrollRail(1)} aria-label="Next featured">â€º</button>
                     <div className="svc-rail-fade svc-rail-fade-left" />
                     <div className="svc-rail-fade svc-rail-fade-right" />
                   </>
