@@ -652,7 +652,17 @@ export default function Services() {
   useEffect(() => { init() }, [])
 
   useEffect(() => {
-    const onResize = () => { setIsMobile(window.innerWidth < 1100); setIsPhone(window.innerWidth < 768); setPageSize(window.innerWidth >= 1100 ? 16 : window.innerWidth >= 768 ? 12 : 10) }
+    const onResize = () => {
+      setIsMobile(window.innerWidth < 1100)
+      setIsPhone(window.innerWidth < 768)
+      const nextPageSize = window.innerWidth >= 1100 ? 16 : window.innerWidth >= 768 ? 12 : 10
+      setPageSize(nextPageSize)
+      pageSizeRef.current = nextPageSize
+      setDisplayCount(c => {
+        const pages = Math.ceil(c / nextPageSize)
+        return Math.min(pages * nextPageSize, filtered.length)
+      })
+    }
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
