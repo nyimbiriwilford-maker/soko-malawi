@@ -1992,6 +1992,9 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
     return () => { cancelled = true }
   }, [viewerLocationProp])
 
+  const [lfNearby, setLfNearby] = React.useState('all')
+  const lfNearbyPickedRef = React.useRef(false)
+
   React.useEffect(() => {
     const hasLoc = !!(viewerLoc && (viewerLoc.lat != null || viewerLoc.district || viewerLoc.city || (activeDistrict && activeDistrict !== 'All Districts')))
     if (hasLoc && !lfNearbyPickedRef.current && lfNearby === 'all') setLfNearby('near')
@@ -2102,8 +2105,6 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
   const filtered = ranked
   const placeLabel = viewerLoc?.district || viewerLoc?.city || viewerLoc?.label || (activeDistrict && activeDistrict !== 'All Districts' ? activeDistrict : null)
 
-  const [lfNearby, setLfNearby] = React.useState('all')
-  const lfNearbyPickedRef = React.useRef(false)
   const [lfNearbyOpen, setLfNearbyOpen] = React.useState(false)
   const [lfSortOpen, setLfSortOpen] = React.useState(false)
   const lfNearbyRef = React.useRef(null)
