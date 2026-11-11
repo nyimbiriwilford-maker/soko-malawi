@@ -5,7 +5,7 @@ import { SERVICE_CATS, CITIES } from './serviceData'
 import ServiceForm from './ServiceForm'
 import ProviderModal from './ProviderModal'
 import SokoNav from '../components/SokoNav'
-import { Search, X, MapPin, Wrench, BadgeCheck, ChevronDown, Filter, ArrowUpDown, LayoutGrid, MessageCircle } from 'lucide-react'
+import { Search, X, MapPin, Wrench, BadgeCheck, ChevronDown, Filter, ArrowUpDown, LayoutGrid, MessageCircle, Eye } from 'lucide-react'
 
 const css = `
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -359,11 +359,18 @@ const css = `
 
   /* Empty */
   .svc-empty { text-align: center; padding: 48px 24px; display: flex; flex-direction: column; align-items: center; gap: 8px; }
-  .svc-empty-icon { color: #9aa0a6; margin-bottom: 4px; }
+  .svc-empty-icon { color: #80868b; margin-bottom: 4px; }
+  .svc-offline-banner { background: #fff8e6; color: #7a5a00; font-size: 13px; font-weight: 600; padding: 8px 12px; border-radius: 10px; margin-bottom: 12px; text-align: center; }
+  .svc-low-supply { width: 100%; background: #e6f6ed; border: 1px dashed #34c77a; border-radius: 14px; padding: 14px; margin-top: 12px; }
+  .svc-low-supply-title { font-size: 14px; font-weight: 700; color: #202124; }
+  .svc-low-supply-sub { font-size: 13px; color: #5f6368; margin-top: 2px; }
+  .svc-retry-btn { height: 44px; padding: 0 20px; border: none; border-radius: 10px; background: #0F9D58; color: #fff; font-size: 14px; font-weight: 700; cursor: pointer; margin-top: 8px; font-family: inherit; }
+  .svc-card-counters { font-size: 12px; color: #5f6368; display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+  .svc-card-counters svg { color: #5f6368; }
   .svc-empty-title { font-size: 16px; font-weight: 700; color: #202124; }
   .svc-empty-sub { font-size: 13px; color: #5f6368; }
   .svc-clear-btn {
-    height: 40px; padding: 0 16px; border: 1.5px solid #0F9D58; background: transparent;
+    height: 44px; padding: 0 16px; border: 1.5px solid #0F9D58; background: transparent;
     color: #0F9D58; border-radius: 10px; font-size: 13px; font-weight: 700;
     cursor: pointer; margin-top: 8px; font-family: inherit;
   }
@@ -384,6 +391,11 @@ const css = `
   .skeleton { background: linear-gradient(90deg,#f3f4f6 25%,#e5e7eb 50%,#f3f4f6 75%); background-size:400px 100%; animation: svc-shimmer 1.4s infinite; border-radius:16px; height: 260px; }
 
   .svc-form-wrap { max-width: 600px; margin: 20px auto; padding: 0 16px; }
+
+  .soko-services *:focus-visible { outline: 2px solid #0F9D58; outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) {
+    .soko-services * { animation: none !important; transition: none !important; }
+  }
 
   button { font-family: inherit; cursor: pointer; }
   input, select { font-family: inherit; }
@@ -414,7 +426,7 @@ function formatPrice(rate) {
   return { amount: formattedAmount, unit: unitPart }
 }
 
-function ServiceCard({ svc, delay, onClick, onBook, onChat, isMine, onEdit }) {
+function ServiceCard({ svc, delay, onClick, onBook, onChat, isMine, onEdit, showCounters }) {
   const [imgErr, setImgErr] = useState(false)
   const [imgLoaded, setImgLoaded] = useState(false)
   const [now] = useState(() => Date.now())
@@ -474,6 +486,13 @@ function ServiceCard({ svc, delay, onClick, onBook, onChat, isMine, onEdit }) {
             <span className="svc-price-contact">Contact for price</span>
           )}
         </div>
+        {showCounters && isMine && (svc.views != null || svc.chats != null) && (
+          <div className="svc-card-counters">
+            {svc.views != null && <span><Eye size={12} strokeWidth={2.2} /> {svc.views} views</span>}
+            {svc.views != null && svc.chats != null && <span>·</span>}
+            {svc.chats != null && <span><MessageCircle size={12} strokeWidth={2.2} /> {svc.chats} chats</span>}
+          </div>
+        )}
         <div className="svc-card-actions">
           {isMine ? (
             onEdit ? (
@@ -501,20 +520,24 @@ function ServiceCard({ svc, delay, onClick, onBook, onChat, isMine, onEdit }) {
 
 export default function Services() {
   const navigate = useNavigate()
-  const [tab, setTab] = useState(() => new URLSearchParams(window.location.search).get('tab') || 'browse')
+  const _initParams = new URLSearchParams(window.location.search)
+  const [tab, setTab] = useState(() => _initParams.get('tab') || 'browse')
   const [services, setServices] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
+  const [isOffline, setIsOffline] = useState(() => (typeof navigator !== 'undefined' ? !navigator.onLine : false))
   const [currentUser, setCurrentUser] = useState(null)
   const [navUser, setNavUser] = useState(null)
   const [notifCount, setNotifCount] = useState(0)
   const [navSearch, setNavSearch] = useState('')
   const [selectedProvider, setSelectedProvider] = useState(null)
   const [editingService, setEditingService] = useState(null)
-  const [search, setSearch] = useState('')
-  const [activeCat, setActiveCat] = useState('')
-  const [activeCity, setActiveCity] = useState('All')
-  const [verifiedOnly, setVerifiedOnly] = useState(false)
-  const [sortBy, setSortBy] = useState('newest')
+  const [searchInput, setSearchInput] = useState(() => _initParams.get('q') || '')
+  const [search, setSearch] = useState(() => _initParams.get('q') || '')
+  const [activeCat, setActiveCat] = useState(() => _initParams.get('cat') || '')
+  const [activeCity, setActiveCity] = useState(() => _initParams.get('city') || 'All')
+  const [verifiedOnly, setVerifiedOnly] = useState(() => _initParams.get('verified') === '1')
+  const [sortBy, setSortBy] = useState(() => _initParams.get('sort') || 'newest')
   const [cityOpen, setCityOpen] = useState(false)
   const [cityQuery, setCityQuery] = useState('')
   const [filterOpen, setFilterOpen] = useState(false)
@@ -533,6 +556,60 @@ export default function Services() {
     window.addEventListener('resize', onResize)
     return () => window.removeEventListener('resize', onResize)
   }, [])
+
+  useEffect(() => {
+    const t = setTimeout(() => setSearch(searchInput), 250)
+    return () => clearTimeout(t)
+  }, [searchInput])
+
+  useEffect(() => {
+    const params = new URLSearchParams()
+    if (tab && tab !== 'browse') params.set('tab', tab)
+    if (search) params.set('q', search)
+    if (activeCat) params.set('cat', activeCat)
+    if (activeCity && activeCity !== 'All') params.set('city', activeCity)
+    if (sortBy && sortBy !== 'newest') params.set('sort', sortBy)
+    if (verifiedOnly) params.set('verified', '1')
+    const qs = params.toString()
+    const url = qs ? `${window.location.pathname}?${qs}` : window.location.pathname
+    window.history.replaceState(null, '', url)
+  }, [tab, search, activeCat, activeCity, sortBy, verifiedOnly])
+
+  useEffect(() => {
+    const on = () => setIsOffline(false)
+    const off = () => setIsOffline(true)
+    window.addEventListener('online', on)
+    window.addEventListener('offline', off)
+    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off) }
+  }, [])
+
+  useEffect(() => {
+    document.title = 'Services in Malawi | SokoMw'
+    const meta = document.querySelector('meta[name="description"]')
+    if (meta) meta.setAttribute('content', 'Find and book trusted service providers across Malawi on SokoMw.')
+  }, [])
+
+  useEffect(() => {
+    if (!filterOpen && !sortOpen && !cityOpen) return
+    const sheet = document.querySelector('.svc-filter-sheet, .svc-sort-sheet, .svc-city-panel')
+    if (!sheet) return
+    const getFocusables = () => Array.from(sheet.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])')).filter(el => !el.disabled)
+    const f = getFocusables()
+    if (f.length) f[0].focus()
+    function trap(e) {
+      if (e.key === 'Escape') { setFilterOpen(false); setSortOpen(false); setCityOpen(false); return }
+      if (e.key !== 'Tab') return
+      const list = getFocusables()
+      if (!list.length) return
+      const first = list[0], last = list[list.length - 1]
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus() }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus() }
+    }
+    function esc(e) { if (e.key === 'Escape') { setFilterOpen(false); setSortOpen(false); setCityOpen(false) } }
+    sheet.addEventListener('keydown', trap)
+    window.addEventListener('keydown', esc)
+    return () => { sheet.removeEventListener('keydown', trap); window.removeEventListener('keydown', esc) }
+  }, [filterOpen, sortOpen, cityOpen])
 
   useEffect(() => {
     if (isMobile && (filterOpen || sortOpen || cityOpen)) {
@@ -565,42 +642,52 @@ export default function Services() {
 
   async function loadServices() {
     setLoading(true)
-    const { data } = await supabase
-      .from('services').select('*').eq('status', 'active').order('created_at', { ascending: false })
-    const list = data || []
+    setError(false)
+    try {
+      const { data, error: svcErr } = await supabase
+        .from('services').select('*').eq('status', 'active').order('created_at', { ascending: false })
+      if (svcErr) throw svcErr
+      const list = data || []
 
-    const providerIds = [...new Set(list.map(s => s.provider_id).filter(Boolean))]
-    const profileMap = {}
-    if (providerIds.length) {
-      const { data: profiles, error: profErr } = await supabase
-        .from('profiles').select('id, full_name, avatar_url, account_type, district')
-        .in('id', providerIds)
-      let rows = profiles
-      if (profErr && /district|column/i.test(profErr.message || '')) {
-        const { data: fallback } = await supabase
-          .from('profiles').select('id, full_name, avatar_url, account_type')
+      const providerIds = [...new Set(list.map(s => s.provider_id).filter(Boolean))]
+      const profileMap = {}
+      if (providerIds.length) {
+        const { data: profiles, error: profErr } = await supabase
+          .from('profiles').select('id, full_name, avatar_url, account_type, district')
           .in('id', providerIds)
-        rows = fallback
+        let rows = profiles
+        if (profErr && /district|column/i.test(profErr.message || '')) {
+          const { data: fallback } = await supabase
+            .from('profiles').select('id, full_name, avatar_url, account_type')
+            .in('id', providerIds)
+          rows = fallback
+        }
+        const shopAccountIds = (rows || [])
+          .filter(p => p.account_type === 'shop')
+          .map(p => p.id)
+        const shopMap = {}
+        if (shopAccountIds.length) {
+          const { data: shops } = await supabase
+            .from('shops')
+            .select('owner_id, name')
+            .in('owner_id', shopAccountIds)
+          ;(shops || []).forEach(s => { shopMap[s.owner_id] = shopMap[s.owner_id] || s.name })
+        }
+        ;(rows || []).forEach(p => { profileMap[p.id] = { ...p, shop_name: shopMap[p.id] || null } })
       }
-      const shopAccountIds = (rows || [])
-        .filter(p => p.account_type === 'shop')
-        .map(p => p.id)
-      const shopMap = {}
-      if (shopAccountIds.length) {
-        const { data: shops } = await supabase
-          .from('shops')
-          .select('owner_id, name')
-          .in('owner_id', shopAccountIds)
-        ;(shops || []).forEach(s => { shopMap[s.owner_id] = shopMap[s.owner_id] || s.name })
-      }
-      ;(rows || []).forEach(p => { profileMap[p.id] = { ...p, shop_name: shopMap[p.id] || null } })
-    }
 
-    setServices(list.map(s => ({
-      ...s,
-      profile: profileMap[s.provider_id] || null,
-    })))
-    setLoading(false)
+      setServices(list.map(s => ({
+        ...s,
+        profile: profileMap[s.provider_id] || null,
+      })))
+    } catch {
+      setServices(prev => {
+        if (prev.length === 0) setError(true)
+        return prev
+      })
+    } finally {
+      setLoading(false)
+    }
   }
 
   let filtered = services.filter(s => {
@@ -638,6 +725,7 @@ export default function Services() {
   const n = filtered.length
   const resultText = `${n} service${n !== 1 ? 's' : ''}${activeCity !== 'All' ? ` in ${activeCity}` : ''}`
   const filterActive = verifiedOnly || activeCat !== '' || activeCity !== 'All'
+  const noFiltersActive = !search && !activeCat && activeCity === 'All' && !verifiedOnly && sortBy === 'newest'
 
   function openFilter() {
     setDraftVerified(verifiedOnly)
@@ -680,23 +768,27 @@ export default function Services() {
 
         {tab === 'browse' && (
           <>
+            {isOffline && services.length > 0 && (
+              <div className="svc-offline-banner">You're offline. Showing saved results.</div>
+            )}
             <div className="svc-search">
               <Search size={16} strokeWidth={2.2} style={{ color: '#9aa0a6', flexShrink: 0 }} />
               <input
                 placeholder="What do you need? e.g. plumber, tutor, photographer"
-                value={search}
-                onChange={e => setSearch(e.target.value)}
+                value={searchInput}
+                onChange={e => setSearchInput(e.target.value)}
                 autoComplete="off"
+                aria-label="Search services"
               />
-              {search && (
-                <button type="button" className="svc-search-clear" onClick={() => setSearch('')} aria-label="Clear search">
+              {searchInput && (
+                <button type="button" className="svc-search-clear" onClick={() => { setSearchInput(''); setSearch('') }} aria-label="Clear search">
                   <X size={16} strokeWidth={2.5} />
                 </button>
               )}
             </div>
 
             <div className="svc-city-wrap">
-              <button type="button" className="svc-city-pill" onClick={() => setCityOpen(v => !v)}>
+              <button type="button" className="svc-city-pill" onClick={() => setCityOpen(v => !v)} aria-label="Select city">
                 <MapPin size={16} strokeWidth={2.2} />
                 <span>{activeCity === 'All' ? 'All cities' : activeCity}</span>
                 <ChevronDown size={16} strokeWidth={2.2} />
@@ -742,10 +834,10 @@ export default function Services() {
 
             {(tab === 'browse' || tab === 'mine') && (
               <div className="svc-segmented">
-                <button type="button" className={`svc-seg${tab === 'browse' ? ' active' : ''}`} onClick={() => setTab('browse')}>
+                <button type="button" className={`svc-seg${tab === 'browse' ? ' active' : ''}`} onClick={() => setTab('browse')} aria-label="All Services">
                   All Services
                 </button>
-                <button type="button" className={`svc-seg${tab === 'mine' ? ' active' : ''}`} onClick={() => setTab('mine')}>
+                <button type="button" className={`svc-seg${tab === 'mine' ? ' active' : ''}`} onClick={() => setTab('mine')} aria-label="My Services">
                   My Services ({myServices.length})
                 </button>
               </div>
@@ -835,12 +927,19 @@ export default function Services() {
               </div>
             )}
 
-            {!loading && filtered.length === 0 && (
+            {!loading && error && (
               <div className="svc-empty">
-                <div className="svc-empty-icon"><Search size={32} strokeWidth={1.5} /></div>
+                <p className="svc-empty-title">Couldn't load services</p>
+                <button type="button" className="svc-retry-btn" onClick={loadServices}>Try again</button>
+              </div>
+            )}
+
+            {!loading && !error && filtered.length === 0 && (
+              <div className="svc-empty">
+                <div className="svc-empty-icon"><Search size={40} strokeWidth={1.5} color="#80868b" /></div>
                 <p className="svc-empty-title">No services found</p>
                 <p className="svc-empty-sub">Try another category or city</p>
-                <button type="button" className="svc-clear-btn" onClick={() => { setActiveCat(''); setActiveCity('All'); setSearch('') }}>
+                <button type="button" className="svc-clear-btn" onClick={() => { setSearchInput(''); setSearch(''); setActiveCat(''); setActiveCity('All'); setVerifiedOnly(false); setSortBy('newest') }}>
                   Clear filters
                 </button>
               </div>
@@ -866,6 +965,13 @@ export default function Services() {
                 ))}
               </div>
             )}
+
+            {!loading && !error && filtered.length > 0 && filtered.length < 4 && noFiltersActive && (
+              <div className="svc-low-supply">
+                <div className="svc-low-supply-title">Are you a service provider?</div>
+                <div className="svc-low-supply-sub">Tap Post Now to list your service and get found.</div>
+              </div>
+            )}
           </>
         )}
 
@@ -882,21 +988,18 @@ export default function Services() {
         {tab === 'mine' && (
           <>
             <div className="svc-segmented">
-              <button type="button" className={`svc-seg${tab === 'browse' ? ' active' : ''}`} onClick={() => setTab('browse')}>
+              <button type="button" className={`svc-seg${tab === 'browse' ? ' active' : ''}`} onClick={() => setTab('browse')} aria-label="All Services">
                 All Services
               </button>
-              <button type="button" className={`svc-seg${tab === 'mine' ? ' active' : ''}`} onClick={() => setTab('mine')}>
+              <button type="button" className={`svc-seg${tab === 'mine' ? ' active' : ''}`} onClick={() => setTab('mine')} aria-label="My Services">
                 My Services ({myServices.length})
               </button>
             </div>
             {myServices.length === 0 ? (
               <div className="svc-empty">
-                <div className="svc-empty-icon"><Wrench size={32} strokeWidth={1.5} /></div>
-                <p className="svc-empty-title">No services found</p>
-                <p className="svc-empty-sub">Try another category or city</p>
-                <button type="button" className="svc-clear-btn" onClick={() => { setEditingService(null); setTab('post') }}>
-                  List Service
-                </button>
+                <div className="svc-empty-icon"><Wrench size={40} strokeWidth={1.5} color="#80868b" /></div>
+                <p className="svc-empty-title">You haven't listed a service yet</p>
+                <p className="svc-empty-sub">Tap Post Now to list one.</p>
               </div>
             ) : (
               <div className="svc-grid">
@@ -907,6 +1010,7 @@ export default function Services() {
                     delay={i * 0.03}
                     onClick={() => setSelectedProvider(svc)}
                     isMine={true}
+                    showCounters={true}
                     onEdit={() => { setEditingService(svc); setTab('post') }}
                   />
                 ))}
