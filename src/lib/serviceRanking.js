@@ -63,7 +63,7 @@ export function rankServices(services, ctx) {
       quality = 0.5
     }
 
-    const verified = (s.verified || s.profile?.verified) ? 1 : 0
+    const verified = (s._verified != null ? s._verified : isServiceVerified(s, s.profile)) ? 1 : 0
 
     const chatsVal = s.chats_count != null ? s.chats_count : s.chats
     let engagement
@@ -135,3 +135,8 @@ export function rankServices(services, ctx) {
 
   return result
 }
+
+export function isServiceVerified(service, providerProfile) {
+  return service?.verified === true || providerProfile?.is_verified === true || providerProfile?.verified === true
+}
+

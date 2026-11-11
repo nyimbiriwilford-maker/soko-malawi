@@ -17,6 +17,7 @@ export default function ProviderModal({ provider, currentUser, onClose }) {
   const media = provider.media_urls || []
   const heroMedia = media[0]
   const isOwner = currentUser?.id === provider.provider_id
+  const verified = (provider._verified != null) ? !!provider._verified : (provider.verified === true || provider.profile?.is_verified === true)
 
   // Track view on open (deduped per session, skip own)
   useEffect(() => {
@@ -126,7 +127,7 @@ export default function ProviderModal({ provider, currentUser, onClose }) {
             </div>
             <div style={S.modalName}>
               {provider.name}
-              {provider.verified && <BadgeCheck size={16} style={{ color: '#5de89e', marginLeft: '4px', verticalAlign: '-2px' }} />}
+              {verified && <BadgeCheck size={16} aria-label="Verified provider" style={{ color: '#1A73E8', marginLeft: '4px', verticalAlign: '-2px' }} />}
             </div>
             <div style={S.modalSubline}>
               {provider.rating > 0 && <span style={{ color: '#f0c040' }}>{renderStars(provider.rating)} {provider.rating} · </span>}

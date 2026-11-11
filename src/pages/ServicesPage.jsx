@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
-import { rankServices } from '../lib/serviceRanking'
+import { rankServices, isServiceVerified } from '../lib/serviceRanking'
 import { SERVICE_CATS, CITIES } from './serviceData'
 import ServiceForm from './ServiceForm'
 import ProviderModal from './ProviderModal'
@@ -372,6 +372,8 @@ const css = `
   .svc-low-supply-sub { font-size: 13px; color: #5f6368; margin-top: 2px; }
   .svc-retry-btn { height: 44px; padding: 0 20px; border: none; border-radius: 10px; background: #0F9D58; color: #fff; font-size: 14px; font-weight: 700; cursor: pointer; margin-top: 8px; font-family: inherit; }
   .svc-card-counters { font-size: 12px; color: #5f6368; display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+  .svc-verified-pill { display: none; font-size: 11px; font-weight: 700; color: #1A73E8; background: #e8f0fe; border-radius: 999px; padding: 2px 8px; margin-top: 2px; width: fit-content; }
+  @media (min-width: 768px) { .svc-verified-pill { display: inline-block; } }
   .svc-card-counters svg { color: #5f6368; }
   .svc-empty-title { font-size: 16px; font-weight: 700; color: #202124; }
   .svc-empty-sub { font-size: 13px; color: #5f6368; }
@@ -468,7 +470,7 @@ function ServiceCard({ svc, delay, onClick, onBook, onChat, isMine, onEdit, show
   const providerName = profile?.shop_name || profile?.full_name
   const title = rawTitle || providerName || 'Service'
   const showProvider = !!rawTitle && !!providerName
-  const verified = svc.verified || profile?.verified
+  const verified = (svc._verified != null) ? !!svc._verified : isServiceVerified(svc, profile)
   const districtLabel = profile?.district || svc.city || 'Malawi'
   const price = formatPrice(svc.rate)
 
@@ -496,11 +498,12 @@ function ServiceCard({ svc, delay, onClick, onBook, onChat, isMine, onEdit, show
       </div>
       <div className="svc-card-body">
         <h3 className="svc-card-title">{title}</h3>
+        {verified && <span className="svc-verified-pill">Verified</span>}
         {showProvider && (
           <div className="svc-card-meta">
             <span className="svc-provider-name">
               {providerName}
-              {verified && <span className="svc-verified"><BadgeCheck size={12} strokeWidth={2.5} color="#1A73E8" /></span>}
+              {verified && <span className="svc-verified" aria-label="Verified provider"><BadgeCheck size={14} strokeWidth={2.5} color="#1A73E8" /></span>}
             </span>
             <span className="svc-location">
               <MapPin size={12} strokeWidth={2.2} color="#80868b" /> {districtLabel}
@@ -753,10 +756,24 @@ export default function Services() {
         ;(rows || []).forEach(p => { profileMap[p.id] = { ...p, shop_name: shopMap[p.id] || null } })
       }
 
-      setServices(list.map(s => ({
+    let verifiedMap = {}
+    if (providerIds.length) {
+      try {
+        const { data: vRows } = await supabase
+          .from('profiles').select('id, is_verified').in('id', providerIds)
+        ;(vRows || []).forEach(p => { verifiedMap[p.id] = !!p.is_verified })
+      } catch {
+        verifiedMap = {}
+      }
+    }
+    setServices(list.map(s => {
+      const profile = profileMap[s.provider_id] || null
+      return {
         ...s,
-        profile: profileMap[s.provider_id] || null,
-      })))
+        profile,
+        _verified: isServiceVerified(s, profile ? { ...profile, is_verified: verifiedMap[s.provider_id] } : { is_verified: verifiedMap[s.provider_id] }),
+      }
+    }))
     } catch {
       setServices(prev => {
         if (prev.length === 0) setError(true)
@@ -774,7 +791,7 @@ export default function Services() {
   let filtered = services.filter(s => {
     if (activeCat && s.category !== activeCat) return false
     if (activeCity !== 'All' && s.city !== activeCity) return false
-    if (verifiedOnly && !(s.verified || s.profile?.verified)) return false
+    if (verifiedOnly && !(s._verified ?? isServiceVerified(s, s.profile))) return false
     if (search) {
       const q = search.toLowerCase()
       const hit = (s.name || '').toLowerCase().includes(q)
@@ -798,8 +815,8 @@ export default function Services() {
     }
   } else if (sortBy === 'verified') {
     filtered = [...filtered].sort((a, b) => {
-      const av = (a.verified || a.profile?.verified) ? 1 : 0
-      const bv = (b.verified || b.profile?.verified) ? 1 : 0
+      const av = (a._verified ?? isServiceVerified(a, a.profile)) ? 1 : 0
+      const bv = (b._verified ?? isServiceVerified(b, b.profile)) ? 1 : 0
       if (bv !== av) return bv - av
       return new Date(b.created_at) - new Date(a.created_at)
     })
@@ -851,14 +868,14 @@ export default function Services() {
   const noFiltersActive = !search && !activeCat && activeCity === 'All' && !verifiedOnly && sortBy === 'newest'
   const hasFeaturedCol = services.length > 0 && services.some(s => Object.prototype.hasOwnProperty.call(s, 'is_featured'))
   const railCandidates = hasFeaturedCol
-    ? services.filter(s => (s.is_featured || s.verified || s.profile?.verified))
+    ? services.filter(s => (s.is_featured || (s._verified ?? isServiceVerified(s, s.profile))))
     : []
   const featuredRail = [...railCandidates].sort((a, b) => {
     const af = a.is_featured ? 1 : 0
     const bf = b.is_featured ? 1 : 0
     if (bf !== af) return bf - af
-    const av = (a.verified || a.profile?.verified) ? 1 : 0
-    const bv = (b.verified || b.profile?.verified) ? 1 : 0
+    const av = (a._verified ?? isServiceVerified(a, a.profile)) ? 1 : 0
+    const bv = (b._verified ?? isServiceVerified(b, b.profile)) ? 1 : 0
     if (bv !== av) return bv - av
     return new Date(b.created_at) - new Date(a.created_at)
   }).slice(0, 8)
