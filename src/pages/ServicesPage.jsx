@@ -1,6 +1,7 @@
-﻿import { useState, useEffect, useRef } from 'react'
+﻿import { useState, useEffect, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { rankServices } from '../lib/serviceRanking'
 import { SERVICE_CATS, CITIES } from './serviceData'
 import ServiceForm from './ServiceForm'
 import ProviderModal from './ProviderModal'
@@ -547,6 +548,7 @@ export default function Services() {
   const [error, setError] = useState(false)
   const [isOffline, setIsOffline] = useState(() => (typeof navigator !== 'undefined' ? !navigator.onLine : false))
   const [currentUser, setCurrentUser] = useState(null)
+  const [profileCity, setProfileCity] = useState('')
   const [navUser, setNavUser] = useState(null)
   const [notifCount, setNotifCount] = useState(0)
   const [navSearch, setNavSearch] = useState('')
@@ -557,7 +559,7 @@ export default function Services() {
   const [activeCat, setActiveCat] = useState(() => _initParams.get('cat') || '')
   const [activeCity, setActiveCity] = useState(() => _initParams.get('city') || 'All')
   const [verifiedOnly, setVerifiedOnly] = useState(() => _initParams.get('verified') === '1')
-  const [sortBy, setSortBy] = useState(() => _initParams.get('sort') || 'newest')
+  const [sortBy, setSortBy] = useState(() => _initParams.get('sort') || 'recommended')
   const [cityOpen, setCityOpen] = useState(false)
   const [cityQuery, setCityQuery] = useState('')
   const [filterOpen, setFilterOpen] = useState(false)
@@ -569,6 +571,18 @@ export default function Services() {
 
   const touchStartY = useRef(0)
   const railRef = useRef(null)
+  const seed = useMemo(() => {
+    try {
+      let s = sessionStorage.getItem('soko_svc_seed')
+      if (!s) {
+        s = String(Math.floor(Math.random() * 2 ** 32))
+        sessionStorage.setItem('soko_svc_seed', s)
+      }
+      return parseInt(s, 10) || 1
+    } catch {
+      return 1
+    }
+  }, [])
   function scrollRail(dir) {
     const el = railRef.current
     if (!el) return
@@ -651,10 +665,11 @@ export default function Services() {
     setCurrentUser(user)
     if (user) {
       const [{ data: profile }, { data: shop }, { count }] = await Promise.all([
-        supabase.from('profiles').select('full_name, avatar_url, account_type').eq('id', user.id).maybeSingle(),
+        supabase.from('profiles').select('full_name, avatar_url, account_type, city').eq('id', user.id).maybeSingle(),
         supabase.from('shops').select('slug').eq('owner_id', user.id).maybeSingle(),
         supabase.from('notifications').select('*', { count: 'exact', head: true }).eq('user_id', user.id).eq('read', false),
       ])
+      setProfileCity(profile?.city || '')
       setNavUser({
         ...user,
         full_name: profile?.full_name || null,
@@ -717,6 +732,10 @@ export default function Services() {
     }
   }
 
+  const userCity = activeCity !== 'All'
+    ? activeCity
+    : (currentUser ? profileCity : (typeof localStorage !== 'undefined' ? (localStorage.getItem('soko_city') || '') : ''))
+
   let filtered = services.filter(s => {
     if (activeCat && s.category !== activeCat) return false
     if (activeCity !== 'All' && s.city !== activeCity) return false
@@ -732,7 +751,17 @@ export default function Services() {
     }
     return true
   })
-  if (sortBy === 'verified') {
+  if (sortBy === 'recommended') {
+    const ctx = { userCity, userId: currentUser?.id, seed, now: Date.now() }
+    if (search) {
+      const q = search.toLowerCase()
+      const titleMatches = filtered.filter(s => String(s.title || s.name || '').toLowerCase().includes(q))
+      const descMatches = filtered.filter(s => !String(s.title || s.name || '').toLowerCase().includes(q))
+      filtered = [...rankServices(titleMatches, ctx), ...rankServices(descMatches, ctx)]
+    } else {
+      filtered = rankServices(filtered, ctx)
+    }
+  } else if (sortBy === 'verified') {
     filtered = [...filtered].sort((a, b) => {
       const av = (a.verified || a.profile?.verified) ? 1 : 0
       const bv = (b.verified || b.profile?.verified) ? 1 : 0
@@ -748,6 +777,12 @@ export default function Services() {
   const cityCounts = {}
   services.forEach(s => { if (s.city) cityCounts[s.city] = (cityCounts[s.city] || 0) + 1 })
   const myServices = services.filter(s => s.provider_id === currentUser?.id)
+
+  useEffect(() => {
+    if (activeCity && activeCity !== 'All') {
+      try { localStorage.setItem('soko_city', activeCity) } catch (e) { void e }
+    }
+  }, [activeCity])
 
   const n = filtered.length
   const resultText = `${n} service${n !== 1 ? 's' : ''}${activeCity !== 'All' ? ` in ${activeCity}` : ''}`
@@ -982,6 +1017,7 @@ export default function Services() {
                       value={sortBy}
                       onChange={e => setSortBy(e.target.value)}
                     >
+                      <option value="recommended">Recommended</option>
                       <option value="newest">Newest</option>
                       <option value="verified">Verified first</option>
                     </select>
@@ -1192,6 +1228,14 @@ export default function Services() {
             onTouchEnd={e => { if (e.changedTouches[0].clientY - touchStartY.current > 60) setSortOpen(false) }}
           >
             <div className="svc-sheet-handle" />
+            <button
+              type="button"
+              className={`svc-sort-row${sortBy === 'recommended' ? ' on' : ''}`}
+              onClick={() => { setSortBy('recommended'); setSortOpen(false) }}
+            >
+              <span className="svc-radio">{sortBy === 'recommended' && <span className="svc-radio-dot" />}</span>
+              <span className="svc-sort-label">Recommended</span>
+            </button>
             <button
               type="button"
               className={`svc-sort-row${sortBy === 'newest' ? ' on' : ''}`}
