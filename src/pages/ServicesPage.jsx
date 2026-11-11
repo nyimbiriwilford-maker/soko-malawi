@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { rankServices } from '../lib/serviceRanking'
@@ -621,18 +621,6 @@ export default function Services() {
 
   useEffect(() => { setDisplayCount(pageSizeRef.current) }, [search, activeCat, activeCity, verifiedOnly, sortBy])
 
-  useEffect(() => {
-    if (!isPhone) return
-    const el = sentinelRef.current
-    if (!el) return
-    const obs = new IntersectionObserver((entries) => {
-      if (entries[0].isIntersecting) {
-        setDisplayCount(c => (c < filtered.length ? Math.min(c + pageSize, filtered.length) : c))
-      }
-    }, { rootMargin: '400px' })
-    obs.observe(el)
-    return () => obs.disconnect()
-  }, [isPhone, displayCount, filtered.length, pageSize])
 
   useEffect(() => {
     const t = setTimeout(() => setSearch(searchInput), 250)
@@ -818,6 +806,22 @@ export default function Services() {
   } else {
     filtered = [...filtered].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
   }
+
+
+
+
+  useEffect(() => {
+    if (!isPhone) return
+    const el = sentinelRef.current
+    if (!el) return
+    const obs = new IntersectionObserver((entries) => {
+      if (entries[0].isIntersecting) {
+        setDisplayCount(c => (c < filtered.length ? Math.min(c + pageSize, filtered.length) : c))
+      }
+    }, { rootMargin: '400px' })
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [isPhone, displayCount, filtered.length, pageSize])
 
   const catCounts = {}
   services.forEach(s => { catCounts[s.category] = (catCounts[s.category] || 0) + 1 })
