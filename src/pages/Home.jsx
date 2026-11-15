@@ -1890,6 +1890,8 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
+const LF_WEIGHTS = { verified: 15, location: 35, recency: 30, exposure: 20, urgencyNonFlexible: 10, urgencyMedium: 5 }
+const LF_NEAR_KM = 25
 function LookingForSection({ navigate, requests, loading, userLat, userLng, activeDistrict, viewerLocation: viewerLocationProp, user, browseButtonVisible = false }) {
   const [viewerLoc,    setViewerLoc]    = React.useState(viewerLocationProp || null)
   const [detectingGps, setDetectingGps] = React.useState(!viewerLocationProp)
@@ -2011,8 +2013,12 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
   const [lfSort, setLfSort] = React.useState('recent')
   const lfSessionSeed = React.useRef(Math.floor(Math.random() * 1000)).current
 
-  const LF_INITIAL_COUNT = 6
-  const LF_SHOW_MORE_CHUNK = 6
+  function getLfCounts(width) {
+    if (width >= 1100) return { initial: 8, chunk: 8 }
+    if (width >= 768) return { initial: 6, chunk: 6 }
+    return { initial: 4, chunk: 4 }
+  }
+  const [lfCounts, setLfCounts] = React.useState(() => getLfCounts(typeof window !== 'undefined' ? window.innerWidth : 1100))
 
   const impressionCounts = React.useRef({})
   const countedImpression = React.useRef(new Set())
@@ -2026,25 +2032,25 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
       if (r.deleted === true) return false
       if (r.expires_at && new Date(r.expires_at).getTime() <= now) return false
       if (r.created_at && (now - new Date(r.created_at).getTime()) > thirtyDays) return false
-      if (lfNearby === 'near') {
-        const userCity = (viewerLoc?.city || viewerLoc?.district || (activeDistrict && activeDistrict !== 'All Districts' ? activeDistrict : '') || '').trim().toLowerCase()
-        const reqCity = (r.city || r.detected_city || '').trim().toLowerCase()
-        let keep = false
-        if (userCity && reqCity && reqCity === userCity) keep = true
-        if (!keep && viewerLoc?.lat != null && viewerLoc?.lng != null) {
-          const to = buyerCoords(r)
-          if (to) {
-            const km = haversineKm(viewerLoc.lat, viewerLoc.lng, to.lat, to.lng)
-            if (km != null && km <= 25) keep = true
-          }
+    if (lfNearby === 'near') {
+      const userCity = (viewerLoc?.city || viewerLoc?.district || (activeDistrict && activeDistrict !== 'All Districts' ? activeDistrict : '') || '').trim().toLowerCase()
+      const reqCities = [(r.city || ''), r.detected_city || '', ...(Array.isArray(r.cities) ? r.cities : [])].map(x => String(x).trim().toLowerCase()).filter(Boolean)
+      let keep = false
+      if (userCity && reqCities.some(c => c === userCity)) keep = true
+      if (!keep && viewerLoc?.lat != null && viewerLoc?.lng != null) {
+        const to = buyerCoords(r)
+        if (to && Number.isFinite(to.lat) && Number.isFinite(to.lng)) {
+          const km = haversineKm(viewerLoc.lat, viewerLoc.lng, to.lat, to.lng)
+          if (km != null && km <= LF_NEAR_KM) keep = true
         }
-        if (!keep) return false
-      } else if (lfNearby !== 'all') {
-        const target = String(lfNearby).trim().toLowerCase()
-        const reqCity = (r.city || r.detected_city || '').trim().toLowerCase()
-        if (reqCity !== target) return false
       }
-      return true
+      if (!keep) return false
+    } else if (lfNearby !== 'all') {
+      const target = String(lfNearby).trim().toLowerCase()
+      const reqCities = [(r.city || ''), r.detected_city || '', ...(Array.isArray(r.cities) ? r.cities : [])].map(x => String(x).trim().toLowerCase()).filter(Boolean)
+      if (!reqCities.some(c => c === target)) return false
+    }
+    return true
     })
     const loc = viewerLoc
       || (Number.isFinite(userLat) && Number.isFinite(userLng)
@@ -2073,13 +2079,26 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
       const locScore = r._locScore || 0
       const ageH = r.created_at ? (now - new Date(r.created_at).getTime()) / 3600000 : 168
       const exposure = (r.offer_count ?? r.offerCount ?? 0) + (r.view_count ?? 0) + (ic[r.id] || 0)
-      const score = (isVerified ? 40 : 0)
-        + (locScore / 100) * 25
-        + Math.max(0, 20 * (1 - Math.min(ageH, 168) / 168))
-        + Math.max(0, 15 * (1 - Math.min(exposure, 50) / 50))
+      const urgencyBonus = r.urgency === 'flexible' ? 0 : (r.urgency === 'medium' ? LF_WEIGHTS.urgencyMedium : LF_WEIGHTS.urgencyNonFlexible)
+      const score = (isVerified ? LF_WEIGHTS.verified : 0)
+        + (locScore / 100) * LF_WEIGHTS.location
+        + Math.max(0, LF_WEIGHTS.recency * (1 - Math.min(ageH, 168) / 168))
+        + Math.max(0, LF_WEIGHTS.exposure * (1 - Math.min(exposure, 50) / 50))
+        + urgencyBonus
       const tiebreak = r.id ? simpleHash(r.id + tiebreakSeed) % 1e9 : 0
       return { ...r, _fairScore: score, _tiebreak: tiebreak }
     })
+
+    if (lfNearby === 'near' && viewerLoc?.lat != null && viewerLoc?.lng != null) {
+      withScore.sort((a, b) => {
+        const da = a._distanceKm != null ? a._distanceKm : Infinity
+        const db = b._distanceKm != null ? b._distanceKm : Infinity
+        if (da !== db) return da - db
+        if (a._fairScore !== b._fairScore) return b._fairScore - a._fairScore
+        return b._tiebreak - a._tiebreak
+      })
+      return withScore
+    }
 
     withScore.sort((a, b) => {
       if (a._fairScore !== b._fairScore) return b._fairScore - a._fairScore
@@ -2088,9 +2107,22 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
     return withScore
     }, [requests, viewerLoc, userLat, userLng, activeDistrict, lfSort, lfNearby])
 
-  const [lfShowMore, setLfShowMore] = React.useState(0)
-  React.useEffect(() => { setLfShowMore(0) }, [lfSort])
-  const displayCount = LF_INITIAL_COUNT + lfShowMore
+  const [visibleCount, setVisibleCount] = React.useState(() => getLfCounts(typeof window !== 'undefined' ? window.innerWidth : 1100).initial)
+  React.useEffect(() => { setVisibleCount(lfCounts.initial) }, [lfSort])
+  React.useEffect(() => {
+    function onResize() { setLfCounts(getLfCounts(window.innerWidth)) }
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
+  React.useEffect(() => {
+    setVisibleCount(prev => {
+      const chunk = lfCounts.chunk
+      const rounded = Math.ceil(prev / chunk) * chunk
+      const cap = ranked.length || lfCounts.initial
+      return Math.min(Math.max(rounded, lfCounts.initial), cap)
+    })
+  }, [lfCounts])
+  const displayCount = Math.min(visibleCount, ranked.length || visibleCount)
   const hasMoreLf = ranked.length > displayCount
   const shown = hasMoreLf ? ranked.slice(0, displayCount) : ranked
 
@@ -2206,7 +2238,9 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
       padding: '0 24px 32px', background: 'transparent',
     }}>
       <style>{`
-         .lfr-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; padding:4px 0 16px; }
+         .lfr-grid { display:grid; grid-template-columns:1fr; gap:12px; padding:4px 0 16px; }
+         @media (min-width:768px) { .lfr-grid { grid-template-columns:repeat(2,1fr); gap:14px; } }
+         @media (min-width:1100px) { .lfr-grid { grid-template-columns:repeat(4,1fr); gap:16px; } }
          .lf-section { padding-top: 0 !important; }
          .lf-spacing-browse { margin-top: 32px; }
          @media (min-width: 768px) { .lf-spacing-browse { margin-top: 40px; } }
@@ -2222,10 +2256,13 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
           transition:box-shadow 0.35s cubic-bezier(0.22,1,0.36,1),transform 0.35s cubic-bezier(0.22,1,0.36,1),border-color 0.35s ease;
           will-change:transform;
         }
-        .lfr-card:hover {
-          transform:translateY(-6px);
-          box-shadow:0 12px 40px rgba(22,101,52,0.1),0 3px 12px rgba(0,0,0,0.06);
-          border-color:#bbf7d0;
+        .lfr-card:active { transform:scale(0.98); }
+        @media (hover:hover) and (pointer:fine) {
+          .lfr-card:hover {
+            transform:translateY(-2px);
+            box-shadow:0 12px 40px rgba(22,101,52,0.1),0 3px 12px rgba(0,0,0,0.06);
+            border-color:#bbf7d0;
+          }
         }
         .lfr-card:focus-visible {
           outline: 3px solid rgba(15,157,88,0.28);
@@ -2236,13 +2273,18 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
         @keyframes lfrFadeIn { 0%{opacity:0;transform:translateY(16px)} 100%{opacity:1;transform:translateY(0)} }
         @keyframes lfrBadgeIn { 0%{opacity:0;transform:scale(0.85)} 100%{opacity:1;transform:scale(1)} }
         .lfr-skel { border-radius:20px; background:linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%); background-size:600px 100%; animation:lfrShimmer 1.4s infinite; border:1px solid #f1f5f9; }
+        .lfr-img-wrap { height:120px; }
+        @media (min-width:768px) { .lfr-img-wrap { height:132px; } }
+        @media (min-width:1100px) { .lfr-img-wrap { height:148px; } }
         .lfr-card .lfr-img-cell { transition:transform 0.4s cubic-bezier(0.22,1,0.36,1); will-change:transform; }
         @media (hover:hover) { .lfr-card:hover .lfr-img-cell { transform:scale(1.06); } }
 
         @keyframes lfrShimmer { 0%{background-position:600px 0} 100%{background-position:-600px 0} }
         .lfr-act-btn {
           position:relative; overflow:hidden; transition:all 0.2s ease !important;
+          height:36px; font-size:12px; font-weight:700;
         }
+        .lfr-act-btn::before { content:''; position:absolute; inset:-4px; }
         .lfr-act-btn:hover { background:#f1f5f9 !important; color:#0f172a !important; transform:scale(1.05); }
         .lfr-act-btn:active { transform:scale(0.95); }
         .lfr-act-btn::after {
@@ -2272,10 +2314,7 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
           transition:background-size 0s;
         }
         .lfr-respond-btn:active::after { background-size:1000%; transition:background-size 0.4s; }
-        @media (max-width:1024px) { .lfr-grid { grid-template-columns:repeat(3,1fr); } }
-        @media (max-width:768px) { .lfr-grid { grid-template-columns:repeat(2,1fr); gap:12px; } }
         @media (max-width:640px) {
-          .lfr-grid { grid-template-columns:1fr; gap:12px; }
           .lfr-head-actions { width:100% !important; display:grid !important; grid-template-columns:1fr 1fr; gap:6px !important; margin-top:8px !important; }
         }
       `}</style>
@@ -2434,8 +2473,8 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
                   >
 
                     {/* Image collage */}
-                    <div style={{
-                      position:'relative', width:'100%', paddingBottom:'56.25%', borderRadius:'16px 16px 0 0',
+                    <div className="lfr-img-wrap" style={{
+                      position:'relative', width:'100%', borderRadius:'16px 16px 0 0',
                       overflow:'hidden', flexShrink:0, cursor:'pointer',
                       background:'linear-gradient(135deg,#f0fdf4,#dcfce7)',
                       boxShadow:'inset 0 -1px 0 rgba(0,0,0,0.04)',
@@ -2560,7 +2599,7 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
                         Looking for
                       </div>
                       <div style={{
-                        fontSize:17, fontWeight:800, color:'#0f172a', lineHeight:1.25,
+                        fontSize:14, fontWeight:800, color:'#0f172a', lineHeight:1.25,
                         display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden',
                       }}>
                         {r.title || 'Untitled request'}
@@ -2623,11 +2662,11 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
                       <div style={{ flex:1 }} />
                       <button type="button" className="lfr-respond-btn" onClick={e => { e.stopPropagation(); sendOffer(r) }} style={{
                         display:'inline-flex', alignItems:'center', justifyContent:'center', gap:6,
-                        borderRadius:999, padding:'10px 28px', fontSize:13.5, fontWeight:700, cursor:'pointer',
-                        fontFamily:'inherit', background:'#166534', border:'1.5px solid #166534', color:'#fff',
+                        flex:1, height:36, borderRadius:10, padding:'0 16px', fontSize:12, fontWeight:700, cursor:'pointer',
+                        fontFamily:'inherit', background:'#0F9D58', border:'1.5px solid #0F9D58', color:'#fff',
                         boxShadow:'0 4px 14px rgba(22,101,52,0.3)', whiteSpace:'nowrap',
                       }}>
-                        Respond <ArrowRight size={15} />
+                        Make offer <ArrowRight size={15} />
                       </button>
                     </div>
                   </div>
@@ -2676,7 +2715,7 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
         {/* Demand footer */}
         {hasMoreLf && (
           <div style={{ textAlign:'center', marginTop:6 }}>
-            <button type="button" onClick={() => setLfShowMore(prev => prev + LF_SHOW_MORE_CHUNK)} style={{
+            <button type="button" onClick={() => setVisibleCount(prev => Math.min(prev + lfCounts.chunk, ranked.length))} style={{
               display:'inline-flex', alignItems:'center', gap:5, background:'none', border:'none',
               padding:'8px 16px', fontSize:12.5, fontWeight:700, color:'#166534', cursor:'pointer',
               fontFamily:'inherit',

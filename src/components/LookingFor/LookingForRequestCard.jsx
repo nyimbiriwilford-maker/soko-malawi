@@ -33,10 +33,13 @@ export const LOOKING_FOR_CARD_CSS = `
     transition: border-color 0.15s, box-shadow 0.15s, transform 0.15s;
     box-shadow: 0 1px 2px rgba(0,0,0,0.04);
   }
-  .lf-card:hover {
-    border-color: #22c55e;
-    box-shadow: 0 6px 18px rgba(15,157,88,0.12);
-    transform: translateY(-1px);
+  .lf-card:active { transform: scale(0.98); }
+  @media (hover: hover) and (pointer: fine) {
+    .lf-card:hover {
+      border-color: #22c55e;
+      box-shadow: 0 6px 18px rgba(15,157,88,0.12);
+      transform: translateY(-2px);
+    }
   }
   .lf-card.is-near {
     border-color: ${C.green};
@@ -44,12 +47,18 @@ export const LOOKING_FOR_CARD_CSS = `
   }
   .lf-card-media {
     position: relative;
-    height: 148px;
-    min-height: 148px;
-    max-height: 148px;
+    height: 120px;
+    min-height: 120px;
+    max-height: 120px;
     background: ${C.bg};
     flex-shrink: 0;
     overflow: hidden;
+  }
+  @media (min-width: 768px) {
+    .lf-card-media { height: 132px; min-height: 132px; max-height: 132px; }
+  }
+  @media (min-width: 1100px) {
+    .lf-card-media { height: 148px; min-height: 148px; max-height: 148px; }
   }
   .lf-card-img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .lf-card-media-empty {
@@ -153,16 +162,19 @@ export const LOOKING_FOR_CARD_CSS = `
   }
   .lf-card-counts {
     font-size: 11px; color: ${C.gray2}; font-weight: 600; white-space: nowrap;
-    display: inline-flex; align-items: center; min-width: 72px;
+    display: inline-flex; align-items: center; min-width: 72px; gap: 6px;
   }
   .lf-card-count-item { display: inline-flex; align-items: center; gap: 3px; }
   .lf-card-dot { margin: 0 5px; color: ${C.gray3}; }
   .lf-card-actions { display: flex; gap: 6px; flex-shrink: 0; align-items: center; }
   .lf-card-btn {
-    border-radius: 8px; font-size: 11.5px; font-weight: 700; height: 28px;
+    border-radius: 8px; font-size: 12px; font-weight: 700; height: 36px;
     min-width: 64px; padding: 0 10px; cursor: pointer; font-family: inherit;
     line-height: 1; white-space: nowrap; display: inline-flex; align-items: center;
-    justify-content: center; gap: 4px; box-sizing: border-box;
+    justify-content: center; gap: 4px; box-sizing: border-box; position: relative;
+  }
+  .lf-card-btn::before {
+    content: ''; position: absolute; inset: -4px;
   }
   .lf-card-btn-ico { display: inline-flex; }
   .lf-card-btn-ghost {
@@ -227,7 +239,6 @@ export const LOOKING_FOR_CARD_CSS = `
     overflow: hidden; text-overflow: ellipsis;
   }
   @media (max-width: 640px) {
-    .lf-card-media { height: 124px; min-height: 124px; max-height: 124px; }
     .lf-card.is-carousel {
       width: min(236px, 74vw);
       max-width: min(236px, 74vw);
@@ -288,7 +299,7 @@ export default function LookingForRequestCard({
     e?.stopPropagation?.()
     e?.preventDefault?.()
     const url = `${window.location.origin}/looking-for?request=${req.id}`
-    const text = `Looking for on SokoMw: ${req.title || 'Request'}${budget ? ` · ${budget}` : ''}`
+    const text = `Looking for on SokoMw: ${req.title || 'Request'}${budget ? ` ${budget}` : ''}`
     const isMobile = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '')
     try {
       if (isMobile && navigator.share) {
@@ -371,7 +382,7 @@ export default function LookingForRequestCard({
             >
               {Icon.nav(10, C.green)}
               {isNearYou && req._distanceLabel
-                ? `Near you · ${req._distanceLabel}`
+                ? `Near you ${req._distanceLabel}`
                 : isNearYou
                   ? 'Near you'
                   : req._distanceLabel}
@@ -397,7 +408,7 @@ export default function LookingForRequestCard({
             <span className="lf-card-budget-ico">{Icon.wallet(12, C.green)}</span>
             <span className="lf-card-budget-text">{budget}</span>
           </div>
-          <div className="lf-card-loc" title={`Looking: ${lookingLabel}${stayHere ? ` · Stays: ${stayHere}` : ''}`}>
+          <div className="lf-card-loc" title={`Looking: ${lookingLabel}${stayHere ? ` Stays: ${stayHere}` : ''}`}>
             <span className="lf-card-loc-ico">{Icon.pin(11, C.gray2)}</span>
             <span className="lf-card-loc-text">{lookingLabel}</span>
           </div>
@@ -406,7 +417,6 @@ export default function LookingForRequestCard({
         <div className="lf-card-foot">
           <span className="lf-card-counts">
             <span className="lf-card-count-item">{Icon.users(11, C.gray2)} {req.offer_count || 0}</span>
-            <span className="lf-card-dot">·</span>
             <span className="lf-card-count-item">{Icon.eye(11, C.gray2)} {req.view_count || 0}</span>
           </span>
           <div className="lf-card-actions" onClick={e => e.stopPropagation()}>
@@ -421,32 +431,19 @@ export default function LookingForRequestCard({
                   </button>
                 )}
               </>
-            ) : compactCta ? (
+            ) : (
               <button
                 type="button"
-                className="lf-card-btn lf-card-btn-primary"
+                className={`lf-card-btn lf-card-btn-primary${req.user_has_offered ? ' is-done' : ''}`}
                 onClick={() => (onOffer ? onOffer(req) : onViewDetails?.(req))}
+                style={{ flex: 1, borderRadius: 10, background: '#0F9D58', borderColor: '#0F9D58', color: '#fff' }}
               >
-                <span className="lf-card-btn-ico">{Icon.send(12, '#fff')}</span>
-                Respond
+                {req.user_has_offered ? (
+                  <><span className="lf-card-btn-ico">{Icon.check(12, '#5f6368')}</span> Offered</>
+                ) : (
+                  <><span className="lf-card-btn-ico">{Icon.send(12, '#fff')}</span> Make offer</>
+                )}
               </button>
-            ) : (
-              <>
-                <button type="button" className="lf-card-btn lf-card-btn-ghost" onClick={() => onViewDetails?.(req)}>
-                  Details
-                </button>
-                <button
-                  type="button"
-                  className={`lf-card-btn lf-card-btn-primary${req.user_has_offered ? ' is-done' : ''}`}
-                  onClick={() => onOffer?.(req)}
-                >
-                  {req.user_has_offered ? (
-                    <><span className="lf-card-btn-ico">{Icon.check(12, '#5f6368')}</span> Offered</>
-                  ) : (
-                    <><span className="lf-card-btn-ico">{Icon.send(12, '#fff')}</span> Offer</>
-                  )}
-                </button>
-              </>
             )}
           </div>
         </div>

@@ -1,0 +1,2 @@
+1. Inspect state - Home.jsx Phase C items present (LF_WEIGHTS, urgency bonus, LF_NEAR_KM, lfNearby filters, useEffect near, options check icon, Show all Malawi); build passed
+2. Continue/verify - npm run build passed; preview started (HTTP 200); no TDZ errors found in code review
