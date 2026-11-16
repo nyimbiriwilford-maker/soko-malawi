@@ -14,3 +14,5 @@
 15. Step 1 plus-icon - phone + button transparent 44x44, Plus 28px stroke 2.5 green, active opacity 0.6; tablet+ unchanged green button
 16. Step 1 home-actions - Make offer reuses shared makeOffer helper (login prompt, own request hidden); button stopPropagation
 17. Step 2 home-actions - card tap opens details with role link/tabIndex/Enter/cursor/:active bg; no double nav
+18. Step 1 home-offer-fix - shared handler now uses optional onOfferStarted callback instead of setRequests; page/Home pass own updaters
+19. Step 2 home-offer-fix - audited src for undeclared setters; only Home/Notifications/LookingFor use declared setters
