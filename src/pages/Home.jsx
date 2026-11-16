@@ -1997,10 +1997,7 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
   const [lfNearby, setLfNearby] = React.useState('all')
   const lfNearbyPickedRef = React.useRef(false)
 
-  React.useEffect(() => {
-    const hasLoc = !!(viewerLoc && (viewerLoc.lat != null || viewerLoc.district || viewerLoc.city || (activeDistrict && activeDistrict !== 'All Districts')))
-    if (hasLoc && !lfNearbyPickedRef.current && lfNearby === 'all') setLfNearby('near')
-  }, [viewerLoc, activeDistrict])
+  // Home Looking For: no location filter; keep newest-first ordering
   React.useEffect(() => {
     if (viewerLoc?.lat != null) return
     if (activeDistrict && activeDistrict !== 'All Districts') {
@@ -2234,6 +2231,36 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
           @media (min-width:768px) { .lfr-grid { grid-template-columns:repeat(2,1fr); gap:16px; } }
           @media (min-width:1100px) { .lfr-grid { grid-template-columns:repeat(4,1fr); gap:16px; } }
           @media (min-width:1100px) { .soko-section-pad { padding-left: 24px !important; padding-right: 24px !important; } }
+          .lf-home-head {
+            display: flex; align-items: center; gap: 12px; flex-wrap: nowrap;
+            min-width: 0;
+          }
+          .lf-home-title {
+            font-family: Sora, system-ui, sans-serif; font-size: 20px; font-weight: 800;
+            color: #0f172a; letter-spacing: -0.4px; margin: 0; line-height: 1.2;
+            min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+          }
+          @media (min-width: 1100px) { .lf-home-title { font-size: 22px; } }
+          .lf-home-actions {
+            display: flex; align-items: center; gap: 8px; margin-left: auto; flex-shrink: 0;
+          }
+          .lf-home-seeall {
+            display: none; align-items: center; gap: 4px; min-height: 44px; padding: 0 8px;
+            background: none; border: none; color: #0F9D58; font-size: 14px; font-weight: 700;
+            cursor: pointer; font-family: inherit; white-space: nowrap;
+          }
+          .lf-home-postbtn {
+            flex: none; width: 44px; height: 44px; border-radius: 50%;
+            background: #0F9D58; border: 1.5px solid #0F9D58; color: #fff;
+            display: inline-flex; align-items: center; justify-content: center; gap: 0;
+            cursor: pointer; font-family: inherit; flex-shrink: 0; box-sizing: border-box;
+          }
+          .lf-home-postlabel { display: none; }
+          @media (min-width: 768px) {
+            .lf-home-seeall { display: inline-flex; }
+            .lf-home-postbtn { width: auto; height: 44px; border-radius: 999px; padding: 0 16px; gap: 6px; }
+            .lf-home-postlabel { display: inline; }
+          }
           .lf-toolbar {
             display: flex; align-items: center; gap: 8px; margin-top: 14px;
             flex-wrap: nowrap; overflow: hidden; width: 100%; box-sizing: border-box;
@@ -2279,80 +2306,17 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
 
         {/* ─── Header ─── */}
         <div style={{ marginBottom:16 }}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexWrap:'wrap', marginBottom:6 }}>
-            <h2 style={{ fontFamily:'Sora, system-ui, sans-serif', fontSize:'clamp(20px, 2vw, 22px)', fontWeight:800, color:'#0f172a', letterSpacing:-0.4, margin:0, lineHeight:1.2 }}>
-              People Looking For
-            </h2>
-            <button type="button" onClick={() => navigate('/looking-for')} style={{
-              display:'inline-flex', alignItems:'center', gap:4, minHeight:44, padding:'0 8px',
-              background:'none', border:'none', color:'#0F9D58', fontSize:14, fontWeight:700,
-              cursor:'pointer', fontFamily:'inherit',
-            }}>
-              See all <ArrowRight size={14} />
-            </button>
-          </div>
-
-            {/* Filter row */}
-            <div className="lf-toolbar">
-              {/* Nearby filter */}
-              <div ref={lfNearbyRef} className="lf-pill-wrap" style={{ position:'relative' }}>
-                               <button type="button" className="lf-pill" onClick={() => { setLfNearbyOpen(!lfNearbyOpen); setLfSortOpen(false) }}>
-                <MapPin size={13} style={{ flexShrink:0 }} />
-                <span className="lf-pill-label">{lfNearby === 'near' ? 'Near You' : lfNearby === 'all' ? 'All Malawi' : lfNearby}</span>
-                <ChevronRight size={12} style={{ transform:'rotate(90deg)', marginLeft:2, flexShrink:0 }} />
+          <div className="lf-home-head">
+            <h2 className="lf-home-title">People Looking For</h2>
+            <div className="lf-home-actions">
+              <button type="button" className="lf-home-seeall" onClick={() => navigate('/looking-for')}>
+                See all <ArrowRight size={14} />
               </button>
-            {lfNearbyOpen && (
-              <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, background:'#fff', borderRadius:12, border:'1px solid #e2e8f0', boxShadow:'0 8px 24px rgba(0,0,0,0.1)', zIndex:20, minWidth:160, overflow:'hidden', padding:'4px' }}>
-                {(() => {
-                  const hasLoc = !!(placeLabel || (viewerLoc && (viewerLoc.lat != null || viewerLoc.district || viewerLoc.city)))
-                  const opts = []
-                  if (hasLoc) opts.push({ v:'near', l:'Near You' })
-                  opts.push({ v:'all', l:'All Malawi' })
-                  const districts = [...new Set((requests || []).map(r => (r.city || r.detected_city || '').trim()).filter(Boolean))].sort((a,b) => a.localeCompare(b))
-                  districts.forEach(d => opts.push({ v:d, l:d }))
-                  return opts.map(opt => (
-                    <button key={opt.v} type="button" onClick={() => { lfNearbyPickedRef.current = true; setLfNearby(opt.v); setLfNearbyOpen(false) }} style={{
-                      display:'flex', alignItems:'center', gap:8, width:'100%', textAlign:'left', background:'none', border:'none', padding:'8px 12px',
-                      fontSize:12, fontWeight: lfNearby===opt.v ? 700 : 500, color: lfNearby===opt.v ? '#166534' : '#334155',
-                      cursor:'pointer', fontFamily:'inherit', borderRadius:8,
-                    }}>
-                      {lfNearby === opt.v && <Check size={12} strokeWidth={3} color="#166534" />}
-                      {opt.l}
-                    </button>
-                  ))
-                })()}
-              </div>
-            )}
-            </div>
-
-
-            {/* Sort filter */}
-            <div ref={lfSortRef} style={{ position:'relative' }}>
-                               <button type="button" className="lf-pill" onClick={() => { setLfSortOpen(!lfSortOpen); setLfNearbyOpen(false) }}>
-                <TrendingUp size={12} style={{ flexShrink:0 }} />
-                <span className="lf-pill-label">{SORT_OPTIONS.find(s => s.k === lfSort)?.l || 'Newest'}</span>
-                <ChevronRight size={12} style={{ transform:'rotate(90deg)', marginLeft:2, flexShrink:0 }} />
+              <button type="button" className="lf-home-postbtn" onClick={() => navigate('/looking-for')} aria-label="Post Request">
+                <Plus size={16} strokeWidth={3} />
+                <span className="lf-home-postlabel">Post Request</span>
               </button>
-              {lfSortOpen && (
-                <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, background:'#fff', borderRadius:12, border:'1px solid #e2e8f0', boxShadow:'0 8px 24px rgba(0,0,0,0.1)', zIndex:20, minWidth:160, overflow:'hidden', padding:'4px' }}>
-                  {SORT_OPTIONS.map(opt => (
-                    <button key={opt.k} type="button" onClick={() => { setLfSort(opt.k); setLfSortOpen(false) }} style={{
-                      display:'block', width:'100%', textAlign:'left', background:'none', border:'none', padding:'8px 12px',
-                      fontSize:12, fontWeight: lfSort===opt.k ? 700 : 500, color: lfSort===opt.k ? '#166534' : '#334155',
-                      cursor:'pointer', fontFamily:'inherit', borderRadius:8,
-                    }}>
-                      {opt.l}
-                    </button>
-                  ))}
-                </div>
-              )}
             </div>
-
-            {/* Post request */}
-            <button type="button" className="lf-post-btn" onClick={() => navigate('/looking-for')} aria-label="Post Request">
-              <Plus size={16} strokeWidth={3} />
-              <span className="lf-post-label">Post Request</span>
-            </button>
           </div>
         </div>
 

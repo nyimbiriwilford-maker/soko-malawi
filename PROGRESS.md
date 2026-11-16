@@ -9,3 +9,5 @@
 10. Step 2 laptop-fix - grid aligns with heading/toolbar (section padding 14px/24px, grid no side padding)
 11. Step 1 toolbar-polish - removed View all button, lf-toolbar gap 8px no wrap/overflow, pills 44px flex on phone, round + button; natural width + Post Request on tablet+
 12. Step 2 toolbar-polish - buyer name sentence case 12px weight 600 #5f6368 max-width 96px ellipsis
+13. Step 1 home-simplify - removed toolbar row (location/sort), kept newest-first no filter, disabled auto-near effect
+14. Step 2 home-simplify - heading row flex with title ellipsis, phone only + button, tablet+ See all + Post Request, gap 16px
