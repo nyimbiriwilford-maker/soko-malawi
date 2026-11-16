@@ -2234,6 +2234,33 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
           @media (min-width:768px) { .lfr-grid { grid-template-columns:repeat(2,1fr); gap:16px; } }
           @media (min-width:1100px) { .lfr-grid { grid-template-columns:repeat(4,1fr); gap:16px; } }
           @media (min-width:1100px) { .soko-section-pad { padding-left: 24px !important; padding-right: 24px !important; } }
+          .lf-toolbar {
+            display: flex; align-items: center; gap: 8px; margin-top: 14px;
+            flex-wrap: nowrap; overflow: hidden; width: 100%; box-sizing: border-box;
+          }
+          .lf-pill-wrap { position: relative; min-width: 0; flex: 1 1 0; }
+          .lf-pill {
+            display: inline-flex; align-items: center; gap: 5px; width: 100%;
+            height: 44px; padding: 0 12px; border-radius: 999px;
+            font-size: 12px; font-weight: 700; cursor: pointer; font-family: inherit;
+            background: #fff; border: 1.5px solid #e2e8f0; color: #475569;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+            min-width: 0; box-sizing: border-box; transition: all 0.15s;
+          }
+          .lf-pill-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+          .lf-post-btn {
+            flex: none; width: 44px; height: 44px; border-radius: 50%;
+            background: #0F9D58; border: 1.5px solid #0F9D58; color: #fff;
+            display: inline-flex; align-items: center; justify-content: center; gap: 0;
+            cursor: pointer; font-family: inherit; flex-shrink: 0; box-sizing: border-box;
+          }
+          .lf-post-label { display: none; }
+          @media (min-width: 768px) {
+            .lf-pill-wrap { flex: 0 0 auto; }
+            .lf-pill { width: auto; flex: 0 0 auto; }
+            .lf-post-btn { width: auto; height: 44px; border-radius: 999px; padding: 0 16px; gap: 6px; margin-left: auto; }
+            .lf-post-label { display: inline; }
+          }
          .lf-section { padding-top: 0 !important; }
          .lf-spacing-browse { margin-top: 32px; }
          @media (min-width: 768px) { .lf-spacing-browse { margin-top: 40px; } }
@@ -2265,17 +2292,14 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
             </button>
           </div>
 
-          {/* Filter row */}
-          <div style={{ display:'flex', alignItems:'center', gap:10, marginTop:14, flexWrap:'nowrap', overflowX:'auto', width:'100%', scrollbarWidth:'none' }}>
-            {/* Nearby filter */}
-            <div ref={lfNearbyRef} style={{ position:'relative' }}>
-                              <button type="button" onClick={() => { setLfNearbyOpen(!lfNearbyOpen); setLfSortOpen(false) }} style={{
-                display:'inline-flex', alignItems:'center', gap:5, borderRadius:999, padding:'7px 13px',
-                fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap',
-                background:'#fff', border:'1.5px solid #e2e8f0', color:'#475569', transition:'all 0.15s',
-                minHeight:34,
-              }}>
-                <MapPin size={13} /> {lfNearby === 'near' ? 'Near You' : lfNearby === 'all' ? 'All Malawi' : lfNearby} <ChevronRight size={12} style={{ transform:'rotate(90deg)', marginLeft:2 }} />
+            {/* Filter row */}
+            <div className="lf-toolbar">
+              {/* Nearby filter */}
+              <div ref={lfNearbyRef} className="lf-pill-wrap" style={{ position:'relative' }}>
+                               <button type="button" className="lf-pill" onClick={() => { setLfNearbyOpen(!lfNearbyOpen); setLfSortOpen(false) }}>
+                <MapPin size={13} style={{ flexShrink:0 }} />
+                <span className="lf-pill-label">{lfNearby === 'near' ? 'Near You' : lfNearby === 'all' ? 'All Malawi' : lfNearby}</span>
+                <ChevronRight size={12} style={{ transform:'rotate(90deg)', marginLeft:2, flexShrink:0 }} />
               </button>
             {lfNearbyOpen && (
               <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, background:'#fff', borderRadius:12, border:'1px solid #e2e8f0', boxShadow:'0 8px 24px rgba(0,0,0,0.1)', zIndex:20, minWidth:160, overflow:'hidden', padding:'4px' }}>
@@ -2304,13 +2328,10 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
 
             {/* Sort filter */}
             <div ref={lfSortRef} style={{ position:'relative' }}>
-                              <button type="button" onClick={() => { setLfSortOpen(!lfSortOpen); setLfNearbyOpen(false) }} style={{
-                display:'inline-flex', alignItems:'center', gap:5, borderRadius:999, padding:'7px 13px',
-                fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap',
-                background:'#fff', border:'1.5px solid #e2e8f0', color:'#475569', transition:'all 0.15s',
-                minHeight:34,
-              }}>
-                <TrendingUp size={12} /> {SORT_OPTIONS.find(s => s.k === lfSort)?.l || 'Newest'} <ChevronRight size={12} style={{ transform:'rotate(90deg)', marginLeft:2 }} />
+                               <button type="button" className="lf-pill" onClick={() => { setLfSortOpen(!lfSortOpen); setLfNearbyOpen(false) }}>
+                <TrendingUp size={12} style={{ flexShrink:0 }} />
+                <span className="lf-pill-label">{SORT_OPTIONS.find(s => s.k === lfSort)?.l || 'Newest'}</span>
+                <ChevronRight size={12} style={{ transform:'rotate(90deg)', marginLeft:2, flexShrink:0 }} />
               </button>
               {lfSortOpen && (
                 <div style={{ position:'absolute', top:'calc(100% + 4px)', left:0, background:'#fff', borderRadius:12, border:'1px solid #e2e8f0', boxShadow:'0 8px 24px rgba(0,0,0,0.1)', zIndex:20, minWidth:160, overflow:'hidden', padding:'4px' }}>
@@ -2327,25 +2348,11 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
               )}
             </div>
 
-            {/* View all + Post request */}
-            <div className="lfr-head-actions" style={{ display:'flex', alignItems:'center', gap:6, marginLeft:'auto' }}>
-              <button type="button" onClick={() => navigate('/looking-for')} style={{
-                display:'inline-flex', alignItems:'center', gap:4, borderRadius:999, padding:'7px 14px',
-                fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap',
-                background:'#fff', border:'1.5px solid #e2e8f0', color:'#475569', transition:'all 0.15s',
-                minHeight:34,
-              }}>
-                View all <ArrowRight size={13} />
-              </button>
-              <button type="button" onClick={() => navigate('/looking-for')} style={{
-                display:'inline-flex', alignItems:'center', gap:5, borderRadius:999, padding:'7px 16px',
-                fontSize:12, fontWeight:700, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap',
-                background:'#166534', border:'1.5px solid #166534', color:'#fff',
-                boxShadow:'0 3px 10px rgba(22,101,52,0.25)', minHeight:34,
-              }}>
-                <Plus size={13} strokeWidth={3} /> Post Request
-              </button>
-            </div>
+            {/* Post request */}
+            <button type="button" className="lf-post-btn" onClick={() => navigate('/looking-for')} aria-label="Post Request">
+              <Plus size={16} strokeWidth={3} />
+              <span className="lf-post-label">Post Request</span>
+            </button>
           </div>
         </div>
 
