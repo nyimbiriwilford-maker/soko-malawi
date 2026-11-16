@@ -35,3 +35,4 @@
 33. Fix home-services-v2 verified tick - provider line name+16px blue BadgeCheck (gap 4px, flex none, aria Verified) when verified via isServiceVerified(svc,profile) same as /services; profiles select includes is_verified with fallback to id,full_name,avatar_url; tick renders on rail and grid cards
 
 34. Report chat-popup-reply bug (popup reply vs normal chat) and add sql/chat_popup_diagnose.sql (no code changes)
+35. chat-popup-reply step 1: sendMessageReply accepts chatSource and passes it to sendChatMessage; notifications carry chat_source; legacy retry only strips columns named in the error (keeps listing_id/service_id)
