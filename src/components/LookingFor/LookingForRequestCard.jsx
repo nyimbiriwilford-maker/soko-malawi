@@ -94,7 +94,7 @@ export const LOOKING_FOR_CARD_CSS = `
     display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;
     font-size: 12px; color: ${C.textSub};
   }
-  .lf-card-buyer-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lf-card-buyer-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 96px; font-weight: 600; }
   .lf-card-tick { display: inline-flex; flex-shrink: 0; }
   .lf-card-msg {
     display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0;
@@ -170,7 +170,8 @@ export default function LookingForRequestCard({
   const moreCount = Math.max(0, lookingAreas.length - 1)
   const daysAgo = timeAgo(req.created_at)
   const profile = Array.isArray(req.profiles) ? req.profiles[0] : req.profiles
-  const buyerName = (profile?.full_name || '').trim().split(/\s+/)[0] || 'Buyer'
+  const rawBuyerName = (profile?.full_name || '').trim().split(/\s+/)[0] || 'Buyer'
+  const buyerName = rawBuyerName.charAt(0).toUpperCase() + rawBuyerName.slice(1).toLowerCase()
   const isVerified = profile?.is_verified === true
   const offersCount = req.offer_count || 0
   const catEmoji = (CAT_EMOJI && CAT_EMOJI[req.category]) || '📋'
