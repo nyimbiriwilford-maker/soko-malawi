@@ -182,7 +182,7 @@ export default function LookingForRequestCard({
       className={`lf-card${isNearYou ? ' is-near' : ''}${carousel ? ' is-carousel' : ''}`}
       role="link"
       tabIndex={0}
-      onClick={() => onViewDetails?.(req)}
+      onClick={() => onViewDetails?.(req) }
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault()

@@ -16,3 +16,6 @@
 17. Step 2 home-actions - card tap opens details with role link/tabIndex/Enter/cursor/:active bg; no double nav
 18. Step 1 home-offer-fix - shared handler now uses optional onOfferStarted callback instead of setRequests; page/Home pass own updaters
 19. Step 2 home-offer-fix - audited src for undeclared setters; only Home/Notifications/LookingFor use declared setters
+20. Step 1 home-card-open - LookingFor page reads ?request= param and opens details modal; Home card navigates to same URL
+21. Step 2 home-card-open - card click handling restored (role link/tabIndex/Enter/cursor/:active), only Make offer stops propagation
+22. Step 3 home-card-open - added then removed temporary [lf-card-open] console.log; grep clean

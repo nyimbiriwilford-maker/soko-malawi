@@ -62,6 +62,7 @@ export default function LookingFor() {
   const [allCategories, setAllCategories] = useState(new Set())
   const [loading,       setLoading]       = useState(true)
   const viewedIdsRef = useRef(new Set()) // session: count each request once
+  const openedFromUrlRef = useRef(null)
 
   /* ── filters ── */
   const [search,          setSearch]          = useState('')
@@ -151,6 +152,18 @@ const myAlertsRef = useRef([])
   useEffect(() => {
     if (!detectingViewer && user) loadRequests()
   }, [category, detectingViewer, viewerCity, viewerLocation, sortBy, budgetMin, budgetMax, locationFilter, district, search, headerSearch, user])
+
+  // Open a request from the URL (?request=<id>) — used by Home cards
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const rid = params.get('request')
+    if (!rid || openedFromUrlRef.current === rid) return
+    const req = (requests || []).find(r => r.id === rid)
+    if (req) {
+      openRequestDetails(req)
+      openedFromUrlRef.current = rid
+    }
+  }, [requests, location.search])
 
   /* ── data loaders ── */
   async function loadRequests() {
