@@ -24,7 +24,7 @@ import React, {
   useEffect, useState, useMemo, useRef, useCallback, useLayoutEffect,
 } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MapPin, Clock, Zap, Eye, MessageCircle, Plus, ChevronRight, Navigation, Sparkles, TrendingUp, Star, UserCheck, AlertTriangle, DollarSign, ArrowRight, ShieldCheck, Search, Heart, Share2, Flag, ExternalLink, Check, BadgeCheck } from 'lucide-react'
+import { MapPin, Clock, Zap, Eye, MessageCircle, Plus, ChevronRight, Navigation, Sparkles, TrendingUp, Star, UserCheck, AlertTriangle, DollarSign, ArrowRight, ShieldCheck, Search, Heart, Share2, Flag, ExternalLink, Check, BadgeCheck, Store } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { supabase }              from '../lib/supabase'
 import useSearchAnimation        from '../hooks/useSearchAnimation'
@@ -2844,6 +2844,9 @@ function ShopsJobsServicesRow({ navigate, shops, services, loading, currentUser,
   const shopCountedImpressions = React.useRef(new Set())
   const shopSessionSeed = React.useRef(Math.floor(Math.random() * 1000)).current
 
+  const ownsShop = !!currentUser?.shop_slug
+  const openShop = () => navigate(ownsShop ? `/shop/${currentUser.shop_slug}` : '/shop-setup')
+
   const rankedShops = React.useMemo(() => {
     const now = Date.now()
     const tiebreakSeed = shopSessionSeed + Math.floor(now / (60 * 60 * 1000))
@@ -3540,21 +3543,33 @@ function ShopsJobsServicesRow({ navigate, shops, services, loading, currentUser,
            .ts-rating { font-weight: 700; color: #202124; }
            .ts-reviews { color: #5f6368; }
            .ts-new { font-size: 11px; font-weight: 600; color: #5f6368; background: #f1f3f4; border-radius: 999px; padding: 1px 6px; }
-           .ts-end-tile {
+           .ts-open-tile {
              flex: none; width: 140px; min-height: 100%; scroll-snap-align: start;
              border: 1px dashed #0F9D58; border-radius: 16px; background: #fff;
-             display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
-             cursor: pointer; font-family: inherit; color: #0F9D58; font-size: 13px; font-weight: 700;
-             box-sizing: border-box; min-height: 44px;
+             display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+             cursor: pointer; font-family: inherit;
+             box-sizing: border-box; min-height: 44px; padding: 12px 8px;
            }
-           .ts-end-arrow { font-size: 20px; }
-           .ts-seeall-wrap { display: none; }
+           .ts-open-tile:active { background: #f8f9fa; }
+           .ts-open-icon {
+             width: 44px; height: 44px; border-radius: 50%; background: #e6f6ed;
+             display: flex; align-items: center; justify-content: center;
+           }
+           .ts-open-label { font-size: 14px; font-weight: 700; color: #0F9D58; }
+           .ts-open-sub { font-size: 12px; color: #5f6368; text-align: center; line-height: 1.3; }
+           .ts-seeall-wrap { display: none; gap: 12px; justify-content: center; align-items: center; flex-wrap: wrap; }
+           .ts-open-btn {
+             height: 44px; padding: 0 20px; border-radius: 12px;
+             border: none; background: #0F9D58; color: #fff;
+             font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit;
+             display: inline-flex; align-items: center; gap: 6px;
+           }
            .ts-skel { flex: none; width: 220px; border-radius: 16px; overflow: hidden; background: #f1f3f4; }
            @media (min-width: 1100px) {
              .ts-rail { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; overflow: visible; padding: 0 24px; scroll-snap-type: none; }
              .ts-card { width: 100%; }
-             .ts-end-tile { display: none; }
-             .ts-seeall-wrap { display: flex; justify-content: center; margin-top: 16px; }
+             .ts-open-tile { display: none; }
+             .ts-seeall-wrap { display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
              .ts-seeall-btn {
                height: 44px; padding: 0 24px; border-radius: 12px;
                border: 1.5px solid #0F9D58; background: transparent; color: #0F9D58;
@@ -3633,18 +3648,31 @@ function ShopsJobsServicesRow({ navigate, shops, services, loading, currentUser,
                      </button>
                    )
                  })}
-                 {/* end tile (rail only) */}
-                 <button type="button" className="ts-end-tile" onClick={() => navigate('/shops')}>
-                   <span className="ts-end-arrow">→</span>
-                   <span>See all shops</span>
-                 </button>
-               </div>
+                  {/* Open a Shop tile (rail only) */}
+                  <button type="button" className="ts-open-tile" role="button" tabIndex={0}
+                    onClick={openShop}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openShop() } }}>
+                    <span className="ts-open-icon">
+                      {ownsShop
+                        ? <Store size={24} strokeWidth={2.5} color="#0F9D58" />
+                        : <Plus size={24} strokeWidth={2.5} color="#0F9D58" />}
+                    </span>
+                    <span className="ts-open-label">{ownsShop ? 'My Shop' : 'Open a Shop'}</span>
+                    <span className="ts-open-sub">Sell to buyers nationwide</span>
+                  </button>
+                </div>
 
-               <div className="ts-seeall-wrap">
-                 <button type="button" className="ts-seeall-btn" onClick={() => navigate('/shops')}>
-                   See all shops
-                 </button>
-               </div>
+                <div className="ts-seeall-wrap">
+                  <button type="button" className="ts-seeall-btn" onClick={() => navigate('/shops')}>
+                    See all shops
+                  </button>
+                  <button type="button" className="ts-open-btn" onClick={openShop}>
+                    {ownsShop
+                      ? <Store size={18} strokeWidth={2.5} />
+                      : <Plus size={18} strokeWidth={2.5} />}
+                    {ownsShop ? 'My Shop' : 'Open a Shop'}
+                  </button>
+                </div>
              </>
            ) : null}
         </div>

@@ -21,3 +21,6 @@
 22. Step 3 home-card-open - added then removed temporary [lf-card-open] console.log; grep clean
 23. Step 1-4 home-shops-v2 - removed discover strip, heading row Trusted Shops See all, new ts-card (cover/logo/body/meta), rail phone/tablet + end tile, grid laptop + seeall btn, load 8 shops, skeleton, empty hide
 24. Step 1-2 home-shops-fix - shop card media block (cover overflow hidden, logo overlap), CSS moved out of mobile media query, laptop grid 4 cols with padding 24px
+25. Step 1 home-shops-open-tile-v2 - rail end tile replaced with dashed Open a Shop tile (140px, Plus circle, role/tabIndex/Enter, :active), handler uses currentUser.shop_slug -> My Shop/Store else /shop-setup
+26. Step 2 home-shops-open-tile-v2 - laptop row: existing outline See all shops + solid green #0F9D58 Open a Shop button (white, 44px, radius 12, pad 0 20), shared openShop handler + My Shop rule
+27. Verify+bump home-shops-open-tile-v2 - build ok; no-undef clean; headless Chrome 360/768/1280: rail tile 140px dashed #0F9D58, Open a Shop -> /shop-setup, My Shop -> /shop/<slug>, laptop green btn 44px -> same; no console errors; sw v49
