@@ -88,7 +88,7 @@ export const LOOKING_FOR_CARD_CSS = `
   .lf-card-meta-dot { color: ${C.gray}; }
   .lf-card-bottom {
     display: flex; align-items: center; justify-content: space-between; gap: 8px;
-    margin-top: 4px;
+    margin: 0;
   }
   .lf-card-buyer {
     display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1;
@@ -124,7 +124,17 @@ export const LOOKING_FOR_CARD_CSS = `
       border-radius: 12px;
     }
     .lf-card-body { gap: 6px; }
-    .lf-card-btn { width: 100%; }
+    .lf-card-bottom {
+      flex-direction: column;
+      gap: 10px;
+      margin: 0;
+    }
+    .lf-card-buyer {
+      justify-content: space-between;
+      flex: none;
+      width: 100%;
+    }
+    .lf-card-btn { width: 100%; box-sizing: border-box; margin: 0; }
   }
   @media (min-width: 1100px) {
     .lf-card-media { height: 148px; }

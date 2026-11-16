@@ -2230,9 +2230,10 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
     }}>
       <style>{`
           ${LOOKING_FOR_CARD_CSS}
-          .lfr-grid { display:grid; grid-template-columns:1fr; gap:12px; padding:4px 14px 16px; }
+          .lfr-grid { display:grid; grid-template-columns:1fr; gap:12px; padding:4px 0 16px; }
           @media (min-width:768px) { .lfr-grid { grid-template-columns:repeat(2,1fr); gap:16px; } }
-          @media (min-width:1100px) { .lfr-grid { grid-template-columns:repeat(4,1fr); gap:16px; padding:4px 24px 16px; } }
+          @media (min-width:1100px) { .lfr-grid { grid-template-columns:repeat(4,1fr); gap:16px; } }
+          @media (min-width:1100px) { .soko-section-pad { padding-left: 24px !important; padding-right: 24px !important; } }
          .lf-section { padding-top: 0 !important; }
          .lf-spacing-browse { margin-top: 32px; }
          @media (min-width: 768px) { .lf-spacing-browse { margin-top: 40px; } }
