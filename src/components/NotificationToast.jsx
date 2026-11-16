@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { sendMessageReply } from '../utils/sendMessageReply'
+import { sourceFromMessage, contextIdFromMessage } from '../utils/chatSources'
 import { T } from '../constants/tokens'
 import {
   MessageCircle, Phone, VideoOff, Tag, Eye, MessageSquare, CheckCircle2,
@@ -229,14 +230,61 @@ export default function NotificationToast() {
   const accent = getAccent(visible?.type)
   const displayName = visible?.data?.sender_name || visible?.data?.caller_name || visible?.data?.decliner_name || visible?.data?.voucher_name || visible?.data?.viewer_name || visible?.data?.buyer_name || visible?.data?.seller_name || visible?.data?.actor_name || visible?.title || getTitle(visible?.type)
 
+  async function resolveReplyContext() {
+    const data = visible?.data || {}
+    const contextId = data.context_id || data.listing_id || null
+
+    if (data.chat_source) {
+      return { chatSource: data.chat_source, contextId }
+    }
+
+    const { data: authData } = await supabase.auth.getUser()
+    const me = authData?.user?.id || null
+    const senderId = data.sender_id || null
+
+    if (data.message_id) {
+      const { data: anchor } = await supabase
+        .from('messages')
+        .select('*')
+        .eq('id', data.message_id)
+        .maybeSingle()
+      if (anchor) {
+        return {
+          chatSource: sourceFromMessage(anchor),
+          contextId: contextIdFromMessage(anchor),
+        }
+      }
+    }
+
+    if (me && senderId) {
+      const { data: rows } = await supabase
+        .from('messages')
+        .select('*')
+        .or(`and(from_user.eq.${me},to_user.eq.${senderId}),and(from_user.eq.${senderId},to_user.eq.${me})`)
+        .order('created_at', { ascending: false })
+        .limit(1)
+      const latest = rows?.[0]
+      if (latest) {
+        return {
+          chatSource: sourceFromMessage(latest),
+          contextId: contextIdFromMessage(latest),
+        }
+      }
+    }
+
+    return { chatSource: 'direct', contextId }
+  }
+
   async function handleSendReply() {
     const text = replyText.trim()
     if (!text || sending || !visible?.data?.sender_id) return
     setSending(true)
+    const { chatSource, contextId } = await resolveReplyContext()
     const { error } = await sendMessageReply({
       toUserId: visible.data.sender_id,
       body: text,
-      contextId: visible.data.context_id || visible.data.listing_id || null,
+      chatSource,
+      contextId,
       listingTitle: visible.data.listing_title || null,
     })
     setSending(false)
