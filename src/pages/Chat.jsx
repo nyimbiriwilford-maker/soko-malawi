@@ -2903,6 +2903,32 @@ async function uploadAndSend(file, type, caption = '') {
     )
   }
 
+  // Request chats: role-aware quick replies (buyer = request owner, seller = responder)
+  const requestSellerQuickReplies = [
+    'Hi, do you still need this?',
+    'I have what you need.',
+    'Can I send you photos?',
+    'When do you need it?',
+    'I can deliver to you.',
+    'Can we agree on a price?',
+  ]
+  const requestBuyerQuickReplies = [
+    'Yes, I still need it.',
+    'Please send photos.',
+    'What is your best price?',
+    'Where are you located?',
+    'Can you deliver?',
+    'Sorry, I already found one.',
+  ]
+  const activeQuickReplies = (() => {
+    const src = chatSourceRef.current || chatSource || 'direct'
+    if (src === 'request') {
+      const ownerId = request?.user_id || null
+      return ownerId === currentUser?.id ? requestBuyerQuickReplies : requestSellerQuickReplies
+    }
+    return ['Hi! Is this still available?', 'What is your best price?', 'Where can we meet?']
+  })()
+
   // ── Main render ──────────────────────────────────────────────────────────
   return (
     <ChatCallHost {...callHostProps}>
@@ -3370,18 +3396,20 @@ async function uploadAndSend(file, type, caption = '') {
             <p style={{ fontSize: 13, color: '#7a8a80', lineHeight: 1.65, maxWidth: 240 }}>
               Ask about the item, negotiate price, or arrange a meetup
             </p>
-            <div className="chat-quick-replies">
-              {['Hi! Is this still available?', 'What is your best price?', 'Where can we meet?'].map(q => (
-                <button
-                  key={q}
-                  type="button"
-                  className="chat-quick-chip"
-                  onClick={() => { setNewMsg(q); setTimeout(() => inputRef.current?.focus(), 30) }}
-                >
-                  {q}
-                </button>
-              ))}
-            </div>
+            {activeQuickReplies.length > 0 && (
+              <div className="chat-quick-replies">
+                {activeQuickReplies.map(q => (
+                  <button
+                    key={q}
+                    type="button"
+                    className="chat-quick-chip"
+                    onClick={() => { setNewMsg(q); setTimeout(() => inputRef.current?.focus(), 30) }}
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
