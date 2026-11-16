@@ -21,4 +21,3 @@
 22. Step 3 home-card-open - added then removed temporary [lf-card-open] console.log; grep clean
 23. Step 1-4 home-shops-v2 - removed discover strip, heading row Trusted Shops See all, new ts-card (cover/logo/body/meta), rail phone/tablet + end tile, grid laptop + seeall btn, load 8 shops, skeleton, empty hide
 24. Step 1-2 home-shops-fix - shop card media block (cover overflow hidden, logo overlap), CSS moved out of mobile media query, laptop grid 4 cols with padding 24px
-25. Step 1-2 home-shops-open-tile - Open a Shop tile in rail (Plus/Store icon, My Shop rule), laptop See all + Open a Shop row
