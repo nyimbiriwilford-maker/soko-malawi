@@ -1,17 +1,17 @@
-Done. Merged wip/lf-home-card-open to master and pushed.
+Done. Merged wip/home-shops-v2 to master and pushed.
 
 Build: passed. Preview: http://localhost:4173/ returned 200. Console: no errors observed.
 
-Fix: LookingFor page now reads ?request=<id> from URL and opens the same details modal. Home card click navigates to /looking-for?request=<id>, so the request opens. Temporary console.log added then removed; grep for lf-card-open returns 0.
+Fix: Trusted Shops redesigned (new ts-card with cover/logo/body/meta, rail on phone/tablet with See all shops tile, 4-col grid on laptop with outline See all shops button, load 8 shops, skeleton, empty hides section, removed discover strip).
 
 Verification:
 - Vercel: live at https://sokomw.com/
-- live bundle: /assets/index-Cg4ZdA3B.js
-- live sw.js: const CACHE_VERSION = 'sokomw-v45'
+- live bundle: /assets/index-Cq8ArdmU.js
+- live sw.js: const CACHE_VERSION = 'sokomw-v46'
 
 git log --oneline -3:
-162b126 WIP: update response.dm
-27b242e Merge wip/lf-home-card-open
-e91216b WIP: bump sw cache version
+68bb8a9 WIP: update response.dm
+bfe8032 Merge wip/home-shops-v2
+8870f89 WIP: bump sw cache version
 
 git status -sb: ## master...origin/master (clean)
