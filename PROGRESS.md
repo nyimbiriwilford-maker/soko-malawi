@@ -5,3 +5,5 @@
 6. Step 1 v3 - Home now renders LookingForRequestCard (shared redesigned card); removed old inline lfr-card markup/CSS
 7. Step 2 v3 - grid/counts already in place (4/6/8, See all requests, limit 16)
 8. Step 3 v3 - heading People Looking For already in place
+9. Step 1 laptop-fix - card footer column at 768px+ (gap 10px, buyer row space-between, full-width button box-sizing border-box, no margin)
+10. Step 2 laptop-fix - grid aligns with heading/toolbar (section padding 14px/24px, grid no side padding)
