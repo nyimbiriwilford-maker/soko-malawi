@@ -12,3 +12,5 @@
 13. Step 1 home-simplify - removed toolbar row (location/sort), kept newest-first no filter, disabled auto-near effect
 14. Step 2 home-simplify - heading row flex with title ellipsis, phone only + button, tablet+ See all + Post Request, gap 16px
 15. Step 1 plus-icon - phone + button transparent 44x44, Plus 28px stroke 2.5 green, active opacity 0.6; tablet+ unchanged green button
+16. Step 1 home-actions - Make offer reuses shared makeOffer helper (login prompt, own request hidden); button stopPropagation
+17. Step 2 home-actions - card tap opens details with role link/tabIndex/Enter/cursor/:active bg; no double nav
