@@ -1,52 +1,32 @@
-﻿**Branch:** wip/chat-popup-reply (no merge, no push). Commits: 82ad3a7 (step 1), 6f8681d (step 2), 9bb3e34 (step 3), b09e48c (step 4).
+﻿Branch: wip/chat-quick-replies (no merge, no push). Commits: ba3aa92 (step 1), ebbabe2 (step 2), f97217f (step 3).
 
-## Step 1 - src/utils/sendMessageReply.js
-- sendMessageReply({ toUserId, body, contextId, chatSource, listingTitle }) now accepts chatSource and passes it to sendChatMessage.
-- sendChatMessage notification data includes chat_source: chatSource || 'direct' (plus typed context now, see step 3).
-- Legacy retry only strips chat_source/shop_id/request_id when the error message names that column; listing_id and service_id are never stripped.
+REPORT (pre-change, file + line)
+1. Quick replies were a hardcoded listing array rendered at src/pages/Chat.jsx:3373-3384. Only render condition: messages.length === 0 && !isServiceChat (src/pages/Chat.jsx:3366). No source switch, so an empty request chat showed the listing lines.
+2. Chat source: useState init src/pages/Chat.jsx:236-238 calls resolveChatSource({searchParams, locationState, contextId}) || 'direct'; chatSourceRef 240, chatContextRef 310; refs updated at 406-407 and 718-719; source resolved in init 692-720. Request id = contextId from route param named listingId (213-214) when source is 'request'; used in applyContextFilter 787 (request_id) and send path 1583-1585.
+3. Ownership: buyer_requests.user_id exists (used at src/pages/Profile.jsx:1107). Chat already loads the whole row: loadContextEntity src/pages/Chat.jsx:769-774 does supabase.from('buyer_requests').select('*').eq('id', id).maybeSingle() and setRequest(data) (state at 235), so request.user_id is available without a new query. If it were not loaded, cheapest safe read: select('id, user_id') for that request id.
 
-## Step 2 - src/components/NotificationToast.jsx handleSendReply
-- Passes chatSource from visible.data.chat_source and contextId from visible.data.context_id || visible.data.listing_id.
-- If chat_source is missing: looks up messages by visible.data.message_id, derives source/context with sourceFromMessage/contextIdFromMessage; else latest message between the pair (either direction); only if no message exists falls back to 'direct'.
+STEP 1
+Added requestSellerQuickReplies and requestBuyerQuickReplies; selection in activeQuickReplies returns request sets when chatSourceRef/chatSource is 'request' (never listing lines). Listing/service/shop/direct keep the same array.
 
-## Step 3 - new_message producers
-- src/pages/Chat.jsx:1738-1753 (had chat_source; added typed context via messageContextFields).
-- src/utils/forwardMessage.js:144-159 (had chat_source; added typed context via messageContextFields).
-- src/utils/sendMessageReply.js:91-106 (had chat_source; added typed context via contextFields).
-- No other type 'new_message' producers in src/ or supabase/functions (offer_new/offer_counter, wanted_alert, missed_call/missed_video use other types; untouched).
+STEP 2
+Role guard: in request chats, if request.user_id or currentUser.id is missing, activeQuickReplies returns [] (no quick replies). Otherwise owner === currentUser -> buyer set, else seller set. Failed lookup shows none.
 
-## Step 4 - PROGRESS.md
-- Added src/utils/sendMessageReply.test-note line (38). No test files added.
+STEP 3
+Tap behavior unchanged: onClick still setNewMsg(q) + focus; sends still go through existing sendMessage, so chat_source='request' and request_id stay set. No sending logic changed.
 
-## RAW: npm run build
-`
-dist/assets/Notifications-BOQAXAvk.js                     72.47 kB │ gzip: 19.73 kB
-dist/assets/verification-CpAl-AwZ.js                      81.74 kB │ gzip: 22.12 kB
-dist/assets/ListingDetail-BxOGMstA.js                     81.83 kB │ gzip: 19.62 kB
-dist/assets/SearchPage-C95R2JdV.js                        95.90 kB │ gzip: 21.17 kB
-dist/assets/ShopPage-DmQFso3B.js                         132.59 kB │ gzip: 28.44 kB
-dist/assets/vendor-react-CNSGFAJv.js                     178.26 kB │ gzip: 55.95 kB
-dist/assets/ChatsLayout-BErV_SRg.js                      181.76 kB │ gzip: 51.45 kB
-dist/assets/vendor-supabase-niU8KDh3.js                  193.55 kB │ gzip: 49.62 kB
-dist/assets/Admin-BgIGMqUt.js                            198.19 kB │ gzip: 44.41 kB
-dist/assets/vendor-Uo_LcHLI.js                           221.52 kB │ gzip: 73.89 kB
-dist/assets/index-Bps8kSwH.js                            228.70 kB │ gzip: 66.32 kB
-dist/assets/Home-P_k7XATX.js                             229.52 kB │ gzip: 52.04 kB
-dist/assets/Profile-DFAAZkOi.js                          458.54 kB │ gzip: 78.51 kB
+RAW: npm run build
+dist/assets/vendor-supabase-niU8KDh3.js                  193.55 kB | gzip: 49.62 kB
+dist/assets/Admin-B-rvgvoZ.js                            198.19 kB | gzip: 44.41 kB
+dist/assets/vendor-Uo_LcHLI.js                           221.52 kB | gzip: 73.89 kB
+dist/assets/index-CfmrIWxb.js                            228.70 kB | gzip: 66.31 kB
+dist/assets/Home-DZwsS3QB.js                             229.52 kB | gzip: 52.04 kB
+dist/assets/Profile-DCujwtrk.js                          458.54 kB | gzip: 78.51 kB
 
-✓ built in 2.70s
-`
+built in 2.75s
 
-## RAW: npx eslint src/components/NotificationToast.jsx src/utils/sendMessageReply.js | Select-String "no-undef"
-`
+RAW: npx eslint src/pages/Chat.jsx | Select-String "no-undef"
 (no output)
-`
 
-## RAW: git diff --stat
-`
- dist/index.html     |   2 +-
- docs/response.dm    | 369 ++++++----------------------------------------------
- public/version.json |   2 +-
- 3 files changed, 40 insertions(+), 333 deletions(-)
-`
-(Build artifacts only: dist/index.html, public/version.json; docs/response.dm is this report. All source edits are committed.)
+RAW: git diff master --stat -- src
+ src/pages/Chat.jsx | 53 +++++++++++++++++++++++++++++++++++++++++------------
+ 1 file changed, 41 insertions(+), 12 deletions(-)
