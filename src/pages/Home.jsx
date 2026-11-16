@@ -35,6 +35,7 @@ import { fetchAllActiveStories } from '../hooks/useStatuses'
 import VerificationAttentionBanner from '../components/VerificationAttentionBanner'
 import SokoNav from '../components/SokoNav'
 import LookingForRequestCard, { LOOKING_FOR_CARD_CSS } from '../components/LookingFor/LookingForRequestCard'
+import { makeOffer } from '../lib/makeOffer'
 import {
   getGPSLocation,
   sortRequestsByViewerLocation,
@@ -2332,12 +2333,13 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
         ) : shown.length > 0 ? (
            <div className="lfr-grid">
                {shown.map(r => (
-                 <LookingForRequestCard
-                   key={r.id}
-                   req={r}
-                   onViewDetails={(req) => navigate(`/looking-for?request=${req.id}`)}
-                   onOffer={(req) => navigate(`/looking-for?request=${req.id}`)}
-                 />
+                  <LookingForRequestCard
+                    key={r.id}
+                    req={r}
+                    user={user}
+                    onViewDetails={(req) => navigate(`/looking-for?request=${req.id}`)}
+                    onOffer={(req) => makeOffer(req, { user, navigate, setRequests })}
+                  />
                ))}
              </div>
         ) : (

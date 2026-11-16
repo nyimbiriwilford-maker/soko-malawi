@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
+import { makeOffer } from '../../lib/makeOffer'
 import { uploadToR2, getR2Url, deleteFromR2 } from '../../lib/r2'
 import RequestComposer from '../../components/LookingFor/RequestComposer'
 import { Toast, Spinner } from '../../components/LookingFor/Primitives'
@@ -572,40 +573,7 @@ const myAlertsRef = useRef([])
   async function sendOffer(req) {
     // Count a view when seller engages if they haven't already
     await trackRequestView(req)
-    const looking = (req.cities?.length ? req.cities.join(', ') : '') || req.city || ''
-    const msg = `Hi, I can help with your request: "${req.title}"${req.budget ? `\nBudget: ${fmtMWK(req.budget)}` : ''}${req.city ? `\nBuyer stays: ${req.city}` : ''}${looking ? `\nLooking in: ${looking}` : ''}\n\nI have exactly what you need. Let's discuss!`
-    // Track offer — ON CONFLICT DO NOTHING prevents duplicate counting
-    const { error: offerErr } = await supabase.from('buyer_request_offers')
-      .insert({ request_id: req.id, seller_id: user.id })
-    
-    console.log('Offer insert result:', offerErr?.message || 'success')
-    
-    if (!offerErr) {
-      // New unique offer — increment count via RLS-bypassing function
-      const { error: updateErr } = await supabase.rpc('increment_offer_count', { request_id: req.id })
-      console.log('Count update:', updateErr?.message || 'success')
-      setRequests(prev => prev.map(r =>
-        r.id === req.id
-          ? { ...r, offer_count: (r.offer_count || 0) + 1, user_has_offered: true }
-          : r
-      ))
-    } else if (offerErr.code === '23505') {
-      // Duplicate — already offered, just mark UI
-      setRequests(prev => prev.map(r =>
-        r.id === req.id ? { ...r, user_has_offered: true } : r
-      ))
-    } else {
-      console.error('Offer error:', offerErr.message)
-    }
-    // Always attach request context so the thread is identified as Looking For
-    navigate(`/chat/${req.user_id}/${req.id}?src=request`, {
-      state: {
-        source: 'request',
-        isRequest: true,
-        prefillMessage: msg,
-        requestTitle: req.title,
-      },
-    })
+    await makeOffer(req, { user, navigate, setRequests })
   }
 
   /* ── mark fulfilled ── */
