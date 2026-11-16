@@ -33,7 +33,7 @@ export const LOOKING_FOR_CARD_CSS = `
     transition: box-shadow 0.15s, transform 0.15s, border-color 0.15s;
     box-sizing: border-box;
   }
-  .lf-card:active { transform: scale(0.98); }
+  .lf-card:active { transform: scale(0.98); background: #f8f9fa; }
   .lf-card-media {
     position: relative;
     width: 84px;
@@ -180,7 +180,15 @@ export default function LookingForRequestCard({
   return (
     <article
       className={`lf-card${isNearYou ? ' is-near' : ''}${carousel ? ' is-carousel' : ''}`}
+      role="link"
+      tabIndex={0}
       onClick={() => onViewDetails?.(req)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onViewDetails?.(req)
+        }
+      }}
     >
       <div className="lf-card-media">
         {hasPhoto
@@ -230,7 +238,7 @@ export default function LookingForRequestCard({
             >
               Done
             </button>
-          ) : (
+          ) : isOwn ? null : (
             <button
               type="button"
               className={`lf-card-btn${req.user_has_offered ? ' is-done' : ''}`}
