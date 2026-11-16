@@ -3400,7 +3400,7 @@ function ShopsJobsServicesRow({ navigate, shops, services, loading, currentUser,
         .hsvc-title { font-size: 15px; font-weight: 700; color: #202124; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .hsvc-provider { display: flex; align-items: center; gap: 4px; min-width: 0; }
         .hsvc-provider-name { font-size: 12px; color: #5f6368; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1 1 auto; }
-        .hsvc-verified { flex: 0 0 auto; }
+        .hsvc-verified { flex: 0 0 auto; flex-shrink: 0; }
         .hsvc-rating { display: flex; align-items: center; gap: 4px; font-size: 12px; color: #5f6368; min-width: 0; overflow: hidden; white-space: nowrap; }
         .hsvc-rating-val { font-weight: 700; color: #202124; }
         .hsvc-rating-count { color: #5f6368; }
@@ -5369,10 +5369,16 @@ export default function Home() {
           const providerIds = [...new Set(list.map(s => s.provider_id).filter(Boolean))]
           if (providerIds.length) {
             try {
-              const { data: profiles, error: profilesError } = await supabase
+              let { data: profiles, error: profilesError } = await supabase
                 .from('profiles')
-                .select('id, full_name, avatar_url')
+                .select('id, full_name, avatar_url, is_verified')
                 .in('id', providerIds)
+              if (profilesError) {
+                ;({ data: profiles, error: profilesError } = await supabase
+                  .from('profiles')
+                  .select('id, full_name, avatar_url')
+                  .in('id', providerIds))
+              }
               if (profilesError) throw profilesError
               const profileMap = {}
               ;(profiles || []).forEach(p => { profileMap[p.id] = p })
@@ -5384,7 +5390,7 @@ export default function Home() {
                   profile: prof,
                   provider_name: providerName,
                   provider_avatar_url: prof?.avatar_url || null,
-                  _verified: isServiceVerified(s, null),
+                  _verified: isServiceVerified(s, prof),
                 }
               })
             } catch (_) {

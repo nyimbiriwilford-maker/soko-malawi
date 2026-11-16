@@ -32,3 +32,5 @@
 
 32. Fix home-services-v2 rails <1100px - hsvc rail scroll-padding-left 14px, card/offer tile 240px fixed (flex 0 0 240px,width/max/min 240px, offer align-self stretch), cover 110px explicit; ts rail card/open tile aligned to 240px fixed (handlers unchanged)
 
+33. Fix home-services-v2 verified tick - provider line name+16px blue BadgeCheck (gap 4px, flex none, aria Verified) when verified via isServiceVerified(svc,profile) same as /services; profiles select includes is_verified with fallback to id,full_name,avatar_url; tick renders on rail and grid cards
+
