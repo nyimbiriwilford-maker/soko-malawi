@@ -1,4 +1,4 @@
-1. Inspect state - Home.jsx Phase C items present (LF_WEIGHTS, urgency bonus, LF_NEAR_KM, lfNearby filters, useEffect near, options check icon, Show all Malawi); build passed
+﻿1. Inspect state - Home.jsx Phase C items present (LF_WEIGHTS, urgency bonus, LF_NEAR_KM, lfNearby filters, useEffect near, options check icon, Show all Malawi); build passed
 2. Continue/verify - npm run build passed; preview started (HTTP 200); no TDZ errors found in code review3. Step 1 - Card redesign LookingForRequestCard.jsx + CSS (phone horizontal, tablet/laptop vertical, removed caption/buyer/avatar/desc/view details/icons, budget format, hover lift 1100px+)
 4. Step 2 - Grid/counts (.lfr-grid gaps/padding, initial counts 4/6/8 via window-width hook, See all requests button, buyer_requests limit 40->16)
 5. Step 3 - Section heading People Looking For 20px/22px weight 800 with See all green link 44px tap target
@@ -26,3 +26,5 @@
 27. Verify+bump home-shops-open-tile-v2 - build ok; no-undef clean; headless Chrome 360/768/1280: rail tile 140px dashed #0F9D58, Open a Shop -> /shop-setup, My Shop -> /shop/<slug>, laptop green btn 44px -> same; no console errors; sw v49
 28. Step 1 home-shops-laptop-tile - removed laptop See all shops/Open a Shop buttons row; Open a Shop tile is last cell of 4-col grid (width 100%, stretched, dashed, same openShop/ownsShop); hide 8th shop at 1100+ so 7 shops + tile; rail shows 8 shops + tile
 29. Step 2 home-shops-laptop-tile - heading "See all" link retained and is now the only /shops link in Trusted Shops on all sizes (grep confirmed single occurrence)
+30. Step 1 home-services-v2 - heading row (Services 20/22px, See all green 44px), removed icon/count/subtitle; Home-specific hsvc card (cover 110px, category pill, provider+verified, rating/new+city, price, full-width Book now stopPropagation/login prompt), rail 240px + 140px dashed Offer tile, laptop 4-col grid 7+tile, skeletons, empty dashed tile; services query select * in active/published limit 20 + one profiles fetch (shop_name/full_name/avatar/is_verified) attached via isServiceVerified, rankServices featured-first 8 rail/7 grid; card tap reuses existing ProviderModal/onServiceClick (no extra view counter)
+

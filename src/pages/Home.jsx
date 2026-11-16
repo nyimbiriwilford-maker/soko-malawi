@@ -36,6 +36,7 @@ import VerificationAttentionBanner from '../components/VerificationAttentionBann
 import SokoNav from '../components/SokoNav'
 import LookingForRequestCard, { LOOKING_FOR_CARD_CSS } from '../components/LookingFor/LookingForRequestCard'
 import { makeOffer } from '../lib/makeOffer'
+import { rankServices, isServiceVerified } from '../lib/serviceRanking'
 import {
   getGPSLocation,
   sortRequestsByViewerLocation,
@@ -2771,65 +2772,114 @@ function HomeWorkCard({
   )
 }
 
-function HomeServiceCard({
-  name,
-  category,
-  rate,
-  meta,
-  image,
-  providerId,
-  serviceId,
-  navigate,
-  currentUser,
-  onClick,
-}) {
-  const [imgErr, setImgErr] = React.useState(false)
+function formatMwRate(rate) {
+  if (rate == null || rate === '') return ''
+  const raw = String(rate).trim()
+  if (!raw) return ''
+  const unitMatch = raw.match(/\/(\s*[A-Za-z][A-Za-z0-9]*)\s*$/)
+  const unit = unitMatch ? '/' + unitMatch[1].trim() : ''
+  const num = parseFloat(raw.replace(/[^0-9.]/g, ''))
+  if (Number.isNaN(num)) return raw
+  const formatted = Math.round(num).toLocaleString('en-US')
+  return `From MWK ${formatted}${unit ? unit : ''}`
+}
 
-  function goChat(e) {
+function getServiceRating(svc) {
+  const count = Number(svc?.rating_count ?? svc?.review_count ?? 0) || 0
+  const avg = svc?.rating_avg != null ? Number(svc.rating_avg) : (svc?.rating != null ? Number(svc.rating) : NaN)
+  if (count > 0 && Number.isFinite(avg)) return { avg, count }
+  if (Number.isFinite(avg) && avg > 0) return { avg, count }
+  return null
+}
+
+function HomeServiceSkeletonCard() {
+  return (
+    <div className="hsvc-card hsvc-skel" aria-hidden="true">
+      <div className="hsvc-cover skeleton" />
+      <div className="hsvc-body">
+        <div className="skeleton" style={{ height: 14, width: '85%', borderRadius: 6 }} />
+        <div className="skeleton" style={{ height: 12, width: '60%', borderRadius: 6 }} />
+        <div className="skeleton" style={{ height: 12, width: '70%', borderRadius: 6 }} />
+        <div className="skeleton" style={{ height: 14, width: '50%', borderRadius: 6 }} />
+        <div className="skeleton" style={{ height: 44, width: '100%', borderRadius: 12, marginTop: 4 }} />
+      </div>
+    </div>
+  )
+}
+
+function HomeServiceCard({ svc, currentUser, navigate, onClick }) {
+  const [imgErr, setImgErr] = React.useState(false)
+  const image = !imgErr && Array.isArray(svc.media_urls) ? svc.media_urls[0] : null
+  const providerName = svc.provider_name || svc.profile?.shop_name || svc.profile?.full_name || ''
+  const verified = !!svc._verified
+  const rating = getServiceRating(svc)
+  const city = svc.city || 'Malawi'
+  const price = formatMwRate(svc.rate)
+  const title = svc.name || svc.title || 'Service'
+
+  function onBook(e) {
     e.stopPropagation()
     if (currentUser) {
-      navigate(`/chat/${providerId}/${serviceId}?src=service`, { state: { source: 'service' } })
+      navigate(`/chat/${svc.provider_id}/${svc.id}?src=service`, { state: { source: 'service' } })
+    } else {
+      navigate('/login')
     }
   }
 
+  function onKeyDown(e) {
+    if (e.key === 'Enter') { e.preventDefault(); onClick() }
+  }
+
   return (
-    <button
-      type="button"
+    <div
+      className="hsvc-card"
+      role="link"
+      tabIndex={0}
       onClick={onClick}
-      className="soko-service-card"
+      onKeyDown={onKeyDown}
+      style={{ cursor: 'pointer' }}
     >
-      <div className="soko-sc-top">
-        {image && !imgErr ? (
+      <div className="hsvc-cover">
+        {image ? (
           <img
             src={image}
             alt=""
             loading="lazy"
-            className="soko-sc-img"
+            width="240"
+            height="110"
+            className="hsvc-cover-img"
             onError={() => setImgErr(true)}
           />
         ) : (
-          <div className="soko-sc-fallback">
-            {Icon.wrench(28)}
-          </div>
+          <div className="hsvc-cover-empty" aria-hidden="true" />
         )}
-        <div className="soko-sc-overlay" />
-        {category && <span className="soko-sc-cat">{category}</span>}
+        {svc.category && <span className="hsvc-cat-pill">{svc.category}</span>}
       </div>
-      <div className="soko-sc-body">
-        <div className="soko-sc-name">{name}</div>
-        <div className="soko-sc-meta-row">
-          <span className="soko-sc-loc">{Icon.pin(9)} {meta || 'Malawi'}</span>
-          {rate && <span className="soko-sc-rate">{rate}</span>}
-        </div>
-        <div className="soko-sc-cta-row">
-            {currentUser && (
-              <span className="soko-sc-cta-btn" onClick={goChat}>
-                {Icon.lightning(11)} Book Now
-              </span>
-            )}
+      <div className="hsvc-body">
+        <div className="hsvc-title" title={title}>{title}</div>
+        {providerName ? (
+          <div className="hsvc-provider">
+            <span className="hsvc-provider-name">{providerName}</span>
+            {verified && <BadgeCheck size={16} color="#1A73E8" className="hsvc-verified" aria-label="Verified" />}
           </div>
+        ) : null}
+        <div className="hsvc-rating">
+          {rating ? (
+            <>
+              <Star size={12} color="#F9AB00" fill="#F9AB00" />
+              <span className="hsvc-rating-val">{rating.avg.toFixed(1)}</span>
+              <span className="hsvc-rating-count">({rating.count})</span>
+            </>
+          ) : (
+            <span className="hsvc-new-chip">New</span>
+          )}
+          <span className="hsvc-dot">·</span>
+          <span className="hsvc-city">{city}</span>
+        </div>
+        {price ? <div className="hsvc-price">{price}</div> : <div className="hsvc-price hsvc-price-empty" />}
+        <button type="button" className="hsvc-book" onClick={onBook}>Book now</button>
       </div>
-    </button>
+    </div>
   )
 }
 
@@ -3322,102 +3372,50 @@ function ShopsJobsServicesRow({ navigate, shops, services, loading, currentUser,
         }
 .soko-wc-apply-pop-copy:hover { background: rgba(255,255,255,0.2); }
 
-        /* ── Service Cards (premium) ── */
-        .soko-service-card {
-          flex-shrink: 0;
-          width: 220px;
-          max-width: min(220px, 70vw);
-          border: 1px solid #e5e7eb;
-          border-radius: 16px;
-          overflow: hidden;
-          background: #fff;
-          cursor: pointer;
-          padding: 0;
-          text-align: left;
-          font-family: inherit;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.04);
-          scroll-snap-align: start;
-          transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
-          display: flex;
-          flex-direction: column;
+        /* Home services v2 */
+        .hsvc-section { margin-bottom: 22px; }
+        .hsvc-head-row { display: flex; align-items: center; gap: 12px; flex-wrap: nowrap; margin-bottom: 16px; }
+        .hsvc-title-head { font-size: 20px; line-height: 22px; font-weight: 800; color: #202124; margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; }
+        @media (min-width: 1100px) { .hsvc-title-head { font-size: 22px; } }
+        .hsvc-seeall { flex: 0 0 auto; min-height: 44px; padding: 0 4px; display: inline-flex; align-items: center; justify-content: center; background: none; border: none; color: #0F9D58; font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer; white-space: nowrap; }
+        .hsvc-rail { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x proximity; padding: 0 14px; margin: 0 -14px; -webkit-overflow-scrolling: touch; scrollbar-width: none; -ms-overflow-style: none; }
+        .hsvc-rail::-webkit-scrollbar { display: none; }
+        .hsvc-grid { display: none; }
+        @media (min-width: 1100px) {
+          .hsvc-rail { display: none; }
+          .hsvc-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; padding: 0 24px; margin: 0 -24px; }
         }
-        .soko-service-card:hover {
-          transform: translateY(-4px);
-          box-shadow: 0 10px 28px rgba(0,0,0,0.07), 0 4px 12px rgba(0,0,0,0.03);
-          border-color: ${T.violet};
+        .hsvc-card { flex: 0 0 240px; min-width: 240px; background: #fff; border: 1px solid #e8eaed; border-radius: 16px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.04); display: flex; flex-direction: column; scroll-snap-align: start; }
+        @media (min-width: 1100px) {
+          .hsvc-card { flex: none; min-width: 0; width: 100%; height: 100%; }
+          .hsvc-card:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.08); }
         }
-        .soko-service-card:active { transform: scale(0.97); }
-        .soko-sc-top {
-          position: relative; width: 100%; height: 100px; flex-shrink: 0;
-          overflow: hidden; background: ${T.violetL};
-        }
-        .soko-sc-img {
-          width: 100%; height: 100%;
-          object-fit: cover; display: block;
-          transition: transform 0.35s ease;
-        }
-        .soko-service-card:hover .soko-sc-img { transform: scale(1.08); }
-        .soko-sc-fallback {
-          width: 100%; height: 100%;
-          display: flex; align-items: center; justify-content: center;
-          color: ${T.violet}; opacity: 0.6;
-        }
-        .soko-sc-overlay {
-          position: absolute; inset: 0;
-          background: linear-gradient(180deg, transparent 55%, rgba(0,0,0,0.35) 100%);
-          pointer-events: none;
-        }
-        .soko-sc-cat {
-          position: absolute; bottom: 8px; left: 8px;
-          font-size: 9.5px; font-weight: 800;
-          padding: 3px 9px; border-radius: 999px;
-          background: rgba(255,255,255,0.92);
-          color: ${T.violet};
-          backdrop-filter: blur(4px);
-          box-shadow: 0 1px 3px rgba(0,0,0,0.06);
-          max-width: calc(100% - 16px);
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-        .soko-sc-body {
-          padding: 10px 12px 12px;
-          display: flex; flex-direction: column; gap: 4px;
-          min-width: 0; flex: 1;
-        }
-        .soko-sc-name {
-          font-size: 13.5px; font-weight: 800; color: ${T.gray900}; line-height: 1.25;
-          overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
-        }
-        .soko-sc-meta-row {
-          display: flex; align-items: center; justify-content: space-between;
-          gap: 6px; margin-top: auto;
-        }
-        .soko-sc-loc {
-          display: inline-flex; align-items: center; gap: 3px;
-          font-size: 10.5px; font-weight: 600; color: ${T.gray500};
-        }
-        .soko-sc-rate {
-          font-size: 10.5px; font-weight: 800;
-          padding: 2px 8px; border-radius: 999px;
-          background: ${T.violetL};
-          color: ${T.violet};
-          white-space: nowrap;
-        }
-        .soko-sc-cta-row {
-          margin-top: 2px;
-        }
-        .soko-sc-cta-btn {
-          display: flex; align-items: center; justify-content: center; gap: 4px;
-          width: 100%; padding: 7px 0;
-          font-size: 11.5px; font-weight: 800;
-          border-radius: 999px;
-          background: ${T.violet};
-          color: #fff;
-          transition: opacity 0.2s;
-          letter-spacing: 0.1px;
-        }
-        .soko-sc-cta-btn:hover { opacity: 0.9; }
+        .hsvc-card:active { background: #f8f9fa; }
+        .hsvc-cover { position: relative; width: 100%; height: 110px; flex: 0 0 110px; background: #e6f6ed; overflow: hidden; }
+        .hsvc-cover-img, .hsvc-cover img { width: 100%; height: 110px; object-fit: cover; display: block; }
+        .hsvc-cover-empty { width: 100%; height: 110px; background: #e6f6ed; }
+        .hsvc-cat-pill { position: absolute; top: 8px; left: 8px; font-size: 11px; font-weight: 700; color: #0F9D58; background: #fff; border-radius: 999px; padding: 4px 8px; line-height: 1.2; max-width: calc(100% - 16px); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .hsvc-body { padding: 12px; display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; min-width: 0; }
+        .hsvc-title { font-size: 15px; font-weight: 700; color: #202124; line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .hsvc-provider { display: flex; align-items: center; gap: 4px; min-width: 0; }
+        .hsvc-provider-name { font-size: 12px; color: #5f6368; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1 1 auto; }
+        .hsvc-verified { flex: 0 0 auto; }
+        .hsvc-rating { display: flex; align-items: center; gap: 4px; font-size: 12px; color: #5f6368; min-width: 0; overflow: hidden; white-space: nowrap; }
+        .hsvc-rating-val { font-weight: 700; color: #202124; }
+        .hsvc-rating-count { color: #5f6368; }
+        .hsvc-new-chip { font-size: 11px; font-weight: 700; color: #5f6368; background: #f1f3f4; border-radius: 999px; padding: 1px 8px; line-height: 18px; }
+        .hsvc-dot { color: #9aa0a6; }
+        .hsvc-city { overflow: hidden; text-overflow: ellipsis; }
+        .hsvc-price { font-size: 14px; font-weight: 800; color: #0F9D58; margin-top: 2px; min-height: 20px; }
+        .hsvc-price-empty { min-height: 20px; }
+        .hsvc-book { margin-top: auto; width: 100%; height: 44px; border-radius: 12px; background: #0F9D58; color: #fff; border: none; font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer; }
+        .hsvc-book:active { opacity: 0.9; }
+        .hsvc-offer-tile { flex: 0 0 140px; width: 140px; min-height: 240px; border: 1px dashed #0F9D58; background: #fff; border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; padding: 12px; cursor: pointer; scroll-snap-align: start; }
+        .hsvc-offer-tile-empty { width: 100%; min-height: 180px; flex: none; }
+        .hsvc-offer-plus { width: 44px; height: 44px; border-radius: 50%; background: #e6f6ed; display: flex; align-items: center; justify-content: center; }
+        .hsvc-offer-label { font-size: 14px; font-weight: 700; color: #0F9D58; }
+        .hsvc-offer-sub { font-size: 12px; color: #5f6368; }
+        @media (min-width: 1100px) { .hsvc-offer-tile { width: 100%; flex: none; min-height: 100%; align-self: stretch; } .hsvc-grid .hsvc-offer-tile-empty { grid-column: 1 / -1; } }
 
         .soko-shops-view-all-btn {
           display: flex; align-items: center; justify-content: center; gap: 6px;
@@ -3479,28 +3477,7 @@ function ShopsJobsServicesRow({ navigate, shops, services, loading, currentUser,
           .soko-wc-loc { font-size: 10px; }
           .soko-wc-apply-btn { padding: 5px 0; font-size: 10.5px; }
 
-          /* Services — square-thumbnail row card like a mobile app list item */
-          .soko-service-card {
-            width: 100%;
-            max-width: 100%;
-            border-radius: 14px;
-            flex-direction: row;
-            align-items: stretch;
-          }
-          .soko-sc-top {
-            width: 88px;
-            min-width: 88px;
-            height: auto;
-            min-height: 88px;
-            border-right: 1px solid ${T.gray200};
-          }
-          .soko-sc-img { width: 100%; height: 100%; }
-          .soko-sc-cat { top: 6px; left: 6px; bottom: auto; font-size: 8px; padding: 2px 6px; max-width: calc(100% - 12px); }
-          .soko-sc-body { padding: 10px 12px; gap: 3px; }
-          .soko-sc-name { font-size: 13px; -webkit-line-clamp: 1; }
-          .soko-sc-loc { font-size: 10px; }
-          .soko-sc-rate { font-size: 10px; }
-          .soko-sc-cta-btn { width: auto; align-self: flex-start; padding: 4px 14px; font-size: 10.5px; }
+          .hsvc-rail { margin: 0 -14px; }
 
            .soko-sjs-block { margin-bottom: 18px; }
          }
@@ -3653,67 +3630,76 @@ function ShopsJobsServicesRow({ navigate, shops, services, loading, currentUser,
            ) : null}
         </div>
 
-        {/* ── Services ── */}
-        <div className="soko-sjs-block">
-          <div className="soko-shops-head">
-
-            <div className="soko-shops-head-title-row" style={{ marginBottom: 10 }}>
-              <h2 className="soko-shops-head-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 26, height: 26, borderRadius: 8, background: T.violetL, color: T.violet }}>{Icon.wrench(14)}</span>
-                Services
-                {services.length > 0 && (
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#fff', background: T.violet, borderRadius: 999, padding: '1px 8px', lineHeight: '18px' }}>
-                    {services.length}
-                  </span>
-                )}
-              </h2>
-              <button type="button" className="soko-shops-head-link" style={{ color: T.violet }} onClick={() => navigate('/services')}>
-                Browse Services {Icon.chevR(14)}
-              </button>
-            </div>
-            <p style={{ margin: '-6px 0 8px', fontSize: 12, color: T.gray500, fontWeight: 500, paddingLeft: 0 }}>Professional services at your fingertips</p>
+        {/* Services */}
+        <div className="hsvc-section">
+          <div className="hsvc-head-row">
+            <h2 className="hsvc-title-head">Services</h2>
+            <button type="button" className="hsvc-seeall" onClick={() => navigate('/services')} aria-label="See all services">See all →</button>
           </div>
           {loading ? (
-            <div className="soko-sjs-rail">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="skeleton" style={{ flexShrink: 0, width: 220, height: 160, borderRadius: 14 }} />
-              ))}
+            <>
+              <div className="hsvc-rail" aria-hidden="true">
+                {Array.from({ length: 4 }).map((_, i) => <HomeServiceSkeletonCard key={i} />)}
+                <div className="hsvc-offer-tile" style={{ visibility: 'hidden' }} />
+              </div>
+              <div className="hsvc-grid hsvc-grid-skel" aria-hidden="true">
+                {Array.from({ length: 8 }).map((_, i) => <HomeServiceSkeletonCard key={i} />)}
+              </div>
+            </>
+          ) : services.length === 0 ? (
+            <div
+              className="hsvc-offer-tile hsvc-offer-tile-empty"
+              role="button"
+              tabIndex={0}
+              onClick={() => navigate('/services')}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); navigate('/services') } }}
+            >
+              <span className="hsvc-offer-plus"><Plus size={24} strokeWidth={2.5} color="#0F9D58" /></span>
+              <span className="hsvc-offer-label">Offer a Service</span>
+              <span className="hsvc-offer-sub">Earn from your skills</span>
             </div>
-          ) : services.length > 0 ? (
-            <div ref={servicesRail} className="soko-sjs-rail">
-              {services.map(s => (
-                <HomeServiceCard
-                  key={s.id}
-                  name={s.name}
-                  category={s.category || 'Service'}
-                  rate={s.rate}
-                  meta={s.city || 'Malawi'}
-                  image={(Array.isArray(s.media_urls) ? s.media_urls[0] : null) || null}
-                  providerId={s.provider_id}
-                  serviceId={s.id}
-                  navigate={navigate}
-                  currentUser={currentUser}
-                  onClick={() => onServiceClick(s)}
-                />
-              ))}
-            </div>
-          ) : (
-            <EmptyMini text="No services listed yet." cta="Offer a Service" onClick={() => navigate('/services')} />
-          )}
+          ) : (() => {
+            const ranked = [...rankServices(services, { userId: currentUser?.id || null, seed: 1, now: Date.now() })]
+              .sort((a, b) => (b?.is_featured ? 1 : 0) - (a?.is_featured ? 1 : 0))
+            const railItems = ranked.slice(0, 8)
+            const gridItems = ranked.slice(0, 7)
+            const offerTile = (
+              <div
+                className="hsvc-offer-tile"
+                role="button"
+                tabIndex={0}
+                onClick={() => navigate('/services')}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); navigate('/services') } }}
+              >
+                <span className="hsvc-offer-plus"><Plus size={24} strokeWidth={2.5} color="#0F9D58" /></span>
+                <span className="hsvc-offer-label">Offer a Service</span>
+                <span className="hsvc-offer-sub">Earn from your skills</span>
+              </div>
+            )
+            return (
+              <>
+                <div ref={servicesRail} className="hsvc-rail">
+                  {railItems.map(s => (
+                    <HomeServiceCard key={s.id} svc={s} currentUser={currentUser} navigate={navigate} onClick={() => onServiceClick(s)} />
+                  ))}
+                  {offerTile}
+                </div>
+                <div className="hsvc-grid">
+                  {gridItems.map(s => (
+                    <HomeServiceCard key={s.id} svc={s} currentUser={currentUser} navigate={navigate} onClick={() => onServiceClick(s)} />
+                  ))}
+                  {offerTile}
+                </div>
+              </>
+            )
+          })()}
         </div>
       </div>
     </section>
   )
 }
 
-function EmptyMini({ text, cta, onClick }) {
-  return (
-    <div style={{ textAlign: 'center', padding: '24px 16px', border: `1.5px dashed ${T.gray200}`, borderRadius: 14 }}>
-      <p style={{ fontSize: 13, color: T.gray600, marginBottom: 10 }}>{text}</p>
-      <button onClick={onClick} style={{ background: T.gray900, color: '#fff', border: 'none', borderRadius: 10, padding: '7px 16px', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}>{cta}</button>
-    </div>
-  )
-}
+
 
 /* ─────────────────────────────────────────────────────────────────────────────
    SELL BANNER — compact single-shot strip (~160px)
@@ -5363,39 +5349,44 @@ export default function Home() {
       })(),
       (async () => {
         try {
-          // Services use status 'active' (ServiceForm / ServicesPage) — not 'published'
           let servicesQuery = supabase.from('services')
-            .select('id, name, category, city, created_at, media_urls, rate, rating, verified, provider_id, description, skills, contact, coverage, experience, jobs_done, available, views')
-            .eq('status', 'active')
+            .select('*')
+            .in('status', ['active', 'published'])
           if (activeDistrict !== 'All Districts') servicesQuery = servicesQuery.eq('city', activeDistrict)
           let { data, error } = await servicesQuery
             .order('created_at', { ascending: false })
-            .limit(8)
-          if (error && /media_urls|rate|rating|verified|provider_id|description|skills|contact|coverage|experience|jobs_done|available|views|column/i.test(error.message || '')) {
-            ;({ data, error } = await supabase.from('services')
-              .select('id, name, category, city, created_at, media_urls, rate, provider_id, description')
-              .eq('status', 'active')
-              .order('created_at', { ascending: false })
-              .limit(8))
+            .limit(20)
+          if (error) {
+            console.error('services query error:', error)
+            data = []
           }
-          if (error && /media_urls|rate|column/i.test(error.message || '')) {
-            ;({ data, error } = await supabase.from('services')
-              .select('id, name, category, city, created_at')
-              .eq('status', 'active')
-              .order('created_at', { ascending: false })
-              .limit(8))
+          let list = data || []
+          const providerIds = [...new Set(list.map(s => s.provider_id).filter(Boolean))]
+          if (providerIds.length) {
+            try {
+              const { data: profiles } = await supabase
+                .from('profiles')
+                .select('id, full_name, avatar_url, shop_name, is_verified')
+                .in('id', providerIds)
+              const profileMap = {}
+              ;(profiles || []).forEach(p => { profileMap[p.id] = p })
+              list = list.map(s => {
+                const prof = profileMap[s.provider_id] || null
+                const providerName = prof?.shop_name || prof?.full_name || ''
+                return {
+                  ...s,
+                  profile: prof,
+                  provider_name: providerName,
+                  provider_avatar_url: prof?.avatar_url || null,
+                  _verified: isServiceVerified(s, prof),
+                }
+              })
+            } catch (_) {
+              /* profiles query failed — render cards with provider line hidden */
+            }
           }
-          if (!error && (!data || data.length === 0)) {
-            const alt = await supabase.from('services')
-              .select('id, name, category, city, created_at, media_urls, rate')
-              .in('status', ['active', 'published'])
-              .order('created_at', { ascending: false })
-              .limit(8)
-            if (!alt.error && alt.data?.length) data = alt.data
-          }
-          if (error) console.error('services query error:', error)
           if (requestId !== sectionsRequestRef.current) return
-          setServices(data || [])
+          setServices(list)
         } catch (e) {
           console.error('services catch:', e)
           if (requestId !== sectionsRequestRef.current) return
