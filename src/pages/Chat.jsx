@@ -2924,7 +2924,8 @@ async function uploadAndSend(file, type, caption = '') {
     const src = chatSourceRef.current || chatSource || 'direct'
     if (src === 'request') {
       const ownerId = request?.user_id || null
-      return ownerId === currentUser?.id ? requestBuyerQuickReplies : requestSellerQuickReplies
+      if (!ownerId || !currentUser?.id) return []
+      return ownerId === currentUser.id ? requestBuyerQuickReplies : requestSellerQuickReplies
     }
     return ['Hi! Is this still available?', 'What is your best price?', 'Where can we meet?']
   })()
