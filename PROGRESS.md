@@ -7,3 +7,5 @@
 8. Step 3 v3 - heading People Looking For already in place
 9. Step 1 laptop-fix - card footer column at 768px+ (gap 10px, buyer row space-between, full-width button box-sizing border-box, no margin)
 10. Step 2 laptop-fix - grid aligns with heading/toolbar (section padding 14px/24px, grid no side padding)
+11. Step 1 toolbar-polish - removed View all button, lf-toolbar gap 8px no wrap/overflow, pills 44px flex on phone, round + button; natural width + Post Request on tablet+
+12. Step 2 toolbar-polish - buyer name sentence case 12px weight 600 #5f6368 max-width 96px ellipsis
