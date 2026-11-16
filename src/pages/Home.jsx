@@ -2837,7 +2837,7 @@ function ShopsJobsServicesRow({ navigate, shops, services, loading, currentUser,
   const shopsRail = useRef(null)
   const servicesRail = useRef(null)
 
-  const SHOP_INITIAL_COUNT = 6
+  const SHOP_INITIAL_COUNT = 8
   const SHOP_SHOW_MORE_CHUNK = 6
   const [shopShowMore, setShopShowMore] = React.useState(0)
   const shopImpressionCounts = React.useRef({})
@@ -3557,25 +3557,13 @@ function ShopsJobsServicesRow({ navigate, shops, services, loading, currentUser,
            }
            .ts-open-label { font-size: 14px; font-weight: 700; color: #0F9D58; }
            .ts-open-sub { font-size: 12px; color: #5f6368; text-align: center; line-height: 1.3; }
-           .ts-seeall-wrap { display: none; gap: 12px; justify-content: center; align-items: center; flex-wrap: wrap; }
-           .ts-open-btn {
-             height: 44px; padding: 0 20px; border-radius: 12px;
-             border: none; background: #0F9D58; color: #fff;
-             font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit;
-             display: inline-flex; align-items: center; gap: 6px;
-           }
            .ts-skel { flex: none; width: 220px; border-radius: 16px; overflow: hidden; background: #f1f3f4; }
            @media (min-width: 1100px) {
              .ts-rail { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; overflow: visible; padding: 0 24px; scroll-snap-type: none; }
              .ts-card { width: 100%; }
-             .ts-open-tile { display: none; }
-             .ts-seeall-wrap { display: flex; justify-content: center; align-items: center; gap: 12px; margin-top: 16px; flex-wrap: wrap; }
-             .ts-seeall-btn {
-               height: 44px; padding: 0 24px; border-radius: 12px;
-               border: 1.5px solid #0F9D58; background: transparent; color: #0F9D58;
-               font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit;
-             }
-              .ts-skel { width: 100%; }
+             .ts-open-tile { width: 100%; min-height: 0; }
+             .ts-rail .ts-card:nth-child(8) { display: none; }
+               .ts-skel { width: 100%; }
             }
        `}</style>
 
@@ -3648,7 +3636,7 @@ function ShopsJobsServicesRow({ navigate, shops, services, loading, currentUser,
                      </button>
                    )
                  })}
-                  {/* Open a Shop tile (rail only) */}
+                  {/* Open a Shop tile (rail end + laptop grid cell) */}
                   <button type="button" className="ts-open-tile" role="button" tabIndex={0}
                     onClick={openShop}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openShop() } }}>
@@ -3659,18 +3647,6 @@ function ShopsJobsServicesRow({ navigate, shops, services, loading, currentUser,
                     </span>
                     <span className="ts-open-label">{ownsShop ? 'My Shop' : 'Open a Shop'}</span>
                     <span className="ts-open-sub">Sell to buyers nationwide</span>
-                  </button>
-                </div>
-
-                <div className="ts-seeall-wrap">
-                  <button type="button" className="ts-seeall-btn" onClick={() => navigate('/shops')}>
-                    See all shops
-                  </button>
-                  <button type="button" className="ts-open-btn" onClick={openShop}>
-                    {ownsShop
-                      ? <Store size={18} strokeWidth={2.5} />
-                      : <Plus size={18} strokeWidth={2.5} />}
-                    {ownsShop ? 'My Shop' : 'Open a Shop'}
                   </button>
                 </div>
              </>

@@ -24,3 +24,4 @@
 25. Step 1 home-shops-open-tile-v2 - rail end tile replaced with dashed Open a Shop tile (140px, Plus circle, role/tabIndex/Enter, :active), handler uses currentUser.shop_slug -> My Shop/Store else /shop-setup
 26. Step 2 home-shops-open-tile-v2 - laptop row: existing outline See all shops + solid green #0F9D58 Open a Shop button (white, 44px, radius 12, pad 0 20), shared openShop handler + My Shop rule
 27. Verify+bump home-shops-open-tile-v2 - build ok; no-undef clean; headless Chrome 360/768/1280: rail tile 140px dashed #0F9D58, Open a Shop -> /shop-setup, My Shop -> /shop/<slug>, laptop green btn 44px -> same; no console errors; sw v49
+28. Step 1 home-shops-laptop-tile - removed laptop See all shops/Open a Shop buttons row; Open a Shop tile is last cell of 4-col grid (width 100%, stretched, dashed, same openShop/ownsShop); hide 8th shop at 1100+ so 7 shops + tile; rail shows 8 shops + tile
