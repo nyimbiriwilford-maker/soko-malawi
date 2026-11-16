@@ -2777,11 +2777,12 @@ function formatMwRate(rate) {
   const raw = String(rate).trim()
   if (!raw) return ''
   const unitMatch = raw.match(/\/(\s*[A-Za-z][A-Za-z0-9]*)\s*$/)
-  const unit = unitMatch ? '/' + unitMatch[1].trim() : ''
+  let unit = unitMatch ? '/' + unitMatch[1].trim() : ''
+  if (/^\/hour$/i.test(unit)) unit = '/hr'
   const num = parseFloat(raw.replace(/[^0-9.]/g, ''))
   if (Number.isNaN(num)) return raw
   const formatted = Math.round(num).toLocaleString('en-US')
-  return `From MWK ${formatted}${unit ? unit : ''}`
+  return `From MK ${formatted}${unit ? unit : ''}`
 }
 
 function getServiceRating(svc) {
@@ -2810,7 +2811,7 @@ function HomeServiceSkeletonCard() {
 function HomeServiceCard({ svc, currentUser, navigate, onClick }) {
   const [imgErr, setImgErr] = React.useState(false)
   const image = !imgErr && Array.isArray(svc.media_urls) ? svc.media_urls[0] : null
-  const providerName = svc.provider_name || svc.profile?.shop_name || svc.profile?.full_name || ''
+  const providerName = svc.provider_name || svc.profile?.full_name || ''
   const verified = !!svc._verified
   const rating = getServiceRating(svc)
   const city = svc.city || 'Malawi'
@@ -3632,9 +3633,13 @@ function ShopsJobsServicesRow({ navigate, shops, services, loading, currentUser,
 
         {/* Services */}
         <div className="hsvc-section">
-          <div className="hsvc-head-row">
-            <h2 className="hsvc-title-head">Services</h2>
-            <button type="button" className="hsvc-seeall" onClick={() => navigate('/services')} aria-label="See all services">See all →</button>
+          <div className="soko-shops-head">
+            <div className="soko-shops-head-title-row" style={{ marginBottom: 16 }}>
+              <h2 className="soko-shops-head-title" style={{ fontSize: 'clamp(20px, 2vw, 22px)', fontWeight: 800, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Services</h2>
+              <button type="button" className="soko-shops-head-link" onClick={() => navigate('/services')} style={{ minHeight: 44, color: '#0F9D58' }}>
+                See all {Icon.chevR(14)}
+              </button>
+            </div>
           </div>
           {loading ? (
             <>
@@ -5364,21 +5369,22 @@ export default function Home() {
           const providerIds = [...new Set(list.map(s => s.provider_id).filter(Boolean))]
           if (providerIds.length) {
             try {
-              const { data: profiles } = await supabase
+              const { data: profiles, error: profilesError } = await supabase
                 .from('profiles')
-                .select('id, full_name, avatar_url, shop_name, is_verified')
+                .select('id, full_name, avatar_url')
                 .in('id', providerIds)
+              if (profilesError) throw profilesError
               const profileMap = {}
               ;(profiles || []).forEach(p => { profileMap[p.id] = p })
               list = list.map(s => {
                 const prof = profileMap[s.provider_id] || null
-                const providerName = prof?.shop_name || prof?.full_name || ''
+                const providerName = prof?.full_name || ''
                 return {
                   ...s,
                   profile: prof,
                   provider_name: providerName,
                   provider_avatar_url: prof?.avatar_url || null,
-                  _verified: isServiceVerified(s, prof),
+                  _verified: isServiceVerified(s, null),
                 }
               })
             } catch (_) {

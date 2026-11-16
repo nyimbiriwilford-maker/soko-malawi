@@ -28,3 +28,5 @@
 29. Step 2 home-shops-laptop-tile - heading "See all" link retained and is now the only /shops link in Trusted Shops on all sizes (grep confirmed single occurrence)
 30. Step 1 home-services-v2 - heading row (Services 20/22px, See all green 44px), removed icon/count/subtitle; Home-specific hsvc card (cover 110px, category pill, provider+verified, rating/new+city, price, full-width Book now stopPropagation/login prompt), rail 240px + 140px dashed Offer tile, laptop 4-col grid 7+tile, skeletons, empty dashed tile; services query select * in active/published limit 20 + one profiles fetch (shop_name/full_name/avatar/is_verified) attached via isServiceVerified, rankServices featured-first 8 rail/7 grid; card tap reuses existing ProviderModal/onServiceClick (no extra view counter)
 
+31. Fix home-services-v2 - price format From MK + /hr, heading/See all match Trusted Shops classes, profiles query select only id,full_name,avatar_url (remove shop_name/is_verified) to fix 400 and show provider name from full_name
+
