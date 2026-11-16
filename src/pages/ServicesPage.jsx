@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { rankServices, isServiceVerified } from '../lib/serviceRanking'
@@ -1322,7 +1323,7 @@ export default function Services() {
         )}
       </div>
 
-      {filterOpen && isMobile && (
+      {filterOpen && isMobile && createPortal(
         <>
           <div className="svc-sheet-backdrop" onClick={() => setFilterOpen(false)} />
           <div
@@ -1404,10 +1405,11 @@ export default function Services() {
               <button type="button" className="svc-apply-btn" onClick={applyFilter}>Apply</button>
             </div>
           </div>
-        </>
+        </>,
+        document.body
       )}
 
-      {sortOpen && isMobile && (
+      {sortOpen && isMobile && createPortal(
         <>
           <div className="svc-sheet-backdrop" onClick={() => setSortOpen(false)} />
           <div
@@ -1441,7 +1443,8 @@ export default function Services() {
               <span className="svc-sort-label">Verified first</span>
             </button>
           </div>
-        </>
+        </>,
+        document.body
       )}
 
       {selectedProvider && (
