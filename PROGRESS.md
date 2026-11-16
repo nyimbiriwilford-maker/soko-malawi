@@ -2,3 +2,6 @@
 2. Continue/verify - npm run build passed; preview started (HTTP 200); no TDZ errors found in code review3. Step 1 - Card redesign LookingForRequestCard.jsx + CSS (phone horizontal, tablet/laptop vertical, removed caption/buyer/avatar/desc/view details/icons, budget format, hover lift 1100px+)
 4. Step 2 - Grid/counts (.lfr-grid gaps/padding, initial counts 4/6/8 via window-width hook, See all requests button, buyer_requests limit 40->16)
 5. Step 3 - Section heading People Looking For 20px/22px weight 800 with See all green link 44px tap target
+6. Step 1 v3 - Home now renders LookingForRequestCard (shared redesigned card); removed old inline lfr-card markup/CSS
+7. Step 2 v3 - grid/counts already in place (4/6/8, See all requests, limit 16)
+8. Step 3 v3 - heading People Looking For already in place
