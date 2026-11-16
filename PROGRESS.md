@@ -30,3 +30,5 @@
 
 31. Fix home-services-v2 - price format From MK + /hr, heading/See all match Trusted Shops classes, profiles query select only id,full_name,avatar_url (remove shop_name/is_verified) to fix 400 and show provider name from full_name
 
+32. Fix home-services-v2 rails <1100px - hsvc rail scroll-padding-left 14px, card/offer tile 240px fixed (flex 0 0 240px,width/max/min 240px, offer align-self stretch), cover 110px explicit; ts rail card/open tile aligned to 240px fixed (handlers unchanged)
+

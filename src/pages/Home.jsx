@@ -3379,14 +3379,14 @@ function ShopsJobsServicesRow({ navigate, shops, services, loading, currentUser,
         .hsvc-title-head { font-size: 20px; line-height: 22px; font-weight: 800; color: #202124; margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; }
         @media (min-width: 1100px) { .hsvc-title-head { font-size: 22px; } }
         .hsvc-seeall { flex: 0 0 auto; min-height: 44px; padding: 0 4px; display: inline-flex; align-items: center; justify-content: center; background: none; border: none; color: #0F9D58; font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer; white-space: nowrap; }
-        .hsvc-rail { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x proximity; padding: 0 14px; margin: 0 -14px; -webkit-overflow-scrolling: touch; scrollbar-width: none; -ms-overflow-style: none; }
+        .hsvc-rail { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x proximity; scroll-padding-left: 14px; padding: 0 14px; margin: 0 -14px; -webkit-overflow-scrolling: touch; scrollbar-width: none; -ms-overflow-style: none; }
         .hsvc-rail::-webkit-scrollbar { display: none; }
         .hsvc-grid { display: none; }
         @media (min-width: 1100px) {
           .hsvc-rail { display: none; }
           .hsvc-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; padding: 0 24px; margin: 0 -24px; }
         }
-        .hsvc-card { flex: 0 0 240px; min-width: 240px; background: #fff; border: 1px solid #e8eaed; border-radius: 16px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.04); display: flex; flex-direction: column; scroll-snap-align: start; }
+        .hsvc-card { flex: 0 0 240px; width: 240px; max-width: 240px; min-width: 240px; background: #fff; border: 1px solid #e8eaed; border-radius: 16px; overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.04); display: flex; flex-direction: column; scroll-snap-align: start; }
         @media (min-width: 1100px) {
           .hsvc-card { flex: none; min-width: 0; width: 100%; height: 100%; }
           .hsvc-card:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(0,0,0,0.08); }
@@ -3411,7 +3411,7 @@ function ShopsJobsServicesRow({ navigate, shops, services, loading, currentUser,
         .hsvc-price-empty { min-height: 20px; }
         .hsvc-book { margin-top: auto; width: 100%; height: 44px; border-radius: 12px; background: #0F9D58; color: #fff; border: none; font-size: 14px; font-weight: 700; font-family: inherit; cursor: pointer; }
         .hsvc-book:active { opacity: 0.9; }
-        .hsvc-offer-tile { flex: 0 0 140px; width: 140px; min-height: 240px; border: 1px dashed #0F9D58; background: #fff; border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; padding: 12px; cursor: pointer; scroll-snap-align: start; }
+        .hsvc-offer-tile { flex: 0 0 240px; width: 240px; max-width: 240px; min-width: 240px; align-self: stretch; min-height: 240px; border: 1px dashed #0F9D58; background: #fff; border-radius: 16px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center; padding: 12px; cursor: pointer; scroll-snap-align: start; }
         .hsvc-offer-tile-empty { width: 100%; min-height: 180px; flex: none; }
         .hsvc-offer-plus { width: 44px; height: 44px; border-radius: 50%; background: #e6f6ed; display: flex; align-items: center; justify-content: center; }
         .hsvc-offer-label { font-size: 14px; font-weight: 700; color: #0F9D58; }
@@ -3489,8 +3489,8 @@ function ShopsJobsServicesRow({ navigate, shops, services, loading, currentUser,
              -webkit-overflow-scrolling: touch;
            }
            .ts-rail::-webkit-scrollbar { display: none; }
-           .ts-card {
-             flex: none; width: 220px; scroll-snap-align: start; position: relative;
+            .ts-card {
+              flex: 0 0 240px; width: 240px; max-width: 240px; min-width: 240px; scroll-snap-align: start; position: relative;
              background: #fff; border: 1px solid #e8eaed; border-radius: 16px;
              overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
              cursor: pointer; padding: 0; text-align: left; font-family: inherit;
@@ -3521,8 +3521,8 @@ function ShopsJobsServicesRow({ navigate, shops, services, loading, currentUser,
            .ts-rating { font-weight: 700; color: #202124; }
            .ts-reviews { color: #5f6368; }
            .ts-new { font-size: 11px; font-weight: 600; color: #5f6368; background: #f1f3f4; border-radius: 999px; padding: 1px 6px; }
-           .ts-open-tile {
-             flex: none; width: 140px; min-height: 100%; scroll-snap-align: start;
+            .ts-open-tile {
+              flex: 0 0 240px; width: 240px; max-width: 240px; min-width: 240px; align-self: stretch; min-height: 100%; scroll-snap-align: start;
              border: 1px dashed #0F9D58; border-radius: 16px; background: #fff;
              display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
              cursor: pointer; font-family: inherit;
