@@ -24,7 +24,7 @@ import React, {
   useEffect, useState, useMemo, useRef, useCallback, useLayoutEffect,
 } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MapPin, Clock, Zap, Eye, MessageCircle, Plus, ChevronRight, Navigation, Sparkles, TrendingUp, Star, UserCheck, AlertTriangle, DollarSign, ArrowRight, ShieldCheck, Search, Heart, Share2, Flag, ExternalLink, Check } from 'lucide-react'
+import { MapPin, Clock, Zap, Eye, MessageCircle, Plus, ChevronRight, Navigation, Sparkles, TrendingUp, Star, UserCheck, AlertTriangle, DollarSign, ArrowRight, ShieldCheck, Search, Heart, Share2, Flag, ExternalLink, Check, BadgeCheck } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { supabase }              from '../lib/supabase'
 import useSearchAnimation        from '../hooks/useSearchAnimation'
@@ -3499,7 +3499,66 @@ function ShopsJobsServicesRow({ navigate, shops, services, loading, currentUser,
           .soko-sc-rate { font-size: 10px; }
           .soko-sc-cta-btn { width: auto; align-self: flex-start; padding: 4px 14px; font-size: 10.5px; }
 
-          .soko-sjs-block { margin-bottom: 18px; }
+           /* Trusted Shops v2 card */
+           .ts-rail {
+             display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x proximity;
+             scroll-padding-left: 14px; padding: 0 14px; scrollbar-width: none;
+             -webkit-overflow-scrolling: touch;
+           }
+           .ts-rail::-webkit-scrollbar { display: none; }
+           .ts-card {
+             flex: none; width: 220px; scroll-snap-align: start; position: relative;
+             background: #fff; border: 1px solid #e8eaed; border-radius: 16px;
+             overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
+             cursor: pointer; padding: 0; text-align: left; font-family: inherit;
+             display: flex; flex-direction: column; box-sizing: border-box;
+           }
+           .ts-card:active { background: #f8f9fa; }
+           @media (hover: hover) and (pointer: fine) {
+             .ts-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(15,157,88,0.12); border-color: #bbf7d0; }
+           }
+           .ts-cover { position: relative; width: 100%; height: 88px; overflow: hidden; background: #e6f6ed; }
+           .ts-cover-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+           .ts-cover-tint { width: 100%; height: 100%; background: #e6f6ed; }
+           .ts-logo {
+             width: 44px; height: 44px; border-radius: 50%; border: 2px solid #fff;
+             overflow: hidden; background: #e6f6ed; position: absolute;
+             left: 12px; bottom: 0; transform: translateY(50%);
+             display: flex; align-items: center; justify-content: center;
+           }
+           .ts-logo-img { width: 100%; height: 100%; object-fit: cover; }
+           .ts-logo-letter { font-size: 16px; font-weight: 700; color: #0F9D58; }
+           .ts-body { padding: 28px 12px 12px; display: flex; flex-direction: column; gap: 4px; }
+           .ts-name-row { display: flex; align-items: center; gap: 4px; }
+           .ts-name { font-size: 15px; font-weight: 700; color: #202124; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+           .ts-category { font-size: 12px; color: #5f6368; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+           .ts-meta { display: flex; align-items: center; gap: 4px; font-size: 12px; color: #5f6368; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+           .ts-rating { font-weight: 700; color: #202124; }
+           .ts-reviews { color: #5f6368; }
+           .ts-new { font-size: 11px; font-weight: 600; color: #5f6368; background: #f1f3f4; border-radius: 999px; padding: 1px 6px; }
+           .ts-end-tile {
+             flex: none; width: 140px; min-height: 100%; scroll-snap-align: start;
+             border: 1px dashed #0F9D58; border-radius: 16px; background: #fff;
+             display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+             cursor: pointer; font-family: inherit; color: #0F9D58; font-size: 13px; font-weight: 700;
+             box-sizing: border-box; min-height: 44px;
+           }
+           .ts-end-arrow { font-size: 20px; }
+           .ts-seeall-wrap { display: none; }
+           .ts-skel { flex: none; width: 220px; border-radius: 16px; overflow: hidden; background: #f1f3f4; }
+           @media (min-width: 1100px) {
+             .ts-rail { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; overflow: visible; padding: 0; scroll-snap-type: none; }
+             .ts-card { width: 100%; }
+             .ts-end-tile { display: none; }
+             .ts-seeall-wrap { display: flex; justify-content: center; margin-top: 16px; }
+             .ts-seeall-btn {
+               height: 44px; padding: 0 24px; border-radius: 12px;
+               border: 1.5px solid #0F9D58; background: transparent; color: #0F9D58;
+               font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit;
+             }
+             .ts-skel { width: 100%; }
+           }
+           .soko-sjs-block { margin-bottom: 18px; }
         }
       `}</style>
 
@@ -3508,127 +3567,82 @@ function ShopsJobsServicesRow({ navigate, shops, services, loading, currentUser,
         {/* ── Shops (directory-style cards) ── */}
         <div className="soko-sjs-block">
           <div className="soko-shops-head">
-            <div className="soko-shops-head-intro">
-              <p>Discover verified businesses and local shops ready to serve you.</p>
-              <div className="soko-shops-head-badges">
-                <span className="soko-shops-head-badge">✓ Verified Businesses</span>
-                <span className="soko-shops-head-badge">✓ Local Shops</span>
-                <span className="soko-shops-head-badge">✓ Fast Response</span>
-                <span className="soko-shops-head-badge">✓ Trusted Sellers</span>
-              </div>
-            </div>
-            <div className="soko-shops-head-title-row">
-              <h2 className="soko-shops-head-title">Trusted Shops</h2>
-              <button type="button" className="soko-shops-head-link" onClick={() => navigate('/shops')}>
-                View All Shops {Icon.chevR(14)}
-              </button>
-</div>
-</div>
-          {loading ? (
-            <div className="soko-shops-grid">
-              {[1,2,3,4,5,6].map(i => (
-                <div key={i} className="soko-shop-card-dir-skel">
-                  <div className="skeleton" style={{ width:'100%', height:160, borderRadius:'20px 20px 0 0' }} />
-                  <div style={{ padding:'40px 14px 16px', display:'flex', flexDirection:'column', gap:8, alignItems:'center' }}>
-                    <div className="skeleton" style={{ height:14, width:'60%', borderRadius:4 }} />
-                    <div className="skeleton" style={{ height:11, width:'40%', borderRadius:4 }} />
-                    <div className="skeleton" style={{ height:11, width:'75%', borderRadius:4 }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : shops.length > 0 ? (
-            <>
-              <div className="soko-shops-grid">
-                {shownShops.map(s => {
-                  const rating = Number(s.rating) || 0
-                  return (
-                    <button key={s.id} type="button" className="soko-shop-card-dir" onClick={() => navigate('/shop/' + s.slug)}>
-                      <div className="sscd-cover">
-                        {s.cover_url ? (
-                          <img src={s.cover_url} alt="" loading="lazy" className="sscd-cover-img soko-img-reveal"
-                            onError={e => { e.currentTarget.style.display = 'none' }} />
-                        ) : s.logo_url ? (
-                          <>
-                            <img src={s.logo_url} alt="" className="sscd-cover-blur" />
-                            <div className="sscd-cover-overlay" />
-                          </>
-                        ) : (
-                          <div className="sscd-cover-plug" />
-                        )}
-                        {s.is_verified && (
-                          <span className="sscd-badge sscd-badge-verified">
-                            {Icon.verify(11)} Verified
-                          </span>
-                        )}
-                        <div className="sscd-cover-fade" />
-                      </div>
-
-                      <div className="sscd-logo-wrap">
-                        <div className="sscd-logo">
-                          {s.logo_url
-                            ? <img src={s.logo_url} alt="" className="sscd-logo-img" />
-                            : <span className="sscd-logo-letter">{(s.name?.[0] || 'S').toUpperCase()}</span>}
-                        </div>
-                      </div>
-
-                      <div className="sscd-body">
-                        <div className="sscd-name">{s.name}</div>
-                        <div className="sscd-category">{s.category || 'Shop'}</div>
-
-                        <div className="sscd-meta">
-                          <span className="sscd-meta-group">
-                            <span className="sscd-meta-stars">
-                              {([1,2,3,4,5]).map(i => <span key={i} style={{display:'inline-flex'}}>{Icon.star(8, i <= rating ? T.amber : (i - 0.5 <= rating ? T.amber : T.gray300))}</span>)}
-                            </span>
-                            <span className="sscd-meta-score">{rating ? rating.toFixed(1) : 'New'}</span>
-                          </span>
-                          <span className="sscd-meta-group">
-                            <span className="sscd-meta-ico" style={{ color: T.gray400 }}>{Icon.layers(10)}</span>
-                            <span className="sscd-meta-num">{s.listing_count || 0}</span>
-                          </span>
-                          <span className="sscd-meta-group">
-                            <span className="sscd-meta-ico" style={{ color: T.gray400 }}>{Icon.user(10)}</span>
-                            <span className="sscd-meta-num">{(s.follower_count||0) >= 1000 ? ((s.follower_count||0)/1000).toFixed(1).replace(/\.0$/,'')+'K' : s.follower_count||0}</span>
-                          </span>
-                          <span className="sscd-meta-group">
-                            <span className="sscd-meta-ico" style={{ color: T.gray400 }}>{Icon.pin(9)}</span>
-                            <span style={{ color: T.gray500 }}>{s.city || 'Malawi'}</span>
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="sscd-cta">
-                        Visit Shop {Icon.chevR(14)}
-                      </div>
-                    </button>
-                  )
-                })}
-              </div>
-
-              {hasMoreShops && (
-                <button type="button" className="soko-shops-view-all-btn" onClick={() => setShopShowMore(p => p + SHOP_SHOW_MORE_CHUNK)}>
-                  Browse more shops ({rankedShops.length - shopDisplayCount} remaining) {Icon.chevR(16)}
-                </button>
-              )}
-              {!hasMoreShops && rankedShops.length > 0 && (
-                <button type="button" className="soko-shops-view-all-btn" onClick={() => navigate('/shops')} style={{ borderColor: T.green, color: T.green }}>
-                  View All Shops {Icon.chevR(16)}
-                </button>
-              )}
-            </>
-          ) : (
-            <div className="soko-shops-grid">
-              <button type="button" className="soko-shop-card-open" onClick={() => navigate('/shop-setup')}
-                style={{ gridColumn: '1 / -1', justifySelf: 'center', maxWidth: 280 }}>
-                <div className="sscd-open-inner" style={{ padding: '40px 24px' }}>
-                  <div className="sscd-open-icon">{Icon.plus(28)}</div>
-                  <div className="sscd-open-title">Open a shop</div>
-                  <div className="sscd-open-sub">Reach buyers nationwide</div>
-                </div>
+            <div className="soko-shops-head-title-row" style={{ marginBottom: 16 }}>
+              <h2 className="soko-shops-head-title" style={{ fontSize: 'clamp(20px, 2vw, 22px)', fontWeight: 800, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Trusted Shops</h2>
+              <button type="button" className="soko-shops-head-link" onClick={() => navigate('/shops')} style={{ minHeight: 44, color: '#0F9D58' }}>
+                See all {Icon.chevR(14)}
               </button>
             </div>
-          )}
+          </div>
+           {loading ? (
+             <div className="ts-rail">
+               {[1,2,3,4].map(i => (
+                 <div key={i} className="ts-skel">
+                   <div style={{ width:'100%', height:88, background:'#f1f3f4' }} />
+                   <div style={{ padding:'28px 12px 12px', display:'flex', flexDirection:'column', gap:4 }}>
+                     <div style={{ height:14, width:'60%', background:'#f1f3f4', borderRadius:4 }} />
+                     <div style={{ height:11, width:'40%', background:'#f1f3f4', borderRadius:4 }} />
+                     <div style={{ height:11, width:'75%', background:'#f1f3f4', borderRadius:4 }} />
+                   </div>
+                 </div>
+               ))}
+             </div>
+           ) : shops.length > 0 ? (
+             <>
+               <div className="ts-rail">
+                 {shownShops.map(s => {
+                   const rating = Number(s.rating) || 0
+                   return (
+                     <button key={s.id} type="button" className="ts-card" role="link" tabIndex={0}
+                       onClick={() => navigate('/shop/' + s.slug)}
+                       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/shop/' + s.slug) } }}>
+                       <div className="ts-cover">
+                         {s.cover_url
+                           ? <img src={s.cover_url} alt="" loading="lazy" className="ts-cover-img" />
+                           : <div className="ts-cover-tint" />}
+                       </div>
+                       <div className="ts-logo">
+                         {s.logo_url
+                           ? <img src={s.logo_url} alt="" className="ts-logo-img" />
+                           : <span className="ts-logo-letter">{(s.name?.[0] || 'S').toUpperCase()}</span>}
+                       </div>
+                       <div className="ts-body">
+                         <div className="ts-name-row">
+                           <span className="ts-name">{s.name}</span>
+                           {s.is_verified && <BadgeCheck size={16} color="#1A73E8" />}
+                         </div>
+                         <div className="ts-category">{s.category || 'Shop'}</div>
+                         <div className="ts-meta">
+                           {rating > 0 ? (
+                             <>
+                               <Star size={12} color="#F9AB00" fill="#F9AB00" />
+                               <span className="ts-rating">{rating.toFixed(1)}</span>
+                               <span className="ts-reviews">({s.review_count || 0})</span>
+                             </>
+                           ) : (
+                             <span className="ts-new">New</span>
+                           )}
+                           <span>· {s.listing_count || 0} items</span>
+                           <span>· {s.city || 'Malawi'}</span>
+                         </div>
+                       </div>
+                     </button>
+                   )
+                 })}
+                 {/* end tile (rail only) */}
+                 <button type="button" className="ts-end-tile" onClick={() => navigate('/shops')}>
+                   <span className="ts-end-arrow">→</span>
+                   <span>See all shops</span>
+                 </button>
+               </div>
+
+               <div className="ts-seeall-wrap">
+                 <button type="button" className="ts-seeall-btn" onClick={() => navigate('/shops')}>
+                   See all shops
+                 </button>
+               </div>
+             </>
+           ) : null}
         </div>
 
         {/* ── Services ── */}
@@ -5317,8 +5331,8 @@ export default function Home() {
             .order('listing_count', { ascending: false, nullsFirst: false })
             .order('follower_count', { ascending: false, nullsFirst: false })
             .order('created_at', { ascending: false, nullsFirst: false })
-            .limit(12)
-          if (error && /lat|lng|updated_at|column/i.test(error.message)) {
+            .limit(8)
+           if (error && /lat|lng|updated_at|column/i.test(error.message)) {
             ;({ data, error } = await supabase.from('shops')
               .select(SHOP_SELECT)
               .eq('is_active', true)
@@ -5327,8 +5341,8 @@ export default function Home() {
               .order('rating', { ascending: false, nullsFirst: false })
               .order('listing_count', { ascending: false, nullsFirst: false })
               .order('follower_count', { ascending: false, nullsFirst: false })
-              .order('created_at', { ascending: false, nullsFirst: false })
-              .limit(12))
+               .order('created_at', { ascending: false, nullsFirst: false })
+               .limit(8))
           }
           if (error) console.error('shops query error:', error)
           if (requestId !== sectionsRequestRef.current) return
