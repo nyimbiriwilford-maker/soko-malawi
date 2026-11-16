@@ -3666,6 +3666,12 @@ function ShopsJobsServicesRow({ navigate, shops, services, loading, currentUser,
                   <button type="button" className="ts-seeall-btn" onClick={() => navigate('/shops')}>
                     See all shops
                   </button>
+                  <button type="button" className="ts-open-btn" onClick={openShop}>
+                    {ownsShop
+                      ? <Store size={18} strokeWidth={2.5} />
+                      : <Plus size={18} strokeWidth={2.5} />}
+                    {ownsShop ? 'My Shop' : 'Open a Shop'}
+                  </button>
                 </div>
              </>
            ) : null}
