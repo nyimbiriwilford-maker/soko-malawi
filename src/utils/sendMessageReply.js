@@ -60,14 +60,27 @@ export async function sendChatMessage({
     inserted = res.data
     error = res.error
   }
-  if (error && /chat_source|shop_id|request_id|column/i.test(error.message || '')) {
+  if (error) {
+    const errMsg = error.message || ''
     const legacy = { ...msgData }
-    delete legacy.chat_source
-        delete legacy.shop_id
-    delete legacy.request_id
-    const res2 = await supabase.from('messages').insert(legacy).select('*').single()
-    inserted = res2.data
-    error = res2.error
+    let stripped = false
+    if (/chat_source/i.test(errMsg) && 'chat_source' in legacy) {
+      delete legacy.chat_source
+      stripped = true
+    }
+    if (/shop_id/i.test(errMsg) && 'shop_id' in legacy) {
+      delete legacy.shop_id
+      stripped = true
+    }
+    if (/request_id/i.test(errMsg) && 'request_id' in legacy) {
+      delete legacy.request_id
+      stripped = true
+    }
+    if (stripped) {
+      const res2 = await supabase.from('messages').insert(legacy).select('*').single()
+      inserted = res2.data
+      error = res2.error
+    }
   }
 
   if (error) return { error }
@@ -86,6 +99,7 @@ export async function sendChatMessage({
         sender_name: name,
         context_id: contextId || null,
         message_id: inserted?.id || null,
+        ...contextFields,
         chat_source: chatSource || 'direct',
         listing_title: contextTitle || null,
       },
@@ -98,11 +112,12 @@ export async function sendChatMessage({
   return { data: inserted }
 }
 
-export async function sendMessageReply({ toUserId, body, contextId, listingTitle }) {
+export async function sendMessageReply({ toUserId, body, contextId, chatSource, listingTitle }) {
   return sendChatMessage({
     toUserId,
     body,
     mediaType: 'text',
+    chatSource,
     contextId,
     contextTitle: listingTitle,
   })

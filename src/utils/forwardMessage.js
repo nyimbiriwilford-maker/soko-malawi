@@ -152,6 +152,7 @@ export async function forwardMessages({
           sender_name: senderName,
           context_id: target.contextId || null,
           message_id: inserted[inserted.length - 1]?.id || null,
+          ...messageContextFields(target.source || 'direct', target.contextId),
           chat_source: target.source || 'direct',
           forwarded: true,
         },

@@ -34,3 +34,9 @@
 
 33. Fix home-services-v2 verified tick - provider line name+16px blue BadgeCheck (gap 4px, flex none, aria Verified) when verified via isServiceVerified(svc,profile) same as /services; profiles select includes is_verified with fallback to id,full_name,avatar_url; tick renders on rail and grid cards
 
+34. Report chat-popup-reply bug (popup reply vs normal chat) and add sql/chat_popup_diagnose.sql (no code changes)
+35. chat-popup-reply step 1: sendMessageReply accepts chatSource and passes it to sendChatMessage; notifications carry chat_source; legacy retry only strips columns named in the error (keeps listing_id/service_id)
+36. chat-popup-reply step 2: NotificationToast resolves chatSource from notification data, else the anchor message by message_id, else the latest message between the pair; reply keeps original source/context
+37. chat-popup-reply step 3: new_message producers audited (Chat.jsx, forwardMessage.js, sendMessageReply.js); all now carry chat_source plus typed listing/service/shop/request context (offer/wanted/call notifications use other types)
+38. src/utils/sendMessageReply.test-note: quick replies now reuse the original message's chat_source and typed context (message_id lookup, latest-message fallback), so they stay in the same conversation instead of creating a new direct chat
+39. chat-popup-reply step 3-4: verified no-undef clean for the four chat files, build passed, sw cache bumped sokomw-v52 (live v51), merged to master and pushed
