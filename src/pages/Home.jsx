@@ -3499,8 +3499,10 @@ function ShopsJobsServicesRow({ navigate, shops, services, loading, currentUser,
           .soko-sc-rate { font-size: 10px; }
           .soko-sc-cta-btn { width: auto; align-self: flex-start; padding: 4px 14px; font-size: 10.5px; }
 
-           /* Trusted Shops v2 card */
-           .ts-rail {
+           .soko-sjs-block { margin-bottom: 18px; }
+         }
+         /* Trusted Shops v2 card (moved out of mobile media query) */
+         .ts-rail {
              display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x proximity;
              scroll-padding-left: 14px; padding: 0 14px; scrollbar-width: none;
              -webkit-overflow-scrolling: touch;
@@ -3512,13 +3514,15 @@ function ShopsJobsServicesRow({ navigate, shops, services, loading, currentUser,
              overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
              cursor: pointer; padding: 0; text-align: left; font-family: inherit;
              display: flex; flex-direction: column; box-sizing: border-box;
+             height: auto; max-height: none; min-width: 0;
            }
+           .ts-media { position: relative; overflow: visible; }
            .ts-card:active { background: #f8f9fa; }
            @media (hover: hover) and (pointer: fine) {
              .ts-card:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(15,157,88,0.12); border-color: #bbf7d0; }
            }
            .ts-cover { position: relative; width: 100%; height: 88px; overflow: hidden; background: #e6f6ed; }
-           .ts-cover-img { width: 100%; height: 100%; object-fit: cover; display: block; }
+           .ts-cover-img { display: block; width: 100%; height: 100%; object-fit: cover; }
            .ts-cover-tint { width: 100%; height: 100%; background: #e6f6ed; }
            .ts-logo {
              width: 44px; height: 44px; border-radius: 50%; border: 2px solid #fff;
@@ -3526,7 +3530,7 @@ function ShopsJobsServicesRow({ navigate, shops, services, loading, currentUser,
              left: 12px; bottom: 0; transform: translateY(50%);
              display: flex; align-items: center; justify-content: center;
            }
-           .ts-logo-img { width: 100%; height: 100%; object-fit: cover; }
+           .ts-logo-img { width: 100%; height: 100%; object-fit: cover; display: block; }
            .ts-logo-letter { font-size: 16px; font-weight: 700; color: #0F9D58; }
            .ts-body { padding: 28px 12px 12px; display: flex; flex-direction: column; gap: 4px; }
            .ts-name-row { display: flex; align-items: center; gap: 4px; }
@@ -3547,7 +3551,7 @@ function ShopsJobsServicesRow({ navigate, shops, services, loading, currentUser,
            .ts-seeall-wrap { display: none; }
            .ts-skel { flex: none; width: 220px; border-radius: 16px; overflow: hidden; background: #f1f3f4; }
            @media (min-width: 1100px) {
-             .ts-rail { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; overflow: visible; padding: 0; scroll-snap-type: none; }
+             .ts-rail { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; overflow: visible; padding: 0 24px; scroll-snap-type: none; }
              .ts-card { width: 100%; }
              .ts-end-tile { display: none; }
              .ts-seeall-wrap { display: flex; justify-content: center; margin-top: 16px; }
@@ -3556,11 +3560,9 @@ function ShopsJobsServicesRow({ navigate, shops, services, loading, currentUser,
                border: 1.5px solid #0F9D58; background: transparent; color: #0F9D58;
                font-size: 14px; font-weight: 700; cursor: pointer; font-family: inherit;
              }
-             .ts-skel { width: 100%; }
-           }
-           .soko-sjs-block { margin-bottom: 18px; }
-        }
-      `}</style>
+              .ts-skel { width: 100%; }
+            }
+       `}</style>
 
       <div style={{ maxWidth: 1200, margin: '0 auto' }}>
 
@@ -3596,16 +3598,18 @@ function ShopsJobsServicesRow({ navigate, shops, services, loading, currentUser,
                      <button key={s.id} type="button" className="ts-card" role="link" tabIndex={0}
                        onClick={() => navigate('/shop/' + s.slug)}
                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('/shop/' + s.slug) } }}>
-                       <div className="ts-cover">
-                         {s.cover_url
-                           ? <img src={s.cover_url} alt="" loading="lazy" className="ts-cover-img" />
-                           : <div className="ts-cover-tint" />}
-                       </div>
-                       <div className="ts-logo">
-                         {s.logo_url
-                           ? <img src={s.logo_url} alt="" className="ts-logo-img" />
-                           : <span className="ts-logo-letter">{(s.name?.[0] || 'S').toUpperCase()}</span>}
-                       </div>
+                        <div className="ts-media">
+                          <div className="ts-cover">
+                            {s.cover_url
+                              ? <img src={s.cover_url} alt="" loading="lazy" className="ts-cover-img" />
+                              : <div className="ts-cover-tint" />}
+                          </div>
+                          <div className="ts-logo">
+                            {s.logo_url
+                              ? <img src={s.logo_url} alt="" className="ts-logo-img" />
+                              : <span className="ts-logo-letter">{(s.name?.[0] || 'S').toUpperCase()}</span>}
+                          </div>
+                        </div>
                        <div className="ts-body">
                          <div className="ts-name-row">
                            <span className="ts-name">{s.name}</span>
