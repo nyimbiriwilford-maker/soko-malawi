@@ -1746,6 +1746,7 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
               sender_name: senderName,
               context_id: notifContextId,
               message_id: inserted?.id || null,
+              ...messageContextFields(src, notifContextId),
               chat_source: src,
               listing_title: contextTitle,
             },

@@ -37,3 +37,4 @@
 34. Report chat-popup-reply bug (popup reply vs normal chat) and add sql/chat_popup_diagnose.sql (no code changes)
 35. chat-popup-reply step 1: sendMessageReply accepts chatSource and passes it to sendChatMessage; notifications carry chat_source; legacy retry only strips columns named in the error (keeps listing_id/service_id)
 36. chat-popup-reply step 2: NotificationToast resolves chatSource from notification data, else the anchor message by message_id, else the latest message between the pair; reply keeps original source/context
+37. chat-popup-reply step 3: new_message producers audited (Chat.jsx, forwardMessage.js, sendMessageReply.js); all now carry chat_source plus typed listing/service/shop/request context (offer/wanted/call notifications use other types)

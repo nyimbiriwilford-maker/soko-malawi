@@ -99,6 +99,7 @@ export async function sendChatMessage({
         sender_name: name,
         context_id: contextId || null,
         message_id: inserted?.id || null,
+        ...contextFields,
         chat_source: chatSource || 'direct',
         listing_title: contextTitle || null,
       },
