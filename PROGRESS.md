@@ -39,3 +39,4 @@
 36. chat-popup-reply step 2: NotificationToast resolves chatSource from notification data, else the anchor message by message_id, else the latest message between the pair; reply keeps original source/context
 37. chat-popup-reply step 3: new_message producers audited (Chat.jsx, forwardMessage.js, sendMessageReply.js); all now carry chat_source plus typed listing/service/shop/request context (offer/wanted/call notifications use other types)
 38. src/utils/sendMessageReply.test-note: quick replies now reuse the original message's chat_source and typed context (message_id lookup, latest-message fallback), so they stay in the same conversation instead of creating a new direct chat
+39. chat-popup-reply step 3-4: verified no-undef clean for the four chat files, build passed, sw cache bumped sokomw-v52 (live v51), merged to master and pushed
