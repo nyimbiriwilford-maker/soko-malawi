@@ -1893,7 +1893,7 @@ function haversineKm(lat1, lon1, lat2, lon2) {
 
 const LF_WEIGHTS = { verified: 15, location: 35, recency: 30, exposure: 20, urgencyNonFlexible: 10, urgencyMedium: 5 }
 const LF_NEAR_KM = 25
-function LookingForSection({ navigate, requests, loading, userLat, userLng, activeDistrict, viewerLocation: viewerLocationProp, user, browseButtonVisible = false }) {
+function LookingForSection({ navigate, requests, loading, userLat, userLng, activeDistrict, viewerLocation: viewerLocationProp, user, onOffer, browseButtonVisible = false }) {
   const [viewerLoc,    setViewerLoc]    = React.useState(viewerLocationProp || null)
   const [detectingGps, setDetectingGps] = React.useState(!viewerLocationProp)
   const [gpsError,     setGpsError]     = React.useState(null)
@@ -2338,7 +2338,7 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
                     req={r}
                     user={user}
                     onViewDetails={(req) => navigate(`/looking-for?request=${req.id}`)}
-                    onOffer={(req) => makeOffer(req, { user, navigate, setRequests })}
+                    onOffer={onOffer}
                   />
                ))}
              </div>
@@ -5609,17 +5609,22 @@ export default function Home() {
 
       {!isOffline && (
         <div className={!sectionsLoading ? 'soko-swap-in' : undefined}>
-           <LookingForSection
-             navigate={navigate}
-             requests={requests}
-             loading={sectionsLoading}
-             userLat={userLat}
-             userLng={userLng}
-             activeDistrict={activeDistrict}
-             viewerLocation={homeGpsLocation}
-             user={user}
-             browseButtonVisible={latestHasMore}
-           />
+            <LookingForSection
+              navigate={navigate}
+              requests={requests}
+              loading={sectionsLoading}
+              userLat={userLat}
+              userLng={userLng}
+              activeDistrict={activeDistrict}
+              viewerLocation={homeGpsLocation}
+              user={user}
+              onOffer={(req) => makeOffer(req, { user, navigate, onOfferStarted: (r, isNew) => {
+                setRequests(prev => (prev || []).map(x =>
+                  x.id === r.id ? (isNew ? { ...x, offer_count: (x.offer_count || 0) + 1, user_has_offered: true } : { ...x, user_has_offered: true }) : x
+                ))
+              } })}
+              browseButtonVisible={latestHasMore}
+            />
         </div>
       )}
 

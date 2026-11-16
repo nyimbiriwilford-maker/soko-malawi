@@ -573,7 +573,17 @@ const myAlertsRef = useRef([])
   async function sendOffer(req) {
     // Count a view when seller engages if they haven't already
     await trackRequestView(req)
-    await makeOffer(req, { user, navigate, setRequests })
+    await makeOffer(req, { user, navigate, onOfferStarted: (r, isNew) => {
+      if (isNew) {
+        setRequests(prev => prev.map(x =>
+          x.id === r.id ? { ...x, offer_count: (x.offer_count || 0) + 1, user_has_offered: true } : x
+        ))
+      } else {
+        setRequests(prev => prev.map(x =>
+          x.id === r.id ? { ...x, user_has_offered: true } : x
+        ))
+      }
+    } })
   }
 
   /* ── mark fulfilled ── */
