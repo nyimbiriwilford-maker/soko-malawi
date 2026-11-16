@@ -307,7 +307,7 @@ const css = `
   }
 
   /* Bottom sheets */
-  .svc-sheet-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 300; }
+  .svc-sheet-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 1200; }
   .svc-filter-sheet, .svc-sort-sheet {
     position: fixed; left: 0; right: 0; bottom: 0; z-index: 301;
     background: #fff; border-radius: 16px 16px 0 0;
