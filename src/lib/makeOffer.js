@@ -1,7 +1,7 @@
 import { supabase } from './supabase'
 import { fmtMWK } from '../utils/lookingFor'
 
-export async function makeOffer(req, { user, navigate, setRequests }) {
+export async function makeOffer(req, { user, navigate, onOfferStarted }) {
   if (!user) { navigate('/login'); return }
   if (!req || req.user_id === user.id) return
 
@@ -16,15 +16,9 @@ export async function makeOffer(req, { user, navigate, setRequests }) {
   if (!offerErr) {
     const { error: updateErr } = await supabase.rpc('increment_offer_count', { request_id: req.id })
     console.log('Count update:', updateErr?.message || 'success')
-    setRequests?.(prev => (prev || []).map(r =>
-      r.id === req.id
-        ? { ...r, offer_count: (r.offer_count || 0) + 1, user_has_offered: true }
-        : r
-    ))
+    onOfferStarted?.(req, true)
   } else if (offerErr.code === '23505') {
-    setRequests?.(prev => (prev || []).map(r =>
-      r.id === req.id ? { ...r, user_has_offered: true } : r
-    ))
+    onOfferStarted?.(req, false)
   } else {
     console.error('Offer error:', offerErr.message)
   }
