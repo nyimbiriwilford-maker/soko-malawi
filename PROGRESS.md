@@ -40,3 +40,7 @@
 37. chat-popup-reply step 3: new_message producers audited (Chat.jsx, forwardMessage.js, sendMessageReply.js); all now carry chat_source plus typed listing/service/shop/request context (offer/wanted/call notifications use other types)
 38. src/utils/sendMessageReply.test-note: quick replies now reuse the original message's chat_source and typed context (message_id lookup, latest-message fallback), so they stay in the same conversation instead of creating a new direct chat
 39. chat-popup-reply step 3-4: verified no-undef clean for the four chat files, build passed, sw cache bumped sokomw-v52 (live v51), merged to master and pushed
+40. chat-quick-replies step 1: added request seller and buyer quick-reply sets; request chats no longer show listing lines; listing/service/shop/direct sets unchanged
+41. chat-quick-replies step 2: request role detection guards on request.user_id and currentUser; no quick replies until owner is known, failed lookup shows none, never listing set
+42. chat-quick-replies step 3: quick-reply tap behavior unchanged (fills input via setNewMsg, focused), so sends still go through existing sendMessage with chat_source=request and request_id
+43. chat-quick-replies verify: eslint no-undef clean, build passed, sw cache bumped sokomw-v53 (live v52), merged to master and pushed
