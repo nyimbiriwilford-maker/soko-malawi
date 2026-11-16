@@ -2250,15 +2250,17 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
             cursor: pointer; font-family: inherit; white-space: nowrap;
           }
           .lf-home-postbtn {
-            flex: none; width: 44px; height: 44px; border-radius: 50%;
-            background: #0F9D58; border: 1.5px solid #0F9D58; color: #fff;
+            flex: none; width: 44px; height: 44px; border-radius: 0;
+            background: transparent; border: none; box-shadow: none; color: #0F9D58;
             display: inline-flex; align-items: center; justify-content: center; gap: 0;
             cursor: pointer; font-family: inherit; flex-shrink: 0; box-sizing: border-box;
+            padding: 0;
           }
+          .lf-home-postbtn:active { opacity: 0.6; }
           .lf-home-postlabel { display: none; }
           @media (min-width: 768px) {
             .lf-home-seeall { display: inline-flex; }
-            .lf-home-postbtn { width: auto; height: 44px; border-radius: 999px; padding: 0 16px; gap: 6px; }
+            .lf-home-postbtn { width: auto; height: 44px; border-radius: 999px; padding: 0 16px; gap: 6px; background: #0F9D58; border: 1.5px solid #0F9D58; color: #fff; box-shadow: 0 3px 10px rgba(22,101,52,0.25); }
             .lf-home-postlabel { display: inline; }
           }
           .lf-toolbar {
@@ -2313,7 +2315,7 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
                 See all <ArrowRight size={14} />
               </button>
               <button type="button" className="lf-home-postbtn" onClick={() => navigate('/looking-for')} aria-label="Post Request">
-                <Plus size={16} strokeWidth={3} />
+                <Plus size={28} strokeWidth={2.5} />
                 <span className="lf-home-postlabel">Post Request</span>
               </button>
             </div>
