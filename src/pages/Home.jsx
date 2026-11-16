@@ -34,7 +34,7 @@ import ProviderModal              from './ProviderModal'
 import { fetchAllActiveStories } from '../hooks/useStatuses'
 import VerificationAttentionBanner from '../components/VerificationAttentionBanner'
 import SokoNav from '../components/SokoNav'
-import LookingForRequestCard from '../components/LookingFor/LookingForRequestCard'
+import LookingForRequestCard, { LOOKING_FOR_CARD_CSS } from '../components/LookingFor/LookingForRequestCard'
 import {
   getGPSLocation,
   sortRequestsByViewerLocation,
@@ -2229,6 +2229,7 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
       padding: '0 24px 32px', background: 'transparent',
     }}>
       <style>{`
+          ${LOOKING_FOR_CARD_CSS}
           .lfr-grid { display:grid; grid-template-columns:1fr; gap:12px; padding:4px 14px 16px; }
           @media (min-width:768px) { .lfr-grid { grid-template-columns:repeat(2,1fr); gap:16px; } }
           @media (min-width:1100px) { .lfr-grid { grid-template-columns:repeat(4,1fr); gap:16px; padding:4px 24px 16px; } }
@@ -2239,75 +2240,11 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
          .lf-spacing-nobrowse { margin-top: 40px; }
          @media (min-width: 768px) { .lf-spacing-nobrowse { margin-top: 48px; } }
          @media (min-width: 1100px) { .lf-spacing-nobrowse { margin-top: 56px; } }
-        .lfr-card {
-          background:#fff; border-radius:20px; border:1px solid #f1f5f9;
-          box-shadow:0 1px 3px rgba(0,0,0,0.04),0 4px 16px rgba(0,0,0,0.04);
-          display:flex; flex-direction:column; min-height:0;
-          opacity:0; animation:lfrFadeIn 0.5s ease forwards;
-          transition:box-shadow 0.35s cubic-bezier(0.22,1,0.36,1),transform 0.35s cubic-bezier(0.22,1,0.36,1),border-color 0.35s ease;
-          will-change:transform;
-        }
-        .lfr-card:active { transform:scale(0.98); }
-        @media (hover:hover) and (pointer:fine) {
-          .lfr-card:hover {
-            transform:translateY(-2px);
-            box-shadow:0 12px 40px rgba(22,101,52,0.1),0 3px 12px rgba(0,0,0,0.06);
-            border-color:#bbf7d0;
-          }
-        }
-        .lfr-card:focus-visible {
-          outline: 3px solid rgba(15,157,88,0.28);
-          outline-offset: 2px;
-          border-color: #0F9D58;
-        }
-        .lfr-card .lfr-badge { animation:lfrBadgeIn 0.35s ease forwards; opacity:0; }
-        @keyframes lfrFadeIn { 0%{opacity:0;transform:translateY(16px)} 100%{opacity:1;transform:translateY(0)} }
-        @keyframes lfrBadgeIn { 0%{opacity:0;transform:scale(0.85)} 100%{opacity:1;transform:scale(1)} }
-        .lfr-skel { border-radius:20px; background:linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%); background-size:600px 100%; animation:lfrShimmer 1.4s infinite; border:1px solid #f1f5f9; }
-        .lfr-img-wrap { height:120px; }
-        @media (min-width:768px) { .lfr-img-wrap { height:132px; } }
-        @media (min-width:1100px) { .lfr-img-wrap { height:148px; } }
-        .lfr-card .lfr-img-cell { transition:transform 0.4s cubic-bezier(0.22,1,0.36,1); will-change:transform; }
-        @media (hover:hover) { .lfr-card:hover .lfr-img-cell { transform:scale(1.06); } }
-
-        @keyframes lfrShimmer { 0%{background-position:600px 0} 100%{background-position:-600px 0} }
-        .lfr-act-btn {
-          position:relative; overflow:hidden; transition:all 0.2s ease !important;
-          height:36px; font-size:12px; font-weight:700;
-        }
-        .lfr-act-btn::before { content:''; position:absolute; inset:-4px; }
-        .lfr-act-btn:hover { background:#f1f5f9 !important; color:#0f172a !important; transform:scale(1.05); }
-        .lfr-act-btn:active { transform:scale(0.95); }
-        .lfr-act-btn::after {
-          content:''; position:absolute; inset:0; border-radius:6px;
-          background:radial-gradient(circle,rgba(22,101,52,0.2) 10%,transparent 10%);
-          background-position:center; background-repeat:no-repeat; background-size:0%;
-          transition:background-size 0s;
-        }
-        .lfr-act-btn:active::after { background-size:1000%; transition:background-size 0.4s; }
-        .lfr-card:nth-child(1) { animation-delay:0.02s; }
-        .lfr-card:nth-child(2) { animation-delay:0.06s; }
-        .lfr-card:nth-child(3) { animation-delay:0.10s; }
-        .lfr-card:nth-child(4) { animation-delay:0.14s; }
-        .lfr-card:nth-child(5) { animation-delay:0.18s; }
-        .lfr-card:nth-child(6) { animation-delay:0.22s; }
-        .lfr-card:nth-child(7) { animation-delay:0.26s; }
-        .lfr-card:nth-child(8) { animation-delay:0.30s; }
-        .lfr-respond-btn {
-          position:relative; overflow:hidden; transition:all 0.2s ease !important;
-        }
-        .lfr-respond-btn:hover { transform:scale(1.04); box-shadow:0 4px 16px rgba(22,101,52,0.3) !important; }
-        .lfr-respond-btn:active { transform:scale(0.96); }
-        .lfr-respond-btn::after {
-          content:''; position:absolute; inset:0; border-radius:999px;
-          background:radial-gradient(circle,rgba(255,255,255,0.3) 10%,transparent 10%);
-          background-position:center; background-repeat:no-repeat; background-size:0%;
-          transition:background-size 0s;
-        }
-        .lfr-respond-btn:active::after { background-size:1000%; transition:background-size 0.4s; }
-        @media (max-width:640px) {
-          .lfr-head-actions { width:100% !important; display:grid !important; grid-template-columns:1fr 1fr; gap:6px !important; margin-top:8px !important; }
-        }
+         .lfr-skel { border-radius:20px; background:linear-gradient(90deg,#f1f5f9 25%,#e2e8f0 50%,#f1f5f9 75%); background-size:600px 100%; animation:lfrShimmer 1.4s infinite; border:1px solid #f1f5f9; }
+         @keyframes lfrShimmer { 0%{background-position:600px 0} 100%{background-position:-600px 0} }
+         @media (max-width:640px) {
+           .lfr-head-actions { width:100% !important; display:grid !important; grid-template-columns:1fr 1fr; gap:6px !important; margin-top:8px !important; }
+         }
       `}</style>
 
       <div style={{ maxWidth: 1400, margin: '0 auto' }}>
@@ -2419,256 +2356,16 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
             ))}
           </div>
         ) : shown.length > 0 ? (
-          <div className="lfr-grid">
-              {shown.map(r => {
-                const author = r.profiles || {}
-                const hasName = !!author.full_name
-                const aname = hasName ? author.full_name : 'Anonymous Buyer'
-                const aavatar = author.avatar_url
-                const ainitial = (aname[0] || 'A').toUpperCase()
-                const isVerified = author.is_verified || author.verified || false
-                const isAnonymous = !hasName
-                const budgetVal = r.budget
-                const budgetMax = fmtBudget(budgetVal)
-                const cat = r.category || ''
-                const city = r.city || ''
-                const offerCount = r.offer_count ?? r.offerCount ?? 0
-                const distLabel = r._distanceLabel || null
-                const budgetNum = Number(r.budget) || 0
-                const memberSince = author?.created_at ? new Date(author.created_at) : null
-                const memberYears = memberSince ? Math.floor((Date.now() - memberSince.getTime()) / 31536000000) : 0
-                const allImages = r.image_urls && Array.isArray(r.image_urls) && r.image_urls.length > 0
-                  ? r.image_urls
-                  : r.image_url ? [r.image_url] : []
-                const imgCount = allImages.length
-                const hasImages = imgCount > 0
-                const showImages = allImages.slice(0, 3)
-                const extraCount = imgCount - 3
-                const badges = []
-                if (r.urgency === 'urgent') badges.push({ label:'Urgent', fg:'#dc2626', bg:'#fef2f2', icon: '🔥' })
-                if (r._distanceKm != null && r._distanceKm < 5) badges.push({ label:'Nearby', fg:'#2563eb', bg:'#eff6ff' })
-                if (r.created_at && (Date.now() - new Date(r.created_at).getTime()) < 86400000) badges.push({ label:'New', fg:'#16a34a', bg:'#f0fdf4' })
-                const catEmoji = cat === 'Electronics' ? '📱' : cat === 'Fashion' ? '👗' : cat === 'Vehicles' ? '🚗' : cat === 'Property' ? '🏠' : cat === 'Agriculture' ? '🌾' : cat === 'Services' ? '⚙️' : cat === 'Business Partners' ? '🤝' : '📋'
-                const allAreas = r.cities?.length > 0 ? r.cities : (r.city ? [r.city] : [])
-                const extraAreas = allAreas.length - 1
-
-                return (
-                  <div
-                    key={r.id}
-                    className="lfr-card"
-                    role="link"
-                    tabIndex={0}
-                    aria-label={`Open request: ${r.title || 'Looking For request'}`}
-                    onClick={() => navigate(`/looking-for?request=${r.id}`)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        navigate(`/looking-for?request=${r.id}`)
-                      }
-                    }}
-                  >
-
-                    {/* Image collage */}
-                    <div className="lfr-img-wrap" style={{
-                      position:'relative', width:'100%', borderRadius:'16px 16px 0 0',
-                      overflow:'hidden', flexShrink:0, cursor:'pointer',
-                      background:'linear-gradient(135deg,#f0fdf4,#dcfce7)',
-                      boxShadow:'inset 0 -1px 0 rgba(0,0,0,0.04)',
-                    }}>
-                      {hasImages ? (
-                        <div style={{ position:'absolute', inset:0, display:'flex', flexDirection:'column', gap:2 }}>
-                          {showImages.length === 1 ? (
-                            <div style={{ flex:1, overflow:'hidden', borderRadius:14 }}
-                              onClick={e => { e.stopPropagation(); setLfLightbox(r); setLfLbIdx(0) }}>
-                              <img src={showImages[0]} alt="" loading="lazy" className="lfr-img-cell soko-img-reveal"
-                                style={{ width:'100%', height:'100%', objectFit:'cover' }} />
-                            </div>
-                          ) : showImages.length === 2 ? (
-                            <div style={{ display:'flex', flexDirection:'column', gap:2, width:'100%', height:'100%' }}>
-                              <div style={{ flex:'0 0 60%', overflow:'hidden', borderRadius:14 }}
-                                onClick={e => { e.stopPropagation(); setLfLightbox(r); setLfLbIdx(0) }}>
-                                <img src={showImages[0]} alt="" loading="lazy" className="lfr-img-cell soko-img-reveal"
-                                  style={{ width:'100%', height:'100%', objectFit:'cover' }} />
-                              </div>
-                              <div style={{ flex:1, display:'flex', gap:2 }}>
-                                <div style={{ flex:'0 0 50%', overflow:'hidden', borderRadius:14 }}
-                                  onClick={e => { e.stopPropagation(); setLfLightbox(r); setLfLbIdx(1) }}>
-                                  <img src={showImages[1]} alt="" loading="lazy" className="lfr-img-cell soko-img-reveal"
-                                    style={{ width:'100%', height:'100%', objectFit:'cover' }} />
-                                </div>
-                              </div>
-                            </div>
-                          ) : (
-                            <div style={{ display:'flex', flexDirection:'column', gap:2, width:'100%', height:'100%' }}>
-                              <div style={{ flex:'0 0 55%', overflow:'hidden', borderRadius:14 }}
-                                onClick={e => { e.stopPropagation(); setLfLightbox(r); setLfLbIdx(0) }}>
-                                <img src={showImages[0]} alt="" loading="lazy" className="lfr-img-cell soko-img-reveal"
-                                  style={{ width:'100%', height:'100%', objectFit:'cover' }} />
-                              </div>
-                              <div style={{ flex:1, display:'flex', gap:2 }}>
-                                {[1,2].map(i => (
-                                  <div key={i} style={{ flex:1, overflow:'hidden', borderRadius:14, position:'relative' }}
-                                    onClick={e => { e.stopPropagation(); setLfLightbox(r); setLfLbIdx(i) }}>
-                                    <img src={showImages[i]} alt="" loading="lazy" className="lfr-img-cell soko-img-reveal"
-                                      style={{ width:'100%', height:'100%', objectFit:'cover' }} />
-                                    {i === 2 && extraCount > 0 && (
-                                      <div style={{
-                                        position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center',
-                                      }}>
-                                        <span style={{
-                                          display:'inline-flex', alignItems:'center', justifyContent:'center',
-                                          minWidth:32, height:28, borderRadius:999,
-                                          background:'rgba(0,0,0,0.55)', backdropFilter:'blur(4px)',
-                                          border:'1px solid rgba(255,255,255,0.15)',
-                                          fontSize:13, fontWeight:800, color:'#fff',
-                                          padding:'0 8px',
-                                        }}>+{extraCount}</span>
-                                      </div>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div style={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center', fontSize:44 }}>
-                          {catEmoji}
-                        </div>
-                      )}
-
-                      {/* Subtle dark gradient at bottom for overlays */}
-                      {hasImages && <div style={{
-                        position:'absolute', bottom:0, left:0, right:0, height:'35%',
-                        background:'linear-gradient(to top, rgba(0,0,0,0.3), transparent)',
-                        pointerEvents:'none',
-                      }} />}
-
-                      {/* Badges on image (max 3) */}
-                      <div style={{ position:'absolute', top:10, left:10, display:'flex', gap:4, flexWrap:'wrap', zIndex:2 }}>
-                        {badges.slice(0, 3).map((b, i) => (
-                          <span key={i} className="lfr-badge" style={{
-                            display:'inline-flex', alignItems:'center', gap:3,
-                            fontSize: b.label === 'Urgent' ? 10 : 9.5, fontWeight: b.label === 'Urgent' ? 800 : 700,
-                            color: b.label === 'Urgent' ? '#dc2626' : '#fff',
-                            background: b.label === 'Urgent' ? 'rgba(254,242,242,0.9)' : 'rgba(0,0,0,0.55)',
-                            backdropFilter:'blur(4px)',
-                            borderRadius:999, padding:'1px 8px', lineHeight:'18px',
-                            animationDelay:`${i * 0.08}s`,
-                          }}>
-                            {b.icon ? <span style={{ fontSize:10 }}>{b.icon}</span> : null}{b.label}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Avatar + Name row (below image) */}
-                    <div style={{ padding:'12px 16px 0', display:'flex', alignItems:'center', gap:10 }}>
-                      <div style={{
-                        width:36, height:36, borderRadius:'50%', overflow:'hidden', flexShrink:0,
-                        background: isAnonymous
-                          ? 'linear-gradient(135deg,#e2e8f0,#cbd5e1)'
-                          : 'linear-gradient(135deg,#166534,#22c55e)',
-                        display:'flex', alignItems:'center', justifyContent:'center',
-                        fontSize: isAnonymous ? 11 : 10, fontWeight:700, color: isAnonymous ? '#64748b' : '#fff',
-                      }}>
-                        {aavatar && !isAnonymous
-                          ? <img src={aavatar} alt="" loading="lazy" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
-                          : ainitial
-                        }
-                      </div>
-                      <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ display:'flex', alignItems:'center', gap:4, fontSize:13, fontWeight:700, color:'#0f172a', lineHeight:1.2 }}>
-                          {aname}
-                          {isVerified && <ShieldCheck size={12} color="#16a34a" fill="#16a34a" />}
-                        </div>
-                        <div style={{ fontSize:10.5, color:'#16a34a', fontWeight:600, marginTop:1 }}>
-                          {isVerified ? 'Verified Buyer' : 'Buyer'}
-                          {memberYears > 0 && <span style={{ color:'#94a3b8', fontWeight:500 }}> · {memberYears}y on Soko</span>}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Looking for + Title */}
-                    <div style={{ padding:'8px 16px 0' }}>
-                      <div style={{ fontSize:9.5, fontWeight:600, color:'#94a3b8', letterSpacing:0.4, textTransform:'uppercase', marginBottom:1 }}>
-                        Looking for
-                      </div>
-                      <div style={{
-                        fontSize:14, fontWeight:800, color:'#0f172a', lineHeight:1.25,
-                        display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden',
-                      }}>
-                        {r.title || 'Untitled request'}
-                      </div>
-                    </div>
-
-                    {/* Description */}
-                    {r.description && (
-                      <div style={{ padding:'5px 16px 0' }}>
-                        <div style={{
-                          fontSize:12, color:'#64748b', lineHeight:1.4, fontWeight:500,
-                          display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', overflow:'hidden',
-                        }}>
-                          {r.description}
-                        </div>
-                        <div style={{ fontSize:10.5, fontWeight:600, color:'#16a34a', marginTop:3, cursor:'pointer' }}>
-                          View Details →
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Budget */}
-                    <div style={{ padding:'8px 16px 0' }}>
-                      {budgetMax && (
-                        <span style={{ fontSize:19, fontWeight:800, color:'#16a34a', letterSpacing:-0.3 }}>
-                          {budgetMax} Budget
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Location + Time row */}
-                    <div style={{ padding:'4px 16px 0', display:'flex', alignItems:'center', gap:3, flexWrap:'wrap', fontSize:11, color:'#64748b', fontWeight:500 }}>
-                      <MapPin size={10} /> {city || 'Malawi'}
-                      {extraAreas > 0 && (
-                        <span style={{ fontSize:10, fontWeight:600, color:'#166534', background:'#f0fdf4', borderRadius:999, padding:'1px 7px', border:'1px solid #bbf7d0' }}>
-                          +{extraAreas} more
-                        </span>
-                      )}
-                      {distLabel && <><span style={{ color:'#cbd5e1' }}>·</span> {distLabel}</>}
-                      <span style={{ color:'#cbd5e1' }}>·</span>
-                      <Clock size={10} /> {r.created_at ? timeAgoLF(r.created_at) : ''}
-                    </div>
-
-                    {/* Spacer */}
-                    <div style={{ flex:1 }} />
-
-                    {/* Footer row: responses | Save Share (left)  Respond (right) */}
-                    <div style={{ padding:'8px 14px 14px', display:'flex', alignItems:'center' }}>
-                      <div style={{ display:'flex', alignItems:'center', gap:6 }}>
-                        <span style={{ display:'flex', alignItems:'center', gap:3, fontSize:12.5, fontWeight:700, color:'#6366f1', marginRight:2 }}>
-                          <MessageCircle size={14} color="#6366f1" /> {offerCount}
-                        </span>
-                        <button type="button" className="lfr-act-btn" onClick={e => { e.stopPropagation(); toggleLfSave(r.id) }} style={{...actBtn, padding:'5px 7px', color: lfSavedIds.has(r.id) ? '#dc2626' : '#64748b'}} title={lfSavedIds.has(r.id) ? 'Saved' : 'Save'}>
-                          <Heart size={14} fill={lfSavedIds.has(r.id) ? '#dc2626' : 'none'} />
-                        </button>
-                        <button type="button" className="lfr-act-btn" onClick={e => { e.stopPropagation(); shareRequest(r) }} style={{...actBtn, padding:'5px 7px'}} title="Share">
-                          <Share2 size={14} />
-                        </button>
-                      </div>
-                      <div style={{ flex:1 }} />
-                      <button type="button" className="lfr-respond-btn" onClick={e => { e.stopPropagation(); sendOffer(r) }} style={{
-                        display:'inline-flex', alignItems:'center', justifyContent:'center', gap:6,
-                        flex:1, height:36, borderRadius:10, padding:'0 16px', fontSize:12, fontWeight:700, cursor:'pointer',
-                        fontFamily:'inherit', background:'#0F9D58', border:'1.5px solid #0F9D58', color:'#fff',
-                        boxShadow:'0 4px 14px rgba(22,101,52,0.3)', whiteSpace:'nowrap',
-                      }}>
-                        Make offer <ArrowRight size={15} />
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+           <div className="lfr-grid">
+               {shown.map(r => (
+                 <LookingForRequestCard
+                   key={r.id}
+                   req={r}
+                   onViewDetails={(req) => navigate(`/looking-for?request=${req.id}`)}
+                   onOffer={(req) => navigate(`/looking-for?request=${req.id}`)}
+                 />
+               ))}
+             </div>
         ) : (
           <div style={{ textAlign:'center', padding:'52px 24px', borderRadius:20, background:'#fff', border:'1px solid #f1f5f9', boxShadow:'0 1px 3px rgba(0,0,0,0.03)' }}>
             <svg width="80" height="80" viewBox="0 0 80 80" fill="none" style={{ margin:'0 auto 16px', display:'block' }}>
