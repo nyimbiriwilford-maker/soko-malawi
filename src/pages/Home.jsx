@@ -2013,12 +2013,18 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
   const [lfSort, setLfSort] = React.useState('recent')
   const lfSessionSeed = React.useRef(Math.floor(Math.random() * 1000)).current
 
-  function getLfCounts(width) {
-    if (width >= 1100) return { initial: 8, chunk: 8 }
-    if (width >= 768) return { initial: 6, chunk: 6 }
-    return { initial: 4, chunk: 4 }
+  function useLfWindowWidth() {
+    const [w, setW] = React.useState(typeof window !== 'undefined' ? window.innerWidth : 1100)
+    React.useEffect(() => {
+      const onResize = () => setW(window.innerWidth)
+      window.addEventListener('resize', onResize)
+      return () => window.removeEventListener('resize', onResize)
+    }, [])
+    return w
   }
-  const [lfCounts, setLfCounts] = React.useState(() => getLfCounts(typeof window !== 'undefined' ? window.innerWidth : 1100))
+  const lfWidth = useLfWindowWidth()
+  const LF_INITIAL_COUNT = lfWidth >= 1100 ? 8 : lfWidth >= 768 ? 6 : 4
+  const LF_SHOW_MORE_CHUNK = LF_INITIAL_COUNT
 
   const impressionCounts = React.useRef({})
   const countedImpression = React.useRef(new Set())
@@ -2107,24 +2113,9 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
     return withScore
     }, [requests, viewerLoc, userLat, userLng, activeDistrict, lfSort, lfNearby])
 
-  const [visibleCount, setVisibleCount] = React.useState(() => getLfCounts(typeof window !== 'undefined' ? window.innerWidth : 1100).initial)
-  React.useEffect(() => { setVisibleCount(lfCounts.initial) }, [lfSort])
-  React.useEffect(() => {
-    function onResize() { setLfCounts(getLfCounts(window.innerWidth)) }
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [])
-  React.useEffect(() => {
-    setVisibleCount(prev => {
-      const chunk = lfCounts.chunk
-      const rounded = Math.ceil(prev / chunk) * chunk
-      const cap = ranked.length || lfCounts.initial
-      return Math.min(Math.max(rounded, lfCounts.initial), cap)
-    })
-  }, [lfCounts])
-  const displayCount = Math.min(visibleCount, ranked.length || visibleCount)
+  const displayCount = Math.min(LF_INITIAL_COUNT, ranked.length || LF_INITIAL_COUNT)
   const hasMoreLf = ranked.length > displayCount
-  const shown = hasMoreLf ? ranked.slice(0, displayCount) : ranked
+  const shown = ranked.slice(0, displayCount)
 
   React.useEffect(() => {
     const ic = impressionCounts.current
@@ -2238,9 +2229,9 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
       padding: '0 24px 32px', background: 'transparent',
     }}>
       <style>{`
-         .lfr-grid { display:grid; grid-template-columns:1fr; gap:12px; padding:4px 0 16px; }
-         @media (min-width:768px) { .lfr-grid { grid-template-columns:repeat(2,1fr); gap:14px; } }
-         @media (min-width:1100px) { .lfr-grid { grid-template-columns:repeat(4,1fr); gap:16px; } }
+          .lfr-grid { display:grid; grid-template-columns:1fr; gap:12px; padding:4px 14px 16px; }
+          @media (min-width:768px) { .lfr-grid { grid-template-columns:repeat(2,1fr); gap:16px; } }
+          @media (min-width:1100px) { .lfr-grid { grid-template-columns:repeat(4,1fr); gap:16px; padding:4px 24px 16px; } }
          .lf-section { padding-top: 0 !important; }
          .lf-spacing-browse { margin-top: 32px; }
          @media (min-width: 768px) { .lf-spacing-browse { margin-top: 40px; } }
@@ -2323,13 +2314,18 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
 
         {/* ─── Header ─── */}
         <div style={{ marginBottom:16 }}>
-          <div style={{ display:'inline-flex', alignItems:'center', gap:8, fontSize:13, fontWeight:800, color:'#166534', marginBottom:6 }}>
-            <span style={{ fontSize:16 }}>🔥</span>
-            <span>Looking For</span>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:12, flexWrap:'wrap', marginBottom:6 }}>
+            <h2 style={{ fontFamily:'Sora, system-ui, sans-serif', fontSize:'clamp(20px, 2vw, 22px)', fontWeight:800, color:'#0f172a', letterSpacing:-0.4, margin:0, lineHeight:1.2 }}>
+              People Looking For
+            </h2>
+            <button type="button" onClick={() => navigate('/looking-for')} style={{
+              display:'inline-flex', alignItems:'center', gap:4, minHeight:44, padding:'0 8px',
+              background:'none', border:'none', color:'#0F9D58', fontSize:14, fontWeight:700,
+              cursor:'pointer', fontFamily:'inherit',
+            }}>
+              See all <ArrowRight size={14} />
+            </button>
           </div>
-          <h2 style={{ fontFamily:'Sora, system-ui, sans-serif', fontSize:'clamp(18px, 2.2vw, 24px)', fontWeight:800, color:'#0f172a', letterSpacing:-0.4, margin:'0 0 2px', lineHeight:1.2 }}>
-            Real buyers across Malawi looking for products and services
-          </h2>
 
           {/* Filter row */}
           <div style={{ display:'flex', alignItems:'center', gap:10, marginTop:14, flexWrap:'nowrap', overflowX:'auto', width:'100%', scrollbarWidth:'none' }}>
@@ -2712,18 +2708,17 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
           </div>
         )}
 
-        {/* Demand footer */}
-        {hasMoreLf && (
-          <div style={{ textAlign:'center', marginTop:6 }}>
-            <button type="button" onClick={() => setVisibleCount(prev => Math.min(prev + lfCounts.chunk, ranked.length))} style={{
-              display:'inline-flex', alignItems:'center', gap:5, background:'none', border:'none',
-              padding:'8px 16px', fontSize:12.5, fontWeight:700, color:'#166534', cursor:'pointer',
-              fontFamily:'inherit',
-            }}>
-              Browse more ({ranked.length - displayCount} remaining) <ArrowRight size={13} />
-            </button>
-          </div>
-        )}
+        {/* See all requests */}
+        <div style={{ textAlign:'center', marginTop:12 }}>
+          <button type="button" onClick={() => navigate('/looking-for')} style={{
+            display:'inline-flex', alignItems:'center', justifyContent:'center', gap:6,
+            height:44, padding:'0 24px', margin:'0 auto',
+            fontSize:14, fontWeight:700, color:'#0F9D58', cursor:'pointer', fontFamily:'inherit',
+            background:'transparent', border:'1.5px solid #0F9D58', borderRadius:12,
+          }}>
+            See all requests <ArrowRight size={14} />
+          </button>
+        </div>
 
       </div>
 
@@ -5738,7 +5733,7 @@ export default function Home() {
             .neq('status', 'fulfilled')
             .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
             .order('created_at', { ascending: false })
-            .limit(40)
+            .limit(16)
           const result = { data: resultData, error }
           if (result.data) {
             try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ data: result.data, ts: Date.now() })) } catch {}
