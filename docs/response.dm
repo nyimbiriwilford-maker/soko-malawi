@@ -1,17 +1,17 @@
-Done. Merged wip/lf-toolbar-polish to master and pushed.
+Done. Merged wip/lf-home-simplify to master and pushed.
 
 Build: passed. Preview: http://localhost:4173/ returned 200. Console: no errors observed.
 
-Fix: toolbar one row gap 8px no wrap/overflow; removed View all button; phone pills 44px flex, round 44x44 + button; tablet+ natural pills + Post Request button. Buyer name sentence case 12px weight 600 #5f6368 max-width 96px ellipsis.
+Fix: removed toolbar row from Home Looking For section; list stays newest-first no filter; heading row flex (title ellipsis, phone only + button, tablet+ See all + Post Request); gap 16px.
 
 Verification:
 - Vercel: live at https://sokomw.com/
-- live bundle: /assets/index-j8dEpOhr.js
-- live sw.js: const CACHE_VERSION = 'sokomw-v40'
+- live bundle: /assets/index-Czx8-MWK.js
+- live sw.js: const CACHE_VERSION = 'sokomw-v41'
 
 git log --oneline -3:
-f27e4ee WIP: update response.dm
-0c77f37 Merge wip/lf-toolbar-polish
-342964d WIP: bump sw cache version
+4261e0a WIP: update response.dm
+b2b86a2 Merge wip/lf-home-simplify
+8631b5a WIP: bump sw cache version
 
 git status -sb: ## master...origin/master (clean)
