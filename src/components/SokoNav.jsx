@@ -150,6 +150,7 @@ export default function SokoNav({
   const [distOpen, setDistOpen] = useState(false)
   const [avatarOpen, setAvatarOpen] = useState(false)
   const [showPostMenu, setShowPostMenu] = useState(false)
+  const [isGuest, setIsGuest] = useState(false)
   const [chatCount, setChatCount] = useState(0)
   const postRef = useRef(null)
 
@@ -157,7 +158,7 @@ export default function SokoNav({
     let channel
     let cancelled = false
     supabase.auth.getUser().then(async ({ data: { user } }) => {
-      if (!user || cancelled) return
+      if (!user) { if (!cancelled) setIsGuest(true); return } if (cancelled) return
 
       const fetchUnread = async () => {
         const { count } = await supabase
@@ -350,6 +351,19 @@ export default function SokoNav({
 
         {/* Desktop Action Icons */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          {isGuest ? (
+            <>
+              <button type="button" onClick={() => navigate('/login')}
+                style={{ height: 38, padding: '0 18px', fontSize: 13.5, fontWeight: 700, background: '#fff', color: T.green, border: `1.5px solid ${T.green}`, borderRadius: 50, cursor: 'pointer', fontFamily: 'inherit' }}>
+                Log in
+              </button>
+              <button type="button" onClick={() => navigate('/login')}
+                style={{ height: 38, padding: '0 18px', fontSize: 13.5, fontWeight: 700, background: '#0F9D58', color: '#fff', border: 'none', borderRadius: 50, cursor: 'pointer', fontFamily: 'inherit' }}>
+                Sign up
+              </button>
+            </>
+          ) : (
+            <>
           <div style={{ position: 'relative' }}>
             <NavIconBtn icon={Icon.chat(18)} label="Chats" onClick={() => navigate('/chats')} />
             {chatCount > 0 && (
@@ -441,6 +455,8 @@ export default function SokoNav({
               </div>
             )}
           </div>
+            </>
+          )}
         </div>
 
       </div>
@@ -478,6 +494,13 @@ export default function SokoNav({
               {Icon.search(20)}
             </button>
 
+            {isGuest ? (
+              <button type="button" onClick={() => navigate('/login')}
+                style={{ height: 36, borderRadius: 50, padding: '0 14px', fontWeight: 700, fontSize: 13, background: '#0F9D58', color: '#fff', border: 'none', cursor: 'pointer', fontFamily: 'inherit' }}>
+                Log in
+              </button>
+            ) : (
+              <>
             {/* Notification Bell */}
             <button
               type="button"
@@ -530,6 +553,8 @@ export default function SokoNav({
                 ? <img src={user.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 : (user?.email?.[0] || user?.full_name?.[0] || 'S').toUpperCase()}
             </button>
+              </>
+            )}
 
           </div>
         </div>

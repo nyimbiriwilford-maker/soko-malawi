@@ -615,6 +615,7 @@ export default function Services() {
   const [error, setError] = useState(false)
   const [isOffline, setIsOffline] = useState(() => (typeof navigator !== 'undefined' ? !navigator.onLine : false))
   const [currentUser, setCurrentUser] = useState(null)
+  const [userLoading, setUserLoading] = useState(true)
   const [profileCity, setProfileCity] = useState('')
   const [navUser, setNavUser] = useState(null)
   const [notifCount, setNotifCount] = useState(0)
@@ -662,6 +663,10 @@ export default function Services() {
   }
 
   useEffect(() => { init() }, [])
+
+  useEffect(() => {
+    if (!userLoading && !currentUser && tab === 'post') navigate('/login')
+  }, [userLoading, currentUser, tab, navigate])
 
   useEffect(() => {
     const onResize = () => {
@@ -749,6 +754,7 @@ export default function Services() {
   async function init() {
     const { data: { user } } = await supabase.auth.getUser()
     setCurrentUser(user)
+    setUserLoading(false)
     if (user) {
       const [{ data: profile }, { data: shop }, { count }] = await Promise.all([
         supabase.from('profiles').select('full_name, avatar_url, account_type, city').eq('id', user.id).maybeSingle(),
@@ -888,6 +894,12 @@ export default function Services() {
     return () => obs.disconnect()
   }, [isPhone, displayCount, filtered.length, pageSize])
 
+  function openForUser(action) {
+    if (userLoading) return
+    if (!currentUser) { navigate('/login'); return }
+    action()
+  }
+
   function renderCta() {
     const headline = myServices.length > 0 ? 'Grow your reach.' : 'Offer your skills. Get found across Malawi.'
     const buttonLabel = myServices.length > 0 ? 'Post another service' : 'Post a Service'
@@ -908,7 +920,7 @@ export default function Services() {
           <button
             type="button"
             className="svc-cta-btn"
-            onClick={() => { setEditingService(null); setTab('post') }}
+            onClick={() => openForUser(() => { setEditingService(null); setTab('post') })}
             aria-label="Post a service"
           >
             <Plus size={16} strokeWidth={2.5} /> {buttonLabel}
@@ -995,7 +1007,7 @@ export default function Services() {
         navigate={navigate}
         activePillar="services"
         ctaLabel="List service"
-        onCta={() => { setEditingService(null); setTab('post') }}
+        onCta={() => openForUser(() => { setEditingService(null); setTab('post') })}
       />
 
       <div className="svc-page">
@@ -1075,7 +1087,7 @@ export default function Services() {
                 <button type="button" className={`svc-seg${tab === 'browse' ? ' active' : ''}`} onClick={() => setTab('browse')} aria-label="All Services">
                   All Services
                 </button>
-                <button type="button" className={`svc-seg${tab === 'mine' ? ' active' : ''}`} onClick={() => setTab('mine')} aria-label="My Services">
+                <button type="button" className={`svc-seg${tab === 'mine' ? ' active' : ''}`} onClick={() => openForUser(() => setTab('mine'))} aria-label="My Services">
                   My Services ({myServices.length})
                 </button>
               </div>
@@ -1126,12 +1138,14 @@ export default function Services() {
                         onClick={() => navigate('/services/' + svc.id)}
                         onBook={() => {
                           if (currentUser) navigate(`/chat/${svc.provider_id}/${svc.id}?src=service`, { state: { source: 'service' } })
+                          else navigate('/login')
                         }}
                     onChat={() => {
                       if (currentUser) { trackServiceChat(svc); navigate(`/chat/${svc.provider_id}/${svc.id}?src=service`, { state: { source: 'service' } }) }
+                      else navigate('/login')
                     }}
                         isMine={svc.provider_id === currentUser?.id}
-                        onEdit={() => { setEditingService(svc); setTab('post') }}
+                        onEdit={() => openForUser(() => { setEditingService(svc); setTab('post') })}
                         featuredBadge={!!svc.is_featured}
                       />
                     </div>
@@ -1236,12 +1250,14 @@ export default function Services() {
                       onClick={() => navigate('/services/' + svc.id)}
                       onBook={() => {
                         if (currentUser) navigate(`/chat/${svc.provider_id}/${svc.id}?src=service`, { state: { source: 'service' } })
+                        else navigate('/login')
                       }}
                       onChat={() => {
                         if (currentUser) { trackServiceChat(svc); navigate(`/chat/${svc.provider_id}/${svc.id}?src=service`, { state: { source: 'service' } }) }
+                        else navigate('/login')
                       }}
                       isMine={svc.provider_id === currentUser?.id}
-                      onEdit={() => { setEditingService(svc); setTab('post') }}
+                      onEdit={() => openForUser(() => { setEditingService(svc); setTab('post') })}
                     />
                   ))}
                 </div>
@@ -1267,8 +1283,8 @@ export default function Services() {
           <div className="svc-form-wrap">
             <ServiceForm
               editingService={editingService}
-              onSuccess={() => { loadServices(); setTab('mine'); setEditingService(null) }}
-              onCancel={() => { setEditingService(null); setTab('mine') }}
+              onSuccess={() => openForUser(() => { loadServices(); setTab('mine'); setEditingService(null) })}
+              onCancel={() => openForUser(() => { setEditingService(null); setTab('mine') })}
             />
           </div>
         )}
@@ -1279,7 +1295,7 @@ export default function Services() {
               <button type="button" className={`svc-seg${tab === 'browse' ? ' active' : ''}`} onClick={() => setTab('browse')} aria-label="All Services">
                 All Services
               </button>
-              <button type="button" className={`svc-seg${tab === 'mine' ? ' active' : ''}`} onClick={() => setTab('mine')} aria-label="My Services">
+              <button type="button" className={`svc-seg${tab === 'mine' ? ' active' : ''}`} onClick={() => openForUser(() => setTab('mine'))} aria-label="My Services">
                 My Services ({myServices.length})
               </button>
             </div>
@@ -1299,7 +1315,7 @@ export default function Services() {
                     onClick={() => navigate('/services/' + svc.id)}
                     isMine={true}
                     showCounters={true}
-                    onEdit={() => { setEditingService(svc); setTab('post') }}
+                    onEdit={() => openForUser(() => { setEditingService(svc); setTab('post') })}
                   />
                 ))}
               </div>

@@ -63,3 +63,9 @@
 60. merge: merged wip/service-cards-to-page into master (no-ff) after browser test passed; service cards, search/listing results, story tags and notifications now open /services/:id, sw cache sokomw-v56
 61. fix profiles district: ServicesPage profiles select no longer requests district (line 784 only); district label and existing error fallback untouched
 62. bump sw cache: CACHE_VERSION sokomw-v56 -> sokomw-v57 for the profiles district fix
+63. make /services public step 1: App.jsx /services route no longer requires authed; ServicesPage auth uses audited (no code change)
+64. make /services public step 2: ServicesPage Post a Service/List service/My Services/Edit/openForUser callbacks send logged-out visitors to /login; ?tab=post redirects only after auth finishes loading
+65. make /services public step 3: Book now onBook handlers (featured rail + browse grid) navigate to /login when currentUser is empty; logged-in chat navigation unchanged; My Services cards show Manage, not Book now
+66. make /services public step 5: SokoNav adds isGuest from auth getUser; desktop guest header shows Log in/Sign up instead of Chats/Alerts/Post Now/avatar; mobile guest header shows Log in instead of bell/profile; both navigate to /login
+67. make /services public step 4: both onChat handlers (featured rail + browse grid) navigate to /login when currentUser is empty; logged-in trackServiceChat and chat navigation unchanged
+68. bump sw cache: CACHE_VERSION sokomw-v57 -> sokomw-v58 for public /services and guest header changes
