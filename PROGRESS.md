@@ -66,3 +66,4 @@
 63. make /services public step 1: App.jsx /services route no longer requires authed; ServicesPage auth uses audited (no code change)
 64. make /services public step 2: ServicesPage Post a Service/List service/My Services/Edit/openForUser callbacks send logged-out visitors to /login; ?tab=post redirects only after auth finishes loading
 65. make /services public step 3: Book now onBook handlers (featured rail + browse grid) navigate to /login when currentUser is empty; logged-in chat navigation unchanged; My Services cards show Manage, not Book now
+66. make /services public step 5: SokoNav adds isGuest from auth getUser; desktop guest header shows Log in/Sign up instead of Chats/Alerts/Post Now/avatar; mobile guest header shows Log in instead of bell/profile; both navigate to /login
