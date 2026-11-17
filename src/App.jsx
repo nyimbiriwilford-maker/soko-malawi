@@ -521,7 +521,7 @@ const [installPrompt, setInstallPrompt] = useState(null)
             <Route path="/chat/:userId/:listingId" element={authed ? <ChatsLayout />    : <Navigate to="/login" />} />
             <Route path="/chat/:userId"            element={authed ? <ChatsLayout />    : <Navigate to="/login" />} />
             <Route path="/profile"                 element={authed ? <Profile />        : <Navigate to="/login" />} />
-            <Route path="/services"                element={authed ? <Services />       : <Navigate to="/login" />} />
+            <Route path="/services"                element={<Services />} />
             <Route path="/profile/:id"             element={authed ? <PublicProfile />  : <Navigate to="/login" />} />
             <Route path="/post/edit/:id"           element={authed ? <PostListing />    : <Navigate to="/login" />} />
             <Route path="/status"          element={authed ? <StatusPage />        : <Navigate to="/login" />} />
