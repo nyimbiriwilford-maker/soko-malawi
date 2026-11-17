@@ -1395,7 +1395,7 @@ function LiveSearchOverlay({ liveQuery, setLiveQuery, liveResults, liveLoading, 
               {liveResults.services.length > 0 && (
                 <Section label="Services" iconNode={Icon.wrench(14)}>
                   {liveResults.services.map(s => (
-                    <LiveRow key={s.id} onClick={() => { navigate('/services'); onClose() }}
+                    <LiveRow key={s.id} onClick={() => { navigate('/services/' + s.id); onClose() }}
                       avatar={<span style={{ color:T.violet, display:'flex' }}>{Icon.wrench(18)}</span>}
                       title={s.name} sub={[s.category, s.city].filter(Boolean).join(' - ')}
                     />
@@ -1850,7 +1850,7 @@ const locationParam = searchParams.get('location') || ''
         return count || 0
       }),
       safe(async () => {
-        return count || 0
+        return 0
       }),
       safe(async () => {
         const { count } = await supabase.from('services').select('id', { count:'exact', head:true }).eq('status', 'active').ilike('name', `%${q}%`)
@@ -2175,7 +2175,7 @@ const locationParam = searchParams.get('location') || ''
       case 'listings':   return '/listing/' + item.id
       case 'shops':      return '/shop/' + item.slug
       case 'lookingfor': return '/looking-for'
-      case 'services':   return '/services'
+      case 'services':   return '/services/' + item.id
       default:           return '/'
     }
   }

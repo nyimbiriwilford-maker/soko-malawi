@@ -2705,6 +2705,8 @@ export default function Notifications() {
       default:
         if (String(notif.type || '').startsWith('verification')) {
           navigate('/profile?verify=1', { state: { openVerify: true } })
+        } else if (data.service_id) {
+          navigate(`/services/${data.service_id}`)
         } else if (notif.link) {
           navigate(notif.link)
         }

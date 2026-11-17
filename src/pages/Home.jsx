@@ -30,7 +30,6 @@ import { supabase }              from '../lib/supabase'
 import useSearchAnimation        from '../hooks/useSearchAnimation'
 import { useUserLocation }       from '../hooks/useUserLocation'
 import { useNetwork }            from '../context/NetworkContext'
-import ProviderModal              from './ProviderModal'
 import { fetchAllActiveStories } from '../hooks/useStatuses'
 import VerificationAttentionBanner from '../components/VerificationAttentionBanner'
 import SokoNav from '../components/SokoNav'
@@ -5014,7 +5013,6 @@ export default function Home() {
   const [services, setServices] = useState([])
   const [requests, setRequests] = useState([])
   const [sectionsLoading, setSectionsLoading] = useState(true)
-  const [selectedService, setSelectedService] = useState(null)
   const listingsRequestRef = useRef(0)
   const sectionsRequestRef = useRef(0)
 
@@ -5654,7 +5652,7 @@ export default function Home() {
       )}
 
       <div className={!sectionsLoading ? 'soko-swap-in' : undefined}>
-        <ShopsJobsServicesRow navigate={navigate} shops={shops} services={services} loading={sectionsLoading} currentUser={user} onServiceClick={setSelectedService} userLat={userLat} userLng={userLng} activeDistrict={activeDistrict} />
+        <ShopsJobsServicesRow navigate={navigate} shops={shops} services={services} loading={sectionsLoading} currentUser={user} onServiceClick={(svc) => navigate('/services/' + svc.id)} userLat={userLat} userLng={userLng} activeDistrict={activeDistrict} />
       </div>
 
       <div className="soko-settle soko-settle-d8">
@@ -5679,14 +5677,6 @@ export default function Home() {
             setShowUpload(false)
             fetchAllActiveStories(user?.id, 'All').then(setStories)
           }}
-        />
-      )}
-
-      {selectedService && (
-        <ProviderModal
-          provider={selectedService}
-          currentUser={user}
-          onClose={() => setSelectedService(null)}
         />
       )}
 
