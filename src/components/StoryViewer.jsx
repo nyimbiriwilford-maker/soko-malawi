@@ -978,7 +978,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
     if (!kind || !id) return
     onClose?.()
     if (kind === 'listing') navigate('/listing/' + id)
-    else if (kind === 'service') navigate('/services')
+    else if (kind === 'service') navigate('/services/' + id)
     else if (kind === 'shop') navigate('/shop/' + id)
     else if (kind === 'request') navigate('/looking-for')
   }

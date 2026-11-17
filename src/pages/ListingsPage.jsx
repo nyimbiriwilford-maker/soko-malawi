@@ -1754,7 +1754,7 @@ export default function SearchPage() {
       case 'listings':   return '/listing/' + item.id
       case 'shops':      return '/shop/' + item.slug
       case 'lookingfor': return '/looking-for'
-      case 'services':   return '/services'
+      case 'services':   return '/services/' + item.id
       default:           return '/'
     }
   }
