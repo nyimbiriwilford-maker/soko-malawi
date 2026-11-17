@@ -136,6 +136,40 @@ const CSS = `
   .sd-nf-sub { font-size:14px; color:#5f6368; margin:0 0 20px; line-height:1.6; }
   .sd-btn-primary { min-height:44px; border:none; border-radius:12px; background:#0F9D58; color:#fff; font-size:14px; font-weight:700; font-family:inherit; cursor:pointer; padding:0 18px; display:inline-flex; align-items:center; justify-content:center; gap:6px; }
   .sd-btn-outline { min-height:44px; border:1px solid #e8eaed; border-radius:12px; background:#fff; color:#202124; font-size:14px; font-weight:700; font-family:inherit; cursor:pointer; padding:0 18px; display:inline-flex; align-items:center; justify-content:center; gap:6px; }
+
+  .sd-rev-summary { display:flex; gap:16px; background:#fff; border:1px solid #e8eaed; border-radius:14px; padding:14px; align-items:center; flex-wrap:wrap; }
+  .sd-rev-left { flex:0 0 110px; text-align:center; }
+  .sd-rev-avg { font-size:32px; font-weight:800; line-height:1.1; }
+  .sd-rev-total { font-size:12px; color:#5f6368; margin-top:4px; }
+  .sd-rev-bars { flex:1 1 180px; min-width:160px; display:flex; flex-direction:column; gap:4px; }
+  .sd-rev-bar-row { display:flex; align-items:center; gap:8px; font-size:11px; color:#5f6368; }
+  .sd-rev-bar-lab { width:10px; text-align:right; }
+  .sd-rev-bar { flex:1; height:8px; background:#f1f3f4; border-radius:999px; overflow:hidden; }
+  .sd-rev-bar-fill { display:block; height:100%; background:#F9AB00; border-radius:999px; }
+  .sd-rev-bar-count { width:22px; text-align:right; }
+  .sd-rev-note { font-size:12px; color:#5f6368; line-height:1.6; margin:10px 0 0; }
+  .sd-rev-cta { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; background:#fff; border:1px solid #e8eaed; border-radius:14px; padding:12px 14px; margin-top:12px; font-size:13px; color:#202124; }
+  .sd-rev-cta > span { display:inline-flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .sd-rev-form { background:#fff; border:1px solid #e8eaed; border-radius:14px; padding:14px; margin-top:12px; }
+  .sd-rev-form-title { font-size:13px; font-weight:700; margin-bottom:6px; }
+  .sd-stars-input { display:flex; gap:4px; margin-bottom:8px; }
+  .sd-star-btn { width:44px; height:44px; border:none; background:none; padding:0; display:flex; align-items:center; justify-content:center; cursor:pointer; }
+  .sd-rev-textarea { width:100%; min-height:96px; border:1px solid #e8eaed; border-radius:12px; padding:10px 12px; font-family:inherit; font-size:13px; line-height:1.6; resize:vertical; box-sizing:border-box; color:#202124; }
+  .sd-rev-textarea:focus { outline:2px solid #0F9D58; outline-offset:1px; }
+  .sd-rev-form-foot { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:8px; }
+  .sd-rev-counter { font-size:11px; color:#5f6368; }
+  .sd-rev-error { font-size:12px; color:#c0392b; margin-top:8px; }
+  .sd-rev-list { display:flex; flex-direction:column; gap:10px; margin-top:14px; }
+  .sd-rev-card { background:#fff; border:1px solid #e8eaed; border-radius:14px; padding:14px; }
+  .sd-rev-head { display:flex; align-items:center; gap:10px; }
+  .sd-rev-who { min-width:0; flex:1; }
+  .sd-rev-name { font-size:13px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .sd-rev-sub { display:flex; align-items:center; gap:5px; font-size:11px; color:#5f6368; margin-top:2px; }
+  .sd-rev-del { border:none; background:none; color:#c0392b; font-size:12px; font-weight:700; font-family:inherit; cursor:pointer; padding:6px 8px; min-height:32px; }
+  .sd-rev-link { border:none; background:none; color:#0F9D58; font-size:12px; font-weight:700; font-family:inherit; cursor:pointer; padding:4px 0; }
+  .sd-rev-comment { font-size:13px; line-height:1.65; margin:8px 0 0; white-space:pre-wrap; overflow-wrap:anywhere; }
+  .sd-rev-comment.clamp { display:-webkit-box; -webkit-line-clamp:4; -webkit-box-orient:vertical; overflow:hidden; }
+  .sd-rev-more { min-height:44px; border:1px solid #e8eaed; border-radius:12px; background:#fff; color:#202124; font-size:13px; font-weight:700; font-family:inherit; cursor:pointer; }
 `
 
 function ratingOf(svc) {
@@ -184,6 +218,35 @@ function maskContact(contact) {
   const s = String(contact || '').replace(/\s+/g, '')
   if (!s) return ''
   return `${s.slice(0, 4)} *** ***`
+}
+
+function titleName(name) {
+  const s = String(name || '').trim()
+  if (!s) return 'Customer'
+  return s.split(/\s+/).map(w => (w ? w[0].toUpperCase() + w.slice(1) : '')).join(' ')
+}
+
+function reviewDate(value) {
+  if (!value) return ''
+  const then = new Date(value)
+  if (Number.isNaN(then.getTime())) return ''
+  const mins = Math.floor((Date.now() - then.getTime()) / 60000)
+  if (mins < 1) return 'just now'
+  if (mins < 60) return `${mins} minute${mins === 1 ? '' : 's'} ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs} hour${hrs === 1 ? '' : 's'} ago`
+  const days = Math.floor(hrs / 24)
+  if (days < 7) return `${days} day${days === 1 ? '' : 's'} ago`
+  if (days < 30) {
+    const weeks = Math.floor(days / 7)
+    return `${weeks} week${weeks === 1 ? '' : 's'} ago`
+  }
+  if (days < 365) {
+    const months = Math.floor(days / 30)
+    return `${months} month${months === 1 ? '' : 's'} ago`
+  }
+  const years = Math.floor(days / 365)
+  return `${years} year${years === 1 ? '' : 's'} ago`
 }
 
 function Stars({ value, size = 16 }) {
@@ -280,6 +343,14 @@ export default function ServiceDetailsPage() {
   const [reportSent, setReportSent] = useState(false)
   const [toast, setToast] = useState('')
   const [showEdit, setShowEdit] = useState(false)
+  const [messaged, setMessaged] = useState(false)
+  const [myRating, setMyRating] = useState(0)
+  const [reviewText, setReviewText] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [deletingReviewId, setDeletingReviewId] = useState(null)
+  const [reviewError, setReviewError] = useState('')
+  const [showAllReviews, setShowAllReviews] = useState(false)
+  const [expandedReviews, setExpandedReviews] = useState([])
 
   const media = Array.isArray(service?.media_urls) ? service.media_urls : []
   const isOwner = !!currentUser && !!service && currentUser.id === service.provider_id
@@ -296,6 +367,9 @@ export default function ServiceDetailsPage() {
   const completed = Number(service?.completed_count ?? service?.jobs_done ?? 0) || 0
   const views = Number(service?.views) || 0
   const catInfo = SERVICE_CATS.find(c => c.name === service?.category)
+  const myReview = currentUser ? reviews.find(r => r.reviewer_id === currentUser.id) : null
+  const starCounts = [5, 4, 3, 2, 1].map(n => reviews.filter(r => Number(r.rating) === n).length)
+  const visibleReviews = showAllReviews ? reviews : reviews.slice(0, 3)
 
   useEffect(() => {
     let active = true
@@ -314,6 +388,14 @@ export default function ServiceDetailsPage() {
     setReportReason('')
     setReportSent(false)
     setShowEdit(false)
+    setMessaged(false)
+    setMyRating(0)
+    setReviewText('')
+    setSubmitting(false)
+    setDeletingReviewId(null)
+    setReviewError('')
+    setShowAllReviews(false)
+    setExpandedReviews([])
     ;(async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!active) return
@@ -371,17 +453,29 @@ export default function ServiceDetailsPage() {
           .limit(8)
         : Promise.resolve({ data: [] })
 
-      const [prof, shop, rev, sim] = await Promise.all([
+      const eligibilityPromise = user && user.id !== svc.provider_id
+        ? supabase
+          .from('messages')
+          .select('id')
+          .eq('service_id', svc.id)
+          .eq('from_user', user.id)
+          .eq('to_user', svc.provider_id)
+          .limit(1)
+        : Promise.resolve({ data: [] })
+
+      const [prof, shop, rev, sim, elig] = await Promise.all([
         profilePromise,
         shopPromise,
         reviewsPromise,
         similarPromise,
+        eligibilityPromise,
       ])
       if (!active) return
       setProfile(prof)
       setShopName(shop?.data?.name || '')
       setReviews(rev?.data || [])
       setSimilar(sim?.data || [])
+      setMessaged(!!(elig?.data && elig.data.length))
       setLoading(false)
 
       if (user && user.id !== svc.provider_id) {
@@ -479,6 +573,67 @@ export default function ServiceDetailsPage() {
   async function refreshService() {
     const { data } = await supabase.from('services').select('*').eq('id', id).maybeSingle()
     if (data) setService(data)
+  }
+
+  async function loadReviews() {
+    const { data } = await supabase
+      .from('reviews')
+      .select('*')
+      .eq('service_id', id)
+      .order('created_at', { ascending: false })
+      .limit(50)
+    setReviews(data || [])
+  }
+
+  async function submitReview() {
+    if (!currentUser || !service) return
+    if (!myRating) {
+      setReviewError('Please select a star rating')
+      return
+    }
+    setSubmitting(true)
+    setReviewError('')
+    const { error } = await supabase.from('reviews').insert({
+      service_id: service.id,
+      provider_id: service.provider_id,
+      reviewer_id: currentUser.id,
+      reviewer_name: currentUser.user_metadata?.full_name || profile?.full_name || currentUser.email?.split('@')[0] || 'Customer',
+      rating: myRating,
+      comment: reviewText.trim(),
+    })
+    setSubmitting(false)
+    if (error) {
+      setReviewError(error.code === '23505' ? 'You already reviewed this service.' : (error.message || 'Could not submit your review.'))
+      return
+    }
+    setMyRating(0)
+    setReviewText('')
+    setToast('Review added')
+    await Promise.all([loadReviews(), refreshService()])
+  }
+
+  async function deleteReview(review) {
+    if (!currentUser || review.reviewer_id !== currentUser.id) return
+    setDeletingReviewId(review.id)
+    const { error } = await supabase
+      .from('reviews')
+      .delete()
+      .eq('id', review.id)
+      .eq('reviewer_id', currentUser.id)
+    setDeletingReviewId(null)
+    if (error) {
+      setToast('Could not delete review')
+      return
+    }
+    setToast('Review deleted')
+    setExpandedReviews(prev => prev.filter(rid => rid !== review.id))
+    await Promise.all([loadReviews(), refreshService()])
+  }
+
+  function toggleExpanded(reviewId) {
+    setExpandedReviews(prev => (
+      prev.includes(reviewId) ? prev.filter(rid => rid !== reviewId) : [...prev, reviewId]
+    ))
   }
 
   function goToMedia(index) {
@@ -699,17 +854,136 @@ export default function ServiceDetailsPage() {
 
   const reviewsSection = (
     <Section title="Reviews">
-      {reviews.length === 0 ? (
-        <p className="sd-text" style={{ color: '#5f6368' }}>No reviews yet.</p>
+      <div className="sd-rev-summary">
+        <div className="sd-rev-left">
+          <div className="sd-rev-avg">{totalReviews > 0 ? displayAvg.toFixed(1) : '—'}</div>
+          <Stars value={displayAvg} size={15} />
+          <div className="sd-rev-total">{totalReviews} review{totalReviews === 1 ? '' : 's'}</div>
+        </div>
+        <div className="sd-rev-bars">
+          {starCounts.map((count, index) => {
+            const star = 5 - index
+            const pct = reviews.length ? Math.round((count / reviews.length) * 100) : 0
+            return (
+              <div key={star} className="sd-rev-bar-row">
+                <span className="sd-rev-bar-lab">{star}</span>
+                <span className="sd-rev-bar"><span className="sd-rev-bar-fill" style={{ width: `${pct}%` }} /></span>
+                <span className="sd-rev-bar-count">{count}</span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+      {totalReviews > 50 && <p className="sd-rev-note">Based on the latest 50 reviews</p>}
+
+      {isOwner ? (
+        <p className="sd-rev-note">Customers can leave a review after messaging you about this service.</p>
+      ) : !currentUser ? (
+        <div className="sd-rev-cta">
+          <span>Log in to write a review</span>
+          <button type="button" className="sd-btn-primary" onClick={() => navigate('/login')}>Log in</button>
+        </div>
+      ) : myReview ? (
+        <div className="sd-rev-cta">
+          <span>You reviewed this service <Stars value={Number(myReview.rating) || 0} size={13} /></span>
+          <button
+            type="button"
+            className="sd-rev-link"
+            onClick={() => deleteReview(myReview)}
+            disabled={deletingReviewId === myReview.id}
+          >
+            {deletingReviewId === myReview.id ? 'Removing…' : 'Delete my review'}
+          </button>
+        </div>
+      ) : !messaged ? (
+        <div className="sd-rev-cta">
+          <span>Chat with this provider to leave a review</span>
+          <button type="button" className="sd-btn-outline" onClick={goChat}>Chat</button>
+        </div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {reviews.slice(0, 3).map(r => (
-            <div key={r.id} style={{ background: '#fff', border: '1px solid #e8eaed', borderRadius: 12, padding: 12 }}>
-              <div style={{ fontSize: 13, fontWeight: 700 }}>{r.reviewer_name || 'Customer'}</div>
-              <div style={{ fontSize: 12, color: '#5f6368' }}>{r.rating}★ · {new Date(r.created_at).toLocaleDateString()}</div>
-              {r.comment && <p style={{ fontSize: 13, marginTop: 4, lineHeight: 1.6 }}>{r.comment}</p>}
-            </div>
-          ))}
+        <div className="sd-rev-form">
+          <div className="sd-rev-form-title">Rate this service</div>
+          <div className="sd-stars-input">
+            {[1, 2, 3, 4, 5].map(n => (
+              <button
+                key={n}
+                type="button"
+                className="sd-star-btn"
+                onClick={() => { setMyRating(n); setReviewError('') }}
+                aria-label={`${n} star${n === 1 ? '' : 's'}`}
+                aria-pressed={n <= myRating}
+              >
+                <Star size={30} color={n <= myRating ? '#F9AB00' : '#c7cdd2'} fill={n <= myRating ? '#F9AB00' : 'none'} strokeWidth={1.5} />
+              </button>
+            ))}
+          </div>
+          <textarea
+            className="sd-rev-textarea"
+            value={reviewText}
+            maxLength={1000}
+            placeholder="Share your experience with this service"
+            onChange={e => setReviewText(e.target.value)}
+          />
+          <div className="sd-rev-form-foot">
+            <span className="sd-rev-counter">{reviewText.length}/1000</span>
+            <button type="button" className="sd-btn-primary" onClick={submitReview} disabled={submitting || !myRating}>
+              {submitting ? 'Posting…' : 'Post review'}
+            </button>
+          </div>
+          {reviewError && <div className="sd-rev-error">{reviewError}</div>}
+        </div>
+      )}
+
+      {reviews.length === 0 ? (
+        <p className="sd-text" style={{ color: '#5f6368', marginTop: 14 }}>No reviews yet.</p>
+      ) : (
+        <div className="sd-rev-list">
+          {visibleReviews.map(review => {
+            const name = titleName(review.reviewer_name)
+            const expanded = expandedReviews.includes(review.id)
+            const isLong = String(review.comment || '').length > 220
+            const mine = !!currentUser && review.reviewer_id === currentUser.id
+            return (
+              <div key={review.id} className="sd-rev-card">
+                <div className="sd-rev-head">
+                  <div className="sd-avatar" style={{ background: avatarColor(name) }}>{initials(name)}</div>
+                  <div className="sd-rev-who">
+                    <div className="sd-rev-name">{name}</div>
+                    <div className="sd-rev-sub">
+                      <Stars value={Number(review.rating) || 0} size={12} />
+                      <span>·</span>
+                      <span>{reviewDate(review.created_at)}</span>
+                    </div>
+                  </div>
+                  {mine && (
+                    <button
+                      type="button"
+                      className="sd-rev-del"
+                      onClick={() => deleteReview(review)}
+                      disabled={deletingReviewId === review.id}
+                    >
+                      {deletingReviewId === review.id ? '…' : 'Delete'}
+                    </button>
+                  )}
+                </div>
+                {review.comment && (
+                  <>
+                    <p className={`sd-rev-comment${!expanded && isLong ? ' clamp' : ''}`}>{review.comment}</p>
+                    {isLong && (
+                      <button type="button" className="sd-rev-link" onClick={() => toggleExpanded(review.id)}>
+                        {expanded ? 'Show less' : 'Read more'}
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+            )
+          })}
+          {reviews.length > 3 && (
+            <button type="button" className="sd-rev-more" onClick={() => setShowAllReviews(value => !value)}>
+              {showAllReviews ? 'Show fewer reviews' : `See all ${reviews.length} reviews`}
+            </button>
+          )}
         </div>
       )}
     </Section>
