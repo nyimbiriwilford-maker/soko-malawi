@@ -64,3 +64,4 @@
 61. fix profiles district: ServicesPage profiles select no longer requests district (line 784 only); district label and existing error fallback untouched
 62. bump sw cache: CACHE_VERSION sokomw-v56 -> sokomw-v57 for the profiles district fix
 63. make /services public step 1: App.jsx /services route no longer requires authed; ServicesPage auth uses audited (no code change)
+64. make /services public step 2: ServicesPage Post a Service/List service/My Services/Edit/openForUser callbacks send logged-out visitors to /login; ?tab=post redirects only after auth finishes loading
