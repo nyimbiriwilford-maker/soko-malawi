@@ -6,7 +6,7 @@ import { rankServices, isServiceVerified } from '../lib/serviceRanking'
 import { SERVICE_CATS, CITIES } from './serviceData'
 import ServiceForm from './ServiceForm'
 import SokoNav from '../components/SokoNav'
-import { Search, X, MapPin, Wrench, BadgeCheck, ChevronDown, Filter, ArrowUpDown, LayoutGrid, MessageCircle, Eye, Check, Plus } from 'lucide-react'
+import { Search, X, MapPin, Wrench, BadgeCheck, ChevronDown, Filter, ArrowUpDown, LayoutGrid, MessageCircle, Eye, Check, Plus, Star } from 'lucide-react'
 
 const css = `
   * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -284,8 +284,9 @@ const css = `
   .svc-card-yours { font-size: 13px; color: #5f6368; padding: 4px 0; }
   .svc-card-desc { font-size: 13px; color: #5f6368; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: none; }
   @media (min-width: 1100px) { .svc-card-desc { display: block; } }
-  .svc-card-rating { font-size: 12px; color: #5f6368; display: none; align-items: center; gap: 4px; }
-  @media (min-width: 1100px) { .svc-card-rating { display: inline-flex; } }
+  .svc-card-rating { display: flex; align-items: center; gap: 4px; font-size: 12.5px; color: #5f6368; margin: 4px 0 0; }
+  .svc-card-rating strong { color: #202124; font-weight: 700; }
+  .svc-card-rating-none { color: #80868b; }
   @media (max-width: 767px) { .svc-provider-name { display: none; } }
 
   /* Skeleton cards */
@@ -525,6 +526,8 @@ function ServiceCard({ svc, delay, onClick, onBook, onChat, isMine, onEdit, show
   const verified = (svc._verified != null) ? !!svc._verified : isServiceVerified(svc, profile)
   const districtLabel = profile?.district || svc.city || 'Malawi'
   const price = formatPrice(svc.rate)
+  const ratingCount = Number(svc.rating_count) || 0
+  const ratingAvg = Number(svc.rating_avg)
 
   const isNew = !!svc.created_at && (now - new Date(svc.created_at).getTime()) <= 7 * 24 * 60 * 60 * 1000
 
@@ -560,6 +563,15 @@ function ServiceCard({ svc, delay, onClick, onBook, onChat, isMine, onEdit, show
               <MapPin size={12} strokeWidth={2.2} color="#80868b" /> {districtLabel}
             </span>
           </div>
+        )}
+        {ratingCount > 0 && Number.isFinite(ratingAvg) ? (
+          <div className="svc-card-rating">
+            <Star size={13} color="#F9AB00" fill="#F9AB00" />
+            <strong>{ratingAvg.toFixed(1)}</strong>
+            <span>({ratingCount})</span>
+          </div>
+        ) : (
+          <div className="svc-card-rating svc-card-rating-none">No reviews yet</div>
         )}
         {svc.description && <p className="svc-card-desc">{svc.description}</p>}
         {showCounters && isMine && (svc.views != null || svc.chats_count != null || svc.chats != null) && (
