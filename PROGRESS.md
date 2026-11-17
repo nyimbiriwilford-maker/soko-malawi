@@ -50,3 +50,4 @@
 47. services-filter-sheet verify: eslint no-undef clean, build passed, sw cache bumped sokomw-v54 (live v53), merged to master and pushed
 48. service-details-page step 1: public /services/:id route (lazy ServiceDetailsPage), bottom nav hidden for /services/<id>, not-found state with Browse services/Go back
 49. service-details-page step 2: fetch service (select *), profile with is_verified/created_at fallback, shop name, reviews limit 50, similar active same-category limit 8, session view count, rate/experience formatting, document.title
+50. service-details-page step 3: full public layout - gallery with dots and lightbox, header/provider/stats, about/skills/coverage/contact (masked reveal), safety tip, similar rail, sticky side card, bottom bar, report modal, edit sheet embedding ServiceForm, share/call/whatsapp/chat
