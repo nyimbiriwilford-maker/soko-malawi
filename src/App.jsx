@@ -33,6 +33,7 @@ const ExplorePage       = lazyRetry(() => import('./pages/ExplorePage'))
 const ListingsPage      = lazyRetry(() => import('./pages/ListingsPage'))
 const CallBudgetPage    = lazyRetry(() => import('./pages/CallBudget'))
 const SafetyPage        = lazyRetry(() => import('./pages/SafetyPage'))
+const ServiceDetailsPage = lazyRetry(() => import('./pages/ServiceDetailsPage'))
 
 import ErrorBoundary from './components/ErrorBoundary'
 import AdminGate from './components/AdminGate'
@@ -89,6 +90,7 @@ function AppMobileBottomNav({ enabled }) {
     p.startsWith('/onboarding') ||
     p.startsWith('/verify-payment') ||
     p.startsWith('/call-budget') ||
+    p.startsWith('/services/') ||
     p.startsWith('/chat/')
   ) {
     return null
@@ -507,6 +509,9 @@ const [installPrompt, setInstallPrompt] = useState(null)
 
             {/* ── Admin ─────────────────────────────────── */}
             <Route path="/admin/*" element={<AdminGate />} />
+
+            {/* ── Public service details ────────────────── */}
+            <Route path="/services/:id" element={<ServiceDetailsPage />} />
 
             {/* ── Protected routes ──────────────────────── */}
             <Route path="/"                        element={authed ? (isAdmin ? <Navigate to="/admin" /> : <Home />)      : <Navigate to="/login" />} />
