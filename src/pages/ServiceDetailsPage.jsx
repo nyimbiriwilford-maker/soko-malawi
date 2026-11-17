@@ -39,6 +39,10 @@ const CSS = `
   .sd-avatar { width:36px; height:36px; border-radius:50%; color:#fff; display:flex; align-items:center; justify-content:center; font-size:13px; font-weight:800; flex:0 0 36px; }
   .sd-provider-name { display:flex; align-items:center; gap:4px; font-size:14px; font-weight:700; }
   .sd-member { font-size:12px; color:#5f6368; margin-top:1px; }
+  .sd-provider-resp { margin-top:6px; }
+  .sd-resp-chip { display:inline-flex; align-items:center; background:#e6f6ed; color:#0F9D58; border-radius:999px; padding:2px 8px; font-size:11px; font-weight:700; white-space:nowrap; }
+  .sd-resp-text { font-size:12px; color:#5f6368; }
+  @media (min-width:1100px) { .sd-provider-resp { display:none; } }
   .sd-meta { display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-top:10px; font-size:13px; color:#5f6368; }
   .sd-meta b { color:#202124; }
   .sd-new { background:#f1f3f4; border-radius:999px; padding:1px 8px; font-size:12px; font-weight:700; color:#5f6368; }
@@ -220,6 +224,32 @@ function maskContact(contact) {
   return `${s.slice(0, 4)} *** ***`
 }
 
+function formatPhoneSpaced(contact) {
+  const digits = String(contact || '').replace(/\D/g, '')
+  if (!digits) return ''
+  if (digits.length <= 4) return digits
+  if (digits.length <= 6) return `${digits.slice(0, 4)} ${digits.slice(4)}`
+  return `${digits.slice(0, 4)} ${digits.slice(4, 6)} ${digits.slice(6)}`
+}
+
+function fallbackCopy(text) {
+  try {
+    const ta = document.createElement('textarea')
+    ta.value = text
+    ta.setAttribute('readonly', '')
+    ta.style.position = 'fixed'
+    ta.style.top = '-1000px'
+    ta.style.opacity = '0'
+    document.body.appendChild(ta)
+    ta.select()
+    const ok = document.execCommand('copy')
+    document.body.removeChild(ta)
+    return ok
+  } catch {
+    return false
+  }
+}
+
 function titleName(name) {
   const s = String(name || '').trim()
   if (!s) return 'Customer'
@@ -247,6 +277,18 @@ function reviewDate(value) {
   }
   const years = Math.floor(days / 365)
   return `${years} year${years === 1 ? '' : 's'} ago`
+}
+
+function responseInfo(profile) {
+  if (!profile) return null
+  if (profile.fast_responder) return { fast: true, label: 'Fast responder' }
+  const samples = Number(profile.response_sample_count) || 0
+  const seconds = Number(profile.avg_response_seconds) || 0
+  if (samples < 3 || seconds <= 0) return null
+  if (seconds < 300) return { fast: false, label: 'Replies in about under 5 min' }
+  if (seconds < 3600) return { fast: false, label: `Replies in about ${Math.max(1, Math.round(seconds / 60))} min` }
+  if (seconds < 86400) return { fast: false, label: `Replies in about ${Math.max(1, Math.round(seconds / 3600))} hr` }
+  return { fast: false, label: `Replies in about ${Math.max(1, Math.round(seconds / 86400))} days` }
 }
 
 function Stars({ value, size = 16 }) {
@@ -356,6 +398,7 @@ export default function ServiceDetailsPage() {
   const isOwner = !!currentUser && !!service && currentUser.id === service.provider_id
   const providerName = shopName || profile?.full_name || ''
   const verified = isServiceVerified(service, profile)
+  const response = responseInfo(profile)
   const serviceRating = ratingOf(service)
   const reviewAvg = reviews.length
     ? reviews.reduce((sum, r) => sum + (Number(r.rating) || 0), 0) / reviews.length
@@ -418,7 +461,7 @@ export default function ServiceDetailsPage() {
         if (!svc.provider_id) return null
         let res = await supabase
           .from('profiles')
-          .select('id, full_name, avatar_url, is_verified, created_at')
+          .select('id, full_name, avatar_url, is_verified, avg_response_seconds, response_sample_count, fast_responder')
           .eq('id', svc.provider_id)
           .maybeSingle()
         if (res.error) {
@@ -535,8 +578,29 @@ export default function ServiceDetailsPage() {
     })
   }
 
-  function doCall() {
-    if (service?.contact) window.location.href = `tel:${service.contact}`
+  async function doCall() {
+    const contact = service?.contact
+    if (!contact) return
+    const coarse = typeof window !== 'undefined'
+      && typeof window.matchMedia === 'function'
+      && window.matchMedia('(pointer: coarse)').matches
+    if (coarse) {
+      window.location.href = `tel:${contact}`
+      return
+    }
+    const display = formatPhoneSpaced(contact)
+    setShowContact(true)
+    let copied = false
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(String(contact))
+        copied = true
+      }
+    } catch {
+      copied = false
+    }
+    if (!copied) copied = fallbackCopy(String(contact))
+    setToast(copied ? `Number copied: ${display}` : `Number: ${display}`)
   }
 
   function doWhatsApp() {
@@ -764,11 +828,18 @@ export default function ServiceDetailsPage() {
             {providerName || 'Service provider'}
             {verified && <BadgeCheck size={16} color="#1A73E8" aria-label="Verified provider" />}
           </div>
-          {profile?.created_at && (
-            <div className="sd-member">Member since {monthYear(profile.created_at)}</div>
+          {service?.created_at && (
+            <div className="sd-member">Listed since {monthYear(service.created_at)}</div>
           )}
         </div>
       </div>
+      {response && (
+        <div className="sd-provider-resp">
+          {response.fast
+            ? <span className="sd-resp-chip">Fast responder</span>
+            : <span className="sd-resp-text">{response.label}</span>}
+        </div>
+      )}
       <div className="sd-meta">
         {totalReviews > 0 ? (
           <>
@@ -1028,6 +1099,11 @@ export default function ServiceDetailsPage() {
           </>
         ) : (
           <span className="sd-new">New</span>
+        )}
+        {response && (
+          response.fast
+            ? <span className="sd-resp-chip">Fast responder</span>
+            : <span className="sd-resp-text">{response.label}</span>
         )}
       </div>
       <div className="sd-side-note">
