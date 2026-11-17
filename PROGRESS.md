@@ -63,3 +63,4 @@
 60. merge: merged wip/service-cards-to-page into master (no-ff) after browser test passed; service cards, search/listing results, story tags and notifications now open /services/:id, sw cache sokomw-v56
 61. fix profiles district: ServicesPage profiles select no longer requests district (line 784 only); district label and existing error fallback untouched
 62. bump sw cache: CACHE_VERSION sokomw-v56 -> sokomw-v57 for the profiles district fix
+63. make /services public step 1: App.jsx /services route no longer requires authed; ServicesPage auth uses audited (no code change)
