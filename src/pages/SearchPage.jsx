@@ -1850,7 +1850,7 @@ const locationParam = searchParams.get('location') || ''
         return count || 0
       }),
       safe(async () => {
-        return count || 0
+        return 0
       }),
       safe(async () => {
         const { count } = await supabase.from('services').select('id', { count:'exact', head:true }).eq('status', 'active').ilike('name', `%${q}%`)
