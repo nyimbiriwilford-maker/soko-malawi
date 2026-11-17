@@ -5,7 +5,6 @@ import { supabase } from '../lib/supabase'
 import { rankServices, isServiceVerified } from '../lib/serviceRanking'
 import { SERVICE_CATS, CITIES } from './serviceData'
 import ServiceForm from './ServiceForm'
-import ProviderModal from './ProviderModal'
 import SokoNav from '../components/SokoNav'
 import { Search, X, MapPin, Wrench, BadgeCheck, ChevronDown, Filter, ArrowUpDown, LayoutGrid, MessageCircle, Eye, Check, Plus } from 'lucide-react'
 
@@ -620,7 +619,6 @@ export default function Services() {
   const [navUser, setNavUser] = useState(null)
   const [notifCount, setNotifCount] = useState(0)
   const [navSearch, setNavSearch] = useState('')
-  const [selectedProvider, setSelectedProvider] = useState(null)
   const [editingService, setEditingService] = useState(null)
   const [searchInput, setSearchInput] = useState(() => _initParams.get('q') || '')
   const [search, setSearch] = useState(() => _initParams.get('q') || '')
@@ -717,17 +715,6 @@ export default function Services() {
     const meta = document.querySelector('meta[name="description"]')
     if (meta) meta.setAttribute('content', 'Find and book trusted service providers across Malawi on SokoMw.')
   }, [])
-
-  useEffect(() => {
-    if (!selectedProvider) return
-    if (selectedProvider.provider_id === currentUser?.id) return
-    const key = `svc_viewed_${selectedProvider.id}`
-    try {
-      if (sessionStorage.getItem(key)) return
-      sessionStorage.setItem(key, '1')
-    } catch { return }
-    supabase.rpc('increment_service_stat', { p_service_id: selectedProvider.id, p_stat: 'views' }).then(() => {}).catch(() => {})
-  }, [selectedProvider, currentUser])
 
   useEffect(() => {
     if (!filterOpen && !sortOpen && !cityOpen) return
@@ -1136,7 +1123,7 @@ export default function Services() {
                       <ServiceCard
                         svc={svc}
                         delay={0}
-                        onClick={() => setSelectedProvider(svc)}
+                        onClick={() => navigate('/services/' + svc.id)}
                         onBook={() => {
                           if (currentUser) navigate(`/chat/${svc.provider_id}/${svc.id}?src=service`, { state: { source: 'service' } })
                         }}
@@ -1246,7 +1233,7 @@ export default function Services() {
                       svc={svc}
                       delay={i * 0.03}
                       priority={i < 4}
-                      onClick={() => setSelectedProvider(svc)}
+                      onClick={() => navigate('/services/' + svc.id)}
                       onBook={() => {
                         if (currentUser) navigate(`/chat/${svc.provider_id}/${svc.id}?src=service`, { state: { source: 'service' } })
                       }}
@@ -1309,7 +1296,7 @@ export default function Services() {
                     key={svc.id}
                     svc={svc}
                     delay={i * 0.03}
-                    onClick={() => setSelectedProvider(svc)}
+                    onClick={() => navigate('/services/' + svc.id)}
                     isMine={true}
                     showCounters={true}
                     onEdit={() => { setEditingService(svc); setTab('post') }}
@@ -1446,9 +1433,6 @@ export default function Services() {
         document.body
       )}
 
-      {selectedProvider && (
-        <ProviderModal provider={selectedProvider} currentUser={currentUser} onClose={() => setSelectedProvider(null)} />
-      )}
     </div>
   )
 }
