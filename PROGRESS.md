@@ -68,3 +68,4 @@
 65. make /services public step 3: Book now onBook handlers (featured rail + browse grid) navigate to /login when currentUser is empty; logged-in chat navigation unchanged; My Services cards show Manage, not Book now
 66. make /services public step 5: SokoNav adds isGuest from auth getUser; desktop guest header shows Log in/Sign up instead of Chats/Alerts/Post Now/avatar; mobile guest header shows Log in instead of bell/profile; both navigate to /login
 67. make /services public step 4: both onChat handlers (featured rail + browse grid) navigate to /login when currentUser is empty; logged-in trackServiceChat and chat navigation unchanged
+68. bump sw cache: CACHE_VERSION sokomw-v57 -> sokomw-v58 for public /services and guest header changes
