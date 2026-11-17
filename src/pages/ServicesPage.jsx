@@ -1142,6 +1142,7 @@ export default function Services() {
                         }}
                     onChat={() => {
                       if (currentUser) { trackServiceChat(svc); navigate(`/chat/${svc.provider_id}/${svc.id}?src=service`, { state: { source: 'service' } }) }
+                      else navigate('/login')
                     }}
                         isMine={svc.provider_id === currentUser?.id}
                         onEdit={() => openForUser(() => { setEditingService(svc); setTab('post') })}
@@ -1253,6 +1254,7 @@ export default function Services() {
                       }}
                       onChat={() => {
                         if (currentUser) { trackServiceChat(svc); navigate(`/chat/${svc.provider_id}/${svc.id}?src=service`, { state: { source: 'service' } }) }
+                        else navigate('/login')
                       }}
                       isMine={svc.provider_id === currentUser?.id}
                       onEdit={() => openForUser(() => { setEditingService(svc); setTab('post') })}
