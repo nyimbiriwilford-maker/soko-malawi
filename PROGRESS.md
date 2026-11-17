@@ -58,3 +58,4 @@
 55. phase-c step 2: Services page cards (featured rail, browse grid, My Services) navigate to /services/:id via each card's id; removed selectedProvider state, view-count effect, ProviderModal render and import; filters, sort, paging and Book now unchanged
 56. phase-c step 3: remaining service entry points open /services/:id - SearchPage live rows and Services tab result cards, ListingsPage Services tab result cards, StoryViewer service tag, and Notifications fall back to the service page when data.service_id is present; service chat/new_message routing unchanged
 57. phase-c step 3 verify: eslint no-undef clean for the four touched files (pre-existing count/unused warnings untouched); npm run build passed; sw cache bumped sokomw-v56 (live v55)
+58. undo unrelated file changes: restored docs/response.dm, public/version.json and dist/index.html to master; public/sw.js kept at sokomw-v56; source code untouched
