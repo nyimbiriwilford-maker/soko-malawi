@@ -46,3 +46,5 @@
 43. chat-quick-replies verify: eslint no-undef clean, build passed, sw cache bumped sokomw-v53 (live v52), merged to master and pushed
 44. services-filter-sheet step 1: Filters and Sort sheets now render through createPortal to document.body
 45. services-filter-sheet step 2: overlay is fixed inset 0, rgba(0,0,0,.45), z-index 1200 (above bottom nav 1000; no nav values needed raising)
+46. services-filter-sheet step 3: sheet panels z-index 1201 so they sit above their own backdrop (1200), max-height 85dvh with overflow hidden; safe-area padding kept on the footer only, so the whole sheet stays visible above header and bottom nav
+47. services-filter-sheet verify: eslint no-undef clean, build passed, sw cache bumped sokomw-v54 (live v53), merged to master and pushed

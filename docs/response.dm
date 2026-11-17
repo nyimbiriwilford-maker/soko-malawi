@@ -1,32 +1,34 @@
-﻿Branch: wip/chat-quick-replies (no merge, no push). Commits: ba3aa92 (step 1), ebbabe2 (step 2), f97217f (step 3).
+﻿Branch: wip/services-filter-sheet -> merged to master and pushed.
+
+TASK: On the Services page (mobile), the Filters and Sort bottom sheets were being hidden by the fixed bottom nav / clipped on short phones. Make the sheets render above the header and bottom nav and keep the whole sheet visible.
 
 REPORT (pre-change, file + line)
-1. Quick replies were a hardcoded listing array rendered at src/pages/Chat.jsx:3373-3384. Only render condition: messages.length === 0 && !isServiceChat (src/pages/Chat.jsx:3366). No source switch, so an empty request chat showed the listing lines.
-2. Chat source: useState init src/pages/Chat.jsx:236-238 calls resolveChatSource({searchParams, locationState, contextId}) || 'direct'; chatSourceRef 240, chatContextRef 310; refs updated at 406-407 and 718-719; source resolved in init 692-720. Request id = contextId from route param named listingId (213-214) when source is 'request'; used in applyContextFilter 787 (request_id) and send path 1583-1585.
-3. Ownership: buyer_requests.user_id exists (used at src/pages/Profile.jsx:1107). Chat already loads the whole row: loadContextEntity src/pages/Chat.jsx:769-774 does supabase.from('buyer_requests').select('*').eq('id', id).maybeSingle() and setRequest(data) (state at 235), so request.user_id is available without a new query. If it were not loaded, cheapest safe read: select('id, user_id') for that request id.
+1. Both sheets rendered inline inside the Services page tree, so position:fixed could be trapped by an ancestor stacking context: filter sheet src/pages/ServicesPage.jsx:1325, sort sheet :1411.
+2. Backdrop .svc-sheet-backdrop was z-index 1200, but the sheet panels .svc-filter-sheet/.svc-sort-sheet were z-index 301 (src/pages/ServicesPage.jsx:309-316) - below their own backdrop and below the fixed bottom nav (z-index 1000, src/components/BottomNav.jsx:262) and sticky header (z-index 100, src/components/SokoNav.jsx:238).
+3. Sheet height was max-height 85vh only (no dvh fallback) and the panel itself carried the safe-area padding.
 
 STEP 1
-Added requestSellerQuickReplies and requestBuyerQuickReplies; selection in activeQuickReplies returns request sets when chatSourceRef/chatSource is 'request' (never listing lines). Listing/service/shop/direct keep the same array.
+Imported createPortal from react-dom and rendered both filter and sort sheets through createPortal(..., document.body), so fixed positioning is relative to the viewport, not the page container.
 
 STEP 2
-Role guard: in request chats, if request.user_id or currentUser.id is missing, activeQuickReplies returns [] (no quick replies). Otherwise owner === currentUser -> buyer set, else seller set. Failed lookup shows none.
+Overlay .svc-sheet-backdrop is fixed inset 0, rgba(0,0,0,.45), z-index 1200 - above the header (100) and bottom nav (1000); no nav z-index values were touched.
 
 STEP 3
-Tap behavior unchanged: onClick still setNewMsg(q) + focus; sends still go through existing sendMessage, so chat_source='request' and request_id stay set. No sending logic changed.
+Sheet panels are z-index 1201 (above their own backdrop), border-radius 20px, max-height 85vh with 85dvh fallback, overflow hidden. Removed panel-level safe-area padding; the footer keeps calc(12px + env(safe-area-inset-bottom)), so Apply/Clear stay above the home indicator and the whole sheet fits a short phone. Existing body scroll lock (ServicesPage.jsx:754-760) and focus trap (:732-752) are unchanged.
 
-RAW: npm run build
-dist/assets/vendor-supabase-niU8KDh3.js                  193.55 kB | gzip: 49.62 kB
-dist/assets/Admin-B-rvgvoZ.js                            198.19 kB | gzip: 44.41 kB
-dist/assets/vendor-Uo_LcHLI.js                           221.52 kB | gzip: 73.89 kB
-dist/assets/index-CfmrIWxb.js                            228.70 kB | gzip: 66.31 kB
-dist/assets/Home-DZwsS3QB.js                             229.52 kB | gzip: 52.04 kB
-dist/assets/Profile-DCujwtrk.js                          458.54 kB | gzip: 78.51 kB
-
-built in 2.75s
-
-RAW: npx eslint src/pages/Chat.jsx | Select-String "no-undef"
+RAW
+npx eslint src/pages/ServicesPage.jsx | Select-String "no-undef"
 (no output)
 
-RAW: git diff master --stat -- src
- src/pages/Chat.jsx | 53 +++++++++++++++++++++++++++++++++++++++++------------
- 1 file changed, 41 insertions(+), 12 deletions(-)
+npm run build
+dist/assets/ServicesPage-C6UX7hFG.js   61.63 kB | gzip: 14.96 kB
+dist/assets/index-Co7KG0YG.js         228.12 kB | gzip: 65.86 kB
+built in 2.81s
+
+git log --oneline -4
+(see below after merge)
+
+sw cache: live was sokomw-v53, bumped to sokomw-v54 (public/sw.js; dist/sw.js verified v54)
+local built bundle: index-Co7KG0YG.js (ServicesPage-C6UX7hFG.js)
+
+Not touched: no SQL, no change to filter/sort state logic, no change to the desktop services layout.
