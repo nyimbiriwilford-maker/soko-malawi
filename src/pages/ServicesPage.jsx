@@ -1138,6 +1138,7 @@ export default function Services() {
                         onClick={() => navigate('/services/' + svc.id)}
                         onBook={() => {
                           if (currentUser) navigate(`/chat/${svc.provider_id}/${svc.id}?src=service`, { state: { source: 'service' } })
+                          else navigate('/login')
                         }}
                     onChat={() => {
                       if (currentUser) { trackServiceChat(svc); navigate(`/chat/${svc.provider_id}/${svc.id}?src=service`, { state: { source: 'service' } }) }
@@ -1248,6 +1249,7 @@ export default function Services() {
                       onClick={() => navigate('/services/' + svc.id)}
                       onBook={() => {
                         if (currentUser) navigate(`/chat/${svc.provider_id}/${svc.id}?src=service`, { state: { source: 'service' } })
+                        else navigate('/login')
                       }}
                       onChat={() => {
                         if (currentUser) { trackServiceChat(svc); navigate(`/chat/${svc.provider_id}/${svc.id}?src=service`, { state: { source: 'service' } }) }
