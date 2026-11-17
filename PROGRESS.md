@@ -60,3 +60,4 @@
 57. phase-c step 3 verify: eslint no-undef clean for the four touched files (pre-existing count/unused warnings untouched); npm run build passed; sw cache bumped sokomw-v56 (live v55)
 58. undo unrelated file changes: restored docs/response.dm, public/version.json and dist/index.html to master; public/sw.js kept at sokomw-v56; source code untouched
 59. fix undefined count in search totals: the orphan safe block in ListingsPage and SearchPage Services tab counts now returns 0 instead of the undefined count; all other count returns untouched
+60. merge: merged wip/service-cards-to-page into master (no-ff) after browser test passed; service cards, search/listing results, story tags and notifications now open /services/:id, sw cache sokomw-v56
