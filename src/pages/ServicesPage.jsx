@@ -781,7 +781,7 @@ export default function Services() {
       const profileMap = {}
       if (providerIds.length) {
         const { data: profiles, error: profErr } = await supabase
-          .from('profiles').select('id, full_name, avatar_url, account_type, district')
+          .from('profiles').select('id, full_name, avatar_url, account_type')
           .in('id', providerIds)
         let rows = profiles
         if (profErr && /district|column/i.test(profErr.message || '')) {
