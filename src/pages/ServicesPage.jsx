@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { rankServices, isServiceVerified } from '../lib/serviceRanking'
@@ -306,13 +307,12 @@ const css = `
   }
 
   /* Bottom sheets */
-  .svc-sheet-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 300; }
+  .svc-sheet-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 1200; }
   .svc-filter-sheet, .svc-sort-sheet {
-    position: fixed; left: 0; right: 0; bottom: 0; z-index: 301;
-    background: #fff; border-radius: 16px 16px 0 0;
-    max-height: 85vh; display: flex; flex-direction: column;
-    padding-bottom: calc(env(safe-area-inset-bottom, 0px));
-    box-shadow: 0 -4px 24px rgba(0,0,0,.12);
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 1201;
+    background: #fff; border-radius: 20px 20px 0 0;
+    max-height: 85vh; max-height: 85dvh; display: flex; flex-direction: column;
+    overflow: hidden; box-shadow: 0 -4px 24px rgba(0,0,0,.12);
   }
   .svc-sheet-handle { width: 40px; height: 4px; border-radius: 2px; background: #dadce0; margin: 8px auto 4px; flex-shrink: 0; }
   .svc-sheet-title { font-size: 18px; font-weight: 700; color: #202124; padding: 8px 16px; }
@@ -1322,7 +1322,7 @@ export default function Services() {
         )}
       </div>
 
-      {filterOpen && isMobile && (
+      {filterOpen && isMobile && createPortal(
         <>
           <div className="svc-sheet-backdrop" onClick={() => setFilterOpen(false)} />
           <div
@@ -1404,10 +1404,11 @@ export default function Services() {
               <button type="button" className="svc-apply-btn" onClick={applyFilter}>Apply</button>
             </div>
           </div>
-        </>
+        </>,
+        document.body
       )}
 
-      {sortOpen && isMobile && (
+      {sortOpen && isMobile && createPortal(
         <>
           <div className="svc-sheet-backdrop" onClick={() => setSortOpen(false)} />
           <div
@@ -1441,7 +1442,8 @@ export default function Services() {
               <span className="svc-sort-label">Verified first</span>
             </button>
           </div>
-        </>
+        </>,
+        document.body
       )}
 
       {selectedProvider && (
