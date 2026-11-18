@@ -83,3 +83,7 @@
 80. remove-provider-modal step 2: delete unused ProviderModal.jsx and ReviewSection.jsx
 81. remove-provider-modal step 3: build and eslint checks passed
 82. remove-provider-modal step 4: preview started on port 4175 and stopped
+83. profile-errors step 1: remove service_requests query, keep serviceReqs fixed null
+84. profile-errors step 2: recompute_user_achievements call left unchanged
+85. profile-errors step 3: build and eslint checks passed
+86. profile-errors step 4: preview restarted on port 4175

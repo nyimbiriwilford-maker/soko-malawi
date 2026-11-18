@@ -29,7 +29,7 @@ export function useProfileDashboard(userId) {
   const [suggestions, setSuggestions] = useState([])
   const [recommended, setRecommended] = useState([])
   const [recentlyViewed, setRecentlyViewed] = useState([])
-  const [serviceReqs, setServiceReqs] = useState(null)
+  const [serviceReqs] = useState(null)
   const [loadingExtra, setLoadingExtra] = useState(false)
   const [ready, setReady] = useState(false)
 
@@ -169,16 +169,6 @@ export function useProfileDashboard(userId) {
         setRecentlyViewed([])
       }
     } catch { /* ignore */ }
-
-    try {
-      const { count } = await supabase
-        .from('service_requests')
-        .select('id', { count: 'exact', head: true })
-        .eq('user_id', userId)
-      setServiceReqs(count ?? 0)
-    } catch {
-      setServiceReqs(null)
-    }
 
     setLoadingExtra(false)
     setReady(true)
