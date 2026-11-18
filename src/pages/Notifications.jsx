@@ -553,7 +553,7 @@ function useProductContext(notifications) {
         tasks.push(
           supabase
             .from('services')
-            .select('id, name, media_urls, rate, city, district')
+            .select('id, name, media_urls, rate, city')
             .in('id', allService)
             .then(({ data }) => {
               for (const row of data || []) {
