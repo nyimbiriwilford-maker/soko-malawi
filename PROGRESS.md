@@ -79,3 +79,4 @@
 76. service-provider-name step 2: bump sw cache to sokomw-v62 for the brand name display changes
 77. repo-cleanup: fix .gitignore encoding, untrack generated files, fix Notifications services select, remove dead service files, record brand_name migration
 78. bump sw cache: CACHE_VERSION sokomw-v62 -> sokomw-v63 for repo cleanup changes
+79. remove-provider-modal step 1: ProviderModal reference report captured
