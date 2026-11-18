@@ -200,6 +200,7 @@ export async function notifyOfferExpired({
   const body = isOfferer
     ? `Your offer of ${amount}${suffix} has expired`
     : `The offer of ${amount}${suffix} has expired`
+  const title = 'Offer expired'
   return insertNotification({
     key: 'offer_expired',
     toUserId,
