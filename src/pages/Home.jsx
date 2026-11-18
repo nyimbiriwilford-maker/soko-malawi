@@ -2810,7 +2810,7 @@ function HomeServiceSkeletonCard() {
 function HomeServiceCard({ svc, currentUser, navigate, onClick }) {
   const [imgErr, setImgErr] = React.useState(false)
   const image = !imgErr && Array.isArray(svc.media_urls) ? svc.media_urls[0] : null
-  const providerName = svc.provider_name || svc.profile?.full_name || ''
+  const providerName = svc.brand_name || svc.profile?.full_name || ''
   const verified = !!svc._verified
   const rating = getServiceRating(svc)
   const city = svc.city || 'Malawi'
