@@ -81,3 +81,4 @@
 78. bump sw cache: CACHE_VERSION sokomw-v62 -> sokomw-v63 for repo cleanup changes
 79. remove-provider-modal step 1: ProviderModal reference report captured
 80. remove-provider-modal step 2: delete unused ProviderModal.jsx and ReviewSection.jsx
+81. remove-provider-modal step 3: build and eslint checks passed
