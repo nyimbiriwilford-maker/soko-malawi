@@ -77,3 +77,5 @@
 74. fix-undefined-vars step 2: bump sw cache to sokomw-v61 for the undefined variable fixes
 75. service-provider-name: brand_name field on ServiceForm; Services/ServiceDetails/Home cards show brand_name or person name, shop name lookups removed
 76. service-provider-name step 2: bump sw cache to sokomw-v62 for the brand name display changes
+77. repo-cleanup: fix .gitignore encoding, untrack generated files, fix Notifications services select, remove dead service files, record brand_name migration
+78. bump sw cache: CACHE_VERSION sokomw-v62 -> sokomw-v63 for repo cleanup changes
