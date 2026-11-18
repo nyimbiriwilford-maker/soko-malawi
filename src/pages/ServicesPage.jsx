@@ -521,7 +521,7 @@ function ServiceCard({ svc, delay, onClick, onBook, onChat, isMine, onEdit, show
   const catUi = SERVICE_CATS.find(c => c.name === svc.category)
   const heroMedia = svc.media_urls?.[0]
   const rawTitle = svc.title || svc.name
-  const providerName = profile?.shop_name || profile?.full_name
+  const providerName = svc.brand_name || profile?.full_name
   const title = rawTitle || providerName || 'Service'
   const showProvider = !!rawTitle && !!providerName
   const verified = (svc._verified != null) ? !!svc._verified : isServiceVerified(svc, profile)
@@ -809,18 +809,7 @@ export default function Services() {
             .in('id', providerIds)
           rows = fallback
         }
-        const shopAccountIds = (rows || [])
-          .filter(p => p.account_type === 'shop')
-          .map(p => p.id)
-        const shopMap = {}
-        if (shopAccountIds.length) {
-          const { data: shops } = await supabase
-            .from('shops')
-            .select('owner_id, name')
-            .in('owner_id', shopAccountIds)
-          ;(shops || []).forEach(s => { shopMap[s.owner_id] = shopMap[s.owner_id] || s.name })
-        }
-        ;(rows || []).forEach(p => { profileMap[p.id] = { ...p, shop_name: shopMap[p.id] || null } })
+        ;(rows || []).forEach(p => { profileMap[p.id] = { ...p } })
       }
 
     let verifiedMap = {}
