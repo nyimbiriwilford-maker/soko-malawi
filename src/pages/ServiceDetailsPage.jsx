@@ -372,7 +372,6 @@ export default function ServiceDetailsPage() {
   const [currentUser, setCurrentUser] = useState(null)
   const [service, setService] = useState(null)
   const [profile, setProfile] = useState(null)
-  const [shopName, setShopName] = useState('')
   const [reviews, setReviews] = useState([])
   const [similar, setSimilar] = useState([])
   const [loading, setLoading] = useState(true)
@@ -396,7 +395,7 @@ export default function ServiceDetailsPage() {
 
   const media = Array.isArray(service?.media_urls) ? service.media_urls : []
   const isOwner = !!currentUser && !!service && currentUser.id === service.provider_id
-  const providerName = shopName || profile?.full_name || ''
+  const providerName = service?.brand_name || profile?.full_name || ''
   const verified = isServiceVerified(service, profile)
   const response = responseInfo(profile)
   const serviceRating = ratingOf(service)
@@ -421,7 +420,6 @@ export default function ServiceDetailsPage() {
     setNotFound(false)
     setService(null)
     setProfile(null)
-    setShopName('')
     setReviews([])
     setSimilar([])
     setActiveMedia(0)
@@ -474,10 +472,6 @@ export default function ServiceDetailsPage() {
         return res.data || null
       })()
 
-      const shopPromise = svc.provider_id
-        ? supabase.from('shops').select('name').eq('owner_id', svc.provider_id).maybeSingle()
-        : Promise.resolve({ data: null })
-
       const reviewsPromise = supabase
         .from('reviews')
         .select('*')
@@ -506,16 +500,14 @@ export default function ServiceDetailsPage() {
           .limit(1)
         : Promise.resolve({ data: [] })
 
-      const [prof, shop, rev, sim, elig] = await Promise.all([
+      const [prof, rev, sim, elig] = await Promise.all([
         profilePromise,
-        shopPromise,
         reviewsPromise,
         similarPromise,
         eligibilityPromise,
       ])
       if (!active) return
       setProfile(prof)
-      setShopName(shop?.data?.name || '')
       setReviews(rev?.data || [])
       setSimilar(sim?.data || [])
       setMessaged(!!(elig?.data && elig.data.length))
