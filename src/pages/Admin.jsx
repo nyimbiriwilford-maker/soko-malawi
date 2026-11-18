@@ -244,7 +244,7 @@ export default function Admin() {
         if (!error) break
         const col = missingColumn(error)
         if (col && Object.prototype.hasOwnProperty.call(attemptPayload, col) && !REQUIRED.has(col)) {
-          if (process.env.NODE_ENV !== 'production') console.warn('Dropping missing column:', col)
+          if (import.meta.env.DEV) console.warn('Dropping missing column:', col)
           delete attemptPayload[col]
           continue
         }
@@ -2578,6 +2578,7 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
   const [previewMode, setPreviewMode] = useState('phone')
   const fileRef = useRef(null)
   const mobileFileRef = useRef(null)
+  const desktopFileRef = useRef(null)
 
   const lastSearchRef = useRef('')
   useEffect(() => {
