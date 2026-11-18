@@ -74,3 +74,4 @@
 71. card-review-link step 1: ServiceDetailsPage wraps visible Reviews section in #reviews and scrolls to it on #reviews hash after loading; ServiceCard rating line links to /services/:id#reviews
 72. card-review-link step 2: bump sw cache to sokomw-v60 for the Reviews section link
 73. fix-undefined-vars: import estimateDuration in CallBudgetSelector, define title in notifyOfferExpired, add desktopFileRef and use import.meta.env.DEV in Admin
+74. fix-undefined-vars step 2: bump sw cache to sokomw-v61 for the undefined variable fixes
