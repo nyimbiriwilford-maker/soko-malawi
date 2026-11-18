@@ -76,3 +76,4 @@
 73. fix-undefined-vars: import estimateDuration in CallBudgetSelector, define title in notifyOfferExpired, add desktopFileRef and use import.meta.env.DEV in Admin
 74. fix-undefined-vars step 2: bump sw cache to sokomw-v61 for the undefined variable fixes
 75. service-provider-name: brand_name field on ServiceForm; Services/ServiceDetails/Home cards show brand_name or person name, shop name lookups removed
+76. service-provider-name step 2: bump sw cache to sokomw-v62 for the brand name display changes
