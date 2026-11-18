@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Check, Video, Phone, Sparkles, Leaf, Gauge, Crown, SlidersHorizontal } from 'lucide-react'
 import {
   BUDGET_PRESETS, getCallBudgetPref, setCallBudgetPref,
-  effectiveEstimateDuration, shouldAutoLowData, getCallUsageLog,
+  estimateDuration, effectiveEstimateDuration, shouldAutoLowData, getCallUsageLog,
 } from '../lib/callBudgetPrefs'
 
 const KEYS  = ['low', 'medium', 'high']
