@@ -513,6 +513,7 @@ function formatPrice(rate) {
 }
 
 function ServiceCard({ svc, delay, onClick, onBook, onChat, isMine, onEdit, showCounters, featuredBadge, priority }) {
+  const navigate = useNavigate()
   const [imgErr, setImgErr] = useState(false)
   const [imgLoaded, setImgLoaded] = useState(false)
   const [now] = useState(() => Date.now())
@@ -565,7 +566,7 @@ function ServiceCard({ svc, delay, onClick, onBook, onChat, isMine, onEdit, show
           </div>
         )}
         {ratingCount > 0 && Number.isFinite(ratingAvg) ? (
-          <div className="svc-card-rating">
+          <div className="svc-card-rating" role="link" style={{ cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); navigate('/services/' + svc.id + '#reviews') }}>
             <Star size={13} color="#F9AB00" fill="#F9AB00" />
             <strong>{ratingAvg.toFixed(1)}</strong>
             <span>({ratingCount})</span>

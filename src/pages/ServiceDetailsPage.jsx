@@ -550,6 +550,12 @@ export default function ServiceDetailsPage() {
     return () => clearTimeout(t)
   }, [toast])
 
+  useEffect(() => {
+    if (loading) return
+    if (window.location.hash !== '#reviews') return
+    document.getElementById('reviews')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [loading])
+
   function goBack() {
     const idx = window.history.state?.idx
     if (typeof idx === 'number' && idx > 0) navigate(-1)
@@ -1143,7 +1149,7 @@ export default function ServiceDetailsPage() {
             {gallery}
             {headerBlock}
             {infoSections}
-            {reviewsSection}
+            <div id="reviews" style={{ scrollMarginTop: 80 }}>{reviewsSection}</div>
             {similarSection}
           </main>
           <aside className="sd-side">{sideCard}</aside>
