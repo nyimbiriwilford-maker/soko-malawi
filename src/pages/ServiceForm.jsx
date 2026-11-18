@@ -13,6 +13,7 @@ export default function ServiceForm({ editingService, onSuccess, onCancel }) {
     name: '', category: '', description: '', rate: '',
     experience: '', skills: '', coverage: '', city: '',
     contact: '', available: 'Available today', tags: '',
+    brand_name: '',
   }
 
   const [form, setForm] = useState(() => editingService ? {
@@ -27,6 +28,7 @@ export default function ServiceForm({ editingService, onSuccess, onCancel }) {
     contact: editingService.contact || '',
     available: editingService.available || 'Available today',
     tags: (editingService.tags || []).join(', '),
+    brand_name: editingService.brand_name || '',
   } : blank)
 
   const [mediaFiles, setMediaFiles] = useState([])
@@ -105,6 +107,7 @@ export default function ServiceForm({ editingService, onSuccess, onCancel }) {
       experience: form.experience.trim(),
       skills: form.skills ? form.skills.split(',').map(s => s.trim()).filter(Boolean) : [],
       tags: form.tags ? form.tags.split(',').map(s => s.trim().toLowerCase()).filter(Boolean) : [],
+      brand_name: form.brand_name.trim() || null,
       coverage: form.coverage.trim(),
       city: form.city,
       contact: form.contact.trim(),
@@ -194,6 +197,15 @@ export default function ServiceForm({ editingService, onSuccess, onCancel }) {
 
         <label style={S.label}>Skills (comma separated)</label>
         <input style={S.input} placeholder="e.g. Pipe fitting, Leak detection, Water heater" value={form.skills} onChange={e => setF('skills', e.target.value)} />
+
+        <label style={S.label}>
+          Business or brand name
+          <span style={{ fontWeight: '400', textTransform: 'none', color: '#bbb', marginLeft: '4px' }}>(optional)</span>
+        </label>
+        <input style={S.input} placeholder="e.g. Soko Web Studio. Leave empty to use your name" value={form.brand_name} maxLength={60} onChange={e => setF('brand_name', e.target.value)} />
+        <p style={{ fontSize: '11px', color: '#888', marginTop: '4px', marginLeft: '2px' }}>
+          Shown instead of your personal name on your service.
+        </p>
 
         <label style={S.label}>
           Search Tags
