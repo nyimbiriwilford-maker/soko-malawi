@@ -4197,7 +4197,7 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
         @media (min-width: 1100px) {
           .hero-banner { border-radius: 18px !important; }
           .hero-visual, .hero-image-wrapper, .hero-image-wrapper img, .hero-visual img { border-radius: 18px !important; }
-          .hero-visual { height: 100%; }
+          .hero-visual { height: 260px; }
           .hero-image-wrapper { height: 100%; }
         }
         .hero-banner-wrap {
@@ -4345,11 +4345,9 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
             overflow: hidden;
             margin-top: 12px;
             width: 100%;
-            aspect-ratio: 16 / 9;
-            max-height: 240px;
-            height: auto;
+            height: 160px;
           }
-          .hero-visual img { border-radius: 16px; }
+          .hero-visual img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 16px; }
           .hero-image-wrapper {
             overflow: hidden;
             border-radius: 16px;
@@ -4370,7 +4368,7 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
           .hero-dots { padding: 14px 16px 20px; }
         }
         @media (min-width: 768px) and (max-width: 1099px) {
-          .hero-visual { aspect-ratio: 16 / 10; max-height: 340px; border-radius: 16px; }
+          .hero-visual { height: 200px; border-radius: 16px; }
           .hero-image-wrapper { max-height: 340px; border-radius: 16px; }
         }
         @media (max-width: 375px) {
