@@ -72,3 +72,4 @@
 69. service-card-ratings step 1: ServiceCard shows rating_avg/rating_count star line or No reviews yet; styles and Star import added; services query still select('*')
 70. service-card-ratings step 2: bump sw cache to sokomw-v59 for service card star ratings
 71. card-review-link step 1: ServiceDetailsPage wraps visible Reviews section in #reviews and scrolls to it on #reviews hash after loading; ServiceCard rating line links to /services/:id#reviews
+72. card-review-link step 2: bump sw cache to sokomw-v60 for the Reviews section link
