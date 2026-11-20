@@ -855,7 +855,7 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
     <>
       <style>{`
         .hs-rail::-webkit-scrollbar { display: none; }
-        .hs-rail { padding: 8px 14px 12px; margin: 0; scroll-padding-left: 14px; overflow-x: auto; overflow-y: hidden; position: relative; z-index: 1; background: transparent !important; height: auto; max-height: none; scroll-behavior: smooth; scrollbar-width: none; overscroll-behavior-x: contain; }
+         .hs-rail { padding: 8px 14px 12px; margin: 0; scroll-padding-left: 14px; overflow-x: auto; overflow-y: hidden; position: relative; z-index: 1; background: transparent !important; height: auto; max-height: none; scroll-behavior: smooth; scrollbar-width: none; overscroll-behavior-x: contain; }
         .hs-fade { position: absolute; top: 0; bottom: 0; width: 56px; pointer-events: none; z-index: 2; transition: opacity 0.2s ease; }
         .hs-fade-left { left: 0; background: linear-gradient(to right, var(--home-bg), transparent); }
         .hs-fade-right { right: 0; background: linear-gradient(to left, var(--home-bg), transparent); }
@@ -915,17 +915,18 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
         @media (max-width: 767px) {
           .hs-add-btn { border-radius: 18px; }
           .hs-tablet-hide { display: none !important; }
-          .hs-rail { gap: 10px; }
+          .hs-rail { gap: 10px; padding: 8px 14px 12px; scroll-padding-left: 14px; }
           .hs-chip { height: 40px; }
           .hs-section { margin-bottom: 0 !important; padding-top: 6px !important; overflow: visible; }
         }
         @media (min-width: 768px) {
-          .hs-rail { gap: 12px; padding: 8px 20px 12px; scroll-padding-left: 20px; }
+          .hs-rail { gap: 12px; padding: 8px 20px 12px 14px; scroll-padding-left: 14px; }
           .hs-section { padding-top: 10px; }
           .hs-story-btn, .hs-add-btn { flex-basis: 170px; width: 170px; }
         }
         @media (min-width: 1100px) {
-          .hs-rail { gap: 14px; padding: 8px 24px 12px; scroll-padding-left: 24px; }
+          .hs-rail-wrap { width: 100%; margin-left: 0; }
+          .hs-rail { gap: 14px; padding: 8px 24px 12px 0; scroll-padding-left: 0; }
           .hs-section { padding-top: 14px; }
           .hs-story-btn, .hs-add-btn { flex-basis: 196px; width: 196px; border-radius: 18px; }
           .hs-story-btn .hs-avatar, .hs-add-btn .hs-avatar { width: 36px; height: 36px; }
@@ -952,7 +953,8 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
           marginBottom: 16,
           background: 'transparent',
         }}>
-         <div style={isMobile ? { padding: '0 14px' } : { maxWidth: 1100, margin: '0 auto', padding: windowWidth >= 1100 ? '0 24px' : '0 14px' }}>
+          <div style={isMobile ? { padding: '0 14px' } : { padding: windowWidth >= 1100 ? '0 24px' : '0 14px' }}>
+            <div style={{ maxWidth: 1100, margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
           {loading ? (
             <div style={isMobile ? { padding: '0' } : { padding: '0' }}>
               <div className="skeleton" style={{ width: 140, height: 16, borderRadius: 6, marginBottom: 12 }} />
@@ -1174,10 +1176,11 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
                      ) : null}
                  </div>
                )}
-            </div>
-          )}
-        </div>
-      </section>
+             </div>
+           )}
+           </div>
+         </div>
+       </section>
     </>
   )
 }
