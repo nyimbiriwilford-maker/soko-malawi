@@ -95,3 +95,4 @@
 92. home-hero-premium: banner price overlay from linked listing
 93. home-hero-premium: space above search bar
 94. home-hero-premium: 300px laptop height, white price
+95. home-hero-premium: fix laptop height override

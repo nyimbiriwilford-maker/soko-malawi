@@ -4205,10 +4205,10 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
           onClick={handleBannerClick}
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
-          style={{ position: 'relative', width: '100%', height: 190, borderRadius: 16, overflow: 'hidden', boxShadow: '0 4px 14px rgba(16,24,40,0.08)', cursor: 'pointer', contain: 'layout' }}
+          style={{ position: 'relative', width: '100%', borderRadius: 16, overflow: 'hidden', boxShadow: '0 4px 14px rgba(16,24,40,0.08)', cursor: 'pointer', contain: 'layout' }}
         >
           <style>{`
-            .hero-banner-box { height: 190px; }
+            .hero-banner-box { height: 190px !important; }
             @media (min-width: 768px) { .hero-banner-box { height: 240px !important; } }
             @media (min-width: 1100px) { .hero-banner-box { height: 300px !important; } }
           `}</style>
