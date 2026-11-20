@@ -4146,11 +4146,11 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
   const showOverlay = !!(overlayTitle && String(overlayTitle).trim())
 
   return (
-    <div className="hb-wrap">
+    <div className="hb-wrap" style={{ marginBottom: 16 }}>
       <style>{`
         .hb-wrap { padding: 0 14px; box-sizing: border-box; width: 100%; }
         @media (min-width: 1100px) { .hb-wrap { padding: 0 24px; } }
-        .hb-inner { max-width: 1100px; margin: 0 auto; width: 100%; }
+        .hb-inner { max-width: 1100px; margin: 0 auto; width: 100%; box-sizing: border-box; }
       `}</style>
       {onSearch && (
         <div className="hb-inner" ref={searchRef} style={{ position: 'relative', zIndex: 100, marginBottom: 12 }}>
@@ -4193,8 +4193,9 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
       )}
 
       {loading ? (
-        <div style={{ height: 190, background: '#f1f3f4', borderRadius: 16, width: '100%' }} />
+        <div className="hb-inner"><div style={{ height: 190, background: '#f1f3f4', borderRadius: 16, width: '100%' }} /></div>
       ) : n > 0 ? (
+        <div className="hb-inner">
         <div
           ref={boxRef}
           className="hero-banner-box"
@@ -4247,12 +4248,12 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
                 )}
               </div>
               {showOverlay && (
-                <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '14px 16px', background: 'linear-gradient(to top, rgba(0,0,0,0.55), rgba(0,0,0,0))', zIndex: 2 }}>
+                <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '14px 16px 28px', background: 'linear-gradient(to top, rgba(0,0,0,0.55), rgba(0,0,0,0))', zIndex: 2 }}>
                   {overlayTitle && (
                     <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', lineHeight: 1.2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{overlayTitle}</div>
                   )}
                   {overlayDesc && (
-                    <div style={{ fontSize: 13, color: '#fff', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{overlayDesc}</div>
+                    <div style={{ fontSize: 13, color: '#fff', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}>{overlayDesc}</div>
                   )}
                   {slide?.cta && (
                     <button
@@ -4268,7 +4269,7 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
             </div>
           ) : null)}
           {n > 1 && (
-            <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', bottom: 8, display: 'flex', gap: 5, zIndex: 3 }}>
+            <div style={{ position: 'absolute', right: 14, bottom: 8, display: 'flex', gap: 5, zIndex: 4 }}>
               {slides.map((s, i) => (
                 <button
                   key={s.id}
@@ -4280,6 +4281,7 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
               ))}
             </div>
           )}
+        </div>
         </div>
       ) : null}
     </div>
