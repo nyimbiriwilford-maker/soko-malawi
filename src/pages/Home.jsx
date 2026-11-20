@@ -4209,7 +4209,7 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
         >
           <style>{`
             .hero-banner-box { height: 190px; }
-            @media (min-width: 768px) { .hero-banner-box { height: 230px !important; } }
+            @media (min-width: 768px) { .hero-banner-box { height: 240px !important; } }
             @media (min-width: 1100px) { .hero-banner-box { height: 300px !important; } }
           `}</style>
           {slides.map((s, i) => i === idx ? (
@@ -4251,14 +4251,14 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
                 )}
               </div>
               {showOverlay && (
-                <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '14px 16px 28px', background: 'linear-gradient(to top, rgba(0,0,0,0.55), rgba(0,0,0,0))', zIndex: 2 }}>
+                <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '14px 16px 28px', background: 'linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.35) 45%, rgba(0,0,0,0) 80%)', zIndex: 2 }}>
                   {overlayTitle && (
                     <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', lineHeight: 1.2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{overlayTitle}</div>
                   )}
                   {slide?.listing && slide.listing.price != null && (
                     <div style={{ marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      <span style={{ fontSize: 16, fontWeight: 800, color: '#34c77a' }}>{formatPrice(slide.listing.price)}</span>
-                      {slide.listing.city && <span style={{ fontSize: 13, color: '#fff', marginLeft: 6 }}>· {slide.listing.city}</span>}
+                      <span style={{ fontSize: 16, fontWeight: 800, color: '#ffffff', textShadow: '0 1px 4px rgba(0,0,0,0.6)' }}>{formatPrice(slide.listing.price)}</span>
+                      {slide.listing.city && <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.9)', marginLeft: 6 }}>· {slide.listing.city}</span>}
                     </div>
                   )}
                   {overlayDesc && !(slide?.listing && slide.listing.price != null) && (
