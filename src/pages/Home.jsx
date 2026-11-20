@@ -4252,7 +4252,13 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
                   {overlayTitle && (
                     <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', lineHeight: 1.2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{overlayTitle}</div>
                   )}
-                  {overlayDesc && (
+                  {slide?.listing && slide.listing.price != null && (
+                    <div style={{ marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <span style={{ fontSize: 16, fontWeight: 800, color: '#34c77a' }}>{formatPrice(slide.listing.price)}</span>
+                      {slide.listing.city && <span style={{ fontSize: 13, color: '#fff', marginLeft: 6 }}>· {slide.listing.city}</span>}
+                    </div>
+                  )}
+                  {overlayDesc && !(slide?.listing && slide.listing.price != null) && (
                     <div style={{ fontSize: 13, color: '#fff', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}>{overlayDesc}</div>
                   )}
                   {slide?.cta && (

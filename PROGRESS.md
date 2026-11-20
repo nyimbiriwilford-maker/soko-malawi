@@ -92,3 +92,4 @@
 89. home-hero-premium: hero banner redesign with search above, overlay, blur, swipe
 90. home-hero-premium: hero polish (padding, heights, blur 14, overlay gated on title)
 91. home-hero-premium: hero alignment (wrapper, dots right, overlay padding, desc 2 lines)
+92. home-hero-premium: banner price overlay from linked listing
