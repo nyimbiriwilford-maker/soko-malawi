@@ -24,7 +24,7 @@ import React, {
   useEffect, useState, useMemo, useRef, useCallback, useLayoutEffect,
 } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { MapPin, Clock, Zap, Eye, MessageCircle, Plus, ChevronRight, Navigation, Sparkles, TrendingUp, Star, UserCheck, AlertTriangle, DollarSign, ArrowRight, ShieldCheck, Search, Heart, Share2, Flag, ExternalLink, Check, BadgeCheck, Store } from 'lucide-react'
+import { Clock, Zap, Eye, MessageCircle, Plus, ChevronRight, Navigation, Sparkles, TrendingUp, Star, UserCheck, AlertTriangle, DollarSign, ArrowRight, ShieldCheck, Search, Heart, Share2, Flag, ExternalLink, Check, BadgeCheck, Store } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { supabase }              from '../lib/supabase'
 import useSearchAnimation        from '../hooks/useSearchAnimation'
@@ -3932,7 +3932,7 @@ function mapBanner(row) {
     desktopImage: resolveBannerImageUrl(row.desktop_image_url || row.image_url || row.mobile_image_url),
     mobileImage: resolveBannerImageUrl(row.mobile_image_url || row.image_url || row.desktop_image_url),
     imagePos: row.image_pos || 'center center',
-    cta: row.button_text || 'Learn More',
+    cta: row.button_text || '',
     path: row.button_link || '/',
     accent: row.accent || '#0F9D58',
     badge: row.badge || '',
@@ -3958,25 +3958,15 @@ function getActiveSlides(slides) {
     .sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999))
 }
 
-function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
+function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
   const [fetchedSlides, setFetchedSlides] = useState([])
   const [dbLoaded, setDbLoaded] = useState(false)
-  const [imgFailed, setImgFailed] = useState(false)
   const [searchFocused, setSearchFocused] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  const [liveResults, setLiveResults] = useState(null)
-  const [liveLoading, setLiveLoading] = useState(false)
   const searchRef = useRef(null)
   const searchInputRef = useRef(null)
 
   const POPULAR_SEARCHES = ['Phones', 'Clothes', 'Cars', 'Farm products', 'Electronics']
-  const SEARCH_CATEGORIES = [
-    { key: 'Electronics', label: 'Electronics' },
-    { key: 'Clothing', label: 'Fashion' },
-    { key: 'Vehicles', label: 'Vehicles' },
-    { key: 'Agriculture', label: 'Agriculture' },
-    { key: 'Services', label: 'Services' },
-  ]
 
   const handleSearchSubmit = (val) => {
     if (onSearch && val.trim()) onSearch(val.trim())
@@ -3988,49 +3978,6 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
     if (onSearch) onSearch(term)
     setSearchFocused(false)
   }
-
-  const handleCategoryClick = (catKey) => {
-    if (onSearch) onSearch('', { category: catKey })
-    setSearchQuery('')
-    setSearchFocused(false)
-  }
-
-  // Debounced live search
-  useEffect(() => {
-    if (!searchQuery.trim() || !searchFocused) {
-      setLiveResults(null)
-      setLiveLoading(false)
-      return
-    }
-    const q = searchQuery.trim().toLowerCase()
-    setLiveLoading(true)
-    const timer = setTimeout(async () => {
-      try {
-        const [listingsData, shopsData] = await Promise.all([
-          supabase.from('listings')
-            .select('id,title,price,images,city')
-            .in('status', ['published', 'active'])
-            .ilike('title', `%${q}%`)
-            .order('created_at', { ascending: false })
-            .limit(5),
-          supabase.from('shops')
-            .select('id,name,slug,logo_url,city')
-            .eq('is_active', true)
-            .ilike('name', `%${q}%`)
-            .limit(3),
-        ])
-        setLiveResults({
-          listings: (listingsData.data || []).filter(l => !isJobListing(l)),
-          shops: shopsData.data || [],
-        })
-      } catch (e) {
-        console.error('Live search error:', e)
-        setLiveResults({ listings: [], shops: [] })
-      }
-      setLiveLoading(false)
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [searchQuery, searchFocused])
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -4137,16 +4084,20 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
 
   const slide = slides[idx]
   const [imgLoaded, setImgLoaded] = useState(false)
-  const [lowRatio, setLowRatio] = useState(false)
+  const [isWide, setIsWide] = useState(false)
   const [imgAttempt, setImgAttempt] = useState(0)
+  const [touchStartX, setTouchStartX] = useState(null)
   const [allFailed, setAllFailed] = useState(false)
   const phoneImageUrls = [slide?.mobileImage, slide?.image, slide?.desktopImage].filter(Boolean)
-  useEffect(() => { setImgFailed(false); setImgLoaded(false); setLowRatio(false); setImgAttempt(0); setAllFailed(false) }, [idx, slide?.id])
+  useEffect(() => { setImgLoaded(false); setIsWide(false); setImgAttempt(0); setAllFailed(false) }, [idx, slide?.id])
   const handleImgLoad = (e) => {
     setImgLoaded(true)
     const nw = e?.target?.naturalWidth
     const nh = e?.target?.naturalHeight
-    if (nw && nh && nw / nh < 1.3) setLowRatio(true)
+    if (nw && nh) {
+      const ratio = nw / nh
+      setIsWide(ratio >= (16 / 7) * 0.9 && ratio <= (16 / 7) * 1.1)
+    }
   }
   const handleImgError = () => {
     setImgLoaded(true)
@@ -4157,568 +4108,167 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
       setAllFailed(true)
     }
   }
-  if (!slide || imgFailed) return null
+  const loading = !externalSlides && !dbLoaded
+  if (!loading && n === 0) return null
+
+  const handleBannerClick = () => {
+    if (isDbSource && slide) {
+      supabase.rpc('increment_banner_metric', { p_banner_id: slide.id, p_metric: 'click' }).then(() => {}).catch(() => {})
+    }
+    if (slide?.listing && isListingActive(slide?.listing)) {
+      navigate('/listing/' + slide.listing.id)
+    } else {
+      navigate(slide?.button_link || slide?.path || '/listings')
+    }
+  }
+
+  const onTouchStart = (e) => { setTouchStartX(e.touches[0].clientX); setPaused(true) }
+  const onTouchEnd = (e) => {
+    if (touchStartX === null) return
+    const diff = e.changedTouches[0].clientX - touchStartX
+    if (Math.abs(diff) > 40 && n > 1) {
+      if (diff < 0) goTo((idx + 1) % n)
+      else goTo((idx - 1 + n) % n)
+    }
+    setTouchStartX(null)
+    setTimeout(() => setPaused(false), 3000)
+  }
+
+  const overlayTitle = slide?.title
+  const overlayDesc = slide?.description || slide?.desc
+  const showOverlay = !!(overlayTitle || slide?.cta)
 
   return (
-    <div className="hero-banner-wrap" style={{ width: '100%', boxSizing: 'border-box', position: 'relative', zIndex: 0 }}>
-      <section className="hero-banner" style={{
-        position: 'relative', zIndex: 1,
-        background: 'transparent',
-        borderRadius: 0,
-        margin: '0 auto',
-        maxWidth: 1400,
-        border: 'none',
-        boxShadow: 'none',
-      }}>
-      <style>{`
-        @keyframes heroFadeSlide {
-          from { opacity: 0; transform: translateY(20px); }
-          to { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes heroScaleIn {
-          from { opacity: 0; transform: scale(0.98); }
-          to { opacity: 1; transform: scale(1); }
-        }
-        @keyframes spinner {
-          to { transform: rotate(360deg); }
-        }
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-        .hero-banner, .hero-inner, .hero-visual, .hero-image-wrapper, .hero-content, .hero-dots {
-          background: transparent !important;
-          border: none !important;
-          box-shadow: none !important;
-        }
-        .hero-banner {
-          border-radius: 0 !important;
-          overflow: visible;
-        }
-        @media (min-width: 1100px) {
-          .hero-banner { border-radius: 18px !important; }
-          .hero-visual, .hero-image-wrapper, .hero-image-wrapper img, .hero-visual img { border-radius: 18px !important; }
-          .hero-visual { height: 260px; }
-          .hero-image-wrapper { height: 100%; }
-        }
-        .hero-banner-wrap {
-          padding: 0 14px !important;
-          margin-top: 12px !important;
-          margin-bottom: 8px !important;
-        }
-        @media (min-width: 768px) {
-          .hero-banner-wrap {
-            padding: 0 14px !important;
-            margin-top: 16px !important;
-            margin-bottom: 12px !important;
-          }
-        }
-        @media (min-width: 1100px) {
-          .hero-banner-wrap {
-            padding: 0 24px !important;
-            margin-top: 20px !important;
-            margin-bottom: 16px !important;
-          }
-        }
-        .hero-inner {
-          background: transparent !important;
-          border-radius: 16px;
-        }
-        .hero-inner {
-          display: grid;
-          grid-template-columns: 1.1fr 0.9fr;
-          min-height: 420px;
-          max-height: 560px;
-          gap: 0;
-          align-items: stretch;
-          box-sizing: border-box;
-        }
-        .hero-content {
-          animation: heroFadeSlide 0.6s ease both;
-          max-width: 520px;
-          padding: 48px 0 40px 48px;
-          display: flex;
-          flex-direction: column;
-          gap: 0;
-        }
-        .hero-visual {
-          animation: heroScaleIn 0.6s ease 0.05s both;
-          position: absolute;
-          inset: 0;
-          left: 55%;
-          border-radius: 0 24px 24px 0;
-          overflow: hidden;
-        }
-        .hero-visual img {
-          width: 100%; height: 100%;
-          object-fit: cover;
-          display: block;
-        }
-        .hero-search {
-          display: flex;
-          align-items: center;
-          gap: 0;
-          background: #fff;
-          height: 60px;
-          border-radius: 16px;
-          transition: box-shadow 0.3s ease;
-          box-shadow: 0 10px 30px rgba(0,0,0,0.08);
-        }
-        .hero-search:focus-within {
-          box-shadow: 0 10px 30px rgba(0,0,0,0.08), 0 0 0 3px rgba(15,157,88,0.12);
-        }
-        .hero-search-input {
-          flex: 1;
-          border: none;
-          outline: none;
-          padding: 0 16px;
-          font-size: 14px;
-          font-family: inherit;
-          color: #111827;
-          background: transparent;
-          min-width: 0;
-        }
-        .hero-search-input::placeholder { color: #9CA3AF; }
-        .hero-entrance-badge { animation: heroFadeSlide 0.5s cubic-bezier(0.22,1,0.36,1) 0.05s both; }
-        .hero-entrance-title { animation: heroFadeSlide 0.5s cubic-bezier(0.22,1,0.36,1) 0.15s both; }
-        .hero-entrance-desc  { animation: heroFadeSlide 0.5s cubic-bezier(0.22,1,0.36,1) 0.25s both; }
-        .hero-desc { font-size: 14px; line-height: 1.45; color: #5f6368; margin-top: 8px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; min-width: 0; }
-        .hero-desc.has-price { margin-top: 6px; }
-        .hero-price { font-size: 13px; font-weight: 800; color: #0F9D58; margin-top: 8px; white-space: nowrap; }
-        .hero-loc { display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 600; color: #5f6368; margin-top: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; max-width: 100%; }
-        .hero-loc.has-price { margin-top: 6px; }
-        @media (min-width: 1100px) {
-          .hero-loc { font-size: 14px; margin-top: 10px; }
-          .hero-loc.has-price { margin-top: 8px; }
-        }
-        .hero-search-wrap { margin-top: 16px; }
-        .hero-btn-wrap { margin-top: 12px; align-self: flex-start; }
-        @media (min-width: 1100px) {
-          .hero-desc { font-size: 15px; margin-top: 10px; }
-          .hero-desc.has-price { margin-top: 8px; }
-          .hero-price { font-size: 14px; margin-top: 10px; }
-          .hero-search-wrap { margin-top: 20px; }
-          .hero-btn-wrap { margin-top: 14px; }
-        }
-        .hero-entrance-search { animation: heroFadeSlide 0.55s cubic-bezier(0.22,1,0.36,1) 0.35s both; }
-        .hero-entrance-image { animation: heroScaleIn 0.6s cubic-bezier(0.22,1,0.36,1) 0.1s both; }
-        .hero-dots {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 5px;
-          padding: 10px 0 0;
-          margin: 0;
-        }
-        .hero-dot {
-          width: 6px;
-          height: 6px;
-          border-radius: 999px;
-          border: none;
-          padding: 0;
-          cursor: pointer;
-          background: #cfd8d3;
-          transition: all 0.25s ease;
-        }
-        .hero-dot.is-active {
-          width: 22px;
-          height: 6px;
-          border-radius: 999px;
-          background: #0F9D58;
-        }
-        @media (max-width: 900px) {
-          .hero-banner { width: 100%; }
-          .hero-inner {
-            grid-template-columns: 1fr;
-            min-height: auto;
-            height: auto;
-            padding: 0;
-            align-items: start;
-          }
-          .hero-content { position: relative; z-index: 1; max-width: 100%; padding: 24px 16px; box-sizing: border-box; display: flex; flex-direction: column; gap: 0; }
-          .hero-content h1 { font-size: 32px !important; line-height: 1.15 !important; overflow-wrap: break-word; word-break: break-word; hyphens: auto; }
-          .hero-content p { font-size: 15px !important; line-height: 1.5 !important; overflow-wrap: break-word; word-break: break-word; hyphens: auto; }
-          .hero-visual {
-            position: relative;
-            inset: auto;
-            left: auto;
-            border-radius: 16px;
-            overflow: hidden;
-            margin-top: 12px;
-            width: 100%;
-            height: 160px;
-          }
-          .hero-visual img { width: 100%; height: 100%; object-fit: contain !important; object-position: center !important; display: block; border-radius: 16px; }
-          .hero-image-wrapper {
-            overflow: hidden;
-            border-radius: 16px;
-            background: #f8f9fa !important;
-            width: 100%;
-            height: 100%;
-            box-shadow: 0 4px 14px rgba(16,24,40,0.08);
-            position: relative;
-          }
-           .hero-image-wrapper img { width: 100%; height: 100%; object-fit: contain !important; object-position: center !important; display: block; border-radius: 16px; }
-           .hero-image-wrapper img.hb-contain { object-fit: contain !important; object-position: center !important; max-width: 100%; max-height: 100%; width: auto; height: auto; margin: auto; }
-           .hb-shimmer { position: absolute; inset: 0; background: #f8f9fa; }
-          .hb-blur { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: blur(24px) saturate(1.1); transform: scale(1.15); opacity: .9; z-index: 0; }
-          .hero-image-wrapper img { position: relative; z-index: 1; }
-          .hero-dots { padding: 10px 0 0; }
-          .hero-search { max-width: 100% !important; height: 56px; border-radius: 16px; }
-          .hero-search-input { width: 100%; }
-          .hero-dots { padding: 14px 16px 20px; }
-        }
-         @media (min-width: 768px) and (max-width: 1099px) {
-           .hero-visual { height: 200px; border-radius: 16px; }
-           .hero-visual img { width: 100%; height: 100%; object-fit: contain !important; object-position: center !important; display: block; border-radius: 16px; }
-           .hero-image-wrapper { max-height: 340px; border-radius: 16px; background: #f8f9fa !important; }
-           .hero-image-wrapper img { width: 100%; height: 100%; object-fit: contain !important; object-position: center !important; display: block; border-radius: 16px; }
-         }
-        @media (max-width: 375px) {
-          .hero-visual { height: 230px; }
-        }
-      `}</style>
-
-      <div className="hero-inner" style={{
-        position: 'relative',
-        opacity: fade === 'in' ? 1 : 0,
-        transition: 'opacity 0.4s ease',
-      }}>
-        <div className="hero-content">
-          {slide.badge && (
-            <div className="hero-entrance-badge" style={{
-              display: 'inline-flex', alignItems: 'center', gap: 4,
-              fontSize: 10, fontWeight: 800, letterSpacing: 0.5,
-              color: slide.accent, background: `${slide.accent}12`,
-              borderRadius: 999, padding: '3px 10px 3px 8px', marginBottom: 10,
-              textTransform: 'uppercase',
-            }}>
-              <span style={{ fontSize: 11 }}>{slide.badgeIcon}</span>
-              {slide.badge}
+    <div className="hero-banner-wrap" style={{ width: '100%', boxSizing: 'border-box' }}>
+      {onSearch && (
+        <div ref={searchRef} style={{ position: 'relative', zIndex: 100, marginBottom: 12 }}>
+          <div className="hero-search" style={{ height: 48, borderRadius: 14, display: 'flex', alignItems: 'center', background: '#fff', boxShadow: '0 10px 30px rgba(0,0,0,0.08)', overflow: 'hidden', width: '100%' }}>
+            <input
+              ref={searchInputRef}
+              className="hero-search-input"
+              type="text"
+              value={searchQuery}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder="Search products, services, shops..."
+              onFocus={() => setSearchFocused(true)}
+              onKeyDown={e => { if (e.key === 'Enter') handleSearchSubmit(searchQuery) }}
+              aria-label="Search marketplace"
+              style={{ height: '100%', flex: 1 }}
+            />
+            <button
+              type="button"
+              onClick={() => handleSearchSubmit(searchQuery)}
+              style={{ border: 'none', background: '#0F9D58', color: '#fff', padding: '0 20px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, fontWeight: 700, height: '100%', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+            >
+              Search
+            </button>
+          </div>
+          {searchFocused && (
+            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, background: '#fff', borderRadius: 16, marginTop: 6, boxShadow: '0 12px 40px rgba(0,0,0,0.12)', padding: '12px 0', maxHeight: 400, overflowY: 'auto' }}>
+              {!searchQuery.trim() ? (
+                <>
+                  <div style={{ padding: '0 16px 10px', fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5 }}>Popular searches</div>
+                  {POPULAR_SEARCHES.map(term => (
+                    <button key={term} type="button" onClick={() => handleSuggestionClick(term)}
+                      style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 16px', border: 'none', background: 'transparent', fontSize: 13.5, fontWeight: 500, color: '#374151', cursor: 'pointer', fontFamily: 'inherit' }}
+                    >{term}</button>
+                  ))}
+                </>
+              ) : null}
             </div>
           )}
-          <h1 className="hero-entrance-title" style={{
-            margin: 0,
-            fontFamily: T.fontDisplay,
-            fontSize: 'clamp(24px, 3.2vw, 36px)',
-            fontWeight: 800,
-            color: '#111827',
-            lineHeight: 1.2,
-            letterSpacing: '-0.5px',
-            whiteSpace: 'pre-line',
-            overflowWrap: 'anywhere',
-            minWidth: 0,
-          }}>
-            {slide.title}
-          </h1>
-          {slide?.listing && isListingActive(slide?.listing) && slide?.listing?.price != null && (
-            <div className="hero-price">Price: {formatPrice(slide.listing.price)}</div>
-          )}
-          {(() => {
-            const l = slide?.listing
-            if (!l || !isListingActive(l)) return null
-            const part1 = l.area || l.district
-            const parts = [part1, l.city].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i)
-            const text = parts.join(', ')
-            if (!text) return null
-            const hasPrice = l.price != null
-            return (
-              <div className={'hero-loc' + (hasPrice ? ' has-price' : '')} title={text}>
-                <MapPin size={14} color="#0F9D58" strokeWidth={2.2} aria-hidden="true" style={{ flexShrink: 0 }} />
-                {text}
-              </div>
-            )
-          })()}
-          {(slide.description || slide.desc) ? (
-            <p className={'hero-entrance-desc hero-desc' + ((slide?.listing && isListingActive(slide?.listing) && (slide.listing.price != null || slide.listing.area || slide.listing.district || slide.listing.city)) ? ' has-price' : '')} style={{ margin: 0 }}>
-              {slide.description || slide.desc}
-            </p>
-          ) : null}
+        </div>
+      )}
 
-          {onSearch && (
-            <div ref={searchRef} className="hero-entrance-search hero-search-wrap" style={{ maxWidth: 420, position: 'relative', zIndex: 100 }}>
-              <div className="hero-search">
-                <div style={{ display: 'flex', alignItems: 'center', height: '100%', borderRadius: 16, overflow: 'hidden', width: '100%' }}>
-                  <input
-                    ref={searchInputRef}
-                    className="hero-search-input"
-                    type="text"
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                    placeholder="Search products, services, shops..."
-                    onFocus={() => setSearchFocused(true)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter') handleSearchSubmit(searchQuery)
-                    }}
-                    aria-label="Search marketplace"
+      {loading ? (
+        <div style={{ height: 160, background: '#f1f3f4', borderRadius: 16, width: '100%' }} />
+      ) : n > 0 ? (
+        <div
+          className="hero-banner-box"
+          onClick={handleBannerClick}
+          onTouchStart={onTouchStart}
+          onTouchEnd={onTouchEnd}
+          style={{ position: 'relative', width: '100%', height: 160, borderRadius: 16, overflow: 'hidden', boxShadow: '0 4px 14px rgba(16,24,40,0.08)', cursor: 'pointer', contain: 'layout' }}
+        >
+          <style>{`
+            .hero-banner-box { height: 160px; }
+            @media (min-width: 768px) { .hero-banner-box { height: 200px !important; } }
+            @media (min-width: 1100px) { .hero-banner-box { height: 280px !important; } }
+          `}</style>
+          {slides.map((s, i) => i === idx ? (
+            <div key={s.id} style={{ position: 'absolute', inset: 0, opacity: fade === 'in' ? 1 : 0, transition: 'opacity 0.4s ease' }}>
+              <div className="hero-image-wrapper" style={{ position: 'absolute', inset: 0, background: '#f8f9fa' }}>
+                {!imgLoaded && !allFailed && <div className="hb-shimmer" style={{ position: 'absolute', inset: 0, background: '#f8f9fa' }} />}
+                {allFailed && (
+                  <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, textAlign: 'center', color: '#374151', fontSize: 14, fontWeight: 600, background: '#eceff1' }}>
+                    {slide.title}
+                  </div>
+                )}
+                {!allFailed && !isWide && (
+                  <img
+                    className="hb-blur"
+                    src={phoneImageUrls[imgAttempt] || slide.image}
+                    alt=""
+                    aria-hidden="true"
+                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(24px)', transform: 'scale(1.15)', opacity: 0.9, zIndex: 0 }}
                   />
-                  <button
-                    type="button"
-                    onClick={() => handleSearchSubmit(searchQuery)}
-                    style={{
-                      border: 'none', background: '#0F9D58', color: '#fff',
-                      padding: '0 22px', cursor: 'pointer', fontFamily: 'inherit',
-                      fontSize: 14, fontWeight: 700, whiteSpace: 'nowrap',
-                      height: '100%',
-                      display: 'flex', alignItems: 'center', gap: 6,
-                      letterSpacing: 0.3, flexShrink: 0,
-                    }}
-                  >
-                    Search
-                  </button>
-                </div>
+                )}
+                {!allFailed && (
+                  <picture style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 1 }}>
+                    {slide.desktopImage && <source media="(min-width: 768px)" srcSet={slide.desktopImage} />}
+                    {slide.mobileImage && <source media="(max-width: 767px)" srcSet={slide.mobileImage} />}
+                    <img
+                      key={slide.id + '-img-' + imgAttempt}
+                      src={phoneImageUrls[imgAttempt] || ''}
+                      alt=""
+                      aria-hidden="true"
+                      width="1600"
+                      height="700"
+                      fetchPriority="high"
+                      loading="eager"
+                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: isWide ? 'cover' : 'contain', objectPosition: slide.imagePos || 'center center', opacity: 1, filter: 'none', display: 'block', zIndex: 1 }}
+                      onLoad={handleImgLoad}
+                      onError={handleImgError}
+                    />
+                  </picture>
+                )}
               </div>
-              {searchFocused && (
-                <div style={{
-                  position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
-                  background: '#fff', borderRadius: 16, marginTop: 6,
-                  boxShadow: '0 12px 40px rgba(0,0,0,0.12), 0 0 0 1px rgba(0,0,0,0.04)',
-                  padding: '12px 0', maxHeight: 400, overflowY: 'auto',
-                }}>
-                  {!searchQuery.trim() ? (
-                    <>
-                      <div style={{ padding: '0 16px 10px', fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                        Popular searches
-                      </div>
-                      {POPULAR_SEARCHES.map(term => (
-                        <button key={term} type="button" onClick={() => handleSuggestionClick(term)}
-                          style={{
-                            display: 'block', width: '100%', textAlign: 'left',
-                            padding: '8px 16px', border: 'none', background: 'transparent',
-                            fontSize: 13.5, fontWeight: 500, color: '#374151', cursor: 'pointer',
-                            fontFamily: 'inherit', transition: 'background 0.1s',
-                          }}
-                          onMouseEnter={e => e.currentTarget.style.background = '#F3F4F6'}
-                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                        >{term}</button>
-                      ))}
-                      <div style={{ borderTop: '1px solid #F3F4F6', margin: '8px 16px 0' }} />
-                      <div style={{ padding: '10px 16px 4px', fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                        Browse categories
-                      </div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '8px 16px 4px' }}>
-                        {SEARCH_CATEGORIES.map(cat => (
-                          <button key={cat.key} type="button" onClick={() => handleCategoryClick(cat.key)}
-                            style={{
-                              padding: '5px 12px', borderRadius: 8, border: '1px solid #E5E7EB',
-                              background: '#F9FAFB', fontSize: 12, fontWeight: 600, color: '#374151',
-                              cursor: 'pointer', fontFamily: 'inherit',
-                            }}
-                          >{cat.label}</button>
-                        ))}
-                      </div>
-                    </>
-                  ) : liveLoading ? (
-                    <div style={{ padding: '16px 16px 12px' }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 }}>
-                        Searching products...
-                      </div>
-                      {[1, 2, 3].map(i => (
-                        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0' }}>
-                          <div className="skeleton" style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0, background: '#E5E7EB' }} />
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div className="skeleton" style={{ width: `${60 + i * 10}%`, height: 12, borderRadius: 4, marginBottom: 6, background: '#E5E7EB' }} />
-                            <div className="skeleton" style={{ width: `${30 + i * 5}%`, height: 10, borderRadius: 4, background: '#E5E7EB' }} />
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : liveResults ? (
-                    <>
-                      {liveResults.listings.length > 0 && (
-                        <>
-                          <div style={{ padding: '0 16px 8px', fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                            Products
-                          </div>
-                          {liveResults.listings.map(item => (
-                            <button key={item.id} type="button" onClick={() => handleSuggestionClick(item.title)}
-                              style={{
-                                display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
-                                padding: '7px 16px', border: 'none', background: 'transparent',
-                                cursor: 'pointer', fontFamily: 'inherit', transition: 'background 0.1s',
-                              }}
-                              onMouseEnter={e => e.currentTarget.style.background = '#F3F4F6'}
-                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                            >
-                              <div style={{ width: 32, height: 32, borderRadius: 8, background: '#F3F4F6', overflow: 'hidden', flexShrink: 0 }}>
-                                {item.images?.[0] && <img src={item.images[0]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
-                              </div>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
-                                <div style={{ fontSize: 11, color: '#6B7280' }}>
-                                  {item.price ? `MK ${Number(item.price).toLocaleString()}` : ''}{item.city ? ` · ${item.city}` : ''}
-                                </div>
-                              </div>
-                            </button>
-                          ))}
-                        </>
-                      )}
-                      {liveResults.shops.length > 0 && (
-                        <>
-                          <div style={{ borderTop: liveResults.listings.length > 0 ? '1px solid #F3F4F6' : 'none', padding: '8px 16px 8px', fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                            Shops
-                          </div>
-                          {liveResults.shops.map(shop => (
-                            <button key={shop.id} type="button" onClick={() => handleSuggestionClick(shop.name)}
-                              style={{
-                                display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
-                                padding: '7px 16px', border: 'none', background: 'transparent',
-                                cursor: 'pointer', fontFamily: 'inherit', transition: 'background 0.1s',
-                              }}
-                              onMouseEnter={e => e.currentTarget.style.background = '#F3F4F6'}
-                              onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
-                            >
-                              <div style={{ width: 32, height: 32, borderRadius: 8, background: '#F3F4F6', overflow: 'hidden', flexShrink: 0 }}>
-                                {shop.logo_url && <img src={shop.logo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
-                              </div>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{shop.name}</div>
-                                <div style={{ fontSize: 11, color: '#6B7280' }}>{shop.city || 'Shop'}</div>
-                              </div>
-                            </button>
-                          ))}
-                        </>
-                      )}
-                      {liveResults.listings.length === 0 && liveResults.shops.length === 0 && (
-                        <div style={{ padding: '20px 16px 16px' }}>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 4 }}>
-                            No products found for "{searchQuery.trim()}"
-                          </div>
-                          <div style={{ fontSize: 11, fontWeight: 600, color: '#9CA3AF', marginBottom: 12 }}>
-                            Try:
-                          </div>
-                          <ul style={{ margin: '0 0 14px', padding: '0 0 0 16px', fontSize: 11, color: '#6B7280', lineHeight: 1.8 }}>
-                            <li>Different spelling</li>
-                            <li>Browse categories</li>
-                            <li>View latest listings</li>
-                          </ul>
-                          <button type="button" onClick={() => { setSearchFocused(false); onNotify?.(searchQuery.trim()) }}
-                            style={{
-                              width:'100%', border:'none', background:'#0F9D58', borderRadius:8,
-                              padding:'9px 12px', fontSize:12, fontWeight:800, color:'#fff',
-                              cursor:'pointer', fontFamily:'inherit', marginBottom:10,
-                              display:'flex', alignItems:'center', justifyContent:'center', gap:6,
-                            }}>
-                            🔔 Notify me when &ldquo;{searchQuery.trim()}&rdquo; is available
-                          </button>
-                          <div style={{ display: 'flex', gap: 8 }}>
-                            <button type="button" onClick={() => { setSearchFocused(false); navigate?.('/search') }}
-                              style={{
-                                flex: 1, border: '1px solid #D1D5DB', background: '#fff', borderRadius: 8,
-                                padding: '8px 12px', fontSize: 11, fontWeight: 700, color: '#374151',
-                                cursor: 'pointer', fontFamily: 'inherit',
-                              }}
-                            >Explore Categories</button>
-                            <button type="button" onClick={() => { setSearchFocused(false); navigate?.('/search?sort=newest') }}
-                              style={{
-                                flex: 1, border: 'none', background: '#374151', borderRadius: 8,
-                                padding: '8px 12px', fontSize: 11, fontWeight: 700, color: '#fff',
-                                cursor: 'pointer', fontFamily: 'inherit',
-                              }}
-                            >View Latest Products</button>
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  ) : null}
+              {showOverlay && (
+                <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '14px 16px', background: 'linear-gradient(to top, rgba(0,0,0,0.55), rgba(0,0,0,0))', zIndex: 2 }}>
+                  {overlayTitle && (
+                    <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', lineHeight: 1.2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{overlayTitle}</div>
+                  )}
+                  {overlayDesc && (
+                    <div style={{ fontSize: 13, color: '#fff', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{overlayDesc}</div>
+                  )}
+                  {slide?.cta && (
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); handleBannerClick() }}
+                      style={{ marginTop: 8, height: 36, minWidth: 44, padding: '0 14px', borderRadius: 10, border: 'none', background: '#0F9D58', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
+                    >
+                      {slide.cta}
+                    </button>
+                  )}
                 </div>
               )}
             </div>
-          )}
-
-          <div className="hero-btn-wrap">
-            <button
-              type="button"
-              aria-label={slide?.listing && isListingActive(slide?.listing) ? `Open ${slide.listing.title}` : undefined}
-              onClick={() => {
-                if (isDbSource && slide) {
-                  supabase.rpc('increment_banner_metric', {
-                    p_banner_id: slide.id,
-                    p_metric: 'click',
-                  }).then(() => {}).catch(() => {})
-                }
-                if (slide?.listing && isListingActive(slide?.listing)) {
-                  navigate('/listing/' + slide.listing.id)
-                } else {
-                  navigate(slide?.button_link || slide?.path || '/listings')
-                }
-              }}
-              style={{
-                border: 'none', borderRadius: 12,
-                padding: '12px 24px',
-                fontSize: 14, fontWeight: 700,
-                maxWidth: 260,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                background: slide.accent, color: '#fff',
-                cursor: 'pointer', fontFamily: 'inherit',
-                transition: 'transform 0.15s, box-shadow 0.15s',
-                boxShadow: `0 4px 14px ${slide.accent}33`,
-              }}
-              onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = `0 6px 20px ${slide.accent}44` }}
-              onMouseLeave={e => { e.currentTarget.style.transform = ''; e.currentTarget.style.boxShadow = `0 4px 14px ${slide.accent}33` }}
-            >
-              {getBannerCta(slide?.listing && isListingActive(slide?.listing) ? slide.listing : null, slide?.cta_label)}
-            </button>
-          </div>
-        </div>
-
-        <div className="hero-visual">
-          <div className="hero-image-wrapper">
-            {!imgLoaded && !allFailed && <div className="hb-shimmer" />}
-            {allFailed && (
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16, textAlign: 'center', color: '#374151', fontSize: 14, fontWeight: 600, background: '#eceff1' }}>
-                {slide.title}
-              </div>
-            )}
-            {!allFailed && lowRatio && (
-              <img
-                className="hb-blur"
-                src={phoneImageUrls[imgAttempt] || slide.image}
-                alt=""
-                aria-hidden="true"
-                style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(24px) saturate(1.1)', transform: 'scale(1.15)', opacity: 0.9, zIndex: 1 }}
-              />
-            )}
-            {!allFailed && (
-              <picture style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 2 }}>
-                {slide.desktopImage && <source media="(min-width: 768px)" srcSet={slide.desktopImage} />}
-                {slide.mobileImage && <source media="(max-width: 767px)" srcSet={slide.mobileImage} />}
-                <img
-                  key={slide.id + '-img-' + imgAttempt}
-                  src={phoneImageUrls[imgAttempt] || ''}
-                  alt=""
-                  aria-hidden="true"
-                  width="1600"
-                  height="700"
-                  fetchPriority="high"
-                  loading="eager"
-                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: lowRatio ? 'contain' : 'cover', objectPosition: slide.imagePos || 'center center', opacity: 1, filter: 'none', display: 'block', zIndex: 2 }}
-                  onLoad={handleImgLoad}
-                  onError={handleImgError}
+          ) : null)}
+          {n > 1 && (
+            <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', bottom: 8, display: 'flex', gap: 5, zIndex: 3 }}>
+              {slides.map((s, i) => (
+                <button
+                  key={s.id}
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); goTo(i); setPaused(true); setTimeout(() => setPaused(false), 3000) }}
+                  aria-label={`Slide ${i + 1} of ${n}`}
+                  style={{ width: i === idx ? 22 : 6, height: 6, borderRadius: 999, border: 'none', padding: 0, cursor: 'pointer', background: i === idx ? '#0F9D58' : '#cfd8d3', transition: 'all 0.25s ease' }}
                 />
-              </picture>
-            )}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
-      </div>
-
-      {n > 1 && (
-        <div className="hero-dots" role="tablist" aria-label="Hero slides">
-          {slides.map((s, i) => (
-            <button
-              key={s.id}
-              type="button"
-              className={'hero-dot' + (i === idx ? ' is-active' : '')}
-              role="tab"
-              aria-selected={i === idx}
-              aria-label={`Slide ${i + 1} of ${n}`}
-              onClick={() => { goTo(i); setPaused(true); setTimeout(() => setPaused(false), 3000) }}
-            />
-          ))}
-        </div>
-      )}
-    </section>
+      ) : null}
     </div>
   )
 }
