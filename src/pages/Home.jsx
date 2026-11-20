@@ -4151,9 +4151,12 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
         .hb-wrap { padding: 0 14px; box-sizing: border-box; width: 100%; }
         @media (min-width: 1100px) { .hb-wrap { padding: 0 24px; } }
         .hb-inner { max-width: 1100px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+        .hb-search { margin-top: 12px; }
+        @media (min-width: 768px) { .hb-search { margin-top: 16px; } }
+        @media (min-width: 1100px) { .hb-search { margin-top: 20px; } }
       `}</style>
       {onSearch && (
-        <div className="hb-inner" ref={searchRef} style={{ position: 'relative', zIndex: 100, marginBottom: 12 }}>
+        <div className="hb-inner hb-search" ref={searchRef} style={{ position: 'relative', zIndex: 100, marginBottom: 12 }}>
           <div className="hero-search" style={{ height: 48, display: 'flex', alignItems: 'center', background: 'transparent', overflow: 'hidden', width: '100%' }}>
             <input
               ref={searchInputRef}
