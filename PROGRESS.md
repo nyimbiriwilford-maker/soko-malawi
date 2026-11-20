@@ -100,3 +100,4 @@
 97. home-hero-premium: fix laptop height via JS viewport
 98. home-hero-premium: restore live search and notify
 99. home-hero-premium: compact create status tile
+100. home-hero-premium: align and widen create status tile

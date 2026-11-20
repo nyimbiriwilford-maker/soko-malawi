@@ -1083,18 +1083,8 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
                      </button>
                    )}
                 </div>
-              ) : (
-                <div className="hs-rail-wrap" style={{ position: 'relative', padding: 0, margin: 0 }}>
-                  <div ref={scrollRef}
-                    className="hs-rail"
-                    style={{
-                      display: 'flex', gap: 10, overflowX: 'auto', overflowY: 'hidden',
-                      scrollSnapType: 'x proximity',
-                      WebkitOverflowScrolling: 'touch',
-                      overscrollBehaviorX: 'contain',
-                      scrollPaddingLeft: '14px',
-                    }}
-                  >
+               ) : (
+                 <div style={{ padding: 0, margin: 0 }}>
                      <button ref={createCardRef} type="button" className="hs-add-btn"
                        onClick={() => { if (!currentUserId) { navigate?.('/login'); return }; onCreateStory?.() }}
                        style={{
@@ -1130,6 +1120,7 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
                            color: '#202124',
                            letterSpacing: -0.2,
                            lineHeight: 1.2,
+                           whiteSpace: 'nowrap',
                          }}>
                            Create Status
                          </div>
@@ -1180,10 +1171,9 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
                           Retry
                         </button>
                       </section>
-                    ) : null}
-                  </div>
-                </div>
-              )}
+                     ) : null}
+                 </div>
+               )}
             </div>
           )}
         </div>
