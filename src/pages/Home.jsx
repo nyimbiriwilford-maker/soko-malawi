@@ -3958,11 +3958,13 @@ function getActiveSlides(slides) {
     .sort((a, b) => (a.priority ?? 999) - (b.priority ?? 999))
 }
 
-function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
+function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
   const [fetchedSlides, setFetchedSlides] = useState([])
   const [dbLoaded, setDbLoaded] = useState(false)
   const [searchFocused, setSearchFocused] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [liveResults, setLiveResults] = useState(null)
+  const [liveLoading, setLiveLoading] = useState(false)
   const searchRef = useRef(null)
   const searchInputRef = useRef(null)
 
@@ -3979,14 +3981,58 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
     setSearchFocused(false)
   }
 
+  // Debounced live search
+  useEffect(() => {
+    if (!searchQuery.trim() || searchQuery.trim().length < 2 || !searchFocused) {
+      setLiveResults(null)
+      setLiveLoading(false)
+      return
+    }
+    const q = searchQuery.trim().toLowerCase()
+    setLiveLoading(true)
+    const timer = setTimeout(async () => {
+      try {
+        const [listingsData, shopsData] = await Promise.all([
+          supabase.from('listings')
+            .select('id,title,price,images,city')
+            .in('status', ['published', 'active'])
+            .ilike('title', `%${q}%`)
+            .order('created_at', { ascending: false })
+            .limit(5),
+          supabase.from('shops')
+            .select('id,name,slug,logo_url,city')
+            .eq('is_active', true)
+            .ilike('name', `%${q}%`)
+            .limit(3),
+        ])
+        setLiveResults({
+          listings: (listingsData.data || []).filter(l => !isJobListing(l)),
+          shops: shopsData.data || [],
+        })
+      } catch (e) {
+        console.error('Live search error:', e)
+        setLiveResults({ listings: [], shops: [] })
+      }
+      setLiveLoading(false)
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery, searchFocused])
+
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (searchRef.current && !searchRef.current.contains(e.target)) {
         setSearchFocused(false)
       }
     }
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') setSearchFocused(false)
+    }
     document.addEventListener('mousedown', handleClickOutside)
-    return () => document.removeEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
   }, [])
 
   const fetchBanners = useCallback(async () => {
@@ -4185,16 +4231,122 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
               Search
             </button>
           </div>
-          {searchFocused && (
-            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, background: '#fff', borderRadius: 16, marginTop: 6, boxShadow: '0 12px 40px rgba(0,0,0,0.12)', padding: '12px 0', maxHeight: 400, overflowY: 'auto' }}>
-              {!searchQuery.trim() ? (
-                <>
-                  <div style={{ padding: '0 16px 10px', fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5 }}>Popular searches</div>
-                  {POPULAR_SEARCHES.map(term => (
-                    <button key={term} type="button" onClick={() => handleSuggestionClick(term)}
-                      style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 16px', border: 'none', background: 'transparent', fontSize: 13.5, fontWeight: 500, color: '#374151', cursor: 'pointer', fontFamily: 'inherit' }}
-                    >{term}</button>
+          {searchFocused && searchQuery.trim().length >= 2 && (
+            <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100, background: '#fff', border: '1px solid #e8eaed', borderRadius: 12, marginTop: 6, boxShadow: '0 12px 40px rgba(0,0,0,0.12)', padding: '8px 0', maxHeight: 400, overflowY: 'auto' }}>
+              {liveLoading ? (
+                <div style={{ padding: '16px 16px 12px' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 }}>
+                    Searching products...
+                  </div>
+                  {[1, 2, 3].map(i => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 0', minHeight: 44 }}>
+                      <div className="skeleton" style={{ width: 32, height: 32, borderRadius: 8, flexShrink: 0, background: '#E5E7EB' }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div className="skeleton" style={{ width: `${60 + i * 10}%`, height: 12, borderRadius: 4, marginBottom: 6, background: '#E5E7EB' }} />
+                        <div className="skeleton" style={{ width: `${30 + i * 5}%`, height: 10, borderRadius: 4, background: '#E5E7EB' }} />
+                      </div>
+                    </div>
                   ))}
+                </div>
+              ) : liveResults ? (
+                <>
+                  {liveResults.listings.length > 0 && (
+                    <>
+                      <div style={{ padding: '0 16px 8px', fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        Products
+                      </div>
+                      {liveResults.listings.map(item => (
+                        <button key={item.id} type="button" onClick={() => handleSuggestionClick(item.title)}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
+                            padding: '7px 16px', border: 'none', background: 'transparent',
+                            cursor: 'pointer', fontFamily: 'inherit', transition: 'background 0.1s',
+                            minHeight: 44,
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = '#F3F4F6'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                          <div style={{ width: 32, height: 32, borderRadius: 8, background: '#F3F4F6', overflow: 'hidden', flexShrink: 0 }}>
+                            {item.images?.[0] && <img src={item.images[0]} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</div>
+                            <div style={{ fontSize: 11, color: '#6B7280' }}>
+                              {item.price ? `MK ${Number(item.price).toLocaleString()}` : ''}{item.city ? ` · ${item.city}` : ''}
+                            </div>
+                          </div>
+                        </button>
+                      ))}
+                    </>
+                  )}
+                  {liveResults.shops.length > 0 && (
+                    <>
+                      <div style={{ borderTop: liveResults.listings.length > 0 ? '1px solid #F3F4F6' : 'none', padding: '8px 16px 8px', fontSize: 11, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        Shops
+                      </div>
+                      {liveResults.shops.map(shop => (
+                        <button key={shop.id} type="button" onClick={() => handleSuggestionClick(shop.name)}
+                          style={{
+                            display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
+                            padding: '7px 16px', border: 'none', background: 'transparent',
+                            cursor: 'pointer', fontFamily: 'inherit', transition: 'background 0.1s',
+                            minHeight: 44,
+                          }}
+                          onMouseEnter={e => e.currentTarget.style.background = '#F3F4F6'}
+                          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                        >
+                          <div style={{ width: 32, height: 32, borderRadius: 8, background: '#F3F4F6', overflow: 'hidden', flexShrink: 0 }}>
+                            {shop.logo_url && <img src={shop.logo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />}
+                          </div>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: '#111827' }}>{shop.name}</div>
+                            <div style={{ fontSize: 11, color: '#6B7280' }}>{shop.city || 'Shop'}</div>
+                          </div>
+                        </button>
+                      ))}
+                    </>
+                  )}
+                  {liveResults.listings.length === 0 && liveResults.shops.length === 0 && (
+                    <div style={{ padding: '20px 16px 16px' }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#374151', marginBottom: 4 }}>
+                        No products found for "{searchQuery.trim()}"
+                      </div>
+                      <div style={{ fontSize: 11, fontWeight: 600, color: '#9CA3AF', marginBottom: 12 }}>
+                        Try:
+                      </div>
+                      <ul style={{ margin: '0 0 14px', padding: '0 0 0 16px', fontSize: 11, color: '#6B7280', lineHeight: 1.8 }}>
+                        <li>Different spelling</li>
+                        <li>Browse categories</li>
+                        <li>View latest listings</li>
+                      </ul>
+                      <button type="button" onClick={() => { setSearchFocused(false); onNotify?.(searchQuery.trim()) }}
+                        style={{
+                          width:'100%', border:'none', background:'#0F9D58', borderRadius:8,
+                          padding:'9px 12px', fontSize:12, fontWeight:800, color:'#fff',
+                          cursor:'pointer', fontFamily:'inherit', marginBottom:10,
+                          display:'flex', alignItems:'center', justifyContent:'center', gap:6,
+                          minHeight: 44,
+                        }}>
+                        🔔 Notify me when &ldquo;{searchQuery.trim()}&rdquo; is available
+                      </button>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button type="button" onClick={() => { setSearchFocused(false); navigate?.('/search') }}
+                          style={{
+                            flex: 1, border: '1px solid #D1D5DB', background: '#fff', borderRadius: 8,
+                            padding: '8px 12px', fontSize: 11, fontWeight: 700, color: '#374151',
+                            cursor: 'pointer', fontFamily: 'inherit', minHeight: 44,
+                          }}
+                        >Explore Categories</button>
+                        <button type="button" onClick={() => { setSearchFocused(false); navigate?.('/search?sort=newest') }}
+                          style={{
+                            flex: 1, border: 'none', background: '#374151', borderRadius: 8,
+                            padding: '8px 12px', fontSize: 11, fontWeight: 700, color: '#fff',
+                            cursor: 'pointer', fontFamily: 'inherit', minHeight: 44,
+                          }}
+                        >View Latest Products</button>
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : null}
             </div>
