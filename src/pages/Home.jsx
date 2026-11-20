@@ -4203,7 +4203,7 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
       <style>{`
         .hb-wrap { padding: 0 14px; box-sizing: border-box; width: 100%; }
         @media (min-width: 1100px) { .hb-wrap { padding: 0 24px; } }
-        .hb-inner { max-width: 1100px; margin: 0 auto; width: 100%; box-sizing: border-box; }
+        .hb-inner { max-width: 1400px; margin: 0 auto; width: 100%; box-sizing: border-box; }
         .hb-search { margin-top: 12px; }
         @media (min-width: 768px) { .hb-search { margin-top: 16px; } }
         @media (min-width: 1100px) { .hb-search { margin-top: 20px; } }

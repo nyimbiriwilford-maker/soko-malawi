@@ -954,7 +954,7 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
           background: 'transparent',
         }}>
           <div style={isMobile ? { padding: '0 14px', boxSizing: 'border-box', width: '100%' } : { padding: windowWidth >= 1100 ? '0 24px' : '0 14px', boxSizing: 'border-box', width: '100%' }}>
-            <div style={{ maxWidth: 1100, margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
+            <div style={{ maxWidth: 1400, margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
           {loading ? (
             <div style={isMobile ? { padding: '0' } : { padding: '0' }}>
               <div className="skeleton" style={{ width: 140, height: 16, borderRadius: 6, marginBottom: 12 }} />
