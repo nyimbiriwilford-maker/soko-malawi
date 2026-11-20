@@ -4087,6 +4087,12 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
   const [isWide, setIsWide] = useState(false)
   const [boxRatio, setBoxRatio] = useState(2.5)
   const boxRef = useRef(null)
+  const [winW, setWinW] = useState(typeof window !== 'undefined' ? window.innerWidth : 1100)
+  useEffect(() => {
+    const onResize = () => setWinW(window.innerWidth)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
   const [imgAttempt, setImgAttempt] = useState(0)
   const [touchStartX, setTouchStartX] = useState(null)
   const [allFailed, setAllFailed] = useState(false)
@@ -4144,6 +4150,7 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
   const overlayTitle = slide?.title
   const overlayDesc = slide?.description || slide?.desc
   const showOverlay = !!(overlayTitle && String(overlayTitle).trim())
+  const boxH = winW >= 1100 ? 300 : winW >= 768 ? 240 : 190
 
   return (
     <div className="hb-wrap" style={{ marginBottom: 16 }}>
@@ -4196,7 +4203,7 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
       )}
 
       {loading ? (
-        <div className="hb-inner"><div style={{ height: 190, background: '#f1f3f4', borderRadius: 16, width: '100%' }} /></div>
+        <div className="hb-inner"><div style={{ height: boxH, background: '#f1f3f4', borderRadius: 16, width: '100%' }} /></div>
       ) : n > 0 ? (
         <div className="hb-inner">
         <div
@@ -4205,12 +4212,10 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
           onClick={handleBannerClick}
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
-          style={{ position: 'relative', width: '100%', borderRadius: 16, overflow: 'hidden', boxShadow: '0 4px 14px rgba(16,24,40,0.08)', cursor: 'pointer', contain: 'layout' }}
+          style={{ position: 'relative', width: '100%', height: boxH, borderRadius: 16, overflow: 'hidden', boxShadow: '0 4px 14px rgba(16,24,40,0.08)', cursor: 'pointer', contain: 'layout' }}
         >
           <style>{`
-            .hero-banner-box { height: 190px !important; }
-            @media (min-width: 768px) { .hero-banner-box { height: 240px !important; } }
-            @media (min-width: 1100px) { .hero-banner-box { height: 300px !important; } }
+            .hero-banner-box { height: 190px; }
             @media (max-width: 767px) {
               .hb-overlay { padding: 12px 0 12px 12px !important; max-width: 60% !important; }
               .hb-overlay-title { font-size: 16px !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; display: block !important; -webkit-line-clamp: unset !important; }

@@ -97,3 +97,4 @@
 94. home-hero-premium: 300px laptop height, white price
 95. home-hero-premium: fix laptop height override
 96. home-hero-premium: compact phone overlay
+97. home-hero-premium: fix laptop height via JS viewport
