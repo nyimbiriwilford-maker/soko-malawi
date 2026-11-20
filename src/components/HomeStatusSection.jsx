@@ -953,7 +953,7 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
           marginBottom: 16,
           background: 'transparent',
         }}>
-          <div style={isMobile ? { padding: '0 14px' } : { padding: windowWidth >= 1100 ? '0 24px' : '0 14px' }}>
+          <div style={isMobile ? { padding: '0 14px', boxSizing: 'border-box', width: '100%' } : { padding: windowWidth >= 1100 ? '0 24px' : '0 14px', boxSizing: 'border-box', width: '100%' }}>
             <div style={{ maxWidth: 1100, margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
           {loading ? (
             <div style={isMobile ? { padding: '0' } : { padding: '0' }}>
@@ -968,7 +968,7 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
             ) : (
             <div style={isMobile ? {} : {}}>
             {rankedStories.length > 0 ? (
-                <div className="hs-rail-wrap" style={{ position: 'relative', padding: 0, margin: 0 }}>
+                <div className="hs-rail-wrap" style={{ position: 'relative', padding: 0 }}>
                    <div className="hs-fade hs-fade-left" style={{ opacity: (!isMobile && canScrollLeft) ? 1 : 0 }} aria-hidden="true" />
                    <div className="hs-fade hs-fade-right" style={{ opacity: (!isMobile && canScrollRight) ? 1 : 0 }} aria-hidden="true" />
                    {canScrollLeft && !isMobile && (

@@ -102,3 +102,4 @@
 99. home-hero-premium: compact create status tile
 100. home-hero-premium: align and widen create status tile
 101. home-hero-premium: align status row to hero edge
+102. Step 1 home-status-align: align status row to hero edge
