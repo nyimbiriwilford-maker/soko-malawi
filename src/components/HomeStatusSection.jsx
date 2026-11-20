@@ -947,12 +947,12 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
         }
       `}</style>
 
-       <section className="hs-section" style={{
-         padding: '0',
-         marginBottom: 0,
-         background: 'transparent',
-       }}>
-        <div style={isMobile ? { padding: '0 20px' } : { maxWidth: 1400, margin: '0 auto', padding: '0 20px' }}>
+        <section className="hs-section" style={{
+          padding: '0',
+          marginBottom: 16,
+          background: 'transparent',
+        }}>
+         <div style={isMobile ? { padding: '0 14px' } : { maxWidth: 1100, margin: '0 auto', padding: windowWidth >= 1100 ? '0 24px' : '0 14px' }}>
           {loading ? (
             <div style={isMobile ? { padding: '0' } : { padding: '0' }}>
               <div className="skeleton" style={{ width: 140, height: 16, borderRadius: 6, marginBottom: 12 }} />
@@ -1014,41 +1014,41 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
                         boxSizing: 'border-box',
                       }}
                     >
-                      <div className="hs-create-plus" style={{
-                        width: 44, height: 44,
-                        borderRadius: '50%',
-                        background: '#0F9D58',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        boxShadow: '0 6px 16px rgba(15,157,88,0.28)',
-                      }}>
-                        <Plus size={22} color="#fff" strokeWidth={2.5} />
-                      </div>
-                      <div style={{
-                        fontSize: 13,
-                        fontWeight: 700,
-                        color: '#202124',
-                        letterSpacing: -0.2,
-                      }}>
-                        Create Status
-                      </div>
-                      {rankedStories.length === 0 && (
-                        <div style={{
-                          fontSize: 11.5,
-                          fontWeight: 500,
-                          color: '#5f6368',
-                          lineHeight: 1.45,
-                          maxWidth: 140,
-                          textAlign: 'center',
-                          display: '-webkit-box',
-                          WebkitLineClamp: 3,
-                          WebkitBoxOrient: 'vertical',
-                          overflow: 'hidden',
-                        }}>
-                          Share what you're selling today.
-                        </div>
-                      )}
-                    </button>
-                    {rankedStories.slice(0, displayLimit).map(s => (
+                       <div className="hs-create-plus" style={{
+                         width: 36, height: 36,
+                         borderRadius: '50%',
+                         background: '#0F9D58',
+                         display: 'flex', alignItems: 'center', justifyContent: 'center',
+                         boxShadow: '0 6px 16px rgba(15,157,88,0.28)',
+                       }}>
+                         <Plus size={18} color="#fff" strokeWidth={2.5} />
+                       </div>
+                       <div style={{
+                         fontSize: 13,
+                         fontWeight: 700,
+                         color: '#202124',
+                         letterSpacing: -0.2,
+                       }}>
+                         Create Status
+                       </div>
+                       {rankedStories.length === 0 && (
+                         <div style={{
+                           fontSize: 11.5,
+                           fontWeight: 500,
+                           color: '#5f6368',
+                           lineHeight: 1.45,
+                           maxWidth: 140,
+                           textAlign: 'center',
+                           display: '-webkit-box',
+                           WebkitLineClamp: 3,
+                           WebkitBoxOrient: 'vertical',
+                           overflow: 'hidden',
+                         }}>
+                           Share what you're selling today.
+                         </div>
+                       )}
+                     </button>
+                     {rankedStories.slice(0, displayLimit).map(s => (
                       <StoryCard
                         key={s.user_id}
                         s={s}
@@ -1095,57 +1095,59 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
                       scrollPaddingLeft: '14px',
                     }}
                   >
-                    <button ref={createCardRef} type="button" className="hs-add-btn"
-                      onClick={() => { if (!currentUserId) { navigate?.('/login'); return }; onCreateStory?.() }}
-                      style={{
-                        flexShrink: 0,
-                        cursor: 'pointer', padding: 14, fontFamily: 'inherit',
-                        textAlign: 'center', background: '#ffffff',
-                        scrollSnapAlign: 'start',
-                        border: '1.5px dashed rgba(15,157,88,0.45)',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-                        transition: 'all 0.25s ease',
-                        display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-                        gap: 10,
-                        boxSizing: 'border-box',
-                      }}
-                    >
-                      <div className="hs-create-plus" style={{
-                        width: 44, height: 44,
-                        borderRadius: '50%',
-                        background: '#0F9D58',
-                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        boxShadow: '0 6px 16px rgba(15,157,88,0.28)',
-                      }}>
-                        <Plus size={22} color="#fff" strokeWidth={2.5} />
-                      </div>
-                      <div style={{
-                        fontSize: 13,
-                        fontWeight: 700,
-                        color: '#202124',
-                        letterSpacing: -0.2,
-                      }}>
-                        Create Status
-                      </div>
-                      {rankedStories.length === 0 && (
-                        <div style={{
-                          fontSize: 11.5,
-                          fontWeight: 500,
-                          color: '#5f6368',
-                          lineHeight: 1.45,
-                          maxWidth: 140,
-                          textAlign: 'center',
-                          display: '-webkit-box',
-                          WebkitLineClamp: 3,
-                          WebkitBoxOrient: 'vertical',
-                          overflow: 'hidden',
-                        }}>
-                          Share what you're selling today.
-                        </div>
-                      )}
-                    </button>
+                     <button ref={createCardRef} type="button" className="hs-add-btn"
+                       onClick={() => { if (!currentUserId) { navigate?.('/login'); return }; onCreateStory?.() }}
+                       style={{
+                         flexShrink: 0,
+                         cursor: 'pointer', padding: 12, fontFamily: 'inherit',
+                         textAlign: 'left', background: '#e6f6ed',
+                         border: '1.5px dashed #34c77a',
+                         borderRadius: 14,
+                         boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                         transition: 'all 0.25s ease',
+                         display: 'flex', flexDirection: 'row', alignItems: 'center',
+                         gap: 12,
+                         boxSizing: 'border-box',
+                         width: '100%',
+                         maxWidth: 360,
+                         minHeight: 64,
+                         height: 64,
+                       }}
+                     >
+                       <div className="hs-create-plus" style={{
+                         width: 40, height: 40, flexShrink: 0,
+                         borderRadius: '50%',
+                         background: '#0F9D58',
+                         display: 'flex', alignItems: 'center', justifyContent: 'center',
+                         boxShadow: '0 6px 16px rgba(15,157,88,0.28)',
+                       }}>
+                         <Plus size={20} color="#fff" strokeWidth={2.5} />
+                       </div>
+                       <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0 }}>
+                         <div style={{
+                           fontSize: 15,
+                           fontWeight: 800,
+                           color: '#202124',
+                           letterSpacing: -0.2,
+                           lineHeight: 1.2,
+                         }}>
+                           Create Status
+                         </div>
+                         <div style={{
+                           fontSize: 13,
+                           fontWeight: 500,
+                           color: '#5f6368',
+                           lineHeight: 1.4,
+                           overflow: 'hidden',
+                           textOverflow: 'ellipsis',
+                           whiteSpace: 'nowrap',
+                         }}>
+                           Share what you're selling today
+                         </div>
+                       </div>
+                     </button>
 
-                    {error ? (
+                     {error ? (
                       <section className="hs-error-card" aria-label="Couldn't load statuses"
                         style={{
                           background: 'linear-gradient(160deg, #e8f5ee 0%, #f0fdf4 55%, #fff8e1 100%)',
