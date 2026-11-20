@@ -4347,19 +4347,19 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
             width: 100%;
             height: 160px;
           }
-          .hero-visual img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 16px; }
+          .hero-visual img { width: 100%; height: 100%; object-fit: contain !important; object-position: center !important; display: block; border-radius: 16px; }
           .hero-image-wrapper {
             overflow: hidden;
             border-radius: 16px;
-            background: #eceff1 !important;
+            background: #f8f9fa !important;
             width: 100%;
             height: 100%;
             box-shadow: 0 4px 14px rgba(16,24,40,0.08);
             position: relative;
           }
-          .hero-image-wrapper img { width: 100%; height: 100%; object-fit: cover; display: block; border-radius: 16px; }
-          .hero-image-wrapper img.hb-contain { object-fit: contain; max-width: 100%; max-height: 100%; width: auto; height: auto; margin: auto; }
-          .hb-shimmer { position: absolute; inset: 0; background: #eceff1; }
+           .hero-image-wrapper img { width: 100%; height: 100%; object-fit: contain !important; object-position: center !important; display: block; border-radius: 16px; }
+           .hero-image-wrapper img.hb-contain { object-fit: contain !important; object-position: center !important; max-width: 100%; max-height: 100%; width: auto; height: auto; margin: auto; }
+           .hb-shimmer { position: absolute; inset: 0; background: #f8f9fa; }
           .hb-blur { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; filter: blur(24px) saturate(1.1); transform: scale(1.15); opacity: .9; z-index: 0; }
           .hero-image-wrapper img { position: relative; z-index: 1; }
           .hero-dots { padding: 10px 0 0; }
@@ -4367,10 +4367,12 @@ function HeroBanner({ navigate, onSearch, onNotify, slides: externalSlides }) {
           .hero-search-input { width: 100%; }
           .hero-dots { padding: 14px 16px 20px; }
         }
-        @media (min-width: 768px) and (max-width: 1099px) {
-          .hero-visual { height: 200px; border-radius: 16px; }
-          .hero-image-wrapper { max-height: 340px; border-radius: 16px; }
-        }
+         @media (min-width: 768px) and (max-width: 1099px) {
+           .hero-visual { height: 200px; border-radius: 16px; }
+           .hero-visual img { width: 100%; height: 100%; object-fit: contain !important; object-position: center !important; display: block; border-radius: 16px; }
+           .hero-image-wrapper { max-height: 340px; border-radius: 16px; background: #f8f9fa !important; }
+           .hero-image-wrapper img { width: 100%; height: 100%; object-fit: contain !important; object-position: center !important; display: block; border-radius: 16px; }
+         }
         @media (max-width: 375px) {
           .hero-visual { height: 230px; }
         }
