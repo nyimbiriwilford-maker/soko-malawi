@@ -4211,6 +4211,12 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
             .hero-banner-box { height: 190px !important; }
             @media (min-width: 768px) { .hero-banner-box { height: 240px !important; } }
             @media (min-width: 1100px) { .hero-banner-box { height: 300px !important; } }
+            @media (max-width: 767px) {
+              .hb-overlay { padding: 12px 0 12px 12px !important; max-width: 60% !important; }
+              .hb-overlay-title { font-size: 16px !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; display: block !important; -webkit-line-clamp: unset !important; }
+              .hb-overlay-price { font-size: 14px !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; }
+              .hb-btn { display: none !important; }
+            }
           `}</style>
           {slides.map((s, i) => i === idx ? (
             <div key={s.id} style={{ position: 'absolute', inset: 0, opacity: fade === 'in' ? 1 : 0, transition: 'opacity 0.4s ease' }}>
@@ -4251,12 +4257,12 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
                 )}
               </div>
               {showOverlay && (
-                <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '14px 16px 28px', background: 'linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.35) 45%, rgba(0,0,0,0) 80%)', zIndex: 2 }}>
+                <div className="hb-overlay" style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '14px 16px 28px', background: 'linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.35) 45%, rgba(0,0,0,0) 80%)', zIndex: 2 }}>
                   {overlayTitle && (
-                    <div style={{ fontSize: 18, fontWeight: 800, color: '#fff', lineHeight: 1.2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{overlayTitle}</div>
+                    <div className="hb-overlay-title" style={{ fontSize: 18, fontWeight: 800, color: '#fff', lineHeight: 1.2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{overlayTitle}</div>
                   )}
                   {slide?.listing && slide.listing.price != null && (
-                    <div style={{ marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    <div className="hb-overlay-price" style={{ marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                       <span style={{ fontSize: 16, fontWeight: 800, color: '#ffffff', textShadow: '0 1px 4px rgba(0,0,0,0.6)' }}>{formatPrice(slide.listing.price)}</span>
                       {slide.listing.city && <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.9)', marginLeft: 6 }}>· {slide.listing.city}</span>}
                     </div>
@@ -4267,6 +4273,7 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
                   {slide?.cta && (
                     <button
                       type="button"
+                      className="hb-btn"
                       onClick={(e) => { e.stopPropagation(); handleBannerClick() }}
                       style={{ marginTop: 8, height: 36, minWidth: 44, padding: '0 14px', borderRadius: 10, border: 'none', background: '#0F9D58', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}
                     >
