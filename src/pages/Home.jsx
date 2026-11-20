@@ -555,7 +555,7 @@ function GlobalStyles() {
         .soko-featured-stories-grid { grid-template-columns: 1fr !important; }
 
         .soko-cat-section {
-          padding: 0 0 0 !important;
+          padding: 0 14px 0 !important;
           margin-top: 8px;
           margin-bottom: 0 !important;
         }
@@ -564,14 +564,14 @@ function GlobalStyles() {
           width: 100% !important;
         }
         .cat-header-row {
-          padding: 0 20px;
+          padding: 0;
           margin-bottom: 12px !important;
         }
           .soko-cat-grid {
             display: grid !important;
             grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
             gap: 8px !important;
-            padding: 8px 20px 16px !important;
+            padding: 8px 0 16px !important;
             margin: 0 !important;
           width: 100% !important;
           max-width: 100% !important;
@@ -612,17 +612,17 @@ function GlobalStyles() {
       @media (min-width: 768px) {
         .soko-cat-section { margin-top: 16px !important; margin-bottom: 0 !important; }
       }
-      @media (min-width: 769px) {
+      @media (min-width: 768px) {
         .soko-cat-section {
           padding: 0 24px 0 !important;
           margin-top: 20px !important;
           margin-bottom: 0 !important;
         }
         .cat-header-row {
-          padding: 0 24px;
+          padding: 0;
         }
         .soko-cat-grid {
-          padding: 8px 24px 16px !important;
+          padding: 8px 0 16px !important;
           grid-template-columns: repeat(9, minmax(0, 1fr)) !important;
           gap: 10px !important;
         }
@@ -658,7 +658,7 @@ function GlobalStyles() {
       }
       @media (max-width: 768px) {
         .cat-header-row {
-          padding: 0 14px;
+          padding: 0;
         }
         .soko-cat-grid {
           display: flex !important;
@@ -670,7 +670,7 @@ function GlobalStyles() {
           scrollbar-width: none;
           -ms-overflow-style: none;
           gap: 8px !important;
-          padding: 8px 14px 16px !important;
+          padding: 8px 0 16px !important;
         }
         .soko-cat-grid::-webkit-scrollbar { display: none !important; }
         .soko-cat-grid .soko-cat-tile {

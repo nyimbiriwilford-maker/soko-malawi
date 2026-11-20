@@ -104,3 +104,4 @@
 101. home-hero-premium: align status row to hero edge
 102. Step 1 home-status-align: align status row to hero edge
 103. Step 1 home-hero-wide: widen hero block and status row to 1400
+104. Step 1 home-category-padding: removed double side padding in Shop by Category
