@@ -4085,6 +4085,8 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
   const slide = slides[idx]
   const [imgLoaded, setImgLoaded] = useState(false)
   const [isWide, setIsWide] = useState(false)
+  const [boxRatio, setBoxRatio] = useState(2.5)
+  const boxRef = useRef(null)
   const [imgAttempt, setImgAttempt] = useState(0)
   const [touchStartX, setTouchStartX] = useState(null)
   const [allFailed, setAllFailed] = useState(false)
@@ -4096,7 +4098,12 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
     const nh = e?.target?.naturalHeight
     if (nw && nh) {
       const ratio = nw / nh
-      setIsWide(ratio >= (16 / 7) * 0.9 && ratio <= (16 / 7) * 1.1)
+      const el = boxRef.current
+      const bw = el ? el.clientWidth : 0
+      const bh = el ? el.clientHeight : 0
+      const br = bw && bh ? bw / bh : boxRatio
+      if (bw && bh) setBoxRatio(br)
+      setIsWide(Math.abs(ratio - br) / br <= 0.25)
     }
   }
   const handleImgError = () => {
@@ -4136,13 +4143,18 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
 
   const overlayTitle = slide?.title
   const overlayDesc = slide?.description || slide?.desc
-  const showOverlay = !!(overlayTitle || slide?.cta)
+  const showOverlay = !!(overlayTitle && String(overlayTitle).trim())
 
   return (
-    <div className="hero-banner-wrap" style={{ width: '100%', boxSizing: 'border-box' }}>
+    <div className="hb-wrap">
+      <style>{`
+        .hb-wrap { padding: 0 14px; box-sizing: border-box; width: 100%; }
+        @media (min-width: 1100px) { .hb-wrap { padding: 0 24px; } }
+        .hb-inner { max-width: 1100px; margin: 0 auto; width: 100%; }
+      `}</style>
       {onSearch && (
-        <div ref={searchRef} style={{ position: 'relative', zIndex: 100, marginBottom: 12 }}>
-          <div className="hero-search" style={{ height: 48, borderRadius: 14, display: 'flex', alignItems: 'center', background: '#fff', boxShadow: '0 10px 30px rgba(0,0,0,0.08)', overflow: 'hidden', width: '100%' }}>
+        <div className="hb-inner" ref={searchRef} style={{ position: 'relative', zIndex: 100, marginBottom: 12 }}>
+          <div className="hero-search" style={{ height: 48, display: 'flex', alignItems: 'center', background: 'transparent', overflow: 'hidden', width: '100%' }}>
             <input
               ref={searchInputRef}
               className="hero-search-input"
@@ -4153,12 +4165,12 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
               onFocus={() => setSearchFocused(true)}
               onKeyDown={e => { if (e.key === 'Enter') handleSearchSubmit(searchQuery) }}
               aria-label="Search marketplace"
-              style={{ height: '100%', flex: 1 }}
+              style={{ height: 48, flex: 1, background: '#fff', border: '1px solid #e8eaed', borderRight: 'none', borderRadius: '14px 0 0 14px', padding: '0 14px', outline: 'none', fontSize: 14, fontFamily: 'inherit', color: '#111827' }}
             />
             <button
               type="button"
               onClick={() => handleSearchSubmit(searchQuery)}
-              style={{ border: 'none', background: '#0F9D58', color: '#fff', padding: '0 20px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, fontWeight: 700, height: '100%', display: 'flex', alignItems: 'center', flexShrink: 0 }}
+              style={{ border: 'none', background: '#0F9D58', color: '#fff', padding: '0 20px', cursor: 'pointer', fontFamily: 'inherit', fontSize: 14, fontWeight: 700, height: 48, display: 'flex', alignItems: 'center', flexShrink: 0, borderRadius: '0 14px 14px 0' }}
             >
               Search
             </button>
@@ -4181,19 +4193,20 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
       )}
 
       {loading ? (
-        <div style={{ height: 160, background: '#f1f3f4', borderRadius: 16, width: '100%' }} />
+        <div style={{ height: 190, background: '#f1f3f4', borderRadius: 16, width: '100%' }} />
       ) : n > 0 ? (
         <div
+          ref={boxRef}
           className="hero-banner-box"
           onClick={handleBannerClick}
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
-          style={{ position: 'relative', width: '100%', height: 160, borderRadius: 16, overflow: 'hidden', boxShadow: '0 4px 14px rgba(16,24,40,0.08)', cursor: 'pointer', contain: 'layout' }}
+          style={{ position: 'relative', width: '100%', height: 190, borderRadius: 16, overflow: 'hidden', boxShadow: '0 4px 14px rgba(16,24,40,0.08)', cursor: 'pointer', contain: 'layout' }}
         >
           <style>{`
-            .hero-banner-box { height: 160px; }
-            @media (min-width: 768px) { .hero-banner-box { height: 200px !important; } }
-            @media (min-width: 1100px) { .hero-banner-box { height: 280px !important; } }
+            .hero-banner-box { height: 190px; }
+            @media (min-width: 768px) { .hero-banner-box { height: 230px !important; } }
+            @media (min-width: 1100px) { .hero-banner-box { height: 300px !important; } }
           `}</style>
           {slides.map((s, i) => i === idx ? (
             <div key={s.id} style={{ position: 'absolute', inset: 0, opacity: fade === 'in' ? 1 : 0, transition: 'opacity 0.4s ease' }}>
@@ -4210,7 +4223,7 @@ function HeroBanner({ navigate, onSearch, slides: externalSlides }) {
                     src={phoneImageUrls[imgAttempt] || slide.image}
                     alt=""
                     aria-hidden="true"
-                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(24px)', transform: 'scale(1.15)', opacity: 0.9, zIndex: 0 }}
+                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(14px)', transform: 'scale(1.15)', opacity: 0.7, zIndex: 0 }}
                   />
                 )}
                 {!allFailed && (

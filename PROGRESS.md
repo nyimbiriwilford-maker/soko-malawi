@@ -90,3 +90,4 @@
 87. home-banner-contain: object-fit contain applied to phone and tablet banner images
 88. home-banner-contain: bump sw to v67
 89. home-hero-premium: hero banner redesign with search above, overlay, blur, swipe
+90. home-hero-premium: hero polish (padding, heights, blur 14, overlay gated on title)
