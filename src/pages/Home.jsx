@@ -4184,13 +4184,17 @@ function HeroBanner({ navigate, onSearch, user, slides: externalSlides }) {
                   </div>
                 )}
                 {!allFailed && !isWide && (
-                  <img
-                    className="hb-blur"
-                    src={phoneImageUrls[imgAttempt] || slide.image}
-                    alt=""
-                    aria-hidden="true"
-                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(14px)', transform: 'scale(1.15)', opacity: 0.7, zIndex: 0 }}
-                  />
+                  <picture style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 0 }}>
+                    {slide.desktopImage && <source media="(min-width: 768px)" srcSet={slide.desktopImage} />}
+                    {slide.mobileImage && <source media="(max-width: 767px)" srcSet={slide.mobileImage} />}
+                    <img
+                      className="hb-blur"
+                      src={phoneImageUrls[imgAttempt] || ''}
+                      alt=""
+                      aria-hidden="true"
+                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', filter: 'blur(14px)', transform: 'scale(1.15)', opacity: 0.7, zIndex: 0 }}
+                    />
+                  </picture>
                 )}
                 {!allFailed && (
                   <picture style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 1 }}>

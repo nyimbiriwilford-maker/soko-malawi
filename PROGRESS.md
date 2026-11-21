@@ -115,4 +115,4 @@
 112. Home banner ratio: box/skeleton aspect 1200/667 below 769px and 14/3 with max-height 300px at 769px+; image-ratio tolerance 12%, no fixed heights
 113. Admin banners: two shape-aware slots, optional text
 114. Banner: desktop/tablet shape changed from 14:3 to 4:1; phone 1200/667 unchanged
-
+115. Banner: blurred copy uses the same picture as front image
