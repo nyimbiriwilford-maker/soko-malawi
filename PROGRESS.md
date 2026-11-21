@@ -112,4 +112,6 @@
 109. Home: hide hero search (.hb-search) at min-width 1100px only; phone/tablet unchanged
 110. Header search on tablet: shared SearchBox shown from 769px up, old tablet input hidden at same breakpoint, .hb-search hidden from 769px; phone magnifier unchanged
 111. Home header-banner spacing: .hb-wrap padding-top 16px at 769px+ and 20px at 1100px+; phone unchanged, early access strip has no bottom margin so no double gap
+112. Home banner ratio: box/skeleton aspect 1200/667 below 769px and 14/3 with max-height 300px at 769px+; image-ratio tolerance 12%, no fixed heights
+113. Admin banners: two shape-aware slots, optional text
 
