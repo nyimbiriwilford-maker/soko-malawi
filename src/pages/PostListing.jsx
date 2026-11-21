@@ -16,7 +16,7 @@ import {
   formatFeaturedPrice,
   featuredPriceLabel,
 } from '../constants/featuredPricing'
-
+import { SHOW_FEATURED_ADS } from '../config/featureFlags'
 /* ────────────────────────────────────────────────────────────
    Design tokens
    ──────────────────────────────────────────────────────────── */
@@ -2241,7 +2241,7 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
                 {location.detecting ? 'Detecting…' : 'Detect again'}
               </button>
               <div style={S.tipBannerGreen}>Accurate location helps buyers near you find your listing easily.</div>
-              {sectionsComplete.location && (
+              {sectionsComplete.location && SHOW_FEATURED_ADS && (
                 <OutlineButton onClick={() => scrollToRef(promotionRef)} style={{ width: '100%', marginTop: 10, display: 'flex', justifyContent: 'center', gap: 6 }}>
                   Continue to Promotion <ChevronRight size={14} />
                 </OutlineButton>
@@ -2249,6 +2249,7 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
             </Card>
             </div>
 
+            {SHOW_FEATURED_ADS && (
             <div ref={promotionRef}>
             <Card title="Promotion" icon={Crown} subtitle="Boost your listing's visibility (optional)"
               style={{
@@ -2315,6 +2316,7 @@ function ResumeDraftModal({ draft, onResume, onDiscard }) {
               </div>
             </Card>
             </div>
+            )}
 
             </aside>
         </div>

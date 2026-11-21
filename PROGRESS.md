@@ -125,3 +125,4 @@
 Home: category heading and icons
 Hide Get Featured adverts (SHOW_FEATURED_ADS=false)
 Home: gap between categories and Latest Listings
+Hide feature-a-product options (SHOW_FEATURED_ADS)

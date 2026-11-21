@@ -3963,6 +3963,7 @@ export default function Profile() {
                               <path d="m8.59 13.51 6.83 3.98M15.41 6.51l-6.82 3.98" />
                             </svg>
                           </button>
+                          {SHOW_FEATURED_ADS && (
                           <button
                             type="button"
                             className="mp-inv-icon-btn is-boost"
@@ -3988,6 +3989,7 @@ export default function Profile() {
                               </svg>
                             )}
                           </button>
+                          )}
                           <button
                             type="button"
                             className="mp-inv-icon-btn is-danger"
@@ -5850,7 +5852,7 @@ export default function Profile() {
       </div>
 
       {/* Feature another — choose existing listing or create new */}
-      {showFeatureChoice && (
+      {SHOW_FEATURED_ADS && showFeatureChoice && (
         <div className="mp-overlay" onClick={() => setShowFeatureChoice(false)}>
           <div className="mp-modal mp-feature-choice-modal" onClick={e => e.stopPropagation()} role="dialog" aria-labelledby="mp-feature-choice-title">
             <div className="mp-fc-head">

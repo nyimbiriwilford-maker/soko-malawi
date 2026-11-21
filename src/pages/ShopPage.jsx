@@ -3433,7 +3433,7 @@ if (!shop) {
       <div style={{ height: 48 }} aria-hidden />
 
       {/* ── FEATURE PRODUCT PICKER ── */}
-      {featureSheetOpen && isOwner && (
+      {SHOW_FEATURED_ADS && featureSheetOpen && isOwner && (
         <div
           className="sp-feature-sheet-overlay"
           onClick={() => !featuringId && setFeatureSheetOpen(false)}
