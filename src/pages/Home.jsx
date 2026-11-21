@@ -679,11 +679,13 @@ function GlobalStyles() {
         }
         .soko-cat-grid .soko-cat-tile {
           display: flex !important;
+          flex: none !important;
           flex-direction: column !important;
           align-items: center !important;
           justify-content: flex-start !important;
           gap: 8px !important;
           min-height: 44px !important;
+          scroll-snap-align: none !important;
           padding: 8px 4px !important;
           border: none !important;
           box-shadow: none !important;
@@ -732,24 +734,23 @@ function GlobalStyles() {
           padding: 0;
         }
         .soko-cat-grid {
-          display: flex !important;
-          flex-direction: row !important;
-          flex-wrap: nowrap !important;
-          overflow-x: auto !important;
-          overflow-y: hidden !important;
-          -webkit-overflow-scrolling: touch;
-          scrollbar-width: none;
-          -ms-overflow-style: none;
-          gap: 8px !important;
+          display: grid !important;
+          grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+          gap: 12px 8px !important;
           padding: 8px 0 16px !important;
+          margin: 0 !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          overflow: visible !important;
         }
         .soko-cat-grid::-webkit-scrollbar { display: none !important; }
         .soko-cat-grid .soko-cat-tile {
-          flex: 0 0 auto !important;
-          width: calc((100vw - 44px) / 3) !important;
-          min-width: calc((100vw - 44px) / 3) !important;
-          max-width: calc((100vw - 44px) / 3) !important;
-          min-height: 92px !important;
+          flex: none !important;
+          width: auto !important;
+          min-width: 0 !important;
+          max-width: none !important;
+          min-height: 44px !important;
+          scroll-snap-align: none !important;
         }
         /* ── App shell (not a website) ── */
         .soko-v3 {

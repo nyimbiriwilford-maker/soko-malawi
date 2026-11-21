@@ -121,3 +121,4 @@
 118. Home: skeleton loading for Recommended
 119. Home: category row fills width on laptop
 120. Home: category grid (4x2 phone, 8 across laptop)
+121. Home: fix category grid on phone
