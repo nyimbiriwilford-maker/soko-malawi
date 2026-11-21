@@ -4133,7 +4133,7 @@ function HeroBanner({ navigate, onSearch, user, slides: externalSlides }) {
         @media (min-width: 768px) { .hb-search { margin-top: 16px; } }
         @media (min-width: 1100px) { .hb-search { margin-top: 20px; } }
         .hb-skeleton-box { aspect-ratio: 1200 / 667; height: auto; width: 100%; }
-        @media (min-width: 769px) { .hb-skeleton-box { aspect-ratio: 14 / 3; height: auto; max-height: 300px; width: 100%; } }
+        @media (min-width: 769px) { .hb-skeleton-box { aspect-ratio: 4 / 1; height: auto; max-height: 350px; width: 100%; } }
       `}</style>
       {onSearch && (
         <div className="hb-inner hb-search" style={{ position: 'relative', zIndex: 100, marginBottom: 12 }}>
@@ -4166,7 +4166,7 @@ function HeroBanner({ navigate, onSearch, user, slides: externalSlides }) {
         >
           <style>{`
             .hero-banner-box { aspect-ratio: 1200 / 667; height: auto; width: 100%; }
-            @media (min-width: 769px) { .hero-banner-box { aspect-ratio: 14 / 3; height: auto; max-height: 300px; width: 100%; } }
+            @media (min-width: 769px) { .hero-banner-box { aspect-ratio: 4 / 1; height: auto; max-height: 350px; width: 100%; } }
             @media (max-width: 767px) {
               .hb-overlay { padding: 12px 0 12px 12px !important; max-width: 60% !important; }
               .hb-overlay-title { font-size: 16px !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; display: block !important; -webkit-line-clamp: unset !important; }

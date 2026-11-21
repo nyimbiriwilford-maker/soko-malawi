@@ -2741,11 +2741,11 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
         setPhoneShapeOk(!badShape)
         if (badShape) setPhoneWarning('Shape is not 1200 x 667.')
       } else {
-        const badShape = Math.abs(ratio - 14 / 3) / (14 / 3) > 0.12
+        const badShape = Math.abs(ratio - 4 / 1) / (4 / 1) > 0.12
         setDesktopShapeOk(!badShape)
         let warning = ''
-        if (badShape) warning = 'Shape is not 14:3. The banner will show blurred sides or crop. Use 2800 x 600.'
-        if (img.naturalWidth < 1400) warning = `${warning} Image is under 1400px wide. Use 2800 x 600.`.trim()
+        if (badShape) warning = 'Shape is not 4:1. Use 2800 x 700.'
+        if (img.naturalWidth < 1400) warning = `${warning} Image is under 1400px wide. Use 2800 x 700.`.trim()
         setDesktopWarning(warning)
       }
     } catch (_) {}
@@ -2821,7 +2821,7 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
 {(mode === 'custom' || form.listing_id) && (
 <>
         <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>Desktop and tablet picture, 2800 x 600 (ratio 14:3)</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>Desktop and tablet picture, 2800 x 700 (ratio 4:1)</div>
           <input ref={fileRef} type="file" accept="image/*" hidden
             onChange={e => handleFilePick(e, 'image_url', setUploading, setUploadError)} />
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -2844,7 +2844,7 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
           {desktopWarning && (
             <div style={{ marginTop: 6, fontSize: 12, color: '#dc2626' }}>⚠️ {desktopWarning}</div>
           )}
-          <div style={{ marginTop: 10, width: '100%', maxWidth: 700, aspectRatio: '14 / 3', height: 'auto', borderRadius: 16, overflow: 'hidden', position: 'relative', background: '#eceff1', boxShadow: '0 4px 14px rgba(16,24,40,0.08)' }}>
+          <div style={{ marginTop: 10, width: '100%', maxWidth: 700, aspectRatio: '4 / 1', height: 'auto', borderRadius: 16, overflow: 'hidden', position: 'relative', background: '#eceff1', boxShadow: '0 4px 14px rgba(16,24,40,0.08)' }}>
             {(form.desktop_image_url || form.image_url) ? (
               <img src={form.desktop_image_url || form.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: form.image_pos || 'center center', display: 'block' }} />
             ) : (
