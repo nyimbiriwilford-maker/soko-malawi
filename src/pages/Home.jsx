@@ -646,6 +646,12 @@ function GlobalStyles() {
           max-width: 100% !important;
         }
       }
+      @media (min-width: 1100px) {
+        .soko-cat-grid {
+          grid-template-columns: repeat(8, minmax(0, 1fr)) !important;
+          gap: 16px !important;
+        }
+      }
       @media (max-width: 640px) {
         .soko-cat-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
       }
