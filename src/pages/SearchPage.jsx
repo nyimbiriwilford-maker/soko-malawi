@@ -2261,6 +2261,7 @@ const locationParam = searchParams.get('location') || ''
         notifCount={notifCount}
         search={search}
         setSearch={handleNavSearch}
+        onLaptopSearch={(val) => { handleNavSearch(val); navigate(`/search?q=${encodeURIComponent(val)}`) }}
         navigate={navigate}
         activeDistrict={district}
         onDistrictChange={(d) => {

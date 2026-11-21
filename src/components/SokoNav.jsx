@@ -7,6 +7,7 @@ import { Image as ImageIcon, Wrench, Search, ChevronRight, Clock } from 'lucide-
 import { T } from '../constants/tokens'
 import { MALAWI_DISTRICTS } from '../constants/malawiDistricts'
 import { supabase } from '../lib/supabase'
+import SearchBox from './SearchBox'
 
 const Icon = {
   search: (s = 18) => (
@@ -133,6 +134,7 @@ export default function SokoNav({
   notifCount = 0,
   search = '',
   setSearch,
+  onLaptopSearch,
   navigate,
   onImageFile,
   animKeywords = [],
@@ -152,6 +154,8 @@ export default function SokoNav({
   const [showPostMenu, setShowPostMenu] = useState(false)
   const [isGuest, setIsGuest] = useState(false)
   const [chatCount, setChatCount] = useState(0)
+  const [headerSearchOpen, setHeaderSearchOpen] = useState(false)
+  const [laptopSearch, setLaptopSearch] = useState(search)
   const postRef = useRef(null)
 
   useEffect(() => {
@@ -216,6 +220,12 @@ export default function SokoNav({
     }
   }
 
+  function commitLaptopSearch(val) {
+    setLaptopSearch(val)
+    if (onLaptopSearch) onLaptopSearch(val)
+    else navigate(`/search?q=${encodeURIComponent(val)}`)
+  }
+
   function handleCta() {
     setShowPostMenu(m => !m)
   }
@@ -233,7 +243,7 @@ export default function SokoNav({
 }
 
   return (
-    <nav className="soko-nav-glass">
+    <nav className="soko-nav-glass" style={headerSearchOpen ? { zIndex: 1300 } : undefined}>
       <style>{`
         .soko-nav-glass {
           position: sticky; top: 0; z-index: 100;
@@ -307,6 +317,11 @@ export default function SokoNav({
         @media (min-width: 769px) {
           .soko-nav-mobile { display: none !important; }
         }
+        .hs-search-laptop { display: none !important; }
+        @media (min-width: 1100px) {
+          .hs-search-tablet { display: none !important; }
+          .hs-search-laptop { display: block !important; }
+        }
       `}</style>
 
       {/* ════════════════════ DESKTOP LAYOUT ════════════════════ */}
@@ -326,27 +341,40 @@ export default function SokoNav({
         </div>
 
         {/* Desktop Search */}
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', background: focused ? '#fff' : T.gray100, border: `1.5px solid ${focused ? T.green : 'transparent'}`, borderRadius: 50, padding: '4px 4px 4px 14px', transition: 'border-color 0.2s, background 0.2s', boxShadow: focused ? '0 0 0 3px rgba(15,157,88,0.10)' : 'none', minHeight: 42 }}>
-          <span style={{ color: T.gray600, flexShrink: 0, display: 'flex', alignItems: 'center', marginRight: 8 }}>{Icon.search(15)}</span>
-          <input ref={inputRef} value={search}
-            onChange={e => { const val = e.target.value; setSearch?.(val); navigate(`/search?q=${encodeURIComponent(val)}&focus=1`) }}
-            onFocus={() => { setFocused(true); navigate('/search?focus=1') }}
-            onBlur={() => setFocused(false)}
-            onKeyDown={handleKey}
-            placeholder="Search for anything (e.g. iPhone, Toyota, services...)"
-            style={{ flex: 1, border: 'none', background: 'transparent', fontSize: 13.5, color: T.gray900, outline: 'none', padding: 0, minWidth: 0, cursor: 'text', fontFamily: 'inherit' }}
-          />
-          {search && (
-            <button type="button" onClick={() => setSearch?.('')}
-              style={{ background: T.gray200, border: 'none', borderRadius: '50%', width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: T.gray600, flexShrink: 0, marginRight: 6 }}>
-              {Icon.x(9)}
+        <div className="hs-search-tablet" style={{ flex: 1, minWidth: 0, display: 'flex' }}>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', background: focused ? '#fff' : T.gray100, border: `1.5px solid ${focused ? T.green : 'transparent'}`, borderRadius: 50, padding: '4px 4px 4px 14px', transition: 'border-color 0.2s, background 0.2s', boxShadow: focused ? '0 0 0 3px rgba(15,157,88,0.10)' : 'none', minHeight: 42 }}>
+            <span style={{ color: T.gray600, flexShrink: 0, display: 'flex', alignItems: 'center', marginRight: 8 }}>{Icon.search(15)}</span>
+            <input ref={inputRef} value={search}
+              onChange={e => { const val = e.target.value; setSearch?.(val); navigate(`/search?q=${encodeURIComponent(val)}&focus=1`) }}
+              onFocus={() => { setFocused(true); navigate('/search?focus=1') }}
+              onBlur={() => setFocused(false)}
+              onKeyDown={handleKey}
+              placeholder="Search for anything (e.g. iPhone, Toyota, services...)"
+              style={{ flex: 1, border: 'none', background: 'transparent', fontSize: 13.5, color: T.gray900, outline: 'none', padding: 0, minWidth: 0, cursor: 'text', fontFamily: 'inherit' }}
+            />
+            {search && (
+              <button type="button" onClick={() => setSearch?.('')}
+                style={{ background: T.gray200, border: 'none', borderRadius: '50%', width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: T.gray600, flexShrink: 0, marginRight: 6 }}>
+                {Icon.x(9)}
+              </button>
+            )}
+            <button type="button" onClick={() => { if (search.trim()) navigate(`/search?q=${encodeURIComponent(search.trim())}`) }}
+              style={{ flexShrink: 0, background: T.green, color: '#fff', border: 'none', borderRadius: 50, height: 34, padding: '0 20px', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
+              Search
             </button>
-          )}
-          <button type="button" onClick={() => { if (search.trim()) navigate(`/search?q=${encodeURIComponent(search.trim())}`) }}
-            style={{ flexShrink: 0, background: T.green, color: '#fff', border: 'none', borderRadius: 50, height: 34, padding: '0 20px', fontSize: 13.5, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>
-            Search
-          </button>
-          
+          </div>
+        </div>
+        <div className="hs-search-laptop" style={{ flex: 1, minWidth: 0 }}>
+          <SearchBox
+            value={laptopSearch}
+            onChange={setLaptopSearch}
+            onSubmit={commitLaptopSearch}
+            onSelect={commitLaptopSearch}
+            onFocusChange={setHeaderSearchOpen}
+            navigate={navigate}
+            user={user}
+            placeholder="Search for anything (e.g. iPhone, Toyota, services...)"
+          />
         </div>
 
         {/* Desktop Action Icons */}
