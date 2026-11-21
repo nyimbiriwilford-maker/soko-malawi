@@ -25,6 +25,7 @@ import React, {
 } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Clock, Zap, Eye, MessageCircle, Plus, ChevronRight, Navigation, Sparkles, TrendingUp, Star, UserCheck, AlertTriangle, DollarSign, ArrowRight, ShieldCheck, Search, Heart, Share2, Flag, ExternalLink, Check, BadgeCheck, Store } from 'lucide-react'
+import { Building2, Sprout, Ellipsis, Grid, Car, Smartphone, Shirt, Wrench } from 'lucide-react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { supabase }              from '../lib/supabase'
 import useSearchAnimation        from '../hooks/useSearchAnimation'
@@ -540,6 +541,10 @@ function GlobalStyles() {
       .soko-cat-icon-wrap {
         box-shadow: inset 0 0 0 1px rgba(255,255,255,0.75), 0 2px 6px rgba(15,23,42,0.08);
       }
+      .soko-cat-icon-wrap svg {
+        width: 26px;
+        height: 26px;
+      }
       .soko-cat-more {
         border-style: dashed !important;
       }
@@ -661,6 +666,10 @@ function GlobalStyles() {
         .soko-cat-grid .soko-cat-icon-wrap {
           width: 48px !important;
           height: 48px !important;
+        }
+        .soko-cat-grid .soko-cat-icon-wrap svg {
+          width: 24px !important;
+          height: 24px !important;
         }
       }
       @media (max-width: 1099px) {
@@ -1127,13 +1136,13 @@ function formatPrice(n) {
    no overflow tile).
 ───────────────────────────────────────────────────────────────────────────── */
 const QUICK_CATEGORIES = [
-  { key: 'all',         label: 'All Categories', sub: 'Browse everything', icon: Icon.grid,        fg: '#1f2937', bg: '#eef2f7', isAll: true },
-  { key: 'Vehicles',    label: 'Vehicles',       sub: 'Cars and bikes',    icon: Icon.car,         fg: '#0369a1', bg: '#e0f2fe' },
-  { key: 'Electronics', label: 'Electronics',    sub: 'Phones and laptops',icon: Icon.phone,       fg: '#6d28d9', bg: '#f3e8ff' },
-  { key: 'Clothing',    label: 'Fashion',        sub: 'Clothes and shoes', icon: Icon.shirt,       fg: '#be185d', bg: '#fce7f3' },
-  { key: 'Property',    label: 'Property',       sub: 'Houses and land',   icon: Icon.houseFilled, fg: '#c2410c', bg: '#fff7ed' },
-  { key: 'Agriculture', label: 'Agriculture',    sub: 'Farm and produce',  icon: Icon.leaf,        fg: '#0f766e', bg: '#ecfdf5' },
-  { key: 'Services',    label: 'Services',       sub: 'Trusted experts',   icon: Icon.tools,       fg: '#475569', bg: '#f1f5f9', isServices: true },
+  { key: 'all',         label: 'All',            sub: 'Browse everything', icon: Grid,        fg: '#1f2937', bg: '#eef2f7', isAll: true },
+  { key: 'Vehicles',    label: 'Vehicles',       sub: 'Cars and bikes',    icon: Car,         fg: '#0369a1', bg: '#e0f2fe' },
+  { key: 'Electronics', label: 'Electronics',    sub: 'Phones and laptops',icon: Smartphone,  fg: '#6d28d9', bg: '#f3e8ff' },
+  { key: 'Clothing',    label: 'Fashion',        sub: 'Clothes and shoes', icon: Shirt,       fg: '#be185d', bg: '#fce7f3' },
+  { key: 'Property',    label: 'Property',       sub: 'Houses and land',   icon: Building2,   fg: '#c2410c', bg: '#fff7ed' },
+  { key: 'Agriculture', label: 'Agriculture',    sub: 'Farm and produce',  icon: Sprout,      fg: '#0f766e', bg: '#ecfdf5' },
+  { key: 'Services',    label: 'Services',       sub: 'Trusted experts',   icon: Wrench,      fg: '#475569', bg: '#f1f5f9', isServices: true },
 ]
 
 function CategoryGrid({ navigate, onCategoryChange }) {
@@ -1149,8 +1158,8 @@ function CategoryGrid({ navigate, onCategoryChange }) {
         {/* — Section header — */}
         <div className="cat-header-row" style={{ display:'flex', alignItems:'flex-end', justifyContent:'space-between', marginBottom:20 }}>
           <div>
-            <div className="soko-std-title" style={{ fontFamily:T.fontDisplay, fontSize:20, fontWeight:800, color:'#202124', letterSpacing:-0.3, lineHeight:1.2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>Shop by Category</div>
-            <div style={{ fontSize:13, color:'#5f6368', fontWeight:500, marginTop:4, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>Trusted categories for faster discovery</div>
+            <div className="soko-std-title" style={{ fontFamily:T.fontDisplay, fontSize:20, fontWeight:800, color:'#202124', letterSpacing:-0.3, lineHeight:1.2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>Browse categories</div>
+            <div style={{ fontSize:13, color:'#5f6368', fontWeight:500, marginTop:4, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>Find what you need in Malawi</div>
           </div>
           <button type="button" onClick={() => navigate('/categories')}
             style={{ background:'none', border:'none', padding:0, fontSize:13, fontWeight:700, color:T.green, cursor:'pointer', fontFamily:'inherit', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:4 }}>
@@ -1173,7 +1182,7 @@ function CategoryGrid({ navigate, onCategoryChange }) {
               boxSizing: 'border-box',
             }}>
               <div className="soko-cat-icon-wrap" style={{ width: 44, height: 44, borderRadius: 12, background: item.bg, color: item.fg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                {item.icon(19)}
+                {React.createElement(item.icon, { size: 26, strokeWidth: 1.75 })}
               </div>
               <div style={{ textAlign: 'center', minWidth: 0, width: '100%' }}>
                 <div className="soko-cat-label" style={{ fontSize: 13, fontWeight: 700, color: T.gray900 }}>{item.label}</div>
@@ -1188,7 +1197,7 @@ function CategoryGrid({ navigate, onCategoryChange }) {
             boxSizing: 'border-box',
           }}>
             <div className="soko-cat-icon-wrap" style={{ width: 44, height: 44, borderRadius: 12, background: '#fff4d8', color: T.amberD, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {Icon.layers(18)}
+              {React.createElement(Ellipsis, { size: 26, strokeWidth: 1.75 })}
             </div>
             <div className="soko-cat-label" style={{ fontSize: 13.5, fontWeight: 700, color: T.amberD }}>More</div>
             <div className="soko-cat-sub" style={{ fontSize: 10.5, color: T.gray600 }}>View all</div>
