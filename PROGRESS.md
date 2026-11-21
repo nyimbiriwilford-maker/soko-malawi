@@ -123,3 +123,4 @@
 120. Home: category grid (4x2 phone, 8 across laptop)
 121. Home: fix category grid on phone
 Home: category heading and icons
+Hide Get Featured adverts (SHOW_FEATURED_ADS=false)

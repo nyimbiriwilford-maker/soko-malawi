@@ -22,7 +22,7 @@ import { fetchListingStatus, fetchUserActiveStatus } from '../hooks/useStatuses'
 import { isListingFeatured } from '../utils/homeUtils'
 import { featureExistingListing } from '../lib/featureListing'
 import { featuredPriceLabel } from '../constants/featuredPricing'
-
+import { SHOW_FEATURED_ADS } from '../config/featureFlags'
 const CAT_META = {
   Electronics: { color: '#1a7a4a', bg: '#e6f4ec' },
   Furniture:   { color: '#b45309', bg: '#fef3c7' },
@@ -516,7 +516,7 @@ export default function ListingDetail() {
   const ownerCtas = (featureLabel) => (
     <>
       {featureError && <div style={S.featureErrorInline}>{featureError}</div>}
-      {!isListingFeatured(listing) && (
+      {SHOW_FEATURED_ADS && !isListingFeatured(listing) && (
         <button
           className="ld-btn-hover"
           style={{ ...S.callBtn, color: '#b45309', borderColor: '#fde68a', background: '#fffbeb' }}
@@ -1382,7 +1382,7 @@ export default function ListingDetail() {
                 <div style={S.barTitle}>{listing.title}</div>
               </div>
               <div style={{ display: 'flex', gap: 10 }}>
-                {!isListingFeatured(listing) && (
+                {SHOW_FEATURED_ADS && !isListingFeatured(listing) && (
                   <button
                     className="ld-btn-hover"
                     style={{ ...S.barCallBtn, color: '#b45309', borderColor: '#fde68a', background: '#fffbeb' }}

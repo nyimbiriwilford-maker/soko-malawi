@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { T } from '../../constants/tokens'
 import { supabase } from '../../lib/supabase'
+import { SHOW_FEATURED_ADS } from '../../config/featureFlags'
 
 /* ── Particle mesh canvas ─────────────────────────────────── */
 function ParticleMesh({ accent }) {
@@ -125,10 +126,10 @@ function buildAds(stats) {
       accent:   'rgba(74,222,128,',
       btnColor: '#4ade80',
     },
-    {
-      tip:      '⚡ Grow faster',
+    ...(SHOW_FEATURED_ADS ? [{
+      tip:      '�s� Grow faster',
       tipColor: '#facc15',
-      headline: 'Featured listings get 10× more views',
+      headline: 'Featured listings get 10�- more views',
       sub:      'Boost your listing to the top of search results and the homepage for just MK 500.',
       chips:    ['Top placement', 'Homepage banner', 'MK 500 only'],
       cta:      'Boost My Listing',
@@ -136,7 +137,7 @@ function buildAds(stats) {
       gradient: 'linear-gradient(120deg, #110d00 0%, #211700 55%, #0d0900 100%)',
       accent:   'rgba(250,204,21,',
       btnColor: '#facc15',
-    },
+    }] : []),
     {
       tip:      '🔔 Stay ahead',
       tipColor: '#60a5fa',

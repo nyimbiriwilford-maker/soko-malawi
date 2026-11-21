@@ -5,6 +5,7 @@ import { uploadToR2, getR2Url, deleteFromR2 } from '../lib/r2'
 import { isListingFeatured, isJobListing } from '../utils/homeUtils'
 import { featureExistingListing } from '../lib/featureListing'
 import { featuredPriceLabel, FEATURED_DURATION_DAYS } from '../constants/featuredPricing'
+import { SHOW_FEATURED_ADS } from '../config/featureFlags'
 import VouchSection from '../components/VouchSection'
 import TrustBadge from '../components/TrustBadge'
 import StatusPicker from '../components/StatusPicker'
@@ -2050,7 +2051,7 @@ export default function Profile() {
         cta: 'Post',
         onClick: () => navigate('/post'),
       })
-    } else if (featuredListings.length === 0) {
+    } else if (SHOW_FEATURED_ADS && featuredListings.length === 0) {
       tips.push({
         id: 'feature',
         text: 'Feature a listing to reach more buyers this week.',
@@ -5741,6 +5742,7 @@ export default function Profile() {
           </div>
 
           {/* 8. Featured Promotion */}
+          {SHOW_FEATURED_ADS && (
           <div className="mp-insights-card mp-promo-card">
             <div className="mp-promo-head">
               <span className="mp-promo-head-icon" aria-hidden="true">
@@ -5839,10 +5841,11 @@ export default function Profile() {
                   <MpIcon name={activeListing.length ? 'sparkles' : 'plusCircle'} size={16} />
                   {activeListing.length ? 'Feature a listing' : 'Post & feature'}
                 </button>
-              </>
-            )}
-          </div>
+        </>
+      )}
         </div>
+          )}
+      </div>
       </aside>
       </div>
 

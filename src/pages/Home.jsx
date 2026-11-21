@@ -58,7 +58,7 @@ import {
   FEATURED_DURATION_DAYS,
   FEATURED_PRICE_MWK,
 } from '../constants/featuredPricing'
-
+import { SHOW_FEATURED_ADS } from '../config/featureFlags'
 import HomeStatusSection from '../components/HomeStatusSection'
 import StatusUploadModal from '../components/StatusUploadModal'
 import FeaturedListingsRow, { FEATURED_POOL_SIZE } from '../components/FeaturedListings'
@@ -5267,9 +5267,11 @@ export default function Home() {
 
       {/* — Categories → Featured transition — */}
       <div className="soko-banner-featured-wrap">
-      <div className="soko-settle soko-settle-d3">
-        <FeaturedRevenueBanner navigate={navigate} user={user} />
-      </div>
+        {SHOW_FEATURED_ADS && (
+          <div className="soko-settle soko-settle-d3">
+            <FeaturedRevenueBanner navigate={navigate} user={user} />
+          </div>
+        )}
 
       <style>{`
         .soko-featured-banner { margin-top: 8px !important; margin-bottom: 0 !important; }

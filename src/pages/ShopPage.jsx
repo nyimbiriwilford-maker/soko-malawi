@@ -6,6 +6,7 @@ import VerificationModal from '../components/VerificationModal'
 import SokoNav from '../components/SokoNav'
 import { featureExistingListing } from '../lib/featureListing'
 import { FEATURED_DURATION_DAYS, featuredPriceLabel } from '../constants/featuredPricing'
+import { SHOW_FEATURED_ADS } from '../config/featureFlags'
 import { isListingFeatured } from '../utils/homeUtils'
 
 const CATEGORIES = [
@@ -3201,6 +3202,7 @@ if (!shop) {
         <aside className="sp-sidebar" aria-label="Shop details">
           <div className="sp-sidebar-sticky" tabIndex={0}>
           {/* Product featuring advert */}
+          {SHOW_FEATURED_ADS && (
           <div className="sp-feature-ad">
             <div className="sp-feature-ad-badge">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
@@ -3271,6 +3273,7 @@ if (!shop) {
               </>
             )}
           </div>
+          )}
 
           <div className="sp-side-card">
             <div className="sp-side-title">About this shop</div>
