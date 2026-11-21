@@ -89,3 +89,4 @@
 86. profile-errors step 4: preview restarted on port 4175
 87. home-banner-contain: object-fit contain applied to phone and tablet banner images
 88. home-banner-contain: bump sw to v67
+89. otp-functions: allow sokomw.com and Vercel preview origins in CORS

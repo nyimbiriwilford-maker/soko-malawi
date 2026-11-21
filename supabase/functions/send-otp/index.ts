@@ -4,11 +4,9 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const ALLOWED_ORIGINS = new Set([
+  'https://sokomw.com',
+  'https://www.sokomw.com',
   'https://soko-malawi.vercel.app',
-  'http://localhost:5173',
-  'http://localhost:4173',
-  'http://127.0.0.1:5173',
-  'http://127.0.0.1:4173',
 ])
 
 const MAX_REQUESTS = 3
@@ -17,7 +15,17 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 function corsHeaders(req: Request) {
   const origin = req.headers.get('Origin') || ''
-  const allow = ALLOWED_ORIGINS.has(origin) ? origin : 'https://soko-malawi.vercel.app'
+  const isLocalhost = (value: string) => /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/i.test(value)
+  const extraOrigins = (Deno.env.get('ALLOWED_ORIGINS') || '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter((value) => /^https?:\/\//.test(value) && value !== '*' && !isLocalhost(value))
+  const isAllowed = !isLocalhost(origin) && (
+    ALLOWED_ORIGINS.has(origin) ||
+    extraOrigins.includes(origin) ||
+    /^https:\/\/soko-malawi[a-z0-9-]*\.vercel\.app$/.test(origin)
+  )
+  const allow = isAllowed ? origin : 'https://sokomw.com'
   return {
     'Access-Control-Allow-Origin': allow,
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
