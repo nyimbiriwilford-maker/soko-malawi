@@ -128,3 +128,4 @@ Home: gap between categories and Latest Listings
 Hide feature-a-product options (SHOW_FEATURED_ADS)
 Home statuses: remove type badge, show price
 Home statuses: compact cards, Add status card, heading
+Home statuses: fix card layout overlap and price cut-off

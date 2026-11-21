@@ -215,7 +215,7 @@ function LazyMedia({ src, isVideo, style }) {
   )
 }
 
-function StoryCard({ s, isOwn, viewedIds, onClick, locationLabel, isMobile }) {
+function StoryCard({ s, isOwn, viewedIds, onClick, locationLabel }) {
   const name = s.profiles?.full_name || 'Seller'
   const avatar = s.profiles?.avatar_url
   const media = s.media_urls?.[0]
@@ -226,8 +226,8 @@ function StoryCard({ s, isOwn, viewedIds, onClick, locationLabel, isMobile }) {
   const group = s._ownGroup || [s]
   const ringItems = group.map(st => ({ id: st.id, viewed: viewedIds.has(st.id) }))
   const tagged = s.tagged || {}
-  // Text boards already show the words on the tile — don't repeat them in the label
   const title = tagged?.title || tagged?.name || null
+  const statusText = (s.content || '').trim()
 
   const taggedKind = s.tagged_kind || (s.tagged_listing_id ? 'listing' : null)
   const priceValue = tagged?.price
@@ -249,152 +249,14 @@ function StoryCard({ s, isOwn, viewedIds, onClick, locationLabel, isMobile }) {
   const unseenCount = isOwn ? 0 : group.filter(x => !viewedIds.has(x.id)).length
   const isViewedCard = !isOwn && unseenCount === 0
 
-  if (isMobile) {
-    return (
-      <button type="button" className="hs-story-btn"
-        onClick={onClick}
-        aria-label={isOwn ? name + ', your story' : isViewedCard ? name + ', viewed' : name + ', ' + unseenCount + ' new statuses'}
-        style={{
-flexShrink: 0,
-position: 'relative', cursor: 'pointer', border: 'none', padding: 0, fontFamily: 'inherit',
-textAlign: 'left', background: '#111',
-          scrollSnapAlign: 'start',
-          boxShadow: isOwn
-            ? '0 4px 12px rgba(0,0,0,0.08)'
-            : isViewedCard
-              ? '0 0 0 1px rgba(0,0,0,0.08)'
-              : '0 0 0 2.5px #0F9D58, 0 0 0 4.5px #e8f5ee',
-          transition: 'transform 0.25s ease, box-shadow 0.25s ease',
-        }}
-      >
-         {media ? (
-           <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', filter: isViewedCard ? 'saturate(0.75)' : undefined }}>
-             {isViewedCard && (
-               <div style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.28)', zIndex: 2, pointerEvents: 'none' }} />
-             )}
-             {boardColor ? (
-               <StatusTextBoard color={boardColor} text={s.content} fontSize={14} maxLines={5} className="board"
-                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
-             ) : (
-               <LazyMedia src={media} isVideo={isVideo}
-                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
-             )}
-             {isVideo && (
-               <div style={{ position: 'absolute', bottom: 8, right: 8, width: 22, height: 22, borderRadius: '50%', background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3 }}>
-                 <svg width="10" height="10" viewBox="0 0 24 24" fill="#fff" aria-hidden><polygon points="8,5 19,12 8,19" /></svg>
-               </div>
-             )}
-           </div>
-        ) : avatar ? (
-          <img src={avatar} alt=""
-            style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-            loading="lazy" />
-        ) : null}
-
-        <div className="hs-overlay" style={{
-          position: 'absolute', inset: 0,
-          background: 'linear-gradient(0deg, rgba(0,0,0,0.65) 0%, transparent 45%)',
-        }} />
-        <div style={{
-          position: 'absolute', bottom: 8, right: 8, zIndex: 5,
-          minWidth: 24, height: 20, borderRadius: 10,
-          background: isOwn ? 'rgba(0,0,0,0.7)' : isViewedCard ? 'rgba(0,0,0,0.55)' : '#0F9D58',
-          backdropFilter: 'blur(8px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          padding: '0 6px',
-          fontSize: 11, fontWeight: 700, color: '#fff',
-        }}>
-          {isOwn ? statusCount : isViewedCard ? statusCount : unseenCount}
-        </div>
-
-        <div style={{
-          position: 'absolute', top: 10, left: 10, zIndex: 3,
-          display: 'flex', alignItems: 'center', gap: 6,
-          maxWidth: 'calc(100% - 20px)',
-        }}>
-           <div style={{ position: 'relative', flexShrink: 0 }}>
-              <div className="hs-avatar" style={{
-                width: 28, height: 28, borderRadius: '50%', overflow: 'hidden',
-                boxShadow: isOwn
-                  ? '0 0 0 2px #fff, 0 0 0 4px #0F9D58'
-                  : isViewedCard
-                    ? '0 0 0 2px #fff, 0 0 0 4px #c4c7cc'
-                    : '0 0 0 2px #fff, 0 0 0 4px #0F9D58',
-               background: 'linear-gradient(135deg,#0F9D58,#22c55e)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#fff', fontSize: 12, fontWeight: 800,
-              }}>
-               {avatar
-                ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                : initial}
-            </div>
-            {isVerified && (
-              <div style={{
-                position: 'absolute', bottom: 0, right: 0,
-                width: 16, height: 16, borderRadius: '50%', background: '#fff',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
-              }}>
-                <VerifiedBadge size={12} />
-              </div>
-            )}
-          </div>
-          <span style={{
-            fontSize: 12, fontWeight: 700, color: isOwn ? '#fff' : isViewedCard ? 'rgba(255,255,255,0.85)' : '#fff',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            textShadow: '0 1px 4px rgba(0,0,0,0.5)',
-          }}>
-            {isOwn ? 'Your story' : name.split(' ')[0]}
-          </span>
-        </div>
-
-        <div style={{
-          position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 2,
-          padding: '18px 34px 7px 8px',
-          background: 'linear-gradient(0deg, rgba(0,0,0,0.65) 0%, transparent 100%)',
-        }}>
-           {title && (
-             <div style={{
-               display: 'inline-block', marginBottom: 4,
-               fontSize: 12, fontWeight: 700, color: '#fff',
-               borderRadius: 999, padding: '3px 9px',
-               background: 'rgba(0,0,0,0.45)',
-               maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-               lineHeight: 1.4,
-             }}>
-               {title}
-             </div>
-           )}
-           {priceLine && (
-             <div style={{
-               marginBottom: 4, marginRight: 30, maxWidth: 'calc(100% - 30px)',
-               fontFamily: G.fontDisplay, fontWeight: 700, fontSize: 14,
-               color: '#ffffff', textShadow: '0 1px 3px rgba(0,0,0,0.45)',
-               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-             }}>
-               {priceLine}
-             </div>
-           )}
-
-          <div style={{
-            fontSize: 11, fontWeight: 500, color: 'rgba(255,255,255,0.8)',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>
-            {locationLabel && <span>{locationLabel} · </span>}
-            {timeAgo(s.created_at)}
-          </div>
-        </div>
-      </button>
-    )
-  }
-
-   return (
+  return (
     <button type="button" className="hs-story-btn"
       onClick={onClick}
       aria-label={isOwn ? name + ', your story' : isViewedCard ? name + ', viewed' : name + ', ' + unseenCount + ' new statuses'}
       style={{
         flexShrink: 0,
-        position: 'relative', cursor: 'pointer', border: 'none', padding: 0, fontFamily: 'inherit',
+        display: 'flex', flexDirection: 'column', padding: 10, boxSizing: 'border-box',
+        overflow: 'hidden', position: 'relative', cursor: 'pointer', border: 'none', fontFamily: 'inherit',
         textAlign: 'left', background: '#111',
         scrollSnapAlign: 'start',
         boxShadow: isOwn
@@ -405,129 +267,132 @@ textAlign: 'left', background: '#111',
         transition: 'transform 0.25s ease, box-shadow 0.25s ease',
       }}
     >
-{media ? (
-          <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', filter: isViewedCard ? 'saturate(0.75)' : undefined }}>
-            {isViewedCard && (
-              <div style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.28)', zIndex: 2, pointerEvents: 'none' }} />
-            )}
-            {boardColor ? (
-               <StatusTextBoard color={boardColor} text={s.content} fontSize={14} maxLines={5} className="board"
-                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
-             ) : (
-               <LazyMedia src={media} isVideo={isVideo}
-                 style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
-             )}
-             {isVideo && (
-               <div style={{ position: 'absolute', bottom: 8, right: 8, width: 22, height: 22, borderRadius: '50%', background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 3 }}>
-                 <svg width="10" height="10" viewBox="0 0 24 24" fill="#fff" aria-hidden><polygon points="8,5 19,12 8,19" /></svg>
-               </div>
-             )}
-            </div>
-       ) : avatar ? (
-        <img src={avatar} alt=""
-          style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
-          loading="lazy" />
+      {media ? (
+        <div style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', filter: isViewedCard ? 'saturate(0.75)' : undefined }}>
+          {isViewedCard && (
+            <div style={{ position: 'absolute', inset: 0, background: 'rgba(15,23,42,0.28)', zIndex: 0, pointerEvents: 'none' }} />
+          )}
+          {boardColor ? (
+            <StatusTextBoard color={boardColor} text="" className="board"
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+          ) : (
+            <LazyMedia src={media} isVideo={isVideo}
+              style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }} />
+          )}
+        </div>
       ) : null}
 
       <div className="hs-overlay" style={{
-        position: 'absolute', inset: 0,
-        background: 'linear-gradient(0deg, rgba(0,0,0,0.65) 0%, transparent 45%)',
+        position: 'absolute', inset: 0, zIndex: 0,
+        background: 'linear-gradient(0deg, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.25) 40%, rgba(0,0,0,0.25) 65%, rgba(0,0,0,0.55) 100%)',
       }} />
 
       <div style={{
-        position: 'absolute', bottom: 8, right: 8, zIndex: 5,
-        minWidth: 24, height: 20, borderRadius: 10,
+        position: 'absolute', top: 8, right: 8, zIndex: 5,
+        width: 20, height: 20, borderRadius: '50%',
         background: isOwn ? 'rgba(0,0,0,0.7)' : isViewedCard ? 'rgba(0,0,0,0.55)' : '#0F9D58',
         backdropFilter: 'blur(8px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: '0 6px',
+        padding: 0,
         fontSize: 11, fontWeight: 700, color: '#fff',
       }}>
         {isOwn ? statusCount : isViewedCard ? statusCount : unseenCount}
       </div>
 
       {isVideo && (
-        <div className="hs-tablet-hide" style={{
-          position: 'absolute', top: '50%', left: '50%', zIndex: 2,
-          width: 28, height: 28, borderRadius: '50%',
-          marginTop: -14, marginLeft: -14,
+        <div style={{
+          position: 'absolute', bottom: 8, right: 8, zIndex: 3,
+          width: 22, height: 22, borderRadius: '50%',
           background: 'rgba(0,0,0,0.5)',
-          border: '2px solid rgba(255,255,255,0.3)',
-          backdropFilter: 'blur(4px)',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="#fff" aria-hidden>
-            <polygon points="8,5 19,12 8,19" />
-          </svg>
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="#fff" aria-hidden><polygon points="8,5 19,12 8,19" /></svg>
         </div>
       )}
 
       <div style={{
-        position: 'absolute', bottom: 0, left: 0, right: 0,
-        padding: '24px 34px 10px 10px', zIndex: 2,
-        background: 'linear-gradient(0deg, rgba(0,0,0,0.7) 0%, transparent 100%)',
+        position: 'relative', zIndex: 2, flex: 'none',
+        display: 'flex', alignItems: 'center', gap: 8, paddingRight: 28, minWidth: 0,
       }}>
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4,
-        }}>
-          <div style={{ position: 'relative' }}>
-            <StoryStatusRing items={ringItems} size={34}>
-               <div className="hs-avatar" style={{
-                 width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden',
-                 background: 'linear-gradient(135deg,#0F9D58,#22c55e)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                color: '#fff', fontSize: 11, fontWeight: 800,
-              }}>
-                {avatar
-                  ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  : initial}
-              </div>
-            </StoryStatusRing>
-            {isVerified && (
-              <div style={{
-                position: 'absolute', bottom: 0, right: 0,
-                width: 16, height: 16, borderRadius: '50%', background: '#fff',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
-              }}>
-                <VerifiedBadge size={12} />
-              </div>
-            )}
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="hs-name" style={{
-              fontSize: 12, fontWeight: 700, color: isOwn ? '#fff' : isViewedCard ? 'rgba(255,255,255,0.85)' : '#fff',
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+        <div style={{ position: 'relative', flexShrink: 0 }}>
+          <StoryStatusRing items={ringItems} size={32}>
+            <div className="hs-avatar" style={{
+              width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden',
+              background: 'linear-gradient(135deg,#0F9D58,#22c55e)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              color: '#fff', fontSize: 12, fontWeight: 800,
             }}>
-              {isOwn ? 'Your story' : name.split(' ')[0]}
+              {avatar
+                ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                : initial}
             </div>
+          </StoryStatusRing>
+          {isVerified && (
             <div style={{
-              fontSize: 11, fontWeight: 500, color: isOwn ? 'rgba(255,255,255,0.6)' : isViewedCard ? 'rgba(255,255,255,0.65)' : 'rgba(255,255,255,0.8)',
-              display: 'flex', alignItems: 'center', gap: 4,
+              position: 'absolute', bottom: 0, right: 0,
+              width: 14, height: 14, borderRadius: '50%', background: '#fff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
             }}>
-              {locationLabel && <span>{locationLabel} · </span>}
-              {timeAgo(s.created_at)}
+              <VerifiedBadge size={10} />
             </div>
+          )}
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{
+            fontSize: 12, fontWeight: 700, color: '#fff',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            textShadow: '0 1px 4px rgba(0,0,0,0.5)',
+          }}>
+            {isOwn ? 'Your story' : name.split(' ')[0]}
+          </div>
+          <div style={{
+            fontSize: 11, fontWeight: 500, color: 'rgba(255,255,255,0.85)',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            textShadow: '0 1px 4px rgba(0,0,0,0.5)',
+          }}>
+            {locationLabel && <span>{locationLabel} · </span>}
+            {timeAgo(s.created_at)}
           </div>
         </div>
+      </div>
+
+      <div style={{
+        position: 'relative', zIndex: 2, flex: 1, minHeight: 0, overflow: 'hidden',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '6px 0',
+      }}>
+        {statusText && (
+          <div style={{
+            margin: 0, maxWidth: '100%',
+            fontSize: 14, fontWeight: 700, color: '#fff', lineHeight: 1.25,
+            textAlign: 'center', textShadow: '0 1px 4px rgba(0,0,0,0.6)',
+            wordBreak: 'break-word',
+            display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+          }}>
+            {statusText}
+          </div>
+        )}
+      </div>
+
+      <div style={{ position: 'relative', zIndex: 2, flex: 'none' }}>
         {title && (
           <div style={{
-            display: 'inline-block', marginBottom: 4,
-            fontSize: 12, fontWeight: 700, color: '#fff',
+            display: 'inline-block', boxSizing: 'border-box', maxWidth: '100%', marginBottom: 4,
+            fontSize: 11, fontWeight: 700, color: '#fff',
             borderRadius: 999, padding: '3px 9px',
             background: 'rgba(0,0,0,0.45)',
-            maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             lineHeight: 1.4,
           }}>
             {title}
           </div>
         )}
         {priceLine && (
-          <div style={{
-            marginRight: 30, maxWidth: 'calc(100% - 30px)',
-            fontFamily: G.fontDisplay, fontWeight: 700, fontSize: 14,
+          <div className="hs-price-line" style={{
+            width: '100%',
+            fontFamily: "'Sora', 'Inter', system-ui, sans-serif", fontWeight: 700,
             color: '#ffffff', textShadow: '0 1px 3px rgba(0,0,0,0.45)',
-            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            whiteSpace: 'nowrap', overflow: 'visible', maxWidth: 'none',
           }}>
             {priceLine}
           </div>
@@ -876,6 +741,8 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
         }
          .hs-story-btn, .hs-add-btn, .hs-error-card { flex: 0 0 130px; width: 130px; height: 190px; border-radius: 16px; box-sizing: border-box; overflow: hidden; position: relative; scroll-snap-align: start; background: #0f172a; box-shadow: 0 1px 3px rgba(0,0,0,0.10), 0 4px 14px rgba(0,0,0,0.08); cursor: pointer; transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.28s cubic-bezier(0.22, 1, 0.36, 1); will-change: transform; }
          @media (min-width: 769px) { .hs-story-btn, .hs-add-btn, .hs-error-card { flex-basis: 150px; width: 150px; height: 220px; } }
+         .hs-price-line { font-size: 14px; }
+         @media (max-width: 768px) { .hs-price-line { font-size: 12px; } }
         .hs-story-btn img, .hs-story-btn video, .hs-story-btn .board { transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
         .hs-story-btn::after { content: ''; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1.5px rgba(15,157,88,0); transition: box-shadow 0.28s ease; pointer-events: none; }
         @media (hover: hover) and (pointer: fine) {
@@ -1015,7 +882,6 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
                         viewedIds={viewedIds}
                         onClick={() => openStoryGroup(s)}
                         locationLabel={getLocationText(s)}
-                        isMobile={isMobile}
                       />
                     ))}
                   </div>
