@@ -111,4 +111,5 @@
 108. Commit header-search: live suggestions and notify on laptop
 109. Home: hide hero search (.hb-search) at min-width 1100px only; phone/tablet unchanged
 110. Header search on tablet: shared SearchBox shown from 769px up, old tablet input hidden at same breakpoint, .hb-search hidden from 769px; phone magnifier unchanged
+111. Home header-banner spacing: .hb-wrap padding-top 16px at 769px+ and 20px at 1100px+; phone unchanged, early access strip has no bottom margin so no double gap
 

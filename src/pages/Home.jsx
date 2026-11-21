@@ -4062,12 +4062,6 @@ function HeroBanner({ navigate, onSearch, user, slides: externalSlides }) {
   const [isWide, setIsWide] = useState(false)
   const [boxRatio, setBoxRatio] = useState(2.5)
   const boxRef = useRef(null)
-  const [winW, setWinW] = useState(typeof window !== 'undefined' ? window.innerWidth : 1100)
-  useEffect(() => {
-    const onResize = () => setWinW(window.innerWidth)
-    window.addEventListener('resize', onResize)
-    return () => window.removeEventListener('resize', onResize)
-  }, [])
   const [imgAttempt, setImgAttempt] = useState(0)
   const [touchStartX, setTouchStartX] = useState(null)
   const [allFailed, setAllFailed] = useState(false)
@@ -4084,7 +4078,7 @@ function HeroBanner({ navigate, onSearch, user, slides: externalSlides }) {
       const bh = el ? el.clientHeight : 0
       const br = bw && bh ? bw / bh : boxRatio
       if (bw && bh) setBoxRatio(br)
-      setIsWide(Math.abs(ratio - br) / br <= 0.25)
+      setIsWide(Math.abs(ratio - br) / br <= 0.12)
     }
   }
   const handleImgError = () => {
@@ -4125,7 +4119,6 @@ function HeroBanner({ navigate, onSearch, user, slides: externalSlides }) {
   const overlayTitle = slide?.title
   const overlayDesc = slide?.description || slide?.desc
   const showOverlay = !!(overlayTitle && String(overlayTitle).trim())
-  const boxH = winW >= 1100 ? 300 : winW >= 768 ? 240 : 190
 
   return (
     <div className="hb-wrap" style={{ marginBottom: 16 }}>
@@ -4139,6 +4132,8 @@ function HeroBanner({ navigate, onSearch, user, slides: externalSlides }) {
         .hb-search { margin-top: 12px; }
         @media (min-width: 768px) { .hb-search { margin-top: 16px; } }
         @media (min-width: 1100px) { .hb-search { margin-top: 20px; } }
+        .hb-skeleton-box { aspect-ratio: 1200 / 667; height: auto; width: 100%; }
+        @media (min-width: 769px) { .hb-skeleton-box { aspect-ratio: 14 / 3; height: auto; max-height: 300px; width: 100%; } }
       `}</style>
       {onSearch && (
         <div className="hb-inner hb-search" style={{ position: 'relative', zIndex: 100, marginBottom: 12 }}>
@@ -4158,7 +4153,7 @@ function HeroBanner({ navigate, onSearch, user, slides: externalSlides }) {
       )}
 
       {loading ? (
-        <div className="hb-inner"><div style={{ height: boxH, background: '#f1f3f4', borderRadius: 16, width: '100%' }} /></div>
+        <div className="hb-inner"><div className="hb-skeleton-box" style={{ background: '#f1f3f4', borderRadius: 16 }} /></div>
       ) : n > 0 ? (
         <div className="hb-inner">
         <div
@@ -4167,10 +4162,11 @@ function HeroBanner({ navigate, onSearch, user, slides: externalSlides }) {
           onClick={handleBannerClick}
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
-          style={{ position: 'relative', width: '100%', height: boxH, borderRadius: 16, overflow: 'hidden', boxShadow: '0 4px 14px rgba(16,24,40,0.08)', cursor: 'pointer', contain: 'layout' }}
+          style={{ position: 'relative', width: '100%', borderRadius: 16, overflow: 'hidden', boxShadow: '0 4px 14px rgba(16,24,40,0.08)', cursor: 'pointer', contain: 'layout' }}
         >
           <style>{`
-            .hero-banner-box { height: 190px; }
+            .hero-banner-box { aspect-ratio: 1200 / 667; height: auto; width: 100%; }
+            @media (min-width: 769px) { .hero-banner-box { aspect-ratio: 14 / 3; height: auto; max-height: 300px; width: 100%; } }
             @media (max-width: 767px) {
               .hb-overlay { padding: 12px 0 12px 12px !important; max-width: 60% !important; }
               .hb-overlay-title { font-size: 16px !important; white-space: nowrap !important; overflow: hidden !important; text-overflow: ellipsis !important; display: block !important; -webkit-line-clamp: unset !important; }
