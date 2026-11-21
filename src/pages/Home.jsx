@@ -3931,6 +3931,8 @@ function mapBanner(row) {
     image: resolveBannerImageUrl(row.image_url || row.desktop_image_url || row.mobile_image_url),
     desktopImage: resolveBannerImageUrl(row.desktop_image_url || row.image_url || row.mobile_image_url),
     mobileImage: resolveBannerImageUrl(row.mobile_image_url || row.image_url || row.desktop_image_url),
+    layout: row.layout === 'split' ? 'split' : 'picture',
+    bgColor: /^#[0-9a-fA-F]{6}$/.test(row.bg_color || '') ? row.bg_color : '#e6f6ed',
     imagePos: row.image_pos || 'center center',
     cta: row.button_text || '',
     path: row.button_link || '/',
@@ -4134,6 +4136,16 @@ function HeroBanner({ navigate, onSearch, user, slides: externalSlides }) {
         @media (min-width: 1100px) { .hb-search { margin-top: 20px; } }
         .hb-skeleton-box { aspect-ratio: 1200 / 667; height: auto; width: 100%; }
         @media (min-width: 769px) { .hb-skeleton-box { aspect-ratio: 4 / 1; height: auto; max-height: 350px; width: 100%; } }
+        .hb-split-desktop { display: none; position: absolute; inset: 0; grid-template-columns: 55% 45%; height: 100%; align-items: center; z-index: 1; }
+        @media (min-width: 769px) { .hb-split-desktop { display: grid; } }
+        .hb-split-left { padding-left: 40px; padding-right: 16px; }
+        .hb-split-title { font-family: 'Sora', sans-serif; font-weight: 800; font-size: clamp(26px, 3vw, 42px); line-height: 1.1; color: #202124; margin: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .hb-split-desc { font-size: 15px; color: #5f6368; margin-top: 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        @media (min-width: 769px) and (max-width: 1000px) { .hb-split-desc { font-size: 14px; } }
+        .hb-split-btn { margin-top: 14px; height: 44px; padding: 0 22px; border-radius: 999px; background: #0F9D58; color: #fff; font-weight: 700; font-size: 15px; border: none; }
+        .hb-split-img { width: 100%; height: 100%; object-fit: contain; object-position: right center; padding: 16px 24px 16px 0; }
+        .hb-picture-path { display: block; }
+        @media (min-width: 769px) { .hb-split .hb-picture-path { display: none !important; } .hb-split .hb-overlay { display: none !important; } }
       `}</style>
       {onSearch && (
         <div className="hb-inner hb-search" style={{ position: 'relative', zIndex: 100, marginBottom: 12 }}>
@@ -4158,7 +4170,7 @@ function HeroBanner({ navigate, onSearch, user, slides: externalSlides }) {
         <div className="hb-inner">
         <div
           ref={boxRef}
-          className="hero-banner-box"
+          className={`hero-banner-box ${slide.layout === 'split' ? 'hb-split' : ''}`}
           onClick={handleBannerClick}
           onTouchStart={onTouchStart}
           onTouchEnd={onTouchEnd}
@@ -4183,7 +4195,7 @@ function HeroBanner({ navigate, onSearch, user, slides: externalSlides }) {
                     {slide.title}
                   </div>
                 )}
-                {!allFailed && !isWide && (
+                {!allFailed && !isWide && slide.layout !== 'split' && (
                   <picture style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 0 }}>
                     {slide.desktopImage && <source media="(min-width: 768px)" srcSet={slide.desktopImage} />}
                     {slide.mobileImage && <source media="(max-width: 767px)" srcSet={slide.mobileImage} />}
@@ -4196,8 +4208,27 @@ function HeroBanner({ navigate, onSearch, user, slides: externalSlides }) {
                     />
                   </picture>
                 )}
+                {!allFailed && slide.layout === 'split' && (
+                  <div className="hb-split-desktop" style={{ background: slide.bgColor }}>
+                    <div className="hb-split-left">
+                      {slide.title && <h2 className="hb-split-title">{slide.title}</h2>}
+                      {slide.desc && <p className="hb-split-desc">{slide.desc}</p>}
+                      {slide.cta && <button type="button" className="hb-split-btn">{slide.cta}</button>}
+                    </div>
+                    <div style={{ height: '100%' }}>
+                      <img
+                        className="hb-split-img"
+                        src={imgAttempt === 0 ? (slide.desktopImage || slide.image || '') : (phoneImageUrls[imgAttempt] || '')}
+                        alt=""
+                        aria-hidden="true"
+                        onError={handleImgError}
+                      />
+                    </div>
+                  </div>
+                )}
                 {!allFailed && (
-                  <picture style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 1 }}>
+                  <div className="hb-picture-path">
+                    <picture style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', zIndex: 1 }}>
                     {slide.desktopImage && <source media="(min-width: 768px)" srcSet={slide.desktopImage} />}
                     {slide.mobileImage && <source media="(max-width: 767px)" srcSet={slide.mobileImage} />}
                     <img
@@ -4214,6 +4245,7 @@ function HeroBanner({ navigate, onSearch, user, slides: externalSlides }) {
                       onError={handleImgError}
                     />
                   </picture>
+                  </div>
                 )}
               </div>
               {showOverlay && (

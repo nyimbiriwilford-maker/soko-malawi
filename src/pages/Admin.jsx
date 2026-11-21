@@ -211,8 +211,10 @@ export default function Admin() {
       priority: b.priority ?? 5,
       status: b.status || 'draft',
       accent: b.accent || '#0F9D58',
-      image_pos: b.image_pos || 'center center',
-      badge: b.badge || '',
+       image_pos: b.image_pos || 'center center',
+       layout: b.layout === 'split' ? 'split' : 'picture',
+       bg_color: b.layout === 'split' && /^#[0-9a-fA-F]{6}$/.test(b.bg_color || '') ? b.bg_color : null,
+       badge: b.badge || '',
       badge_icon: b.badge_icon || '',
       start_date: b.start_date ? `${b.start_date}T00:00:00Z` : null,
       end_date: b.end_date ? `${b.end_date}T23:59:59.999Z` : null,
@@ -2549,6 +2551,8 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
     listing_id: banner?.listing_id || null,
     cta_label: banner?.cta_label || '',
     image_pos: banner?.image_pos || 'center center',
+    layout: banner?.layout === 'split' ? 'split' : 'picture',
+    bg_color: /^#[0-9a-fA-F]{6}$/.test(banner?.bg_color || '') ? banner.bg_color : '#e6f6ed',
   })
   const [pickerOpen, setPickerOpen] = useState(false)
   const [pickerLoading, setPickerLoading] = useState(false)
@@ -2577,7 +2581,8 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
   const [phoneWarning, setPhoneWarning] = useState('')
   const [desktopShapeOk, setDesktopShapeOk] = useState(false)
   const [phoneShapeOk, setPhoneShapeOk] = useState(false)
-  const [showOverlay, setShowOverlay] = useState(!!(banner?.title || '').trim())
+  const [showOverlay, setShowOverlay] = useState(banner?.layout === 'split' ? true : !!(banner?.title || '').trim())
+  useEffect(() => { if (form.layout === 'split') setShowOverlay(true) }, [form.layout])
   const fileRef = useRef(null)
   const mobileFileRef = useRef(null)
 
@@ -2740,14 +2745,16 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
         const badShape = Math.abs(ratio - 1200 / 667) / (1200 / 667) > 0.12
         setPhoneShapeOk(!badShape)
         if (badShape) setPhoneWarning('Shape is not 1200 x 667.')
-      } else {
-        const badShape = Math.abs(ratio - 4 / 1) / (4 / 1) > 0.12
-        setDesktopShapeOk(!badShape)
-        let warning = ''
-        if (badShape) warning = 'Shape is not 4:1. Use 2800 x 700.'
-        if (img.naturalWidth < 1400) warning = `${warning} Image is under 1400px wide. Use 2800 x 700.`.trim()
-        setDesktopWarning(warning)
-      }
+       } else {
+         const isSplit = form.layout === 'split'
+         const targetRatio = isSplit ? 4 / 3 : 4 / 1
+         const badShape = Math.abs(ratio - targetRatio) / targetRatio > 0.12
+         setDesktopShapeOk(!badShape)
+         let warning = ''
+         if (badShape) warning = isSplit ? 'Shape is not 4:3. Use 1600 x 1200.' : 'Shape is not 4:1. Use 2800 x 700.'
+         if (!isSplit && img.naturalWidth < 1400) warning = `${warning} Image is under 1400px wide. Use 2800 x 700.`.trim()
+         setDesktopWarning(warning)
+       }
     } catch (_) {}
     setUploadingFn(true)
 
@@ -2783,6 +2790,7 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
 
   const handleSave = () => {
     if (!form.image_url.trim()) { alert('Please upload an image'); return }
+    if (form.layout === 'split' && !form.title.trim()) { alert('Please enter a title for a split banner'); return }
     const textForm = showOverlay ? form : { ...form, title: '', description: '' }
     if (mode === 'custom') {
       onSave({ ...textForm, id: banner?.id, listing_id: null, cta_label: null, ctaTouched: false })
@@ -2821,7 +2829,14 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
 {(mode === 'custom' || form.listing_id) && (
 <>
         <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>Desktop and tablet picture, 2800 x 700 (ratio 4:1)</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 6 }}>Layout</div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button type="button" onClick={() => set('layout', 'picture')} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #d0ddd5', background: form.layout !== 'split' ? '#1a7a4a' : '#fff', color: form.layout !== 'split' ? '#fff' : '#555', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Picture banner (full picture)</button>
+            <button type="button" onClick={() => set('layout', 'split')} style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #d0ddd5', background: form.layout === 'split' ? '#1a7a4a' : '#fff', color: form.layout === 'split' ? '#fff' : '#555', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>Split banner (text + illustration)</button>
+          </div>
+        </div>
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>{form.layout === 'split' ? 'Illustration, 1600 x 1200 (ratio 4:3, no text)' : 'Desktop and tablet picture, 2800 x 700 (ratio 4:1)'}</div>
           <input ref={fileRef} type="file" accept="image/*" hidden
             onChange={e => handleFilePick(e, 'image_url', setUploading, setUploadError)} />
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -2844,6 +2859,34 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
           {desktopWarning && (
             <div style={{ marginTop: 6, fontSize: 12, color: '#dc2626' }}>⚠️ {desktopWarning}</div>
           )}
+          {form.layout === 'split' && (
+            <div style={{ marginBottom: 12 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>Banner background colour (match the illustration background)</div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <input type="color" value={/^#[0-9a-fA-F]{6}$/.test(form.bg_color || '') ? form.bg_color : '#e6f6ed'} onChange={e => set('bg_color', e.target.value)} style={{ width: 44, height: 34, border: '1px solid #d0ddd5', borderRadius: 8, padding: 2, background: '#fff' }} />
+                <input type="text" value={form.bg_color} onChange={e => set('bg_color', e.target.value)} placeholder="#e6f6ed" style={i} />
+              </div>
+              {!/^#[0-9a-fA-F]{6}$/.test(form.bg_color || '') && <div style={{ marginTop: 4, fontSize: 12, color: '#dc2626' }}>Invalid hex color</div>}
+            </div>
+          )}
+          {form.layout === 'split' ? (
+            <div style={{ marginTop: 10, width: '100%', maxWidth: 700, aspectRatio: '4 / 1', height: 'auto', borderRadius: 16, overflow: 'hidden', position: 'relative', background: /^#[0-9a-fA-F]{6}$/.test(form.bg_color || '') ? form.bg_color : '#e6f6ed', boxShadow: '0 4px 14px rgba(16,24,40,0.08)' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '55% 45%', height: '100%', alignItems: 'center' }}>
+                <div style={{ paddingLeft: 40, paddingRight: 16 }}>
+                  {form.title && <div style={{ fontFamily: 'Sora, sans-serif', fontWeight: 800, fontSize: 'clamp(20px, 2.2vw, 30px)', lineHeight: 1.1, color: '#202124', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{form.title}</div>}
+                  {form.description && <div style={{ fontSize: 15, color: '#5f6368', marginTop: 8, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{form.description}</div>}
+                  {form.button_text && <button type="button" style={{ marginTop: 14, height: 44, padding: '0 22px', borderRadius: 999, border: 'none', background: '#0F9D58', color: '#fff', fontWeight: 700, fontSize: 15 }}>{form.button_text}</button>}
+                </div>
+                <div style={{ height: '100%', padding: '16px 24px 16px 0' }}>
+                  {(form.desktop_image_url || form.image_url) ? (
+                    <img src={form.desktop_image_url || form.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'contain', objectPosition: 'right center', display: 'block' }} />
+                  ) : (
+                    <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: '#bbb' }}>Illustration preview</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : (
           <div style={{ marginTop: 10, width: '100%', maxWidth: 700, aspectRatio: '4 / 1', height: 'auto', borderRadius: 16, overflow: 'hidden', position: 'relative', background: '#eceff1', boxShadow: '0 4px 14px rgba(16,24,40,0.08)' }}>
             {(form.desktop_image_url || form.image_url) ? (
               <img src={form.desktop_image_url || form.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: form.image_pos || 'center center', display: 'block' }} />
@@ -2852,6 +2895,7 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
             )}
             {previewOverlay(false)}
           </div>
+          )}
         </div>
 
         <div style={{ marginBottom: 16 }}>
@@ -2888,6 +2932,10 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
           </div>
         </div>
 
+        {form.layout === 'split' && (
+          <div style={{ marginBottom: 16, fontSize: 12, color: '#555' }}>On phones this banner shows the Phone picture, so upload a Phone picture with the text on it.</div>
+        )}
+
         <div style={{ marginTop: 12 }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 6 }}>IMAGE POSITION</div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4, maxWidth: 180 }}>
@@ -2911,9 +2959,9 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
         <div style={{ marginBottom: 16, borderTop: '1px solid #e8f0ec', paddingTop: 16 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 12 }}>
             <div style={{ fontSize: 13, fontWeight: 800, color: '#111' }}>Add text over the picture (optional)</div>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-              <input type="checkbox" checked={showOverlay} onChange={e => setShowOverlay(e.target.checked)} />
-              <span style={{ fontSize: 12, color: '#555' }}>{showOverlay ? 'On' : 'Off'}</span>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: form.layout === 'split' ? 'default' : 'pointer' }}>
+              <input type="checkbox" checked={form.layout === 'split' ? true : showOverlay} disabled={form.layout === 'split'} onChange={e => setShowOverlay(e.target.checked)} />
+              <span style={{ fontSize: 12, color: '#555' }}>{form.layout === 'split' ? 'On' : (showOverlay ? 'On' : 'Off')}</span>
             </label>
           </div>
           {showOverlay && (
