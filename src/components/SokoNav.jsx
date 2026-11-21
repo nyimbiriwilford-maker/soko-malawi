@@ -318,7 +318,7 @@ export default function SokoNav({
           .soko-nav-mobile { display: none !important; }
         }
         .hs-search-laptop { display: none !important; }
-        @media (min-width: 1100px) {
+        @media (min-width: 769px) {
           .hs-search-tablet { display: none !important; }
           .hs-search-laptop { display: block !important; }
         }
