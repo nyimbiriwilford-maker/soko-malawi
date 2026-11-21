@@ -2791,6 +2791,7 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
   const handleSave = () => {
     if (!form.image_url.trim()) { alert('Please upload an image'); return }
     if (form.layout === 'split' && !form.title.trim()) { alert('Please enter a title for a split banner'); return }
+    if (form.layout === 'split' && !form.mobile_image_url.trim()) { alert('Please upload a Phone picture (1200 x 667) for the split banner'); return }
     const textForm = showOverlay ? form : { ...form, title: '', description: '' }
     if (mode === 'custom') {
       onSave({ ...textForm, id: banner?.id, listing_id: null, cta_label: null, ctaTouched: false })
@@ -2934,6 +2935,10 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
 
         {form.layout === 'split' && (
           <div style={{ marginBottom: 16, fontSize: 12, color: '#555' }}>On phones this banner shows the Phone picture, so upload a Phone picture with the text on it.</div>
+        )}
+
+        {form.layout === 'split' && (
+          <div style={{ marginBottom: 16, fontSize: 12, color: '#dc2626', fontWeight: 700 }}>Required: shows on phones. Put the text on this picture.</div>
         )}
 
         <div style={{ marginTop: 12 }}>

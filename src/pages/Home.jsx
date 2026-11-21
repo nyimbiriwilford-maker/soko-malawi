@@ -4145,7 +4145,14 @@ function HeroBanner({ navigate, onSearch, user, slides: externalSlides }) {
         .hb-split-btn { margin-top: 14px; height: 44px; padding: 0 22px; border-radius: 999px; background: #0F9D58; color: #fff; font-weight: 700; font-size: 15px; border: none; }
         .hb-split-img { width: 100%; height: 100%; object-fit: contain; object-position: right center; padding: 16px 24px 16px 0; }
         .hb-picture-path { display: block; }
-        @media (min-width: 769px) { .hb-split .hb-picture-path { display: none !important; } .hb-split .hb-overlay { display: none !important; } }
+        .hb-split .hb-overlay { display: none !important; }
+        @media (min-width: 769px) { .hb-split .hb-picture-path { display: none !important; } }
+        @media (min-width: 769px) and (max-width: 1099px) {
+          .hb-split .hb-split-left { padding-left: 24px; }
+          .hb-split .hb-split-title { font-size: clamp(22px, 2.6vw, 30px); }
+          .hb-split .hb-split-desc { display: none; }
+          .hb-split .hb-split-btn { height: 38px; padding: 0 18px; font-size: 14px; margin-top: 10px; }
+        }
       `}</style>
       {onSearch && (
         <div className="hb-inner hb-search" style={{ position: 'relative', zIndex: 100, marginBottom: 12 }}>

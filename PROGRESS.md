@@ -117,3 +117,4 @@
 114. Banner: desktop/tablet shape changed from 14:3 to 4:1; phone 1200/667 unchanged
 115. Banner: blurred copy uses the same picture as front image
 116. Banner: split layout (text + illustration)
+117. Banner: split on tablet and laptop only
