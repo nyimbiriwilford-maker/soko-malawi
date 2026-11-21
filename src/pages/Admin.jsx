@@ -2569,16 +2569,17 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
   const pickerRequestId = useRef(0)
   const pickerCacheRef = useRef(null)
   const [uploading, setUploading] = useState(false)
-  const [useDifferentImages, setUseDifferentImages] = useState(!!(banner?.desktop_image_url || banner?.mobile_image_url))
   const [ctaTouched, setCtaTouched] = useState(!!banner?.cta_label)
   const [mobileUploading, setMobileUploading] = useState(false)
   const [uploadError, setUploadError] = useState('')
   const [mobileUploadError, setMobileUploadError] = useState('')
-  const [imageWarning, setImageWarning] = useState('')
-  const [previewMode, setPreviewMode] = useState('phone')
+  const [desktopWarning, setDesktopWarning] = useState('')
+  const [phoneWarning, setPhoneWarning] = useState('')
+  const [desktopShapeOk, setDesktopShapeOk] = useState(false)
+  const [phoneShapeOk, setPhoneShapeOk] = useState(false)
+  const [showOverlay, setShowOverlay] = useState(!!(banner?.title || '').trim())
   const fileRef = useRef(null)
   const mobileFileRef = useRef(null)
-  const desktopFileRef = useRef(null)
 
   const lastSearchRef = useRef('')
   useEffect(() => {
@@ -2716,7 +2717,14 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
     const file = e.target.files?.[0]
     if (!file) return
     setUploadErrorFn('')
-    setImageWarning('')
+    const isPhoneSlot = targetField === 'mobile_image_url'
+    if (isPhoneSlot) {
+      setPhoneWarning('')
+      setPhoneShapeOk(false)
+    } else {
+      setDesktopWarning('')
+      setDesktopShapeOk(false)
+    }
     // dimension check
     try {
       const url = URL.createObjectURL(file)
@@ -2727,13 +2735,25 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
         img.src = url
       })
       URL.revokeObjectURL(url)
-      if (img.naturalWidth < 1200) setImageWarning('Image is under 1200px wide. Use a wide image (about 1600 x 700) with the subject near the center.')
       const ratio = img.naturalWidth / img.naturalHeight
-      if (Math.abs(ratio - 21 / 9) > 0.6) setImageWarning('Aspect ratio is far from 21/9. Use a wide image (about 1600 x 700) with the subject near the center.')
+      if (isPhoneSlot) {
+        const badShape = Math.abs(ratio - 1200 / 667) / (1200 / 667) > 0.12
+        setPhoneShapeOk(!badShape)
+        if (badShape) setPhoneWarning('Shape is not 1200 x 667.')
+      } else {
+        const badShape = Math.abs(ratio - 14 / 3) / (14 / 3) > 0.12
+        setDesktopShapeOk(!badShape)
+        let warning = ''
+        if (badShape) warning = 'Shape is not 14:3. The banner will show blurred sides or crop. Use 2800 x 600.'
+        if (img.naturalWidth < 1400) warning = `${warning} Image is under 1400px wide. Use 2800 x 600.`.trim()
+        setDesktopWarning(warning)
+      }
     } catch (_) {}
     setUploadingFn(true)
 
-    const oldUrl = form[targetField]
+    const oldUrls = targetField === 'image_url'
+      ? Array.from(new Set([form.image_url, form.desktop_image_url].filter(Boolean)))
+      : [form[targetField]]
     try {
       const compressed = await compressImage(file)
       const name = `banner_${Date.now()}_${Math.random().toString(36).slice(2)}.webp`
@@ -2744,11 +2764,14 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
       const url = await uploadToR2(named, path, null, { compress: false })
       if (!url) throw new Error('Upload failed')
       // Remove old file from R2 (best effort)
-      if (oldUrl) {
-        const key = r2PathFromUrl(oldUrl)
-        if (key) { try { await deleteFromR2(key) } catch (err) { console.error('deleteFromR2 failed:', err) } }
+      for (const oldUrl of oldUrls) {
+        if (oldUrl) {
+          const key = r2PathFromUrl(oldUrl)
+          if (key) { try { await deleteFromR2(key) } catch (err) { console.error('deleteFromR2 failed:', err) } }
+        }
       }
       set(targetField, url)
+      if (targetField === 'image_url') set('desktop_image_url', url)
     } catch (err) {
       console.error('handleFilePick failed:', err)
       setUploadErrorFn(err?.message || String(err))
@@ -2760,12 +2783,23 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
 
   const handleSave = () => {
     if (!form.image_url.trim()) { alert('Please upload an image'); return }
+    const textForm = showOverlay ? form : { ...form, title: '', description: '' }
     if (mode === 'custom') {
-      onSave({ ...form, id: banner?.id, listing_id: null, cta_label: null, ctaTouched: false })
+      onSave({ ...textForm, id: banner?.id, listing_id: null, cta_label: null, ctaTouched: false })
     } else {
-      onSave({ ...form, id: banner?.id, ctaTouched })
+      onSave({ ...textForm, id: banner?.id, ctaTouched })
     }
   }
+
+  const showPreviewOverlay = !!(showOverlay && String(form.title || '').trim())
+  const previewDescription = showPreviewOverlay ? (form.description || '') : ''
+  const previewOverlay = (compact) => showPreviewOverlay ? (
+    <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: compact ? '10px 12px 14px' : '14px 16px 28px', background: 'linear-gradient(to top, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.35) 45%, rgba(0,0,0,0) 80%)', zIndex: 2 }}>
+      <div style={{ fontSize: compact ? 14 : 18, fontWeight: 800, color: '#fff', lineHeight: 1.2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{form.title}</div>
+      {previewDescription && <div style={{ fontSize: compact ? 11 : 13, color: '#fff', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}>{previewDescription}</div>}
+      {form.button_text && <button type="button" style={{ marginTop: compact ? 6 : 8, height: compact ? 28 : 36, minWidth: 44, padding: '0 14px', borderRadius: 10, border: 'none', background: '#0F9D58', color: '#fff', fontSize: compact ? 11 : 13, fontWeight: 700, cursor: 'pointer', fontFamily: 'inherit' }}>{getBannerCta({ id: form.listing_id }, form.cta_label)}</button>}
+    </div>
+  ) : null
 
   return (
     <div style={{ maxWidth: 560 }}>
@@ -2784,26 +2818,10 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
           </button>
         </div>
 
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>TITLE</div>
-          <input type="text" value={form.title} onChange={e => set('title', e.target.value)}
-            placeholder="Buy. Sell. Discover. Everything Malawi."
-            style={i} />
-          <div style={{ fontSize: 11, marginTop: 4, color: form.title.length > 48 ? '#b45309' : '#888' }}>{form.title.length}/60</div>
-        </div>
-
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>DESCRIPTION</div>
-          <textarea value={form.description} onChange={e => set('description', e.target.value)}
-            placeholder="Supporting text for the banner"
-            rows={3} style={{ ...i, resize: 'vertical' }} />
-          <div style={{ fontSize: 11, marginTop: 4, color: form.description.length > 96 ? '#b45309' : '#888' }}>{form.description.length}/120</div>
-        </div>
-
 {(mode === 'custom' || form.listing_id) && (
 <>
         <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>IMAGE</div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>Desktop and tablet picture, 2800 x 600 (ratio 14:3)</div>
           <input ref={fileRef} type="file" accept="image/*" hidden
             onChange={e => handleFilePick(e, 'image_url', setUploading, setUploadError)} />
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -2820,70 +2838,24 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
           {uploadError && (
             <div style={{ marginTop: 6, fontSize: 12, color: '#dc2626' }}>⚠️ {uploadError}</div>
           )}
-          {form.image_url ? (
-            <div style={{ marginTop: 10, borderRadius: 12, overflow: 'hidden', height: 120, background: '#f0f5f1' }}>
-              <img src={form.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            </div>
-          ) : (
-            <div style={{ marginTop: 10, borderRadius: 12, height: 80, background: '#f4f7f5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: '#bbb' }}>
-              No image selected
-            </div>
+          {desktopShapeOk && (
+            <div style={{ marginTop: 6, fontSize: 12, color: '#1a7a4a' }}>✅ Shape OK</div>
           )}
-          {imageWarning && (
-            <div style={{ marginTop: 6, fontSize: 12, color: '#b45309' }}>⚠️ {imageWarning}</div>
+          {desktopWarning && (
+            <div style={{ marginTop: 6, fontSize: 12, color: '#dc2626' }}>⚠️ {desktopWarning}</div>
           )}
-          <div style={{ marginTop: 12 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 6 }}>IMAGE POSITION</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4, maxWidth: 180 }}>
-              {[
-                ['left top','top-left'], ['center top','top'], ['right top','top-right'],
-                ['left center','left'], ['center center','center'], ['right center','right'],
-                ['left bottom','bottom-left'], ['center bottom','bottom'], ['right bottom','bottom-right'],
-              ].map(([val, lbl]) => (
-                <button key={val} type="button" onClick={() => set('image_pos', val)}
-                  style={{
-                    padding: '6px 4px', fontSize: 10, fontWeight: 700, borderRadius: 6, cursor: 'pointer',
-                    border: '1px solid #d0ddd5',
-                    background: (form.image_pos || 'center center') === val ? '#1a7a4a' : '#fff',
-                    color: (form.image_pos || 'center center') === val ? '#fff' : '#555',
-                  }}>{lbl}</button>
-              ))}
-            </div>
+          <div style={{ marginTop: 10, width: '100%', maxWidth: 700, aspectRatio: '14 / 3', height: 'auto', borderRadius: 16, overflow: 'hidden', position: 'relative', background: '#eceff1', boxShadow: '0 4px 14px rgba(16,24,40,0.08)' }}>
+            {(form.desktop_image_url || form.image_url) ? (
+              <img src={form.desktop_image_url || form.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: form.image_pos || 'center center', display: 'block' }} />
+            ) : (
+              <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: '#bbb' }}>Desktop preview</div>
+            )}
+            {previewOverlay(false)}
           </div>
         </div>
 
         <div style={{ marginBottom: 16 }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#555', cursor: 'pointer' }}>
-            <input type="checkbox" checked={useDifferentImages} onChange={e => {
-              setUseDifferentImages(e.target.checked)
-              if (!e.target.checked) { set('desktop_image_url', ''); set('mobile_image_url', '') }
-            }} />
-            Use a different image for desktop or mobile
-          </label>
-        </div>
-
-        {useDifferentImages && (
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>DESKTOP IMAGE <span style={{ fontWeight: 400, color: '#aaa' }}>(optional)</span></div>
-            <input ref={desktopFileRef} type="file" accept="image/*" hidden
-              onChange={e => handleFilePick(e, 'desktop_image_url', setUploading, setUploadError)} />
-            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-              <button type="button" onClick={() => desktopFileRef.current?.click()} disabled={uploading}
-                style={{ padding: '10px 20px', borderRadius: 10, border: '1px solid #d0ddd5', background: uploading ? '#f0f0f0' : '#fff', fontSize: 13, fontWeight: 700, cursor: uploading ? 'default' : 'pointer', fontFamily: 'inherit' }}>
-                {uploading ? 'Uploading...' : 'Choose File'}
-              </button>
-              {!uploading && form.desktop_image_url && <span style={{ fontSize: 12, color: '#1a7a4a' }}>Ready</span>}
-            </div>
-            {form.desktop_image_url ? (
-              <div style={{ marginTop: 10, borderRadius: 12, overflow: 'hidden', height: 120, background: '#f0f5f1' }}>
-                <img src={form.desktop_image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              </div>
-            ) : null}
-          </div>
-        )}
-
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>MOBILE IMAGE <span style={{ fontWeight: 400, color: '#aaa' }}>(optional)</span></div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>Phone picture, 1200 x 667 (ratio 1.8:1), optional</div>
           <input ref={mobileFileRef} type="file" accept="image/*" hidden
             onChange={e => handleFilePick(e, 'mobile_image_url', setMobileUploading, setMobileUploadError)} />
           <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
@@ -2900,21 +2872,75 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
           {mobileUploadError && (
             <div style={{ marginTop: 6, fontSize: 12, color: '#dc2626' }}>⚠️ {mobileUploadError}</div>
           )}
-          {form.mobile_image_url ? (
-            <div style={{ marginTop: 10, borderRadius: 12, overflow: 'hidden', height: 120, background: '#f0f5f1' }}>
-              <img src={form.mobile_image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            </div>
-          ) : (
-            <div style={{ marginTop: 10, borderRadius: 12, height: 80, background: '#f4f7f5', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: '#bbb' }}>
-              No image selected
-            </div>
+          {phoneShapeOk && (
+            <div style={{ marginTop: 6, fontSize: 12, color: '#1a7a4a' }}>✅ Shape OK</div>
           )}
+          {phoneWarning && (
+            <div style={{ marginTop: 6, fontSize: 12, color: '#dc2626' }}>⚠️ {phoneWarning}</div>
+          )}
+          <div style={{ marginTop: 10, width: 342, maxWidth: '100%', aspectRatio: '1200 / 667', height: 'auto', borderRadius: 16, overflow: 'hidden', position: 'relative', background: '#eceff1', boxShadow: '0 4px 14px rgba(16,24,40,0.08)' }}>
+            {(form.mobile_image_url || form.image_url) ? (
+              <img src={form.mobile_image_url || form.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: form.image_pos || 'center center', display: 'block' }} />
+            ) : (
+              <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, color: '#bbb' }}>Phone preview</div>
+            )}
+            {previewOverlay(true)}
+          </div>
         </div>
 
-        <div style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>BUTTON TEXT</div>
-          <input type="text" value={form.button_text} onChange={e => set('button_text', e.target.value)}
-            placeholder="Explore Marketplace" style={i} />
+        <div style={{ marginTop: 12 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 6 }}>IMAGE POSITION</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 4, maxWidth: 180 }}>
+            {[
+              ['left top','top-left'], ['center top','top'], ['right top','top-right'],
+              ['left center','left'], ['center center','center'], ['right center','right'],
+              ['left bottom','bottom-left'], ['center bottom','bottom'], ['right bottom','bottom-right'],
+            ].map(([val, lbl]) => (
+              <button key={val} type="button" onClick={() => set('image_pos', val)}
+                style={{
+                  padding: '6px 4px', fontSize: 10, fontWeight: 700, borderRadius: 6, cursor: 'pointer',
+                  border: '1px solid #d0ddd5',
+                  background: (form.image_pos || 'center center') === val ? '#1a7a4a' : '#fff',
+                  color: (form.image_pos || 'center center') === val ? '#fff' : '#555',
+                }}>{lbl}</button>
+            ))}
+          </div>
+          <div style={{ fontSize: 11, color: '#888', marginTop: 6 }}>Only needed when the picture shape does not match</div>
+        </div>
+
+        <div style={{ marginBottom: 16, borderTop: '1px solid #e8f0ec', paddingTop: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 12 }}>
+            <div style={{ fontSize: 13, fontWeight: 800, color: '#111' }}>Add text over the picture (optional)</div>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+              <input type="checkbox" checked={showOverlay} onChange={e => setShowOverlay(e.target.checked)} />
+              <span style={{ fontSize: 12, color: '#555' }}>{showOverlay ? 'On' : 'Off'}</span>
+            </label>
+          </div>
+          {showOverlay && (
+            <>
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>TITLE</div>
+                <input type="text" value={form.title} onChange={e => set('title', e.target.value)}
+                  placeholder="Buy. Sell. Discover. Everything Malawi."
+                  style={i} />
+                <div style={{ fontSize: 11, marginTop: 4, color: form.title.length > 48 ? '#b45309' : '#888' }}>{form.title.length}/60</div>
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>DESCRIPTION</div>
+                <textarea value={form.description} onChange={e => set('description', e.target.value)}
+                  placeholder="Supporting text for the banner"
+                  rows={3} style={{ ...i, resize: 'vertical' }} />
+                <div style={{ fontSize: 11, marginTop: 4, color: form.description.length > 96 ? '#b45309' : '#888' }}>{form.description.length}/120</div>
+              </div>
+
+              <div style={{ marginBottom: 16 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: '#888', marginBottom: 4 }}>BUTTON TEXT</div>
+                <input type="text" value={form.button_text} onChange={e => set('button_text', e.target.value)}
+                  placeholder="Explore Marketplace" style={i} />
+              </div>
+            </>
+          )}
         </div>
 
         <div style={{ marginBottom: 16 }}>
@@ -3142,28 +3168,6 @@ function BannerEditor({ banner, mode = 'custom', listings = [], adminUserId = nu
 </>
         )}
 
-        <div style={{ marginBottom: 20 }}>
-          <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
-            <button type="button" onClick={() => setPreviewMode('phone')}
-              style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #d0ddd5', background: previewMode === 'phone' ? '#1a7a4a' : '#fff', color: previewMode === 'phone' ? '#fff' : '#555', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Phone</button>
-            <button type="button" onClick={() => setPreviewMode('desktop')}
-              style={{ padding: '6px 12px', borderRadius: 8, border: '1px solid #d0ddd5', background: previewMode === 'desktop' ? '#1a7a4a' : '#fff', color: previewMode === 'desktop' ? '#fff' : '#555', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>Desktop</button>
-          </div>
-          <div style={{ width: previewMode === 'phone' ? 360 : 768, maxWidth: '100%', margin: '0 auto', display: 'grid', gridTemplateColumns: previewMode === 'phone' ? '1fr' : '1.1fr 0.9fr', borderRadius: 16, overflow: 'hidden', background: 'transparent', boxShadow: '0 4px 14px rgba(16,24,40,0.08)' }}>
-            <div style={{ padding: previewMode === 'phone' ? '16px' : '24px 0 24px 24px', color: '#111827' }}>
-              <div style={{ fontSize: 10, fontWeight: 800, color: form.accent || '#0F9D58', background: `${form.accent || '#0F9D58'}12`, borderRadius: 999, padding: '3px 10px 3px 8px', marginBottom: 10, display: 'inline-block', textTransform: 'uppercase' }}>{form.badge || ''}</div>
-              <div style={{ fontSize: previewMode === 'phone' ? 18 : 24, fontWeight: 800, lineHeight: 1.2, marginBottom: 6, overflowWrap: 'anywhere', minWidth: 0 }}>{form.title}</div>
-              <div style={{ fontSize: 13, color: '#6B7280', lineHeight: 1.5, marginBottom: 12, overflowWrap: 'anywhere', minWidth: 0 }}>{form.description}</div>
-              <div style={{ marginTop: 8, minHeight: 31 }}>
-                {form.listing_id && <span style={{ fontSize: 13, fontWeight: 800, color: '#0F9D58', background: '#e8f5ee', borderRadius: 999, padding: '4px 10px', display: 'inline-block', marginBottom: 10 }}>{getBannerCta({ id: form.listing_id }, form.cta_label)}</span>}
-              </div>
-              <button type="button" style={{ height: previewMode === 'phone' ? 40 : 44, padding: '0 18px', border: 'none', borderRadius: 12, background: form.accent || '#0F9D58', color: '#fff', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%' }}>{getBannerCta({ id: form.listing_id }, form.cta_label)}</button>
-            </div>
-            <div style={{ position: 'relative', overflow: 'hidden', minHeight: 120, background: '#eceff1' }}>
-              {form.image_url && <img src={form.image_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: form.image_pos || 'center center' }} />}
-            </div>
-          </div>
-        </div>
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', borderTop: '1px solid #e8f0ec', paddingTop: 20 }}>
           <button onClick={onCancel}
             style={{
