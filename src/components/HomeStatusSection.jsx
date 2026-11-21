@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef, useEffect, useLayoutEffect, useCallback } from 'react'
 import { ChevronRight, Plus, ChevronLeft } from 'lucide-react'
-import { STATUS_META } from '../constants/homeConstants'
 import { supabase } from '../lib/supabase'
+import { formatPrice } from '../lib/format'
 import { isStatusVideoUrl, isStatusColorBoard } from '../utils/statusVideo'
 import StatusTextBoard from './StatusTextBoard'
 
@@ -26,16 +26,6 @@ function timeAgo(iso) {
   if (h >= 1) return `${h}h`
   if (m < 1) return 'now'
   return `${m}m`
-}
-
-function getMarketplaceLabel(s) {
-  const kind = s.tagged_kind
-  const type = s.status_type || ''
-  const fromKind = kind ? STATUS_META[kind] : null
-  if (fromKind) return { text: fromKind.label, type: kind }
-  if (type === 'promo' || type === 'promotion' || s.is_promoted) return { text: 'PROMOTION', type: 'promotion' }
-  if (kind === 'event' || type === 'event') return { text: 'EVENT', type: 'event' }
-  return null
 }
 
 function getLocationText(s) {
@@ -225,7 +215,7 @@ function LazyMedia({ src, isVideo, style }) {
   )
 }
 
-function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLabel, isMobile }) {
+function StoryCard({ s, isOwn, viewedIds, onClick, locationLabel, isMobile }) {
   const name = s.profiles?.full_name || 'Seller'
   const avatar = s.profiles?.avatar_url
   const media = s.media_urls?.[0]
@@ -238,6 +228,22 @@ function StoryCard({ s, isOwn, viewedIds, onClick, marketplaceLabel, locationLab
   const tagged = s.tagged || {}
   // Text boards already show the words on the tile — don't repeat them in the label
   const title = tagged?.title || tagged?.name || null
+
+  const taggedKind = s.tagged_kind || (s.tagged_listing_id ? 'listing' : null)
+  const priceValue = tagged?.price
+  const priceNumber = Number(priceValue)
+  const hasPriceValue = priceValue !== null && priceValue !== undefined && priceValue !== ''
+    && (Number.isFinite(priceNumber) || typeof priceValue === 'string')
+  let priceLine = null
+  if ((taggedKind === 'listing' || taggedKind === 'product' || taggedKind === 'request' || taggedKind === 'service') && hasPriceValue) {
+    if (Number.isFinite(priceNumber)) {
+      if (taggedKind === 'request') priceLine = `Budget ${formatPrice(priceNumber)}`
+      else if (taggedKind === 'service') priceLine = `From ${formatPrice(priceNumber)}`
+      else priceLine = formatPrice(priceNumber)
+    } else {
+      priceLine = taggedKind === 'request' ? `Budget ${priceValue}` : priceValue
+    }
+  }
 
   const statusCount = group.length
   const unseenCount = isOwn ? 0 : group.filter(x => !viewedIds.has(x.id)).length
@@ -347,18 +353,6 @@ textAlign: 'left', background: '#111',
           padding: '24px 8px 7px',
           background: 'linear-gradient(0deg, rgba(0,0,0,0.65) 0%, transparent 100%)',
         }}>
-          {marketplaceLabel && (
-            <div style={{
-              display: 'inline-block', marginBottom: 4,
-              fontSize: 10, fontWeight: 600, letterSpacing: 0.2,
-              color: '#fff', borderRadius: 999, padding: '3px 9px',
-              background: 'rgba(0,0,0,0.45)',
-              WebkitBackdropFilter: 'blur(8px)', backdropFilter: 'blur(8px)',
-              lineHeight: 1.4,
-            }}>
-              {marketplaceLabel.text}
-            </div>
-          )}
            {title && (
              <div style={{
                display: 'inline-block', marginBottom: 4,
@@ -369,6 +363,16 @@ textAlign: 'left', background: '#111',
                lineHeight: 1.4,
              }}>
                {title}
+             </div>
+           )}
+           {priceLine && (
+             <div style={{
+               marginBottom: 4, marginRight: 30, maxWidth: 'calc(100% - 30px)',
+               fontFamily: G.fontDisplay, fontWeight: 700, fontSize: 14,
+               color: '#ffffff', textShadow: '0 1px 3px rgba(0,0,0,0.45)',
+               overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+             }}>
+               {priceLine}
              </div>
            )}
 
@@ -458,20 +462,6 @@ textAlign: 'left', background: '#111',
         </div>
       )}
 
-      {marketplaceLabel && (
-        <div className="hs-tablet-hide" style={{
-          position: 'absolute', top: 10, left: 10, zIndex: 2,
-          fontSize: 10, fontWeight: 700, letterSpacing: 0.2,
-          color: '#fff', borderRadius: 20, padding: '3px 10px',
-          background: 'rgba(0,0,0,0.45)',
-          WebkitBackdropFilter: 'blur(8px)', backdropFilter: 'blur(8px)',
-          lineHeight: 1.4,
-        }}>
-          {marketplaceLabel.text}
-        </div>
-      )}
-
-
       <div style={{
         position: 'absolute', bottom: 0, left: 0, right: 0,
         padding: '30px 12px 10px', zIndex: 2,
@@ -530,6 +520,16 @@ textAlign: 'left', background: '#111',
             lineHeight: 1.4,
           }}>
             {title}
+          </div>
+        )}
+        {priceLine && (
+          <div style={{
+            marginRight: 30, maxWidth: 'calc(100% - 30px)',
+            fontFamily: G.fontDisplay, fontWeight: 700, fontSize: 14,
+            color: '#ffffff', textShadow: '0 1px 3px rgba(0,0,0,0.45)',
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {priceLine}
           </div>
         )}
       </div>
@@ -1057,7 +1057,6 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
                         isOwn={s.user_id === currentUserId}
                         viewedIds={viewedIds}
                         onClick={() => openStoryGroup(s)}
-                        marketplaceLabel={getMarketplaceLabel(s)}
                         locationLabel={getLocationText(s)}
                         isMobile={isMobile}
                       />
