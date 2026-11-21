@@ -1681,14 +1681,13 @@ function LatestListingCard({ listing, delay = 0, onClick, user, navigate, saved,
 
 function SkeletonLatestCard() {
   return (
-    <div className="soko-product-card soko-latest-card soko-card-bg" style={{ border: `1px solid ${T.gray100}`, boxShadow: T.shadow }}>
-      <div className="soko-product-card-media skeleton" style={{ animation: 'none' }} />
+    <div className="soko-product-card soko-latest-card soko-card-bg" style={{ borderRadius: 16, border: '1px solid #e8eaed', background: '#fff', boxShadow: '0 1px 2px rgba(16,24,40,0.04), 0 4px 12px rgba(16,24,40,0.05)', overflow: 'hidden' }}>
+      <div className="soko-product-card-media soko-latest-skeleton-shimmer" style={{ aspectRatio: '1 / 1' }} />
       <div className="soko-product-card-body soko-latest-body">
-        <div className="skeleton" style={{ height: 15, width: '90%', borderRadius: 4 }} />
-        <div className="skeleton" style={{ height: 17, width: '46%', borderRadius: 4, marginTop: 4 }} />
+        <div className="soko-latest-skeleton-shimmer" style={{ height: 15, width: '90%', borderRadius: 4 }} />
+        <div className="soko-latest-skeleton-shimmer" style={{ height: 17, width: '46%', borderRadius: 4, marginTop: 4 }} />
         <div style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column' }}>
-          <div className="skeleton" style={{ height: 12, width: '55%', borderRadius: 4, paddingTop: 10, borderTop: '1px solid #f1f3f4' }} />
-          <div style={{ minHeight: 22, marginTop: 8 }} />
+          <div className="soko-latest-skeleton-shimmer" style={{ height: 12, width: '55%', borderRadius: 4, paddingTop: 10, borderTop: '1px solid #f1f3f4' }} />
         </div>
       </div>
     </div>
@@ -1799,6 +1798,26 @@ function LatestListingsSection({ listings, navigate, loading, user, savedIds, on
             margin-top: 0 !important;
           }
         }
+        @keyframes sokoLatestShimmer {
+          0% { background-position: 200% 0; }
+          100% { background-position: -200% 0; }
+        }
+        .soko-latest-skeleton-shimmer {
+          background: linear-gradient(90deg, #f1f3f4 0%, #e8eaed 50%, #f1f3f4 100%);
+          background-size: 200% 100%;
+          animation: sokoLatestShimmer 1.4s linear infinite;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .soko-latest-skeleton-shimmer { animation: none; }
+        }
+        .soko-latest-card-wrap.skeleton-card:nth-child(n+5) { display: none; }
+        @media (min-width: 769px) and (max-width: 1100px) {
+          .soko-latest-card-wrap.skeleton-card:nth-child(n+5) { display: flex; }
+          .soko-latest-card-wrap.skeleton-card:nth-child(n+7) { display: none; }
+        }
+        @media (min-width: 1101px) {
+          .soko-latest-card-wrap.skeleton-card:nth-child(n+5) { display: flex; }
+        }
       `}</style>
 
       <div style={{ maxWidth: 1400, margin: '0 auto', minWidth: 0 }}>
@@ -1837,7 +1856,7 @@ function LatestListingsSection({ listings, navigate, loading, user, savedIds, on
         <div className="soko-latest-grid">
           {loading
             ? Array.from({ length: HOME_LATEST_SKELETONS }).map((_, i) => (
-                <div key={i} className="soko-latest-card-wrap"><SkeletonLatestCard /></div>
+                <div key={i} className="soko-latest-card-wrap skeleton-card"><SkeletonLatestCard /></div>
               ))
             : latest.map((l, i) => (
                 <div key={l.id} className="soko-latest-card-wrap">

@@ -118,3 +118,4 @@
 115. Banner: blurred copy uses the same picture as front image
 116. Banner: split layout (text + illustration)
 117. Banner: split on tablet and laptop only
+118. Home: skeleton loading for Recommended
