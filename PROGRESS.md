@@ -108,4 +108,5 @@
 105. Step 1 header-search: added shared SearchBox (44px input, grouped live results, no-results actions, portaled notify modal); hero reused it
 106. Step 2 header-search: SokoNav switches to SearchBox only at 1100px+; 769-1099px tablet search markup and navigation preserved raw
 107. header-search verify: npm run build passed; SearchBox eslint clean; Home/SokoNav/SearchPage lint counts unchanged (pre-existing only)
+108. Commit header-search: live suggestions and notify on laptop
 
