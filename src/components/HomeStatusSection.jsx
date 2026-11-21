@@ -28,10 +28,6 @@ function timeAgo(iso) {
   return `${m}m`
 }
 
-function getLocationText(s) {
-  return s.location_hint || s.profiles?.city || null
-}
-
 function VerifiedBadge({ size = 14 }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" style={{ flexShrink: 0 }} aria-hidden>
@@ -215,7 +211,9 @@ function LazyMedia({ src, isVideo, style }) {
   )
 }
 
-function StoryCard({ s, isOwn, viewedIds, onClick, locationLabel }) {
+function StoryCard({ s, isOwn, viewedIds, onClick, windowWidth }) {
+  const avatarSize = windowWidth >= 769 ? 32 : 30
+  const statusFontSize = windowWidth >= 769 ? 14 : 13
   const name = s.profiles?.full_name || 'Seller'
   const avatar = s.profiles?.avatar_url
   const media = s.media_urls?.[0]
@@ -287,18 +285,6 @@ function StoryCard({ s, isOwn, viewedIds, onClick, locationLabel }) {
         background: 'linear-gradient(0deg, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.25) 40%, rgba(0,0,0,0.25) 65%, rgba(0,0,0,0.55) 100%)',
       }} />
 
-      <div style={{
-        position: 'absolute', top: 8, right: 8, zIndex: 5,
-        width: 20, height: 20, borderRadius: '50%',
-        background: isOwn ? 'rgba(0,0,0,0.7)' : isViewedCard ? 'rgba(0,0,0,0.55)' : '#0F9D58',
-        backdropFilter: 'blur(8px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        padding: 0,
-        fontSize: 11, fontWeight: 700, color: '#fff',
-      }}>
-        {isOwn ? statusCount : isViewedCard ? statusCount : unseenCount}
-      </div>
-
       {isVideo && (
         <div style={{
           position: 'absolute', bottom: 8, right: 8, zIndex: 3,
@@ -312,46 +298,60 @@ function StoryCard({ s, isOwn, viewedIds, onClick, locationLabel }) {
 
       <div style={{
         position: 'relative', zIndex: 2, flex: 'none',
-        display: 'flex', alignItems: 'center', gap: 8, paddingRight: 28, minWidth: 0,
+        display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0,
       }}>
-        <div style={{ position: 'relative', flexShrink: 0 }}>
-          <StoryStatusRing items={ringItems} size={32}>
-            <div className="hs-avatar" style={{
-              width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden',
-              background: 'linear-gradient(135deg,#0F9D58,#22c55e)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: '#fff', fontSize: 12, fontWeight: 800,
-            }}>
-              {avatar
-                ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                : initial}
-            </div>
-          </StoryStatusRing>
-          {isVerified && (
-            <div style={{
-              position: 'absolute', bottom: 0, right: 0,
-              width: 14, height: 14, borderRadius: '50%', background: '#fff',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
-            }}>
-              <VerifiedBadge size={10} />
-            </div>
-          )}
-        </div>
-        <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', minWidth: 0,
+        }}>
+          <div style={{ position: 'relative', flexShrink: 0 }}>
+            <StoryStatusRing items={ringItems} size={avatarSize}>
+              <div className="hs-avatar" style={{
+                width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden',
+                background: 'linear-gradient(135deg,#0F9D58,#22c55e)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                color: '#fff', fontSize: 12, fontWeight: 800,
+              }}>
+                {avatar
+                  ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  : initial}
+              </div>
+            </StoryStatusRing>
+            {isVerified && (
+              <div style={{
+                position: 'absolute', bottom: 0, right: 0,
+                width: 14, height: 14, borderRadius: '50%', background: '#fff',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.15)',
+              }}>
+                <VerifiedBadge size={10} />
+              </div>
+            )}
+          </div>
           <div style={{
-            fontSize: 12, fontWeight: 700, color: '#fff',
+            flexShrink: 0,
+            width: 20, height: 20, borderRadius: '50%',
+            background: isOwn ? 'rgba(0,0,0,0.7)' : isViewedCard ? 'rgba(0,0,0,0.55)' : '#0F9D58',
+            backdropFilter: 'blur(8px)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 0,
+            fontSize: 11, fontWeight: 700, color: '#fff',
+          }}>
+            {isOwn ? statusCount : isViewedCard ? statusCount : unseenCount}
+          </div>
+        </div>
+        <div style={{ width: '100%', minWidth: 0 }}>
+          <div style={{
+            fontSize: 12, fontWeight: 700, color: '#fff', lineHeight: 1.25,
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             textShadow: '0 1px 4px rgba(0,0,0,0.5)',
           }}>
             {isOwn ? 'Your story' : name.split(' ')[0]}
           </div>
           <div style={{
-            fontSize: 11, fontWeight: 500, color: 'rgba(255,255,255,0.85)',
+            fontSize: 11, fontWeight: 500, color: 'rgba(255,255,255,0.8)', lineHeight: 1.25,
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             textShadow: '0 1px 4px rgba(0,0,0,0.5)',
           }}>
-            {locationLabel && <span>{locationLabel} · </span>}
             {timeAgo(s.created_at)}
           </div>
         </div>
@@ -364,7 +364,7 @@ function StoryCard({ s, isOwn, viewedIds, onClick, locationLabel }) {
         {statusText && (
           <div style={{
             margin: 0, maxWidth: '100%',
-            fontSize: 14, fontWeight: 700, color: '#fff', lineHeight: 1.25,
+            fontSize: statusFontSize, fontWeight: 700, color: '#fff', lineHeight: 1.25,
             textAlign: 'center', textShadow: '0 1px 4px rgba(0,0,0,0.6)',
             wordBreak: 'break-word',
             display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
@@ -881,7 +881,7 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
                         isOwn={s.user_id === currentUserId}
                         viewedIds={viewedIds}
                         onClick={() => openStoryGroup(s)}
-                        locationLabel={getLocationText(s)}
+                        windowWidth={windowWidth}
                       />
                     ))}
                   </div>
