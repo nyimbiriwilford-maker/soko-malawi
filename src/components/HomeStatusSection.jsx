@@ -308,13 +308,13 @@ textAlign: 'left', background: '#111',
         </div>
 
         <div style={{
-          position: 'absolute', top: 12, left: 12, zIndex: 3,
-          display: 'flex', alignItems: 'center', gap: 8,
-          maxWidth: 'calc(100% - 24px)',
+          position: 'absolute', top: 10, left: 10, zIndex: 3,
+          display: 'flex', alignItems: 'center', gap: 6,
+          maxWidth: 'calc(100% - 20px)',
         }}>
            <div style={{ position: 'relative', flexShrink: 0 }}>
               <div className="hs-avatar" style={{
-                width: 32, height: 32, borderRadius: '50%', overflow: 'hidden',
+                width: 28, height: 28, borderRadius: '50%', overflow: 'hidden',
                 boxShadow: isOwn
                   ? '0 0 0 2px #fff, 0 0 0 4px #0F9D58'
                   : isViewedCard
@@ -322,9 +322,9 @@ textAlign: 'left', background: '#111',
                     : '0 0 0 2px #fff, 0 0 0 4px #0F9D58',
                background: 'linear-gradient(135deg,#0F9D58,#22c55e)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-               color: '#fff', fontSize: 13, fontWeight: 800,
-             }}>
-              {avatar
+                color: '#fff', fontSize: 12, fontWeight: 800,
+              }}>
+               {avatar
                 ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 : initial}
             </div>
@@ -340,7 +340,7 @@ textAlign: 'left', background: '#111',
             )}
           </div>
           <span style={{
-            fontSize: 9, fontWeight: 700, color: isOwn ? '#fff' : isViewedCard ? 'rgba(255,255,255,0.85)' : '#fff',
+            fontSize: 12, fontWeight: 700, color: isOwn ? '#fff' : isViewedCard ? 'rgba(255,255,255,0.85)' : '#fff',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
             textShadow: '0 1px 4px rgba(0,0,0,0.5)',
           }}>
@@ -350,13 +350,13 @@ textAlign: 'left', background: '#111',
 
         <div style={{
           position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 2,
-          padding: '24px 8px 7px',
+          padding: '18px 34px 7px 8px',
           background: 'linear-gradient(0deg, rgba(0,0,0,0.65) 0%, transparent 100%)',
         }}>
            {title && (
              <div style={{
                display: 'inline-block', marginBottom: 4,
-               fontSize: 10.5, fontWeight: 700, color: '#fff',
+               fontSize: 12, fontWeight: 700, color: '#fff',
                borderRadius: 999, padding: '3px 9px',
                background: 'rgba(0,0,0,0.45)',
                maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -377,7 +377,7 @@ textAlign: 'left', background: '#111',
            )}
 
           <div style={{
-            fontSize: 10.5, fontWeight: 500, color: 'rgba(255,255,255,0.8)',
+            fontSize: 11, fontWeight: 500, color: 'rgba(255,255,255,0.8)',
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
             {locationLabel && <span>{locationLabel} · </span>}
@@ -464,14 +464,14 @@ textAlign: 'left', background: '#111',
 
       <div style={{
         position: 'absolute', bottom: 0, left: 0, right: 0,
-        padding: '30px 12px 10px', zIndex: 2,
+        padding: '24px 34px 10px 10px', zIndex: 2,
         background: 'linear-gradient(0deg, rgba(0,0,0,0.7) 0%, transparent 100%)',
       }}>
         <div style={{
-          display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4,
+          display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4,
         }}>
           <div style={{ position: 'relative' }}>
-            <StoryStatusRing items={ringItems} size={40}>
+            <StoryStatusRing items={ringItems} size={34}>
                <div className="hs-avatar" style={{
                  width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden',
                  background: 'linear-gradient(135deg,#0F9D58,#22c55e)',
@@ -502,7 +502,7 @@ textAlign: 'left', background: '#111',
               {isOwn ? 'Your story' : name.split(' ')[0]}
             </div>
             <div style={{
-              fontSize: 10, fontWeight: 500, color: isOwn ? 'rgba(255,255,255,0.6)' : isViewedCard ? 'rgba(255,255,255,0.65)' : 'rgba(255,255,255,0.8)',
+              fontSize: 11, fontWeight: 500, color: isOwn ? 'rgba(255,255,255,0.6)' : isViewedCard ? 'rgba(255,255,255,0.65)' : 'rgba(255,255,255,0.8)',
               display: 'flex', alignItems: 'center', gap: 4,
             }}>
               {locationLabel && <span>{locationLabel} · </span>}
@@ -513,7 +513,7 @@ textAlign: 'left', background: '#111',
         {title && (
           <div style={{
             display: 'inline-block', marginBottom: 4,
-            fontSize: 10.5, fontWeight: 700, color: '#fff',
+            fontSize: 12, fontWeight: 700, color: '#fff',
             borderRadius: 999, padding: '3px 9px',
             background: 'rgba(0,0,0,0.45)',
             maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
@@ -854,14 +854,15 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
   return (
     <>
       <style>{`
-        .hs-rail::-webkit-scrollbar { display: none; }
-         .hs-rail { padding: 8px 14px 12px; margin: 0; scroll-padding-left: 14px; overflow-x: auto; overflow-y: hidden; position: relative; z-index: 1; background: transparent !important; height: auto; max-height: none; scroll-behavior: smooth; scrollbar-width: none; overscroll-behavior-x: contain; }
+         .hs-rail::-webkit-scrollbar { display: none; }
+         .hs-rail { -ms-overflow-style: none; scrollbar-width: none; display: flex; flex-wrap: nowrap; gap: 12px; padding: 0; margin: 0; scroll-padding-left: 0; overflow-x: auto; overflow-y: hidden; position: relative; z-index: 1; background: transparent; scroll-snap-type: x proximity; scroll-behavior: smooth; overscroll-behavior-x: contain; }
         .hs-fade { position: absolute; top: 0; bottom: 0; width: 56px; pointer-events: none; z-index: 2; transition: opacity 0.2s ease; }
         .hs-fade-left { left: 0; background: linear-gradient(to right, var(--home-bg), transparent); }
         .hs-fade-right { right: 0; background: linear-gradient(to left, var(--home-bg), transparent); }
         @media (hover: none), (pointer: coarse) { .hs-fade { display: none !important; } .hs-rail-arrow { display: none !important; } }
-        .hs-rail-wrap { width: 100vw; margin-left: calc(50% - 50vw); margin-top: 0; padding-top: 0; background: transparent !important; overflow: visible; position: relative; z-index: 2; }
-        .hs-section { padding-top: 6px; background: transparent !important; }
+         .hs-rail-wrap { width: 100%; margin: 0; padding: 0; background: transparent; overflow: visible; position: relative; z-index: 1; }
+         .hs-section { margin: 28px 0; padding: 0; background: transparent; }
+         @media (min-width: 1100px) { .hs-section { margin: 36px 0; } }
         .hs-story-btn:active { transform: scale(0.97); transition: transform 0.12s ease; }
         .hs-rail-arrow { opacity: 0; transition: opacity 0.2s ease; pointer-events: none; }
         .hs-rail-wrap:hover .hs-rail-arrow { opacity: 1; pointer-events: auto; }
@@ -873,11 +874,8 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
           .hs-story-btn:hover { transform: none; }
           .hs-story-btn:hover img, .hs-story-btn:hover video { transform: none; }
         }
-        .hs-rail { -ms-overflow-style: none; scrollbar-width: none; position: relative; }
-        .hs-rail { flex-wrap: nowrap !important; }
-        .hs-chip-rail::-webkit-scrollbar { display: none; }
-
-        .hs-story-btn, .hs-add-btn { flex: 0 0 148px; width: 148px; aspect-ratio: 9 / 14; border-radius: 16px; overflow: hidden; position: relative; scroll-snap-align: start; background: #0f172a; box-shadow: 0 1px 3px rgba(0,0,0,0.10), 0 4px 14px rgba(0,0,0,0.08); cursor: pointer; transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.28s cubic-bezier(0.22, 1, 0.36, 1); will-change: transform; }
+         .hs-story-btn, .hs-add-btn, .hs-error-card { flex: 0 0 130px; width: 130px; height: 190px; border-radius: 16px; box-sizing: border-box; overflow: hidden; position: relative; scroll-snap-align: start; background: #0f172a; box-shadow: 0 1px 3px rgba(0,0,0,0.10), 0 4px 14px rgba(0,0,0,0.08); cursor: pointer; transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.28s cubic-bezier(0.22, 1, 0.36, 1); will-change: transform; }
+         @media (min-width: 769px) { .hs-story-btn, .hs-add-btn, .hs-error-card { flex-basis: 150px; width: 150px; height: 220px; } }
         .hs-story-btn img, .hs-story-btn video, .hs-story-btn .board { transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
         .hs-story-btn::after { content: ''; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1.5px rgba(15,157,88,0); transition: box-shadow 0.28s ease; pointer-events: none; }
         @media (hover: hover) and (pointer: fine) {
@@ -908,53 +906,28 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
           .hs-story-btn:hover, .hs-add-btn:hover { transform: none !important; box-shadow: none !important; }
         }
 
-        @media (max-width: 1023px) and (min-width: 768px) {
-          .hs-tablet-hide { display: none !important; }
-        }
-
-        @media (max-width: 767px) {
-          .hs-add-btn { border-radius: 18px; }
-          .hs-tablet-hide { display: none !important; }
-          .hs-rail { gap: 10px; padding: 8px 14px 12px; scroll-padding-left: 14px; }
-          .hs-chip { height: 40px; }
-          .hs-section { margin-bottom: 0 !important; padding-top: 6px !important; overflow: visible; }
-        }
-        @media (min-width: 768px) {
-          .hs-rail { gap: 12px; padding: 8px 20px 12px 14px; scroll-padding-left: 14px; }
-          .hs-section { padding-top: 10px; }
-          .hs-story-btn, .hs-add-btn { flex-basis: 170px; width: 170px; }
-        }
-        @media (min-width: 1100px) {
-          .hs-rail-wrap { width: 100%; margin-left: 0; }
-          .hs-rail { gap: 14px; padding: 8px 24px 12px 0; scroll-padding-left: 0; }
-          .hs-section { padding-top: 14px; }
-          .hs-story-btn, .hs-add-btn { flex-basis: 196px; width: 196px; border-radius: 18px; }
-          .hs-story-btn .hs-avatar, .hs-add-btn .hs-avatar { width: 36px; height: 36px; }
-          .hs-story-btn .hs-name { font-size: 13px; }
-        }
-        @media (min-width: 1600px) {
-          .hs-story-btn, .hs-add-btn { flex-basis: 210px; width: 210px; }
-          .hs-error-card { flex-basis: 210px; width: 210px; }
-        }
-        .hs-error-card { flex: 0 0 148px; width: 148px; aspect-ratio: 9 / 14; border-radius: 16px; box-sizing: border-box; scroll-snap-align: start; }
-        @media (min-width: 768px) { .hs-error-card { flex-basis: 170px; width: 170px; } }
-        @media (min-width: 1100px) { .hs-error-card { flex-basis: 196px; width: 196px; border-radius: 18px; } }
-        .hs-add-btn:focus-visible { outline: 2px solid #0F9D58; outline-offset: 3px; }
-        @media (hover: hover) and (pointer: fine) {
-          .hs-add-btn:hover { border-color: #0F9D58 !important; background: #f4fbf7 !important; }
-        }
-        @media (min-width: 1100px) {
-          .hs-add-btn .hs-create-plus { width: 48px !important; height: 48px !important; }
-        }
+         @media (max-width: 1023px) and (min-width: 768px) {
+           .hs-tablet-hide { display: none !important; }
+         }
+         @media (max-width: 767px) {
+           .hs-tablet-hide { display: none !important; }
+         }
+         .hs-add-btn:focus-visible { outline: 2px solid #0F9D58; outline-offset: 3px; }
       `}</style>
 
-        <section className="hs-section" style={{
-          padding: '0',
-          marginBottom: 16,
-          background: 'transparent',
-        }}>
-          <div style={isMobile ? { padding: '0 14px', boxSizing: 'border-box', width: '100%' } : { padding: windowWidth >= 1100 ? '0 24px' : '0 14px', boxSizing: 'border-box', width: '100%' }}>
+        <section className="hs-section" style={{ background: 'transparent' }}>
+          <div style={{ padding: windowWidth >= 769 ? '0 24px' : '0 14px', boxSizing: 'border-box', width: '100%' }}>
             <div style={{ maxWidth: 1400, margin: '0 auto', width: '100%', boxSizing: 'border-box' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', marginBottom: 14 }}>
+                <div>
+                  <div style={{ fontFamily: "'Sora', 'Inter', system-ui, sans-serif", fontSize: 20, fontWeight: 800, color: '#202124', letterSpacing: -0.3, lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Live statuses</div>
+                  <div style={{ fontSize: 13, color: '#5f6368', fontWeight: 500, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>See what sellers are offering today</div>
+                </div>
+                <button type="button" onClick={() => navigate?.('/status')}
+                  style={{ background: 'none', border: 'none', padding: 0, fontSize: 13, fontWeight: 700, color: '#0F9D58', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  View all <span style={{ fontSize: 14, lineHeight: 1 }}>→</span>
+                </button>
+              </div>
           {loading ? (
             <div style={isMobile ? { padding: '0' } : { padding: '0' }}>
               <div className="skeleton" style={{ width: 140, height: 16, borderRadius: 6, marginBottom: 12 }} />
@@ -994,21 +967,21 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
                   <div ref={scrollRef}
                     className="hs-rail"
                     style={{
-                      display: 'flex', gap: 10, overflowX: 'auto', overflowY: 'hidden',
+                      display: 'flex', gap: 12, overflowX: 'auto', overflowY: 'hidden',
                       scrollSnapType: 'x proximity',
                       WebkitOverflowScrolling: 'touch',
                       overscrollBehaviorX: 'contain',
-                      scrollPaddingLeft: '14px',
+                      scrollPaddingLeft: 0,
                     }}
                   >
                     <button ref={createCardRef} type="button" className="hs-add-btn"
                       onClick={() => { if (!currentUserId) { navigate?.('/login'); return }; onCreateStory?.() }}
                       style={{
                         flexShrink: 0,
-                        cursor: 'pointer', padding: 14, fontFamily: 'inherit',
-                        textAlign: 'center', background: '#ffffff',
+                        cursor: 'pointer', padding: 8, fontFamily: 'inherit',
+                        textAlign: 'center', background: '#e6f6ed',
                         scrollSnapAlign: 'start',
-                        border: '1.5px dashed rgba(15,157,88,0.45)',
+                        border: '2px dashed #0F9D58',
                         boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
                         transition: 'all 0.25s ease',
                         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
@@ -1017,38 +990,22 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
                       }}
                     >
                        <div className="hs-create-plus" style={{
-                         width: 36, height: 36,
+                         width: 44, height: 44,
                          borderRadius: '50%',
                          background: '#0F9D58',
                          display: 'flex', alignItems: 'center', justifyContent: 'center',
                          boxShadow: '0 6px 16px rgba(15,157,88,0.28)',
                        }}>
-                         <Plus size={18} color="#fff" strokeWidth={2.5} />
+                         <Plus size={22} color="#fff" strokeWidth={2.5} />
                        </div>
                        <div style={{
+                         fontFamily: "'DM Sans', system-ui, sans-serif",
                          fontSize: 13,
                          fontWeight: 700,
                          color: '#202124',
-                         letterSpacing: -0.2,
                        }}>
-                         Create Status
+                         Add status
                        </div>
-                       {rankedStories.length === 0 && (
-                         <div style={{
-                           fontSize: 11.5,
-                           fontWeight: 500,
-                           color: '#5f6368',
-                           lineHeight: 1.45,
-                           maxWidth: 140,
-                           textAlign: 'center',
-                           display: '-webkit-box',
-                           WebkitLineClamp: 3,
-                           WebkitBoxOrient: 'vertical',
-                           overflow: 'hidden',
-                         }}>
-                           Share what you're selling today.
-                         </div>
-                       )}
                      </button>
                      {rankedStories.slice(0, displayLimit).map(s => (
                       <StoryCard
@@ -1085,57 +1042,38 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
                    )}
                 </div>
                ) : (
-                 <div style={{ padding: 0, margin: 0 }}>
-                     <button ref={createCardRef} type="button" className="hs-add-btn"
+                  <div style={{ display: 'flex', gap: 12, padding: 0, margin: 0 }}>
+                      <button ref={createCardRef} type="button" className="hs-add-btn"
                        onClick={() => { if (!currentUserId) { navigate?.('/login'); return }; onCreateStory?.() }}
                        style={{
                          flexShrink: 0,
-                         cursor: 'pointer', padding: 12, fontFamily: 'inherit',
-                         textAlign: 'left', background: '#e6f6ed',
-                         border: '1.5px dashed #34c77a',
-                         borderRadius: 14,
+                         cursor: 'pointer', padding: 8, fontFamily: 'inherit',
+                         textAlign: 'center', background: '#e6f6ed',
+                         scrollSnapAlign: 'start',
+                         border: '2px dashed #0F9D58',
                          boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
                          transition: 'all 0.25s ease',
-                         display: 'flex', flexDirection: 'row', alignItems: 'center',
-                         gap: 12,
+                         display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                         gap: 10,
                          boxSizing: 'border-box',
-                         width: '100%',
-                         maxWidth: 360,
-                         minHeight: 64,
-                         height: 64,
                        }}
                      >
                        <div className="hs-create-plus" style={{
-                         width: 40, height: 40, flexShrink: 0,
+                         width: 44, height: 44,
                          borderRadius: '50%',
                          background: '#0F9D58',
                          display: 'flex', alignItems: 'center', justifyContent: 'center',
                          boxShadow: '0 6px 16px rgba(15,157,88,0.28)',
                        }}>
-                         <Plus size={20} color="#fff" strokeWidth={2.5} />
+                         <Plus size={22} color="#fff" strokeWidth={2.5} />
                        </div>
-                       <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0 }}>
-                         <div style={{
-                           fontSize: 15,
-                           fontWeight: 800,
-                           color: '#202124',
-                           letterSpacing: -0.2,
-                           lineHeight: 1.2,
-                           whiteSpace: 'nowrap',
-                         }}>
-                           Create Status
-                         </div>
-                         <div style={{
-                           fontSize: 13,
-                           fontWeight: 500,
-                           color: '#5f6368',
-                           lineHeight: 1.4,
-                           overflow: 'hidden',
-                           textOverflow: 'ellipsis',
-                           whiteSpace: 'nowrap',
-                         }}>
-                           Share what you're selling today
-                         </div>
+                       <div style={{
+                         fontFamily: "'DM Sans', system-ui, sans-serif",
+                         fontSize: 13,
+                         fontWeight: 700,
+                         color: '#202124',
+                       }}>
+                         Add status
                        </div>
                      </button>
 
