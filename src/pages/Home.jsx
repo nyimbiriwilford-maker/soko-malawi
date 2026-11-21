@@ -650,7 +650,72 @@ function GlobalStyles() {
         .soko-cat-grid {
           grid-template-columns: repeat(8, minmax(0, 1fr)) !important;
           gap: 16px !important;
+          display: grid !important;
         }
+        .soko-cat-grid .soko-cat-tile {
+          border: 1px solid #e8eaed !important;
+          border-radius: 14px !important;
+          box-shadow: 0 1px 2px rgba(16,24,40,0.04), 0 4px 12px rgba(16,24,40,0.05) !important;
+          background: #ffffff !important;
+        }
+        .soko-cat-grid .soko-cat-icon-wrap {
+          width: 48px !important;
+          height: 48px !important;
+        }
+      }
+      @media (max-width: 1099px) {
+        .soko-cat-section {
+          padding: 0 20px 0 !important;
+        }
+        .soko-cat-grid {
+          display: grid !important;
+          grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+          gap: 12px 8px !important;
+          padding: 8px 0 16px !important;
+          margin: 0 !important;
+          width: 100% !important;
+          max-width: 100% !important;
+          overflow: visible !important;
+        }
+        .soko-cat-grid .soko-cat-tile {
+          display: flex !important;
+          flex-direction: column !important;
+          align-items: center !important;
+          justify-content: flex-start !important;
+          gap: 8px !important;
+          min-height: 44px !important;
+          padding: 8px 4px !important;
+          border: none !important;
+          box-shadow: none !important;
+          background: transparent !important;
+          border-radius: 0 !important;
+        }
+        .soko-cat-grid .soko-cat-tile:active { transform: scale(0.96) !important; }
+        .soko-cat-grid .soko-cat-more {
+          border: 1px dashed #e8eaed !important;
+          border-radius: 0 !important;
+        }
+        .soko-cat-grid .soko-cat-icon-wrap {
+          width: 52px !important;
+          height: 52px !important;
+          border-radius: 16px !important;
+        }
+        .soko-cat-grid .soko-cat-label {
+          font-family: 'DM Sans', sans-serif !important;
+          font-size: 12px !important;
+          font-weight: 600 !important;
+          color: #202124 !important;
+          text-align: center !important;
+          line-height: 1.25 !important;
+          max-width: 100% !important;
+          display: -webkit-box !important;
+          -webkit-line-clamp: 2 !important;
+          -webkit-box-orient: vertical !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: normal !important;
+        }
+        .soko-cat-grid .soko-cat-sub { display: none !important; }
       }
       @media (max-width: 640px) {
         .soko-cat-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
