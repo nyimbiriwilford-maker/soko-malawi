@@ -49,6 +49,8 @@ const CAT_ICONS = {
 /* ══════════════════════════════════════════════════════
    MAIN PAGE
 ══════════════════════════════════════════════════════ */
+function isExpired(r) { return !!(r && r.expires_at && new Date(r.expires_at) <= new Date()) }
+
 export default function LookingFor() {
   const navigate  = useNavigate()
   const location  = useLocation()
@@ -198,7 +200,11 @@ const myAlertsRef = useRef([])
         .select(selectCols)
         .neq('status', 'fulfilled')
         .limit(preferLocal ? 60 : 120)
-      if (withExpiryFilter) q = q.or(`expires_at.is.null,expires_at.gt.${nowIso}`)
+      if (withExpiryFilter) {
+        let orFilter = `expires_at.is.null,expires_at.gt.${nowIso}`
+        if (user?.id) orFilter += `,user_id.eq.${user.id}`
+        q = q.or(orFilter)
+      }
       if (category !== 'All') q = q.eq('category', category)
       // Pull extra rows that list viewer's city in "looking for" areas
       if (preferLocal && placeTokens.length) {
@@ -239,7 +245,7 @@ const myAlertsRef = useRef([])
     if (!error) {
       let filtered = data || []
       // Client-side expiry guard (covers legacy rows + failed server filter)
-      filtered = filtered.filter(r => !r.expires_at || new Date(r.expires_at) > new Date())
+      filtered = filtered.filter(r => !r.expires_at || new Date(r.expires_at) > new Date() || r.user_id === user?.id)
       const combinedSearch = (search || headerSearch).trim().toLowerCase()
       if (combinedSearch) filtered = filtered.filter(r =>
         r.title?.toLowerCase().includes(combinedSearch) || r.description?.toLowerCase().includes(combinedSearch))
@@ -650,8 +656,8 @@ const myAlertsRef = useRef([])
   /* ── derived lists ── */
   const allReqs   = requests
   const myReqs    = allReqs.filter(r => r.user_id === user?.id)
-  const otherReqs = allReqs.filter(r => r.user_id !== user?.id)
-  const savedReqs = allReqs.filter(r => savedIds.has(r.id))
+  const otherReqs = allReqs.filter(r => r.user_id !== user?.id && !isExpired(r))
+  const savedReqs = allReqs.filter(r => savedIds.has(r.id) && !isExpired(r))
   const tabReqs   = activeTab === 'mine' ? myReqs : activeTab === 'saved' ? savedReqs : otherReqs
   const localNearCount = tabReqs.filter(r => (r._locScore || 0) >= 85).length
   const viewerPlaceLabel =
@@ -682,6 +688,7 @@ const myAlertsRef = useRef([])
         onCta={handleOpenComposer}
       />
 
+      <div style={{ position: 'sticky', top: 70, zIndex: 40, background: '#fff' }}>
       {/* slim header */}
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: (windowWidth >= 769 ? '20px 24px 16px' : '20px 14px 16px'), boxSizing: 'border-box' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
@@ -852,6 +859,7 @@ const myAlertsRef = useRef([])
       </div>
 
       {/* ── MAIN CONTENT ── */}
+      </div>
       <div id="lf-requests-grid" className="lf-main" style={{ display:'flex', padding:'20px 32px', gap:20, alignItems:'flex-start', minWidth:0, position:'relative' }}>
 
         {/* Mobile filter drawer backdrop */}
@@ -1055,7 +1063,7 @@ const myAlertsRef = useRef([])
 
       {/* Responsive CSS */}
       <style>{`
-        .lf-page { overflow-x: hidden; max-width: 100vw; box-sizing: border-box; min-height: 100vh; min-height: 100dvh; }
+        .lf-page { overflow-x: visible; max-width: 100vw; box-sizing: border-box; min-height: 100vh; min-height: 100dvh; }
         .lf-page *, .lf-page *::before, .lf-page *::after { box-sizing: border-box; }
         @media (max-width: 768px) {
           .lf-page { padding-bottom: calc(var(--bottom-nav-h, 60px) + env(safe-area-inset-bottom, 0px) + 16px); }
@@ -1537,6 +1545,15 @@ function DetailModal({ req, user, myListings, saved, onClose, onOffer, onSave, o
                 {Icon.clock(11, '#b45309')} {expiresLabel}
               </span>
             )}
+            {expiresLabel === 'Expired' && (
+              <span style={{
+                fontSize: 11, fontWeight: 700, color: '#5f6368',
+                background: '#f1f3f4', borderRadius: 999, padding: '5px 10px',
+                display: 'inline-flex', alignItems: 'center', gap: 4,
+              }}>
+                No longer active
+              </span>
+            )}
           </div>
 
           <h2 style={{
@@ -1761,5 +1778,8 @@ function DetailModal({ req, user, myListings, saved, onClose, onOffer, onSave, o
     </div>
   )
 }
+
+
+
 
 
