@@ -176,3 +176,20 @@ git log --oneline -3
 npm run build
 npx eslint <the real row component path> | Select-String "no-undef|is not defined" ; "ESLINT DONE"
 git status -sb
+
+GOAL: On desktop, the add (+) button in the left icon rail should be a plain green plus icon with no circle around it. Branch wip/home-hero-premium (check with git branch --show-current). Rules: no git stash or reset, no SQL, no installs, do NOT launch Chrome or any browser, do not merge or push. Make the edits directly.
+
+1. Find the left icon rail component (Select-String "Select a conversation|icon rail|rail" in src, or the component that renders the home, chat, plus and bell icons). Print the plus button code raw with line numbers.
+2. At 769px and up, render the plus as a bare icon: no filled green circle, no background, no box-shadow, no border. Icon colour green #0F9D58, size 26px, strokeWidth 2.25, same 44px tap target and the same alignment as the other rail icons.
+3. Hover (only for devices with (hover: hover)): a light #e6f6ed rounded-square background (10px radius) behind the icon. Add title="Post a listing" and aria-label "Post a listing".
+4. Phone layout (below 769px): do not change anything. The centre green circle in the bottom nav stays exactly as it is.
+5. Keep the same onClick, route and permissions logic. Do not touch any other component or page.
+
+Commit as "Rail: plain green plus on desktop", append one line to PROGRESS.md and commit it too.
+
+End with RAW output only, no summary:
+git log --oneline -3
+npm run build
+npx eslint <the real rail component path> | Select-String "no-undef|is not defined" ; "ESLINT DONE"
+git status -sb
+git diff HEAD~1 --stat -- src

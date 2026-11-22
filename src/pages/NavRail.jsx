@@ -18,6 +18,11 @@ const ICONS = {
       <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
     </svg>
   ),
+  plusDesktop: (
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="#0F9D58" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+    </svg>
+  ),
   bell: (
     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
@@ -48,7 +53,24 @@ export default function NavRail() {
   }, [])
 
   return (
-    <div className="soko-navrail" style={S.rail}>
+    <>
+      <style>{`
+        .navrail-plus-desktop { display: none; }
+        @media (min-width: 769px) {
+          .soko-navrail .navrail-post-btn {
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+            border-radius: 10px !important;
+          }
+          .soko-navrail .navrail-plus-phone { display: none; }
+          .soko-navrail .navrail-plus-desktop { display: inline-flex; }
+        }
+        @media (min-width: 769px) and (hover: hover) {
+          .soko-navrail .navrail-post-btn:hover { background: #e6f6ed !important; }
+        }
+      `}</style>
+      <div className="soko-navrail" style={S.rail}>
       <button
         style={{ ...S.iconBtn, ...(location.pathname === '/' ? S.iconBtnHome : {}) }}
         onClick={() => navigate('/')}
@@ -65,9 +87,16 @@ export default function NavRail() {
         {ICONS.chat}
       </button>
 
-      <button style={S.postBtn} onClick={() => navigate('/post')} title="Post a listing">
-        {ICONS.plus}
-      </button>
+        <button
+          className="navrail-post-btn"
+          style={S.postBtn}
+          onClick={() => navigate('/post')}
+          title="Post a listing"
+          aria-label="Post a listing"
+        >
+          <span className="navrail-plus-phone">{ICONS.plus}</span>
+          <span className="navrail-plus-desktop">{ICONS.plusDesktop}</span>
+        </button>
 
       <button
         style={{ ...S.iconBtn, ...(location.pathname === '/notifications' ? S.iconBtnAlert : {}) }}
@@ -84,7 +113,8 @@ export default function NavRail() {
           ? <img src={profile.avatar_url} alt="" style={S.profileImg} />
           : <span style={S.profileInitial}>{initial}</span>}
       </button>
-    </div>
+      </div>
+    </>
   )
 }
 
