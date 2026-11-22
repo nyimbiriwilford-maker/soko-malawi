@@ -692,7 +692,7 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
     <>
       <style>{`
          .hs-rail::-webkit-scrollbar { display: none; }
-         .hs-rail { -ms-overflow-style: none; scrollbar-width: none; display: flex; flex-wrap: nowrap; gap: 12px; padding: 0; margin: 0; scroll-padding-left: 0; overflow-x: auto; overflow-y: hidden; position: relative; z-index: 1; background: transparent; scroll-snap-type: x proximity; scroll-behavior: smooth; overscroll-behavior-x: contain; }
+         .hs-rail { -ms-overflow-style: none; scrollbar-width: none; display: flex; flex-wrap: nowrap; gap: 12px; padding: 8px 0 12px; margin: -8px 0 -12px; scroll-padding-left: 0; overflow-x: auto; overflow-y: hidden; position: relative; z-index: 1; background: transparent; scroll-snap-type: x proximity; scroll-behavior: smooth; overscroll-behavior-x: contain; }
          .hs-fade { position: absolute; top: 0; bottom: 0; width: 32px; pointer-events: none; z-index: 2; transition: opacity 0.2s ease; }
          .hs-fade-left { left: 0; background: linear-gradient(to right, #f8f9fa, transparent); }
          .hs-fade-right { right: 0; background: linear-gradient(to left, #f8f9fa, transparent); }
@@ -700,7 +700,7 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
          .hs-rail-wrap { width: 100%; margin: 0; padding: 0; background: transparent; overflow: visible; position: relative; z-index: 1; }
          .hs-section { margin: 28px 0; padding: 0; background: transparent; }
          @media (min-width: 1100px) { .hs-section { margin: 36px 0; } }
-        .hs-story-btn:active { transform: scale(0.97); transition: transform 0.12s ease; }
+        .hs-story-btn:active { transform: translateY(0) scale(0.98); transition: transform 160ms ease; }
         .hs-rail-arrow { opacity: 0; transition: opacity 0.2s ease; pointer-events: none; }
         .hs-rail-wrap:hover .hs-rail-arrow { opacity: 1; pointer-events: auto; }
         .hs-rail-arrow:hover { background: #f4fbf7 !important; border-color: #0F9D58 !important; }
@@ -720,12 +720,12 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
         .hs-story-btn img, .hs-story-btn video, .hs-story-btn .board { transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
         .hs-story-btn::after { content: ''; position: absolute; inset: 0; border-radius: inherit; box-shadow: inset 0 0 0 1.5px rgba(15,157,88,0); transition: box-shadow 0.28s ease; pointer-events: none; }
         @media (hover: hover) and (pointer: fine) {
-          .hs-story-btn:hover { transform: translateY(-2px); box-shadow: 0 2px 4px rgba(0,0,0,0.08), 0 14px 32px rgba(0,0,0,0.18); }
+          .hs-story-btn:hover, .hs-add-btn:hover { transform: translateY(-3px); box-shadow: 0 6px 16px rgba(0,0,0,0.12); transition: transform 160ms ease, box-shadow 160ms ease; }
           .hs-story-btn:hover img, .hs-story-btn:hover video { transform: scale(1.06); }
           .hs-story-btn:hover::after { box-shadow: inset 0 0 0 1.5px rgba(15,157,88,0.55); }
         }
-        .hs-story-btn:active { transform: scale(0.97); transition-duration: 0.12s; }
-        .hs-story-btn:focus-visible { outline: 2px solid #0F9D58; outline-offset: 3px; }
+        .hs-story-btn:active, .hs-add-btn:active { transform: translateY(0) scale(0.98); transition: transform 160ms ease; }
+        .hs-story-btn:focus-visible, .hs-add-btn:focus-visible { outline: 2px solid #0F9D58; outline-offset: 2px; }
 
         @keyframes hsPulse {
           0%, 100% { opacity: 1; transform: scale(1); }
@@ -748,7 +748,7 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
           .hs-story-btn img, .hs-story-btn video { transition: transform .35s ease, filter .35s ease; }
           .hs-story-btn:hover img, .hs-story-btn:hover video { transform: scale(1.04); filter: brightness(1.08) contrast(1.05); }
           .hs-story-btn:hover .hs-overlay { background: linear-gradient(180deg, rgba(0,0,0,0.05) 0%, transparent 35%, rgba(0,0,0,0.02) 50%, rgba(0,0,0,0.25) 100%) !important; }
-          .hs-add-btn:hover { transform: translateY(-3px); box-shadow: 0 12px 30px rgba(22,163,74,0.12) !important; }
+          .hs-add-btn:hover { transform: translateY(-3px); box-shadow: 0 6px 16px rgba(0,0,0,0.12) !important; transition: transform 160ms ease, box-shadow 160ms ease; }
         }
         @media (hover: none) {
           .hs-story-btn:hover, .hs-add-btn:hover { transform: none !important; box-shadow: none !important; }
@@ -760,7 +760,7 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
          @media (max-width: 767px) {
            .hs-tablet-hide { display: none !important; }
          }
-         .hs-add-btn:focus-visible { outline: 2px solid #0F9D58; outline-offset: 3px; }
+         .hs-add-btn:focus-visible { outline: 2px solid #0F9D58; outline-offset: 2px; }
       `}</style>
 
         <section className="hs-section" style={{ background: 'transparent' }}>
@@ -863,6 +863,7 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
                       WebkitOverflowScrolling: 'touch',
                       overscrollBehaviorX: 'contain',
                       scrollPaddingLeft: 0,
+                      paddingTop: 8, paddingBottom: 12, marginTop: -8, marginBottom: -12,
                       paddingRight: windowWidth >= 769 ? 24 : 14,
                     }}
                   >
@@ -1051,3 +1052,5 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
     </>
   )
 }
+
+
