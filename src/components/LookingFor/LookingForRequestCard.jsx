@@ -215,6 +215,9 @@ export default function LookingForRequestCard({
           {moreCount > 0 && <span className="lf-card-chip-more">+{moreCount}</span>}
           <span className="lf-card-meta-dot">·</span>
           <span>{daysAgo}</span>
+          {req.expires_at && new Date(req.expires_at) <= new Date() && (
+            <span style={{ fontSize: 11, fontWeight: 700, color: '#5f6368', background: '#f1f3f4', borderRadius: 999, padding: '2px 8px' }}>No longer active</span>
+          )}
         </div>
 
         <div className="lf-card-bottom">
