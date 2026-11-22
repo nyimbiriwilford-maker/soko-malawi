@@ -249,7 +249,9 @@ export default function RequestComposer({
   homeSearch = '',
   onHomeSearch,
   gpsDetected = null,
+  gpsStatus = 'idle',
   onRedetectGps,
+  onRetryGps,
   selectedCities = [],
   onAddCity,
   onRemoveCity,
@@ -619,42 +621,56 @@ export default function RequestComposer({
           </div>
 
           {/* ── Where I stay (home) — GPS area + district, editable ── */}
-          {(gpsDetected || detectingCity) && (
+          <div style={{
+            marginBottom: 12, padding: '10px 12px', borderRadius: 14, minHeight: 72,
+            background: gpsStatus === 'success' ? T.greenL : T.gray50,
+            border: `1.5px solid ${gpsStatus === 'success' ? G : T.gray200}`,
+            boxSizing: 'border-box',
+          }}>
             <div style={{
-              marginBottom: 12, padding: '12px 14px', borderRadius: 14,
-              background: detectingCity ? T.gray50 : T.greenL,
-              border: `1.5px solid ${detectingCity ? T.gray200 : G}`,
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10,
+              minHeight: 18,
             }}>
               <div style={{
-                display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10,
+                fontSize: 11, fontWeight: 800, lineHeight: '15px',
+                color: gpsStatus === 'success' ? G : T.gray400,
               }}>
+                {gpsStatus === 'finding'
+                  ? 'Finding your location...'
+                  : gpsStatus === 'success'
+                    ? `Location captured · ${gpsDetected?.label || ''}`
+                    : "Couldn't get exact location. Your request will show the city only."}
+              </div>
+              {gpsStatus === 'error' && (
+                <button
+                  type="button"
+                  onClick={() => onRetryGps?.()}
+                  disabled={detectingCity}
+                  style={{
+                    border: `1.5px solid ${G}`, background: '#fff', color: G,
+                    borderRadius: 10, padding: '6px 10px', fontSize: 11, fontWeight: 800,
+                    cursor: detectingCity ? 'default' : 'pointer', fontFamily: 'inherit',
+                    opacity: detectingCity ? 0.6 : 1, flexShrink: 0,
+                  }}
+                >
+                  Try again
+                </button>
+              )}
+            </div>
+            {gpsStatus === 'success' && gpsDetected && (
+              <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 10, marginTop: 6 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{
-                    fontSize: 10, fontWeight: 800, color: detectingCity ? T.gray400 : G,
-                    textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4,
-                  }}>
-                    {detectingCity ? 'Detecting GPS…' : 'Detected where you stay'}
+                  <div style={{ fontSize: 14, fontWeight: 800, color: T.gray900, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {homeLocation || gpsDetected.label}
                   </div>
-                  {!detectingCity && gpsDetected && (
-                    <>
-                      <div style={{ fontSize: 14, fontWeight: 800, color: T.gray900 }}>
-                        {homeLocation || gpsDetected.label}
-                      </div>
-                      {(gpsDetected.area || gpsDetected.district) && (
-                        <div style={{ fontSize: 11, color: T.gray600, fontWeight: 600, marginTop: 3 }}>
-                          {[gpsDetected.area && `Area: ${gpsDetected.area}`, gpsDetected.district && `District: ${gpsDetected.district}`]
-                            .filter(Boolean).join(' · ')}
-                        </div>
-                      )}
-                      {homeLocation && homeLocation !== gpsDetected.label && (
-                        <div style={{ fontSize: 11, color: T.amber, fontWeight: 700, marginTop: 4 }}>
-                          Changed from GPS: {gpsDetected.label}
-                        </div>
-                      )}
-                    </>
+                  {(gpsDetected.area || gpsDetected.district) && (
+                    <div style={{ fontSize: 11, color: T.gray600, fontWeight: 600, marginTop: 3, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {[gpsDetected.area && `Area: ${gpsDetected.area}`, gpsDetected.district && `District: ${gpsDetected.district}`]
+                        .filter(Boolean).join(' · ')}
+                    </div>
                   )}
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, flexShrink: 0 }}>
+                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
                   <button
                     type="button"
                     onClick={() => {
@@ -686,8 +702,8 @@ export default function RequestComposer({
                   </button>
                 </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
           <LocationPicker
             label="Where do you stay?"
             hint="GPS fills area & district — tap Change, or search/type a different place"

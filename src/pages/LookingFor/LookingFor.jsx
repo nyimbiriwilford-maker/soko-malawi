@@ -14,6 +14,7 @@ import {
   withDistanceToBuyer,
   viewerLocationTokens,
   haversineKm,
+  MALAWI_PLACE_COORDS,
 } from '../../utils/lookingFor'
 import { CATEGORIES, URGENCY_OPTIONS, expiresAtFromDays } from '../../constants/lookingFor'
 import { timeAgo } from '../../utils/lookingFor'
@@ -37,6 +38,32 @@ const C = {
   text:     '#202124',
   textSub:  '#5f6368',
   shadow:   '0 1px 3px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.06)',
+}
+
+const GPS_ACCEPT_ACCURACY_M = 500
+const GPS_VIEWER_ACCURACY_M = 1000
+
+function isInMalawi(lat, lng) {
+  const a = Number(lat)
+  const b = Number(lng)
+  return Number.isFinite(a) && Number.isFinite(b) &&
+    a >= -17.2 && a <= -9.3 && b >= 32.6 && b <= 36.0
+}
+
+function isAccurateMalawiGps(gps) {
+  if (!gps) return false
+  const accuracy = Number(gps.accuracy)
+  return Number.isFinite(accuracy) && accuracy <= GPS_ACCEPT_ACCURACY_M && isInMalawi(gps.lat, gps.lng)
+}
+
+function isKnownPlaceCenter(lat, lng) {
+  const a = Number(lat)
+  const b = Number(lng)
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return false
+  return Object.values(MALAWI_PLACE_COORDS).some(c =>
+    (Math.abs(a - c.lat) < 0.00005 && Math.abs(b - c.lng) < 0.00005) ||
+    (Number(a.toFixed(3)) === Number(c.lat.toFixed(3)) && Number(b.toFixed(3)) === Number(c.lng.toFixed(3))),
+  )
 }
 
 /* ══════════════════════════════════════════════════════
@@ -118,6 +145,7 @@ export default function LookingFor() {
   const [homeLocation,  setHomeLocation]  = useState('')
   const [homeSearch,    setHomeSearch]    = useState('')
   const [gpsDetected,   setGpsDetected]   = useState(null) // { label, area, district }
+  const [gpsStatus,     setGpsStatus]     = useState('idle')
   const [detectingCity, setDetectingCity] = useState(false)
   const [posting,       setPosting]       = useState(false)
 
@@ -377,21 +405,27 @@ export default function LookingFor() {
   }, [user, viewerLocation, viewerCity, sortBy])
 
   /* ── composer open ── */
+  async function captureComposerGps() {
+    let gps = await getGPSLocation({ force: true })
+    if (!isAccurateMalawiGps(gps)) gps = await getGPSLocation({ force: true })
+    return isAccurateMalawiGps(gps) ? gps : null
+  }
+
   async function handleOpenComposer() {
     setComposerOpen(true)
     setDetectingCity(true)
     setGpsDetected(null)
+    setGpsStatus('finding')
     const cities = await getDBCities(supabase)
     setDbCities(cities)
 
-    // GPS first for district + area where buyer stays
-    const gps = await getGPSLocation()
-    if (gps?.label) {
+    const gps = await captureComposerGps()
+    if (gps) {
       setGpsDetected(gps)
+      setGpsStatus('success')
       setViewerCity(gps.label)
       setHomeLocation(gps.label)
       if (selectedCities.length === 0) {
-        // Default looking area to detected district/city (user can change)
         const seed = gps.district || gps.city || gps.label
         setSelectedCities([seed])
       }
@@ -402,20 +436,24 @@ export default function LookingFor() {
         setDbCities(prev => [gps.area, ...prev.filter(c => c !== gps.area)])
       }
     } else {
-      showToast('Could not detect GPS. Type where you stay.', 'warning')
+      setGpsDetected(null)
+      setGpsStatus('error')
     }
     setDetectingCity(false)
   }
 
   async function redetectHomeGps() {
     setDetectingCity(true)
-    const gps = await getGPSLocation()
+    setGpsStatus('finding')
+    const gps = await captureComposerGps()
     setDetectingCity(false)
-    if (!gps?.label) {
-      showToast('Could not detect GPS location. Type your area instead.', 'warning')
+    if (!gps) {
+      setGpsDetected(null)
+      setGpsStatus('error')
       return
     }
     setGpsDetected(gps)
+    setGpsStatus('success')
     setViewerCity(gps.label)
     setHomeLocation(gps.label)
     setHomeSearch('')
@@ -481,15 +519,11 @@ export default function LookingFor() {
     const stay = homeLocation.trim()
     const lookingAreas = selectedCities.filter(Boolean)
 
-    // Prefer GPS coords from stay detection when label still matches
-    const stayGps =
-      gpsDetected &&
-      Number.isFinite(gpsDetected.lat) &&
-      Number.isFinite(gpsDetected.lng) &&
-      (!homeLocation || !gpsDetected.label || homeLocation === gpsDetected.label ||
-        homeLocation.toLowerCase().includes(String(gpsDetected.district || '').toLowerCase()))
-        ? gpsDetected
-        : null
+    const stayGps = isAccurateMalawiGps(gpsDetected) && homeLocation.trim() === gpsDetected.label
+      ? gpsDetected
+      : null
+    const savedLat = stayGps ? Number(Number(stayGps.lat).toFixed(3)) : null
+    const savedLng = stayGps ? Number(Number(stayGps.lng).toFixed(3)) : null
 
     const payload = {
       user_id: user.id,
@@ -499,8 +533,8 @@ export default function LookingFor() {
       city: stay,
       cities: lookingAreas,
       detected_city: gpsDetected?.label || viewerCity || null,
-      lat: stayGps?.lat ?? null,
-      lng: stayGps?.lng ?? null,
+      lat: savedLat,
+      lng: savedLng,
       description: form.description.trim() || null,
       urgency: form.urgency,
       image_url,
@@ -1221,11 +1255,19 @@ export default function LookingFor() {
         }}
         onSetCover={setCoverIndex}
         homeLocation={homeLocation}
-        onHomeLocationChange={setHomeLocation}
+        onHomeLocationChange={value => {
+          setHomeLocation(value)
+          if (gpsDetected && value !== gpsDetected.label) {
+            setGpsDetected(null)
+            setGpsStatus('error')
+          }
+        }}
         homeSearch={homeSearch}
         onHomeSearch={setHomeSearch}
         gpsDetected={gpsDetected}
+        gpsStatus={gpsStatus}
         onRedetectGps={redetectHomeGps}
+        onRetryGps={redetectHomeGps}
         selectedCities={selectedCities}
         onAddCity={city => setSelectedCities(p => p.includes(city) ? p : [...p, city])}
         onRemoveCity={city => setSelectedCities(p => p.filter(c => c !== city))}
@@ -1357,26 +1399,29 @@ function DetailModal({ req, user, myListings, saved, viewerLocation, onClose, on
     if (!Number.isFinite(n) || n === 0) return null
     return n
   }
-  const realPoint = (latValue, lngValue) => {
+  const realPoint = (latValue, lngValue, accuracyValue) => {
     const lat = coordToReal(latValue)
     const lng = coordToReal(lngValue)
     if (lat == null || lng == null) return null
     if (lat < -17.2 || lat > -9.3 || lng < 32.6 || lng > 36) return null
+    if (isKnownPlaceCenter(lat, lng)) return null
+    if (accuracyValue !== undefined) {
+      const accuracy = Number(accuracyValue)
+      if (!Number.isFinite(accuracy) || accuracy > GPS_VIEWER_ACCURACY_M) return null
+    }
     return { lat, lng }
   }
 
   let distanceText = null
   if (!isOwn && placeMatch && placeMatch !== 'Different city') {
-    const viewerPoint = realPoint(viewerLocation?.lat, viewerLocation?.lng)
+    const viewerPoint = realPoint(viewerLocation?.lat, viewerLocation?.lng, viewerLocation?.accuracy)
     const reqPoint = realPoint(req.lat, req.lng)
     if (viewerPoint && reqPoint) {
       const km = haversineKm(viewerPoint.lat, viewerPoint.lng, reqPoint.lat, reqPoint.lng)
       if (km != null && km <= 50) distanceText = `about ${Math.max(1, Math.round(km))} km away`
     }
   }
-  const locationMatchText = placeMatch
-    ? (distanceText && placeMatch !== 'In your area' ? distanceText : placeMatch)
-    : null
+  const locationMatchText = distanceText || placeMatch
 
   const iconBtn = {
     width: 40, height: 40, borderRadius: 12, border: `1px solid ${C.border}`,

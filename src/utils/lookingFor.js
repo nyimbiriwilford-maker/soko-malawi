@@ -37,7 +37,7 @@ export async function getGPSLocation({ force = false } = {}) {
           return parsed.data
         }
       }
-    } catch {}
+    } catch { void 0 }
   }
   const result = await new Promise((resolve) => {
     if (!navigator.geolocation) {
@@ -92,6 +92,7 @@ export async function getGPSLocation({ force = false } = {}) {
             country: d.countryName || null,
             lat: coords.latitude,
             lng: coords.longitude,
+            accuracy: coords.accuracy,
             raw: d,
           })
         } catch {
@@ -103,7 +104,7 @@ export async function getGPSLocation({ force = false } = {}) {
     )
   })
   if (result) {
-    try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), data: result })) } catch {}
+    try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), data: result })) } catch { void 0 }
   }
   return result
 }
