@@ -2484,9 +2484,8 @@ async function uploadAndSend(file, type, caption = '') {
       if (nearest != null) {
         const wait = Math.max(0, nearest - Date.now()) + 150
         timer = setTimeout(() => { setOfferExpiryTick(n => n + 1); refresh() }, wait)
-        // Also tick every second so the countdown label counts down live.
-        // Reuses the same single ticker (same state/scheduling) — no second timer.
-        interval = setInterval(() => setOfferExpiryTick(n => n + 1), 1000)
+        // Countdowns show whole minutes, so one tick per minute is enough.
+        interval = setInterval(() => setOfferExpiryTick(n => n + 1), 60_000)
       } else {
         // No active deadline — poll loosely so newly created offers get scheduled
         interval = setInterval(() => setOfferExpiryTick(n => n + 1), 60_000)
@@ -3414,6 +3413,9 @@ async function uploadAndSend(file, type, caption = '') {
         .chat-page.chat-thread .msg-bubble.offer-bubble.r-theirs-join { border-top-left-radius: 4px !important; }
         .chat-page.chat-thread .msg-bubble.offer-bubble .offer-card {
           box-sizing: border-box;
+          --offer-status-bg: #fff7e6;
+          --offer-status-fg: #a16207;
+          --offer-status-border: #fde68a;
           width: 100% !important;
           max-width: none !important;
           max-height: none !important;
@@ -3489,20 +3491,60 @@ async function uploadAndSend(file, type, caption = '') {
           opacity: 0.8 !important;
         }
         .chat-page.chat-thread .offer-card-tag::before { display: none !important; }
+        .chat-page.chat-thread .msg-bubble.offer-bubble .offer-card.is-pending {
+          --offer-status-bg: #fff7e6 !important;
+          --offer-status-fg: #a16207 !important;
+          --offer-status-border: #fde68a !important;
+        }
+        .chat-page.chat-thread .msg-bubble.offer-bubble .offer-card.is-accepted {
+          --offer-status-bg: #e8f5ee !important;
+          --offer-status-fg: #0f9d58 !important;
+          --offer-status-border: #a7dfc0 !important;
+        }
+        .chat-page.chat-thread .msg-bubble.offer-bubble .offer-card.is-declined {
+          --offer-status-bg: #fdecea !important;
+          --offer-status-fg: #d93025 !important;
+          --offer-status-border: #f5b7b1 !important;
+        }
+        .chat-page.chat-thread .msg-bubble.offer-bubble .offer-card.is-countered,
+        .chat-page.chat-thread .msg-bubble.offer-bubble .offer-card.is-superseded {
+          --offer-status-bg: #e8f0fe !important;
+          --offer-status-fg: #1d4ed8 !important;
+          --offer-status-border: #bfdbfe !important;
+        }
+        .chat-page.chat-thread .msg-bubble.offer-bubble .offer-card.is-withdrawn {
+          --offer-status-bg: #f3e8fd !important;
+          --offer-status-fg: #7b1fa2 !important;
+          --offer-status-border: #d7b3ed !important;
+        }
+        .chat-page.chat-thread .msg-bubble.offer-bubble .offer-card.is-expired {
+          --offer-status-bg: #f1f3f4 !important;
+          --offer-status-fg: #5f6368 !important;
+          --offer-status-border: #dadce0 !important;
+        }
         .chat-page.chat-thread .offer-card-status {
+          display: inline-flex !important;
+          align-items: center !important;
+          gap: 5px !important;
           flex: 0 0 auto !important;
           font-size: 11px !important;
+          font-weight: 700 !important;
+          text-transform: uppercase !important;
+          letter-spacing: 0.04em !important;
           line-height: 1.4 !important;
           padding: 2px 8px !important;
+          border: 1px solid var(--offer-status-border) !important;
           border-radius: 999px !important;
+          background: var(--offer-status-bg) !important;
+          color: var(--offer-status-fg) !important;
         }
-        .chat-page.chat-thread .msg-bubble.offer-bubble.is-mine .offer-card-status {
-          background: rgba(255,255,255,0.2) !important;
-          color: #fff !important;
-        }
-        .chat-page.chat-thread .msg-bubble.offer-bubble.is-theirs .offer-card-status {
-          background: #e8f5ee !important;
-          color: #0F9D58 !important;
+        .chat-page.chat-thread .offer-card-status::before {
+          content: '' !important;
+          width: 6px !important;
+          height: 6px !important;
+          flex: 0 0 6px !important;
+          border-radius: 50% !important;
+          background: currentColor !important;
         }
         .chat-page.chat-thread .offer-card-amount {
           display: block !important;
@@ -3550,8 +3592,64 @@ async function uploadAndSend(file, type, caption = '') {
         .chat-page.chat-thread .msg-bubble.offer-bubble .msg-ticks.is-failed { color: inherit !important; }
         .chat-page.chat-thread .offer-card-note,
         .chat-page.chat-thread .offer-stepper,
-        .chat-page.chat-thread .offer-card-parent,
-        .chat-page.chat-thread .offer-card-footer { display: none !important; }
+        .chat-page.chat-thread .offer-card-parent { display: none !important; }
+        .chat-page.chat-thread .offer-card-footer {
+          display: flex !important;
+          align-items: center !important;
+          justify-content: space-between !important;
+          flex-wrap: nowrap !important;
+          gap: 6px !important;
+          margin: 6px 0 0 !important;
+          padding: 0 !important;
+          border: 0 !important;
+        }
+        .chat-page.chat-thread .offer-card-statusline {
+          display: inline-flex !important;
+          align-items: flex-start !important;
+          gap: 6px !important;
+          flex: 1 1 auto !important;
+          min-width: 0 !important;
+          font-size: 11px !important;
+          font-weight: 600 !important;
+          line-height: 1.35 !important;
+          opacity: 1 !important;
+        }
+        .chat-page.chat-thread .offer-card-statusline::before {
+          content: '' !important;
+          width: 6px !important;
+          height: 6px !important;
+          margin-top: 4px !important;
+          flex: 0 0 6px !important;
+          border-radius: 50% !important;
+          background: var(--offer-status-fg) !important;
+        }
+        .chat-page.chat-thread .offer-card-statusline-text {
+          display: block !important;
+          min-width: 0 !important;
+          overflow: visible !important;
+          text-overflow: clip !important;
+          white-space: normal !important;
+        }
+        .chat-page.chat-thread .msg-bubble.offer-bubble.is-mine .offer-card-statusline {
+          color: rgba(255,255,255,0.92) !important;
+        }
+        .chat-page.chat-thread .msg-bubble.offer-bubble.is-theirs .offer-card-statusline {
+          color: var(--offer-status-fg) !important;
+        }
+        .chat-page.chat-thread .offer-card-countdown {
+          padding: 2px 7px !important;
+          font-size: 10px !important;
+          line-height: 1.4 !important;
+        }
+        .chat-page.chat-thread .offer-card-countdown-label {
+          display: inline !important;
+          font-size: 10px !important;
+          font-weight: 600 !important;
+          letter-spacing: 0 !important;
+          text-transform: none !important;
+          opacity: 0.85 !important;
+        }
+        .chat-page.chat-thread .offer-card-countdown.is-expired { display: none !important; }
         .chat-page.chat-thread .offer-card-actions,
         .chat-page.chat-thread .offer-card-actions.is-manage {
           display: flex !important;
@@ -4108,33 +4206,37 @@ async function uploadAndSend(file, type, caption = '') {
                 return `⏱ ${Math.ceil(ms / 86400000)}d`
               })()
             : null
-          // Offer accept-window countdown — shown on the card for both parties.
-          // Live HH:MM:SS "clock" format, driven by the existing single ticker.
+          // Offer accept-window countdown — shown only while an offer is actionable.
+          // Whole days/hours, minute precision below one hour, driven by the minute ticker.
           const offerExpiryAt = isOffer && offer && offerExpiresAt(offer)
-          const offerTimeLeft = !offerExpired && offerExpiryAt
+          const offerCountdownActive = !offerExpired && effStatus === OFFER_STATUS.pending && offerExpiryAt
+          const offerTimeLeft = offerCountdownActive
             ? (() => {
                 const ms = new Date(offerExpiryAt).getTime() - Date.now()
                 if (ms <= 0) return null
-                const totalSec = Math.max(1, Math.floor(ms / 1000))
-                const d = Math.floor(totalSec / 86400)
-                const h = Math.floor((totalSec % 86400) / 3600)
-                const m = Math.floor((totalSec % 3600) / 60)
-                const s = totalSec % 60
-                const pad = (n) => String(n).padStart(2, '0')
-                const clock = `${pad(h)}:${pad(m)}:${pad(s)}`
-                return d > 0 ? `${d}d ${clock}` : clock
+                const totalMin = Math.max(1, Math.ceil(ms / 60000))
+                if (totalMin < 60) return `${totalMin}m`
+                const d = Math.floor(totalMin / 1440)
+                const h = Math.floor((totalMin % 1440) / 60)
+                return [d ? `${d}d` : '', h ? `${h}h` : ''].filter(Boolean).join(' ')
               })()
             : null
-          // Urgency tier for countdown pill styling (purely visual, no logic change)
-          const offerCountdownUrgency = !offerExpired && offerExpiryAt
+          const offerCountdownUrgency = offerCountdownActive
             ? (() => {
                 const ms = new Date(offerExpiryAt).getTime() - Date.now()
                 if (ms <= 0) return null
-                if (ms < 3600000)  return 'urgent'   // < 1 hour  → red pulse
-                if (ms < 86400000) return 'warning'  // < 24 hours → amber
+                if (ms < 3600000) return 'urgent'
+                if (ms < 86400000) return 'warning'
                 return null
               })()
             : null
+          const offerStatusFooterText = isOffer && offer
+            ? (() => {
+                const text = offerStatusText({ ...offer, status: effStatus }, currentUser?.id, isMine)
+                if (!text || effStatus === OFFER_STATUS.pending) return text
+                return text.toLowerCase().includes(offerStatusLabel(effStatus).toLowerCase()) ? '' : text
+              })()
+            : ''
 
           let radiusClass = ''
           if (isMine) {
@@ -4307,23 +4409,24 @@ async function uploadAndSend(file, type, caption = '') {
                         {flow && flow.hasChild && (
                           <div className="offer-card-parent is-down">↓ continued by offer {flow.index + 1}</div>
                         )}
-                        <div className="offer-card-footer">
-                          <span className={`offer-card-statusline is-${effStatus}`}>
-                            {offerStatusText({ ...offer, status: effStatus }, currentUser?.id, isMine)}
-                          </span>
-                          {offerTimeLeft ? (
-                            <span className={`offer-card-countdown${offerCountdownUrgency ? ` is-${offerCountdownUrgency}` : ''}`}>
-                              <span className="offer-card-countdown-ico" aria-hidden>⏱</span>
-                              <span className="offer-card-countdown-label">Expires in</span>
-                              <span className="offer-card-countdown-time">{offerTimeLeft}</span>
-                            </span>
-                          ) : effStatus === OFFER_STATUS.expired && (
-                            <span className="offer-card-countdown is-expired" aria-hidden>
-                              <span className="offer-card-countdown-ico">⏱</span>
-                              Offer expired
-                            </span>
-                          )}
-                        </div>
+                        {(offerStatusFooterText || offerTimeLeft) && (
+                          <div className="offer-card-footer">
+                            {offerStatusFooterText && (
+                              <span className={`offer-card-statusline is-${effStatus}`}>
+                                <span className="offer-card-statusline-text">
+                                  {offerStatusFooterText}
+                                </span>
+                              </span>
+                            )}
+                            {offerTimeLeft && (
+                              <span className={`offer-card-countdown${offerCountdownUrgency ? ` is-${offerCountdownUrgency}` : ''}`}>
+                                <span className="offer-card-countdown-ico" aria-hidden>⏱</span>
+                                <span className="offer-card-countdown-label">{isMine ? 'Complete within' : 'Expires in'}</span>
+                                <span className="offer-card-countdown-time">{offerTimeLeft}</span>
+                              </span>
+                            )}
+                          </div>
+                        )}
                         {isMine && !deletedEveryone && (
                           <div className="offer-card-actions is-manage">
                             {!offerExpired && offer.status === OFFER_STATUS.pending && (

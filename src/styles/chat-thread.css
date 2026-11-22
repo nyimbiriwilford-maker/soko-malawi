@@ -912,6 +912,9 @@
 
 .chat-thread .msg-bubble.offer-bubble .offer-card {
   --oc-accent: #1f2b26;
+  --offer-status-bg: #fff7e6;
+  --offer-status-fg: #a16207;
+  --offer-status-border: #fde68a;
   position: relative;
   background: #ffffff;
   border: 1px solid #e2ece6;
@@ -945,7 +948,16 @@
 }
 
 /* Full-card status accents */
+.chat-thread .msg-bubble.offer-bubble .offer-card.is-pending {
+  --offer-status-bg: #fff7e6;
+  --offer-status-fg: #a16207;
+  --offer-status-border: #fde68a;
+}
+
 .chat-thread .msg-bubble.offer-bubble .offer-card.is-accepted {
+  --offer-status-bg: #e8f5ee;
+  --offer-status-fg: #0f9d58;
+  --offer-status-border: #a7dfc0;
   background: #f4fdf8;
   border-color: #7fd8a7;
 }
@@ -954,11 +966,33 @@
 }
 
 .chat-thread .msg-bubble.offer-bubble .offer-card.is-declined {
+  --offer-status-bg: #fdecea;
+  --offer-status-fg: #d93025;
+  --offer-status-border: #f5b7b1;
   background: #fdf8f8;
   border-color: #f3c1c1;
 }
 .chat-thread .msg-bubble.offer-bubble .offer-card.is-declined::before {
   background: linear-gradient(90deg, #dc2626, #f87171);
+}
+
+.chat-thread .msg-bubble.offer-bubble .offer-card.is-countered,
+.chat-thread .msg-bubble.offer-bubble .offer-card.is-superseded {
+  --offer-status-bg: #e8f0fe;
+  --offer-status-fg: #1d4ed8;
+  --offer-status-border: #bfdbfe;
+}
+
+.chat-thread .msg-bubble.offer-bubble .offer-card.is-withdrawn {
+  --offer-status-bg: #f3e8fd;
+  --offer-status-fg: #7b1fa2;
+  --offer-status-border: #d7b3ed;
+}
+
+.chat-thread .msg-bubble.offer-bubble .offer-card.is-expired {
+  --offer-status-bg: #f1f3f4;
+  --offer-status-fg: #5f6368;
+  --offer-status-border: #dadce0;
 }
 
 /* Expired / withdrawn → graceful desaturation + soft overlay */
@@ -1079,50 +1113,31 @@
   box-shadow: 0 0 0 3px rgba(26, 122, 74, 0.14);
 }
 
-/* Status pill — professional, subtle */
+/* Status pill — distinct, scannable status colours */
 .chat-thread .offer-card-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font-size: 10px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #8a5a00;
-  background: #fff8e6;
-  border: 1px solid #f0d88a;
+  color: var(--offer-status-fg);
+  background: var(--offer-status-bg);
+  border: 1px solid var(--offer-status-border);
   border-radius: 999px;
-  padding: 2px 10px;
+  padding: 2px 9px;
   white-space: nowrap;
-  line-height: 1.7;
+  line-height: 1.6;
 }
 
-.chat-thread .offer-card-status.is-accepted {
-  color: #116b38;
-  background: #ecfbf2;
-  border-color: #7fd8a7;
-}
-
-.chat-thread .offer-card-status.is-declined {
-  color: #a32424;
-  background: #fceaea;
-  border-color: #f0aeae;
-}
-
-.chat-thread .offer-card-status.is-countered,
-.chat-thread .offer-card-status.is-superseded {
-  color: #3f4a55;
-  background: #f4f6f8;
-  border-color: #cdd5db;
-}
-
-.chat-thread .offer-card-status.is-withdrawn {
-  color: #6b7280;
-  background: #f7f8f9;
-  border-color: #d6dbe0;
-}
-
-.chat-thread .offer-card-status.is-expired {
-  color: #8a9490;
-  background: #f4f6f5;
-  border-color: #dfe5e2;
+.chat-thread .offer-card-status::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border-radius: 50%;
+  background: currentColor;
 }
 
 /* Amount — hero focal point */
@@ -1255,23 +1270,34 @@
 }
 
 .chat-thread .offer-card-statusline {
+  display: inline-flex;
+  align-items: flex-start;
+  gap: 6px;
   font-size: 11.5px;
   font-weight: 600;
-  color: #5d7066;
+  color: var(--offer-status-fg);
   flex: 1 1 auto;
   min-width: 0;
   line-height: 1.45;
 }
 
-.chat-thread .offer-card-statusline.is-pending  { color: #92640a; }
-.chat-thread .offer-card-statusline.is-accepted  { color: #147a3f; }
-.chat-thread .offer-card-statusline.is-declined  { color: #a32424; }
-.chat-thread .offer-card-statusline.is-countered,
-.chat-thread .offer-card-statusline.is-superseded { color: #64748b; }
-.chat-thread .offer-card-statusline.is-withdrawn  { color: #8a9490; }
-.chat-thread .offer-card-statusline.is-expired    { color: #8a9490; }
+.chat-thread .offer-card-statusline::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  margin-top: 5px;
+  flex: 0 0 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
 
-/* Live countdown pill — HH:MM:SS. Default neutral (> 24 h) */
+.chat-thread .offer-card-statusline-text {
+  display: block;
+  min-width: 0;
+  line-height: 1.35;
+}
+
+/* Live countdown pill — days/hours (minutes under 1 h). Default neutral (> 24 h) */
 .chat-thread .offer-card-countdown {
   display: inline-flex;
   align-items: center;
@@ -1296,10 +1322,10 @@
 }
 
 .chat-thread .offer-card-countdown-label {
-  font-size: 9.5px;
+  font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
+  letter-spacing: 0;
+  text-transform: none;
   opacity: 0.85;
 }
 
@@ -1439,22 +1465,6 @@
   background: #d97706;
   border-color: #d97706 !important;
 }
-
-/* Withdrawn / expired read-only state colors */
-.chat-thread .offer-card-status.is-withdrawn {
-  color: #8a5a00;
-  background: #fff8e6;
-  border-color: #eecf77;
-}
-
-.chat-thread .offer-card-status.is-expired {
-  color: #8a9490;
-  background: #f4f6f5;
-  border-color: #dfe5e2;
-}
-
-.chat-thread .offer-card-statusline.is-withdrawn { color: #8a5a00; }
-.chat-thread .offer-card-statusline.is-expired   { color: #8a9490; }
 
 /* Meta row sits below the offer card bubble */
 .chat-thread .msg-bubble.offer-bubble .msg-meta-row {
