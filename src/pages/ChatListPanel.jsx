@@ -230,6 +230,37 @@ function formatChatPrice(value) {
   return `MWK ${Math.round(amount).toLocaleString('en-US')}`
 }
 
+const CONTEXT_IMAGE_CACHE = new Map()
+
+function firstImageValue(value) {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = firstImageValue(item)
+      if (found) return found
+    }
+    return null
+  }
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  if (!trimmed || trimmed === 'null' || trimmed === 'undefined') return null
+  if (trimmed.startsWith('[')) {
+    try { return firstImageValue(JSON.parse(trimmed)) } catch { return null }
+  }
+  return trimmed
+}
+
+function rememberContextImages(type, rows) {
+  for (const row of rows || []) {
+    if (!row?.id) continue
+    let image = null
+    if (type === 'service') image = firstImageValue(row.media_urls)
+    else if (type === 'listing') image = firstImageValue(row.images)
+    else if (type === 'request') image = firstImageValue(row.image_url) || firstImageValue(row.image_urls)
+    else if (type === 'shop') image = firstImageValue(row.logo_url)
+    if (image) CONTEXT_IMAGE_CACHE.set(`${type}:${row.id}`, image)
+  }
+}
+
 function getSourceType(chat) {
   return chat?.source || (chat?.isService ? 'service' : chat?.isRequest ? 'request' : chat?.listing ? 'listing' : 'direct')
 }
@@ -239,13 +270,15 @@ function getContextTitle(chat, src) {
   if (src === 'request') return chat.requestTitle || chat.request?.title || 'Request chat'
   if (src === 'listing') return chat.listing?.title || 'Listing chat'
   if (src === 'shop') return chat.shop?.name || 'Shop chat'
-  return 'New chat'
+  return titleCaseName(chat.displayName)
 }
 
 function getContextImage(chat, src) {
-  if (src === 'service') return chat.service?.media_urls?.[0] || null
-  if (src === 'listing') return chat.listing?.images?.[0] || null
-  if (src === 'shop') return chat.shop?.logo_url || null
+  const cached = chat?.contextId ? CONTEXT_IMAGE_CACHE.get(`${src}:${chat.contextId}`) : null
+  if (src === 'service') return cached || firstImageValue(chat.service?.media_urls)
+  if (src === 'listing') return cached || firstImageValue(chat.listing?.images)
+  if (src === 'request') return cached || firstImageValue(chat.request?.image_url) || firstImageValue(chat.request?.image_urls)
+  if (src === 'shop') return cached || firstImageValue(chat.shop?.logo_url)
   return null
 }
 
@@ -270,13 +303,13 @@ function formatChatTime(value) {
   return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
 }
 
-function PeerAvatar({ url, name, online }) {
+function PeerAvatar({ url, name, online, main = false }) {
   const [failed, setFailed] = useState(false)
   const cleanUrl = typeof url === 'string' && url.trim() && url !== 'null' && url !== 'undefined' ? url.trim() : null
   const initial = (String(name || 'U').trim()[0] || 'U').toUpperCase()
 
   return (
-    <span className="chat-peer-avatar">
+    <span className={main ? 'chat-main-avatar' : 'chat-peer-avatar'}>
       {cleanUrl && !failed ? (
         <img src={cleanUrl} alt="" onError={() => setFailed(true)} />
       ) : (
@@ -358,9 +391,11 @@ function renderChatPreview(msg, currentUserId) {
 
 function ChatListRow({ chat, index, isOpen, online, currentUserId, onOpen, onMenu, onLongPressStart, onLongPressMove, onLongPressEnd }) {
   const src = getSourceType(chat)
+  const hasContext = src !== 'direct' && !!(chat.contextId || chat.listing || chat.service || chat.request || chat.shop)
   const contextTitle = getContextTitle(chat, src)
   const price = getContextPrice(chat, src)
   const peerName = titleCaseName(chat.displayName)
+  const title = hasContext ? contextTitle : peerName
   const hasUnread = (chat.unread || 0) > 0
   const time = formatChatTime(chat.lastActivityAt || chat.lastMsg?.created_at)
 
@@ -375,26 +410,37 @@ function ChatListRow({ chat, index, isOpen, online, currentUserId, onOpen, onMen
       onTouchEnd={onLongPressEnd}
       onTouchCancel={onLongPressEnd}
     >
-      <ContextThumb
-        image={getContextImage(chat, src)}
-        type={src}
-        title={contextTitle}
-        peerUrl={chat.avatarUrl}
-        peerName={peerName}
-        online={online}
-      />
+      {hasContext ? (
+        <ContextThumb
+          image={getContextImage(chat, src)}
+          type={src}
+          title={title}
+          peerUrl={chat.avatarUrl}
+          peerName={peerName}
+          online={online}
+        />
+      ) : (
+        <PeerAvatar
+          main
+          url={chat.avatarUrl}
+          name={peerName}
+          online={online}
+        />
+      )}
       <div className="chat-row-body">
         <div className="chat-row-top">
-          <span className="chat-row-title" title={contextTitle}>{contextTitle}</span>
+          <span className="chat-row-title" title={title}>{title}</span>
           <div className="chat-row-meta">
             <span className="chat-row-time">{time}</span>
             {hasUnread ? <span className="chat-row-unread">{chat.unread > 99 ? '99+' : chat.unread}</span> : null}
           </div>
         </div>
-        <div className="chat-row-person">
-          <span>{peerName}</span>
-          {price ? <span className="chat-list-price"> · {price}</span> : null}
-        </div>
+        {hasContext ? (
+          <div className="chat-row-person">
+            <span>{peerName}</span>
+            {price ? <span className="chat-list-price"> · {price}</span> : null}
+          </div>
+        ) : null}
         <div className="chat-row-preview">{renderChatPreview(chat.lastMsg, currentUserId)}</div>
         <button
           type="button"
@@ -683,9 +729,14 @@ export default function ChatListPanel() {
         ? supabase.from('shops').select('id,name,slug,logo_url,category,city,district').in('id', shopIds)
         : Promise.resolve({ data: [] }),
       requestIds.length > 0
-        ? supabase.from('buyer_requests').select('id,title,budget,city,status').in('id', requestIds)
+        ? supabase.from('buyer_requests').select('id,title,budget,city,status,image_url,image_urls').in('id', requestIds)
         : Promise.resolve({ data: [] }),
     ])
+
+    rememberContextImages('service', services)
+    rememberContextImages('listing', listings)
+    rememberContextImages('shop', shopsRes?.data)
+    rememberContextImages('request', requestsRes?.data)
 
     const profilesMap = Object.fromEntries((profiles || []).map(p => [p.id, p]))
     const servicesMap = Object.fromEntries((services || []).map(s => [s.id, s]))
@@ -995,7 +1046,9 @@ export default function ChatListPanel() {
           align-items: center;
           gap: 12px;
           min-height: 80px;
+          max-height: 88px;
           padding: 12px 16px;
+          box-sizing: border-box;
           background: #fff;
           cursor: pointer;
           animation: chatFadeUp 0.24s ease both;
@@ -1008,7 +1061,7 @@ export default function ChatListPanel() {
           content: '';
           position: absolute;
           left: 88px;
-          right: 0;
+          right: 16px;
           bottom: 0;
           height: 1px;
           background: #e8eaed;
@@ -1016,8 +1069,8 @@ export default function ChatListPanel() {
         }
         .chat-row:last-child::after { display: none; }
         .chat-row.is-unread { background: #f6fbf8; }
-        .chat-row-body { flex: 1; min-width: 0; padding-right: 40px; }
-        .chat-row-top { display: flex; align-items: flex-start; gap: 12px; }
+        .chat-row-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+        .chat-row-top { display: flex; align-items: flex-start; gap: 8px; }
         .chat-row-title {
           flex: 1;
           min-width: 0;
@@ -1052,9 +1105,9 @@ export default function ChatListPanel() {
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
+          line-height: 1.3;
         }
-        .chat-row-person { margin-top: 3px; }
-        .chat-row-preview { margin-top: 4px; font-size: 14px; }
+        .chat-row-preview { font-size: 14px; }
         .chat-row.is-unread .chat-row-preview,
         .chat-row.is-unread .chat-preview-text { color: #202124; }
         .chat-preview-row { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; min-width: 0; }
@@ -1104,7 +1157,24 @@ export default function ChatListPanel() {
           box-sizing: border-box;
         }
         .chat-peer-avatar > img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
-        .chat-peer-initial { font-size: 11px; font-weight: 800; line-height: 1; }
+        .chat-main-avatar {
+          position: relative;
+          width: 56px;
+          height: 56px;
+          flex-shrink: 0;
+          border-radius: 50%;
+          background: #e6f6ed;
+          color: #0F9D58;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          overflow: visible;
+          box-sizing: border-box;
+        }
+        .chat-main-avatar > img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
+        .chat-main-avatar .chat-peer-initial { font-size: 20px; }
+        .chat-main-avatar .chat-online-dot { right: 0; bottom: 0; }
+        .chat-peer-initial { font-size: 12px; font-weight: 700; line-height: 1; }
         .chat-online-dot {
           position: absolute;
           right: -3px;
@@ -1142,7 +1212,6 @@ export default function ChatListPanel() {
         }
         @media (hover: none) {
           .chat-row-menu-btn { display: none !important; }
-          .chat-row-body { padding-right: 0; }
         }
         @media (min-width: 769px) {
           .chat-list-card { border: 0; border-radius: 0; }
@@ -1152,7 +1221,6 @@ export default function ChatListPanel() {
         }
         @media (max-width: 768px) {
           .chat-header-row { padding: 0 14px; }
-          .chat-row { padding: 12px 14px; }
         }
         @media (max-width: 359px) {
           .chat-list-price { display: none; }

@@ -168,3 +168,4 @@ Notifications: listing photo on view rows
 Notifications: remove Orders and System tabs
 Notifications: unread-only count, clearer time, solid header
 Chats: product-first rows, unread tab, responsive panes
+Chats: real images, full-width rows, avatar and menu fixes

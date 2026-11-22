@@ -111,3 +111,22 @@ npx eslint <the real page and row component paths> | Select-String "no-undef|is 
 npx eslint <the real page path> --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
 git status -sb
 git diff HEAD~1 --stat -- src
+GOAL: Fix 5 remaining issues on the Chats list. Branch wip/home-hero-premium (check with git branch --show-current). Rules: no git stash or reset, no SQL, no installs, do NOT launch Chrome or any browser, do not merge or push. Make the edits directly. Edit only the Chats list page and its row component.
+
+1. IMAGES: print raw how the row image is chosen. Request chats must show the request's first image (image_url or image_urls[0]), product chats the listing's first image, service chats the service's first image. Use the type icon fallback ONLY when no image exists or it fails to load. If the image fields are not available on the chat object, fetch them with ONE batched query per type for all chat ids on the page (cached in a Map), never per-row queries.
+2. PHONE WIDTH AND HEIGHT: on phone the row content must span the full row width (no stray right padding or fixed width), the time sits at the far right of line 1 with padding 16px, and the row is at most about 88px tall (padding 12px 16px, no extra margins, line-heights 1.3). Titles and previews truncate only at the real edge.
+3. PERSON AVATAR: make the overlay avatar 24px with a 2px white ring and a visible initial (12px, weight 700, green on #e6f6ed); on very small phones (under 360px) 20px.
+4. NO PRODUCT: when a chat has no linked product/request/service (currently titled "New chat"), show the other person's name in Title Case as the title, no second line, and the avatar as the main 56px image (circle, with the initial fallback).
+5. MENU: remove any visible three-dot on rows at rest. Show it only on hover for devices with (hover: hover), and open the same menu on long-press (500ms) for touch devices. Do not change what the menu actions do.
+
+Do not change fetching of chats, realtime, unread logic, routes, the open conversation view or tap behaviour. Do not touch other pages.
+
+Commit as "Chats: real images, full-width rows, avatar and menu fixes", append one line to PROGRESS.md and commit it too.
+
+End with RAW output only, no summary:
+git log --oneline -4
+npm run build
+npx eslint <the real page and row component paths> | Select-String "no-undef|is not defined" ; "ESLINT DONE"
+npx eslint <the real page path> --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
+git status -sb
+git diff HEAD~1 --stat -- src
