@@ -167,3 +167,4 @@ Notifications: viewer name, tighter rows, 2-line titles on phone
 Notifications: listing photo on view rows
 Notifications: remove Orders and System tabs
 Notifications: unread-only count, clearer time, solid header
+Chats: product-first rows, unread tab, responsive panes

@@ -5,14 +5,12 @@ import {
   sourceFromMessage,
   contextIdFromMessage,
   conversationKey,
-  sourceMeta,
   buildChatPath,
-  CHAT_SOURCES,
   loadDeletedChatKeys,
   markChatDeleted,
 } from '../utils/chatSources'
 import SafeAvatar from '../components/SafeAvatar'
-import { watchUserOnline, activityTargetsChat } from '../hooks/usePresence'
+import { watchUserOnline } from '../hooks/usePresence'
 import { parseOfferMessage, formatOfferAmount } from '../utils/offerMessage'
 import { stripForwardMark } from '../utils/forwardMessage'
 
@@ -22,12 +20,19 @@ import { stripForwardMark } from '../utils/forwardMessage'
 // whatever composes the reply (likely Chat.jsx's image-reply handler); this
 // is a display-time safety net.
 const BARE_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\]?$/i
+const WRAPPED_REPLY_RE = new RegExp(`^${String.fromCharCode(2)}\\[(.+?)\\|\\|\\|([^\\]]+)\\]${String.fromCharCode(3)}(.*)$`, 's')
+const CONTROL_CHARS_RE = new RegExp(
+  `[${String.fromCharCode(0)}-${String.fromCharCode(8)}${String.fromCharCode(11)}-${String.fromCharCode(12)}${String.fromCharCode(14)}-${String.fromCharCode(31)}]`,
+  'g',
+)
+
+let S
 
 function decodeReply(body) {
   if (!body) return { body, replyPreview: null, replyToId: null, isForwarded: false }
   const fwd = stripForwardMark(body)
   if (fwd.isForwarded) return { ...decodeReply(fwd.body), isForwarded: true }
-  const match = body.match(/^\x02\[(.+?)\|\|\|([^\]]+)\]\x03(.*)$/s)
+  const match = body.match(WRAPPED_REPLY_RE)
   if (match) return { body: match[3], replyPreview: match[1], replyToId: match[2] }
   const fallback = body.match(/^(.+?)\|\|\|([a-f0-9-]{36})\](.*)$/s)
   if (fallback) return { body: fallback[3], replyPreview: fallback[1], replyToId: fallback[2] }
@@ -80,81 +85,36 @@ const REQUEST_TEXT_RE = /(?:i saw your|your) request for/i
 const STARRED_KEY = 'soko_starred_chats'
 const ARCHIVED_KEY = 'soko_archived_chats'
 
-const CATEGORY_META = {
-  marketplace: { label: 'Marketplace', bg: '#e6f7ee', color: '#1a7a4a' },
-  services: { label: 'Services', bg: '#f3e8ff', color: '#7c3aed' },
-  requests: { label: 'People Looking For', bg: '#fef3e0', color: '#c9820a' },
-  shops: { label: 'Shops', bg: '#e0f7fa', color: '#0891b2' },
-}
-
-const PILL_COLORS = {
-  all: { bg: '#eef2ef', color: '#3a443d' },
-  marketplace: { bg: '#e6f7ee', color: '#1a7a4a' },
-  services: { bg: '#f3e8ff', color: '#7c3aed' },
-  requests: { bg: '#fef3e0', color: '#c9820a' },
-  shops: { bg: '#e0f7fa', color: '#0891b2' },
-  unread: { bg: '#e6f7ee', color: '#1a7a4a' },
-}
-
-const CHIP_COLORS = {
-  starred: { bg: '#fff8e6', color: '#c9820a' },
-  unread: { bg: '#e6f7ee', color: '#1a7a4a' },
-  offers: { bg: '#fff4e0', color: '#d97706' },
-  archived: { bg: '#eef2f5', color: '#5c6b78' },
-}
-
-const PILLS = [
+const TABS = [
   { key: 'all', label: 'All' },
+  { key: 'unread', label: 'Unread' },
   { key: 'marketplace', label: 'Marketplace' },
   { key: 'services', label: 'Services' },
   { key: 'requests', label: 'Requests' },
-  { key: 'shops', label: 'Shops' },
-  { key: 'unread', label: 'Unread' },
 ]
 
-const CHIPS = []
-
-function VerifiedBadge() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 24 24" style={{ flexShrink: 0 }}>
-      <path fill="#2563eb" d="M12 2 14.5 4.5 18 4l.5 3.5L22 9l-1.5 3L22 15l-3.5 1.5L18 20l-3.5-.5L12 22l-2.5-2.5L6 20l-.5-3.5L2 15l1.5-3L2 9l3.5-1.5L6 4l3.5.5L12 2Z" />
-      <path fill="none" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4" />
-    </svg>
-  )
-}
-
-function StarIcon({ filled }) {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill={filled ? '#f5a623' : 'none'} stroke={filled ? '#f5a623' : '#c7d0ca'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polygon points="12 2 15.1 8.6 22 9.3 17 14.1 18.2 21 12 17.6 5.8 21 7 14.1 2 9.3 8.9 8.6 12 2" />
-    </svg>
-  )
-}
-
-function ArchiveIcon({ active }) {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke={active ? '#1a7a4a' : '#c7d0ca'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="2" y="4" width="20" height="5" rx="1" fill={active ? '#e6f7ee' : 'none'} />
-      <path d="M4 9v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9" />
-      <path d="M10 13h4" />
-    </svg>
-  )
-}
 
 // Shared line-icon set — replaces emoji glyphs everywhere in this panel
 // (chips, empty states, media/call previews) so the icon language matches
 // the rest of the app (NavRail, category badges) instead of mixing in emoji.
-function WrenchIcon({ size = 16, color = 'currentColor' }) {
+function WrenchIcon({ size = 16, color = 'currentColor', strokeWidth = 1.75 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4l-6 6a2.12 2.12 0 0 0 3 3l6-6a4 4 0 0 0 5.4-5.4l-2.1 2.1-2.6-2.6Z" />
     </svg>
   )
 }
-function BagIcon({ size = 16, color = 'currentColor' }) {
+function BagIcon({ size = 16, color = 'currentColor', strokeWidth = 1.75 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z" /><path d="M3 6h18" /><path d="M16 10a4 4 0 0 1-8 0" />
+    </svg>
+  )
+}
+function TargetIcon({ size = 16, color = 'currentColor', strokeWidth = 1.75 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1" fill={color} stroke="none" />
     </svg>
   )
 }
@@ -165,17 +125,17 @@ function SearchGlassIcon({ size = 16, color = 'currentColor' }) {
     </svg>
   )
 }
-function StoreIcon({ size = 16, color = 'currentColor' }) {
+function StoreIcon({ size = 16, color = 'currentColor', strokeWidth = 1.75 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round">
       <path d="M3 9 5 3h14l2 6" /><path d="M3 9v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V9" /><path d="M3 9h18" /><path d="M9 21v-6h6v6" />
     </svg>
   )
 }
-function BellIcon({ size = 15, color = 'currentColor' }) {
+function FileIcon({ size = 14, color = 'currentColor' }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z" /><path d="M14 2v6h6" />
     </svg>
   )
 }
@@ -228,13 +188,6 @@ function MicIcon({ size = 13, color = 'currentColor' }) {
     </svg>
   )
 }
-function PaperclipIcon({ size = 13, color = 'currentColor' }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21.44 11.05 12.25 20.24a5 5 0 0 1-7.07-7.07l9.19-9.19a3.5 3.5 0 0 1 4.95 4.95L10.13 17.12a2 2 0 0 1-2.83-2.83l8.49-8.49" />
-    </svg>
-  )
-}
 function PhoneIcon({ size = 13, color = 'currentColor' }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -257,6 +210,205 @@ function NewChatIcon({ size = 15, color = 'currentColor' }) {
   )
 }
 
+function titleCaseName(value) {
+  const name = String(value || 'User').trim().toLowerCase()
+  if (!name) return 'User'
+  return name.replace(/(^|[\s'-])([a-z])/g, (_, sep, ch) => sep + ch.toUpperCase())
+}
+
+function formatChatPrice(value) {
+  if (value === null || value === undefined || value === '') return ''
+  const match = String(value).trim().replace(/,/g, '').match(/(\d+(?:\.\d+)?)\s*([mk])?/i)
+  if (!match) return ''
+  const suffix = (match[2] || '').toLowerCase()
+  const amount = Number(match[1]) * (suffix === 'm' ? 1000000 : suffix === 'k' ? 1000 : 1)
+  if (!Number.isFinite(amount) || amount <= 0) return ''
+  if (amount >= 1000000) {
+    const millions = amount / 1000000
+    return `MWK ${Number.isInteger(millions) ? millions : millions.toFixed(1).replace(/\.0$/, '')}M`
+  }
+  return `MWK ${Math.round(amount).toLocaleString('en-US')}`
+}
+
+function getSourceType(chat) {
+  return chat?.source || (chat?.isService ? 'service' : chat?.isRequest ? 'request' : chat?.listing ? 'listing' : 'direct')
+}
+
+function getContextTitle(chat, src) {
+  if (src === 'service') return chat.service?.name || 'Service chat'
+  if (src === 'request') return chat.requestTitle || chat.request?.title || 'Request chat'
+  if (src === 'listing') return chat.listing?.title || 'Listing chat'
+  if (src === 'shop') return chat.shop?.name || 'Shop chat'
+  return 'New chat'
+}
+
+function getContextImage(chat, src) {
+  if (src === 'service') return chat.service?.media_urls?.[0] || null
+  if (src === 'listing') return chat.listing?.images?.[0] || null
+  if (src === 'shop') return chat.shop?.logo_url || null
+  return null
+}
+
+function getContextPrice(chat, src) {
+  if (src === 'service') return formatChatPrice(chat.service?.rate)
+  if (src === 'listing') return formatChatPrice(chat.listing?.price)
+  if (src === 'request') return formatChatPrice(chat.request?.budget)
+  return ''
+}
+
+function formatChatTime(value) {
+  if (!value) return ''
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return ''
+  const now = new Date()
+  const day = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const days = Math.round((today - day) / 86400000)
+  if (days <= 0) return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+  if (days === 1) return 'Yesterday'
+  if (days < 7) return d.toLocaleDateString('en-US', { weekday: 'short' })
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })
+}
+
+function PeerAvatar({ url, name, online }) {
+  const [failed, setFailed] = useState(false)
+  const cleanUrl = typeof url === 'string' && url.trim() && url !== 'null' && url !== 'undefined' ? url.trim() : null
+  const initial = (String(name || 'U').trim()[0] || 'U').toUpperCase()
+
+  return (
+    <span className="chat-peer-avatar">
+      {cleanUrl && !failed ? (
+        <img src={cleanUrl} alt="" onError={() => setFailed(true)} />
+      ) : (
+        <span className="chat-peer-initial">{initial}</span>
+      )}
+      {online ? <span className="chat-online-dot" /> : null}
+    </span>
+  )
+}
+
+function ContextThumb({ image, type, title, peerUrl, peerName, online }) {
+  const [failed, setFailed] = useState(false)
+  const Icon = type === 'request' ? TargetIcon : type === 'service' ? WrenchIcon : type === 'shop' ? StoreIcon : BagIcon
+
+  return (
+    <span className="chat-context-thumb" title={title}>
+      {image && !failed ? (
+        <img src={image} alt="" onError={() => setFailed(true)} />
+      ) : (
+        <span className="chat-context-fallback">
+          <Icon size={24} color="#0F9D58" />
+        </span>
+      )}
+      <PeerAvatar url={peerUrl} name={peerName} online={online} />
+    </span>
+  )
+}
+
+function renderChatPreview(msg, currentUserId) {
+  if (!msg) return <span className="chat-preview-empty">No messages yet</span>
+
+  const isMine = msg.from_user === currentUserId
+  const decoded = decodeReply(msg.body || '')
+  const prefix = (isMine ? 'You: ' : '') + (decoded.isForwarded ? '↪ ' : '')
+  const caption = (decoded.body || '').trim()
+
+  const iconRow = (Icon, label) => (
+    <span className="chat-preview-row">
+      <span className="chat-preview-icon"><Icon size={14} color="currentColor" /></span>
+      <span className="chat-preview-text">{label}</span>
+    </span>
+  )
+
+  if (msg.media_type === 'deal_request') return iconRow(TagIcon, prefix + 'Deal request')
+
+  if (msg.media_type === 'offer') {
+    const parsed = parseOfferMessage(msg.body)
+    return iconRow(TagIcon, prefix + (parsed.ok ? `Price offer: ${formatOfferAmount(parsed.offer)}` : 'Price offer'))
+  }
+
+  if (msg.call_type) {
+    const isVideo = msg.call_type === 'video'
+    const CallIcon = isVideo ? VideoMiniIcon : PhoneIcon
+    if (msg.call_status === 'missed') return iconRow(CallIcon, 'Missed ' + (isVideo ? 'video call' : 'voice call'))
+    if (msg.call_status === 'declined') return iconRow(CallIcon, 'Declined ' + (isVideo ? 'video call' : 'voice call'))
+    if (msg.call_status === 'ended' || msg.call_status === 'answered') {
+      const dur = msg.call_duration
+      const durStr = dur ? (dur >= 60 ? `${Math.floor(dur / 60)}m ${dur % 60}s` : `${dur}s`) : ''
+      return iconRow(CallIcon, (isVideo ? 'Video call' : 'Voice call') + (durStr ? ` · ${durStr}` : ''))
+    }
+    return iconRow(CallIcon, isVideo ? 'Video call' : 'Voice call')
+  }
+
+  if (msg.media_type === 'image' || (msg.media_url && msg.media_type === 'image')) {
+    return iconRow(CameraIcon, prefix + 'Photo' + (caption ? `: ${caption}` : ''))
+  }
+  if (msg.media_type === 'video') return iconRow(VideoMiniIcon, prefix + 'Video' + (caption ? `: ${caption}` : ''))
+  if (msg.media_type === 'audio') return iconRow(MicIcon, prefix + 'Voice note')
+  if (msg.media_url && msg.media_type && msg.media_type !== 'text') {
+    return iconRow(FileIcon, prefix + 'File' + (caption ? `: ${caption}` : ''))
+  }
+
+  let body = caption
+  if (!body && decoded.replyToId) body = 'Photo'
+  if (!body) body = 'Message'
+  body = body.replace(CONTROL_CHARS_RE, '').trim() || 'Message'
+  return <span className="chat-preview-text">{prefix}{body}</span>
+}
+
+function ChatListRow({ chat, index, isOpen, online, currentUserId, onOpen, onMenu, onLongPressStart, onLongPressMove, onLongPressEnd }) {
+  const src = getSourceType(chat)
+  const contextTitle = getContextTitle(chat, src)
+  const price = getContextPrice(chat, src)
+  const peerName = titleCaseName(chat.displayName)
+  const hasUnread = (chat.unread || 0) > 0
+  const time = formatChatTime(chat.lastActivityAt || chat.lastMsg?.created_at)
+
+  return (
+    <div
+      className={`chat-row${isOpen ? ' is-selected' : ''}${hasUnread ? ' is-unread' : ''}`}
+      style={{ animationDelay: `${index * 0.03}s` }}
+      onClick={onOpen}
+      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onMenu(chat) }}
+      onTouchStart={(e) => onLongPressStart(e, chat)}
+      onTouchMove={onLongPressMove}
+      onTouchEnd={onLongPressEnd}
+      onTouchCancel={onLongPressEnd}
+    >
+      <ContextThumb
+        image={getContextImage(chat, src)}
+        type={src}
+        title={contextTitle}
+        peerUrl={chat.avatarUrl}
+        peerName={peerName}
+        online={online}
+      />
+      <div className="chat-row-body">
+        <div className="chat-row-top">
+          <span className="chat-row-title" title={contextTitle}>{contextTitle}</span>
+          <div className="chat-row-meta">
+            <span className="chat-row-time">{time}</span>
+            {hasUnread ? <span className="chat-row-unread">{chat.unread > 99 ? '99+' : chat.unread}</span> : null}
+          </div>
+        </div>
+        <div className="chat-row-person">
+          <span>{peerName}</span>
+          {price ? <span className="chat-list-price"> · {price}</span> : null}
+        </div>
+        <div className="chat-row-preview">{renderChatPreview(chat.lastMsg, currentUserId)}</div>
+        <button
+          type="button"
+          className="chat-row-menu-btn"
+          onClick={(e) => { e.stopPropagation(); onMenu(chat) }}
+          aria-label="Chat options"
+        >
+          <KebabIcon size={16} color="#5f6368" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function ChatListPanel() {
   const navigate = useNavigate()
   // Params of the thread currently open in the right pane (if any) — used to
@@ -276,17 +428,15 @@ export default function ChatListPanel() {
   const [newChatQuery, setNewChatQuery] = useState('')
   const [newChatResults, setNewChatResults] = useState([])
   const [newChatLoading, setNewChatLoading] = useState(false)
-  const [starred, setStarred] = useState(() => {
+  const [starred] = useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem(STARRED_KEY) || '[]')) } catch { return new Set() }
   })
-  const [archived, setArchived] = useState(() => {
+  const [archived] = useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem(ARCHIVED_KEY) || '[]')) } catch { return new Set() }
   })
   const [deletedKeys, setDeletedKeys] = useState(() => new Set())
   const [rowMenuChat, setRowMenuChat] = useState(null)
   const [rowBusy, setRowBusy] = useState(false)
-  // Long-press enters multi-select mode — holds the keys of selected rows.
-  const [selectedKeys, setSelectedKeys] = useState(() => new Set())
   const longPressRef = useRef(null)
   const suppressClickRef = useRef(null)
   // Live presence: otherUserId -> { online, typing, recording, activityMeta }
@@ -370,7 +520,7 @@ export default function ChatListPanel() {
   // Sync deleted chats + listen for deletes from the thread view
   useEffect(() => {
     if (!currentUser?.id) return
-    setDeletedKeys(loadDeletedChatKeys(currentUser.id))
+    queueMicrotask(() => setDeletedKeys(loadDeletedChatKeys(currentUser.id)))
     function onDeleted() {
       setDeletedKeys(loadDeletedChatKeys(currentUser.id))
       loadChats()
@@ -405,8 +555,9 @@ export default function ChatListPanel() {
     if (!newChatOpen) return
     const q = newChatQuery.trim()
     let cancelled = false
-    setNewChatLoading(true)
     const t = setTimeout(async () => {
+      if (cancelled) return
+      setNewChatLoading(true)
       let query = supabase
         .from('profiles')
         .select('id,full_name,avatar_url,city')
@@ -429,22 +580,16 @@ export default function ChatListPanel() {
     })
   }
 
-  // Long-press (touch or held mouse) selects the row and enters multi-select.
-  // Fires after ~480ms of no movement; cancels on movement/cancel/release.
   function startLongPress(e, chat) {
     cancelLongPress()
     const point = (e.changedTouches && e.changedTouches[0]) || (e.touches && e.touches[0]) || e
     if (!point) return
-    const lp = { key: chat.key, x: point.clientX, y: point.clientY }
+    const lp = { key: chat.key, chat, x: point.clientX, y: point.clientY }
     lp.timer = setTimeout(() => {
       longPressRef.current = null
       suppressClickRef.current = chat.key
-      setSelectedKeys(prev => {
-        const next = new Set(prev)
-        next.add(chat.key)
-        return next
-      })
-    }, 480)
+      setRowMenuChat(chat)
+    }, 500)
     longPressRef.current = lp
   }
 
@@ -461,53 +606,6 @@ export default function ChatListPanel() {
     if (!lp) return
     clearTimeout(lp.timer)
     longPressRef.current = null
-  }
-
-  function toggleSelect(key) {
-    setSelectedKeys(prev => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
-  }
-
-  function clearSelection() {
-    setSelectedKeys(new Set())
-  }
-
-  function bulkStar() {
-    const keys = [...selectedKeys]
-    if (!keys.length) return
-    setStarred(prev => {
-      const next = new Set(prev)
-      const allStarred = keys.every(k => next.has(k))
-      keys.forEach(k => allStarred ? next.delete(k) : next.add(k))
-      localStorage.setItem(STARRED_KEY, JSON.stringify([...next]))
-      return next
-    })
-  }
-
-  function bulkArchive() {
-    const keys = [...selectedKeys]
-    if (!keys.length) return
-    setArchived(prev => {
-      const next = new Set(prev)
-      const allArchived = keys.every(k => next.has(k))
-      keys.forEach(k => allArchived ? next.delete(k) : next.add(k))
-      localStorage.setItem(ARCHIVED_KEY, JSON.stringify([...next]))
-      return next
-    })
-    clearSelection()
-  }
-
-  function bulkDelete() {
-    const keys = [...selectedKeys]
-    if (!currentUser?.id || !keys.length) return
-    if (!window.confirm(`Delete ${keys.length} chat${keys.length > 1 ? 's' : ''}?`)) return
-    keys.forEach(key => markChatDeleted(currentUser.id, key))
-    setDeletedKeys(loadDeletedChatKeys(currentUser.id))
-    clearSelection()
   }
 
   async function loadChats() {
@@ -620,7 +718,6 @@ export default function ChatListPanel() {
       const requestTitle = requestEntity?.title
         || (isRequest ? extractRequestTitle(decoded.body) : null)
       const offerText = parseOffer(decoded.body, c.lastMsg?.media_type)
-      const meta = sourceMeta(c.source)
 
       return {
         ...c,
@@ -631,9 +728,6 @@ export default function ChatListPanel() {
         requestTitle,
         hasOffer: !!offerText,
         offerText,
-        sourceLabel: meta.label,
-        sourceColor: meta.color,
-        sourceBg: meta.bg,
         service: c.source === 'service' ? servicesMap[c.contextId] : null,
         listing: c.source === 'listing' ? listingsMap[c.contextId] : null,
         shop: c.source === 'shop' ? shopsMap[c.contextId] : null,
@@ -657,7 +751,7 @@ export default function ChatListPanel() {
     const visible = chats.filter(c => !archived.has(c.key) && !deletedKeys.has(c.key))
     return {
       all: visible.length,
-      marketplace: visible.filter(c => !c.isService && !c.isRequest && c.listing).length,
+      marketplace: visible.filter(c => c.source === 'listing' || c.source === 'shop' || (!!c.listing && !c.isService)).length,
       services: visible.filter(c => c.isService).length,
       requests: visible.filter(c => c.isRequest || c.source === 'request').length,
       shops: visible.filter(c => c.isShop || c.source === 'shop').length,
@@ -668,36 +762,21 @@ export default function ChatListPanel() {
     }
   }, [chats, starred, archived, deletedKeys])
 
-  // ── Unread MESSAGE counts per category — drives the badges on the pill row ──
-  const unreadCounts = useMemo(() => {
-    const visible = chats.filter(c => !archived.has(c.key) && !deletedKeys.has(c.key))
-    const sum = list => list.reduce((n, c) => n + (c.unread || 0), 0)
-    return {
-      all: sum(visible),
-      marketplace: sum(visible.filter(c => c.source === 'listing' || (!c.isService && !c.isRequest && c.listing))),
-      services: sum(visible.filter(c => c.source === 'service' || c.isService)),
-      requests: sum(visible.filter(c => c.source === 'request' || c.isRequest)),
-      shops: sum(visible.filter(c => c.source === 'shop' || c.isShop)),
-      unread: sum(visible),
-    }
-  }, [chats, archived, deletedKeys])
-
   // ── Filtering + search ──────────────────────────────────────────────────────
   const filtered = useMemo(() => {
     const pool = activeFilter === 'archived'
       ? chats.filter(c => archived.has(c.key) && !deletedKeys.has(c.key))
       : chats.filter(c => !archived.has(c.key) && !deletedKeys.has(c.key))
 
-    let list = pool
+    let list
     switch (activeFilter) {
-      case 'marketplace': list = pool.filter(c => c.source === 'listing' || (!!c.listing && c.source !== 'service')); break
+      case 'marketplace': list = pool.filter(c => c.source === 'listing' || c.source === 'shop' || (!!c.listing && c.source !== 'service')); break
       case 'services': list = pool.filter(c => c.source === 'service' || c.isService); break
       case 'requests': list = pool.filter(c => c.source === 'request' || c.isRequest); break
       case 'shops': list = pool.filter(c => c.source === 'shop' || c.isShop); break
       case 'starred': list = pool.filter(c => starred.has(c.key)); break
       case 'unread': list = pool.filter(c => c.unread > 0); break
       case 'offers': list = pool.filter(c => c.hasOffer); break
-      case 'archived': list = pool; break
       default: list = pool
     }
 
@@ -708,332 +787,35 @@ export default function ChatListPanel() {
       const q = search.toLowerCase()
       list = list.filter(c => {
         const nameMatch = c.displayName?.toLowerCase().includes(q)
-        const contextMatch = (c.service?.name || c.listing?.title || c.requestTitle || '').toLowerCase().includes(q)
-        const msgBody = decodeReply(c.lastMsg?.body || '').body?.toLowerCase()
-        const msgMatch = msgBody?.includes(q)
-        if (nameMatch || contextMatch || msgMatch) {
-          c._matchedMsgId = msgMatch ? c.lastMsg?.id : null
-          return true
-        }
-        return false
+        const titleMatch = getContextTitle(c, getSourceType(c)).toLowerCase().includes(q)
+        return nameMatch || titleMatch
       })
     }
     return list
   }, [chats, activeFilter, search, starred, archived, deletedKeys])
 
-  function renderLastMsg(chat) {
-    const msg = chat.lastMsg
-    if (!msg) return <span style={{ color: '#aaa' }}>No messages yet</span>
-
-    const isMine = msg.from_user === currentUser?.id
-    const decoded = decodeReply(msg.body || '')
-    const prefix = (isMine ? 'You: ' : '') + (decoded.isForwarded ? '↪ ' : '')
-    const caption = (decoded.body || '').trim()
-
-    const iconRow = (Icon, label) => (
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, maxWidth: '100%' }}>
-        <Icon size={13} color="currentColor" style={{ flexShrink: 0 }} />
-        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {label}
-        </span>
-      </span>
-    )
-
-    if (msg.media_type === 'deal_request') {
-      return iconRow(TagIcon, prefix + 'Deal request')
-    }
-
-    if (msg.media_type === 'offer') {
-      const parsed = parseOfferMessage(msg.body)
-      return iconRow(TagIcon, prefix + (parsed.ok ? `Price offer: ${formatOfferAmount(parsed.offer)}` : 'Price offer'))
-    }
-
-    if (msg.call_type) {
-      const isVideo = msg.call_type === 'video'
-      const CallIcon = isVideo ? VideoMiniIcon : PhoneIcon
-      if (msg.call_status === 'missed') return iconRow(CallIcon, 'Missed ' + (isVideo ? 'video call' : 'voice call'))
-      if (msg.call_status === 'declined') return iconRow(CallIcon, 'Declined ' + (isVideo ? 'video call' : 'voice call'))
-      if (msg.call_status === 'ended' || msg.call_status === 'answered') {
-        const dur = msg.call_duration
-        const durStr = dur
-          ? (dur >= 60 ? `${Math.floor(dur / 60)}m ${dur % 60}s` : `${dur}s`)
-          : ''
-        return iconRow(CallIcon, (isVideo ? 'Video call' : 'Voice call') + (durStr ? ` · ${durStr}` : ''))
-      }
-      return iconRow(CallIcon, isVideo ? 'Video call' : 'Voice call')
-    }
-
-    if (msg.media_type === 'image' || (msg.media_url && msg.media_type === 'image')) {
-      return iconRow(CameraIcon, prefix + (caption || 'Photo'))
-    }
-    if (msg.media_type === 'video') {
-      return iconRow(VideoMiniIcon, prefix + (caption || 'Video'))
-    }
-    if (msg.media_type === 'audio') {
-      return iconRow(MicIcon, prefix + 'Voice note')
-    }
-    if (msg.media_url && msg.media_type && msg.media_type !== 'text') {
-      return iconRow(PaperclipIcon, prefix + (caption || 'Attachment'))
-    }
-
-    let body = caption
-    if (!body && decoded.replyToId) body = 'Photo'
-    if (!body) body = 'Message'
-    // Strip leftover control chars / reply artifacts
-    body = body.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '').trim() || 'Message'
-    const text = body.length > 42 ? body.slice(0, 42) + '…' : body
-    return (
-      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-        {prefix}{text}
-      </span>
-    )
-  }
-
-  function timeLabel(date) {
-    const d = new Date(date)
-    const now = new Date()
-    const diff = now - d
-    if (diff < 60000) return 'now'
-    if (diff < 3600000) return Math.floor(diff / 60000) + 'm'
-    if (diff < 86400000) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    if (diff < 604800000) return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()]
-    return d.toLocaleDateString([], { day: 'numeric', month: 'short' })
-  }
-
   function emptyStateCopy() {
     switch (activeFilter) {
-      case 'services': return { Icon: WrenchIcon, title: 'No service chats yet', sub: 'Book a service and chat with the provider', cta: 'Browse Services', to: '/services', ...PILL_COLORS.services }
-      case 'marketplace': return { Icon: BagIcon, title: 'No marketplace chats yet', sub: 'Chat with sellers when browsing listings', cta: 'Browse Listings', to: '/', ...PILL_COLORS.marketplace }
-      case 'requests': return { Icon: SearchGlassIcon, title: 'No requests yet', sub: 'Conversations from buyer requests will show up here', cta: 'Browse Requests', to: '/looking-for', ...PILL_COLORS.requests }
-      case 'shops': return { Icon: StoreIcon, title: 'No shop chats yet', sub: 'Shop messaging is on its way', cta: 'Browse Shops', to: '/shops', ...PILL_COLORS.shops }
-      case 'starred': return { Icon: StarFilledIcon, title: 'No starred chats', sub: 'Tap the star on a conversation to pin it here', cta: null, ...CHIP_COLORS.starred }
-      case 'unread': return { Icon: ChatBubbleIcon, title: "You're all caught up", sub: 'No unread conversations right now', cta: null, ...CHIP_COLORS.unread }
-      case 'offers': return { Icon: TagIcon, title: 'No offers yet', sub: 'Offers made in your chats will show up here', cta: null, ...CHIP_COLORS.offers }
-      case 'archived': return { Icon: ArchiveBoxIcon, title: 'No archived chats', sub: 'Archive a conversation from the list to see it here', cta: null, ...CHIP_COLORS.archived }
-      default: return { Icon: ChatBubbleIcon, title: 'No messages yet', sub: 'Chat with sellers when browsing listings', cta: 'Browse Listings', to: '/', ...PILL_COLORS.marketplace }
+      case 'services': return { Icon: WrenchIcon, sub: 'Service conversations will appear here.' }
+      case 'marketplace': return { Icon: BagIcon, sub: 'Marketplace conversations will appear here.' }
+      case 'requests': return { Icon: TargetIcon, sub: 'Request conversations will appear here.' }
+      case 'unread': return { Icon: ChatBubbleIcon, sub: 'Unread conversations will appear here.' }
+      case 'starred': return { Icon: StarFilledIcon, sub: 'Starred conversations will appear here.' }
+      case 'offers': return { Icon: TagIcon, sub: 'Offer conversations will appear here.' }
+      case 'archived': return { Icon: ArchiveBoxIcon, sub: 'Archived conversations will appear here.' }
+      default: return { Icon: ChatBubbleIcon, sub: 'Your conversations will appear here.' }
     }
   }
 
-  function renderChatRow(chat, i) {
-    const src = chat.source || (chat.isService ? 'service' : chat.isRequest ? 'request' : chat.listing ? 'listing' : 'direct')
-    const meta = sourceMeta(src)
-
-    const contextLabel =
-      src === 'service' ? (chat.service?.name || 'Service')
-      : src === 'request' ? (chat.requestTitle ? `Looking for ${chat.requestTitle}` : 'Buyer Request')
-      : src === 'listing' ? (chat.listing?.title || null)
-      : src === 'shop' ? (chat.shop?.name || 'Shop')
-      : null
-
-    const contextSub =
-      src === 'service' ? [chat.service?.rate, chat.service?.city].filter(Boolean).join(' · ')
-      : src === 'listing' && chat.listing?.price ? 'MWK ' + Number(chat.listing.price).toLocaleString()
-      : src === 'shop' ? [chat.shop?.category, chat.shop?.city || chat.shop?.district].filter(Boolean).join(' · ')
-      : src === 'request' && chat.request?.budget ? String(chat.request.budget)
-      : ''
-
-    // Context image (product / service / shop logo) — right thumb
-    const productImg =
-      src === 'service' ? chat.service?.media_urls?.[0]
-      : src === 'listing' ? chat.listing?.images?.[0]
-      : src === 'shop' ? chat.shop?.logo_url
-      : null
-
-    const profileAvatar = chat.avatarUrl || null
-    const initial = (chat.displayName || 'U')[0].toUpperCase()
-    const isSelected = selectedKeys.has(chat.key)
-    const hasUnread = chat.unread > 0
-    const isOpen = openUserId === chat.otherId && String(openContextId || '') === String(chat.contextId || '')
-    const presence = presenceMap[chat.otherId] || {}
-    const isOnline = !!presence.online
-    // Typing/recording only on the row that matches who they're messaging + context
-    const activityForThisRow = activityTargetsChat(presence.activityMeta, {
-      myId: currentUser?.id,
-      otherId: chat.otherId,
-      contextId: chat.contextId,
-      source: src,
-    })
-    // Require peer scoping: if no meta/peerId, do NOT show on list (avoids lighting every row)
-    const isTyping = !!presence.typing && !!presence.activityMeta?.peerId && activityForThisRow
-    const isRecording = !!presence.recording && !!presence.activityMeta?.peerId && activityForThisRow
-
-    const chatPath = buildChatPath(chat.otherId, { source: src, contextId: chat.contextId })
-    const chatState = {
-      source: src,
-      ...(chat._matchedMsgId ? { scrollToMessageId: chat._matchedMsgId } : {}),
+  function openChat(chat) {
+    if (suppressClickRef.current === chat.key) {
+      suppressClickRef.current = null
+      return
     }
-
-    const activityAt = chat.lastActivityAt || chat.lastMsg?.created_at
-    const firstName = (chat.displayName || 'User').split(' ')[0]
-
-    return (
-      <div
-        key={chat.key}
-        className="chat-row"
-        style={{
-          ...S.chatRow,
-          animationDelay: i * 0.03 + 's',
-          background: isSelected ? '#e6f7ee' : isOpen ? '#e6f7ee' : hasUnread ? '#fafffd' : '#fff',
-        }}
-        onClick={() => {
-          if (suppressClickRef.current === chat.key) {
-            suppressClickRef.current = null
-            return
-          }
-          if (selectedKeys.size > 0) {
-            toggleSelect(chat.key)
-            return
-          }
-          navigate(chatPath, { state: chatState })
-        }}
-        onContextMenu={(e) => {
-          e.preventDefault()
-          e.stopPropagation()
-          setSelectedKeys(prev => {
-            const next = new Set(prev)
-            next.add(chat.key)
-            return next
-          })
-        }}
-        onTouchStart={(e) => startLongPress(e, chat)}
-        onTouchMove={moveLongPress}
-        onTouchEnd={cancelLongPress}
-        onTouchCancel={cancelLongPress}
-        onMouseDown={(e) => startLongPress(e, chat)}
-        onMouseMove={moveLongPress}
-        onMouseUp={cancelLongPress}
-        onMouseLeave={cancelLongPress}
-      >
-        <div style={S.avatarWrap}>
-          <SafeAvatar
-            url={profileAvatar}
-            name={chat.displayName || initial}
-            size={54}
-            radius="50%"
-            style={{ border: '2px solid #fff' }}
-          />
-          {isSelected && (
-            <span style={S.selectCheck}>
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="20 6 9 17 4 12" />
-              </svg>
-            </span>
-          )}
-          <span
-            style={{
-              ...S.onlineDot,
-              background: isOnline ? '#22c55e' : '#c5d0c8',
-              boxShadow: isOnline
-                ? '0 0 0 2px #fff, 0 0 0 4px rgba(34,197,94,0.25)'
-                : '0 0 0 2px #fff',
-            }}
-            title={isOnline ? 'Online' : 'Offline'}
-          />
-        </div>
-
-        <div style={S.chatInfo}>
-          <div style={S.chatTop}>
-            <div style={S.nameRow}>
-              <span style={{
-                ...S.chatName,
-                fontWeight: hasUnread ? 800 : 700,
-                color: isOnline ? '#0f1410' : undefined,
-              }}>
-                {chat.displayName}
-              </span>
-              {chat.isVerified && <VerifiedBadge />}
-            </div>
-            <span
-              style={{
-                ...S.chatTime,
-                color: hasUnread || isTyping || isRecording ? '#1a7a4a' : '#a0ada6',
-                fontWeight: hasUnread ? 700 : 500,
-              }}
-            >
-              {isOnline && !isTyping && !isRecording ? 'Online' : timeLabel(activityAt)}
-            </span>
-          </div>
-
-          {contextLabel && (
-            <div style={S.contextPill}>
-              <span style={{ ...S.contextBadge, background: meta.bg, color: meta.color }}>
-                {meta.label}
-              </span>
-              <span style={S.contextName}>{contextLabel}</span>
-              {contextSub ? <span style={S.contextSub}> · {contextSub}</span> : null}
-            </div>
-          )}
-
-          <div style={S.chatBottom}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              {isRecording ? (
-                <div style={S.presenceLineRecording}>
-                  <span style={S.recDot} />
-                  {firstName} is recording audio…
-                </div>
-              ) : isTyping ? (
-                <div style={S.presenceLineTyping}>
-                  {firstName} is typing
-                  <span style={S.typingDotsInline}>
-                    <span style={{ ...S.typingDotSm, animationDelay: '0s' }} />
-                    <span style={{ ...S.typingDotSm, animationDelay: '0.2s' }} />
-                    <span style={{ ...S.typingDotSm, animationDelay: '0.4s' }} />
-                  </span>
-                </div>
-              ) : chat.hasOffer ? (
-                <div style={S.offerLine}>
-                  <TagIcon size={13} color="#1a7a4a" /> {chat.offerText}
-                </div>
-              ) : (
-                <div
-                  style={{
-                    ...S.lastMsg,
-                    fontWeight: hasUnread || search ? 600 : 400,
-                    color: hasUnread
-                      ? '#0f1410'
-                      : (search && chat._matchedMsgId ? '#1a7a4a' : '#6b7a70'),
-                  }}
-                >
-                  {renderLastMsg(chat)}
-                </div>
-              )}
-            </div>
-            <div style={S.rowActions}>
-              {hasUnread && (
-                <span style={S.unreadBadge}>
-                  {chat.unread > 9 ? '9+' : chat.unread}
-                </span>
-              )}
-              <div style={S.actionIcons}>
-                {selectedKeys.size === 0 && (
-                  <button
-                    style={S.starBtn}
-                    onClick={(e) => { e.stopPropagation(); setRowMenuChat(chat) }}
-                    aria-label="Chat options"
-                    title="Options"
-                  >
-                    <svg width="15" height="15" viewBox="0 0 24 24" fill="#9ca3af">
-                      <circle cx="12" cy="5" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="19" r="1.5" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {productImg && (
-          <div style={S.productThumb} title={contextLabel || meta.label}>
-            <img
-              src={productImg}
-              alt=""
-              style={S.productThumbImg}
-              onError={e => { e.currentTarget.style.display = 'none' }}
-            />
-          </div>
-        )}
-      </div>
-    )
+    const src = getSourceType(chat)
+    navigate(buildChatPath(chat.otherId, { source: src, contextId: chat.contextId }), {
+      state: { source: src },
+    })
   }
 
   async function rowBlock(chat) {
@@ -1083,7 +865,7 @@ export default function ChatListPanel() {
         })
         alert('Report submitted. Thank you.')
         setRowMenuChat(null)
-      } catch (e2) {
+      } catch {
         alert(e?.message || 'Could not submit report')
       }
     } finally {
@@ -1101,131 +883,386 @@ export default function ChatListPanel() {
 
   const empty = emptyStateCopy()
 
-  const inSelection = selectedKeys.size > 0
-  const selectedArr = inSelection ? [...selectedKeys] : []
-  const allStarred = selectedArr.length > 0 && selectedArr.every(k => starred.has(k))
-  const allArchived = selectedArr.length > 0 && selectedArr.every(k => archived.has(k))
-
   return (
     <div className="chat-list-panel" style={S.panel}>
       <style>{`
-        @keyframes fadeUp { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
-        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
-        @keyframes typingDot { 0%,80%,100%{transform:scale(0.6);opacity:0.4} 40%{transform:scale(1);opacity:1} }
+        @keyframes chatFadeUp { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes chatShimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
         @keyframes searchDrop { from{opacity:0;transform:translateY(-6px)} to{opacity:1;transform:translateY(0)} }
 
+        .chat-list-panel {
+          background: #fff;
+          font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+        }
+        .chat-header-row {
+          height: 64px;
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 0 16px;
+          flex-shrink: 0;
+        }
+        .chat-header-title {
+          font-family: 'Sora', 'DM Sans', sans-serif;
+          font-size: 20px;
+          font-weight: 800;
+          color: #202124;
+        }
+        .chat-header-actions { display: flex; align-items: center; gap: 4px; }
+        .chat-header-btn {
+          width: 44px;
+          height: 44px;
+          border: none;
+          border-radius: 12px;
+          background: transparent;
+          color: #5f6368;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+        }
+        .chat-header-btn.is-active { background: #e6f6ed; color: #0F9D58; }
+
+        .chat-tab-row {
+          display: flex;
+          gap: 8px;
+          padding: 0 14px 12px;
+          overflow-x: auto;
+          overflow-y: hidden;
+          scrollbar-width: none;
+          -ms-overflow-style: none;
+          flex-shrink: 0;
+        }
+        .chat-tab-row::-webkit-scrollbar { display: none; }
+        .chat-tab {
+          position: relative;
+          height: 40px;
+          flex: 0 0 auto;
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 0 15px;
+          border: 1px solid #e8eaed;
+          border-radius: 999px;
+          background: #fff;
+          color: #5f6368;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 13px;
+          font-weight: 600;
+          cursor: pointer;
+          white-space: nowrap;
+        }
+        .chat-tab.is-active { background: #0F9D58; border-color: #0F9D58; color: #fff; }
+        .chat-tab-count {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          min-width: 18px;
+          height: 18px;
+          padding: 0 5px;
+          border-radius: 999px;
+          background: #e6f6ed;
+          color: #0F9D58;
+          font-size: 10px;
+          font-weight: 800;
+        }
+        .chat-tab.is-active .chat-tab-count { background: rgba(255,255,255,0.24); color: #fff; }
+        @media (hover: none) { .chat-tab::after { content: ''; position: absolute; inset: -2px 0; } }
+
+        .chat-list-scroll {
+          flex: 1;
+          min-height: 0;
+          overflow-y: auto;
+          overflow-x: hidden;
+          touch-action: pan-y;
+          background: #f8f9fa;
+          padding: 0 14px calc(var(--bottom-nav-h, 60px) + env(safe-area-inset-bottom, 0px) + 16px);
+        }
+        body.install-bar-visible .chats-shell .chat-list-panel .chat-list-scroll {
+          padding-bottom: calc(var(--bottom-nav-h, 60px) + 56px + env(safe-area-inset-bottom, 0px) + 16px);
+        }
+        .chat-list-card {
+          background: #fff;
+          border: 1px solid #e8eaed;
+          border-radius: 16px;
+          overflow: hidden;
+        }
+
         .chat-row {
-          transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+          position: relative;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          min-height: 80px;
+          padding: 12px 16px;
+          background: #fff;
+          cursor: pointer;
+          animation: chatFadeUp 0.24s ease both;
           -webkit-touch-callout: none;
           -webkit-user-select: none;
           user-select: none;
           touch-action: pan-y;
         }
-        .chat-row:hover {
-          background: #f8fffa !important;
-          transform: translateY(-1px);
-          box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+        .chat-row::after {
+          content: '';
+          position: absolute;
+          left: 88px;
+          right: 0;
+          bottom: 0;
+          height: 1px;
+          background: #e8eaed;
+          pointer-events: none;
+        }
+        .chat-row:last-child::after { display: none; }
+        .chat-row.is-unread { background: #f6fbf8; }
+        .chat-row-body { flex: 1; min-width: 0; padding-right: 40px; }
+        .chat-row-top { display: flex; align-items: flex-start; gap: 12px; }
+        .chat-row-title {
+          flex: 1;
+          min-width: 0;
+          font-size: 15px;
+          font-weight: 600;
+          color: #202124;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          line-height: 1.3;
+        }
+        .chat-row.is-unread .chat-row-title { font-weight: 700; }
+        .chat-row-meta { flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+        .chat-row-time { font-size: 12px; color: #80868b; white-space: nowrap; line-height: 1.3; }
+        .chat-row-unread {
+          min-width: 20px;
+          height: 20px;
+          padding: 0 6px;
+          border-radius: 999px;
+          background: #0F9D58;
+          color: #fff;
+          font-size: 11px;
+          font-weight: 700;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .chat-row-person,
+        .chat-row-preview {
+          font-size: 13px;
+          color: #5f6368;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .chat-row-person { margin-top: 3px; }
+        .chat-row-preview { margin-top: 4px; font-size: 14px; }
+        .chat-row.is-unread .chat-row-preview,
+        .chat-row.is-unread .chat-preview-text { color: #202124; }
+        .chat-preview-row { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; min-width: 0; }
+        .chat-preview-icon { display: inline-flex; flex: 0 0 auto; }
+        .chat-preview-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .chat-preview-empty { color: #80868b; }
+
+        .chat-context-thumb {
+          position: relative;
+          width: 56px;
+          height: 56px;
+          flex-shrink: 0;
+          border: 1px solid #e8eaed;
+          border-radius: 12px;
+          background: #e6f6ed;
+        }
+        .chat-context-thumb > img {
+          display: block;
+          width: 100%;
+          height: 100%;
+          border-radius: 11px;
+          object-fit: cover;
+        }
+        .chat-context-fallback {
+          position: absolute;
+          inset: 0;
+          border-radius: 11px;
+          background: #e6f6ed;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .chat-peer-avatar {
+          position: absolute;
+          right: -6px;
+          bottom: -6px;
+          width: 24px;
+          height: 24px;
+          border: 2px solid #fff;
+          border-radius: 50%;
+          background: #e6f6ed;
+          color: #0F9D58;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          overflow: visible;
+          box-sizing: border-box;
+        }
+        .chat-peer-avatar > img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; display: block; }
+        .chat-peer-initial { font-size: 11px; font-weight: 800; line-height: 1; }
+        .chat-online-dot {
+          position: absolute;
+          right: -3px;
+          bottom: -3px;
+          width: 10px;
+          height: 10px;
+          border-radius: 50%;
+          background: #0F9D58;
+          box-shadow: 0 0 0 2px #fff;
         }
 
-        .soko-pillrow::-webkit-scrollbar { display: none; }
+        .chat-row-menu-btn {
+          position: absolute;
+          right: 8px;
+          top: 50%;
+          transform: translateY(-50%);
+          width: 32px;
+          height: 32px;
+          border: none;
+          border-radius: 8px;
+          background: transparent;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          opacity: 0;
+          pointer-events: none;
+          transition: opacity 0.15s ease;
+        }
+        @media (hover: hover) {
+          .chat-row:hover { background: #f8faf9; }
+          .chat-row.is-unread:hover { background: #eef8f2; }
+          .chat-row:hover .chat-row-menu-btn,
+          .chat-row-menu-btn:focus-visible { opacity: 1; pointer-events: auto; }
+        }
+        @media (hover: none) {
+          .chat-row-menu-btn { display: none !important; }
+          .chat-row-body { padding-right: 0; }
+        }
+        @media (min-width: 769px) {
+          .chat-list-card { border: 0; border-radius: 0; }
+          .chat-list-scroll { padding: 0 !important; background: #fff; }
+          .chat-row.is-selected { background: #e6f6ed !important; }
+          .chat-row.is-selected::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: #0F9D58; }
+        }
+        @media (max-width: 768px) {
+          .chat-header-row { padding: 0 14px; }
+          .chat-row { padding: 12px 14px; }
+        }
+        @media (max-width: 359px) {
+          .chat-list-price { display: none; }
+          .chat-peer-avatar { width: 20px; height: 20px; }
+          .chat-row::after { left: 82px; }
+        }
+        @media (max-width: 768px) and (max-height: 500px) {
+          .chat-header-row { height: 52px; }
+          .chat-tab { height: 36px; }
+        }
 
-        @media (min-width: 900px) {
-          .soko-mobile-bottomnav { display: none !important; }
+        .chat-skeleton-row {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          min-height: 80px;
+          padding: 12px 16px;
+          border-bottom: 1px solid #e8eaed;
+        }
+        .chat-skeleton-square { width: 56px; height: 56px; border-radius: 12px; flex-shrink: 0; }
+        .chat-skeleton-lines { flex: 1; }
+        .chat-skeleton-line { height: 10px; border-radius: 6px; margin-bottom: 9px; }
+        .chat-skeleton { background: #f1f3f4; background-image: linear-gradient(90deg,#f1f3f4 25%,#e8eaed 50%,#f1f3f4 75%); background-size: 200% 100%; animation: chatShimmer 1.4s linear infinite; }
+        .chat-empty {
+          min-height: 280px;
+          padding: 48px 24px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          text-align: center;
+        }
+        .chat-empty-icon {
+          width: 72px;
+          height: 72px;
+          border-radius: 50%;
+          background: #e6f6ed;
+          color: #0F9D58;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          margin-bottom: 16px;
+        }
+        .chat-empty-title {
+          font-family: 'Sora', 'DM Sans', sans-serif;
+          font-size: 16px;
+          font-weight: 700;
+          color: #202124;
+          margin-bottom: 6px;
+        }
+        .chat-empty-sub { font-size: 13px; color: #5f6368; line-height: 1.5; }
+        @media (prefers-reduced-motion: reduce) {
+          .chat-row { animation: none; }
+          .chat-skeleton { animation: none; background-image: none; }
         }
       `}</style>
 
-      {/* Selection bar — replaces the brand row while chats are selected */}
-      {inSelection ? (
-        <div className="chat-select-bar" style={S.selectBar}>
+      <div className="chat-header-row" style={S.headerRow}>
+        <span className="chat-header-title">Chats</span>
+        <div className="chat-header-actions">
           <button
             type="button"
-            style={S.selectClose}
-            onClick={clearSelection}
-            aria-label="Cancel selection"
-          >
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-          <span style={S.selectCount}>{selectedKeys.size} selected</span>
-          <div style={S.selectActions}>
-            <button type="button" style={S.selectAction} onClick={bulkStar} aria-label="Star selected" title="Star">
-              <StarIcon filled={allStarred} />
-            </button>
-            <button type="button" style={S.selectAction} onClick={bulkArchive} aria-label="Archive selected" title="Archive">
-              <ArchiveIcon active={allArchived} />
-            </button>
-            <button type="button" style={S.selectAction} onClick={bulkDelete} aria-label="Delete selected" title="Delete">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3a443d" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M3 6h18" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" /><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /><line x1="10" y1="11" x2="10" y2="17" /><line x1="14" y1="11" x2="14" y2="17" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      ) : (
-      <>
-      {/* Brand row */}
-      <div className="chat-brand-row" style={S.brandRow}>
-        <div>
-          <div style={S.logo}>
-            <span style={{ color: '#1a7a4a' }}>Soko</span><span style={{ color: '#f5a623' }}>Mw</span>
-          </div>
-          <div style={S.tagline}>Buy. Sell. Find. Anywhere in Malawi.</div>
-        </div>
-
-        <div style={S.brandActions}>
-          <button
-            type="button"
-            style={{ ...S.menuBtn, ...(searchOpen ? S.menuBtnActive : {}) }}
+            className={`chat-header-btn${searchOpen ? ' is-active' : ''}`}
             onClick={() => setSearchOpen(v => !v)}
             aria-label="Search chats"
             aria-expanded={searchOpen}
           >
-            <SearchGlassIcon size={18} color={searchOpen ? '#1a7a4a' : '#3a443d'} />
+            <SearchGlassIcon size={20} color={searchOpen ? '#0F9D58' : '#5f6368'} />
           </button>
           <div style={S.menuWrap}>
-          <button type="button" style={S.menuBtn} onClick={() => setMenuOpen(v => !v)} aria-label="More filters">
-            <KebabIcon />
-          </button>
-          {menuOpen && (
-            <>
-              <div style={S.menuOverlay} onClick={() => setMenuOpen(false)} />
-              <div style={S.menuDropdown}>
-                <button
-                  type="button"
-                  style={S.menuItem}
-                  onClick={() => { setMenuOpen(false); setNewChatQuery(''); setNewChatOpen(true) }}
-                >
-                  <NewChatIcon size={15} color="#3a443d" />
-                  New Message
-                </button>
-                <div style={S.menuDivider} />
-                <button
-                  type="button"
-                  style={{ ...S.menuItem, ...(activeFilter === 'starred' ? S.menuItemActive : {}) }}
-                  onClick={() => { setActiveFilter('starred'); setMenuOpen(false) }}
-                >
-                  <StarFilledIcon size={15} color={activeFilter === 'starred' ? '#1a7a4a' : '#f5a623'} />
-                  Starred
-                  {counts.starred > 0 && <span style={S.menuCount}>{counts.starred}</span>}
-                </button>
-                <button
-                  type="button"
-                  style={{ ...S.menuItem, ...(activeFilter === 'archived' ? S.menuItemActive : {}) }}
-                  onClick={() => { setActiveFilter('archived'); setMenuOpen(false) }}
-                >
-                  <ArchiveBoxIcon size={15} color={activeFilter === 'archived' ? '#1a7a4a' : '#5c6b78'} />
-                  Archived
-                  {counts.archived > 0 && <span style={S.menuCount}>{counts.archived}</span>}
-                </button>
-              </div>
-            </>
-          )}
-        </div>
+            <button type="button" className="chat-header-btn" onClick={() => setMenuOpen(v => !v)} aria-label="More options">
+              <KebabIcon size={20} color="#5f6368" />
+            </button>
+            {menuOpen && (
+              <>
+                <div style={S.menuOverlay} onClick={() => setMenuOpen(false)} />
+                <div style={S.menuDropdown}>
+                  <button
+                    type="button"
+                    style={S.menuItem}
+                    onClick={() => { setMenuOpen(false); setNewChatQuery(''); setNewChatOpen(true) }}
+                  >
+                    <NewChatIcon size={15} color="#5f6368" />
+                    New Message
+                  </button>
+                  <div style={S.menuDivider} />
+                  <button
+                    type="button"
+                    style={{ ...S.menuItem, ...(activeFilter === 'starred' ? S.menuItemActive : {}) }}
+                    onClick={() => { setActiveFilter('starred'); setMenuOpen(false) }}
+                  >
+                    <StarFilledIcon size={15} color={activeFilter === 'starred' ? '#0F9D58' : '#f5a623'} />
+                    Starred
+                    {counts.starred > 0 && <span style={S.menuCount}>{counts.starred}</span>}
+                  </button>
+                  <button
+                    type="button"
+                    style={{ ...S.menuItem, ...(activeFilter === 'archived' ? S.menuItemActive : {}) }}
+                    onClick={() => { setActiveFilter('archived'); setMenuOpen(false) }}
+                  >
+                    <ArchiveBoxIcon size={15} color={activeFilter === 'archived' ? '#0F9D58' : '#80868b'} />
+                    Archived
+                    {counts.archived > 0 && <span style={S.menuCount}>{counts.archived}</span>}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
-      </>
-      )}
 
       {newChatOpen && (
         <div style={S.newChatOverlay} onClick={() => setNewChatOpen(false)}>
@@ -1281,7 +1318,7 @@ export default function ChatListPanel() {
       {/* Search — appears only after tapping the search icon in the brand row */}
       {searchOpen && (
         <div style={{ ...S.searchWrap, animation: 'searchDrop 0.18s ease both' }}>
-          <SearchGlassIcon size={15} color="#8aa093" />
+          <SearchGlassIcon size={15} color="#80868b" />
           <input
             autoFocus
             style={S.searchInput}
@@ -1290,7 +1327,7 @@ export default function ChatListPanel() {
             onChange={e => setSearch(e.target.value)}
           />
           {search && (
-            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#aaa', padding: 0 }} onClick={() => setSearch('')}>
+            <button style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#80868b', padding: 0 }} onClick={() => setSearch('')}>
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.8" strokeLinecap="round">
                 <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
               </svg>
@@ -1309,64 +1346,64 @@ export default function ChatListPanel() {
         </div>
       )}
 
-      {/* Category pills — horizontal, was the vertical sidebar */}
-      <div style={S.rowWrap}>
-        <div className="soko-pillrow" style={S.pillRow}>
-          {PILLS.map(p => (
-            <button
-              key={p.key}
-              style={{
-                ...S.pill,
-                background: PILL_COLORS[p.key].bg,
-                color: PILL_COLORS[p.key].color,
-                ...(activeFilter === p.key ? S.pillActive : {}),
-              }}
-              onClick={() => setActiveFilter(p.key)}
-            >
-              {p.label}
-              {/* Counts reflect totals, not the active search — hide them while
-                  searching so they don't look like they contradict the visible list. */}
-              {!search.trim() && unreadCounts[p.key] > 0 && (
-                <span style={{ ...S.pillCount, ...(activeFilter === p.key ? S.pillCountActive : {}) }}>{unreadCounts[p.key]}</span>
-              )}
-            </button>
-          ))}
-        </div>
-        <div style={S.rowFade} />
+      <div className="chat-tab-row" role="tablist" aria-label="Chat filters">
+        {TABS.map(tab => (
+          <button
+            key={tab.key}
+            type="button"
+            role="tab"
+            aria-selected={activeFilter === tab.key}
+            className={`chat-tab${activeFilter === tab.key ? ' is-active' : ''}`}
+            onClick={() => setActiveFilter(tab.key)}
+          >
+            {tab.label}
+            {tab.key === 'unread' && counts.unread > 0 ? (
+              <span className="chat-tab-count">{counts.unread}</span>
+            ) : null}
+          </button>
+        ))}
       </div>
 
-      
-
-      {/* Loading skeletons */}
-      {loading && (
-        <div style={{ padding: '8px 0' }}>
-          {[1, 2, 3, 4].map(i => (
-            <div key={i} style={S.skeletonRow}>
-              <div style={S.skeletonAvatar} />
-              <div style={{ flex: 1 }}>
-                <div style={{ ...S.skeletonLine, width: '55%', marginBottom: '8px' }} />
-                <div style={{ ...S.skeletonLine, width: '80%' }} />
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Scroll body — empty + rows share one scroller so BottomNav padding applies to both */}
       <div className="chat-list-scroll" style={S.list}>
-        {!loading && filtered.length === 0 && (
-          <div style={S.empty}>
-            <div style={{ ...S.emptyIconCircle, background: empty.bg }}>
-              <empty.Icon size={30} color={empty.color} />
+        <div className="chat-list-card">
+          {loading ? (
+            [1, 2, 3, 4, 5, 6].map(i => (
+              <div className="chat-skeleton-row" key={i}>
+                <div className="chat-skeleton-square chat-skeleton" />
+                <div className="chat-skeleton-lines">
+                  <div className="chat-skeleton-line chat-skeleton" style={{ width: '48%' }} />
+                  <div className="chat-skeleton-line chat-skeleton" style={{ width: '72%' }} />
+                  <div className="chat-skeleton-line chat-skeleton" style={{ width: '88%', marginBottom: 0 }} />
+                </div>
+              </div>
+            ))
+          ) : filtered.length === 0 ? (
+            <div className="chat-empty">
+              <div className="chat-empty-icon"><empty.Icon size={30} color="#0F9D58" /></div>
+              <div className="chat-empty-title">No chats here</div>
+              <div className="chat-empty-sub">{empty.sub}</div>
             </div>
-            <p style={S.emptyTitle}>{empty.title}</p>
-            <p style={S.emptySub}>{empty.sub}</p>
-            {empty.cta && (
-              <button type="button" style={S.browseBtn} onClick={() => navigate(empty.to)}>{empty.cta}</button>
-            )}
-          </div>
-        )}
-        {filtered.map((chat, i) => renderChatRow(chat, i))}
+          ) : (
+            filtered.map((chat, i) => {
+              const isOpen = openUserId === chat.otherId && String(openContextId || '') === String(chat.contextId || '')
+              return (
+                <ChatListRow
+                  key={chat.key}
+                  chat={chat}
+                  index={i}
+                  isOpen={isOpen}
+                  online={!!presenceMap[chat.otherId]?.online}
+                  currentUserId={currentUser?.id}
+                  onOpen={() => openChat(chat)}
+                  onMenu={setRowMenuChat}
+                  onLongPressStart={startLongPress}
+                  onLongPressMove={moveLongPress}
+                  onLongPressEnd={cancelLongPress}
+                />
+              )
+            })
+          )}
+        </div>
       </div>
 
       {/* Per-row options: block / report / delete */}
@@ -1378,8 +1415,8 @@ export default function ChatListPanel() {
         >
           <div style={S.rowMenuSheet} onClick={e => e.stopPropagation()}>
             <div style={S.rowMenuHandle} />
-            <div style={{ fontSize: 15, fontWeight: 800, color: '#0f1410', marginBottom: 4 }}>
-              {rowMenuChat.displayName}
+            <div style={{ fontSize: 15, fontWeight: 800, color: '#202124', marginBottom: 4 }}>
+              {titleCaseName(rowMenuChat.displayName)}
             </div>
             <div style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>
               Chat options
@@ -1404,7 +1441,7 @@ export default function ChatListPanel() {
               disabled={rowBusy}
               onClick={() => rowReport(rowMenuChat)}
             >
-              🚩 Report
+              Report
             </button>
             <button
               type="button"
@@ -1412,7 +1449,7 @@ export default function ChatListPanel() {
               disabled={rowBusy}
               onClick={() => rowBlock(rowMenuChat)}
             >
-              🚫 Block
+              Block
             </button>
             <button
               type="button"
@@ -1420,7 +1457,7 @@ export default function ChatListPanel() {
               disabled={rowBusy}
               onClick={() => rowDelete(rowMenuChat)}
             >
-              🗑 Delete chat
+              Delete chat
             </button>
             <button
               type="button"
@@ -1437,101 +1474,29 @@ export default function ChatListPanel() {
   )
 }
 
-const S = {
+S = {
   panel: {
     display: 'flex',
     flexDirection: 'column',
     height: '100%',
     minHeight: 0,
     background: '#fff',
-    fontFamily: 'system-ui, -apple-system, sans-serif',
+    fontFamily: "'DM Sans', system-ui, -apple-system, sans-serif",
   },
 
-  brandRow: { display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', padding: '16px 20px 12px', flexShrink: 0 },
-  logo: { fontSize: '22px', fontWeight: '900', letterSpacing: '-0.5px' },
-  tagline: { fontSize: '11.5px', color: '#9aa39d', marginTop: '3px' },
-
-  selectBar: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-    padding: '14px 20px 12px',
-    flexShrink: 0,
-    animation: 'fadeUp 0.18s ease both',
-  },
-  selectClose: {
-    background: 'none',
-    border: 'none',
-    cursor: 'pointer',
-    color: '#3a443d',
-    padding: '4px',
-    display: 'flex',
-    flexShrink: 0,
-  },
-  selectCount: {
-    fontSize: '16px',
-    fontWeight: '800',
-    color: '#0f1410',
-    letterSpacing: '-0.01em',
-  },
-  selectActions: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 4,
-    marginLeft: 'auto',
-  },
-  selectAction: {
-    background: 'rgba(0,0,0,0.04)',
-    border: 'none',
-    borderRadius: '10px',
-    width: '38px',
-    height: '38px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    cursor: 'pointer',
-  },
-  selectCheck: {
-    position: 'absolute',
-    top: -4,
-    left: -4,
-    width: 20,
-    height: 20,
-    borderRadius: '50%',
-    background: '#1a7a4a',
-    border: '2px solid #fff',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 2,
-  },
-
+  headerRow: { flexShrink: 0 },
   menuWrap: { position: 'relative' },
-  brandActions: { display: 'flex', alignItems: 'center', gap: 8 },
-  menuBtn: {
-    background: 'rgba(0,0,0,0.04)',
-    border: 'none',
-    borderRadius: '10px',
-    width: '34px',
-    height: '34px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    cursor: 'pointer',
-    transition: 'background 0.2s ease',
-  },
-  menuBtnActive: { background: '#e6f7ee' },
   menuOverlay: { position: 'fixed', inset: 0, zIndex: 20 },
   menuDropdown: {
     position: 'absolute',
-    top: '40px',
+    top: '48px',
     right: 0,
     background: '#fff',
     borderRadius: '14px',
-    boxShadow: '0 8px 24px rgba(0,0,0,0.14)',
-    border: '1px solid #eef2ef',
+    boxShadow: '0 8px 24px rgba(32,33,36,0.12)',
+    border: '1px solid #e8eaed',
     padding: '6px',
-    minWidth: '160px',
+    minWidth: '170px',
     zIndex: 21,
   },
   menuItem: {
@@ -1543,15 +1508,15 @@ const S = {
     borderRadius: '10px',
     border: 'none',
     background: 'none',
-    fontSize: '13.5px',
+    fontSize: '13px',
     fontWeight: '600',
-    color: '#3a443d',
+    color: '#5f6368',
     cursor: 'pointer',
     textAlign: 'left',
   },
-  menuItemActive: { background: '#e6f7ee', color: '#1a7a4a' },
-  menuCount: { marginLeft: 'auto', fontSize: '11px', fontWeight: '800', color: '#9aa39d' },
-  menuDivider: { height: '1px', background: '#eef2ef', margin: '4px 6px' },
+  menuItemActive: { background: '#e6f6ed', color: '#0F9D58' },
+  menuCount: { marginLeft: 'auto', fontSize: '11px', fontWeight: '800', color: '#80868b' },
+  menuDivider: { height: '1px', background: '#e8eaed', margin: '4px 6px' },
 
   newChatOverlay: {
     position: 'fixed',
@@ -1598,10 +1563,10 @@ const S = {
     display: 'flex',
     alignItems: 'center',
     gap: 10,
-    background: '#f4f8f5',
+    background: '#f8f9fa',
     borderRadius: 999,
     padding: '11px 18px',
-    border: '1.5px solid #e0ebe3',
+    border: '1px solid #e8eaed',
     margin: '0 16px 12px',
   },
   searchInput: {
@@ -1609,14 +1574,14 @@ const S = {
     border: 'none',
     background: 'transparent',
     fontSize: '15px',
-    color: '#111',
+    color: '#202124',
     outline: 'none',
   },
   searchCloseBtn: {
     background: 'none',
     border: 'none',
     cursor: 'pointer',
-    color: '#9aa39d',
+    color: '#80868b',
     padding: '2px',
     display: 'flex',
     flexShrink: 0,
@@ -1890,7 +1855,7 @@ const S = {
     padding: '14px 16px',
     fontSize: 14,
     fontWeight: 700,
-    color: '#0f1410',
+    color: '#202124',
     cursor: 'pointer',
     marginBottom: 8,
     fontFamily: 'inherit',
