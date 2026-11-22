@@ -133,3 +133,4 @@ Home statuses: two-row top zone, time only
 Home statuses: scroll, arrows, fades, view-all card, skeleton
 Home statuses: light skeleton, viewer covers header
 Home statuses: fix top clipping on hover
+Home statuses: rotating order with seen tracking (temp demo helper)

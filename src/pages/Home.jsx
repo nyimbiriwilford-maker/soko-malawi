@@ -4557,6 +4557,9 @@ class BannerErrorBoundary extends React.Component {
   render() { if (this.state.hasError) return null; return this.props.children }
 }
 
+let homeStatusCache = { userId: null, at: 0, data: null }
+const HOME_STATUS_CACHE_TTL = 5 * 60 * 1000
+
 export default function Home() {
   const navigate = useNavigate()
   const { isOffline } = useNetwork()
@@ -4762,13 +4765,19 @@ export default function Home() {
     let ch
     setStoriesLoading(true)
     setStoriesError(null)
-    fetchAllActiveStories(user.id, 'All', 13)
-      .then(data => { setStories(data); setStoriesLoading(false) })
-      .catch(err => { setStoriesError(err); setStoriesLoading(false) })
+    const cached = homeStatusCache.userId === user.id && (Date.now() - homeStatusCache.at) < HOME_STATUS_CACHE_TTL ? homeStatusCache.data : null
+    if (cached) {
+      setStories(cached)
+      setStoriesLoading(false)
+    } else {
+      fetchAllActiveStories(user.id, 'All', 30)
+        .then(data => { homeStatusCache = { userId: user.id, at: Date.now(), data }; setStories(data); setStoriesLoading(false) })
+        .catch(err => { setStoriesError(err); setStoriesLoading(false) })
+    }
 
     ch = supabase.channel(`home-live-stories-${user.id}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'user_statuses' }, () => {
-        fetchAllActiveStories(user.id, 'All', 13).then(setStories)
+        fetchAllActiveStories(user.id, 'All', 30).then(data => { homeStatusCache = { userId: user.id, at: Date.now(), data }; setStories(data) })
       })
       .subscribe()
     return () => { if (ch) supabase.removeChannel(ch) }
@@ -5254,7 +5263,7 @@ export default function Home() {
             stories={forceEmptyStatus ? [] : stories}
             loading={forceEmptyStatus || forceErrorStatus ? false : storiesLoading}
             error={forceErrorStatus ? new Error('forced') : (forceEmptyStatus ? null : storiesError)}
-            onRetry={() => { setStoriesLoading(true); setStoriesError(null); fetchAllActiveStories(user.id, 'All', 13).then(data => { setStories(data); setStoriesLoading(false) }).catch(err => { setStoriesError(err); setStoriesLoading(false) }) }}
+            onRetry={() => { setStoriesLoading(true); setStoriesError(null); fetchAllActiveStories(user.id, 'All', 30).then(data => { homeStatusCache = { userId: user.id, at: Date.now(), data }; setStories(data); setStoriesLoading(false) }).catch(err => { setStoriesError(err); setStoriesLoading(false) }) }}
             onCreateStory={handleCreateStory}
             currentUserId={user?.id}
             currentUserProfile={user ? { avatar_url: user.avatar_url, full_name: user.full_name, is_verified: user.is_verified } : null}
@@ -5362,3 +5371,6 @@ export default function Home() {
     </div>
   )
 }
+
+
+

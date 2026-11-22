@@ -211,7 +211,7 @@ function LazyMedia({ src, isVideo, style }) {
   )
 }
 
-function StoryCard({ s, isOwn, viewedIds, onClick, windowWidth }) {
+function StoryCard({ s, isOwn, viewedIds, onClick, windowWidth, seen = false }) {
   const avatarSize = windowWidth >= 769 ? 32 : 30
   const statusFontSize = windowWidth >= 769 ? 14 : 13
   const name = s.profiles?.full_name || 'Seller'
@@ -310,6 +310,7 @@ function StoryCard({ s, isOwn, viewedIds, onClick, windowWidth }) {
                 background: 'linear-gradient(135deg,#0F9D58,#22c55e)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 color: '#fff', fontSize: 12, fontWeight: 800,
+                opacity: seen ? 0.85 : 1,
               }}>
                 {avatar
                   ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -415,10 +416,126 @@ function persistViewedStoryIds(set) {
   } catch { /* ignore */ }
 }
 
+function readSeenStatuses() {
+  try {
+    const raw = localStorage.getItem('soko_seen_statuses')
+    if (!raw) return new Set()
+    const arr = JSON.parse(raw)
+    if (!Array.isArray(arr)) return new Set()
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000
+    const valid = arr.filter(x => x && x.id && typeof x.seenAt === 'number' && x.seenAt > cutoff)
+    try { localStorage.setItem('soko_seen_statuses', JSON.stringify(valid)) } catch { /* ignore */ }
+    return new Set(valid.map(x => x.id))
+  } catch { return new Set() }
+}
+
+function markSeenStatus(id) {
+  try {
+    const raw = localStorage.getItem('soko_seen_statuses')
+    let arr = []
+    try { arr = raw ? JSON.parse(raw) : [] } catch { arr = [] }
+    if (!Array.isArray(arr)) arr = []
+    const cutoff = Date.now() - 24 * 60 * 60 * 1000
+    arr = arr.filter(x => x && x.id && typeof x.seenAt === 'number' && x.seenAt > cutoff)
+    if (arr.some(x => x.id === id)) {
+      arr = arr.map(x => x.id === id ? { ...x, seenAt: Date.now() } : x)
+    } else {
+      arr.push({ id, seenAt: Date.now() })
+    }
+    localStorage.setItem('soko_seen_statuses', JSON.stringify(arr))
+  } catch { /* ignore */ }
+}
+
+// TEMP-STATUS-DEMO
+function isStatusDemoEnabled() {
+  try {
+    const host = window.location.hostname
+    if (host !== 'localhost' && host !== '127.0.0.1') return false
+    return new URLSearchParams(window.location.search).get('statusdemo') === '1'
+  } catch { return false }
+}
+
+// TEMP-STATUS-DEMO
+function makeDemoStatuses() {
+  const now = Date.now()
+  const ages = [1, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 23, 3]
+  const out = []
+  for (let i = 0; i < 14; i++) {
+    const ageHours = ages[i]
+    const hasPrice = i % 3 === 0
+    const hasTag = i % 2 === 0
+    out.push({
+      id: 'demo-status-' + (i + 1),
+      user_id: 'demo-seller-' + (i + 1),
+      content: 'Demo status ' + (i + 1) + ' - quick update',
+      status_type: 'availability',
+      created_at: new Date(now - ageHours * 60 * 60 * 1000).toISOString(),
+      expires_at: new Date(now + 24 * 60 * 60 * 1000).toISOString(),
+      media_urls: [],
+      tagged_listing_id: hasTag ? 'demo-listing-' + (i + 1) : null,
+      tagged_kind: hasTag ? 'listing' : null,
+      tagged: hasTag ? { title: 'Demo product', price: hasPrice ? 12000 : null } : null,
+      profiles: { full_name: 'Demo seller ' + (i + 1), avatar_url: null, is_verified: i % 4 === 0 },
+      _demo: true,
+    })
+  }
+  return out
+}
+
+function groupStatusRows(rows, currentUserId) {
+  const sorted = [...(rows || [])].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+  const map = new Map()
+  for (const s of sorted) {
+    if (!map.has(s.user_id)) map.set(s.user_id, [])
+    map.get(s.user_id).push(s)
+  }
+  return Array.from(map.entries()).map(([uid, group]) => ({
+    ...group[0],
+    _ownGroup: group,
+    _isCurrentUser: group[0].user_id === currentUserId,
+  }))
+}
+
+function weightedKey(card) {
+  const ageHours = Math.max(0, (Date.now() - new Date(card.created_at).getTime()) / 3600000)
+  const weight = 1 / (1 + ageHours / 6)
+  return Math.pow(Math.random(), 1 / weight)
+}
+
+function computeHomeOrder(cards, currentUserId, seenSet) {
+  const own = cards.filter(c => c.user_id === currentUserId)
+  const unseen = cards.filter(c => c.user_id !== currentUserId && !seenSet.has(c.user_id))
+  const seen = cards.filter(c => c.user_id !== currentUserId && seenSet.has(c.user_id))
+  const sortGroup = (group) => group
+    .map(c => ({ c, key: weightedKey(c) }))
+    .sort((a, b) => b.key - a.key)
+    .map(x => x.c)
+  return [...sortGroup(own), ...sortGroup(unseen), ...sortGroup(seen)]
+}
+
+function mergeHomeOrder(existing, cards, seenSet) {
+  const byId = new Map(cards.map(c => [c.user_id, c]))
+  let base = (existing || []).filter(c => byId.has(c.user_id)).map(c => byId.get(c.user_id))
+  const existingIds = new Set(base.map(c => c.user_id))
+  const newCards = cards.filter(c => !existingIds.has(c.user_id))
+  if (newCards.length === 0) return base
+  const unseenNew = newCards.filter(c => !seenSet.has(c.user_id))
+  const seenNew = newCards.filter(c => seenSet.has(c.user_id))
+  const firstSeenIdx = base.findIndex(c => seenSet.has(c.user_id))
+  if (firstSeenIdx === -1) return [...base, ...unseenNew, ...seenNew]
+  return [...base.slice(0, firstSeenIdx), ...unseenNew, ...base.slice(firstSeenIdx), ...seenNew]
+}
+
+let homeStatusOrder = null
+let homeStatusOrderUserId = null
+let homeStatusHiddenAt = null
+
 function getInitCount(w) { return w >= 1024 ? 5 : 4 }
 
 export default function HomeStatusSection({ navigate, stories, loading, error, onRetry, onCreateStory, currentUserId }) {
   const [viewedIds, setViewedIds] = useState(loadViewedStoryIds)
+  const [seenIds, setSeenIds] = useState(() => readSeenStatuses())
+  const [orderTick, setOrderTick] = useState(0)
   const [windowWidth, setWindowWidth] = useState(window.innerWidth)
   const scrollRef = useRef(null)
   const [canScrollRight, setCanScrollRight] = useState(false)
@@ -430,6 +547,23 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
     }
     window.addEventListener('resize', handler)
     return () => window.removeEventListener('resize', handler)
+  }, [])
+
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.hidden) {
+        homeStatusHiddenAt = Date.now()
+      } else {
+        if (homeStatusHiddenAt && Date.now() - homeStatusHiddenAt >= 10 * 60 * 1000) {
+          homeStatusOrder = null
+          homeStatusOrderUserId = null
+          setOrderTick(t => t + 1)
+        }
+        homeStatusHiddenAt = null
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
   }, [])
 
   const isMobile = windowWidth < 768
@@ -457,43 +591,30 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
     return () => { cancelled = true }
   }, [currentUserId, stories])
 
-  const storyGroups = useMemo(() => {
-    const map = new Map()
-    for (const s of stories || []) {
-      if (!map.has(s.user_id)) map.set(s.user_id, [])
-      map.get(s.user_id).push(s)
+  const orderedCards = useMemo(() => {
+    // TEMP-STATUS-DEMO
+    let rows = Array.isArray(stories) ? [...stories] : []
+    if (isStatusDemoEnabled()) rows = rows.concat(makeDemoStatuses())
+    const cards = groupStatusRows(rows, currentUserId)
+    if (cards.length === 0) return homeStatusOrder || []
+    if (homeStatusOrderUserId !== currentUserId) {
+      homeStatusOrder = null
+      homeStatusOrderUserId = currentUserId
     }
-    const cards = Array.from(map.entries()).map(([, group], idx) => ({
-      ...group[0],
-      _ownGroup: group,
-      _isCurrentUser: group[0].user_id === currentUserId,
-      _groupIndex: idx,
-    }))
-    return cards
-  }, [stories, currentUserId])
-
-  const rankedStories = useMemo(() => {
-    const owned = storyGroups.filter(s => s.user_id === currentUserId)
-    const others = storyGroups.filter(s => s.user_id !== currentUserId)
-    const withMeta = others.map(c => {
-      const unseenCount = (c._ownGroup || []).filter(x => !viewedIds.has(x.id)).length
-      const isViewed = unseenCount === 0
-      const newest = Math.max(0, ...((c._ownGroup || []).map(x => new Date(x.created_at).getTime())))
-      return { c, unseenCount, isViewed, newest }
-    })
-    const unviewed = withMeta.filter(x => !x.isViewed)
-    const viewed = withMeta.filter(x => x.isViewed)
-    const sortFn = (a, b) => {
-      if (b.newest !== a.newest) return b.newest - a.newest
-      return (a.c._groupIndex || 0) - (b.c._groupIndex || 0)
+    if (!homeStatusOrder) {
+      const seenSet = readSeenStatuses()
+      const ordered = computeHomeOrder(cards, currentUserId, seenSet)
+      homeStatusOrder = ordered
+      return ordered
     }
-    unviewed.sort(sortFn)
-    viewed.sort(sortFn)
-    return [...owned, ...unviewed.map(x => x.c), ...viewed.map(x => x.c)].slice(0, 13)
-  }, [storyGroups, viewedIds, currentUserId])
+    const seenSet = readSeenStatuses()
+    const merged = mergeHomeOrder(homeStatusOrder, cards, seenSet)
+    homeStatusOrder = merged
+    return merged
+  }, [stories, currentUserId, orderTick])
 
-  const visibleStories = rankedStories.slice(0, 12)
-  const hasMoreStories = rankedStories.length > 12
+  const visibleStories = orderedCards.slice(0, 12)
+  const hasMoreStories = orderedCards.length > 12
 
   // Create Status card is the first rail item. With 2+ posted statuses it is
   // scrolled off-screen before first paint so landing/refresh shows only
@@ -501,7 +622,7 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
   // With 0–1 posters it stays visible at the start of the rail so mobile
   // fills its two visible slots (create + the single posted status).
   const createCardRef = useRef(null)
-  const hideCreateCard = rankedStories.length > 1
+  const hideCreateCard = orderedCards.length > 1
   const layoutKey = isMobile ? 'm' : windowWidth < 1024 ? 't' : 'd'
 
   useLayoutEffect(() => {
@@ -519,7 +640,14 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
   }, [hideCreateCard, layoutKey, loading, isMobile])
 
   function openStoryGroup(s) {
+    if (s._demo) return
     const ids = s._ownGroup ? s._ownGroup.map(x => x.id) : [s.id]
+    markSeenStatus(s.user_id)
+    setSeenIds(prev => {
+      const next = new Set(prev)
+      next.add(s.user_id)
+      return next
+    })
     setViewedIds(prev => {
       const next = new Set([...prev, ...ids])
       persistViewedStoryIds(next)
@@ -561,7 +689,7 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
       ro.disconnect()
       if (raf) cancelAnimationFrame(raf)
     }
-  }, [checkScroll, rankedStories.length])
+  }, [checkScroll, orderedCards.length])
 
   // Mouse wheel horizontal scrolling (hover devices only)
   useEffect(() => {
@@ -678,7 +806,7 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
     }
     el.addEventListener('keydown', onKeyDown)
     return () => el.removeEventListener('keydown', onKeyDown)
-  }, [rankedStories.length])
+  }, [orderedCards.length])
 
   function scrollByCards(dir) {
     const el = scrollRef.current
@@ -827,7 +955,7 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
              </div>
              ) : (
             <div style={isMobile ? {} : {}}>
-            {rankedStories.length > 0 ? (
+            {orderedCards.length > 0 ? (
                 <div className="hs-rail-wrap" style={{ position: 'relative', padding: 0 }}>
                     <div className="hs-fade hs-fade-left" style={{ opacity: canScrollLeft ? 1 : 0 }} aria-hidden="true" />
                     <div className="hs-fade hs-fade-right" style={{ opacity: canScrollRight ? 1 : 0 }} aria-hidden="true" />
@@ -908,6 +1036,7 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
                          viewedIds={viewedIds}
                          onClick={() => openStoryGroup(s)}
                          windowWidth={windowWidth}
+                         seen={seenIds.has(s.user_id)}
                        />
                      ))}
                      {hasMoreStories && (
