@@ -18,6 +18,14 @@ const G = {
 const RING_ACTIVE = '#0F9D58'
 const RING_VIEWED = '#c4c7cc'
 
+const STATUS_PRIORITY = {
+  LOCATION_CITY: 3,
+  LOCATION_REGION: 1.5,
+  VERIFIED: 1.3,
+  COMPLETE: 1.2,
+  TEXT_ONLY: 0.5,
+}
+
 function timeAgo(iso) {
   const diff = Date.now() - new Date(iso)
   const h = Math.floor(diff / 3600000)
@@ -456,31 +464,33 @@ function isStatusDemoEnabled() {
 }
 
 // TEMP-STATUS-DEMO
-function makeDemoStatuses() {
-  const now = Date.now()
-  const ages = [1, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 23, 3]
-  const out = []
-  for (let i = 0; i < 14; i++) {
-    const ageHours = ages[i]
-    const hasPrice = i % 3 === 0
-    const hasTag = i % 2 === 0
-    out.push({
-      id: 'demo-status-' + (i + 1),
-      user_id: 'demo-seller-' + (i + 1),
-      content: 'Demo status ' + (i + 1) + ' - quick update',
-      status_type: 'availability',
-      created_at: new Date(now - ageHours * 60 * 60 * 1000).toISOString(),
-      expires_at: new Date(now + 24 * 60 * 60 * 1000).toISOString(),
-      media_urls: [],
-      tagged_listing_id: hasTag ? 'demo-listing-' + (i + 1) : null,
-      tagged_kind: hasTag ? 'listing' : null,
-      tagged: hasTag ? { title: 'Demo product', price: hasPrice ? 12000 : null } : null,
-      profiles: { full_name: 'Demo seller ' + (i + 1), avatar_url: null, is_verified: i % 4 === 0 },
-      _demo: true,
-    })
-  }
-  return out
-}
+function makeDemoStatuses() { // TEMP-STATUS-DEMO
+  const now = Date.now() // TEMP-STATUS-DEMO
+  const ages = [1, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 23, 3] // TEMP-STATUS-DEMO
+  const cities = ['Lilongwe', 'Blantyre', 'Mzuzu', 'Lilongwe', 'Blantyre', 'Mzuzu', 'Lilongwe', 'Blantyre', 'Mzuzu', 'Lilongwe', 'Blantyre', 'Mzuzu', 'Lilongwe', 'Blantyre'] // TEMP-STATUS-DEMO
+  const out = [] // TEMP-STATUS-DEMO
+  for (let i = 0; i < 14; i++) { // TEMP-STATUS-DEMO
+    const ageHours = ages[i] // TEMP-STATUS-DEMO
+    const hasPrice = i % 3 === 0 // TEMP-STATUS-DEMO
+    const hasTag = i % 2 === 0 // TEMP-STATUS-DEMO
+    const textOnly = i % 5 === 0 // TEMP-STATUS-DEMO
+    out.push({ // TEMP-STATUS-DEMO
+      id: 'demo-status-' + (i + 1), // TEMP-STATUS-DEMO
+      user_id: 'demo-seller-' + (i + 1), // TEMP-STATUS-DEMO
+      content: textOnly ? 'Demo status ' + (i + 1) + ' - quick update' : 'Demo status ' + (i + 1) + ' - quick update', // TEMP-STATUS-DEMO
+      status_type: 'availability', // TEMP-STATUS-DEMO
+      created_at: new Date(now - ageHours * 60 * 60 * 1000).toISOString(), // TEMP-STATUS-DEMO
+      expires_at: new Date(now + 24 * 60 * 60 * 1000).toISOString(), // TEMP-STATUS-DEMO
+      media_urls: textOnly ? [] : (i % 4 === 0 ? ['https://example.com/demo.jpg'] : []), // TEMP-STATUS-DEMO
+      tagged_listing_id: hasTag ? 'demo-listing-' + (i + 1) : null, // TEMP-STATUS-DEMO
+      tagged_kind: hasTag ? 'listing' : null, // TEMP-STATUS-DEMO
+      tagged: hasTag ? { title: 'Demo product', price: hasPrice ? 12000 : null } : null, // TEMP-STATUS-DEMO
+      profiles: { full_name: 'Demo seller ' + (i + 1), avatar_url: null, city: cities[i], is_verified: i % 4 === 0 }, // TEMP-STATUS-DEMO
+      _demo: true, // TEMP-STATUS-DEMO
+    }) // TEMP-STATUS-DEMO
+  } // TEMP-STATUS-DEMO
+  return out // TEMP-STATUS-DEMO
+} // TEMP-STATUS-DEMO
 
 function groupStatusRows(rows, currentUserId) {
   const sorted = [...(rows || [])].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
@@ -496,18 +506,40 @@ function groupStatusRows(rows, currentUserId) {
   }))
 }
 
-function weightedKey(card) {
+function statusWeight(card, userCity) {
   const ageHours = Math.max(0, (Date.now() - new Date(card.created_at).getTime()) / 3600000)
-  const weight = 1 / (1 + ageHours / 6)
-  return Math.pow(Math.random(), 1 / weight)
+  const freshness = 1 / (1 + ageHours / 6)
+  let location = 1
+  const sellerCity = String(card.profiles?.city || '').trim().toLowerCase()
+  const uc = String(userCity || '').trim().toLowerCase()
+  if (uc) {
+    if (sellerCity && sellerCity === uc) {
+      location = STATUS_PRIORITY.LOCATION_CITY
+    } else {
+      const sellerRegion = String(card.profiles?.region || card.profiles?.district || '').trim().toLowerCase()
+      const userRegion = ''
+      if (sellerRegion && userRegion && sellerRegion === userRegion) {
+        location = STATUS_PRIORITY.LOCATION_REGION
+      }
+    }
+  }
+  const verified = card.profiles?.is_verified ? STATUS_PRIORITY.VERIFIED : 1
+  const hasTag = !!(card.tagged_listing_id || card.tagged_kind || card.tagged_ref_id || card.tagged?.title)
+  const hasPrice = card.tagged?.price !== null && card.tagged?.price !== undefined && card.tagged?.price !== ''
+  const hasPriceOrTag = hasTag || hasPrice
+  const hasMedia = Array.isArray(card.media_urls) && card.media_urls.length > 0
+  let completeness = 1
+  if (hasPriceOrTag) completeness = STATUS_PRIORITY.COMPLETE
+  else if (!hasMedia) completeness = STATUS_PRIORITY.TEXT_ONLY
+  return freshness * location * verified * completeness
 }
 
-function computeHomeOrder(cards, currentUserId, seenSet) {
+function computeHomeOrder(cards, currentUserId, seenSet, userCity) {
   const own = cards.filter(c => c.user_id === currentUserId)
   const unseen = cards.filter(c => c.user_id !== currentUserId && !seenSet.has(c.user_id))
   const seen = cards.filter(c => c.user_id !== currentUserId && seenSet.has(c.user_id))
   const sortGroup = (group) => group
-    .map(c => ({ c, key: weightedKey(c) }))
+    .map(c => ({ c, key: Math.pow(Math.random(), 1 / statusWeight(c, userCity)) }))
     .sort((a, b) => b.key - a.key)
     .map(x => x.c)
   return [...sortGroup(own), ...sortGroup(unseen), ...sortGroup(seen)]
@@ -535,6 +567,7 @@ function getInitCount(w) { return w >= 1024 ? 5 : 4 }
 export default function HomeStatusSection({ navigate, stories, loading, error, onRetry, onCreateStory, currentUserId }) {
   const [viewedIds, setViewedIds] = useState(loadViewedStoryIds)
   const [seenIds, setSeenIds] = useState(() => readSeenStatuses())
+  const [userCity, setUserCity] = useState(currentUserId ? undefined : null)
   const [orderTick, setOrderTick] = useState(0)
   const [windowWidth, setWindowWidth] = useState(window.innerWidth)
   const scrollRef = useRef(null)
@@ -548,6 +581,16 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
     window.addEventListener('resize', handler)
     return () => window.removeEventListener('resize', handler)
   }, [])
+
+  useEffect(() => {
+    if (!currentUserId) { setUserCity(null); return }
+    let cancelled = false
+    supabase.from('profiles').select('city').eq('id', currentUserId).maybeSingle().then(({ data }) => {
+      if (cancelled) return
+      setUserCity(data?.city ?? null)
+    }).catch(() => { if (!cancelled) setUserCity(null) })
+    return () => { cancelled = true }
+  }, [currentUserId])
 
   useEffect(() => {
     const onVisibility = () => {
@@ -592,6 +635,7 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
   }, [currentUserId, stories])
 
   const orderedCards = useMemo(() => {
+    if (currentUserId && userCity === undefined) return homeStatusOrder || []
     // TEMP-STATUS-DEMO
     let rows = Array.isArray(stories) ? [...stories] : []
     if (isStatusDemoEnabled()) rows = rows.concat(makeDemoStatuses())
@@ -601,17 +645,28 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
       homeStatusOrder = null
       homeStatusOrderUserId = currentUserId
     }
+    let ordered
     if (!homeStatusOrder) {
       const seenSet = readSeenStatuses()
-      const ordered = computeHomeOrder(cards, currentUserId, seenSet)
+      ordered = computeHomeOrder(cards, currentUserId, seenSet, userCity)
       homeStatusOrder = ordered
-      return ordered
+    } else {
+      const seenSet = readSeenStatuses()
+      ordered = mergeHomeOrder(homeStatusOrder, cards, seenSet)
+      homeStatusOrder = ordered
     }
-    const seenSet = readSeenStatuses()
-    const merged = mergeHomeOrder(homeStatusOrder, cards, seenSet)
-    homeStatusOrder = merged
-    return merged
-  }, [stories, currentUserId, orderTick])
+    if (isStatusDemoEnabled()) {
+      console.table(ordered.slice(0, 12).map(c => ({ // TEMP-STATUS-DEMO
+        seller: c.profiles?.full_name || c.user_id, // TEMP-STATUS-DEMO
+        city: c.profiles?.city || '', // TEMP-STATUS-DEMO
+        verified: !!c.profiles?.is_verified, // TEMP-STATUS-DEMO
+        hasPriceOrTag: !!(c.tagged_listing_id || c.tagged_kind || c.tagged_ref_id || c.tagged?.title || (c.tagged?.price !== null && c.tagged?.price !== undefined && c.tagged?.price !== '')), // TEMP-STATUS-DEMO
+        ageHours: Math.round(Math.max(0, (Date.now() - new Date(c.created_at).getTime()) / 3600000) * 10) / 10, // TEMP-STATUS-DEMO
+        weight: Math.round(statusWeight(c, userCity) * 1000) / 1000, // TEMP-STATUS-DEMO
+      }))) // TEMP-STATUS-DEMO
+    }
+    return ordered
+  }, [stories, currentUserId, userCity, orderTick])
 
   const visibleStories = orderedCards.slice(0, 12)
   const hasMoreStories = orderedCards.length > 12
