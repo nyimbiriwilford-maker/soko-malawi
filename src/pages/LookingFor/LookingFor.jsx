@@ -942,34 +942,18 @@ const myAlertsRef = useRef([])
           {/* Local-first GPS banner */}
           <div className="lf-gps-banner" style={{
             display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
-            flexWrap: 'wrap',
-            marginBottom: 14, padding: '12px 14px',
-            background: C.greenL, border: `1px solid ${C.green}`,
-            borderRadius: 12,
+            marginBottom: 16, padding: '0 0',
+            minHeight: 44, maxHeight: 44,
+            background: 'transparent',
           }}>
-            <div style={{ minWidth: 0, flex: 1, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
-              <span style={{
-                width: 32, height: 32, borderRadius: 9, flexShrink: 0,
-                background: '#fff', border: `1px solid ${C.green}33`,
-                display: 'flex', alignItems: 'center', justifyContent: 'center', color: C.green,
-              }}>
-                {Icon.nav(15, C.green)}
-              </span>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 800, color: C.green }}>
-                  {detectingViewer
-                    ? 'Detecting your location…'
-                    : viewerPlaceLabel
-                      ? `Near you · ${viewerPlaceLabel}`
-                      : 'Location not detected'}
-                </div>
-                <div style={{ fontSize: 11, color: C.textSub, fontWeight: 600, marginTop: 3, lineHeight: 1.4 }}>
-                  {viewerPlaceLabel
-                    ? localNearCount > 0
-                      ? `${localNearCount} request${localNearCount === 1 ? '' : 's'} looking in your area shown first`
-                      : 'No local matches yet · other requests below'
-                    : 'Allow GPS so requests looking in your city appear first'}
-                </div>
+            <div style={{ minWidth: 0, flex: 1, display: 'flex', gap: 8, alignItems: 'center' }}>
+              <span style={{ color: C.green, display: 'flex' }}>{Icon.nav(16, C.green)}</span>
+              <div style={{ fontSize: 14, fontWeight: 600, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {detectingViewer
+                  ? 'Detecting your location…'
+                  : viewerPlaceLabel
+                    ? `Near ${viewerPlaceLabel}`
+                    : 'Enable location'}
               </div>
             </div>
             <button
@@ -977,14 +961,12 @@ const myAlertsRef = useRef([])
               onClick={redetectViewerGps}
               disabled={detectingViewer}
               style={{
-                flexShrink: 0, border: `1.5px solid ${C.green}`, background: '#fff',
-                color: C.green, borderRadius: 10, padding: '8px 12px',
-                fontSize: 12, fontWeight: 800, cursor: detectingViewer ? 'default' : 'pointer',
+                flexShrink: 0, border: 'none', background: 'transparent',
+                color: C.green, padding: '0',
+                fontSize: 14, fontWeight: 700, cursor: detectingViewer ? 'default' : 'pointer',
                 fontFamily: 'inherit', opacity: detectingViewer ? 0.6 : 1,
-                display: 'flex', alignItems: 'center', gap: 5,
               }}
             >
-              {Icon.nav(13, C.green)}
               {detectingViewer ? '…' : 'Update GPS'}
             </button>
           </div>
@@ -1003,10 +985,10 @@ const myAlertsRef = useRef([])
               }}>
                 {Icon.search(24, C.green)}
               </div>
-              <div style={{ fontSize:17, fontWeight:700, marginBottom:8 }}>No requests found</div>
-              <div style={{ fontSize:13, color:C.gray2, marginBottom:20 }}>Try different filters or be the first to post a request.</div>
+              <div style={{ fontFamily:"'Sora', 'Inter', system-ui, sans-serif", fontSize:18, fontWeight:700, marginBottom:8, color:C.text }}>No requests found</div>
+              <div style={{ fontSize:14, color:C.gray2, marginBottom:20 }}>Try different filters or be the first to post a request.</div>
               <button onClick={handleOpenComposer}
-                style={{ background: C.greenDk, color:'#fff', border:'none', borderRadius:10, padding:'12px 20px', fontWeight:700, fontSize:14, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6 }}>
+                style={{ background: C.green, color:'#fff', border:'none', borderRadius:10, padding:'0 20px', height:44, fontWeight:700, fontSize:14, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6 }}>
                 {Icon.plus(14, '#fff')} Post request
               </button>
             </div>
