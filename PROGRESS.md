@@ -164,3 +164,4 @@ Notifications: wider titles on phone, type icons for system rows
 Install bar: compact, above bottom nav, 14 day dismiss
 Notifications: typography, copy, merged messages, centred laptop column
 Notifications: viewer name, tighter rows, 2-line titles on phone
+Notifications: listing photo on view rows

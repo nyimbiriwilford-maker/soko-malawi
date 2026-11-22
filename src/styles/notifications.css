@@ -3219,6 +3219,29 @@
   box-shadow: 0 0 0 2px #fff !important;
 }
 
+.view-photo-wrap,
+.view-photo {
+  width: 44px !important;
+  height: 44px !important;
+  border-radius: 10px !important;
+}
+
+.view-photo {
+  border: 1px solid #e8eaed !important;
+  object-fit: cover !important;
+  background: #f1ecff;
+  box-shadow: none !important;
+}
+
+.view-photo-wrap .icon-badge {
+  right: -3px !important;
+  bottom: -3px !important;
+  width: 18px !important;
+  height: 18px !important;
+  border: 0 !important;
+  box-shadow: 0 0 0 2px #fff !important;
+}
+
 @media (min-width: 1100px) {
   .notifications-page {
     --notif-max: 720px;

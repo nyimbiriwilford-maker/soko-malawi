@@ -269,6 +269,42 @@ function firstImage(images) {
   return null
 }
 
+function firstViewImage(value) {
+  if (!value) return null
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const image = firstViewImage(item)
+      if (image) return image
+    }
+    return null
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (!trimmed) return null
+    if (trimmed.startsWith('[') || trimmed.startsWith('{')) {
+      try { return firstViewImage(JSON.parse(trimmed)) } catch { return trimmed }
+    }
+    return trimmed
+  }
+  if (typeof value === 'object') {
+    return firstViewImage(value[0] || value.url || value.src || value.image || value.path)
+  }
+  return null
+}
+
+function getViewListingId(notif) {
+  const d = notif.data || {}
+  return d.listing_id || (d.context_type === 'listing' ? d.context_id : null)
+}
+
+function resolveViewImage(notif, viewImages) {
+  const d = notif.data || {}
+  const payloadImage = firstViewImage(d.listing_image || d.image)
+  if (payloadImage) return payloadImage
+  const id = getViewListingId(notif)
+  return id ? viewImages[String(id)] || null : null
+}
+
 function timeLabel(date) {
   const d = new Date(date)
   const now = new Date()
@@ -591,6 +627,62 @@ function useProductContext(notifications) {
   return { products, loading }
 }
 
+const VIEW_LISTING_IMAGE_CACHE = new Map()
+
+function loadViewListingImages(ids) {
+  const unique = [...new Set(ids.map(String))]
+  const missing = unique.filter((id) => !VIEW_LISTING_IMAGE_CACHE.has(id))
+
+  if (missing.length) {
+    const request = supabase
+      .from('listings')
+      .select('id, images')
+      .in('id', missing)
+      .then(({ data }) => {
+        const byId = {}
+        for (const row of data || []) byId[String(row.id)] = firstViewImage(row.images)
+        return byId
+      })
+      .catch(() => ({}))
+
+    for (const id of missing) {
+      VIEW_LISTING_IMAGE_CACHE.set(id, request.then((byId) => byId[id] || null))
+    }
+  }
+
+  return Promise.all(unique.map((id) => VIEW_LISTING_IMAGE_CACHE.get(id) || Promise.resolve(null)))
+}
+
+function useViewListingImages(notifications) {
+  const [images, setImages] = useState({})
+
+  const viewIds = useMemo(() => {
+    const ids = new Set()
+    for (const notif of notifications) {
+      if (notif.type !== 'listing_view') continue
+      const d = notif.data || {}
+      if (firstViewImage(d.listing_image || d.image)) continue
+      const id = getViewListingId(notif)
+      if (id) ids.add(String(id))
+    }
+    return Array.from(ids)
+  }, [notifications])
+
+  useEffect(() => {
+    let cancelled = false
+    if (!viewIds.length) return
+    loadViewListingImages(viewIds).then((values) => {
+      if (cancelled) return
+      const map = {}
+      viewIds.forEach((id, index) => { if (values[index]) map[id] = values[index] })
+      setImages(map)
+    })
+    return () => { cancelled = true }
+  }, [viewIds])
+
+  return viewIds.length ? images : {}
+}
+
 function resolveProduct(notif, products) {
   const d = notif.data || {}
   const { listingId, serviceId, contextId } = getProductIds(notif)
@@ -710,18 +802,33 @@ function ActionButton({ label, icon: Icon, variant = 'secondary', onClick, ariaL
   )
 }
 
-function AvatarIcon({ notif, name: displayName, hasActor, cfg, sender, loading, showTypeBadge = true }) {
+function AvatarIcon({ notif, name: displayName, hasActor, cfg, sender, loading, viewImage, showTypeBadge = true }) {
   const [failedAvatar, setFailedAvatar] = useState(null)
+  const [failedViewImage, setFailedViewImage] = useState(null)
   const actorId = getActorId(notif)
   const TypeIcon = cfg.Icon || Bell
   const name = stripEmojis(displayName || sender?.full_name || getActorName(notif, sender) || 'User') || 'User'
   const initial = name.trim()[0]?.toUpperCase() || 'U'
   const avatarUrl = sender?.avatar_url
   const showImage = !!hasActor && !!avatarUrl && failedAvatar !== avatarUrl
+  const showViewImage = notif.type === 'listing_view' && !!viewImage && failedViewImage !== viewImage
   const typeColor = NO_SENDER_AVATAR_COLORS[cfg.category] || { color: cfg.color, bg: cfg.bg }
 
   if (loading && actorId) {
     return <div className="avatar-skeleton" aria-hidden="true" />
+  }
+
+  if (showViewImage) {
+    return (
+      <div className="avatar-wrap view-photo-wrap" aria-hidden="true">
+        <img className="avatar view-photo" src={viewImage} alt="" loading="lazy" onError={() => setFailedViewImage(viewImage)} />
+        {showTypeBadge && (
+          <span className="icon-badge" style={{ backgroundColor: '#f1ecff', color: '#7c4dff' }}>
+            <Ic icon={TypeIcon} size={14} strokeWidth={2.25} />
+          </span>
+        )}
+      </div>
+    )
   }
 
   if (showImage) {
@@ -985,6 +1092,7 @@ const NotificationCard = memo(function NotificationCard({
   sender,
   sendersLoading,
   product,
+  viewImage,
   index,
   onCardClick,
   onDelete,
@@ -1049,6 +1157,7 @@ const NotificationCard = memo(function NotificationCard({
                 cfg={cfg}
                 sender={sender}
                 loading={sendersLoading}
+                viewImage={viewImage}
               />
               <div className="notif-person-text">
                 <div className="notif-person-row">
@@ -1317,6 +1426,7 @@ export default function Notifications() {
   const [actionBusy, setActionBusy] = useState(null) // `${notifId}:${action}`
   const { senders, loading: sendersLoading } = useSenderProfiles(notifications)
   const { products } = useProductContext(notifications)
+  const viewImages = useViewListingImages(notifications)
 
   // ── Toast ────────────────────────────────────────────────────────────────
   const showToast = useCallback((message, type = 'info') => {
@@ -1899,6 +2009,7 @@ export default function Notifications() {
                       const cfg = getConfig(notif.type)
                       const sender = senders[getActorId(notif)]
                       const product = resolveProduct(notif, products)
+                      const viewImage = notif.type === 'listing_view' ? resolveViewImage(notif, viewImages) : null
                       return (
                         <NotificationCard
                           key={notif.id}
@@ -1907,6 +2018,7 @@ export default function Notifications() {
                           sender={sender}
                           sendersLoading={sendersLoading}
                           product={product}
+                          viewImage={viewImage}
                           index={i}
                           onCardClick={handleCardClick}
                           onDelete={deleteNotification}
