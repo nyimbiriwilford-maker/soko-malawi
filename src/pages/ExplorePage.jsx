@@ -135,7 +135,7 @@ export default function ExplorePage() {
 
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: `0 ${sidePadding}px`, boxSizing: 'border-box' }}>
         {/* Header */}
-        <div style={{ paddingTop: 16, paddingBottom: 12 }}>
+        <div style={{ paddingTop: 16, paddingBottom: 0 }}>
           <h1 style={{
             fontFamily: "'Sora', 'Inter', system-ui, sans-serif",
             fontSize: 20, fontWeight: 800, color: TEXT,
@@ -314,5 +314,6 @@ export default function ExplorePage() {
     </div>
   )
 }
+
 
 

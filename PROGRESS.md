@@ -139,3 +139,4 @@ Home statuses: remove temp demo helper
 Explore: redesign to match Home, shared categories config
 Explore: chevrons, grid overflow, row text
 Explore: label wrapping and row subtitles
+Explore: section spacing
