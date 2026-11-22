@@ -65,33 +65,37 @@ function Ic({
   )
 }
 
-/**
- * Home.jsx verified seal (Icon.verify) — green badge + white check.
- * Keep in sync with src/pages/Home.jsx `Icon.verify`.
- */
-function VerifiedBadge({ size = 14, className = '' }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      className={className}
-      aria-hidden="true"
-    >
-      <path
-        fill="#16a34a"
-        d="M12 0a4 4 0 0 1 3.2 1.6 4 4 0 0 1 3.6 1 4 4 0 0 1 1 3.6A4 4 0 0 1 21.4 9.4a4 4 0 0 1 0 5.2A4 4 0 0 1 19.8 17.8a4 4 0 0 1-1 3.6 4 4 0 0 1-3.6 1A4 4 0 0 1 12 24a4 4 0 0 1-3.2-1.6 4 4 0 0 1-3.6-1 4 4 0 0 1-1-3.6A4 4 0 0 1 2.6 14.6a4 4 0 0 1 0-5.2A4 4 0 0 1 4.2 6.2a4 4 0 0 1 1-3.6 4 4 0 0 1 3.6-1A4 4 0 0 1 12 0Z"
-      />
-      <path
-        d="m7.5 12.5 3 3 6-7"
-        stroke="#fff"
-        strokeWidth="2.4"
-        fill="none"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  )
+const EMOJI_RE = /(?:\p{Extended_Pictographic}|\p{Regional_Indicator}|\p{Emoji_Modifier}|\uFE0F|\u200D|\u20E3|[#*]\uFE0F?\u20E3)+[\t ]*/gu
+
+function stripEmojis(value) {
+  if (value == null) return ''
+  return String(value).replace(EMOJI_RE, '').trim()
+}
+
+function dedupeBody(title, body, name, listingTitle) {
+  let text = stripEmojis(body)
+  const cleanTitle = stripEmojis(title)
+  const cleanName = stripEmojis(name)
+  const cleanListing = stripEmojis(listingTitle)
+
+  if (!text) return ''
+
+  if (cleanTitle && text.toLowerCase().startsWith(cleanTitle.toLowerCase())) {
+    const rest = text.slice(cleanTitle.length).replace(/^[\s,:;.\-–—]+/, '')
+    if (rest) text = rest
+  }
+
+  if (cleanName && text.toLowerCase().startsWith(cleanName.toLowerCase())) {
+    const rest = text.slice(cleanName.length).replace(/^[\s,:;.\-–—]+/, '')
+    if (rest) text = rest
+  }
+
+  if (cleanListing && text.toLowerCase().startsWith(cleanListing.toLowerCase())) {
+    const rest = text.slice(cleanListing.length).replace(/^\s*(?:for|on|about)?\s*[,\s\-–—:.]*/, '')
+    if (rest) text = rest
+  }
+
+  return text
 }
 
 // ── Notification type config (premium Lucide icons) ───────────────────────
@@ -561,6 +565,17 @@ function EmptyIllustration({ Icon, color, bg }) {
   )
 }
 
+const EMPTY_COPY = {
+  all:      { title: 'No notifications yet', sub: "You're all caught up! New activity will appear here.", Icon: Bell, color: '#0F9D58', bg: '#e8f5ee' },
+  messages: { title: 'No messages yet', sub: 'When someone messages you, it will appear here.', Icon: MessageCircle, color: '#1A73E8', bg: '#e8f0fe' },
+  calls:    { title: 'No missed calls', sub: 'Missed calls and video calls will appear here.', Icon: PhoneMissed, color: '#ea4335', bg: '#fce8e6' },
+  listings: { title: 'No listing activity', sub: 'Views, comments, likes and sales on your listings will appear here.', Icon: ShoppingBag, color: '#0F9D58', bg: '#e8f5ee' },
+  offers:   { title: 'No offers yet', sub: 'Offers from buyers will appear here.', Icon: CircleDollarSign, color: '#F9AB00', bg: '#fff8e1' },
+  deals:    { title: 'No deal updates', sub: 'Deal requests and confirmations will appear here.', Icon: Handshake, color: '#0F9D58', bg: '#e8f5ee' },
+  orders:   { title: 'No orders yet', sub: 'Orders and shipping updates will appear here.', Icon: Package, color: '#1A73E8', bg: '#e8f0fe' },
+  system:   { title: 'No system alerts', sub: 'System notifications and warnings will appear here.', Icon: Settings, color: '#80868b', bg: '#f8f9fa' },
+}
+
 function EmptyState({ category, search }) {
   const copy = search.trim()
     ? { title: 'No matches found', sub: 'Try a different search term or clear filters.', Icon: Search, color: '#80868b', bg: '#f8f9fa' }
@@ -573,17 +588,6 @@ function EmptyState({ category, search }) {
       <p className="empty-sub">{copy.sub}</p>
     </div>
   )
-}
-
-const EMPTY_COPY = {
-  all:      { title: 'No notifications yet', sub: "You're all caught up! New activity will appear here.", Icon: Bell, color: '#0F9D58', bg: '#e8f5ee' },
-  messages: { title: 'No messages yet', sub: 'When someone messages you, it will appear here.', Icon: MessageCircle, color: '#1A73E8', bg: '#e8f0fe' },
-  calls:    { title: 'No missed calls', sub: 'Missed calls and video calls will appear here.', Icon: PhoneMissed, color: '#ea4335', bg: '#fce8e6' },
-  listings: { title: 'No listing activity', sub: 'Views, comments, likes and sales on your listings will appear here.', Icon: ShoppingBag, color: '#0F9D58', bg: '#e8f5ee' },
-  offers:   { title: 'No offers yet', sub: 'Offers from buyers will appear here.', Icon: CircleDollarSign, color: '#F9AB00', bg: '#fff8e1' },
-  deals:    { title: 'No deal updates', sub: 'Deal requests and confirmations will appear here.', Icon: Handshake, color: '#0F9D58', bg: '#e8f5ee' },
-  orders:   { title: 'No orders yet', sub: 'Orders and shipping updates will appear here.', Icon: Package, color: '#1A73E8', bg: '#e8f0fe' },
-  system:   { title: 'No system alerts', sub: 'System notifications and warnings will appear here.', Icon: Settings, color: '#80868b', bg: '#f8f9fa' },
 }
 
 function RippleButton({ className = '', variant = 'secondary', children, ...props }) {
@@ -611,20 +615,23 @@ function ActionButton({ label, icon: Icon, variant = 'secondary', onClick, ariaL
   )
 }
 
-function AvatarIcon({ notif, cfg, sender, loading, showTypeBadge = true }) {
+function AvatarIcon({ notif, name: displayName, cfg, sender, loading, showTypeBadge = true }) {
+  const [failedAvatar, setFailedAvatar] = useState(null)
   const actorId = getActorId(notif)
   const TypeIcon = cfg.Icon || Bell
-  const name = sender?.full_name || 'User'
-  const initial = (name && name !== 'Someone' ? name : 'U')[0].toUpperCase()
+  const name = stripEmojis(displayName || sender?.full_name || getActorName(notif, sender) || 'User') || 'User'
+  const initial = name.trim()[0]?.toUpperCase() || 'U'
+  const avatarUrl = sender?.avatar_url
+  const showImage = !!avatarUrl && failedAvatar !== avatarUrl
 
   if (loading && actorId) {
     return <div className="avatar-skeleton" aria-hidden="true" />
   }
 
-  if (sender?.avatar_url) {
+  if (showImage) {
     return (
       <div className="avatar-wrap" aria-hidden="true">
-        <img className="avatar" src={sender.avatar_url} alt={name} loading="lazy" />
+        <img className="avatar" src={avatarUrl} alt="" loading="lazy" onError={() => setFailedAvatar(avatarUrl)} />
         {showTypeBadge && (
           <span className="icon-badge" style={{ backgroundColor: cfg.bg, color: cfg.color }}>
             <Ic icon={TypeIcon} size={9} strokeWidth={2.25} />
@@ -635,12 +642,12 @@ function AvatarIcon({ notif, cfg, sender, loading, showTypeBadge = true }) {
   }
 
   // Letter avatar when no photo — still shows a person, not only the type icon
-  if (actorId || sender) {
+  if (!showImage) {
     return (
       <div className="avatar-wrap" aria-hidden="true">
         <span
           className="avatar avatar-initial"
-          style={{ backgroundColor: cfg.bg, color: cfg.color }}
+          style={{ backgroundColor: '#e6f6ed', color: '#0F9D58' }}
         >
           {initial}
         </span>
@@ -893,9 +900,10 @@ const NotificationCard = memo(function NotificationCard({
   const onClickCard = useCallback(() => onCardClick(notif), [onCardClick, notif])
   const actorName = getActorName(notif, sender)
   const hasActor = !!(actorName && actorName !== 'Someone')
-  const displayName = hasActor ? actorName : (notif.title || cfg.label || 'Someone')
+  const displayName = stripEmojis(hasActor ? actorName : (notif.title || cfg.label || 'Someone')) || stripEmojis(cfg.label) || 'Someone'
   const isVerified = !!(sender?.is_verified)
-  const purpose = getNotificationPurpose(notif, sender)
+  const listingTitle = product?.title || notif.data?.listing_title || notif.data?.service_name || ''
+  const purpose = dedupeBody(notif.title, getNotificationPurpose(notif, sender), displayName, listingTitle)
 
   const ariaLabel = [
     cfg.label,
@@ -927,6 +935,7 @@ const NotificationCard = memo(function NotificationCard({
             <div className="notif-person">
               <AvatarIcon
                 notif={notif}
+                name={displayName}
                 cfg={cfg}
                 sender={sender}
                 loading={sendersLoading}
@@ -936,11 +945,6 @@ const NotificationCard = memo(function NotificationCard({
                   <span className={`notif-person-name${notif.read ? '' : ' is-unread-name'}`}>
                     {displayName}
                   </span>
-                  {isVerified && (
-                    <span className="notif-verified" title="Verified user">
-                      <VerifiedBadge size={13} />
-                    </span>
-                  )}
                   <div className="notif-person-end">
                     <time className="notif-time" dateTime={notif.created_at}>
                       {timeLabel(notif.created_at)}
@@ -963,7 +967,7 @@ const NotificationCard = memo(function NotificationCard({
                 aria-label="Dismiss notification"
                 onClick={() => onDelete(notif.id)}
               >
-                <Ic icon={X} size={12} strokeWidth={2.25} />
+                <Ic icon={X} size={14} strokeWidth={2.25} />
               </button>
             </div>
           </div>
