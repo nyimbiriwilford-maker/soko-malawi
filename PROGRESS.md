@@ -148,3 +148,4 @@ Looking for: fix use-before-init crash
 Looking For: keep expired requests in Mine, pin header
 Looking For: No longer active badge on expired cards
 Looking For: pin only tabs row
+Looking For: reactivate expired requests
