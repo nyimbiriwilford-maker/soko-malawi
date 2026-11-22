@@ -183,3 +183,4 @@ Chat view: bubble-style offer card, polished message menu, slim images
 Chat view: one polished message menu, slim image bubbles
 Chat view: compact composer, plus menu, quick replies, new icons
 Chat view: slim image bubble
+Looking For: composer sheet with pinned Post button

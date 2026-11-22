@@ -399,3 +399,29 @@ npx eslint <the real changed file paths> | Select-String "no-undef|is not define
 npx eslint <the real conversation view and composer paths> --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
 git status -sb
 git diff HEAD~1 --stat -- src
+
+GOAL: Redesign the Looking For posting modal (RequestComposer) so it is clean and professional, and the Post button is always visible on phone and laptop. Branch wip/home-hero-premium (check with git branch --show-current). Rules: no git stash or reset, no SQL, no installs, do NOT launch Chrome or any browser, do not merge or push. Edit only src/components/LookingFor/RequestComposer.jsx and its styles.
+
+STEP 1 - Print raw with line numbers, then continue without waiting: the modal wrapper and its styles (position, z-index, height, overflow), the field list in order, the duration options, the GPS line, the submit button, and the bottom nav z-index (Select-String "zIndex|z-index" in the nav component and app css).
+
+STEP 2 - Colours/fonts: green #0F9D58, tint #e6f6ed, text #202124, grey #5f6368 / #80868b, border #e8eaed, DM Sans body, Sora headings.
+1. PHONE (below 769px): bottom sheet, fixed, left 0, right 0, bottom 0, height 100dvh minus 24px, 16px top radius, white, z-index ABOVE the bottom nav and the install bar (use a portal to document.body if needed), backdrop rgba(0,0,0,0.4), body scroll locked while open. Layout is a flex column: pinned header, scrolling body (flex 1, overflow-y auto, -webkit-overflow-scrolling touch, padding 16px), pinned footer.
+2. HEADER (pinned): drag handle 36x4px, title "Post a request" (Sora 18px, 800), grey subtitle "Tell sellers what you need", X close button 44px. 1px #e8eaed bottom border.
+3. FOOTER (pinned, always visible): white, 1px #e8eaed top border, padding 12px 16px plus env(safe-area-inset-bottom). One full-width green #0F9D58 button "Post request", 52px tall, 16px weight 700, white text, 14px radius. Disabled (grey #dadce0) until the title has text; spinner and "Posting..." while submitting. Keep the existing submit handler and validation. Show validation errors inline under the field and scroll to the first error.
+4. KEYBOARD: use visualViewport (or 100dvh) so when the phone keyboard opens the footer stays visible above it and the focused field scrolls into view.
+5. FIELDS (keep every existing field, same order, same names): What are you looking for (text, 16px so iOS does not zoom, 48px tall, label 13px weight 600 above it, no uppercase labels), Budget and Category side by side (budget with "MK" prefix, thousands separators as you type; category select 48px), Description (optional, 3 lines), image upload (optional, 72px thumbnails with X), Cities/location, Urgency. Labels sentence case 13px weight 600 #202124, helper text 12px #80868b, field radius 12px, 1px #e8eaed border, focus ring 2px #0F9D58.
+6. DURATION: replace the large cards with one row of compact chips (40px, 1 day, 3 days, 7 days, 14 days, 30 days, Custom, No expiry), wrapping to two lines if needed, 7 days selected by default with a "Recommended" tiny label. Below it, one grey line: "Expires <date>. You can mark it fulfilled earlier." Custom opens a small number input. Keep the same values and logic.
+7. LOCATION LINE: keep the GPS capture line ("Finding your location..." / "Location captured" / "Try again") as a slim row near the top of the body.
+8. LAPTOP (769px and up): centred modal, width 560px, max-height 90vh, 16px radius, shadow 0 16px 48px rgba(16,24,40,0.2), same pinned header and footer, body scrolls. Esc and backdrop click close it (confirm if the form has unsaved text).
+9. Closing with unsaved text on phone asks once: "Discard this request?" with Keep editing and Discard.
+10. Do not change what gets saved, the GPS logic, expiry logic, fetching, realtime or other pages.
+
+Commit as "Looking For: composer sheet with pinned Post button", append one line to PROGRESS.md and commit it too.
+
+End with RAW output only, no summary: first the step 1 findings, then:
+git log --oneline -4
+npm run build
+npx eslint src/components/LookingFor/RequestComposer.jsx | Select-String "no-undef|is not defined" ; "ESLINT DONE"
+npx eslint src/components/LookingFor/RequestComposer.jsx --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
+git status -sb
+git diff HEAD~1 --stat -- src
