@@ -437,7 +437,7 @@ function ChatListRow({ chat, index, isOpen, online, currentUserId, onOpen, onMen
         </div>
         {hasContext ? (
           <div className="chat-row-person">
-            <span>{peerName}</span>
+            <span className="chat-row-person-name">{peerName}</span>
             {price ? <span className="chat-list-price"> · {price}</span> : null}
           </div>
         ) : null}
@@ -1107,6 +1107,9 @@ export default function ChatListPanel() {
           text-overflow: ellipsis;
           line-height: 1.3;
         }
+        .chat-row-person { display: flex; align-items: center; min-width: 0; }
+        .chat-row-person-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .chat-list-price { flex: 0 0 auto; white-space: nowrap; }
         .chat-row-preview { font-size: 14px; }
         .chat-row.is-unread .chat-row-preview,
         .chat-row.is-unread .chat-preview-text { color: #202124; }

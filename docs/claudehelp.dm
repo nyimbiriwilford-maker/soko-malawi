@@ -130,3 +130,18 @@ npx eslint <the real page and row component paths> | Select-String "no-undef|is 
 npx eslint <the real page path> --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
 git status -sb
 git diff HEAD~1 --stat -- src
+GOAL: Fix the chat row price hiding on phone and find the failing images. Branch wip/home-hero-premium (check with git branch --show-current). Rules: no git stash or reset, no SQL, no installs, do NOT launch Chrome or any browser, do not merge or push. Make the edits directly. Edit only the Chats list page and its row component.
+
+1. PRICE: print raw the CSS/logic that hides the price on phone. The price part of line 2 ("Wilford James · MWK 1M") must show on all widths, and be hidden ONLY below 360px (max-width: 359px). Fix the breakpoint if it fires at a larger width.
+2. IMAGES: for the chats titled Mandasi and Nyumba, print the raw image URLs the row uses (image_url / image_urls[0]) and whether the URL host and path match how other working images are built (check how Looking For request cards build their image URL, e.g. getR2Url or a public base URL). If the row builds the URL differently from the Looking For cards, use the same helper so both match. If the stored value is simply a missing file, change nothing and tell me.
+3. Do not change fetching, realtime, unread logic, routes, tap behaviour or other pages.
+
+Commit as "Chats: price on phone, image URL helper", append one line to PROGRESS.md and commit it too.
+
+End with RAW output only, no summary: first the findings for 1 and 2, then:
+git log --oneline -4
+npm run build
+npx eslint <the real page and row component paths> | Select-String "no-undef|is not defined" ; "ESLINT DONE"
+npx eslint <the real page path> --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
+git status -sb
+git diff HEAD~1 --stat -- src
