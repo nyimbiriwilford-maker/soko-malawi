@@ -152,3 +152,4 @@ Looking For: reactivate expired requests
 Looking For: auto GPS location, ignore profile city
 Home: fix missing requests, rank Looking For cards by priority
 Home: Manage button on own requests
+Looking For: redesign request detail view, remove km estimate
