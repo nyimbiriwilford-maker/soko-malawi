@@ -135,3 +135,4 @@ Home statuses: light skeleton, viewer covers header
 Home statuses: fix top clipping on hover
 Home statuses: rotating order with seen tracking (temp demo helper)
 Home statuses: priority multipliers (location, verified, completeness)
+Home statuses: remove temp demo helper

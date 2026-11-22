@@ -454,44 +454,6 @@ function markSeenStatus(id) {
   } catch { /* ignore */ }
 }
 
-// TEMP-STATUS-DEMO
-function isStatusDemoEnabled() {
-  try {
-    const host = window.location.hostname
-    if (host !== 'localhost' && host !== '127.0.0.1') return false
-    return new URLSearchParams(window.location.search).get('statusdemo') === '1'
-  } catch { return false }
-}
-
-// TEMP-STATUS-DEMO
-function makeDemoStatuses() { // TEMP-STATUS-DEMO
-  const now = Date.now() // TEMP-STATUS-DEMO
-  const ages = [1, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 23, 3] // TEMP-STATUS-DEMO
-  const cities = ['Lilongwe', 'Blantyre', 'Mzuzu', 'Lilongwe', 'Blantyre', 'Mzuzu', 'Lilongwe', 'Blantyre', 'Mzuzu', 'Lilongwe', 'Blantyre', 'Mzuzu', 'Lilongwe', 'Blantyre'] // TEMP-STATUS-DEMO
-  const out = [] // TEMP-STATUS-DEMO
-  for (let i = 0; i < 14; i++) { // TEMP-STATUS-DEMO
-    const ageHours = ages[i] // TEMP-STATUS-DEMO
-    const hasPrice = i % 3 === 0 // TEMP-STATUS-DEMO
-    const hasTag = i % 2 === 0 // TEMP-STATUS-DEMO
-    const textOnly = i % 5 === 0 // TEMP-STATUS-DEMO
-    out.push({ // TEMP-STATUS-DEMO
-      id: 'demo-status-' + (i + 1), // TEMP-STATUS-DEMO
-      user_id: 'demo-seller-' + (i + 1), // TEMP-STATUS-DEMO
-      content: textOnly ? 'Demo status ' + (i + 1) + ' - quick update' : 'Demo status ' + (i + 1) + ' - quick update', // TEMP-STATUS-DEMO
-      status_type: 'availability', // TEMP-STATUS-DEMO
-      created_at: new Date(now - ageHours * 60 * 60 * 1000).toISOString(), // TEMP-STATUS-DEMO
-      expires_at: new Date(now + 24 * 60 * 60 * 1000).toISOString(), // TEMP-STATUS-DEMO
-      media_urls: textOnly ? [] : (i % 4 === 0 ? ['https://example.com/demo.jpg'] : []), // TEMP-STATUS-DEMO
-      tagged_listing_id: hasTag ? 'demo-listing-' + (i + 1) : null, // TEMP-STATUS-DEMO
-      tagged_kind: hasTag ? 'listing' : null, // TEMP-STATUS-DEMO
-      tagged: hasTag ? { title: 'Demo product', price: hasPrice ? 12000 : null } : null, // TEMP-STATUS-DEMO
-      profiles: { full_name: 'Demo seller ' + (i + 1), avatar_url: null, city: cities[i], is_verified: i % 4 === 0 }, // TEMP-STATUS-DEMO
-      _demo: true, // TEMP-STATUS-DEMO
-    }) // TEMP-STATUS-DEMO
-  } // TEMP-STATUS-DEMO
-  return out // TEMP-STATUS-DEMO
-} // TEMP-STATUS-DEMO
-
 function groupStatusRows(rows, currentUserId) {
   const sorted = [...(rows || [])].sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
   const map = new Map()
@@ -636,9 +598,7 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
 
   const orderedCards = useMemo(() => {
     if (currentUserId && userCity === undefined) return homeStatusOrder || []
-    // TEMP-STATUS-DEMO
-    let rows = Array.isArray(stories) ? [...stories] : []
-    if (isStatusDemoEnabled()) rows = rows.concat(makeDemoStatuses())
+    const rows = Array.isArray(stories) ? [...stories] : []
     const cards = groupStatusRows(rows, currentUserId)
     if (cards.length === 0) return homeStatusOrder || []
     if (homeStatusOrderUserId !== currentUserId) {
@@ -654,16 +614,6 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
       const seenSet = readSeenStatuses()
       ordered = mergeHomeOrder(homeStatusOrder, cards, seenSet)
       homeStatusOrder = ordered
-    }
-    if (isStatusDemoEnabled()) {
-      console.table(ordered.slice(0, 12).map(c => ({ // TEMP-STATUS-DEMO
-        seller: c.profiles?.full_name || c.user_id, // TEMP-STATUS-DEMO
-        city: c.profiles?.city || '', // TEMP-STATUS-DEMO
-        verified: !!c.profiles?.is_verified, // TEMP-STATUS-DEMO
-        hasPriceOrTag: !!(c.tagged_listing_id || c.tagged_kind || c.tagged_ref_id || c.tagged?.title || (c.tagged?.price !== null && c.tagged?.price !== undefined && c.tagged?.price !== '')), // TEMP-STATUS-DEMO
-        ageHours: Math.round(Math.max(0, (Date.now() - new Date(c.created_at).getTime()) / 3600000) * 10) / 10, // TEMP-STATUS-DEMO
-        weight: Math.round(statusWeight(c, userCity) * 1000) / 1000, // TEMP-STATUS-DEMO
-      }))) // TEMP-STATUS-DEMO
     }
     return ordered
   }, [stories, currentUserId, userCity, orderTick])
@@ -695,7 +645,6 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
   }, [hideCreateCard, layoutKey, loading, isMobile])
 
   function openStoryGroup(s) {
-    if (s._demo) return
     const ids = s._ownGroup ? s._ownGroup.map(x => x.id) : [s.id]
     markSeenStatus(s.user_id)
     setSeenIds(prev => {
