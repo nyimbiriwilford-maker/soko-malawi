@@ -27,6 +27,7 @@ import {
   Ban,
   Trash2,
   Timer,
+  Target,
   Check,
   Copy,
   Forward,
@@ -119,6 +120,22 @@ function toTitleCase(value) {
   return String(value || '')
     .toLowerCase()
     .replace(/(^|[\s'-])([a-z])/g, (_, sep, letter) => sep + letter.toUpperCase())
+}
+
+function formatBudgetMwk(value) {
+  const raw = String(value ?? '').trim()
+  if (!raw) return ''
+  const compact = raw.match(/([0-9]+(?:\.[0-9]+)?)\s*([mk])\b/i)
+  const amount = compact
+    ? Number(compact[1]) * (compact[2].toLowerCase() === 'm' ? 1000000 : 1000)
+    : Number(raw.replace(/[^\d.]/g, ''))
+  if (!Number.isFinite(amount) || amount <= 0) return ''
+  if (amount >= 1000000) {
+    const millions = amount / 1000000
+    const short = Number.isInteger(millions) ? String(millions) : millions.toFixed(1).replace(/\.0$/, '')
+    return `MWK ${short}M`
+  }
+  return `MWK ${Math.round(amount).toLocaleString('en-US')}`
 }
 
 // ── Styles ───────────────────────────────────────────────────────────────────
@@ -2870,7 +2887,7 @@ async function uploadAndSend(file, type, caption = '') {
       return {
         type: contextTypeLabel,
         title: listing.title,
-        sub: listing.price != null ? `MWK ${Number(listing.price).toLocaleString()}` : '',
+        sub: formatBudgetMwk(listing.price),
         img: listing.images?.[0] || null,
         href: sourceHref('listing', listing),
       }
@@ -2885,10 +2902,11 @@ async function uploadAndSend(file, type, caption = '') {
       }
     }
     if (chatSource === 'request' && request) {
+      const budget = formatBudgetMwk(request.budget)
       return {
         type: contextTypeLabel,
         title: request.title,
-        sub: [request.budget ? `Budget: ${request.budget}` : null, request.city].filter(Boolean).join(' · '),
+        sub: [budget ? `Budget: ${budget}` : null, request.city].filter(Boolean).join(' · '),
         img: null,
         href: sourceHref('request', request),
       }
@@ -3324,13 +3342,9 @@ async function uploadAndSend(file, type, caption = '') {
         }
         @media (hover: none) {
           .chat-page.chat-thread .chat-emoji-btn,
-          .chat-page.chat-thread .chat-quick-reply,
           .chat-page.chat-thread .chat-attachment-remove,
           .chat-page.chat-thread .chat-reply-close {
             width: 44px !important;
-            height: 44px !important;
-          }
-          .chat-page.chat-thread .chat-quick-reply {
             height: 44px !important;
           }
         }
@@ -3995,7 +4009,9 @@ async function uploadAndSend(file, type, caption = '') {
           <div className="chat-context-thumb">
             {contextCaption.img
               ? <img src={contextCaption.img} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              : <span style={{ fontSize: 18 }}>{srcMeta.emoji}</span>}
+              : chatSource === 'request'
+                ? <Target size={22} strokeWidth={1.75} color="#0F9D58" aria-hidden="true" />
+                : <span style={{ fontSize: 18 }}>{srcMeta.emoji}</span>}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div className="chat-context-type">{contextCaption.type}</div>
@@ -5236,33 +5252,6 @@ async function uploadAndSend(file, type, caption = '') {
               className="chat-composer-shell"
               style={{ position: 'relative', bottom: isMobile && showEmoji && lockedKbHeight > 0 ? lockedKbHeight : 0, willChange: isMobile && showEmoji ? 'transform' : 'auto' }}
             >
-              {showQuickReplies && (
-                <div className="chat-quick-replies-bar">
-                  <button
-                    type="button"
-                    className="chat-quick-reply"
-                    onClick={() => { setShowAttach(false); sendMessage('Is this still available?') }}
-                  >
-                    <PackageCheck size={16} strokeWidth={1.75} aria-hidden="true" />
-                    <span>Is this still available?</span>
-                  </button>
-                  {offersAllowedToday && (
-                    <button type="button" className="chat-quick-reply" onClick={openComposerOffer}>
-                      <HandCoins size={16} strokeWidth={1.75} aria-hidden="true" />
-                      <span>Make an offer</span>
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className="chat-quick-reply"
-                    onClick={() => { setShowAttach(false); sendMessage("What's your last price?") }}
-                  >
-                    <MessageCircleQuestion size={16} strokeWidth={1.75} aria-hidden="true" />
-                    <span>What's your last price?</span>
-                  </button>
-                </div>
-              )}
-
               {replyTo && (
                 <div className="chat-reply-banner">
                   <CornerUpLeft size={16} strokeWidth={1.75} aria-hidden="true" />
@@ -5309,6 +5298,33 @@ async function uploadAndSend(file, type, caption = '') {
                       </button>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {showQuickReplies && (
+                <div className="chat-quick-replies-bar">
+                  <button
+                    type="button"
+                    className="chat-quick-reply"
+                    onClick={() => { setShowAttach(false); sendMessage('Is this still available?') }}
+                  >
+                    <PackageCheck size={16} strokeWidth={1.75} aria-hidden="true" />
+                    <span>Is this still available?</span>
+                  </button>
+                  {offersAllowedToday && (
+                    <button type="button" className="chat-quick-reply" onClick={openComposerOffer}>
+                      <HandCoins size={16} strokeWidth={1.75} aria-hidden="true" />
+                      <span>Make an offer</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="chat-quick-reply"
+                    onClick={() => { setShowAttach(false); sendMessage("What's your last price?") }}
+                  >
+                    <MessageCircleQuestion size={16} strokeWidth={1.75} aria-hidden="true" />
+                    <span>What's your last price?</span>
+                  </button>
                 </div>
               )}
 

@@ -1783,35 +1783,54 @@
 
 .chat-thread .chat-quick-replies-bar {
   display: flex;
+  flex-wrap: nowrap;
+  flex: 0 0 auto;
+  align-items: center;
   gap: 8px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 8px 12px;
+  background: #fff;
   overflow-x: auto;
+  overflow-y: hidden;
   scrollbar-width: none;
+  -ms-overflow-style: none;
+  white-space: nowrap;
   -webkit-overflow-scrolling: touch;
-  padding: 0 0 2px;
 }
 
 .chat-thread .chat-quick-replies-bar::-webkit-scrollbar {
   display: none;
+  width: 0;
+  height: 0;
 }
 
 .chat-thread .chat-quick-reply {
-  height: 36px;
-  flex: none;
+  flex: 0 0 auto;
+  width: auto;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 12px;
+  gap: 6px;
+  height: 36px;
+  box-sizing: border-box;
+  padding: 0 14px;
   border: 1px solid #e8eaed;
   border-radius: 999px;
   background: #fff;
   color: #202124;
-  font-family: inherit;
+  font-family: 'DM Sans', sans-serif;
   font-size: 14px;
+  font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
 }
 
 .chat-thread .chat-quick-reply svg {
+  flex: 0 0 16px;
+  width: 16px;
+  height: 16px;
   color: #5f6368;
 }
 
@@ -1820,10 +1839,6 @@
   .chat-thread .chat-attachment-remove,
   .chat-thread .chat-reply-close {
     width: 44px;
-    height: 44px;
-  }
-
-  .chat-thread .chat-quick-reply {
     height: 44px;
   }
 }

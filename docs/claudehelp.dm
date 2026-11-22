@@ -425,3 +425,22 @@ npx eslint src/components/LookingFor/RequestComposer.jsx | Select-String "no-und
 npx eslint src/components/LookingFor/RequestComposer.jsx --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
 git status -sb
 git diff HEAD~1 --stat -- src
+
+GOAL: Fix the broken quick-reply chips above the chat composer, and two small details in the listing card. Branch wip/home-hero-premium (check with git branch --show-current). Rules: no git stash or reset, no SQL, no installs, do NOT launch Chrome or any browser, do not merge or push. Edit only the chat view (src/pages/Chat.jsx and src/styles/chat-thread.css).
+
+1. Print raw with line numbers the quick-reply row and chip styles, then fix:
+   - Row: display flex, gap 8px, overflow-x auto, scrollbar hidden, padding 8px 12px, white-space nowrap, -webkit-overflow-scrolling touch, no wrapping, no overlap.
+   - Chip: flex: 0 0 auto, width auto, min-width 0 not applied, height 36px, padding 0 14px, border-radius 999px, white background, 1px #e8eaed border, 14px DM Sans weight 500, white-space nowrap, display inline-flex, align-items center, gap 6px, 16px Lucide icon on the left (PackageCheck "Is this still available?", HandCoins or BadgeDollarSign "Make an offer", MessageCircleQuestion "What's your last price?"). Remove any fixed width, height-equals-width or aspect-ratio rules.
+   - The row must sit directly above the composer with no gap and must not overlap the message list.
+2. Listing/request card under the header: show the budget as "MWK 200,000" (thousands separators, "MWK 1M" above one million), never a raw number.
+3. Request thumbnail: replace the magnifier emoji with a Lucide Target icon (22px, strokeWidth 1.75, green #0F9D58) on a #e6f6ed rounded square.
+4. Do not change sending, offers logic, other chat parts or other pages.
+
+Commit as "Chat view: fix quick-reply chips, format budget", append one line to PROGRESS.md and commit it too.
+
+End with RAW output only, no summary:
+git log --oneline -4
+npm run build
+npx eslint src/pages/Chat.jsx | Select-String "no-undef|is not defined" ; "ESLINT DONE"
+git status -sb
+git diff HEAD~1 --stat -- src
