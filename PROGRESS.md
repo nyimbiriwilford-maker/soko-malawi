@@ -140,3 +140,4 @@ Explore: redesign to match Home, shared categories config
 Explore: chevrons, grid overflow, row text
 Explore: label wrapping and row subtitles
 Explore: section spacing
+Explore: tighten category spacing

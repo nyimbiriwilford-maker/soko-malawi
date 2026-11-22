@@ -93,9 +93,10 @@ export default function ExplorePage() {
           font-family: inherit;
           border: none;
           background: transparent;
-          padding: 8px 4px;
+          padding: 8px 4px 0 4px;
           min-height: 44px;
           min-width: 0;
+          margin-bottom: 0;
           -webkit-tap-highlight-color: transparent;
           transition: transform 0.12s ease;
         }
@@ -188,7 +189,7 @@ export default function ExplorePage() {
             }}>
               Browse categories
             </div>
-            <div style={{ fontSize: 13, color: SUB, fontWeight: 500, marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <div style={{ fontSize: 13, color: SUB, fontWeight: 500, marginTop: 4, marginBottom: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               Find what you need in Malawi
             </div>
           </div>
@@ -196,6 +197,7 @@ export default function ExplorePage() {
             display: 'grid',
             gridTemplateColumns: isWide ? 'repeat(8, minmax(0, 1fr))' : 'repeat(4, minmax(0, 1fr))',
             gap: isWide ? 16 : '12px 8px',
+            marginTop: 14,
             alignItems: 'start',
             justifyItems: 'center',
           }}>
@@ -314,6 +316,7 @@ export default function ExplorePage() {
     </div>
   )
 }
+
 
 
 
