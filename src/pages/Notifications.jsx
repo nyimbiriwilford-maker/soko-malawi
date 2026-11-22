@@ -164,8 +164,6 @@ function isDealNotification(notif) {
 function getDealPresentation(notif, sender, product) {
   const data = notif.data || {}
   const listingTitle = product?.title || data.listing_title || 'your listing'
-  const priceText = formatMwkPrice(product?.price ?? data.listing_price ?? data.price)
-  const item = priceText ? `${listingTitle} · ${priceText}` : listingTitle
   const actorName = toTitleCaseName(getActorName(notif, sender))
   const buyerName = toTitleCaseName(data.buyer_name) || actorName || 'the buyer'
   const sellerName = toTitleCaseName(data.seller_name) || actorName || 'the seller'
@@ -176,9 +174,9 @@ function getDealPresentation(notif, sender, product) {
     case 'deal_ready':
       return {
         title: 'Ready to confirm this deal',
-        body: `You and ${buyerName} talked about ${item}. Send a request when the sale is complete.`,
+        body: `You and ${buyerName} talked it through. Confirm to make it final.`,
         detail: `Deal confirmation is only for sales that really happened. You send the request, then ${buyerName} confirms it.`,
-        badge: 'Your turn',
+        requiresAction: true,
         steps: ['Agree the sale is complete', 'Send the confirmation request', `${buyerName} confirms`],
         activeStep: 2,
         tone: 'action',
@@ -188,7 +186,7 @@ function getDealPresentation(notif, sender, product) {
         title: 'Confirm this deal',
         body: `${sellerName} sent you a deal request. Tap to see how it works.`,
         detail: `Only confirm if you received the item as agreed. Your confirmation helps ${sellerName} build trust.`,
-        badge: status === 'declined' ? 'Closed' : 'Action needed',
+        requiresAction: status !== 'declined' && status !== 'expired' && status !== 'disputed',
         steps: ['Seller sent a request', 'You confirm the sale', 'You can both vouch'],
         activeStep: status ? 3 : 2,
         tone: status === 'declined' || status === 'expired' || status === 'disputed' ? 'danger' : 'action',
@@ -196,9 +194,9 @@ function getDealPresentation(notif, sender, product) {
     case 'deal_confirmed':
       return {
         title: 'Deal confirmed',
-        body: `You and ${buyerName} confirmed ${item}.`,
+        body: `You and ${buyerName} confirmed the sale. Thanks for trading safely.`,
         detail: 'The deal is complete. You can vouch for each other on profile pages.',
-        badge: 'Done',
+        requiresAction: false,
         steps: ['Request sent', 'Both parties confirmed', 'Vouch for each other'],
         activeStep: 3,
         tone: 'done',
@@ -206,9 +204,9 @@ function getDealPresentation(notif, sender, product) {
     case 'deal_declined':
       return {
         title: 'Deal not confirmed',
-        body: `The confirmation for ${item} was declined.`,
+        body: 'The deal confirmation was declined. No action is needed.',
         detail: 'No action is needed. The seller can start a new request if needed.',
-        badge: 'Closed',
+        requiresAction: false,
         steps: ['Request sent', 'Confirmation declined', 'No action needed'],
         activeStep: 2,
         tone: 'danger',
@@ -219,7 +217,7 @@ function getDealPresentation(notif, sender, product) {
         title: 'Offer accepted',
         body: `${actorName} accepted your offer${amountText ? ` of ${amountText}` : ''} for ${listingTitle}. Confirm to start the deal.`,
         detail: `Once you confirm, you and ${actorName} can vouch for each other.`,
-        badge: 'Action needed',
+        requiresAction: true,
         steps: ['Offer accepted', 'Confirm the sale', 'Vouch for each other'],
         activeStep: 2,
         tone: 'action',
@@ -228,9 +226,9 @@ function getDealPresentation(notif, sender, product) {
     case 'deal_vouching':
       return {
         title: 'Vouch for the seller',
-        body: `Your deal for ${item} is confirmed.`,
+        body: `Your deal with ${sellerName} is confirmed. Leave a vouch when you're ready.`,
         detail: `If ${sellerName} delivered as agreed, leave an honest vouch on their profile.`,
-        badge: 'Optional',
+        requiresAction: false,
         steps: ['Deal confirmed', 'Open the seller profile', 'Leave an honest vouch'],
         activeStep: 2,
         tone: 'amber',
@@ -238,9 +236,9 @@ function getDealPresentation(notif, sender, product) {
     case 'new_vouch':
       return {
         title: 'You received a vouch',
-        body: `${voucherName} vouched for you.`,
+        body: `${voucherName} vouched for you. Your reputation just grew.`,
         detail: 'A vouch helps people trust your shop. Keep trading well to grow your reputation.',
-        badge: 'Trust update',
+        requiresAction: false,
         steps: ['Someone bought from you', 'They left a vouch', 'Your reputation grows'],
         activeStep: 3,
         tone: 'done',
@@ -1273,11 +1271,12 @@ const NotificationCard = memo(function NotificationCard({
   const earlierCount = notif.mergedCount > 1 ? notif.mergedCount - 1 : 0
   const mergedUnreadCount = notif.mergedUnreadCount ?? (notif.read ? 0 : 1)
   const purpose = earlierCount > 0 ? `${purposeText} · +${earlierCount} earlier` : purposeText
+  const badgeText = dealPresentation?.requiresAction ? 'Action needed' : null
 
   const ariaLabel = [
     displayTitle,
     purpose,
-    dealPresentation?.badge,
+    badgeText,
     isVerified ? 'verified' : null,
     notif.read ? 'read' : 'unread',
   ].filter(Boolean).join(', ')
@@ -1301,75 +1300,38 @@ const NotificationCard = memo(function NotificationCard({
           ].filter(Boolean).join(' ')}
           style={{ '--notif-accent': cfg.color }}
         >
-          {dealPresentation ? (
-            <div className="notif-deal-layout">
-              <div className="notif-deal-summary">
-                <AvatarIcon
-                  notif={notif}
-                  name={displayName}
-                  hasActor={hasActor}
-                  cfg={cfg}
-                  sender={sender}
-                  loading={sendersLoading}
-                  viewImage={viewImage}
-                />
-                <div className="notif-deal-copy">
-                  <div className="notif-deal-top">
-                    <span className={`notif-deal-name${notif.read ? '' : ' is-unread-name'}`}>
-                      {displayTitle}
-                    </span>
-                    <div className="notif-deal-controls">
-                      {!notif.read && (
-                        <span className="unread-dot" style={{ backgroundColor: cfg.color }} aria-hidden="true" />
-                      )}
-                      <time className="notif-time" dateTime={notif.created_at}>
-                        {timeLabel(notif.created_at)}
-                      </time>
-                      {notif.mergedCount > 1 && mergedUnreadCount > 0 && (
-                        <span className="message-count-pill" aria-label={`${mergedUnreadCount} unread`}>
-                          {mergedUnreadCount}
-                        </span>
-                      )}
-                      <span className={`notif-deal-badge tone-${dealPresentation.tone}`}>
-                        {dealPresentation.badge}
-                      </span>
-                      <button
-                        type="button"
-                        className="notif-deal-toggle"
-                        aria-expanded={expanded}
-                        aria-label={expanded ? 'Hide deal steps' : 'Show deal steps'}
-                        onClick={(e) => { e.stopPropagation(); onToggleExpand(notif.id) }}
-                      >
-                        <Ic icon={ChevronDown} size={16} strokeWidth={2} />
-                      </button>
-                    </div>
-                  </div>
-                  {!expanded && (
-                    <p className="notif-deal-body">
-                      {purposeText}
-                      {earlierCount > 0 && <span className="notif-purpose-older"> · +{earlierCount} earlier</span>}
-                    </p>
-                  )}
-                </div>
-                <div className="notif-deal-side" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    type="button"
-                    className="notif-dismiss"
-                    aria-label="Dismiss notification"
-                    onClick={() => onDelete(notif.id)}
-                  >
-                    <Ic icon={X} size={14} strokeWidth={2.25} />
-                  </button>
-                </div>
-              </div>
+          <div className="notif-layout">
+            <div className="notif-avatar">
+              <AvatarIcon
+                notif={notif}
+                name={displayName}
+                hasActor={hasActor}
+                cfg={cfg}
+                sender={sender}
+                loading={sendersLoading}
+                viewImage={viewImage}
+              />
+            </div>
 
-              {expanded && (
+            <div className="notif-text">
+              <span className={`notif-title${notif.read ? '' : ' is-unread-title'}`}>
+                {displayTitle}
+              </span>
+              <p className={`notif-body${notif.read ? '' : ' is-unread-body'}`}>
+                {purposeText}
+                {earlierCount > 0 && <span className="notif-purpose-older"> · +{earlierCount} earlier</span>}
+              </p>
+
+              {badgeText && (
+                <span className="notif-deal-badge tone-action">
+                  {badgeText}
+                </span>
+              )}
+
+              {dealPresentation && expanded && (
                 <div className="notif-deal-details" onClick={(e) => e.stopPropagation()}>
                   <div className="notif-deal-detail-head">
                     <span className="notif-deal-detail-label">How this works</span>
-                    <span className={`notif-deal-badge tone-${dealPresentation.tone}`}>
-                      {dealPresentation.badge}
-                    </span>
                   </div>
                   <p className="notif-deal-detail-copy">{dealPresentation.detail}</p>
                   <ol className="notif-deal-steps">
@@ -1393,58 +1355,45 @@ const NotificationCard = memo(function NotificationCard({
                 </div>
               )}
             </div>
-          ) : (
-            <div className="notif-card-inner">
-              <div className="notif-person">
-                <AvatarIcon
-                  notif={notif}
-                  name={displayName}
-                  hasActor={hasActor}
-                  cfg={cfg}
-                  sender={sender}
-                  loading={sendersLoading}
-                  viewImage={viewImage}
-                />
-                <div className="notif-person-text">
-                  <div className="notif-person-row">
-                    <span className={`notif-person-name${notif.read ? '' : ' is-unread-name'}`}>
-                      {displayTitle}
-                    </span>
-                    <div className="notif-person-end">
-                      <div className="notif-time-row">
-                        <time className="notif-time" dateTime={notif.created_at}>
-                          {timeLabel(notif.created_at)}
-                        </time>
-                        {!notif.read && (
-                          <span className="unread-dot" style={{ backgroundColor: cfg.color }} aria-hidden="true" />
-                        )}
-                      </div>
-                      {notif.mergedCount > 1 && mergedUnreadCount > 0 && (
-                        <span className="message-count-pill" aria-label={`${mergedUnreadCount} unread`}>
-                          {mergedUnreadCount}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <p className={`notif-purpose${notif.read ? '' : ' is-unread-purpose'}`}>
-                    {purposeText}
-                    {earlierCount > 0 && <span className="notif-purpose-older"> · +{earlierCount} earlier</span>}
-                  </p>
-                </div>
-              </div>
 
-              <div className="notif-side" onClick={(e) => e.stopPropagation()}>
+            <div className="notif-row-end">
+              <div className="notif-time-row">
+                <time className="notif-time" dateTime={notif.created_at}>
+                  {timeLabel(notif.created_at)}
+                </time>
+                {!notif.read && (
+                  <span className="unread-dot" style={{ backgroundColor: cfg.color }} aria-hidden="true" />
+                )}
+              </div>
+              {notif.mergedCount > 1 && mergedUnreadCount > 0 && (
+                <span className="message-count-pill" aria-label={`${mergedUnreadCount} unread`}>
+                  {mergedUnreadCount}
+                </span>
+              )}
+              {dealPresentation && (
                 <button
                   type="button"
-                  className="notif-dismiss"
-                  aria-label="Dismiss notification"
-                  onClick={() => onDelete(notif.id)}
+                  className="notif-deal-toggle"
+                  aria-expanded={expanded}
+                  aria-label={expanded ? 'Hide deal steps' : 'Show deal steps'}
+                  onClick={(e) => { e.stopPropagation(); onToggleExpand(notif.id) }}
                 >
-                  <Ic icon={X} size={14} strokeWidth={2.25} />
+                  <Ic icon={ChevronDown} size={16} strokeWidth={2} />
                 </button>
-              </div>
+              )}
             </div>
-          )}
+
+            <div className="notif-side" onClick={(e) => e.stopPropagation()}>
+              <button
+                type="button"
+                className="notif-dismiss"
+                aria-label="Dismiss notification"
+                onClick={() => onDelete(notif.id)}
+              >
+                <Ic icon={X} size={14} strokeWidth={2.25} />
+              </button>
+            </div>
+          </div>
 
           <NotificationActions notif={notif} onAction={onAction} />
         </article>

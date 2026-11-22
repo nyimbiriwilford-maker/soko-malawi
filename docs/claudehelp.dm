@@ -445,6 +445,26 @@ npx eslint src/pages/Chat.jsx | Select-String "no-undef|is not defined" ; "ESLIN
 git status -sb
 git diff HEAD~1 --stat -- src
 
+GOAL: Fix the title truncation on deal notification rows. Branch wip/home-hero-premium (check with git branch --show-current). Rules: no git stash or reset, no SQL, no installs, do NOT launch Chrome or any browser, do not merge or push. Edit only the Notifications page, its row component and their styles. Do not change deal logic, handlers, fetching or other pages.
+
+1. Print raw with line numbers the row's top line, title, time, badge and chevron markup and styles, then fix.
+2. Layout of every notification row: avatar 44px (align-self flex-start) on the left; text column (flex 1, min-width 0); right column (flex none, width 56px, align flex-end) containing the time (12px grey, nowrap) and, below it, the 16px chevron. The title is NOT in a flex row with the time or the badge: it sits alone at the top of the text column and may take the full column width.
+3. Title: 15px, weight 600, line-height 1.3, max 2 lines, wraps by whole words (word-break normal, overflow-wrap break-word only as a last resort). It must never be cut to a few letters.
+4. Move the "Action needed" badge out of the title line. Show it on its own line directly below the body, 11px, weight 700, amber #B06000 on #FFF8E1, radius 999px, padding 2px 8px, margin-top 6px, only when the user must act.
+5. Remove the old "Your turn" badge everywhere in Notifications; use "Action needed" in all cases.
+6. Apply the plain-copy rewrite to every deal row, so no row shows the old wording: "Offer accepted" / "Wilford James accepted your offer of MWK 30,000 for iphone 2. Confirm to start the deal."; "Ready to confirm this deal" / "You and Wilford James talked it through. Confirm to make it final." Titles are real words, never abbreviated.
+7. Body when collapsed: max 2 lines. Expanded panel stays below the top block, indented 56px, as already built.
+8. Check at widths 360px, 390px and 1100px that titles show whole.
+
+Commit as "Notifications: full-width deal titles, single badge", append one line to PROGRESS.md and commit it too.
+
+End with RAW output only, no summary:
+git log --oneline -4
+npm run build
+npx eslint <the real changed file paths> | Select-String "no-undef|is not defined" ; "ESLINT DONE"
+git status -sb
+git diff HEAD~1 --stat -- src
+
 GOAL: Make deal notifications understandable and expandable, and make deal acceptance clear on every device. Branch wip/home-hero-premium (check with git branch --show-current). Rules: no git stash or reset, no SQL, no installs, do NOT launch Chrome or any browser, do not merge or push. Make edits directly. Edit only the Notifications page, the deal components, the deal card in chat and their styles. Do not change deal logic, handlers, statuses, fetching, realtime or other pages.
 
 STEP 1 - Print raw with line numbers first: the notification row component, NotificationActions, tab row, deal notification types/statuses and generated title/body strings, DealRequestCard, DealConfirmBar, dealNotificationFlow, and where the chat renders media_type === 'deal_request'. Then continue without waiting.
