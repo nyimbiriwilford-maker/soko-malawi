@@ -205,9 +205,37 @@ GOAL: On desktop, the add (+) button in the left icon rail should be a plain gre
 Commit as "Rail: plain green plus on desktop", append one line to PROGRESS.md and commit it too.
 
 End with RAW output only, no summary:
-git log --oneline -3
+git log --oneline -4
 npm run build
-npx eslint <the real rail component path> | Select-String "no-undef|is not defined" ; "ESLINT DONE"
+npx eslint <the real changed file paths> | Select-String "no-undef|is not defined" ; "ESLINT DONE"
+git status -sb
+git diff HEAD~1 --stat -- src
+
+GOAL: Complete the desktop header search bar (min-width 1100px only). Branch wip/home-hero-premium (check with git branch --show-current). Rules: no git stash or reset, no SQL, no installs, do NOT launch Chrome or any browser, do not merge or push. Make edits directly. Edit only the header search component and its styles. Run git status -sb first; if there are uncommitted changes, stop and tell me.
+
+STEP 1 - Print raw with line numbers (then continue without waiting): the header search markup and its submit handler; the current live-search dropdown component's CSS/markup, query code and submit handler; the Search page's query-param names and the four live query blocks (listings, shops, services, requests), including every filter and sort/select field; the category chip source; any cached GPS helper; and the /search route. Check node_modules/lucide-react's TypeScript declarations for Search, MapPin, Clock, ShoppingBag, Store, Wrench, Target, X, ChevronDown, ArrowUpRight, CornerDownLeft, Check and print the matches. Do not change the Search page, its queries, routes, auth, or any other page.
+
+1. Keep the phone/tablet search exactly as it is. For desktop 1100px+ only, turn the header search into a white rounded pill, 56px tall, with a compact scope selector and a search icon; typing shows a clear X. Focus shows a green 2px border and a soft green shadow. Use green #0F9D58, tint #e6f6ed, text #202124, grey #5f6368 / #80868b, border #e8eaed, DM Sans, Lucide outline icons (strokeWidth 1.75). Keep the dropdown inside the viewport.
+
+2. Scope selector: All, Products, Shops, Services, Looking for. Default All. Clicking opens a small 190px dropdown below the pill, 5 options, each with an icon from Lucide. Selecting a scope changes the scope chip and the suggestions list; it must not clear the typed query. For All scope, show all types in one collapsed list with type/category label. For a specific scope, only show that type. Selected scope shows a green dot/check.
+
+3. On focus with no typed query, show Recent searches from localStorage key soko_recent_searches (max 5) and popular category chips from src/config/categories.js. On typing, show live suggestions after 300ms debounce, reusing the exact Search page filters: listings published; shops is_active; services status active; requests not fulfilled and not expired. Never add SQL. Suggestion rows: product with small image/initial tile + price/district; shop with logo/initial tile + category/district; service with icon tile + category/district; request with icon tile + budget/district. Cap rows so the dropdown stays under ~420px.
+
+4. Location chip: show cached GPS label in the pill; read the cached GPS result only and never trigger a permission prompt. X clears the chip back to All Malawi (no permission prompt).
+
+5. Keyboard: ArrowDown/ArrowUp move through suggestions, Enter opens selected suggestion, Escape closes, "/" focuses the search (already implemented). Enter with nothing selected submits the typed query. Highlight selected row and show a CornerDownLeft icon on it.
+
+6. Keep search submit on Enter navigating to search with ?q=...&type=... (use type=services for Services, type=lookingfor for Looking for, type=shops for Shops, type=listings for Products, type=all for All if no tab/type route param exists). Selecting any suggestion or category chip must open the correct result with the correct scope, category, location and q. Do not change the Search page.
+
+7. Add a small inline toast in the dropdown for empty: "Nothing found for {term}. Try another word or switch scope." Keep the Notify me button and modal behaviour for non-desktop search. Keep all other header features.
+
+Commit as "Header: complete desktop search with scope, suggestions, location", append one line to PROGRESS.md and commit it too.
+
+End with RAW output only, no summary: first the STEP 1 findings, then:
+git log --oneline -4
+npm run build
+npx eslint <the real changed file paths> | Select-String "no-undef|is not defined" ; "ESLINT DONE"
+npx eslint <the real search component path> --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
 git status -sb
 git diff HEAD~1 --stat -- src
 
