@@ -76,3 +76,21 @@ npx eslint <the real page and row component paths> | Select-String "no-undef|is 
 npx eslint <the real page path> --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
 git status -sb
 git diff HEAD~1 --stat -- src
+GOAL: Remove the Orders and System category tabs from the Notifications page. Keep All, Messages, Listings, Offers and Deals. Branch wip/home-hero-premium (check with git branch --show-current). Rules: no git stash or reset, no SQL, no installs, do NOT launch Chrome or any browser, do not merge or push. Make the edits directly. Edit only the Notifications page and its row component.
+
+1. Find the tab list (Select-String "Orders" in the Notifications page) and print it raw with line numbers, then continue.
+2. Remove the Orders and System tabs from the tab row. Do the same in the Filters panel if it lists categories.
+3. Orders and system notifications must still show under the All tab. Do not delete them from the data, and do not change how any notification is fetched, grouped or tapped.
+4. If the user opens the page with a saved or URL-selected tab of Orders or System, fall back to All.
+5. Messages, Listings, Offers and Deals keep their current filtering rules. If Orders-type notifications were previously matched by the Deals or Listings filter, leave that matching exactly as it is.
+6. Do not touch other pages.
+
+Commit as "Notifications: remove Orders and System tabs", append one line to PROGRESS.md and commit it too.
+
+End with RAW output only, no summary:
+git log --oneline -4
+npm run build
+npx eslint <the real page path> | Select-String "no-undef|is not defined" ; "ESLINT DONE"
+npx eslint <the real page path> --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
+git status -sb
+git diff HEAD~1 --stat -- src

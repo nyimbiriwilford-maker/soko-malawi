@@ -199,8 +199,6 @@ const TABS = [
   { id: 'listings', label: 'Listings', Icon: ShoppingBag },
   { id: 'offers',   label: 'Offers',   Icon: CircleDollarSign },
   { id: 'deals',    label: 'Deals',    Icon: Handshake },
-  { id: 'orders',   label: 'Orders',   Icon: Package },
-  { id: 'system',   label: 'System',   Icon: Settings },
 ]
 
 const CATEGORIES = [
@@ -209,9 +207,33 @@ const CATEGORIES = [
   { id: 'listings', label: 'Listings' },
   { id: 'offers',   label: 'Offers' },
   { id: 'deals',    label: 'Deals' },
-  { id: 'orders',   label: 'Orders' },
-  { id: 'system',   label: 'System' },
 ]
+
+const VALID_CATEGORY_IDS = new Set(TABS.map((tab) => tab.id))
+
+function normalizeCategory(category) {
+  const id = typeof category === 'string' ? category.toLowerCase() : ''
+  return VALID_CATEGORY_IDS.has(id) ? id : 'all'
+}
+
+function getInitialCategory() {
+  if (typeof window === 'undefined') return 'all'
+  try {
+    const params = new URLSearchParams(window.location.search)
+    const routeState = window.history.state?.usr || {}
+    const saved = params.get('tab')
+      || params.get('category')
+      || routeState.tab
+      || routeState.category
+      || localStorage.getItem('soko_notifications_tab')
+      || localStorage.getItem('soko_notifications_category')
+      || sessionStorage.getItem('soko_notifications_tab')
+      || sessionStorage.getItem('soko_notifications_category')
+    return normalizeCategory(saved)
+  } catch {
+    return 'all'
+  }
+}
 
 const DEFAULT_FILTER = {
   search: '',
@@ -1416,7 +1438,7 @@ export default function Notifications() {
   const navigate = useNavigate()
   const [notifications, setNotifications] = useState([])
   const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState(DEFAULT_FILTER)
+  const [filter, setFilter] = useState(() => ({ ...DEFAULT_FILTER, category: getInitialCategory() }))
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [toast, setToast] = useState(null)
   const [user, setUser] = useState(null)
@@ -1895,7 +1917,11 @@ export default function Notifications() {
   }, [dealModal, user, patchNotifData, showToast])
 
   // ── Filtering / sorting ──────────────────────────────────────────────────
-  const updateFilter = useCallback((updates) => setFilter((prev) => ({ ...prev, ...updates })), [])
+  const updateFilter = useCallback((updates) => setFilter((prev) => ({
+    ...prev,
+    ...updates,
+    category: updates.category === undefined ? prev.category : normalizeCategory(updates.category),
+  })), [])
   const clearFilters = useCallback(() => setFilter(DEFAULT_FILTER), [])
   const toggleFilters = useCallback(() => setFiltersOpen((p) => !p), [])
   const closeFilters = useCallback(() => setFiltersOpen(false), [])
