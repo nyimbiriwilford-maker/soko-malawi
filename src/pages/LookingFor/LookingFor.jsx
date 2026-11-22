@@ -631,6 +631,20 @@ const myAlertsRef = useRef([])
     showToast('Request deleted', 'success')
   }
 
+  async function reactivateRequest(id) {
+    const expires_at = expiresAtFromDays(7)
+    const { error } = await supabase.from('buyer_requests')
+      .update({ expires_at, status: 'open' })
+      .eq('id', id)
+      .eq('user_id', user?.id)
+    if (error) {
+      showToast(error.message || 'Could not reactivate', 'error')
+      return
+    }
+    setRequests(prev => prev.map(r => r.id === id ? { ...r, expires_at, status: 'open' } : r))
+    showToast('Request reactivated', 'success')
+  }
+
   /* ── bookmark (local) ── */
   function toggleSave(id) {
     const wasSaved = savedIds.has(id)
@@ -1053,6 +1067,7 @@ const myAlertsRef = useRef([])
                   onSave={toggleSave}
                   onFulfill={markFulfilled}
                   onDelete={deleteRequest}
+                  onReactivate={reactivateRequest}
                   onViewDetails={openRequestDetails}
                 />
               ))}
@@ -1237,6 +1252,7 @@ const myAlertsRef = useRef([])
           onSave={toggleSave}
           onFulfill={markFulfilled}
           onDelete={deleteRequest}
+                  onReactivate={reactivateRequest}
         />
       )}
 

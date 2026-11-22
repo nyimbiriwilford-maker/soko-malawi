@@ -158,6 +158,7 @@ export default function LookingForRequestCard({
   onSave,
   onFulfill,
   onDelete,
+  onReactivate,
   onViewDetails,
   compactCta = false,
 }) {
@@ -233,7 +234,16 @@ export default function LookingForRequestCard({
               {offersCount}
             </span>
           </div>
-          {isOwn && onFulfill ? (
+          {isOwn && (req.expires_at && new Date(req.expires_at) <= new Date()) ? (
+            <button
+              type="button"
+              className="lf-card-btn"
+              style={{ background: '#0F9D58', color: '#fff', minHeight: 44 }}
+              onClick={e => { e.stopPropagation(); e.preventDefault(); onReactivate?.(req.id) }}
+            >
+              Reactivate
+            </button>
+          ) : isOwn && onFulfill ? (
             <button
               type="button"
               className="lf-card-btn is-done"
