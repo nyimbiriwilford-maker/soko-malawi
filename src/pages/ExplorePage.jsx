@@ -55,10 +55,10 @@ const Icon = {
 
 const EXPLORE_ROWS = [
   { title: 'Shops', icon: Icon.shops, iconBg: '#e6f6ed', iconColor: GREEN, sub: 'Browse verified shops', path: '/shops' },
-  { title: 'People Looking For', icon: Icon.people, iconBg: '#e8f0fe', iconColor: '#1A73E8', sub: 'Find requests and offer help', path: '/looking-for' },
+  { title: 'People Looking For', icon: Icon.people, iconBg: '#e8f0fe', iconColor: '#1A73E8', sub: 'Requests and offers', path: '/looking-for' },
   { title: 'Services', icon: Icon.services, iconBg: '#f1ecff', iconColor: '#7c4dff', sub: 'Find and hire experts', path: '/services' },
-  { title: 'Statuses (Stories)', icon: Icon.stories, iconBg: '#e6f6ed', iconColor: GREEN, sub: 'Watch and share stories', path: '/status' },
-  { title: 'Verification', icon: Icon.verify, iconBg: '#e8f0fe', iconColor: '#1A73E8', sub: 'Verify your account or business', path: '/profile' },
+  { title: 'Statuses (Stories)', icon: Icon.stories, iconBg: '#e6f6ed', iconColor: GREEN, sub: 'Watch and share', path: '/status' },
+  { title: 'Verification', icon: Icon.verify, iconBg: '#e8f0fe', iconColor: '#1A73E8', sub: 'Verify your account', path: '/profile' },
 ]
 
 export default function ExplorePage() {
@@ -102,19 +102,25 @@ export default function ExplorePage() {
         .explore-cat:active { transform: scale(0.96); }
         .explore-cat-label {
           font-family: 'DM Sans', system-ui, sans-serif;
-          font-size: 12px;
+          font-size: 11.5px;
           font-weight: 600;
           color: ${TEXT};
           text-align: center;
           line-height: 1.25;
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
+          white-space: nowrap;
           overflow: hidden;
-          overflow-wrap: anywhere;
+          text-overflow: ellipsis;
+          overflow-wrap: normal;
+          word-break: normal;
+          hyphens: none;
+          padding: 0;
+          min-height: 1.25em;
         }
-        @media (max-width: 359px) {
-          .explore-cat-label { font-size: 11.5px; }
+        @media (max-width: 339px) {
+          .explore-cat-label { font-size: 11px; }
+        }
+        @media (min-width: 1100px) {
+          .explore-cat-label { font-size: 12px; }
         }
         @media (min-width: 1100px) {
           .explore-cat {
@@ -190,6 +196,8 @@ export default function ExplorePage() {
             display: 'grid',
             gridTemplateColumns: isWide ? 'repeat(8, minmax(0, 1fr))' : 'repeat(4, minmax(0, 1fr))',
             gap: isWide ? 16 : '12px 8px',
+            alignItems: 'start',
+            justifyItems: 'center',
           }}>
             {CATEGORIES.map(cat => {
               const IconComp = cat.icon
@@ -286,12 +294,10 @@ export default function ExplorePage() {
                     </div>
                     <div style={{
                       fontFamily: "'DM Sans', system-ui, sans-serif",
-                      fontSize: 14, color: SUB,
-                      display: '-webkit-box',
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: 'vertical',
+                      fontSize: 13, color: SUB,
+                      whiteSpace: 'nowrap',
                       overflow: 'hidden',
-                      lineHeight: 1.35,
+                      textOverflow: 'ellipsis',
                     }}>
                       {row.sub}
                     </div>
@@ -308,3 +314,5 @@ export default function ExplorePage() {
     </div>
   )
 }
+
+
