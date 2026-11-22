@@ -141,3 +141,4 @@ Explore: chevrons, grid overflow, row text
 Explore: label wrapping and row subtitles
 Explore: section spacing
 Explore: tighten category spacing
+Looking for: remove hero, slim header row

@@ -17,7 +17,6 @@ import {
 import { CATEGORIES, URGENCY_OPTIONS, expiresAtFromDays } from '../../constants/lookingFor'
 import { getDemandLevel, timeAgo } from '../../utils/lookingFor'
 import { MALAWI_DISTRICTS } from '../../constants/malawiDistricts'
-import lookingForHero from '../../assets/looking-for-hero.jpg'
 import SokoNav from '../../components/SokoNav'
 import LookingForRequestCard, { LOOKING_FOR_CARD_CSS } from '../../components/LookingFor/LookingForRequestCard'
 
@@ -52,6 +51,12 @@ const CAT_ICONS = {
 export default function LookingFor() {
   const navigate  = useNavigate()
   const location  = useLocation()
+  const [windowWidth, setWindowWidth] = useState(typeof window !== 'undefined' ? window.innerWidth : 1024)
+  useEffect(() => {
+    const handler = () => setWindowWidth(window.innerWidth)
+    window.addEventListener('resize', handler)
+    return () => window.removeEventListener('resize', handler)
+  }, [])
 
   /* ── auth / user ── */
   const [user,          setUser]          = useState(null)
@@ -670,140 +675,20 @@ const myAlertsRef = useRef([])
         onCta={handleOpenComposer}
       />
 
-      {/* ── HERO BANNER ── */}
-      <div className="lf-hero" style={{
-        position: 'relative',
-        overflow: 'hidden',
-        borderBottom: `1px solid ${C.border}`,
-      }}>
-        <div style={{
-          position: 'absolute', inset: 0,
-          backgroundImage: `url(${lookingForHero})`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center 40%',
-          transform: 'scale(1.02)',
-        }} />
-        <div style={{
-          position: 'absolute', inset: 0,
-          background: `
-            linear-gradient(105deg,
-              rgba(6, 40, 22, 0.9) 0%,
-              rgba(10, 80, 45, 0.78) 42%,
-              rgba(15, 157, 88, 0.45) 72%,
-              rgba(15, 157, 88, 0.28) 100%
-            )
-          `,
-        }} />
-
-        <div className="lf-hero-inner" style={{
-          position: 'relative', zIndex: 1,
-          padding: '36px 32px 28px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 28,
-          maxWidth: 1200,
-          margin: '0 auto',
-        }}>
-          <div style={{ maxWidth: 560, flex: 1, minWidth: 0 }}>
-            <div className="lf-hero-badge" style={{
-              display: 'inline-flex', alignItems: 'center', gap: 6,
-              background: 'rgba(255,255,255,0.14)',
-              border: '1px solid rgba(255,255,255,0.22)',
-              backdropFilter: 'blur(8px)',
-              color: '#bbf7d0',
-              fontSize: 11, fontWeight: 800, letterSpacing: 1.1,
-              borderRadius: 999, padding: '6px 12px', marginBottom: 12,
-              textTransform: 'uppercase',
-            }}>
-              <span style={{
-                width: 7, height: 7, borderRadius: '50%', background: '#4ade80',
-                boxShadow: '0 0 0 3px rgba(74,222,128,0.25)',
-              }} />
-              People are looking for
-            </div>
-            <h1 className="lf-hero-title" style={{
-              fontSize: 34, fontWeight: 900, margin: '0 0 10px', lineHeight: 1.18,
-              color: '#fff',
-              textShadow: '0 2px 18px rgba(0,0,0,0.25)',
-              letterSpacing: -0.5,
-            }}>
-              Find requests from buyers, employers &amp; customers
+      {/* slim header */}
+      <div style={{ maxWidth: 1400, margin: '0 auto', padding: (windowWidth >= 769 ? '20px 24px 16px' : '20px 14px 16px'), boxSizing: 'border-box' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <div style={{ minWidth: 0, flex: '1 1 auto' }}>
+            <h1 style={{ fontFamily: "'Sora', 'Inter', system-ui, sans-serif", fontSize: (windowWidth >= 1100 ? 26 : 22), fontWeight: 700, color: '#202124', margin: 0, lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              People Looking For
             </h1>
-            <p className="lf-hero-sub" style={{
-              color: 'rgba(255,255,255,0.85)', fontSize: 15, margin: 0, lineHeight: 1.55,
-              maxWidth: 440, fontWeight: 500,
-            }}>
-              Buyers post what they need — respond and win the deal across Malawi.
-            </p>
-
-            <div className="lf-hero-actions" style={{ display: 'flex', gap: 10, marginTop: 18, flexWrap: 'wrap' }}>
-              <button
-                type="button"
-                onClick={handleOpenComposer}
-                style={{
-                  background: C.amber,
-                  color: '#1a1a1a',
-                  border: 'none',
-                  borderRadius: 12,
-                  padding: '12px 18px',
-                  fontWeight: 800,
-                  fontSize: 14,
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 18px rgba(249,171,0,0.4)',
-                  fontFamily: 'inherit',
-                  flex: '1 1 auto',
-                  minWidth: 140,
-                }}
-              >
-                + Post a request
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  document.getElementById('lf-requests-grid')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                }}
-                style={{
-                  background: 'rgba(255,255,255,0.12)',
-                  color: '#fff',
-                  border: '1.5px solid rgba(255,255,255,0.35)',
-                  borderRadius: 12,
-                  padding: '12px 18px',
-                  fontWeight: 700,
-                  fontSize: 14,
-                  cursor: 'pointer',
-                  backdropFilter: 'blur(8px)',
-                  fontFamily: 'inherit',
-                  flex: '1 1 auto',
-                  minWidth: 140,
-                }}
-              >
-                Browse requests
-              </button>
+            <div style={{ fontFamily: "'DM Sans', 'Inter', system-ui, sans-serif", fontSize: 14, color: '#5f6368', marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              Requests from buyers, employers and customers
             </div>
           </div>
-
-          <div className="lf-hero-side-card" style={{
-            display: 'none',
-            width: 260,
-            flexShrink: 0,
-            background: 'rgba(255,255,255,0.14)',
-            border: '1px solid rgba(255,255,255,0.28)',
-            backdropFilter: 'blur(16px)',
-            borderRadius: 20,
-            padding: 16,
-            boxShadow: '0 16px 40px rgba(0,0,0,0.25)',
-          }}>
-            <div style={{ fontSize: 11, fontWeight: 800, color: '#bbf7d0', letterSpacing: 0.6, marginBottom: 10 }}>
-              LIVE ON SOKO
-            </div>
-            <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', lineHeight: 1.35, marginBottom: 8 }}>
-              Buyers post what they need — sellers respond first.
-            </div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)', lineHeight: 1.5 }}>
-              Electronics Ã Services · Fashion · Food & more
-            </div>
-          </div>
+          <button type="button" onClick={handleOpenComposer} style={{ background: '#F9AB00', color: '#202124', fontWeight: 700, height: 44, borderRadius: 999, padding: '0 18px', border: 'none', cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', flex: '0 0 auto' }}>
+            + Post a request
+          </button>
         </div>
       </div>
 
@@ -1838,3 +1723,4 @@ function DetailModal({ req, user, myListings, saved, onClose, onOffer, onSave, o
     </div>
   )
 }
+
