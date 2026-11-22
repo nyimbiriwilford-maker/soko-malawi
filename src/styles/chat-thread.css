@@ -887,8 +887,8 @@
   border: 1px solid #e2ece6;
   border-radius: 16px;
   padding: 14px 14px 15px;
-  width: 292px;
-  max-width: 292px;
+  width: fit-content;
+  max-width: min(320px, 100%);
   box-shadow: 0 1px 2px rgba(15, 20, 16, 0.04), 0 8px 24px rgba(15, 20, 16, 0.07);
   overflow: hidden;
   transition: box-shadow 0.18s ease, transform 0.18s ease, border-color 0.18s ease;
@@ -1431,12 +1431,19 @@
   padding: 4px 2px 0;
 }
 
-.chat-thread .msg-bubble.offer-bubble.is-mine .msg-meta {
-  color: #6c8b78;
+.chat-thread .msg-bubble.offer-bubble .msg-meta {
+  font-size: 11px;
+  line-height: 1.4;
+  color: #80868b;
 }
 
-.chat-thread .msg-bubble.offer-bubble.is-theirs .msg-meta {
-  color: #8aa094;
+.chat-thread .msg-bubble.offer-bubble .msg-ticks.read {
+  color: #0F9D58;
+}
+
+.chat-thread .msg-bubble.offer-bubble .msg-ticks.sent,
+.chat-thread .msg-bubble.offer-bubble .msg-ticks.is-failed {
+  color: #80868b;
 }
 
 /* Typing indicator */
@@ -2295,8 +2302,8 @@
 
   .chat-thread .msg-bubble.offer-bubble .offer-card {
     min-width: 0;
-    width: min(88vw, 292px);
-    max-width: min(88vw, 292px);
+    width: fit-content;
+    max-width: min(320px, 100%);
   }
 
   /* Composer: 16px prevents iOS focus zoom; keep bar sticky at bottom */

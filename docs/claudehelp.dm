@@ -264,3 +264,21 @@ npx eslint <the real changed file paths> | Select-String "no-undef|is not define
 npx eslint <the real conversation view path> --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
 git status -sb
 git diff HEAD~1 --stat -- src
+
+GOAL: Final polish on the chat view offer card. Branch wip/home-hero-premium (check with git branch --show-current). Rules: no git stash or reset, no SQL, no installs, do NOT launch Chrome or any browser, do not merge or push. Edit only the conversation view and offer card components.
+
+1. PRICE FORMAT: print raw where the offer amount and the "Asking" amount are formatted. Show "MWK 30,000" (a normal space between MWK and the number) and "Asking MWK 39,000". Apply the same format anywhere else in the chat view where MWK is followed directly by digits.
+2. OFFER TIME: the time and read ticks under an offer card use the same style as normal message times (11px, #80868b, ticks as in bubbles), 4px below the card, right-aligned with it. They must be clearly readable on the chat background.
+3. AVATAR: do not render the sender avatar next to messages and cards that the logged-in user sent. Only received messages show the other person's avatar, on the last bubble of a group.
+4. WIDTH AND ALIGNMENT: the offer card max-width 320px (260px under 400px screens), width fit to content. Sent offers align right, received offers align left, with the same side margins as text bubbles. It must never overhang the bubble column.
+5. Do not change offers logic, actions, sending, receiving, realtime, read receipts or other pages.
+
+Commit as "Chat view: offer card price format, time, avatar, width", append one line to PROGRESS.md and commit it too.
+
+End with RAW output only, no summary:
+git log --oneline -4
+npm run build
+npx eslint <the real changed file paths> | Select-String "no-undef|is not defined" ; "ESLINT DONE"
+npx eslint <the real conversation view path> --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
+git status -sb
+git diff HEAD~1 --stat -- src

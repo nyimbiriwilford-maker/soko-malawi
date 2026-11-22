@@ -2402,9 +2402,6 @@ async function uploadAndSend(file, type, caption = '') {
   const displayName  = toTitleCase(otherName)
   const otherAvatar  = otherProfile?.avatar_url || null
   const otherInitial = displayName[0].toUpperCase()
-  const myName       = myProfile?.full_name || currentUser?.email || 'Me'
-  const myAvatar     = myProfile?.avatar_url || null
-  const myInitial    = myName[0].toUpperCase()
   const disappearLabel = DISAPPEAR_OPTIONS.find(opt => opt.ms === defaultDisappear)?.label || 'Off'
 
   // ── Render helpers ───────────────────────────────────────────────────────
@@ -3214,7 +3211,7 @@ async function uploadAndSend(file, type, caption = '') {
           .chat-page.chat-thread .msg-stack { max-width: 65% !important; }
         }
         .chat-page.chat-thread .msg-bubble.offer-bubble {
-          max-width: none !important;
+          max-width: 100% !important;
           padding: 0 !important;
           background: transparent !important;
           border: 0 !important;
@@ -3224,8 +3221,8 @@ async function uploadAndSend(file, type, caption = '') {
         }
         .chat-page.chat-thread .msg-bubble.offer-bubble .offer-card {
           box-sizing: border-box;
-          width: 320px;
-          max-width: 320px;
+          width: fit-content !important;
+          max-width: min(320px, 100%) !important;
           max-height: 190px;
           padding: 12px !important;
           background: #fff !important;
@@ -3324,6 +3321,19 @@ async function uploadAndSend(file, type, caption = '') {
           line-height: 1.3 !important;
           color: #80868b !important;
         }
+        .chat-page.chat-thread .msg-bubble.offer-bubble .msg-meta-row {
+          padding: 4px 2px 0 !important;
+          justify-content: flex-end !important;
+        }
+        .chat-page.chat-thread .msg-bubble.offer-bubble .msg-meta {
+          margin-top: 0 !important;
+          font-size: 11px !important;
+          line-height: 1.4 !important;
+          color: #80868b !important;
+        }
+        .chat-page.chat-thread .msg-bubble.offer-bubble .msg-ticks.read { color: #0F9D58 !important; }
+        .chat-page.chat-thread .msg-bubble.offer-bubble .msg-ticks.sent,
+        .chat-page.chat-thread .msg-bubble.offer-bubble .msg-ticks.is-failed { color: #80868b !important; }
         .chat-page.chat-thread .offer-card-note,
         .chat-page.chat-thread .offer-stepper,
         .chat-page.chat-thread .offer-card-parent,
@@ -3349,8 +3359,7 @@ async function uploadAndSend(file, type, caption = '') {
         }
         @media (max-width: 399px) {
           .chat-page.chat-thread .msg-bubble.offer-bubble .offer-card {
-            width: 260px !important;
-            max-width: 260px !important;
+            max-width: min(260px, 100%) !important;
           }
         }
       `}</style>
@@ -4056,11 +4065,11 @@ async function uploadAndSend(file, type, caption = '') {
                           </span>
                         </div>
                         <div className="offer-card-amount">
-                          <span className="offer-card-amount-currency">{offer?.currency || 'MWK'}</span>
+                          <span className="offer-card-amount-currency">{offer?.currency || 'MWK'}{' '}</span>
                           {Number(offer && offer.amount || 0).toLocaleString()}
                         </div>
                         {offerProduct?.price != null && Number(offerProduct.price) > 0 && (
-                          <div className="offer-card-original-price">Asking {Number(offerProduct.price).toLocaleString()}</div>
+                          <div className="offer-card-original-price">Asking {offer?.currency || 'MWK'} {Number(offerProduct.price).toLocaleString()}</div>
                         )}
                         {offer.note && <div className="offer-card-note">{offer.note}</div>}
                         {flow && flow.total > 1 && (
@@ -4293,9 +4302,6 @@ async function uploadAndSend(file, type, caption = '') {
                   </button>
                 )}
 
-                {isMine && (
-                  <ChatAvatar url={myAvatar} initial={myInitial} size={28} isMine spacer={!isLast} />
-                )}
               </div>
             </div>
           )
@@ -4350,7 +4356,6 @@ async function uploadAndSend(file, type, caption = '') {
                 </div>
               </div>
             </div>
-            <ChatAvatar url={myAvatar} initial={myInitial} size={28} isMine />
           </div>
         )}
         <div ref={bottomRef} />

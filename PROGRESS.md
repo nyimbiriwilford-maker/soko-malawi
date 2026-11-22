@@ -176,3 +176,4 @@ Rail: plain green plus on desktop
 Chats: remove New Message, responsive popup menu
 Chat view: compact header, grouped bubbles, disappearing menu, listings 400 fix
 Chat view: date pill, compact offer card, 15px text
+Chat view: offer card price format, time, avatar, width
