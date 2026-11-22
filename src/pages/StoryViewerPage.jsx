@@ -60,6 +60,7 @@ export default function StoryViewerPage() {
       stories={stories}
       startIndex={startIdx}
       currentUserId={userId}
+      inHomeStrip
       onClose={() => navigate('/', { replace: true })}
     />
   )

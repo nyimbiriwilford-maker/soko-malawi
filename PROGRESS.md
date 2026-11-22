@@ -131,3 +131,4 @@ Home statuses: compact cards, Add status card, heading
 Home statuses: fix card layout overlap and price cut-off
 Home statuses: two-row top zone, time only
 Home statuses: scroll, arrows, fades, view-all card, skeleton
+Home statuses: light skeleton, viewer covers header

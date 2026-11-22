@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import StatusCommentsPanel from './StatusComments'
@@ -371,8 +372,13 @@ async function downloadMediaFully(url, onProgress) {
 }
 
 // ─── Main ────────────────────────────────────────────────────────────────────
-export default function StoryViewer({ stories, startIndex = 0, currentUserId, onClose }) {
+export default function StoryViewer({ stories, startIndex = 0, currentUserId, onClose, inHomeStrip = false }) {
   const navigate = useNavigate()
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
+  }, [])
   const [idx, setIdx] = useState(startIndex || 0)
   const [mediaIdx, setMediaIdx] = useState(0)
   const [progress, setProgress] = useState(0)
@@ -1069,7 +1075,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
 
   const myInitial = 'Y'
 
-  return (
+  const __viewerTree = (
     <>
       <style>{`
         @keyframes svShimmer {
@@ -1242,7 +1248,8 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
 
       <div
         style={{
-          position: 'fixed', inset: 0, zIndex: 998,
+          position: 'fixed', inset: 0, zIndex: 10000,
+          width: '100%', height: '100dvh',
           background: '#000',
           fontFamily: "'DM Sans', system-ui, sans-serif",
           userSelect: 'none',
@@ -1425,7 +1432,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
               position: 'absolute', top: 0, left: 0, right: 0, zIndex: 30,
               display: 'flex', gap: 3,
               padding: '10px 12px 0',
-              paddingTop: 'max(10px, env(safe-area-inset-top, 10px))',
+              paddingTop: 'max(12px, env(safe-area-inset-top, 12px))',
             }}>
               {Array.from({ length: barCount }).map((_, i) => (
                 <div key={i} style={{
@@ -2289,6 +2296,7 @@ export default function StoryViewer({ stories, startIndex = 0, currentUserId, on
       </div>
     </>
   )
+  return inHomeStrip ? createPortal(__viewerTree, document.body) : __viewerTree
 }
 
 function MenuItem({ label, onClick, danger = false }) {
@@ -2348,3 +2356,5 @@ const iconBtnStyle = {
   textShadow: '0 1px 4px rgba(0,0,0,0.5)',
   filter: 'drop-shadow(0 1px 3px rgba(0,0,0,0.45))',
 }
+
+

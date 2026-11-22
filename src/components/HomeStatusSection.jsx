@@ -713,6 +713,8 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
         }
          .hs-story-btn, .hs-add-btn, .hs-error-card { flex: 0 0 130px; width: 130px; height: 190px; border-radius: 16px; box-sizing: border-box; overflow: hidden; position: relative; scroll-snap-align: start; background: #0f172a; box-shadow: 0 1px 3px rgba(0,0,0,0.10), 0 4px 14px rgba(0,0,0,0.08); cursor: pointer; transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.28s cubic-bezier(0.22, 1, 0.36, 1); will-change: transform; }
          @media (min-width: 769px) { .hs-story-btn, .hs-add-btn, .hs-error-card { flex-basis: 150px; width: 150px; height: 220px; } }
+         .hs-skel-card { flex: 0 0 130px; width: 130px; height: 190px; border-radius: 16px; box-sizing: border-box; overflow: hidden; position: relative; scroll-snap-align: start; background: #f1f3f4; box-shadow: none; }
+         @media (min-width: 769px) { .hs-skel-card { flex-basis: 150px; width: 150px; height: 220px; } }
          .hs-price-line { font-size: 14px; }
          @media (max-width: 768px) { .hs-price-line { font-size: 12px; } }
         .hs-story-btn img, .hs-story-btn video, .hs-story-btn .board { transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
@@ -811,7 +813,7 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
                    </div>
                  </button>
                  {[1, 2, 3, 4].map((_, k) => (
-                   <div key={k} className="hs-story-btn hs-skel-card"
+                   <div key={k} className="hs-skel-card"
                      style={{ background: '#f1f3f4', position: 'relative', overflow: 'hidden', boxShadow: 'none' }}>
                      <div className="hs-skel-shimmer" style={{
                        position: 'absolute', inset: 0,
