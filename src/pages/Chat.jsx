@@ -67,6 +67,8 @@ import {
 } from '../hooks/usePresence'
 import ChatCallHost, { HideDuringCall } from '../components/ChatCallHost'
 import CallMessageBubble from '../components/CallMessageBubble'
+import ChatImageBubble from '../components/ChatImageBubble'
+import ImageViewer from '../components/ImageViewer'
 import { maybePromptDealReady } from '../utils/dealNotificationFlow'
 import { notifyMissedCall, notifyCallDeclined } from '../utils/callNotifications'
 import {
@@ -259,6 +261,23 @@ export default function Chat() {
   // ── State ────────────────────────────────────────────────────────────────
   const [messages, setMessages]           = useState([])
   const [groupedMessages, setGroupedMessages] = useState([])
+  const chatImages = useMemo(() => {
+    const urls = []
+    const addUrl = url => {
+      if (url && !urls.includes(url)) urls.push(url)
+    }
+    groupedMessages.forEach(msg => {
+      if (msg.call_type || isMsgDeletedEveryone(msg)) return
+      if (msg._isGroup && Array.isArray(msg._imageGroup)) {
+        msg._imageGroup.forEach(img => {
+          if (!img._uploading) addUrl(img.media_url)
+        })
+      } else if (msg.media_type === 'image' && !msg._pendingLoad) {
+        addUrl(msg.media_url)
+      }
+    })
+    return urls
+  }, [groupedMessages])
   const prefillMessage = useRef(location.state?.prefillMessage || '')
   const isFromRequest = useRef(!!(location.state?.prefillMessage || location.state?.isRequest || location.state?.source === 'request'))
   const [isRequestChat, setIsRequestChat] = useState(isFromRequest.current)
@@ -322,6 +341,7 @@ const [chatSearch, setChatSearch]       = useState(null)
 const [searchMatches, setSearchMatches] = useState([])
 const [searchIdx, setSearchIdx]         = useState(0)
 const [lightbox, setLightbox]           = useState(null) // { url, type, caption }
+const [imageViewer, setImageViewer]     = useState(null) // { photos, index }
 const [showAttach, setShowAttach]       = useState(false)
 const [actionMsg, setActionMsg]         = useState(null) // message under action sheet
 const [imageActionMsg, setImageActionMsg] = useState(null) // individual image under action sheet
@@ -471,6 +491,7 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
   }, [messages, chatSource, currentUser?.id, userId, dmAccepted])
   const bottomRef          = useRef(null)
   const messagesListRef    = useRef(null)
+  const chatScrollTopRef   = useRef(0)
   const scrollContainerRef = messagesListRef
   const nearBottomRef      = useRef(true)
   const mediaRecorderRef   = useRef(null)
@@ -511,6 +532,19 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
     setUnreadBelow(0)
     setShowScrollBtn(false)
   }
+
+  const openImageViewer = useCallback(url => {
+    const index = chatImages.indexOf(url)
+    chatScrollTopRef.current = messagesListRef.current?.scrollTop || 0
+    setImageViewer({ photos: chatImages, index: index >= 0 ? index : 0 })
+  }, [chatImages])
+
+  const closeImageViewer = useCallback(() => {
+    setImageViewer(null)
+    requestAnimationFrame(() => {
+      if (messagesListRef.current) messagesListRef.current.scrollTop = chatScrollTopRef.current
+    })
+  }, [])
 
   // ── Effects ──────────────────────────────────────────────────────────────
 
@@ -596,8 +630,9 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
   // Escape closes overlays
   useEffect(() => {
     function onKey(e) {
-      if (e.key === 'Escape' && showEmoji) { setShowEmoji(false); return }
       if (e.key !== 'Escape') return
+      if (imageViewer) { closeImageViewer(); return }
+      if (showEmoji) { setShowEmoji(false); return }
       if (lightbox) setLightbox(null)
       else if (forwardMsgs) setForwardMsgs(null)
       else if (actionMsg) setActionMsg(null)
@@ -608,7 +643,7 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [lightbox, actionMsg, showEmoji, showAttach, chatSearch, replyTo, forwardMsgs])
+  }, [lightbox, imageViewer, closeImageViewer, actionMsg, showEmoji, showAttach, chatSearch, replyTo, forwardMsgs])
 
   // Scroll to specific message if navigated from notification
   useEffect(() => {
@@ -2601,10 +2636,12 @@ async function uploadAndSend(file, type, caption = '') {
                 <div
                   key={img.id}
                   className={`chat-img-thumb${img._uploading ? ' is-uploading' : ''}`}
+                  role="button"
+                  aria-label="View image"
                   onClick={e => {
                     if (img._uploading) return
                     e.stopPropagation()
-                    setLightbox({ url: img.media_url, type: 'image', caption: '' })
+                    openImageViewer(img.media_url)
                   }}
                   onPointerDown={e => {
                     if (img._uploading) return
@@ -2645,18 +2682,13 @@ async function uploadAndSend(file, type, caption = '') {
         )
       }
       return (
-        <button
-          type="button"
-          className="media-image-wrap"
-          onClick={e => {
-            e.stopPropagation()
-            setLightbox({ url, type: 'image', caption: caption || '' })
-          }}
-          onPointerDown={e => e.stopPropagation()}
-          aria-label="Open image"
-        >
-          <img src={url} alt={caption || 'Shared image'} loading="lazy" />
-        </button>
+        <ChatImageBubble
+          key={url}
+          url={url}
+          caption={caption}
+          isMine={msg.from_user === currentUser?.id}
+          onOpen={() => openImageViewer(url)}
+        />
       )
     }
     if (type === 'video') {
@@ -2699,7 +2731,7 @@ async function uploadAndSend(file, type, caption = '') {
         </svg>
       </a>
     )
-  }, [setLightbox, currentUser, renderVoiceNote, setMessages])
+  }, [setLightbox, openImageViewer, currentUser, renderVoiceNote, setMessages])
 
   const callHostProps = {
     userId,
@@ -4214,8 +4246,10 @@ async function uploadAndSend(file, type, caption = '') {
                         'msg-bubble',
                         isMine ? 'is-mine' : 'is-theirs',
                         hasMedia && !msg.call_type ? 'has-media' : '',
+                        hasMedia && msg.media_type === 'image' && !msg.call_type ? 'has-image' : '',
                         mediaOnly ? 'media-only' : '',
                         isSending ? 'is-sending' : '',
+
                         isFailed ? 'is-failed-bubble' : '',
                         deletedEveryone ? 'is-deleted' : '',
                         actionMsg?.id === msg.id ? 'is-selected' : '',
@@ -4733,6 +4767,16 @@ async function uploadAndSend(file, type, caption = '') {
             </div>
           </div>
         </div>
+      )}
+
+      {imageViewer && (
+        <ImageViewer
+          key={`${imageViewer.index}-${imageViewer.photos.length}`}
+          photos={imageViewer.photos}
+          index={imageViewer.index}
+          onChange={index => setImageViewer(prev => ({ ...prev, index }))}
+          onClose={closeImageViewer}
+        />
       )}
 
       {/* ── Image / video lightbox ── */}

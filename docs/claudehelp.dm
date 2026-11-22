@@ -90,8 +90,25 @@ Commit as "Notifications: remove Orders and System tabs", append one line to PRO
 End with RAW output only, no summary:
 git log --oneline -4
 npm run build
-npx eslint <the real page path> | Select-String "no-undef|is not defined" ; "ESLINT DONE"
-npx eslint <the real page path> --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
+npx eslint <the real changed file paths> | Select-String "no-undef|is not defined" ; "ESLINT DONE"
+npx eslint <the real conversation view path> --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
+git status -sb
+git diff HEAD~1 --stat -- src
+
+GOAL: Fix image messages and the scroll button in the chat view. Branch wip/home-hero-premium (check with git branch --show-current). Rules: no git stash or reset, no SQL, no installs, do NOT launch Chrome or any browser, do not merge or push. Edit only the conversation view and its components.
+
+1. IMAGE BUBBLE: print raw the image message component. Cap the image at max-width 280px (220px if the screen is under 400px) and max-height 320px, object-fit: contain on a #f1f3f4 background so it is never cropped, 12px radius, replace the thick green frame with a 2px padding of the bubble colour (sent = green, received = white with 1px #e8eaed border). Time and read ticks overlay the bottom-right corner in a small dark pill (rgba(0,0,0,0.45), white 11px). Keep a caption below the image if one exists. Reserve the image's aspect ratio so the list does not jump while it loads, and show a grey placeholder until loaded and a grey "Image unavailable" panel on error.
+2. VIEWER: tapping or clicking an image message opens the same full-screen image viewer built for the Looking For detail view (reuse that component or helper, do not write a new one): dark background, uncropped image, X button, Esc and backdrop-tap to close, pinch/double-tap zoom on phone. If the chat has several images, allow left/right navigation through them with a "1 / 3" counter. Closing returns to the chat at the same scroll position. Add aria-label "View image" and cursor zoom-in.
+3. SCROLL BUTTON: position it bottom 12px above the input bar and right 16px inside the message area, shown only when scrolled up more than 200px. Make sure it does not sit on top of message cards when the list is at the bottom (hide it at the bottom).
+4. Do not change sending, uploading, receiving, realtime, read receipts, offers or other pages.
+
+Commit as "Chat view: image bubbles, viewer, scroll button", append one line to PROGRESS.md and commit it too.
+
+End with RAW output only, no summary:
+git log --oneline -4
+npm run build
+npx eslint <the real changed file paths> | Select-String "no-undef|is not defined" ; "ESLINT DONE"
+npx eslint <the real conversation view path> --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
 git status -sb
 git diff HEAD~1 --stat -- src
 GOAL: Replace the count pill on merged message rows with clearer time and unread logic, and fix the see-through header. Branch wip/home-hero-premium (check with git branch --show-current). Rules: no git stash or reset, no SQL, no installs, do NOT launch Chrome or any browser, do not merge or push. Make the edits directly. Edit only the Notifications page and its row component.
