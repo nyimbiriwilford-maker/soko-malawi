@@ -435,6 +435,7 @@
   min-width: 0;
   padding: 3px;
   border-radius: 14px;
+  overflow: hidden;
   background-clip: padding-box;
 }
 
@@ -458,10 +459,16 @@
   padding: 0 8px 4px;
 }
 
-.chat-thread .msg-bubble.has-image.media-only .msg-meta {
+.chat-thread .msg-bubble.has-image.media-only .msg-meta-row {
   position: absolute;
   right: 6px;
   bottom: 6px;
+  z-index: 2;
+  margin: 0;
+  padding: 0;
+}
+
+.chat-thread .msg-bubble.has-image.media-only .msg-meta {
   margin: 0;
   padding: 4px 8px;
   border-radius: 999px;
@@ -558,12 +565,12 @@
 }
 
 .chat-thread .media-image-wrap img {
+  display: block;
   width: auto;
   height: auto;
   max-width: 280px;
   max-height: 320px;
   object-fit: contain;
-  display: block;
   border-radius: 11px;
   background: #f1f3f4;
   transition: opacity 0.2s ease;

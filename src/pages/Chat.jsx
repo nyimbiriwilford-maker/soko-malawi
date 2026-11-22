@@ -3230,6 +3230,7 @@ async function uploadAndSend(file, type, caption = '') {
           border-radius: 14px !important;
           width: fit-content !important;
           min-width: 0 !important;
+          overflow: hidden !important;
           background-clip: padding-box !important;
         }
         .chat-page.chat-thread .msg-bubble.has-image.r-mine-tail,
@@ -3253,10 +3254,15 @@ async function uploadAndSend(file, type, caption = '') {
           margin-top: 0 !important;
           padding: 0 8px 4px !important;
         }
-        .chat-page.chat-thread .msg-bubble.has-image.media-only .msg-meta {
+        .chat-page.chat-thread .msg-bubble.has-image.media-only .msg-meta-row {
           position: absolute !important;
           right: 6px !important;
           bottom: 6px !important;
+          z-index: 2 !important;
+          margin: 0 !important;
+          padding: 0 !important;
+        }
+        .chat-page.chat-thread .msg-bubble.has-image.media-only .msg-meta {
           margin: 0 !important;
           padding: 4px 8px !important;
           border-radius: 999px !important;
