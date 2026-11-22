@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 
-const MENU_WIDTH = 224
+const MENU_WIDTH = 240
 const VIEWPORT_PADDING = 8
 const ANCHOR_GAP = 8
 
@@ -9,25 +9,53 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(value, max))
 }
 
-function positionMenu(anchor, height, viewportWidth, viewportHeight) {
-  if (!anchor) return null
-  const rect = anchor.getBoundingClientRect()
-  const maxLeft = Math.max(VIEWPORT_PADDING, viewportWidth - MENU_WIDTH - VIEWPORT_PADDING)
-  const left = clamp(rect.right - MENU_WIDTH, VIEWPORT_PADDING, maxLeft)
-  const below = rect.bottom + ANCHOR_GAP
+function positionMenu(anchor, anchorPoint, height, viewportWidth, viewportHeight, width) {
+  const point = anchorPoint || null
+  let left
+  let below
+
+  if (point && Number.isFinite(point.x) && Number.isFinite(point.y)) {
+    const maxLeft = Math.max(VIEWPORT_PADDING, viewportWidth - width - VIEWPORT_PADDING)
+    left = clamp(point.x, VIEWPORT_PADDING, maxLeft)
+    below = point.y + ANCHOR_GAP
+  } else if (anchor) {
+    const rect = anchor.getBoundingClientRect()
+    const maxLeft = Math.max(VIEWPORT_PADDING, viewportWidth - width - VIEWPORT_PADDING)
+    left = clamp(rect.right - width, VIEWPORT_PADDING, maxLeft)
+    below = rect.bottom + ANCHOR_GAP
+  } else {
+    return null
+  }
+
   const maxTop = Math.max(VIEWPORT_PADDING, viewportHeight - height - VIEWPORT_PADDING)
   let top = below
   if (below + height + VIEWPORT_PADDING > viewportHeight) {
-    top = rect.top - ANCHOR_GAP - height
+    const originY = point?.y ?? anchor.getBoundingClientRect().top
+    top = originY - ANCHOR_GAP - height
     if (top < VIEWPORT_PADDING) top = clamp(top, VIEWPORT_PADDING, maxTop)
   }
   return { top, left }
 }
 
-export default function ChatPopupMenu({ open, anchorEl, groups = [], onClose, label = 'Menu', title, subtitle }) {
+export default function ChatPopupMenu({
+  open,
+  anchorEl,
+  anchorPoint,
+  groups = [],
+  onClose,
+  label = 'Menu',
+  title,
+  subtitle,
+  reactionRow = [],
+  activeReactions,
+  onReaction,
+  width = MENU_WIDTH,
+  iconSide = 'right',
+}) {
   const menuId = useId()
   const instanceId = useId()
   const menuRef = useRef(null)
+  const reactionRefs = useRef([])
   const itemRefs = useRef([])
   const anchorRef = useRef(anchorEl)
   const restoreFocusRef = useRef(null)
@@ -40,13 +68,16 @@ export default function ChatPopupMenu({ open, anchorEl, groups = [], onClose, la
 
   useEffect(() => { onCloseRef.current = onClose }, [onClose])
 
-  useLayoutEffect(() => { itemRefs.current.length = items.length }, [items.length])
+  useLayoutEffect(() => {
+    reactionRefs.current.length = reactionRow.length
+    itemRefs.current.length = items.length
+  }, [reactionRow.length, items.length])
 
   const close = useCallback(() => { onCloseRef.current?.() }, [])
 
   useEffect(() => {
     if (!open) return undefined
-    anchorRef.current = anchorEl
+    anchorRef.current = anchorEl || null
     const onOtherOpen = (event) => {
       if (event.detail?.id !== instanceId) onCloseRef.current?.()
     }
@@ -58,7 +89,10 @@ export default function ChatPopupMenu({ open, anchorEl, groups = [], onClose, la
   useEffect(() => {
     if (!open) return undefined
     restoreFocusRef.current = document.activeElement
-    const frame = requestAnimationFrame(() => { itemRefs.current[0]?.focus() })
+    const frame = requestAnimationFrame(() => {
+      const nodes = [...reactionRefs.current, ...itemRefs.current].filter(Boolean)
+      nodes[0]?.focus()
+    })
     return () => {
       cancelAnimationFrame(frame)
       const target = anchorRef.current?.isConnected ? anchorRef.current : restoreFocusRef.current
@@ -100,14 +134,16 @@ export default function ChatPopupMenu({ open, anchorEl, groups = [], onClose, la
         close()
         return
       }
-      if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
-      const nodes = itemRefs.current.filter(Boolean)
+      if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp' && event.key !== 'Home' && event.key !== 'End') return
+      const nodes = [...reactionRefs.current, ...itemRefs.current].filter(Boolean)
       if (!nodes.length) return
       event.preventDefault()
       const current = nodes.indexOf(document.activeElement)
-      const next = event.key === 'ArrowDown'
-        ? (current + 1) % nodes.length
-        : (current <= 0 ? nodes.length - 1 : current - 1)
+      let next
+      if (event.key === 'Home') next = 0
+      else if (event.key === 'End') next = nodes.length - 1
+      else if (event.key === 'ArrowDown') next = (current + 1) % nodes.length
+      else next = current <= 0 ? nodes.length - 1 : current - 1
       nodes[next]?.focus()
     }
     function onScroll(event) {
@@ -126,10 +162,15 @@ export default function ChatPopupMenu({ open, anchorEl, groups = [], onClose, la
 
   useLayoutEffect(() => {
     if (!open || phone || !menuRef.current) return undefined
-    const estimate = items.length * 48 + Math.max(0, groups.length - 1) * 9 + 12
+    const rowHeight = 44
+    const estimate = reactionRow.length * 44
+      + (reactionRow.length ? 5 : 0)
+      + items.length * rowHeight
+      + Math.max(0, groups.length - 1) * 9
+      + 12
     const measure = () => {
       const height = menuRef.current?.getBoundingClientRect().height || estimate
-      const next = positionMenu(anchorRef.current, height, window.innerWidth, window.innerHeight)
+      const next = positionMenu(anchorRef.current, anchorPoint, height, window.innerWidth, window.innerHeight, width)
       if (!next) return
       setPosition(prev => (
         Math.abs(prev.top - next.top) < 0.5 && Math.abs(prev.left - next.left) < 0.5
@@ -144,11 +185,32 @@ export default function ChatPopupMenu({ open, anchorEl, groups = [], onClose, la
       cancelAnimationFrame(frame)
       window.removeEventListener('resize', measure)
     }
-  }, [open, phone, groups.length, items.length])
+  }, [open, phone, groups.length, items.length, reactionRow.length, anchorPoint, width])
 
   if (!open) return null
 
   let itemIndex = 0
+
+  function renderReactions() {
+    if (!reactionRow.length) return null
+    return (
+      <div className="chat-popup-reactions">
+        {reactionRow.map((emoji, index) => (
+          <button
+            key={`${emoji}-${index}`}
+            ref={(node) => { reactionRefs.current[index] = node }}
+            type="button"
+            role="menuitem"
+            className={`chat-popup-reaction${activeReactions?.[emoji] ? ' is-active' : ''}`}
+            onClick={() => { close(); onReaction?.(emoji) }}
+            aria-label={`React ${emoji}`}
+          >
+            {emoji}
+          </button>
+        ))}
+      </div>
+    )
+  }
 
   function renderGroups() {
     return groups.map((group, groupIndex) => (
@@ -159,27 +221,34 @@ export default function ChatPopupMenu({ open, anchorEl, groups = [], onClose, la
         {group.map((item) => {
           const index = itemIndex++
           const Icon = item.icon
+          const icon = Icon ? (
+            <span className={`chat-popup-icon${item.danger ? ' is-danger' : ''}`}>
+              <Icon
+                size={20}
+                color={item.danger ? '#d93025' : '#5f6368'}
+                strokeWidth={1.75}
+                aria-hidden="true"
+              />
+            </span>
+          ) : (
+            <span className="chat-popup-icon" />
+          )
           return (
             <button
               key={item.id || item.label}
               ref={(node) => { itemRefs.current[index] = node }}
               type="button"
               role="menuitem"
-              className="chat-popup-item"
+              className={`chat-popup-item${item.danger ? ' is-danger' : ''}`}
               disabled={!!item.disabled}
-              onClick={() => { close(); item.onSelect?.() }}
+              onClick={() => { item.onSelect?.(); if (!item.keepOpen) close() }}
             >
-              {Icon ? (
-                <span className="chat-popup-icon">
-                  <Icon size={20} color="#5f6368" strokeWidth={1.75} aria-hidden="true" />
-                </span>
-              ) : (
-                <span className="chat-popup-icon" />
-              )}
+              {iconSide === 'left' ? icon : null}
               <span className="chat-popup-label">{item.label}</span>
               {item.value != null || item.count > 0 ? (
                 <span className="chat-popup-count">{item.value ?? item.count}</span>
               ) : null}
+              {iconSide === 'right' ? icon : null}
             </button>
           )
         })}
@@ -218,7 +287,7 @@ export default function ChatPopupMenu({ open, anchorEl, groups = [], onClose, la
         }
         .chat-popup-card {
           position: absolute;
-          width: ${MENU_WIDTH}px;
+          width: ${width}px;
           box-sizing: border-box;
           background: #fff;
           border: 1px solid #e8eaed;
@@ -229,11 +298,11 @@ export default function ChatPopupMenu({ open, anchorEl, groups = [], onClose, la
         }
         .chat-popup-item {
           width: 100%;
-          height: 48px;
+          height: 44px;
           display: flex;
           align-items: center;
           gap: 12px;
-          padding: 0 16px;
+          padding: 0 12px;
           box-sizing: border-box;
           border: 0;
           border-radius: 10px;
@@ -248,8 +317,34 @@ export default function ChatPopupMenu({ open, anchorEl, groups = [], onClose, la
         }
         .chat-popup-item:disabled { cursor: default; opacity: 0.6; }
         .chat-popup-icon { flex: 0 0 20px; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; color: #5f6368; }
+        .chat-popup-icon.is-danger { color: #d93025; }
         .chat-popup-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .chat-popup-count { flex: none; margin-left: auto; font-size: 12px; font-weight: 500; color: #5f6368; }
+        .chat-popup-reactions {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 4px;
+          padding: 2px 6px 6px;
+          margin-bottom: 4px;
+          border-bottom: 1px solid #e8eaed;
+        }
+        .chat-popup-reaction {
+          width: 36px;
+          height: 36px;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          border: 0;
+          border-radius: 10px;
+          background: transparent;
+          font-family: inherit;
+          font-size: 18px;
+          line-height: 1;
+          cursor: pointer;
+          -webkit-tap-highlight-color: transparent;
+        }
+        .chat-popup-reaction.is-active { opacity: 0.6; }
         .chat-popup-divider { padding: 4px 0; }
         .chat-popup-divider > span { display: block; height: 1px; background: #e8eaed; }
         .chat-popup-sheet {
@@ -283,11 +378,15 @@ export default function ChatPopupMenu({ open, anchorEl, groups = [], onClose, la
           cursor: pointer;
         }
         .chat-popup-item:active { background: #e6f6ed; }
+        .chat-popup-item.is-danger { color: #d93025; }
+        .chat-popup-item.is-danger:active { background: #fdecea; }
         @media (hover: hover) {
           .chat-popup-item:hover:not(:disabled) { background: #f6fbf8; }
+          .chat-popup-item.is-danger:hover:not(:disabled) { background: #fdecea; }
+          .chat-popup-reaction:hover { background: #f6fbf8; }
         }
         @media (max-width: 768px), (hover: none) {
-          .chat-popup-item { height: 56px; }
+          .chat-popup-item { height: 52px; }
         }
         @keyframes chatPopupFade { from { opacity: 0; } to { opacity: 1; } }
         @keyframes chatPopupSlide { from { transform: translateY(100%); } to { transform: translateY(0); } }
@@ -310,6 +409,7 @@ export default function ChatPopupMenu({ open, anchorEl, groups = [], onClose, la
             <div className="chat-popup-handle" />
             {title ? <div className="chat-popup-sheet-title">{title}</div> : null}
             {subtitle ? <div className="chat-popup-sheet-subtitle">{subtitle}</div> : null}
+            {renderReactions()}
             {renderGroups()}
             <button type="button" className="chat-popup-cancel" onClick={close}>Cancel</button>
           </div>
@@ -322,6 +422,7 @@ export default function ChatPopupMenu({ open, anchorEl, groups = [], onClose, la
             aria-label={label}
             style={{ top: position.top, left: position.left }}
           >
+            {renderReactions()}
             {renderGroups()}
           </div>
         )}

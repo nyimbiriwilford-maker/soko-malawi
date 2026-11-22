@@ -29,6 +29,14 @@ import {
   Trash2,
   Timer,
   Check,
+  Reply,
+  Copy,
+  Forward,
+  Maximize2,
+  ChevronRight,
+  Pencil,
+  RotateCcw,
+  CornerUpLeft,
 } from 'lucide-react'
 import {
   buildOfferPayload,
@@ -344,6 +352,7 @@ const [lightbox, setLightbox]           = useState(null) // { url, type, caption
 const [imageViewer, setImageViewer]     = useState(null) // { photos, index }
 const [showAttach, setShowAttach]       = useState(false)
 const [actionMsg, setActionMsg]         = useState(null) // message under action sheet
+const [actionAnchorPoint, setActionAnchorPoint] = useState(null)
 const [imageActionMsg, setImageActionMsg] = useState(null) // individual image under action sheet
 const [forwardMsgs, setForwardMsgs]     = useState(null) // messages queued for forwarding
 const [toast, setToast]                 = useState(null)
@@ -1223,12 +1232,28 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
     else showToast(durationMs ? 'Auto-delete scheduled' : 'Timer cleared')
   }
 
-  function openActions(msg) {
+  function closeMessageMenu() {
+    setActionMsg(null)
+    setActionMode('main')
+    setActionAnchorPoint(null)
+  }
+
+  function bubbleActionPoint(event) {
+    if (Number.isFinite(event.clientX) && Number.isFinite(event.clientY) && (event.clientX || event.clientY)) {
+      return { x: event.clientX, y: event.clientY }
+    }
+    const rect = event.currentTarget?.getBoundingClientRect?.()
+    if (rect) return { x: rect.right - 12, y: rect.top + 12 }
+    return null
+  }
+
+  function openActions(msg, point) {
     if (!msg || msg.media_type === 'deal_request') return
     if (isMsgDeletedEveryone(msg)) return
     haptic(14)
     setActionMsg(msg)
     setActionMode('main')
+    setActionAnchorPoint(point || null)
     setShowEmoji(false)
     setShowAttach(false)
   }
@@ -1279,14 +1304,15 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
     // Don't hijack interactive media controls
     if (e.target?.closest?.('a, video, audio, .media-image-wrap, .voice-play, .media-file, .msg-rx-chip')) return
     const startX = e.clientX ?? e.touches?.[0]?.clientX ?? 0
-    swipeRef.current = { id: msg.id, x: startX, dx: 0, active: true }
+    const startY = e.clientY ?? e.touches?.[0]?.clientY ?? 0
+    swipeRef.current = { id: msg.id, x: startX, y: startY, dx: 0, active: true }
     longPressFiredRef.current = false
     clearTimeout(longPressRef.current)
     longPressRef.current = setTimeout(() => {
       if (!swipeRef.current.active) return
       if (Math.abs(swipeRef.current.dx) > 12) return
       longPressFiredRef.current = true
-      openActions(msg)
+      openActions(msg, { x: swipeRef.current.x, y: swipeRef.current.y })
       swipeRef.current.active = false
     }, 420)
   }
@@ -3285,97 +3311,129 @@ async function uploadAndSend(file, type, caption = '') {
           .chat-page.chat-thread .msg-stack { max-width: 65% !important; }
         }
         .chat-page.chat-thread .msg-bubble.offer-bubble {
-          max-width: 100% !important;
+          width: fit-content !important;
+          min-width: 0 !important;
+          max-width: 320px !important;
+          padding: 8px 12px !important;
+          border-radius: 16px !important;
+          box-shadow: none !important;
+          overflow: visible !important;
+        }
+        .chat-page.chat-thread .msg-bubble.offer-bubble.is-mine {
+          background: #0F9D58 !important;
+          color: #fff !important;
+          border: 1px solid #0F9D58 !important;
+        }
+        .chat-page.chat-thread .msg-bubble.offer-bubble.is-theirs {
+          background: #fff !important;
+          color: #202124 !important;
+          border: 1px solid #e8eaed !important;
+        }
+        .chat-page.chat-thread .msg-bubble.offer-bubble.r-mine-tail { border-bottom-right-radius: 4px !important; }
+        .chat-page.chat-thread .msg-bubble.offer-bubble.r-mine-join { border-top-right-radius: 4px !important; }
+        .chat-page.chat-thread .msg-bubble.offer-bubble.r-theirs-tail { border-bottom-left-radius: 4px !important; }
+        .chat-page.chat-thread .msg-bubble.offer-bubble.r-theirs-join { border-top-left-radius: 4px !important; }
+        .chat-page.chat-thread .msg-bubble.offer-bubble .offer-card {
+          box-sizing: border-box;
+          width: 100% !important;
+          max-width: none !important;
+          max-height: none !important;
           padding: 0 !important;
           background: transparent !important;
           border: 0 !important;
           border-radius: 0 !important;
           box-shadow: none !important;
           overflow: visible !important;
-        }
-        .chat-page.chat-thread .msg-bubble.offer-bubble .offer-card {
-          box-sizing: border-box;
-          width: fit-content !important;
-          max-width: min(320px, 100%) !important;
-          max-height: 190px;
-          padding: 12px !important;
-          background: #fff !important;
-          border: 1px solid #e8eaed !important;
-          border-radius: 14px !important;
-          box-shadow: 0 2px 10px rgba(16,24,40,0.08) !important;
-          overflow: hidden !important;
           opacity: 1 !important;
           filter: none !important;
+          color: inherit !important;
         }
         .chat-page.chat-thread .msg-bubble.offer-bubble .offer-card::before { display: none !important; }
-        .chat-page.chat-thread .msg-bubble.offer-bubble .offer-card.is-mine,
-        .chat-page.chat-thread .msg-bubble.offer-bubble .offer-card.is-accepted,
-        .chat-page.chat-thread .msg-bubble.offer-bubble .offer-card.is-declined,
-        .chat-page.chat-thread .msg-bubble.offer-bubble .offer-card.is-expired,
-        .chat-page.chat-thread .msg-bubble.offer-bubble .offer-card.is-withdrawn {
-          background: #fff !important;
-          border-color: #e8eaed !important;
-          opacity: 1 !important;
-          filter: none !important;
-        }
         .chat-page.chat-thread .offer-card-product {
           width: 100% !important;
-          margin: 0 0 6px !important;
+          display: flex !important;
+          align-items: center !important;
+          margin: 0 0 8px !important;
           padding: 0 !important;
           gap: 8px !important;
           background: transparent !important;
           border: 0 !important;
           border-radius: 0 !important;
           box-shadow: none !important;
+          color: inherit !important;
         }
         .chat-page.chat-thread .offer-card-product-thumb {
-          width: 36px !important;
-          height: 36px !important;
+          width: 32px !important;
+          height: 32px !important;
           border-radius: 8px !important;
           border: 0 !important;
           box-shadow: none !important;
+          flex: 0 0 32px !important;
+          object-fit: cover !important;
         }
         .chat-page.chat-thread .offer-card-product-title {
+          flex: 1 1 auto !important;
+          min-width: 0 !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          white-space: nowrap !important;
           font-size: 14px !important;
           font-weight: 600 !important;
           line-height: 1.3 !important;
-          color: #202124 !important;
+          color: inherit !important;
         }
         .chat-page.chat-thread .offer-card-product-arrow {
-          color: #5f6368 !important;
-          font-size: 16px !important;
+          flex: 0 0 auto !important;
+          display: inline-flex !important;
+          align-items: center !important;
+          color: inherit !important;
+          opacity: 0.75 !important;
         }
         .chat-page.chat-thread .offer-card-product.is-unavailable {
           justify-content: flex-start !important;
           font-size: 12px !important;
-          color: #80868b !important;
+          color: inherit !important;
+          opacity: 0.8 !important;
         }
         .chat-page.chat-thread .offer-card-head {
+          display: flex !important;
+          align-items: center !important;
+          justify-content: space-between !important;
           margin: 0 0 4px !important;
           gap: 8px !important;
         }
         .chat-page.chat-thread .offer-card-tag {
-          font-size: 11px !important;
+          font-size: 12px !important;
           font-weight: 500 !important;
           line-height: 1.3 !important;
-          letter-spacing: 0.02em !important;
-          color: #80868b !important;
+          color: inherit !important;
+          opacity: 0.8 !important;
         }
         .chat-page.chat-thread .offer-card-tag::before { display: none !important; }
         .chat-page.chat-thread .offer-card-status {
-          font-size: 10px !important;
+          flex: 0 0 auto !important;
+          font-size: 11px !important;
           line-height: 1.4 !important;
           padding: 2px 8px !important;
+          border-radius: 999px !important;
+        }
+        .chat-page.chat-thread .msg-bubble.offer-bubble.is-mine .offer-card-status {
+          background: rgba(255,255,255,0.2) !important;
+          color: #fff !important;
+        }
+        .chat-page.chat-thread .msg-bubble.offer-bubble.is-theirs .offer-card-status {
+          background: #e8f5ee !important;
+          color: #0F9D58 !important;
         }
         .chat-page.chat-thread .offer-card-amount {
           display: block !important;
           margin: 0 !important;
           font-family: 'Sora', 'DM Sans', sans-serif !important;
-          font-size: 22px !important;
+          font-size: 20px !important;
           font-weight: 800 !important;
           line-height: 1.2 !important;
           letter-spacing: -0.01em !important;
-          color: #0F9D58 !important;
+          color: inherit !important;
         }
         .chat-page.chat-thread .offer-card-amount-currency {
           display: inline !important;
@@ -3383,31 +3441,34 @@ async function uploadAndSend(file, type, caption = '') {
           padding: 0 !important;
           background: transparent !important;
           border: 0 !important;
-          font-size: 22px !important;
+          font-size: 20px !important;
           font-weight: 800 !important;
           letter-spacing: 0 !important;
-          color: #0F9D58 !important;
+          color: inherit !important;
         }
         .chat-page.chat-thread .offer-card-original-price {
           margin-top: 2px !important;
           font-size: 12px !important;
           font-weight: 500 !important;
           line-height: 1.3 !important;
-          color: #80868b !important;
+          color: inherit !important;
+          opacity: 0.8 !important;
         }
         .chat-page.chat-thread .msg-bubble.offer-bubble .msg-meta-row {
-          padding: 4px 2px 0 !important;
+          margin-top: 6px !important;
+          padding: 0 !important;
           justify-content: flex-end !important;
         }
         .chat-page.chat-thread .msg-bubble.offer-bubble .msg-meta {
           margin-top: 0 !important;
           font-size: 11px !important;
           line-height: 1.4 !important;
-          color: #80868b !important;
+          color: inherit !important;
+          opacity: 0.8 !important;
         }
-        .chat-page.chat-thread .msg-bubble.offer-bubble .msg-ticks.read { color: #0F9D58 !important; }
+        .chat-page.chat-thread .msg-bubble.offer-bubble .msg-ticks.read,
         .chat-page.chat-thread .msg-bubble.offer-bubble .msg-ticks.sent,
-        .chat-page.chat-thread .msg-bubble.offer-bubble .msg-ticks.is-failed { color: #80868b !important; }
+        .chat-page.chat-thread .msg-bubble.offer-bubble .msg-ticks.is-failed { color: inherit !important; }
         .chat-page.chat-thread .offer-card-note,
         .chat-page.chat-thread .offer-stepper,
         .chat-page.chat-thread .offer-card-parent,
@@ -3415,7 +3476,7 @@ async function uploadAndSend(file, type, caption = '') {
         .chat-page.chat-thread .offer-card-actions,
         .chat-page.chat-thread .offer-card-actions.is-manage {
           display: flex !important;
-          flex-wrap: wrap !important;
+          flex-wrap: nowrap !important;
           gap: 6px !important;
           margin: 8px 0 0 !important;
           padding: 0 !important;
@@ -3424,16 +3485,27 @@ async function uploadAndSend(file, type, caption = '') {
         .chat-page.chat-thread .offer-card-actions button {
           flex: 1 1 0 !important;
           min-width: 0 !important;
-          height: 40px !important;
-          min-height: 40px !important;
-          padding: 0 4px !important;
-          border-radius: 10px !important;
+          height: 36px !important;
+          min-height: 36px !important;
+          padding: 0 6px !important;
+          border-radius: 8px !important;
           font-size: 12px !important;
+          font-weight: 600 !important;
           line-height: 1.15 !important;
         }
+        .chat-page.chat-thread .msg-bubble.offer-bubble.is-mine .offer-card-actions button {
+          background: rgba(255,255,255,0.16) !important;
+          color: #fff !important;
+          border: 1px solid rgba(255,255,255,0.35) !important;
+        }
+        .chat-page.chat-thread .msg-bubble.offer-bubble.is-theirs .offer-card-actions button {
+          background: #f1f8f4 !important;
+          color: #0F9D58 !important;
+          border: 1px solid #e8eaed !important;
+        }
         @media (max-width: 399px) {
-          .chat-page.chat-thread .msg-bubble.offer-bubble .offer-card {
-            max-width: min(260px, 100%) !important;
+          .chat-page.chat-thread .msg-bubble.offer-bubble {
+            max-width: 260px !important;
           }
         }
       `}</style>
@@ -4092,7 +4164,7 @@ async function uploadAndSend(file, type, caption = '') {
                       onPointerMove={e => !deletedEveryone && onBubblePointerMove(e, msg)}
                       onPointerUp={e => !deletedEveryone && onBubblePointerUp(e, msg)}
                       onPointerCancel={() => onBubblePointerCancel(msg)}
-                      onContextMenu={e => { e.preventDefault(); if (!deletedEveryone) openActions(msg) }}
+                      onContextMenu={e => { e.preventDefault(); if (!deletedEveryone) openActions(msg, bubbleActionPoint(e)) }}
                       onClick={() => {
                         if (isFailed) retryMessage(msg)
                       }}
@@ -4100,7 +4172,7 @@ async function uploadAndSend(file, type, caption = '') {
                       tabIndex={0}
                       onKeyDown={e => {
                         if ((e.key === 'Enter' || e.key === ' ') && !deletedEveryone) {
-                          e.preventDefault(); openActions(msg)
+                          e.preventDefault(); openActions(msg, bubbleActionPoint(e))
                         }
                       }}
                     >
@@ -4128,7 +4200,7 @@ async function uploadAndSend(file, type, caption = '') {
                               <span className="offer-card-product-title">
                                 {offerProduct.title || 'Product'}
                               </span>
-                              <span className="offer-card-product-arrow" aria-hidden>›</span>
+                              <ChevronRight className="offer-card-product-arrow" size={14} strokeWidth={2} aria-hidden="true" />
                             </button>
                           )
                         )}
@@ -4301,7 +4373,7 @@ async function uploadAndSend(file, type, caption = '') {
                       onPointerMove={e => !deletedEveryone && onBubblePointerMove(e, msg)}
                       onPointerUp={e => !deletedEveryone && onBubblePointerUp(e, msg)}
                       onPointerCancel={() => onBubblePointerCancel(msg)}
-                      onContextMenu={e => { e.preventDefault(); if (!deletedEveryone) openActions(msg) }}
+                      onContextMenu={e => { e.preventDefault(); if (!deletedEveryone) openActions(msg, bubbleActionPoint(e)) }}
                       onClick={() => {
                         if (isFailed) retryMessage(msg)
                       }}
@@ -4309,7 +4381,7 @@ async function uploadAndSend(file, type, caption = '') {
                       tabIndex={0}
                       onKeyDown={e => {
                         if ((e.key === 'Enter' || e.key === ' ') && !deletedEveryone) {
-                          e.preventDefault(); openActions(msg)
+                          e.preventDefault(); openActions(msg, bubbleActionPoint(e))
                         }
                       }}
                     >
@@ -4460,119 +4532,164 @@ async function uploadAndSend(file, type, caption = '') {
         <div className="chat-toast" role="status">{toast}</div>
       )}
 
-      {/* ── Message action sheet ── */}
-      {actionMsg && (
-        <div className="chat-action-scrim" onClick={() => setActionMsg(null)} role="presentation">
-          <div className="chat-action-sheet" onClick={e => e.stopPropagation()} role="dialog" aria-label="Message actions">
-            <div className="chat-action-handle" />
-            <div className="chat-rx-row">
-              {QUICK_REACTIONS.map(emoji => {
-                const active = (reactions[actionMsg.id]?.[emoji] || []).includes(currentUser?.id)
-                return (
-                  <button
-                    key={emoji}
-                    type="button"
-                    className={`chat-rx-btn${active ? ' is-active' : ''}`}
-                    onClick={() => toggleReaction(actionMsg, emoji)}
-                  >
-                    {emoji}
-                  </button>
-                )
-              })}
-            </div>
-            {actionMode === 'main' && (
-              <>
-                <div className="chat-action-list">
-                  <button type="button" onClick={() => { setReplyTo(actionMsg); setActionMsg(null); setTimeout(() => inputRef.current?.focus(), 40) }}>
-                    <span className="chat-action-ico">↩</span> Reply
-                  </button>
-                  <button type="button" onClick={() => copyMessage(actionMsg)}>
-                    <span className="chat-action-ico">📋</span> Copy
-                  </button>
-                  {canForwardMessage(actionMsg) && (
-                    <button type="button" onClick={() => openForward(actionMsg)}>
-                      <span className="chat-action-ico">↪</span> Forward
-                    </button>
-                  )}
-                  {actionMsg.media_url && (
-                    <button type="button" onClick={() => { setLightbox({ url: actionMsg.media_url, type: actionMsg.media_type === 'video' ? 'video' : 'image', caption: decodeReply(actionMsg.body).body }); setActionMsg(null) }}>
-                      <span className="chat-action-ico">🔍</span> Open media
-                    </button>
-                  )}
-                  {actionMsg.from_user === currentUser?.id
-                    && !actionMsg.call_type
-                    && actionMsg.media_type !== 'offer'
-                    && !(actionMsg.media_url && actionMsg.media_type && actionMsg.media_type !== 'text') && (
-                    <button type="button" onClick={() => startEditMessage(actionMsg)}>
-                      <span className="chat-action-ico">✏️</span> Edit message
-                    </button>
-                  )}
-                  {actionMsg.from_user === currentUser?.id && (
-                    <button type="button" onClick={() => setActionMode('timer')}>
-                      <span className="chat-action-ico">⏱</span> Auto-delete timer
-                    </button>
-                  )}
-                  <button type="button" className="is-danger" onClick={() => setActionMode('delete')}>
-                    <span className="chat-action-ico">🗑</span> Delete…
-                  </button>
-                  {actionMsg._status === 'failed' && (
-                    <button type="button" onClick={() => { retryMessage(actionMsg); setActionMsg(null) }}>
-                      <span className="chat-action-ico">↺</span> Retry send
-                    </button>
-                  )}
-                </div>
-                <button type="button" className="chat-action-cancel" onClick={() => { setActionMsg(null); setActionMode('main') }}>Cancel</button>
-              </>
-            )}
+      <ChatPopupMenu
+        open={!!actionMsg && actionMode === 'main'}
+        anchorEl={null}
+        anchorPoint={actionAnchorPoint}
+        label="Message actions"
+        title="Message actions"
+        subtitle={actionMsg ? decodeReply(actionMsg.body || '').body || 'Message options' : undefined}
+        reactionRow={QUICK_REACTIONS}
+        activeReactions={Object.fromEntries(QUICK_REACTIONS.map(emoji => [
+          emoji,
+          (reactions[actionMsg?.id]?.[emoji] || []).includes(currentUser?.id),
+        ]))}
+        onReaction={emoji => toggleReaction(actionMsg, emoji)}
+        onClose={closeMessageMenu}
+        groups={[
+          [
+            {
+              id: 'reply',
+              label: 'Reply',
+              icon: Reply,
+              onSelect: () => {
+                setReplyTo(actionMsg)
+                closeMessageMenu()
+                setTimeout(() => inputRef.current?.focus(), 40)
+              },
+            },
+            {
+              id: 'copy',
+              label: 'Copy',
+              icon: Copy,
+              onSelect: () => { copyMessage(actionMsg); closeMessageMenu() },
+            },
+            canForwardMessage(actionMsg) ? {
+              id: 'forward',
+              label: 'Forward',
+              icon: Forward,
+              onSelect: () => { openForward(actionMsg); closeMessageMenu() },
+            } : null,
+            actionMsg?.media_url ? {
+              id: 'view',
+              label: 'View',
+              icon: Maximize2,
+              onSelect: () => {
+                setLightbox({ url: actionMsg.media_url, type: actionMsg.media_type === 'video' ? 'video' : 'image', caption: decodeReply(actionMsg.body).body })
+                closeMessageMenu()
+              },
+            } : null,
+            actionMsg?.media_url ? {
+              id: 'download',
+              label: 'Download',
+              icon: Download,
+              onSelect: () => {
+                const link = document.createElement('a')
+                link.href = actionMsg.media_url
+                link.download = ''
+                document.body.appendChild(link)
+                link.click()
+                link.remove()
+                closeMessageMenu()
+              },
+            } : null,
+            actionMsg?.from_user === currentUser?.id
+              && !actionMsg.call_type
+              && actionMsg.media_type !== 'offer'
+              && !(actionMsg.media_url && actionMsg.media_type && actionMsg.media_type !== 'text') ? {
+              id: 'edit',
+              label: 'Edit message',
+              icon: Pencil,
+              onSelect: () => startEditMessage(actionMsg),
+            } : null,
+            actionMsg?.from_user === currentUser?.id ? {
+              id: 'timer',
+              label: 'Auto-delete timer',
+              icon: Timer,
+              keepOpen: true,
+              onSelect: () => setActionMode('timer'),
+            } : null,
+            actionMsg?._status === 'failed' ? {
+              id: 'retry',
+              label: 'Retry send',
+              icon: RotateCcw,
+              onSelect: () => { retryMessage(actionMsg); closeMessageMenu() },
+            } : null,
+          ].filter(Boolean),
+          [
+            {
+              id: 'delete',
+              label: 'Delete…',
+              icon: Trash2,
+              danger: true,
+              keepOpen: true,
+              onSelect: () => setActionMode('delete'),
+            },
+          ],
+        ]}
+      />
 
-            {actionMode === 'delete' && (
-              <>
-                <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 6, padding: '0 4px' }}>Delete message</div>
-                <p style={{ fontSize: 13, color: '#6b7a70', margin: '0 4px 12px', lineHeight: 1.45 }}>
-                  Choose who should no longer see this message.
-                </p>
-                <div className="chat-action-list">
-                  <button type="button" onClick={() => deleteMessageForMe(actionMsg)}>
-                    <span className="chat-action-ico">👁</span> Delete for me
-                  </button>
-                  {actionMsg.from_user === currentUser?.id && (
-                    <button type="button" className="is-danger" onClick={() => deleteMessageForEveryone(actionMsg)}>
-                      <span className="chat-action-ico">🗑</span> Delete for everyone
-                    </button>
-                  )}
-                </div>
-                <button type="button" className="chat-action-cancel" onClick={() => setActionMode('main')}>Back</button>
-              </>
-            )}
+      <ChatPopupMenu
+        open={!!actionMsg && actionMode === 'delete'}
+        anchorEl={null}
+        anchorPoint={actionAnchorPoint}
+        label="Delete message"
+        title="Delete message"
+        subtitle="Choose who should no longer see this message."
+        onClose={closeMessageMenu}
+        groups={[
+          [
+            {
+              id: 'back',
+              label: 'Back',
+              icon: CornerUpLeft,
+              keepOpen: true,
+              onSelect: () => setActionMode('main'),
+            },
+            {
+              id: 'delete-for-me',
+              label: 'Delete for me',
+              icon: Ban,
+              danger: true,
+              onSelect: () => { deleteMessageForMe(actionMsg); closeMessageMenu() },
+            },
+          ],
+          ...(actionMsg?.from_user === currentUser?.id ? [[
+            {
+              id: 'delete-for-everyone',
+              label: 'Delete for everyone',
+              icon: Trash2,
+              danger: true,
+              onSelect: () => { deleteMessageForEveryone(actionMsg); closeMessageMenu() },
+            },
+          ]] : []),
+        ]}
+      />
 
-            {actionMode === 'timer' && (
-              <>
-                <div style={{ fontSize: 15, fontWeight: 800, marginBottom: 6, padding: '0 4px' }}>Auto-delete</div>
-                <p style={{ fontSize: 13, color: '#6b7a70', margin: '0 4px 12px', lineHeight: 1.45 }}>
-                  This message will disappear for both of you after the time you pick.
-                </p>
-                <div className="chat-action-list">
-                  {[
-                    { label: '1 hour', ms: 3600000 },
-                    { label: '24 hours', ms: 86400000 },
-                    { label: '7 days', ms: 604800000 },
-                    { label: 'Off', ms: null },
-                  ].map(opt => (
-                    <button
-                      key={opt.label}
-                      type="button"
-                      onClick={() => setMessageDisappear(actionMsg, opt.ms)}
-                    >
-                      <span className="chat-action-ico">⏱</span> {opt.label}
-                    </button>
-                  ))}
-                </div>
-                <button type="button" className="chat-action-cancel" onClick={() => setActionMode('main')}>Back</button>
-              </>
-            )}
-          </div>
-        </div>
-      )}
+      <ChatPopupMenu
+        open={!!actionMsg && actionMode === 'timer'}
+        anchorEl={null}
+        anchorPoint={actionAnchorPoint}
+        label="Auto-delete"
+        title="Auto-delete"
+        subtitle="This message will disappear for both of you after the time you pick."
+        onClose={closeMessageMenu}
+        groups={[
+          [
+            {
+              id: 'back',
+              label: 'Back',
+              icon: CornerUpLeft,
+              keepOpen: true,
+              onSelect: () => setActionMode('main'),
+            },
+            { label: '1 hour', icon: Timer, onSelect: () => { setMessageDisappear(actionMsg, 3600000); closeMessageMenu() } },
+            { label: '24 hours', icon: Timer, onSelect: () => { setMessageDisappear(actionMsg, 86400000); closeMessageMenu() } },
+            { label: '7 days', icon: Timer, onSelect: () => { setMessageDisappear(actionMsg, 604800000); closeMessageMenu() } },
+            { label: 'Off', icon: Timer, onSelect: () => { setMessageDisappear(actionMsg, null); closeMessageMenu() } },
+          ],
+        ]}
+      />
 
       {/* ── Per-image action sheet ── */}
       {imageActionMsg && (

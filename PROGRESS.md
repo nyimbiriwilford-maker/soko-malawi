@@ -179,3 +179,4 @@ Chat view: date pill, compact offer card, 15px text
 Chat view: offer card price format, time, avatar, width
 Chat view: image bubbles, viewer, scroll button
 Chat view: slim image bubbles, viewer, scroll button
+Chat view: bubble-style offer card, polished message menu, slim images

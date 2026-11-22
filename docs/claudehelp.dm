@@ -319,3 +319,33 @@ npx eslint <the real changed file paths> | Select-String "no-undef|is not define
 npx eslint <the real conversation view path> --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
 git status -sb
 git diff HEAD~1 --stat -- src
+
+GOAL: (1) Offer cards look like normal message bubbles. (2) Restyle the message context menu (right-click on laptop, long-press on touch) to be compact and professional. (3) Fix the image bubble crop and thick frame. Branch wip/home-hero-premium (check with git branch --show-current). Rules: no git stash or reset, no SQL, no installs, do NOT launch Chrome or any browser, do not merge or push. Make the edits directly. Edit only the conversation view and its components.
+
+STEP 1 - Print raw with line numbers, then continue without waiting: the offer card component, the bubble wrapper styles, the image message component, the message context menu (Select-String "Auto-delete timer|Reply|Copy" in src), and the shared popup menu component built for the Chats menu.
+
+PART 1 - OFFER CARD AS A BUBBLE
+1. Same wrapper as text bubbles: sent = green #0F9D58 with white text, received = white with 1px #e8eaed border; radius 16px with 4px on the tail corner; padding 8px 12px; no extra shadow; max-width 320px (260px under 400px).
+2. Row 1: listing photo 32px (8px radius), title 14px weight 600, chevron. Row 2: "Price offer" 12px label with the status chip at the right (translucent white rgba(255,255,255,0.2) with white text on green; green chip on white). Row 3: amount "MWK 30,000" 20px weight 800 (white on green, green on white). Row 4: "Asking MWK 39,000" 12px at 80% opacity. Accept/Decline/Counter buttons in one row, 36px tall, only when actionable. Time and read ticks INSIDE the bubble, bottom right, 11px, like text bubbles. Keep all handlers.
+
+PART 2 - CONTEXT MENU
+1. Use the shared menu component and its styling (white, 1px #e8eaed border, 14px radius, shadow 0 8px 24px rgba(16,24,40,0.12), 10px item radius, DM Sans 15px weight 500).
+2. Laptop (hover: hover): compact card 240px wide at the cursor, flipping to stay inside the viewport, fade 120ms, portal above both panes, rows 44px. Remove the tall modal and the separate Cancel card. Touch below 769px: bottom sheet (drag handle, 16px top radius, backdrop rgba(0,0,0,0.4), safe-area padding, rows 52px, Cancel row at the bottom).
+3. Reaction row at the top: the same 6 emoji, as a single row of 36px buttons with no tile background, hover #f6fbf8, a 1px divider under it.
+4. Item icons: 20px outline, strokeWidth 1.75, grey #5f6368, no filled shapes, no coloured tiles. Reply = corner-up-left, Copy = copy, Auto-delete timer = timer, Forward = forward, Download = download, View = maximize-2, Delete = trash-2. Delete items red #d93025 text and icon, no fill, hover #fdecea, separated by a divider.
+5. Behaviour: close on outside click, Esc, scroll and after choosing; focus moves in and back; arrow keys move; role="menu"/"menuitem"; only one menu open; body scroll locked on the phone sheet. Same actions and handlers as now.
+
+PART 3 - IMAGE BUBBLE
+Image-only bubble: padding 3px, radius 14px, bubble colour background, width fit-content, no min-width. Image max-width 280px (220px under 400px), max-height 320px, width auto, object-fit contain, never cropped, 11px radius, #f1f3f4 behind it. Time and ticks in a small pill over the bottom-right corner (rgba(0,0,0,0.45), white 11px). Tap opens the full-screen image viewer built for Looking For (reuse it).
+
+Do not change sending, receiving, uploading, realtime, read receipts, offers logic or other pages.
+
+Commit as "Chat view: bubble-style offer card, polished message menu, slim images", append one line to PROGRESS.md and commit it too.
+
+End with RAW output only, no summary:
+git log --oneline -4
+npm run build
+npx eslint <the real changed file paths> | Select-String "no-undef|is not defined" ; "ESLINT DONE"
+npx eslint <the real conversation view and menu paths> --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
+git status -sb
+git diff HEAD~1 --stat -- src
