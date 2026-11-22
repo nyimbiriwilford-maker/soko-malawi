@@ -184,8 +184,6 @@ const myAlertsRef = useRef([])
       viewerLocation?.city,
       viewerLocation?.area,
       viewerCity,
-      user?.district,
-      user?.city,
     ].filter(Boolean).map(s => String(s).trim()).filter(Boolean)
 
     function buildQuery(selectCols, withExpiryFilter, { preferLocal = false } = {}) {
@@ -269,7 +267,7 @@ const myAlertsRef = useRef([])
       })
       // Prioritise posts looking for product in viewer's GPS city/district
       // and attach estimated distance (seller GPS → buyer stay)
-      const loc = viewerLocation || viewerCity || user?.city || user?.district || null
+      const loc = viewerLocation || viewerCity || null
       const ranked = sortRequestsByViewerLocation(mapped, loc, sortBy)
       setRequests(withDistanceToBuyer(ranked, loc))
       // Category pills from loaded data (no separate stats bar)
@@ -406,7 +404,7 @@ const myAlertsRef = useRef([])
           setNotifications(prev => [notif, ...prev])
           setToast({ msg: `🔔 New "${req.category}" request: ${req.title}`, type: 'success' })
           setTimeout(() => setToast(null), 5000)
-          const loc = viewerLocation || viewerCity || user?.city || user?.district || null
+          const loc = viewerLocation || viewerCity || null
           setRequests(prev => withDistanceToBuyer(
             sortRequestsByViewerLocation(
               [{ ...req, user_has_offered: false }, ...prev.filter(r => r.id !== req.id)],
@@ -447,10 +445,7 @@ const myAlertsRef = useRef([])
         setDbCities(prev => [gps.area, ...prev.filter(c => c !== gps.area)])
       }
     } else {
-      // Fallback: profile / previous viewerCity
-      const home = user?.city || user?.district || viewerCity || ''
-      if (home) setHomeLocation(home)
-      if (selectedCities.length === 0 && home) setSelectedCities([home])
+      showToast('Could not detect GPS. Type where you stay.', 'warning')
     }
     setDetectingCity(false)
   }
@@ -589,7 +584,7 @@ const myAlertsRef = useRef([])
       urgency: 'flexible', durationDays: 7, customDays: '',
     })
     setImages([]); setCoverIndex(0); setSelectedCities([])
-    setHomeLocation(gpsDetected?.label || user?.city || user?.district || viewerCity || '')
+    setHomeLocation(gpsDetected?.label || '')
     setHomeSearch(''); setCitySearch('')
     setComposerOpen(false)
     loadRequests()

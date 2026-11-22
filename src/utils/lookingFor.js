@@ -37,7 +37,7 @@ export async function getGPSLocation({ force = false } = {}) {
           return parsed.data
         }
       }
-    } catch { /* ignore */ }
+    } catch {}
   }
   const result = await new Promise((resolve) => {
     if (!navigator.geolocation) {
@@ -99,11 +99,11 @@ export async function getGPSLocation({ force = false } = {}) {
         }
       },
       () => resolve(null),
-      { timeout: 12000, enableHighAccuracy: true, maximumAge: 60_000 },
+      { timeout: 12000, enableHighAccuracy: true, maximumAge: force ? 0 : 60_000 },
     )
   })
   if (result) {
-    try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), data: result })) } catch { /* ignore */ }
+    try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), data: result })) } catch {}
   }
   return result
 }
