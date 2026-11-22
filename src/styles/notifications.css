@@ -3271,3 +3271,24 @@
     padding: 12px 0 48px !important;
   }
 }
+
+.notifications-header {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 1000 !important;
+  background: #fff !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-bottom: 1px solid #e8eaed !important;
+  box-shadow: none !important;
+}
+
+.notifications-header .header-top,
+.notifications-header .header-search-row,
+.notifications-header .tabs {
+  background: #fff !important;
+}
+
+.notif-purpose-older {
+  color: #80868b !important;
+}

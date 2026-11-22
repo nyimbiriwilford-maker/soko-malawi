@@ -327,15 +327,27 @@ function resolveViewImage(notif, viewImages) {
   return id ? viewImages[String(id)] || null : null
 }
 
-function timeLabel(date) {
+const SHORT_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+function calendarDayAge(date) {
   const d = new Date(date)
   const now = new Date()
-  const diff = now - d
-  if (diff < 60000)    return 'just now'
-  if (diff < 3600000)  return `${Math.floor(diff / 60000)}m ago`
-  if (diff < 86400000) return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-  if (diff < 604800000) return d.toLocaleDateString([], { weekday: 'long' })
-  return d.toLocaleDateString([], { day: 'numeric', month: 'short' })
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
+  const item = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+  return Math.round((today - item) / 86400000)
+}
+
+function timeLabel(date) {
+  const d = new Date(date)
+  const age = calendarDayAge(date)
+  if (age <= 0) {
+    const hours = String(d.getHours()).padStart(2, '0')
+    const minutes = String(d.getMinutes()).padStart(2, '0')
+    return `${hours}:${minutes}`
+  }
+  if (age === 1) return 'Yesterday'
+  if (age < 7) return d.toLocaleDateString([], { weekday: 'long' })
+  return `${d.getDate()} ${SHORT_MONTHS[d.getMonth()]}`
 }
 
 function isToday(date) {
@@ -425,6 +437,7 @@ function mergeMessageNotifications(notifs, senders) {
       ...notif,
       mergedIds: members.map((member) => member.id),
       mergedCount: members.length,
+      mergedUnreadCount: members.filter((member) => !member.read).length,
     }
   })
 }
@@ -1141,10 +1154,13 @@ const NotificationCard = memo(function NotificationCard({
   const listingTitle = product?.title || notif.data?.listing_title || notif.data?.service_name || ''
   const priceText = formatMwkPrice(product?.price ?? notif.data?.listing_price ?? notif.data?.price)
 
-  let purpose = dedupeBody(notif.title, getNotificationPurpose(notif, sender), displayName, listingTitle)
+  let purposeText = dedupeBody(notif.title, getNotificationPurpose(notif, sender), displayName, listingTitle)
   if (notif.type === 'listing_view') {
-    purpose = [listingTitle, priceText].filter(Boolean).join(' · ')
+    purposeText = [listingTitle, priceText].filter(Boolean).join(' · ')
   }
+  const earlierCount = notif.mergedCount > 1 ? notif.mergedCount - 1 : 0
+  const mergedUnreadCount = notif.mergedUnreadCount ?? (notif.read ? 0 : 1)
+  const purpose = earlierCount > 0 ? `${purposeText} · +${earlierCount} earlier` : purposeText
 
   const ariaLabel = [
     displayTitle,
@@ -1195,15 +1211,16 @@ const NotificationCard = memo(function NotificationCard({
                         <span className="unread-dot" style={{ backgroundColor: cfg.color }} aria-hidden="true" />
                       )}
                     </div>
-                    {notif.mergedCount > 1 && (
-                      <span className="message-count-pill" aria-label={`${notif.mergedCount} messages`}>
-                        {notif.mergedCount}
+                    {notif.mergedCount > 1 && mergedUnreadCount > 0 && (
+                      <span className="message-count-pill" aria-label={`${mergedUnreadCount} unread`}>
+                        {mergedUnreadCount}
                       </span>
                     )}
                   </div>
                 </div>
                 <p className={`notif-purpose${notif.read ? '' : ' is-unread-purpose'}`}>
-                  {purpose}
+                  {purposeText}
+                  {earlierCount > 0 && <span className="notif-purpose-older"> · +{earlierCount} earlier</span>}
                 </p>
               </div>
             </div>

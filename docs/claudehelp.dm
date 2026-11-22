@@ -94,3 +94,20 @@ npx eslint <the real page path> | Select-String "no-undef|is not defined" ; "ESL
 npx eslint <the real page path> --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
 git status -sb
 git diff HEAD~1 --stat -- src
+GOAL: Replace the count pill on merged message rows with clearer time and unread logic, and fix the see-through header. Branch wip/home-hero-premium (check with git branch --show-current). Rules: no git stash or reset, no SQL, no installs, do NOT launch Chrome or any browser, do not merge or push. Make the edits directly. Edit only the Notifications page and its row component.
+
+1. COUNT PILL: show the green pill only when the merged row contains unread notifications, and make the number the UNREAD count (not the total). When all are read, show no pill.
+2. TIME: the time stays at the top right of the row, 12px grey. Format by age of the latest item: today = clock time (08:54), yesterday = "Yesterday", within 7 days = weekday name, older = "11 Nov". Do not show the time twice on a row.
+3. MERGED BODY: for a merged row with more than one message, the body shows the latest text, then " · +N earlier" in lighter grey (#80868b), where N = total minus 1. Single messages show the text only.
+4. HEADER: the sticky header (back button, title, search, tabs) needs a solid white background (#fff) and z-index above the list, with a 1px #e8eaed bottom border. Rows must never show through it while scrolling, on phone and laptop. Tabs row included.
+5. Do not change fetching, realtime, mark-read logic, routes or tap behaviour. Do not touch other pages.
+
+Commit as "Notifications: unread-only count, clearer time, solid header", append one line to PROGRESS.md and commit it too.
+
+End with RAW output only, no summary:
+git log --oneline -4
+npm run build
+npx eslint <the real page and row component paths> | Select-String "no-undef|is not defined" ; "ESLINT DONE"
+npx eslint <the real page path> --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
+git status -sb
+git diff HEAD~1 --stat -- src
