@@ -29,7 +29,6 @@ import {
   Trash2,
   Timer,
   Check,
-  Reply,
   Copy,
   Forward,
   Maximize2,
@@ -354,6 +353,7 @@ const [showAttach, setShowAttach]       = useState(false)
 const [actionMsg, setActionMsg]         = useState(null) // message under action sheet
 const [actionAnchorPoint, setActionAnchorPoint] = useState(null)
 const [imageActionMsg, setImageActionMsg] = useState(null) // individual image under action sheet
+const [imageActionPoint, setImageActionPoint] = useState(null)
 const [forwardMsgs, setForwardMsgs]     = useState(null) // messages queued for forwarding
 const [toast, setToast]                 = useState(null)
 const [reactions, setReactions]         = useState({})
@@ -645,6 +645,7 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
       if (lightbox) setLightbox(null)
       else if (forwardMsgs) setForwardMsgs(null)
       else if (actionMsg) setActionMsg(null)
+      else if (imageActionMsg) { setImageActionMsg(null); setImageActionPoint(null) }
       else if (showEmoji) setShowEmoji(false)
       else if (showAttach) setShowAttach(false)
       else if (chatSearch !== null) setChatSearch(null)
@@ -652,7 +653,7 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [lightbox, imageViewer, closeImageViewer, actionMsg, showEmoji, showAttach, chatSearch, replyTo, forwardMsgs])
+  }, [lightbox, imageViewer, closeImageViewer, actionMsg, imageActionMsg, showEmoji, showAttach, chatSearch, replyTo, forwardMsgs])
 
   // Scroll to specific message if navigated from notification
   useEffect(() => {
@@ -1034,6 +1035,7 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
     }
     setActionMsg(null)
     setImageActionMsg(null)
+    setImageActionPoint(null)
     setActionMode('main')
     setForwardMsgs(forwardable)
   }
@@ -1251,11 +1253,30 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
     if (!msg || msg.media_type === 'deal_request') return
     if (isMsgDeletedEveryone(msg)) return
     haptic(14)
+    setImageActionMsg(null)
+    setImageActionPoint(null)
     setActionMsg(msg)
     setActionMode('main')
     setActionAnchorPoint(point || null)
     setShowEmoji(false)
     setShowAttach(false)
+  }
+
+  const openImageActions = useCallback((img, point) => {
+    if (!img || img._uploading) return
+    haptic(14)
+    setActionMsg(null)
+    setActionAnchorPoint(null)
+    setActionMode('main')
+    setImageActionMsg(img)
+    setImageActionPoint(point || null)
+    setShowEmoji(false)
+    setShowAttach(false)
+  }, [])
+
+  function closeImageMenu() {
+    setImageActionMsg(null)
+    setImageActionPoint(null)
   }
 
   function startEditMessage(msg) {
@@ -2673,7 +2694,7 @@ async function uploadAndSend(file, type, caption = '') {
                     if (img._uploading) return
                     e.stopPropagation()
                     thumbPressTimer.current = setTimeout(() => {
-                      setImageActionMsg(img)
+                      openImageActions(img, null)
                     }, 420)
                   }}
                   onPointerUp={() => { clearTimeout(thumbPressTimer.current) }}
@@ -2683,7 +2704,7 @@ async function uploadAndSend(file, type, caption = '') {
                     if (img._uploading) return
                     e.preventDefault()
                     e.stopPropagation()
-                    setImageActionMsg(img)
+                    openImageActions(img, bubbleActionPoint(e))
                   }}
                 >
                   <img src={img.media_url} alt="" loading="lazy" draggable={false} />
@@ -2759,7 +2780,7 @@ async function uploadAndSend(file, type, caption = '') {
         </svg>
       </a>
     )
-  }, [setLightbox, openImageViewer, currentUser, renderVoiceNote, setMessages])
+  }, [setLightbox, openImageViewer, openImageActions, currentUser, renderVoiceNote, setMessages])
 
   const callHostProps = {
     userId,
@@ -4537,8 +4558,7 @@ async function uploadAndSend(file, type, caption = '') {
         anchorEl={null}
         anchorPoint={actionAnchorPoint}
         label="Message actions"
-        title="Message actions"
-        subtitle={actionMsg ? decodeReply(actionMsg.body || '').body || 'Message options' : undefined}
+        headerLabel="Message"
         reactionRow={QUICK_REACTIONS}
         activeReactions={Object.fromEntries(QUICK_REACTIONS.map(emoji => [
           emoji,
@@ -4551,7 +4571,7 @@ async function uploadAndSend(file, type, caption = '') {
             {
               id: 'reply',
               label: 'Reply',
-              icon: Reply,
+              icon: CornerUpLeft,
               onSelect: () => {
                 setReplyTo(actionMsg)
                 closeMessageMenu()
@@ -4575,7 +4595,8 @@ async function uploadAndSend(file, type, caption = '') {
               label: 'View',
               icon: Maximize2,
               onSelect: () => {
-                setLightbox({ url: actionMsg.media_url, type: actionMsg.media_type === 'video' ? 'video' : 'image', caption: decodeReply(actionMsg.body).body })
+                if (actionMsg.media_type === 'image') openImageViewer(actionMsg.media_url)
+                else setLightbox({ url: actionMsg.media_url, type: 'video', caption: decodeReply(actionMsg.body).body })
                 closeMessageMenu()
               },
             } : null,
@@ -4634,8 +4655,8 @@ async function uploadAndSend(file, type, caption = '') {
         anchorEl={null}
         anchorPoint={actionAnchorPoint}
         label="Delete message"
+        headerLabel="Message"
         title="Delete message"
-        subtitle="Choose who should no longer see this message."
         onClose={closeMessageMenu}
         groups={[
           [
@@ -4649,7 +4670,7 @@ async function uploadAndSend(file, type, caption = '') {
             {
               id: 'delete-for-me',
               label: 'Delete for me',
-              icon: Ban,
+              icon: Trash2,
               danger: true,
               onSelect: () => { deleteMessageForMe(actionMsg); closeMessageMenu() },
             },
@@ -4660,6 +4681,7 @@ async function uploadAndSend(file, type, caption = '') {
               label: 'Delete for everyone',
               icon: Trash2,
               danger: true,
+              badge: 'x',
               onSelect: () => { deleteMessageForEveryone(actionMsg); closeMessageMenu() },
             },
           ]] : []),
@@ -4671,8 +4693,8 @@ async function uploadAndSend(file, type, caption = '') {
         anchorEl={null}
         anchorPoint={actionAnchorPoint}
         label="Auto-delete"
-        title="Auto-delete"
-        subtitle="This message will disappear for both of you after the time you pick."
+        headerLabel="Message"
+        title="Auto-delete timer"
         onClose={closeMessageMenu}
         groups={[
           [
@@ -4691,77 +4713,73 @@ async function uploadAndSend(file, type, caption = '') {
         ]}
       />
 
-      {/* ── Per-image action sheet ── */}
-      {imageActionMsg && (
-        <div className="chat-action-overlay" onClick={() => setImageActionMsg(null)}>
-          <div className="chat-action-sheet chat-image-sheet" onClick={e => e.stopPropagation()}>
-            <div className="chat-action-handle" />
-            <div className="chat-image-head">
-              <img className="chat-image-thumb" src={imageActionMsg.media_url} alt="" />
-              <div className="chat-image-head-txt">
-                <div className="chat-action-title">Image</div>
-                <div className="chat-image-sub">Choose an action for this image</div>
-              </div>
-            </div>
-            <div className="chat-image-actions">
-              <button
-                type="button"
-                className="chat-action-btn"
-                onClick={() => {
-                  setImageActionMsg(null)
-                  setLightbox({ url: imageActionMsg.media_url, type: 'image', caption: '' })
-                }}
-              >
-                <span className="chat-action-ico" aria-hidden="true">👁️</span> View
-              </button>
-              <button
-                type="button"
-                className="chat-action-btn"
-                onClick={() => openForward(imageActionMsg)}
-              >
-                <span className="chat-action-ico" aria-hidden="true">↪</span> Forward
-              </button>
-              <a
-                className="chat-action-btn"
-                href={imageActionMsg.media_url}
-                download
-                target="_blank"
-                rel="noreferrer"
-                onClick={() => setImageActionMsg(null)}
-              >
-                <span className="chat-action-ico" aria-hidden="true">⬇️</span> Download
-              </a>
-              <button
-                type="button"
-                className="chat-action-btn chat-action-btn--danger"
-                onClick={() => {
-                  const img = imageActionMsg
-                  setImageActionMsg(null)
-                  deleteMessageForMe(img)
-                }}
-              >
-                <span className="chat-action-ico" aria-hidden="true">🗑️</span> Delete for me
-              </button>
-              {imageActionMsg.from_user === currentUser?.id && (
-                <button
-                  type="button"
-                  className="chat-action-btn chat-action-btn--danger"
-                  onClick={() => {
-                    const img = imageActionMsg
-                    setImageActionMsg(null)
-                    deleteMessageForEveryone(img)
-                  }}
-                >
-                  <span className="chat-action-ico" aria-hidden="true">👥</span> Delete for everyone
-                </button>
-              )}
-            </div>
-            <button type="button" className="chat-action-btn chat-action-btn--cancel" onClick={() => setImageActionMsg(null)}>
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
+      <ChatPopupMenu
+        open={!!imageActionMsg}
+        anchorEl={null}
+        anchorPoint={imageActionPoint}
+        label="Image actions"
+        headerLabel="Image"
+        headerImage={imageActionMsg?.media_url}
+        onClose={closeImageMenu}
+        groups={[
+          [
+            {
+              id: 'view',
+              label: 'View',
+              icon: Maximize2,
+              onSelect: () => {
+                const img = imageActionMsg
+                closeImageMenu()
+                if (img?.media_url) openImageViewer(img.media_url)
+              },
+            },
+            imageActionMsg && canForwardMessage(imageActionMsg) ? {
+              id: 'forward',
+              label: 'Forward',
+              icon: Forward,
+              onSelect: () => openForward(imageActionMsg),
+            } : null,
+            imageActionMsg?.media_url ? {
+              id: 'download',
+              label: 'Download',
+              icon: Download,
+              onSelect: () => {
+                const link = document.createElement('a')
+                link.href = imageActionMsg.media_url
+                link.download = ''
+                document.body.appendChild(link)
+                link.click()
+                link.remove()
+              },
+            } : null,
+          ].filter(Boolean),
+          [
+            {
+              id: 'delete-for-me',
+              label: 'Delete for me',
+              icon: Trash2,
+              danger: true,
+              onSelect: () => {
+                const img = imageActionMsg
+                closeImageMenu()
+                deleteMessageForMe(img)
+              },
+            },
+            ...(imageActionMsg?.from_user === currentUser?.id ? [{
+              id: 'delete-for-everyone',
+              label: 'Delete for everyone',
+              icon: Trash2,
+              danger: true,
+              badge: 'x',
+              onSelect: () => {
+                const img = imageActionMsg
+                closeImageMenu()
+                deleteMessageForEveryone(img)
+              },
+            }] : []),
+          ],
+        ]}
+      />
 
       {/* ── Forward picker sheet ── */}
       {forwardMsgs?.length > 0 && currentUser?.id && (

@@ -349,3 +349,23 @@ npx eslint <the real changed file paths> | Select-String "no-undef|is not define
 npx eslint <the real conversation view and menu paths> --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
 git status -sb
 git diff HEAD~1 --stat -- src
+
+GOAL: Finish the unified message context menu in the chat view so image messages and text messages use one polished menu, and finish the slim image bubble. Branch wip/home-hero-premium (check with git branch --show-current). Rules: no git stash or reset, no SQL, no installs, do NOT launch Chrome or any browser, do not merge or push. Make edits directly. Edit only the conversation view and its components.
+
+STEP 1 - Print raw with line numbers, then continue without waiting: every component that renders "Choose an action for this image", "Delete for everyone", "Auto-delete timer" and "Reply" in the conversation view, the shared popup menu component built for the Chats menu, and the image message component.
+
+1. Replace the remaining per-image action sheet with the same shared popup menu used by text messages. Keep the existing actions and handlers: View, Forward, Download, Delete for me, and Delete for everyone only when the logged-in user sent it. Hide actions that do not apply. Use the same outline icons and styling as the text message menu: View = maximize-2, Forward = forward, Download = download, Reply = corner-up-left, Copy = copy, Auto-delete timer = timer, Delete = trash-2. Delete for everyone uses trash-2 with a small x badge. No emoji, filled or coloured tiles.
+2. Shared menu polish: laptop card stays 240px at the cursor, viewport flip/shift, portal above both panes, fade 120ms, white, 1px #e8eaed border, 14px radius, shadow 0 8px 24px rgba(16,24,40,0.12), 6px padding, 10px item radius, DM Sans 15px weight 500, 44px rows, no title/subtitle/Cancel card. Touch below 769px uses the bottom sheet with drag handle, 16px top radius, rgba(0,0,0,0.4) backdrop, safe-area padding, 52px rows, a small header with a 40px thumbnail and grey type label ("Image" or "Message"), and one Cancel row.
+3. Delete items are red #d93025 text and icon, no fill, hover #fdecea, separated by a divider. Text menu keeps the six reactions as 36px buttons with no tile background and a divider under the row.
+4. Finish the image bubble: padding 3px, radius 14px, bubble colour background, width fit-content, no min-width; image max-width 280px (220px under 400px), max-height 320px, width auto, object-fit contain, never cropped, 11px radius, #f1f3f4 background; time and ticks in a small dark pill over the bottom-right corner. Tap opens the existing full-screen image viewer from Looking For. Keep captions below the image and reuse the viewer gallery for multiple images with a 1 / 3 counter.
+5. Close the menu on outside click, Esc, scroll and after choosing; focus moves in and back; arrow keys move; role="menu"/"menuitem"; only one menu open; body scroll locked on the phone sheet. Do not change sending, uploading, receiving, realtime, read receipts, offers, routes or other pages.
+
+Commit as "Chat view: one polished message menu, slim image bubbles", append one line to PROGRESS.md and commit it too.
+
+End with RAW output only, no summary: first the STEP 1 raw snippets, then:
+git log --oneline -4
+npm run build
+npx eslint <the real changed file paths> | Select-String "no-undef|is not defined" ; "ESLINT DONE"
+npx eslint <the real conversation view and menu paths> --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
+git status -sb
+git diff HEAD~1 --stat -- src

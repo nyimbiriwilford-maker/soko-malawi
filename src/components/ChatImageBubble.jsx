@@ -1,6 +1,6 @@
 import { useState } from 'react'
 
-export default function ChatImageBubble({ url, caption, isMine, onOpen }) {
+export default function ChatImageBubble({ url, caption, isMine, onOpen, width, height }) {
   const [loaded, setLoaded] = useState(false)
   const [failed, setFailed] = useState(false)
 
@@ -23,6 +23,8 @@ export default function ChatImageBubble({ url, caption, isMine, onOpen }) {
           <img
             src={url}
             alt={caption || 'Shared image'}
+            width={width || undefined}
+            height={height || undefined}
             loading="lazy"
             draggable={false}
             onLoad={() => setLoaded(true)}

@@ -44,6 +44,8 @@ export default function ChatPopupMenu({
   groups = [],
   onClose,
   label = 'Menu',
+  headerLabel,
+  headerImage,
   title,
   subtitle,
   reactionRow = [],
@@ -229,6 +231,7 @@ export default function ChatPopupMenu({
                 strokeWidth={1.75}
                 aria-hidden="true"
               />
+              {item.badge === 'x' ? <span className="chat-popup-icon-badge" aria-hidden="true">×</span> : null}
             </span>
           ) : (
             <span className="chat-popup-icon" />
@@ -316,8 +319,23 @@ export default function ChatPopupMenu({
           -webkit-tap-highlight-color: transparent;
         }
         .chat-popup-item:disabled { cursor: default; opacity: 0.6; }
-        .chat-popup-icon { flex: 0 0 20px; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; color: #5f6368; }
+        .chat-popup-icon { position: relative; flex: 0 0 20px; width: 20px; height: 20px; display: inline-flex; align-items: center; justify-content: center; color: #5f6368; }
         .chat-popup-icon.is-danger { color: #d93025; }
+        .chat-popup-icon-badge {
+          position: absolute;
+          right: -5px;
+          bottom: -4px;
+          width: 12px;
+          height: 12px;
+          border-radius: 999px;
+          background: #d93025;
+          color: #fff;
+          font-family: inherit;
+          font-size: 10px;
+          font-weight: 700;
+          line-height: 12px;
+          text-align: center;
+        }
         .chat-popup-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .chat-popup-count { flex: none; margin-left: auto; font-size: 12px; font-weight: 500; color: #5f6368; }
         .chat-popup-reactions {
@@ -362,6 +380,12 @@ export default function ChatPopupMenu({
           animation: chatPopupSlide 200ms ease both;
         }
         .chat-popup-handle { width: 36px; height: 4px; border-radius: 4px; background: #dadce0; margin: 0 auto 8px; }
+        .chat-popup-sheet-head { display: flex; align-items: center; gap: 12px; padding: 8px 20px 10px; }
+        .chat-popup-sheet-image { width: 40px; height: 40px; flex: none; border-radius: 10px; object-fit: cover; border: 1px solid #e8eaed; background: #f1f3f4; }
+        .chat-popup-sheet-head-text { min-width: 0; }
+        .chat-popup-sheet-head .chat-popup-sheet-title,
+        .chat-popup-sheet-head .chat-popup-sheet-subtitle { padding: 0; }
+        .chat-popup-sheet-type { font-size: 12px; font-weight: 700; color: #80868b; letter-spacing: 0.02em; }
         .chat-popup-sheet-title { padding: 8px 20px 2px; font-size: 15px; font-weight: 700; color: #202124; }
         .chat-popup-sheet-subtitle { padding: 0 20px 8px; font-size: 12px; color: #5f6368; }
         .chat-popup-cancel {
@@ -407,8 +431,21 @@ export default function ChatPopupMenu({
             onTouchMove={onTouchMove}
           >
             <div className="chat-popup-handle" />
-            {title ? <div className="chat-popup-sheet-title">{title}</div> : null}
-            {subtitle ? <div className="chat-popup-sheet-subtitle">{subtitle}</div> : null}
+            {headerImage || headerLabel ? (
+              <div className="chat-popup-sheet-head">
+                {headerImage ? <img className="chat-popup-sheet-image" src={headerImage} alt="" /> : null}
+                <div className="chat-popup-sheet-head-text">
+                  {headerLabel ? <div className="chat-popup-sheet-type">{headerLabel}</div> : null}
+                  {title ? <div className="chat-popup-sheet-title">{title}</div> : null}
+                  {subtitle ? <div className="chat-popup-sheet-subtitle">{subtitle}</div> : null}
+                </div>
+              </div>
+            ) : (
+              <>
+                {title ? <div className="chat-popup-sheet-title">{title}</div> : null}
+                {subtitle ? <div className="chat-popup-sheet-subtitle">{subtitle}</div> : null}
+              </>
+            )}
             {renderReactions()}
             {renderGroups()}
             <button type="button" className="chat-popup-cancel" onClick={close}>Cancel</button>
