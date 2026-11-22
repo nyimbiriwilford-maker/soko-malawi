@@ -1,9 +1,9 @@
 import { useState } from 'react'
 
-export default function ChatImageBubble({ url, caption, isMine, onOpen }) {
+export default function ChatImageBubble({ url, caption, isMine, onOpen, width, height }) {
   const [loaded, setLoaded] = useState(false)
   const [failed, setFailed] = useState(false)
-  const [ratio, setRatio] = useState('4 / 3')
+  const [ratio, setRatio] = useState(width && height ? `${width} / ${height}` : '4 / 3')
 
   function handleLoad(event) {
     const image = event.currentTarget

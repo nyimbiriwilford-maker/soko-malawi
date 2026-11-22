@@ -1461,7 +1461,7 @@ export default function LookingFor() {
   )
 }
 
-function ImageViewer({ photos, index, onChange, onClose }) {
+export function ImageViewer({ photos, index, onChange, onClose }) {
   const [loaded, setLoaded] = useState(false)
   const [failed, setFailed] = useState(false)
   const [zoom, setZoom] = useState(false)

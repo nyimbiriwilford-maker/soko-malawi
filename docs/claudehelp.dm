@@ -299,3 +299,23 @@ npx eslint <the real changed file paths> | Select-String "no-undef|is not define
 npx eslint <the real conversation view path> --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
 git status -sb
 git diff HEAD~1 --stat -- src
+
+GOAL: Fix the image message bubble in the chat view: the green frame is far too thick, the image is oversized and cropped. Branch wip/home-hero-premium (check with git branch --show-current). Rules: no git stash or reset, no SQL, no installs, do NOT launch Chrome or any browser, do not merge or push. Edit only the conversation view and its components.
+
+1. Print raw the image message component and the bubble wrapper styles it inherits (padding, background, border, min-width, width). Find why the green area is about 20px thick.
+2. For image-only messages, the bubble wrapper must have padding 3px, border-radius 14px, background = bubble colour (sent green #0F9D58, received white with 1px #e8eaed border), width fit-content, and NO min-width or text padding. If there is a caption, put it below the image with padding 6px 8px 4px and the time at the bottom right of the caption.
+3. Image: max-width 280px (220px below 400px screens), max-height 320px, width auto, object-fit contain, display block, 11px radius, never cropped, on a #f1f3f4 background. Reserve the aspect ratio (use stored width/height if available) so the list does not jump while loading. Grey placeholder until loaded, grey "Image unavailable" panel on error.
+4. Time and read ticks for image-only messages sit over the bottom-right corner of the image in a small pill (rgba(0,0,0,0.45), white 11px, 4px 8px padding, 999px radius).
+5. Tap or click opens the full-screen image viewer built for the Looking For detail view (reuse that component, do not write a new one): dark background, uncropped image, X button, Esc and backdrop-tap to close, pinch and double-tap zoom on phone, left/right navigation with a "1 / 3" counter when the chat has several images. Closing returns to the same scroll position. Add aria-label "View image" and cursor zoom-in.
+6. Scroll-to-bottom button: right 16px, 12px above the input bar, shown only when scrolled up more than 200px, hidden at the bottom.
+7. Do not change sending, uploading, receiving, realtime, read receipts, offers or other pages.
+
+Commit as "Chat view: slim image bubbles, viewer, scroll button", append one line to PROGRESS.md and commit it too.
+
+End with RAW output only, no summary:
+git log --oneline -4
+npm run build
+npx eslint <the real changed file paths> | Select-String "no-undef|is not defined" ; "ESLINT DONE"
+npx eslint <the real conversation view path> --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
+git status -sb
+git diff HEAD~1 --stat -- src

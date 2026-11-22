@@ -431,12 +431,16 @@
 }
 
 .chat-thread .msg-bubble.has-image {
-  padding: 2px;
+  width: fit-content;
+  min-width: 0;
+  padding: 3px;
+  border-radius: 14px;
   background-clip: padding-box;
 }
 
 .chat-thread .msg-bubble.has-image.is-mine {
-  background: var(--chat-mine);
+  background: #0F9D58;
+  border: 1px solid #0F9D58;
 }
 
 .chat-thread .msg-bubble.has-image.is-theirs {
@@ -445,7 +449,7 @@
 }
 
 .chat-thread .msg-bubble.has-media .msg-caption {
-  padding: 6px 8px 2px;
+  padding: 6px 8px 4px;
   font-size: 15px;
   line-height: 1.4;
 }
@@ -454,16 +458,17 @@
   padding: 0 8px 4px;
 }
 
-.chat-thread .msg-bubble.media-only .msg-meta {
+.chat-thread .msg-bubble.has-image.media-only .msg-meta {
   position: absolute;
-  right: 8px;
+  right: 6px;
   bottom: 6px;
   margin: 0;
-  padding: 2px 7px;
+  padding: 4px 8px;
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.45);
   color: #fff !important;
   font-size: 11px;
+  line-height: 1;
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
 }
@@ -536,13 +541,13 @@
 .chat-thread .media-image-wrap {
   position: relative;
   display: block;
-  width: 280px;
-  max-width: 100%;
+  width: fit-content;
+  max-width: 280px;
   max-height: 320px;
   border: none;
   padding: 0;
   margin: 0;
-  border-radius: 12px;
+  border-radius: 11px;
   overflow: hidden;
   cursor: zoom-in;
   background: #f1f3f4;
@@ -553,11 +558,13 @@
 }
 
 .chat-thread .media-image-wrap img {
-  width: 100%;
-  height: 100%;
+  width: auto;
+  height: auto;
+  max-width: 280px;
   max-height: 320px;
   object-fit: contain;
   display: block;
+  border-radius: 11px;
   background: #f1f3f4;
   transition: opacity 0.2s ease;
 }
@@ -2335,8 +2342,8 @@
   }
 
   .chat-thread .media-image-wrap {
-    width: 280px;
-    max-width: 100%;
+    width: fit-content;
+    max-width: 280px;
   }
 
   .chat-thread .media-video-wrap {
@@ -2468,8 +2475,12 @@
 
 @media (max-width: 399px) {
   .chat-thread .media-image-wrap {
-    width: 220px;
-    max-width: 100%;
+    width: fit-content;
+    max-width: 220px;
+  }
+
+  .chat-thread .media-image-wrap img {
+    max-width: 220px;
   }
 }
 

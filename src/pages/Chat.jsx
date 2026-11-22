@@ -68,7 +68,7 @@ import {
 import ChatCallHost, { HideDuringCall } from '../components/ChatCallHost'
 import CallMessageBubble from '../components/CallMessageBubble'
 import ChatImageBubble from '../components/ChatImageBubble'
-import ImageViewer from '../components/ImageViewer'
+import { ImageViewer } from './LookingFor/LookingFor'
 import { maybePromptDealReady } from '../utils/dealNotificationFlow'
 import { notifyMissedCall, notifyCallDeclined } from '../utils/callNotifications'
 import {
@@ -2688,6 +2688,8 @@ async function uploadAndSend(file, type, caption = '') {
           caption={caption}
           isMine={msg.from_user === currentUser?.id}
           onOpen={() => openImageViewer(url)}
+          width={msg.media_width || msg.width}
+          height={msg.media_height || msg.height}
         />
       )
     }
@@ -3156,6 +3158,46 @@ async function uploadAndSend(file, type, caption = '') {
         .chat-page.chat-thread .msg-bubble.is-mine .msg-meta { color: rgba(255,255,255,0.7) !important; }
         .chat-page.chat-thread .msg-bubble.is-theirs .msg-meta { color: #80868b !important; }
         .chat-page.chat-thread .msg-ticks.read { color: rgba(255,255,255,0.95) !important; }
+        .chat-page.chat-thread .msg-bubble.has-image {
+          padding: 3px !important;
+          border-radius: 14px !important;
+          width: fit-content !important;
+          min-width: 0 !important;
+          background-clip: padding-box !important;
+        }
+        .chat-page.chat-thread .msg-bubble.has-image.r-mine-tail,
+        .chat-page.chat-thread .msg-bubble.has-image.r-mine-join,
+        .chat-page.chat-thread .msg-bubble.has-image.r-theirs-tail,
+        .chat-page.chat-thread .msg-bubble.has-image.r-theirs-join {
+          border-radius: 14px !important;
+        }
+        .chat-page.chat-thread .msg-bubble.has-image.is-mine {
+          background: #0F9D58 !important;
+          border: 1px solid #0F9D58 !important;
+        }
+        .chat-page.chat-thread .msg-bubble.has-image.is-theirs {
+          background: #fff !important;
+          border: 1px solid #e8eaed !important;
+        }
+        .chat-page.chat-thread .msg-bubble.has-image .msg-caption {
+          padding: 6px 8px 4px !important;
+        }
+        .chat-page.chat-thread .msg-bubble.has-image:not(.media-only) .msg-meta {
+          margin-top: 0 !important;
+          padding: 0 8px 4px !important;
+        }
+        .chat-page.chat-thread .msg-bubble.has-image.media-only .msg-meta {
+          position: absolute !important;
+          right: 6px !important;
+          bottom: 6px !important;
+          margin: 0 !important;
+          padding: 4px 8px !important;
+          border-radius: 999px !important;
+          background: rgba(0,0,0,0.45) !important;
+          color: #fff !important;
+          font-size: 11px !important;
+        }
+        .chat-page.chat-thread .msg-bubble.has-image.media-only .msg-ticks { color: #fff !important; }
         .chat-page.chat-thread .chat-input-bar {
           background: #fff !important;
           border-top: 1px solid #e8eaed !important;
