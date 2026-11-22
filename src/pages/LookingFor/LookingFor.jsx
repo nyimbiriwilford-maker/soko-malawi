@@ -90,20 +90,6 @@ export default function LookingFor() {
     return () => window.removeEventListener('resize', handler)
   }, [])
 
-  useEffect(() => {
-    const update = () => setBatchSize(getBatchSize())
-    const laptop = window.matchMedia?.('(min-width: 1100px)')
-    const tablet = window.matchMedia?.('(min-width: 769px)')
-    laptop?.addEventListener?.('change', update)
-    tablet?.addEventListener?.('change', update)
-    window.addEventListener('resize', update)
-    return () => {
-      laptop?.removeEventListener?.('change', update)
-      tablet?.removeEventListener?.('change', update)
-      window.removeEventListener('resize', update)
-    }
-  }, [])
-
   /* ── auth / user ── */
   const [user,          setUser]          = useState(null)
   const [myListings,    setMyListings]    = useState([])
@@ -119,6 +105,20 @@ export default function LookingFor() {
   const openedFromUrlRef = useRef(null)
   const sentinelRef = useRef(null)
   const loadingMoreRef = useRef(false)
+
+  useEffect(() => {
+    const update = () => setBatchSize(getBatchSize())
+    const laptop = window.matchMedia?.('(min-width: 1100px)')
+    const tablet = window.matchMedia?.('(min-width: 769px)')
+    laptop?.addEventListener?.('change', update)
+    tablet?.addEventListener?.('change', update)
+    window.addEventListener('resize', update)
+    return () => {
+      laptop?.removeEventListener?.('change', update)
+      tablet?.removeEventListener?.('change', update)
+      window.removeEventListener('resize', update)
+    }
+  }, [])
 
   /* ── filters ── */
   const [search,          setSearch]          = useState('')
