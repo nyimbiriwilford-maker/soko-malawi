@@ -145,3 +145,22 @@ npx eslint <the real page and row component paths> | Select-String "no-undef|is 
 npx eslint <the real page path> --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
 git status -sb
 git diff HEAD~1 --stat -- src
+GOAL: Remove the extra gap between the title and the person's name on unread chat rows. Branch wip/home-hero-premium (check with git branch --show-current). Rules: no git stash or reset, no SQL, no installs, do NOT launch Chrome or any browser, do not merge or push. Make the edits directly. Edit only the Chats list page and its row component.
+
+1. Print raw the row layout code where the time and the unread pill are rendered.
+2. The right column of line 1 must contain ONLY the time (12px grey, top right, no wrap). Remove the unread pill from that column.
+3. Render the unread pill at the right end of line 3 (the message preview line): the preview takes the remaining width (min-width: 0, ellipsis), the pill is flex: none, margin-left 8px, green #0F9D58, white 11px text, min 20px wide, 20px tall, vertically centred.
+4. Line 1, line 2 and line 3 use the same line-height (1.3) and no extra margins whether the chat is read or unread. An unread row must be exactly as tall as a read row with the same content.
+5. Apply the same layout to the no-product person rows (the ones titled with the person's name).
+6. Keep unread styling: title weight 700, preview #202124, row background #f6fbf8.
+7. Do not change fetching, realtime, unread logic, routes, tap behaviour or other pages.
+
+Commit as "Chats: unread pill on preview line, no row gap", append one line to PROGRESS.md and commit it too.
+
+End with RAW output only, no summary:
+git log --oneline -4
+npm run build
+npx eslint <the real page and row component paths> | Select-String "no-undef|is not defined" ; "ESLINT DONE"
+npx eslint <the real page path> --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
+git status -sb
+git diff HEAD~1 --stat -- src

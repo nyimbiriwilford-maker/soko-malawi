@@ -170,3 +170,4 @@ Notifications: unread-only count, clearer time, solid header
 Chats: product-first rows, unread tab, responsive panes
 Chats: real images, full-width rows, avatar and menu fixes
 Chats: price on phone, image URL helper
+Chats: unread pill on preview line, no row gap

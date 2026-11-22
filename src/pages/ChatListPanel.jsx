@@ -432,7 +432,6 @@ function ChatListRow({ chat, index, isOpen, online, currentUserId, onOpen, onMen
           <span className="chat-row-title" title={title}>{title}</span>
           <div className="chat-row-meta">
             <span className="chat-row-time">{time}</span>
-            {hasUnread ? <span className="chat-row-unread">{chat.unread > 99 ? '99+' : chat.unread}</span> : null}
           </div>
         </div>
         {hasContext ? (
@@ -441,7 +440,10 @@ function ChatListRow({ chat, index, isOpen, online, currentUserId, onOpen, onMen
             {price ? <span className="chat-list-price"> · {price}</span> : null}
           </div>
         ) : null}
-        <div className="chat-row-preview">{renderChatPreview(chat.lastMsg, currentUserId)}</div>
+        <div className="chat-row-preview-line">
+          <div className="chat-row-preview">{renderChatPreview(chat.lastMsg, currentUserId)}</div>
+          {hasUnread ? <span className="chat-row-unread">{chat.unread > 99 ? '99+' : chat.unread}</span> : null}
+        </div>
         <button
           type="button"
           className="chat-row-menu-btn"
@@ -1069,7 +1071,7 @@ export default function ChatListPanel() {
         }
         .chat-row:last-child::after { display: none; }
         .chat-row.is-unread { background: #f6fbf8; }
-        .chat-row-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+        .chat-row-body { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
         .chat-row-top { display: flex; align-items: flex-start; gap: 8px; }
         .chat-row-title {
           flex: 1;
@@ -1083,9 +1085,11 @@ export default function ChatListPanel() {
           line-height: 1.3;
         }
         .chat-row.is-unread .chat-row-title { font-weight: 700; }
-        .chat-row-meta { flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+        .chat-row-meta { flex-shrink: 0; display: flex; align-items: flex-end; }
         .chat-row-time { font-size: 12px; color: #80868b; white-space: nowrap; line-height: 1.3; }
         .chat-row-unread {
+          flex: 0 0 auto;
+          margin-left: 8px;
           min-width: 20px;
           height: 20px;
           padding: 0 6px;
@@ -1094,6 +1098,7 @@ export default function ChatListPanel() {
           color: #fff;
           font-size: 11px;
           font-weight: 700;
+          line-height: 1.3;
           display: inline-flex;
           align-items: center;
           justify-content: center;
@@ -1110,7 +1115,8 @@ export default function ChatListPanel() {
         .chat-row-person { display: flex; align-items: center; min-width: 0; }
         .chat-row-person-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
         .chat-list-price { flex: 0 0 auto; white-space: nowrap; }
-        .chat-row-preview { font-size: 14px; }
+        .chat-row-preview-line { display: flex; align-items: center; min-width: 0; min-height: 20px; line-height: 1.3; }
+        .chat-row-preview { flex: 1; min-width: 0; font-size: 14px; }
         .chat-row.is-unread .chat-row-preview,
         .chat-row.is-unread .chat-preview-text { color: #202124; }
         .chat-preview-row { display: inline-flex; align-items: center; gap: 5px; max-width: 100%; min-width: 0; }
