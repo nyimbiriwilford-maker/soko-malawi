@@ -2919,8 +2919,13 @@
   gap: 10px;
   width: 100%;
 }
+.notif-person-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
 .notif-person-row {
   flex-wrap: nowrap;
+  min-width: 0;
 }
 .notif-person-name {
   flex: 1 1 auto;
@@ -2937,8 +2942,8 @@
   margin-left: 8px;
 }
 .notif-time {
-  flex: 0 0 56px;
-  width: 56px;
+  flex: none;
+  width: auto;
   overflow: hidden;
   text-align: right;
   text-overflow: clip;
@@ -2994,8 +2999,9 @@
   }
 }
 @media (max-width: 768px) {
+  .notif-side,
   .notif-dismiss {
-    opacity: 0.55;
+    display: none;
   }
 }
 .avatar-wrap,

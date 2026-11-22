@@ -132,6 +132,14 @@ offer_declined:   { Icon: X,                color: '#ea4335', bg: '#fce8e6', lab
   default:          { Icon: Bell,           color: '#0F9D58', bg: '#e8f5ee', label: 'Notification',    category: 'system' },
 }
 
+const NO_SENDER_AVATAR_COLORS = {
+  listings: { color: '#7c4dff', bg: '#f1ecff' },
+  offers: { color: '#F9AB00', bg: '#fff7e0' },
+  deals: { color: '#1A73E8', bg: '#e8f0fe' },
+  orders: { color: '#0F9D58', bg: '#e6f6ed' },
+  system: { color: '#80868b', bg: '#f1f3f4' },
+}
+
 const OFFER_NOTIF_TYPES = new Set([
   'offer_new',
   'offer_counter',
@@ -615,14 +623,15 @@ function ActionButton({ label, icon: Icon, variant = 'secondary', onClick, ariaL
   )
 }
 
-function AvatarIcon({ notif, name: displayName, cfg, sender, loading, showTypeBadge = true }) {
+function AvatarIcon({ notif, name: displayName, hasActor, cfg, sender, loading, showTypeBadge = true }) {
   const [failedAvatar, setFailedAvatar] = useState(null)
   const actorId = getActorId(notif)
   const TypeIcon = cfg.Icon || Bell
   const name = stripEmojis(displayName || sender?.full_name || getActorName(notif, sender) || 'User') || 'User'
   const initial = name.trim()[0]?.toUpperCase() || 'U'
   const avatarUrl = sender?.avatar_url
-  const showImage = !!avatarUrl && failedAvatar !== avatarUrl
+  const showImage = !!hasActor && !!avatarUrl && failedAvatar !== avatarUrl
+  const typeColor = NO_SENDER_AVATAR_COLORS[cfg.category] || { color: cfg.color, bg: cfg.bg }
 
   if (loading && actorId) {
     return <div className="avatar-skeleton" aria-hidden="true" />
@@ -641,8 +650,7 @@ function AvatarIcon({ notif, name: displayName, cfg, sender, loading, showTypeBa
     )
   }
 
-  // Letter avatar when no photo — still shows a person, not only the type icon
-  if (!showImage) {
+  if (!showImage && hasActor) {
     return (
       <div className="avatar-wrap" aria-hidden="true">
         <span
@@ -661,8 +669,8 @@ function AvatarIcon({ notif, name: displayName, cfg, sender, loading, showTypeBa
   }
 
   return (
-    <div className="icon-fallback" style={{ backgroundColor: cfg.bg, color: cfg.color }} aria-hidden="true">
-      <Ic icon={TypeIcon} size={17} strokeWidth={1.75} />
+    <div className="icon-fallback" style={{ backgroundColor: typeColor.bg, color: typeColor.color }} aria-hidden="true">
+      <Ic icon={TypeIcon} size={18} strokeWidth={1.75} />
     </div>
   )
 }
@@ -936,6 +944,7 @@ const NotificationCard = memo(function NotificationCard({
               <AvatarIcon
                 notif={notif}
                 name={displayName}
+                hasActor={hasActor}
                 cfg={cfg}
                 sender={sender}
                 loading={sendersLoading}
