@@ -187,3 +187,4 @@ Looking For: composer sheet with pinned Post button
 Chat view: fix quick-reply chips, format budget
 Notifications: expandable rows, plain deal copy; Deal flow: clear steps and confirm sheet
 Chat view: context-aware floating quick replies
+Notifications: clearer deal rows on all widths

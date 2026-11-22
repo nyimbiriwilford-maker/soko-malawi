@@ -115,6 +115,12 @@ function formatMwkPrice(value) {
   return `MWK ${Math.round(amount).toLocaleString('en-US')}`
 }
 
+function formatDealAmount(data) {
+  const amount = Number(data?.amount || 0)
+  if (!Number.isFinite(amount) || amount <= 0) return ''
+  return `${data.currency || 'MWK'} ${amount.toLocaleString('en-US')}`
+}
+
 function dedupeBody(title, body, name, listingTitle) {
   let text = stripEmojis(body)
   const cleanTitle = stripEmojis(title)
@@ -148,6 +154,7 @@ const DEAL_NOTIF_TYPES = new Set([
   'deal_declined',
   'deal_vouching',
   'new_vouch',
+  'offer_accepted',
 ])
 
 function isDealNotification(notif) {
@@ -179,7 +186,7 @@ function getDealPresentation(notif, sender, product) {
     case 'deal_request':
       return {
         title: 'Confirm this deal',
-        body: `${sellerName} says the sale for ${item} is complete.`,
+        body: `${sellerName} sent you a deal request. Tap to see how it works.`,
         detail: `Only confirm if you received the item as agreed. Your confirmation helps ${sellerName} build trust.`,
         badge: status === 'declined' ? 'Closed' : 'Action needed',
         steps: ['Seller sent a request', 'You confirm the sale', 'You can both vouch'],
@@ -206,6 +213,18 @@ function getDealPresentation(notif, sender, product) {
         activeStep: 2,
         tone: 'danger',
       }
+    case 'offer_accepted': {
+      const amountText = formatDealAmount(data)
+      return {
+        title: 'Offer accepted',
+        body: `${actorName} accepted your offer${amountText ? ` of ${amountText}` : ''} for ${listingTitle}. Confirm to start the deal.`,
+        detail: `Once you confirm, you and ${actorName} can vouch for each other.`,
+        badge: 'Action needed',
+        steps: ['Offer accepted', 'Confirm the sale', 'Vouch for each other'],
+        activeStep: 2,
+        tone: 'action',
+      }
+    }
     case 'deal_vouching':
       return {
         title: 'Vouch for the seller',
@@ -537,8 +556,6 @@ function renderSmartBody(notif, sender) {
   const data = notif.data || {}
   const name = getActorName(notif, sender)
 
-  const formatAmount = (d) => `${d.currency || 'MWK'} ${Number(d.amount || 0).toLocaleString()}`
-
   switch (notif.type) {
     case 'new_message':
       return `${name} sent you a message${data.listing_title ? ` about "${data.listing_title}"` : ''}`
@@ -572,26 +589,26 @@ function renderSmartBody(notif, sender) {
     case 'new_vouch':
       return `${name} vouched for you`
     case 'offer_new':
-      return `${name} offered ${data.amount ? formatAmount(data) : ''}${data.listing_title ? ` for "${data.listing_title}"` : ''}`
+      return `${name} offered ${data.amount ? formatDealAmount(data) : ''}${data.listing_title ? ` for "${data.listing_title}"` : ''}`
     case 'offer_counter':
-      return `${name} sent a counter offer of ${data.amount ? formatAmount(data) : ''}${data.listing_title ? ` for "${data.listing_title}"` : ''}`
+      return `${name} sent a counter offer of ${data.amount ? formatDealAmount(data) : ''}${data.listing_title ? ` for "${data.listing_title}"` : ''}`
     case 'offer_accepted':
-      return `${name} accepted your offer of ${data.amount ? formatAmount(data) : ''}${data.listing_title ? ` for "${data.listing_title}"` : ''}`
+      return `${name} accepted your offer of ${data.amount ? formatDealAmount(data) : ''}${data.listing_title ? ` for "${data.listing_title}"` : ''}`
     case 'offer_declined':
-      return `${name} declined your offer of ${data.amount ? formatAmount(data) : ''}${data.listing_title ? ` for "${data.listing_title}"` : ''}`
+      return `${name} declined your offer of ${data.amount ? formatDealAmount(data) : ''}${data.listing_title ? ` for "${data.listing_title}"` : ''}`
       case 'offer_withdrawn':
-        return `${name} withdrew their offer of ${data.amount ? formatAmount(data) : ''}${data.listing_title ? ` for "${data.listing_title}"` : ''}`
+        return `${name} withdrew their offer of ${data.amount ? formatDealAmount(data) : ''}${data.listing_title ? ` for "${data.listing_title}"` : ''}`
     case 'offer_edited':
-      return `${name} updated their offer to ${data.amount ? formatAmount(data) : ''}${data.listing_title ? ` for "${data.listing_title}"` : ''}`
+      return `${name} updated their offer to ${data.amount ? formatDealAmount(data) : ''}${data.listing_title ? ` for "${data.listing_title}"` : ''}`
     case 'offer_expired':
       return data.is_offerer
-        ? `Your offer of ${data.amount ? formatAmount(data) : ''}${data.listing_title ? ` for "${data.listing_title}"` : ''} has expired`
-        : `The offer of ${data.amount ? formatAmount(data) : ''}${data.listing_title ? ` for "${data.listing_title}"` : ''} has expired`
+        ? `Your offer of ${data.amount ? formatDealAmount(data) : ''}${data.listing_title ? ` for "${data.listing_title}"` : ''} has expired`
+        : `The offer of ${data.amount ? formatDealAmount(data) : ''}${data.listing_title ? ` for "${data.listing_title}"` : ''} has expired`
     case 'offer_expiring': {
       const horizon = (data.reminder_window_hours || 0) > 24 ? '1 day' : '1 hour'
       return data.is_offerer
-        ? `Your offer of ${data.amount ? formatAmount(data) : ''} expires in ${horizon}`
-        : `The offer of ${data.amount ? formatAmount(data) : ''} expires in ${horizon}`
+        ? `Your offer of ${data.amount ? formatDealAmount(data) : ''} expires in ${horizon}`
+        : `The offer of ${data.amount ? formatDealAmount(data) : ''} expires in ${horizon}`
     }
     default:
       return 'Tap to view details'
@@ -1225,8 +1242,10 @@ const NotificationCard = memo(function NotificationCard({
   onMarkRead,
   onArchive,
   onAction,
+  isExpanded,
+  onToggleExpand,
 }) {
-  const [expanded, setExpanded] = useState(false)
+  const expanded = isExpanded
   const onClickCard = useCallback(() => onCardClick(notif), [onCardClick, notif])
   const readIds = useMemo(
     () => (notif.mergedIds?.length ? notif.mergedIds : [notif.id]),
@@ -1277,107 +1296,155 @@ const NotificationCard = memo(function NotificationCard({
           className={[
             'notif-card',
             notif.read ? 'is-read' : 'is-unread',
-            dealPresentation ? 'is-deal' : '',
+            dealPresentation ? `is-deal tone-${dealPresentation.tone}` : '',
             expanded ? 'is-expanded' : '',
           ].filter(Boolean).join(' ')}
           style={{ '--notif-accent': cfg.color }}
         >
-          <div className="notif-card-inner">
-            <div className="notif-person">
-              <AvatarIcon
-                notif={notif}
-                name={displayName}
-                hasActor={hasActor}
-                cfg={cfg}
-                sender={sender}
-                loading={sendersLoading}
-                viewImage={viewImage}
-              />
-              <div className="notif-person-text">
-                <div className="notif-person-row">
-                  <span className={`notif-person-name${notif.read ? '' : ' is-unread-name'}`}>
-                    {displayTitle}
-                  </span>
-                  <div className="notif-person-end">
-                    <div className="notif-time-row">
-                      <time className="notif-time" dateTime={notif.created_at}>
-                        {timeLabel(notif.created_at)}
-                      </time>
+          {dealPresentation ? (
+            <div className="notif-deal-layout">
+              <div className="notif-deal-summary">
+                <AvatarIcon
+                  notif={notif}
+                  name={displayName}
+                  hasActor={hasActor}
+                  cfg={cfg}
+                  sender={sender}
+                  loading={sendersLoading}
+                  viewImage={viewImage}
+                />
+                <div className="notif-deal-copy">
+                  <div className="notif-deal-top">
+                    <span className={`notif-deal-name${notif.read ? '' : ' is-unread-name'}`}>
+                      {displayTitle}
+                    </span>
+                    <div className="notif-deal-controls">
                       {!notif.read && (
                         <span className="unread-dot" style={{ backgroundColor: cfg.color }} aria-hidden="true" />
                       )}
-                    </div>
-                    {notif.mergedCount > 1 && mergedUnreadCount > 0 && (
-                      <span className="message-count-pill" aria-label={`${mergedUnreadCount} unread`}>
-                        {mergedUnreadCount}
-                      </span>
-                    )}
-                    {dealPresentation && (
-                      <>
-                        <span className={`notif-deal-badge tone-${dealPresentation.tone}`}>
-                          {dealPresentation.badge}
+                      <time className="notif-time" dateTime={notif.created_at}>
+                        {timeLabel(notif.created_at)}
+                      </time>
+                      {notif.mergedCount > 1 && mergedUnreadCount > 0 && (
+                        <span className="message-count-pill" aria-label={`${mergedUnreadCount} unread`}>
+                          {mergedUnreadCount}
                         </span>
-                        <button
-                          type="button"
-                          className="notif-deal-toggle"
-                          aria-expanded={expanded}
-                          aria-label={expanded ? 'Hide deal steps' : 'Show deal steps'}
-                          onClick={(e) => { e.stopPropagation(); setExpanded((value) => !value) }}
-                        >
-                          <Ic icon={ChevronDown} size={16} strokeWidth={2} />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
-                <p className={`notif-purpose${notif.read ? '' : ' is-unread-purpose'}`}>
-                  {purposeText}
-                  {earlierCount > 0 && <span className="notif-purpose-older"> · +{earlierCount} earlier</span>}
-                </p>
-              </div>
-            </div>
-
-            {dealPresentation && expanded && (
-              <div className="notif-deal-details" onClick={(e) => e.stopPropagation()}>
-                <div className="notif-deal-detail-head">
-                  <span className="notif-deal-detail-label">How this works</span>
-                  <span className={`notif-deal-badge tone-${dealPresentation.tone}`}>
-                    {dealPresentation.badge}
-                  </span>
-                </div>
-                <p className="notif-deal-detail-copy">{dealPresentation.detail}</p>
-                <ol className="notif-deal-steps">
-                  {dealPresentation.steps.map((step, stepIndex) => {
-                    const stepNumber = stepIndex + 1
-                    return (
-                      <li
-                        key={step}
-                        className={[
-                          'notif-deal-step',
-                          stepNumber === dealPresentation.activeStep ? 'is-active' : '',
-                          stepNumber < dealPresentation.activeStep ? 'is-done' : '',
-                        ].filter(Boolean).join(' ')}
+                      )}
+                      <span className={`notif-deal-badge tone-${dealPresentation.tone}`}>
+                        {dealPresentation.badge}
+                      </span>
+                      <button
+                        type="button"
+                        className="notif-deal-toggle"
+                        aria-expanded={expanded}
+                        aria-label={expanded ? 'Hide deal steps' : 'Show deal steps'}
+                        onClick={(e) => { e.stopPropagation(); onToggleExpand(notif.id) }}
                       >
-                        <span className="notif-deal-step-num">{stepNumber}</span>
-                        <span>{step}</span>
-                      </li>
-                    )
-                  })}
-                </ol>
+                        <Ic icon={ChevronDown} size={16} strokeWidth={2} />
+                      </button>
+                    </div>
+                  </div>
+                  {!expanded && (
+                    <p className="notif-deal-body">
+                      {purposeText}
+                      {earlierCount > 0 && <span className="notif-purpose-older"> · +{earlierCount} earlier</span>}
+                    </p>
+                  )}
+                </div>
+                <div className="notif-deal-side" onClick={(e) => e.stopPropagation()}>
+                  <button
+                    type="button"
+                    className="notif-dismiss"
+                    aria-label="Dismiss notification"
+                    onClick={() => onDelete(notif.id)}
+                  >
+                    <Ic icon={X} size={14} strokeWidth={2.25} />
+                  </button>
+                </div>
               </div>
-            )}
 
-            <div className="notif-side" onClick={(e) => e.stopPropagation()}>
-              <button
-                type="button"
-                className="notif-dismiss"
-                aria-label="Dismiss notification"
-                onClick={() => onDelete(notif.id)}
-              >
-                <Ic icon={X} size={14} strokeWidth={2.25} />
-              </button>
+              {expanded && (
+                <div className="notif-deal-details" onClick={(e) => e.stopPropagation()}>
+                  <div className="notif-deal-detail-head">
+                    <span className="notif-deal-detail-label">How this works</span>
+                    <span className={`notif-deal-badge tone-${dealPresentation.tone}`}>
+                      {dealPresentation.badge}
+                    </span>
+                  </div>
+                  <p className="notif-deal-detail-copy">{dealPresentation.detail}</p>
+                  <ol className="notif-deal-steps">
+                    {dealPresentation.steps.map((step, stepIndex) => {
+                      const stepNumber = stepIndex + 1
+                      return (
+                        <li
+                          key={step}
+                          className={[
+                            'notif-deal-step',
+                            stepNumber === dealPresentation.activeStep ? 'is-active' : '',
+                            stepNumber < dealPresentation.activeStep ? 'is-done' : '',
+                          ].filter(Boolean).join(' ')}
+                        >
+                          <span className="notif-deal-step-num">{stepNumber}</span>
+                          <span>{step}</span>
+                        </li>
+                      )
+                    })}
+                  </ol>
+                </div>
+              )}
             </div>
-          </div>
+          ) : (
+            <div className="notif-card-inner">
+              <div className="notif-person">
+                <AvatarIcon
+                  notif={notif}
+                  name={displayName}
+                  hasActor={hasActor}
+                  cfg={cfg}
+                  sender={sender}
+                  loading={sendersLoading}
+                  viewImage={viewImage}
+                />
+                <div className="notif-person-text">
+                  <div className="notif-person-row">
+                    <span className={`notif-person-name${notif.read ? '' : ' is-unread-name'}`}>
+                      {displayTitle}
+                    </span>
+                    <div className="notif-person-end">
+                      <div className="notif-time-row">
+                        <time className="notif-time" dateTime={notif.created_at}>
+                          {timeLabel(notif.created_at)}
+                        </time>
+                        {!notif.read && (
+                          <span className="unread-dot" style={{ backgroundColor: cfg.color }} aria-hidden="true" />
+                        )}
+                      </div>
+                      {notif.mergedCount > 1 && mergedUnreadCount > 0 && (
+                        <span className="message-count-pill" aria-label={`${mergedUnreadCount} unread`}>
+                          {mergedUnreadCount}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <p className={`notif-purpose${notif.read ? '' : ' is-unread-purpose'}`}>
+                    {purposeText}
+                    {earlierCount > 0 && <span className="notif-purpose-older"> · +{earlierCount} earlier</span>}
+                  </p>
+                </div>
+              </div>
+
+              <div className="notif-side" onClick={(e) => e.stopPropagation()}>
+                <button
+                  type="button"
+                  className="notif-dismiss"
+                  aria-label="Dismiss notification"
+                  onClick={() => onDelete(notif.id)}
+                >
+                  <Ic icon={X} size={14} strokeWidth={2.25} />
+                </button>
+              </div>
+            </div>
+          )}
 
           <NotificationActions notif={notif} onAction={onAction} />
         </article>
@@ -1599,6 +1666,7 @@ export default function Notifications() {
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState(() => ({ ...DEFAULT_FILTER, category: getInitialCategory() }))
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [expandedNotificationId, setExpandedNotificationId] = useState(null)
   const [toast, setToast] = useState(null)
   const [user, setUser] = useState(null)
   const [pushBannerVisible, setPushBannerVisible] = useState(() => typeof Notification !== 'undefined' ? Notification.permission === 'default' : true)
@@ -1612,6 +1680,10 @@ export default function Notifications() {
   // ── Toast ────────────────────────────────────────────────────────────────
   const showToast = useCallback((message, type = 'info') => {
     setToast({ message, type, id: Date.now() })
+  }, [])
+
+  const toggleExpanded = useCallback((id) => {
+    setExpandedNotificationId((current) => (current === id ? null : id))
   }, [])
 
   useEffect(() => {
@@ -2210,6 +2282,8 @@ export default function Notifications() {
                           onMarkRead={markOneRead}
                           onArchive={archiveNotification}
                           onAction={handleAction}
+                          isExpanded={expandedNotificationId === notif.id}
+                          onToggleExpand={toggleExpanded}
                         />
                       )
                     })}
