@@ -688,7 +688,7 @@ const myAlertsRef = useRef([])
         onCta={handleOpenComposer}
       />
 
-      <div style={{ position: 'sticky', top: 70, zIndex: 40, background: '#fff' }}>
+      <div style={{ background: '#fff' }}>
       {/* slim header */}
       <div style={{ maxWidth: 1400, margin: '0 auto', padding: (windowWidth >= 769 ? '20px 24px 16px' : '20px 14px 16px'), boxSizing: 'border-box' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
@@ -819,7 +819,7 @@ const myAlertsRef = useRef([])
       </div>
 
       {/* ── CATEGORY PILLS ── */}
-      <div className="lf-tabs-row" style={{ padding:'12px 32px', display:'flex', alignItems:'center', gap:0, borderBottom:`1px solid ${C.border}`, overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
+      <div className="lf-tabs-row" style={{ position: 'sticky', top: 70, zIndex: 40, background: '#fff', padding:'12px 32px', display:'flex', alignItems:'center', gap:0, borderBottom:`1px solid ${C.border}`, overflowX:'auto', WebkitOverflowScrolling:'touch' }}>
         {[
           { id:'all',   label:'All', count: allReqs.length, ico: (s, c) => Icon.list(s, c) },
           { id:'mine',  label:'Mine',  count: myReqs.length, ico: (s, c) => Icon.user(s, c) },
