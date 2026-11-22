@@ -1,11 +1,9 @@
 import { useEffect, useState, useRef } from 'react'
-import { createPortal } from 'react-dom'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { makeOffer } from '../../lib/makeOffer'
-import { uploadToR2, getR2Url, deleteFromR2 } from '../../lib/r2'
+import { uploadToR2 } from '../../lib/r2'
 import RequestComposer from '../../components/LookingFor/RequestComposer'
-import { Toast, Spinner } from '../../components/LookingFor/Primitives'
 import { Icon, CatIcon } from '../../components/LookingFor/Icons'
 import {
   getGPSLocation,
@@ -18,8 +16,7 @@ import {
   haversineKm,
 } from '../../utils/lookingFor'
 import { CATEGORIES, URGENCY_OPTIONS, expiresAtFromDays } from '../../constants/lookingFor'
-import { getDemandLevel, timeAgo } from '../../utils/lookingFor'
-import { MALAWI_DISTRICTS } from '../../constants/malawiDistricts'
+import { timeAgo } from '../../utils/lookingFor'
 import SokoNav from '../../components/SokoNav'
 import LookingForRequestCard, { LOOKING_FOR_CARD_CSS } from '../../components/LookingFor/LookingForRequestCard'
 
@@ -40,12 +37,6 @@ const C = {
   text:     '#202124',
   textSub:  '#5f6368',
   shadow:   '0 1px 3px rgba(0,0,0,0.08), 0 4px 16px rgba(0,0,0,0.06)',
-}
-
-/** @deprecated emoji map — use <CatIcon /> */
-const CAT_ICONS = {
-  All: '📋', Electronics: '📱', Services: '🔧', 
-  Vehicles: '🚗', Fashion: '👗', Food: '🍱', Property: '🏠', Agriculture: '🌱',
 }
 
 /* ══════════════════════════════════════════════════════
@@ -83,7 +74,6 @@ export default function LookingFor() {
   const [district,        setDistrict]        = useState('All Districts')
   const [budgetMin,       setBudgetMin]       = useState('')
   const [budgetMax,       setBudgetMax]       = useState('')
-  const [rangeValue,      setRangeValue]      = useState(50)
   const [moreFiltersOpen, setMoreFiltersOpen] = useState(false)
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   useEffect(() => {
@@ -112,12 +102,8 @@ export default function LookingFor() {
   })
   const [toast,         setToast]         = useState(null)
   const [detailReq,     setDetailReq]     = useState(null)  // View Details modal
-  const [myAlerts,      setMyAlerts]      = useState([])
-const [alertsOpen,    setAlertsOpen]    = useState(false)
-const [alertTab,      setAlertTab]      = useState(0)
-const [newNotifCount, setNewNotifCount] = useState(0)
-const [notifications, setNotifications] = useState([])
-const myAlertsRef = useRef([])
+  const [newNotifCount, setNewNotifCount] = useState(0)
+  const myAlertsRef = useRef([])
 
   /* ── composer ── */
   const [composerOpen,  setComposerOpen]  = useState(false)
@@ -293,7 +279,7 @@ const myAlertsRef = useRef([])
     if (viewedIdsRef.current.has(req.id)) return
 
     const storageKey = `lf_viewed_${user.id}`
-    let seen = []
+    let seen
     try { seen = JSON.parse(localStorage.getItem(storageKey) || '[]') } catch { seen = [] }
     if (seen.includes(req.id)) {
       viewedIdsRef.current.add(req.id)
@@ -353,31 +339,7 @@ const myAlertsRef = useRef([])
 
   async function loadAlerts(uid) {
     const { data } = await supabase.from('wanted_alerts').select('*').eq('user_id', uid).eq('active', true)
-    setMyAlerts(data || [])
     myAlertsRef.current = data || []
-  }
-
-  async function subscribeToCategory(cat, opts = {}) {
-    const exists = myAlerts.find(a => a.category === cat)
-    if (exists) {
-      await supabase.from('wanted_alerts').delete().eq('id', exists.id)
-      setMyAlerts(prev => prev.filter(a => a.id !== exists.id))
-      showToast(`Alert removed for ${cat}`, 'success')
-      return
-    }
-    const { data, error } = await supabase.from('wanted_alerts').insert({
-      user_id: user.id,
-      category: cat,
-      active: true,
-      keywords: opts.keywords || [],
-      budget_min: opts.budgetMin || null,
-      budget_max: opts.budgetMax || null,
-      district: opts.district || null,
-    }).select().single()
-    if (!error && data) {
-      setMyAlerts(prev => [...prev, data])
-      showToast(`🔔 You'll be notified for new "${cat}" requests!`, 'success')
-    }
   }
 
   useEffect(() => {
@@ -396,17 +358,7 @@ const myAlertsRef = useRef([])
           a.active && (a.category === 'All' || a.category === req.category)
         )
         if (match) {
-          const notif = {
-            id: req.id,
-            title: req.title,
-            category: req.category,
-            budget: req.budget,
-            city: req.city,
-            created_at: req.created_at,
-            read: false,
-          }
           setNewNotifCount(n => n + 1)
-          setNotifications(prev => [notif, ...prev])
           setToast({ msg: `🔔 New "${req.category}" request: ${req.title}`, type: 'success' })
           setTimeout(() => setToast(null), 5000)
           const loc = viewerLocation || viewerCity || null
@@ -646,7 +598,7 @@ const myAlertsRef = useRef([])
     setSavedIds(prev => {
       const n = new Set(prev)
       wasSaved ? n.delete(id) : n.add(id)
-      try { localStorage.setItem('soko_saved_requests', JSON.stringify([...n])) } catch {}
+      try { localStorage.setItem('soko_saved_requests', JSON.stringify([...n])) } catch (error) { void error }
       return n
     })
     showToast(wasSaved ? 'Removed from saved' : 'Saved!', 'success')
@@ -668,7 +620,6 @@ const myAlertsRef = useRef([])
   const otherReqs = allReqs.filter(r => r.user_id !== user?.id && !isExpired(r))
   const savedReqs = allReqs.filter(r => savedIds.has(r.id) && !isExpired(r))
   const tabReqs   = activeTab === 'mine' ? myReqs : activeTab === 'saved' ? savedReqs : otherReqs
-  const localNearCount = tabReqs.filter(r => (r._locScore || 0) >= 85).length
   const viewerPlaceLabel =
     viewerLocation?.district ||
     viewerLocation?.city ||
@@ -927,8 +878,8 @@ const myAlertsRef = useRef([])
                 const val = Number(e.target.value)
                 setBudgetMax(val >= 2000000 ? '' : String(val))
               }}
-              onMouseUp={e => loadRequests()}
-              onTouchEnd={e => loadRequests()}
+              onMouseUp={() => loadRequests()}
+              onTouchEnd={() => loadRequests()}
               style={{ width:'100%', accentColor: C.green }} />
             <div style={{ display:'flex', justifyContent:'space-between', marginTop:4, overflow:'hidden' }}>
               <span style={{ fontSize:10, color:C.gray3, flexShrink:0 }}>MK 0</span>
@@ -971,7 +922,7 @@ const myAlertsRef = useRef([])
               Apply
             </button>
             {(budgetMin || budgetMax) && (
-              <button onClick={() => { setBudgetMin(''); setBudgetMax(''); setRangeValue(50); setTimeout(loadRequests, 0) }}
+              <button onClick={() => { setBudgetMin(''); setBudgetMax(''); setTimeout(loadRequests, 0) }}
                 style={{ padding:'9px 12px', background:'transparent', border:`1px solid ${C.border}`, borderRadius:6, color:C.gray2, fontSize:12, cursor:'pointer' }}>
                 ✕
               </button>
@@ -1319,7 +1270,7 @@ function DetailModal({ req, user, myListings, saved, viewerLocation, onClose, on
 
   let expiresLabel = null
   if (req.expires_at) {
-    const ms = new Date(req.expires_at) - Date.now()
+    const ms = new Date(req.expires_at) - new Date()
     if (ms > 0) {
       const days = Math.ceil(ms / 86400000)
       expiresLabel = days === 1 ? '1 day left' : `${days} days left`
@@ -1399,18 +1350,33 @@ function DetailModal({ req, user, myListings, saved, viewerLocation, onClose, on
     placeMatch = sameCity ? 'In your area' : sameRegion ? 'Same region' : 'Different city'
   }
 
+  const coordToReal = value => {
+    if (value == null) return null
+    if (typeof value === 'string' && value.trim() === '') return null
+    const n = Number(value)
+    if (!Number.isFinite(n) || n === 0) return null
+    return n
+  }
+  const realPoint = (latValue, lngValue) => {
+    const lat = coordToReal(latValue)
+    const lng = coordToReal(lngValue)
+    if (lat == null || lng == null) return null
+    if (lat < -17.2 || lat > -9.3 || lng < 32.6 || lng > 36) return null
+    return { lat, lng }
+  }
+
   let distanceText = null
-  if (viewerLocation && !isOwn) {
-    const viewerLat = Number(viewerLocation.lat)
-    const viewerLng = Number(viewerLocation.lng)
-    const reqLat = Number(req.lat)
-    const reqLng = Number(req.lng)
-    if ([viewerLat, viewerLng, reqLat, reqLng].every(Number.isFinite)) {
-      const km = haversineKm(viewerLat, viewerLng, reqLat, reqLng)
-      if (km != null) distanceText = `about ${Math.max(1, Math.round(km))} km`
+  if (!isOwn && placeMatch && placeMatch !== 'Different city') {
+    const viewerPoint = realPoint(viewerLocation?.lat, viewerLocation?.lng)
+    const reqPoint = realPoint(req.lat, req.lng)
+    if (viewerPoint && reqPoint) {
+      const km = haversineKm(viewerPoint.lat, viewerPoint.lng, reqPoint.lat, reqPoint.lng)
+      if (km != null && km <= 50) distanceText = `about ${Math.max(1, Math.round(km))} km away`
     }
   }
-  const locationMatchText = placeMatch ? `${placeMatch}${distanceText ? ` · ${distanceText}` : ''}` : null
+  const locationMatchText = placeMatch
+    ? (distanceText && placeMatch !== 'In your area' ? distanceText : placeMatch)
+    : null
 
   const iconBtn = {
     width: 40, height: 40, borderRadius: 12, border: `1px solid ${C.border}`,
@@ -1421,17 +1387,18 @@ function DetailModal({ req, user, myListings, saved, viewerLocation, onClose, on
   return (
     <div
       style={{
-        position: 'fixed', inset: 0, zIndex: 1000,
+        position: 'fixed', inset: 0, zIndex: 10000,
         background: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(8px)',
         display: 'flex', alignItems: isPhone ? 'flex-end' : 'center', justifyContent: 'center',
       }}
       onClick={e => e.target === e.currentTarget && onClose()}
     >
       <div style={{
+        position: 'relative', zIndex: 10001,
         background: C.surface,
         borderRadius: isPhone ? '16px 16px 0 0' : 20,
         width: '100%', maxWidth: isPhone ? '100%' : 560,
-        maxHeight: '92vh', display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        maxHeight: isPhone ? '100dvh' : '92vh', display: 'flex', flexDirection: 'column', overflow: 'hidden',
         boxShadow: isPhone ? '0 -12px 48px rgba(0,0,0,0.2)' : C.shadow,
         fontFamily: "'Inter', system-ui, sans-serif",
       }}>
@@ -1485,7 +1452,10 @@ function DetailModal({ req, user, myListings, saved, viewerLocation, onClose, on
           </div>
         )}
 
-        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 18px 20px' }}>
+        <div style={{
+          flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 18px 24px',
+          paddingBottom: 'calc(32px + env(safe-area-inset-bottom, 0px))',
+        }}>
           {mainPhoto ? (
             <>
               <div style={{
@@ -1587,17 +1557,6 @@ function DetailModal({ req, user, myListings, saved, viewerLocation, onClose, on
             </p>
           ) : null}
 
-          <div style={{ display: 'flex', gap: 22, marginBottom: 16 }}>
-            <div>
-              <div style={{ fontSize: 12, color: C.gray1, fontWeight: 600 }}>Posted</div>
-              <div style={{ fontSize: 14, color: C.text, fontWeight: 700 }}>{timeAgo(req.created_at)}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 12, color: C.gray1, fontWeight: 600 }}>Expires</div>
-              <div style={{ fontSize: 14, color: C.text, fontWeight: 700 }}>{expiresLabel || 'Open'}</div>
-            </div>
-          </div>
-
           <div style={{
             background: C.bg, border: `1px solid ${C.border}`, borderRadius: 16,
             padding: 14, marginBottom: 16,
@@ -1660,8 +1619,9 @@ function DetailModal({ req, user, myListings, saved, viewerLocation, onClose, on
         </div>
 
         <div style={{
-          position: 'sticky', bottom: 0, background: C.surface, borderTop: `1px solid ${C.border}`,
-          padding: '12px 18px calc(12px + env(safe-area-inset-bottom))',
+          position: 'sticky', bottom: 0, zIndex: 1, background: C.surface, borderTop: `1px solid ${C.border}`,
+          padding: '12px 18px',
+          paddingBottom: 'calc(12px + env(safe-area-inset-bottom, 0px))',
           display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
         }}>
           {!isOwn && (
@@ -1679,9 +1639,6 @@ function DetailModal({ req, user, myListings, saved, viewerLocation, onClose, on
               {saved ? 'Saved' : 'Save'}
             </button>
           )}
-          <button type="button" onClick={handleShare} style={iconBtn} title="Share" aria-label="Share">
-            {Icon.share(18, C.text)}
-          </button>
           {isOwn ? (
             <>
               <button
