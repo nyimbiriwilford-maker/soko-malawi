@@ -151,17 +151,13 @@ export const LOOKING_FOR_CARD_CSS = `
 export default function LookingForRequestCard({
   req,
   user,
-  saved = false,
   isNearYou = false,
   carousel = false,
   onOffer,
-  onSave,
   onFulfill,
-  onDelete,
   onReactivate,
   onManage,
   onViewDetails,
-  compactCta = false,
 }) {
   const isOwn = user?.id && req.user_id === user.id
   const urgOpt = (URGENCY_OPTIONS || []).find(u => u.value === req.urgency)
@@ -215,6 +211,12 @@ export default function LookingForRequestCard({
             {firstCity}
           </span>
           {moreCount > 0 && <span className="lf-card-chip-more">+{moreCount}</span>}
+          {Number.isFinite(req._distanceKm) && (
+            <>
+              <span className="lf-card-meta-dot">·</span>
+              <span>{req._distanceLabel || `about ${Math.max(1, Math.round(req._distanceKm))} km`}</span>
+            </>
+          )}
           <span className="lf-card-meta-dot">·</span>
           <span>{daysAgo}</span>
           {req.expires_at && new Date(req.expires_at) <= new Date() && (

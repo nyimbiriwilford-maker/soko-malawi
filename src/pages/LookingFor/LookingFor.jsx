@@ -13,13 +13,17 @@ import {
   sortRequestsByViewerLocation,
   withDistanceToBuyer,
   viewerLocationTokens,
-  haversineKm,
-  MALAWI_PLACE_COORDS,
+  isRealMalawiPoint,
+  realDistanceKm,
+  requestMatchesViewerPlace,
 } from '../../utils/lookingFor'
 import { CATEGORIES, URGENCY_OPTIONS, expiresAtFromDays } from '../../constants/lookingFor'
 import { timeAgo } from '../../utils/lookingFor'
 import SokoNav from '../../components/SokoNav'
 import LookingForRequestCard, { LOOKING_FOR_CARD_CSS } from '../../components/LookingFor/LookingForRequestCard'
+
+const BATCH_SIZES = { phone: 10, tablet: 16, laptop: 24 }
+const FETCH_LIMIT = 150
 
 /* ── colour tokens (aligned with Home / Shops / Listings) ── */
 const C = {
@@ -41,29 +45,34 @@ const C = {
 }
 
 const GPS_ACCEPT_ACCURACY_M = 500
-const GPS_VIEWER_ACCURACY_M = 1000
-
-function isInMalawi(lat, lng) {
-  const a = Number(lat)
-  const b = Number(lng)
-  return Number.isFinite(a) && Number.isFinite(b) &&
-    a >= -17.2 && a <= -9.3 && b >= 32.6 && b <= 36.0
-}
+const DISTANCE_OPTIONS = [
+  { value: 2, label: 'Within 2 km' },
+  { value: 5, label: 'Within 5 km' },
+  { value: 10, label: 'Within 10 km' },
+  { value: 25, label: 'Within 25 km' },
+  { value: 50, label: 'Within 50 km' },
+]
 
 function isAccurateMalawiGps(gps) {
-  if (!gps) return false
-  const accuracy = Number(gps.accuracy)
-  return Number.isFinite(accuracy) && accuracy <= GPS_ACCEPT_ACCURACY_M && isInMalawi(gps.lat, gps.lng)
+  return isRealMalawiPoint(gps, { requireAccuracy: true }) &&
+    Number(gps.accuracy) <= GPS_ACCEPT_ACCURACY_M
 }
 
-function isKnownPlaceCenter(lat, lng) {
-  const a = Number(lat)
-  const b = Number(lng)
-  if (!Number.isFinite(a) || !Number.isFinite(b)) return false
-  return Object.values(MALAWI_PLACE_COORDS).some(c =>
-    (Math.abs(a - c.lat) < 0.00005 && Math.abs(b - c.lng) < 0.00005) ||
-    (Number(a.toFixed(3)) === Number(c.lat.toFixed(3)) && Number(b.toFixed(3)) === Number(c.lng.toFixed(3))),
-  )
+function applyDistanceFilter(list, viewerLoc, radiusKm) {
+  if (!radiusKm || !isRealMalawiPoint(viewerLoc, { requireAccuracy: true })) return list
+  return (list || []).filter(r => {
+    const km = Number.isFinite(r._distanceKm) ? r._distanceKm : realDistanceKm(r, viewerLoc)
+    return Number.isFinite(km)
+      ? km <= radiusKm
+      : requestMatchesViewerPlace(r, viewerLoc)
+  })
+}
+
+function getBatchSize() {
+  if (typeof window === 'undefined') return BATCH_SIZES.laptop
+  if (window.matchMedia?.('(min-width: 1100px)').matches) return BATCH_SIZES.laptop
+  if (window.matchMedia?.('(min-width: 769px)').matches) return BATCH_SIZES.tablet
+  return BATCH_SIZES.phone
 }
 
 /* ══════════════════════════════════════════════════════
@@ -81,6 +90,20 @@ export default function LookingFor() {
     return () => window.removeEventListener('resize', handler)
   }, [])
 
+  useEffect(() => {
+    const update = () => setBatchSize(getBatchSize())
+    const laptop = window.matchMedia?.('(min-width: 1100px)')
+    const tablet = window.matchMedia?.('(min-width: 769px)')
+    laptop?.addEventListener?.('change', update)
+    tablet?.addEventListener?.('change', update)
+    window.addEventListener('resize', update)
+    return () => {
+      laptop?.removeEventListener?.('change', update)
+      tablet?.removeEventListener?.('change', update)
+      window.removeEventListener('resize', update)
+    }
+  }, [])
+
   /* ── auth / user ── */
   const [user,          setUser]          = useState(null)
   const [myListings,    setMyListings]    = useState([])
@@ -89,8 +112,13 @@ export default function LookingFor() {
   const [requests,      setRequests]      = useState([])
   const [allCategories, setAllCategories] = useState(new Set())
   const [loading,       setLoading]       = useState(true)
+  const [batchSize,     setBatchSize]     = useState(getBatchSize)
+  const [visibleState,  setVisibleState]  = useState(null)
+  const [appending,     setAppending]     = useState(false)
   const viewedIdsRef = useRef(new Set()) // session: count each request once
   const openedFromUrlRef = useRef(null)
+  const sentinelRef = useRef(null)
+  const loadingMoreRef = useRef(false)
 
   /* ── filters ── */
   const [search,          setSearch]          = useState('')
@@ -101,6 +129,7 @@ export default function LookingFor() {
   const [district,        setDistrict]        = useState('All Districts')
   const [budgetMin,       setBudgetMin]       = useState('')
   const [budgetMax,       setBudgetMax]       = useState('')
+  const [radiusKm,        setRadiusKm]        = useState(null)
   const [moreFiltersOpen, setMoreFiltersOpen] = useState(false)
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
   useEffect(() => {
@@ -158,7 +187,7 @@ export default function LookingFor() {
         .then(async ({ data }) => {
           setUser({ ...user, ...(data || {}) })
           const gps = await getGPSLocation()
-          if (gps?.label || gps?.district || gps?.city) {
+          if (isAccurateMalawiGps(gps)) {
             setViewerLocation(gps)
             setViewerCity(gps.district || gps.city || gps.label)
           } else {
@@ -177,7 +206,7 @@ export default function LookingFor() {
 
   useEffect(() => {
     if (!detectingViewer && user) loadRequests()
-  }, [category, detectingViewer, viewerCity, viewerLocation, sortBy, budgetMin, budgetMax, locationFilter, district, search, headerSearch, user])
+  }, [category, detectingViewer, viewerCity, viewerLocation, sortBy, radiusKm, budgetMin, budgetMax, locationFilter, district, search, headerSearch, user])
 
   // Open a request from the URL (?request=<id>) — used by Home cards
   useEffect(() => {
@@ -209,7 +238,7 @@ export default function LookingFor() {
       let q = supabase.from('buyer_requests')
         .select(selectCols)
         .neq('status', 'fulfilled')
-        .limit(preferLocal ? 60 : 120)
+        .limit(preferLocal ? 60 : FETCH_LIMIT)
       if (withExpiryFilter) {
         let orFilter = `expires_at.is.null,expires_at.gt.${nowIso}`
         if (user?.id) orFilter += `,user_id.eq.${user.id}`
@@ -222,10 +251,7 @@ export default function LookingFor() {
         // cities array contains district OR city text match
         q = q.or(`cities.cs.{"${district.replace(/"/g, '')}"},city.ilike.%${district.replace(/[%_,]/g, '')}%`)
       }
-      if (sortBy === 'budget') q = q.order('budget', { ascending: false, nullsFirst: false })
-      else if (sortBy === 'demand') q = q.order('offer_count', { ascending: false })
-      else if (sortBy === 'urgent') q = q.order('urgency', { ascending: true })
-      else q = q.order('created_at', { ascending: false })
+      q = q.order('created_at', { ascending: false })
       return q
     }
 
@@ -284,13 +310,18 @@ export default function LookingFor() {
         }
         return { ...r, profiles, user_has_offered: offeredIds.has(r.id) }
       })
-      // Prioritise posts looking for product in viewer's GPS city/district
-      // and attach estimated distance (seller GPS → buyer stay)
-      const loc = viewerLocation || viewerCity || null
-      const ranked = sortRequestsByViewerLocation(mapped, loc, sortBy)
-      setRequests(withDistanceToBuyer(ranked, loc))
-      // Category pills from loaded data (no separate stats bar)
-      const cats = new Set((mapped || []).map(r => r.category).filter(Boolean))
+      // Attach real distance before sorting/filtering so Nearest and radius work together.
+      const loc = viewerLocation || null
+      const annotated = withDistanceToBuyer(mapped, loc)
+      const withinDistance = applyDistanceFilter(annotated, loc, radiusKm)
+      const ranked = sortRequestsByViewerLocation(
+        withinDistance,
+        viewerLocation || viewerCity || null,
+        sortBy,
+      )
+      setRequests(ranked)
+      // Category pills reflect the active distance filter.
+      const cats = new Set((withinDistance || []).map(r => r.category).filter(Boolean))
       setAllCategories(cats)
     }
     setLoading(false)
@@ -354,10 +385,12 @@ export default function LookingFor() {
     setDetectingViewer(true)
     const gps = await getGPSLocation({ force: true })
     setDetectingViewer(false)
-    if (!gps?.label && !gps?.district) {
+    if (!isAccurateMalawiGps(gps)) {
       setViewerLocation(null)
       setViewerCity(null)
-      showToast('Could not detect GPS.', 'warning')
+      setRadiusKm(null)
+      if (sortBy === 'nearest') setSortBy('recent')
+      showToast('Could not detect an accurate GPS location.', 'warning')
       return
     }
     setViewerLocation(gps)
@@ -389,20 +422,25 @@ export default function LookingFor() {
           setNewNotifCount(n => n + 1)
           setToast({ msg: `🔔 New "${req.category}" request: ${req.title}`, type: 'success' })
           setTimeout(() => setToast(null), 5000)
-          const loc = viewerLocation || viewerCity || null
-          setRequests(prev => withDistanceToBuyer(
-            sortRequestsByViewerLocation(
-              [{ ...req, user_has_offered: false }, ...prev.filter(r => r.id !== req.id)],
-              loc,
+          const loc = viewerLocation || null
+          setRequests(prev => {
+            const incoming = [
+              { ...req, user_has_offered: false },
+              ...prev.filter(r => r.id !== req.id),
+            ]
+            const annotated = withDistanceToBuyer(incoming, loc)
+            const withinDistance = applyDistanceFilter(annotated, loc, radiusKm)
+            return sortRequestsByViewerLocation(
+              withinDistance,
+              viewerLocation || viewerCity || null,
               sortBy,
-            ),
-            loc,
-          ))
+            )
+          })
         }
       })
       .subscribe()
     return () => { supabase.removeChannel(channel) }
-  }, [user, viewerLocation, viewerCity, sortBy])
+  }, [user, viewerLocation, viewerCity, sortBy, radiusKm])
 
   /* ── composer open ── */
   async function captureComposerGps() {
@@ -640,7 +678,7 @@ export default function LookingFor() {
 
   /* ── clear all filters ── */
   function clearFilters() {
-    setCategory('All'); setBudgetMin(''); setBudgetMax('')
+    setCategory('All'); setBudgetMin(''); setBudgetMax(''); setRadiusKm(null)
     setLocationFilter('All Locations'); setDistrict('All Districts')
     setSearch(''); setHeaderSearch('')
     setTimeout(loadRequests, 0)
@@ -654,12 +692,56 @@ export default function LookingFor() {
   const otherReqs = allReqs.filter(r => r.user_id !== user?.id && !isExpired(r))
   const savedReqs = allReqs.filter(r => savedIds.has(r.id) && !isExpired(r))
   const tabReqs   = activeTab === 'mine' ? myReqs : activeTab === 'saved' ? savedReqs : otherReqs
+  const viewKey = JSON.stringify([
+    activeTab, category, search, headerSearch, sortBy, budgetMin, budgetMax,
+    locationFilter, district, radiusKm, batchSize,
+  ])
+  const viewKeyRef = useRef(viewKey)
+  viewKeyRef.current = viewKey
+  const visibleCount = visibleState?.key === viewKey
+    ? Math.min(visibleState.count, tabReqs.length)
+    : batchSize
+  const visibleReqs = tabReqs.slice(0, visibleCount)
+  const hasMore = visibleCount < tabReqs.length
+
+  function loadMoreBatch() {
+    if (loading || appending || loadingMoreRef.current || !hasMore) return
+    loadingMoreRef.current = true
+    setAppending(true)
+    const key = viewKey
+    const y = window.scrollY
+    window.setTimeout(() => {
+      if (viewKeyRef.current === key) setVisibleState({ key, count: visibleCount + batchSize })
+      setAppending(false)
+      loadingMoreRef.current = false
+      window.requestAnimationFrame(() => window.scrollTo(0, y))
+    }, 180)
+  }
+
+  useEffect(() => {
+    const el = sentinelRef.current
+    if (!el || !hasMore || loading) return
+    const observer = new IntersectionObserver(entries => {
+      if (entries[0]?.isIntersecting) loadMoreBatch()
+    }, { rootMargin: '300px 0px' })
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [hasMore, loading, viewKey, visibleCount, batchSize])
+
   const viewerPlaceLabel =
     viewerLocation?.district ||
     viewerLocation?.city ||
     viewerLocation?.label ||
     viewerCity ||
     null
+  const hasViewerGps = isRealMalawiPoint(viewerLocation, { requireAccuracy: true })
+  const distanceLabel = DISTANCE_OPTIONS.find(o => o.value === radiusKm)?.label || ''
+  const activeFilterCount =
+    (category !== 'All' ? 1 : 0) +
+    (locationFilter !== 'All Locations' ? 1 : 0) +
+    (budgetMin || budgetMax ? 1 : 0) +
+    (district !== 'All Districts' ? 1 : 0) +
+    (radiusKm ? 1 : 0)
 
   const visibleCats    = ['All', ...CATEGORIES.filter(c => c !== 'All' && allCategories.has(c))]
   const malawCities    = [...new Set(requests.flatMap(r => r.cities?.length > 0 ? r.cities : (r.city ? [r.city] : [])))]
@@ -711,16 +793,9 @@ export default function LookingFor() {
         <button type="button" onClick={() => setMobileFiltersOpen(true)}
           style={{ height: 48, width: 48, borderRadius: 999, background: '#fff', border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative' }}>
           {Icon.sliders(18, C.textSub)}
-          {(() => {
-            let count = 0
-            if (category !== 'All') count++
-            if (locationFilter !== 'All Locations') count++
-            if (budgetMin || budgetMax) count++
-            if (district !== 'All Districts') count++
-            return count > 0 ? (
-              <span style={{ position: 'absolute', top: 6, right: 6, minWidth: 16, height: 16, borderRadius: 999, background: C.green, color: '#fff', fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>{count}</span>
-            ) : null
-          })()}
+          {activeFilterCount > 0 ? (
+            <span style={{ position: 'absolute', top: 6, right: 6, minWidth: 16, height: 16, borderRadius: 999, background: C.green, color: '#fff', fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>{activeFilterCount}</span>
+          ) : null}
         </button>
       </div>
       <div className="lf-phone-chips" style={{ display: 'none', padding: '8px 14px 0', gap: 8, overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
@@ -786,7 +861,7 @@ export default function LookingFor() {
             onClick={() => setMoreFiltersOpen(p => !p)}
             style={{ display:'flex', alignItems:'center', gap:6, padding:'6px 12px', cursor:'pointer', color: moreFiltersOpen ? C.green : C.textSub, fontSize:13, whiteSpace:'nowrap', background:'none', border:'none', fontFamily:'inherit' }}
           >
-            {Icon.sliders(14, moreFiltersOpen ? C.green : C.textSub)} More {moreFiltersOpen ? Icon.chevU(12) : Icon.chevD(12)}
+            {Icon.sliders(14, moreFiltersOpen ? C.green : C.textSub)} More{activeFilterCount ? ` (${activeFilterCount})` : ''} {moreFiltersOpen ? Icon.chevU(12) : Icon.chevD(12)}
           </button>
         </div>
 
@@ -845,6 +920,7 @@ export default function LookingFor() {
           <select value={sortBy} onChange={e => setSortBy(e.target.value)}
             style={{ background: C.surface, border:`1px solid ${C.border}`, color:C.textSub, borderRadius:6, padding:'5px 10px', fontSize:13, cursor:'pointer', outline:'none' }}>
             <option value="recent">Newest</option>
+            <option value="nearest" disabled={!hasViewerGps}>Nearest</option>
             <option value="budget">Budget</option>
             <option value="demand">Offers</option>
             <option value="urgent">Urgent</option>
@@ -976,6 +1052,37 @@ export default function LookingFor() {
               <span style={{ fontSize:13, color: locationFilter === loc ? C.text : C.textSub, fontWeight: locationFilter === loc ? 700 : 400 }}>{loc}</span>
             </label>
           ))}
+
+          <div style={{ height:1, background: C.border, margin:'14px 0' }} />
+
+          {/* Distance */}
+          <div style={{ fontSize:11, color:C.gray2, marginBottom:10, fontWeight:600 }}>DISTANCE</div>
+          {hasViewerGps ? (
+            <select
+              value={radiusKm ?? ''}
+              onChange={e => setRadiusKm(e.target.value ? Number(e.target.value) : null)}
+              disabled={detectingViewer}
+              style={{ width:'100%', background:C.bg, border:`1px solid ${C.border}`, borderRadius:6, padding:'8px 10px', color:C.textSub, fontSize:12, outline:'none', cursor:'pointer' }}
+            >
+              <option value="">Any distance</option>
+              {DISTANCE_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          ) : (
+            <div style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:'8px 10px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
+              <span style={{ fontSize:12, color:C.gray2, lineHeight:1.3 }}>Enable GPS to filter by distance</span>
+              <button type="button" onClick={redetectViewerGps} disabled={detectingViewer}
+                style={{ flexShrink:0, background:'none', border:'none', color:C.green, fontSize:12, fontWeight:700, cursor:detectingViewer?'default':'pointer', padding:0 }}>
+                {detectingViewer ? '…' : 'Enable GPS'}
+              </button>
+            </div>
+          )}
+          {radiusKm && (
+            <div style={{ marginTop:8, fontSize:11, color:C.green, fontWeight:700 }}>
+              {distanceLabel} · <button type="button" onClick={() => setRadiusKm(null)} style={{ background:'none', border:'none', color:C.green, fontSize:11, fontWeight:700, cursor:'pointer', padding:0 }}>Clear distance</button>
+            </div>
+          )}
         </div>
 
         {/* ── CARDS GRID ── */}
@@ -1013,8 +1120,10 @@ export default function LookingFor() {
           </div>
 
           {loading && (
-            <div style={{ textAlign:'center', padding:'48px 0' }}>
-              <div style={{ color: C.green, fontSize:14 }}>Loading requests…</div>
+            <div className="lf-cards-grid" aria-hidden="true">
+              {Array.from({ length: batchSize === BATCH_SIZES.phone ? 6 : 9 }).map((_, i) => (
+                <div key={i} className="lf-skel-card" />
+              ))}
             </div>
           )}
           {!loading && tabReqs.length === 0 && (
@@ -1026,32 +1135,68 @@ export default function LookingFor() {
               }}>
                 {Icon.search(24, C.green)}
               </div>
-              <div style={{ fontFamily:"'Sora', 'Inter', system-ui, sans-serif", fontSize:18, fontWeight:700, marginBottom:8, color:C.text }}>No requests found</div>
-              <div style={{ fontSize:14, color:C.gray2, marginBottom:20 }}>Try different filters or be the first to post a request.</div>
-              <button onClick={handleOpenComposer}
-                style={{ background: C.green, color:'#fff', border:'none', borderRadius:10, padding:'0 20px', height:44, fontWeight:700, fontSize:14, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6 }}>
-                {Icon.plus(14, '#fff')} Post request
-              </button>
+              <div style={{ fontFamily:"'Sora', 'Inter', system-ui, sans-serif", fontSize:18, fontWeight:700, marginBottom:8, color:C.text }}>
+                {radiusKm ? `No requests within ${radiusKm} km` : 'No requests found'}
+              </div>
+              <div style={{ fontSize:14, color:C.gray2, marginBottom:20 }}>
+                {radiusKm
+                  ? 'Requests without a saved GPS place are only kept when they match your current area.'
+                  : 'Try different filters or be the first to post a request.'}
+              </div>
+              {radiusKm ? (
+                <button onClick={() => setRadiusKm(null)}
+                  style={{ background: C.green, color:'#fff', border:'none', borderRadius:10, padding:'0 20px', height:44, fontWeight:700, fontSize:14, cursor:'pointer' }}>
+                  Clear distance
+                </button>
+              ) : (
+                <button onClick={handleOpenComposer}
+                  style={{ background: C.green, color:'#fff', border:'none', borderRadius:10, padding:'0 20px', height:44, fontWeight:700, fontSize:14, cursor:'pointer', display:'inline-flex', alignItems:'center', gap:6 }}>
+                  {Icon.plus(14, '#fff')} Post request
+                </button>
+              )}
             </div>
           )}
           {!loading && tabReqs.length > 0 && (
-            <div className="lf-cards-grid">
-              {tabReqs.map(req => (
-                <LookingForRequestCard
-                  key={req.id}
-                  req={req}
-                  user={user}
-                  saved={savedIds.has(req.id)}
-                  isNearYou={(req._locScore || 0) >= 85}
-                  onOffer={sendOffer}
-                  onSave={toggleSave}
-                  onFulfill={markFulfilled}
-                  onDelete={deleteRequest}
-                  onReactivate={reactivateRequest}
-                  onViewDetails={openRequestDetails}
-                />
-              ))}
-            </div>
+            <>
+              <div style={{ fontSize:12, color:C.gray2, marginBottom:8 }}>
+                Showing {visibleReqs.length} of {tabReqs.length}
+              </div>
+              <div className="lf-cards-grid">
+                {visibleReqs.map(req => (
+                  <LookingForRequestCard
+                    key={req.id}
+                    req={req}
+                    user={user}
+                    saved={savedIds.has(req.id)}
+                    isNearYou={(req._locScore || 0) >= 85}
+                    onOffer={sendOffer}
+                    onSave={toggleSave}
+                    onFulfill={markFulfilled}
+                    onDelete={deleteRequest}
+                    onReactivate={reactivateRequest}
+                    onViewDetails={openRequestDetails}
+                  />
+                ))}
+                {appending && [0, 1].map(i => (
+                  <div key={`lf-more-skel-${i}`} className="lf-skel-card" aria-hidden="true" />
+                ))}
+              </div>
+              {hasMore ? (
+                <>
+                  <div ref={sentinelRef} style={{ height:1, width:'100%' }} />
+                  <div style={{ display:'flex', justifyContent:'center', marginTop:18 }}>
+                    <button type="button" onClick={loadMoreBatch} disabled={appending}
+                      style={{
+                        height:44, padding:'0 22px', borderRadius:10, border:`1px solid ${C.border}`,
+                        background:'transparent', color:C.textSub, fontSize:13, fontWeight:700,
+                        cursor:appending?'default':'pointer', fontFamily:'inherit',
+                      }}>
+                      {appending ? 'Loading…' : 'Show more'}
+                    </button>
+                  </div>
+                </>
+              ) : null}
+            </>
           )}
         </div>
       </div>
@@ -1112,6 +1257,33 @@ export default function LookingFor() {
           align-items: stretch;
         }
         ${LOOKING_FOR_CARD_CSS}
+        .lf-skel-card {
+          position: relative; overflow: hidden; min-height: 260px;
+          background: #f1f3f4; border-radius: 16px;
+        }
+        .lf-skel-card::after {
+          content: ''; position: absolute; inset: 0;
+          background: linear-gradient(90deg, transparent, rgba(255,255,255,0.65), transparent);
+          transform: translateX(-100%); animation: lf-skel-shimmer 1.3s infinite;
+        }
+        @keyframes lf-skel-shimmer { to { transform: translateX(100%); } }
+        @media (prefers-reduced-motion: reduce) {
+          .lf-skel-card::after { animation: none; }
+        }
+        .lf-viewer-arrow {
+          position: absolute; top: 50%; transform: translateY(-50%); z-index: 2;
+          width: 44px; height: 44px; border-radius: 50%;
+          border: 1px solid rgba(255,255,255,0.35); background: rgba(255,255,255,0.14);
+          color: #fff; font-size: 30px; line-height: 1; cursor: pointer;
+          display: flex; align-items: center; justify-content: center; padding: 0;
+        }
+        .lf-viewer-spinner {
+          position: absolute; width: 38px; height: 38px; border-radius: 50%;
+          border: 3px solid rgba(255,255,255,0.25); border-top-color: #fff;
+          animation: lf-viewer-spin 0.8s linear infinite;
+        }
+        @keyframes lf-viewer-spin { to { transform: rotate(360deg); } }
+        @media (max-width: 768px) { .lf-viewer-arrow { display: none; } }
         @media (min-width: 900px) {
           .lf-hero-side-card { display: block !important; }
           .lf-card-media { height: 168px !important; min-height: 168px !important; max-height: 168px !important; }
@@ -1289,11 +1461,146 @@ export default function LookingFor() {
   )
 }
 
+function ImageViewer({ photos, index, onChange, onClose }) {
+  const [loaded, setLoaded] = useState(false)
+  const [failed, setFailed] = useState(false)
+  const [zoom, setZoom] = useState(false)
+  const startXRef = useRef(null)
+  const lastTapRef = useRef(0)
+
+  useEffect(() => {
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const onKey = e => {
+      if (e.key === 'Escape') onClose()
+      else if (e.key === 'ArrowRight' && photos.length > 1) onChange((index + 1) % photos.length)
+      else if (e.key === 'ArrowLeft' && photos.length > 1) onChange((index - 1 + photos.length) % photos.length)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.body.style.overflow = prev
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [index, photos.length, onChange, onClose])
+
+  function go(delta) {
+    if (photos.length <= 1) return
+    onChange((index + delta + photos.length) % photos.length)
+  }
+
+  function onTouchStart(e) {
+    startXRef.current = e.touches[0]?.clientX ?? null
+  }
+
+  function onTouchEnd(e) {
+    const start = startXRef.current
+    const end = e.changedTouches[0]?.clientX
+    startXRef.current = null
+    if (start == null || end == null) return
+    const dx = end - start
+    if (Math.abs(dx) > 50) {
+      go(dx < 0 ? 1 : -1)
+      lastTapRef.current = 0
+      return
+    }
+    const now = Date.now()
+    if (now - lastTapRef.current < 300) {
+      setZoom(z => !z)
+      lastTapRef.current = 0
+    } else {
+      lastTapRef.current = now
+    }
+  }
+
+  return (
+    <div
+      onClick={e => e.target === e.currentTarget && onClose()}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
+      style={{
+        position:'fixed', inset:0, zIndex:20000, background:'rgba(0,0,0,0.95)',
+        display:'flex', alignItems:'center', justifyContent:'center',
+      }}
+    >
+      <button type="button" aria-label="Close image viewer" onClick={onClose}
+        style={{
+          position:'absolute', top:12, right:12, width:44, height:44, borderRadius:'50%',
+          border:'none', background:'rgba(255,255,255,0.14)', color:'#fff',
+          display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', zIndex:2,
+        }}>
+        {Icon.x(20, '#fff')}
+      </button>
+      {photos.length > 1 && (
+        <div style={{
+          position:'absolute', top:24, left:'50%', transform:'translateX(-50%)',
+          color:'#fff', fontSize:14, fontWeight:800, zIndex:2,
+        }}>
+          {index + 1} / {photos.length}
+        </div>
+      )}
+      {photos.length > 1 && (
+        <>
+          <button type="button" className="lf-viewer-arrow" aria-label="Previous image" onClick={() => go(-1)}
+            style={{ left:16 }}><span>‹</span></button>
+          <button type="button" className="lf-viewer-arrow" aria-label="Next image" onClick={() => go(1)}
+            style={{ right:16 }}><span>›</span></button>
+        </>
+      )}
+      <div style={{ position:'relative', width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', padding:'56px 16px 92px' }}>
+        {failed ? (
+          <div style={{
+            width:'min(80vw, 420px)', height:'min(50vh, 280px)', borderRadius:16,
+            background:'#9aa0a6', color:'#fff', display:'flex', alignItems:'center', justifyContent:'center',
+            fontSize:14, fontWeight:700,
+          }}>Image unavailable</div>
+        ) : (
+          <>
+            {!loaded && <div className="lf-viewer-spinner" />}
+            <img
+              src={photos[index]}
+              alt=""
+              onLoad={() => setLoaded(true)}
+              onError={() => setFailed(true)}
+              onDoubleClick={() => setZoom(z => !z)}
+              style={{
+                maxWidth:'100vw', maxHeight:'100vh', width:'100%', height:'100%',
+                objectFit:'contain', display:'block',
+                opacity: loaded ? 1 : 0,
+                transform: zoom ? 'scale(1.8)' : 'scale(1)',
+                transition:'transform 0.18s ease, opacity 0.18s ease',
+                touchAction:'pinch-zoom', cursor: zoom ? 'zoom-out' : 'zoom-in',
+              }}
+            />
+          </>
+        )}
+      </div>
+      {photos.length > 1 && (
+        <div style={{
+          position:'absolute', bottom:16, left:'50%', transform:'translateX(-50%)',
+          display:'flex', gap:8, maxWidth:'92vw', overflowX:'auto', zIndex:2,
+        }}>
+          {photos.map((url, i) => (
+            <button key={url + i} type="button" aria-label={`View image ${i + 1}`} onClick={() => onChange(i)}
+              style={{
+                width:48, height:48, flexShrink:0, borderRadius:8, padding:0, overflow:'hidden',
+                border: i === index ? '2px solid #0F9D58' : '2px solid rgba(255,255,255,0.45)',
+                background:'#f1f3f4', cursor:'pointer',
+              }}>
+              <img src={url} alt="" style={{ width:'100%', height:'100%', objectFit:'cover', display:'block' }} />
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 /* ══════════════════════════════════════════════════════
    VIEW DETAILS MODAL — modern icons + share
 ══════════════════════════════════════════════════════ */
 function DetailModal({ req, user, myListings, saved, viewerLocation, onClose, onOffer, onSave, onFulfill, onReactivate, onDelete, userHasOffered }) {
   const [mainIdx, setMainIdx] = useState(0)
+  const [viewerIdx, setViewerIdx] = useState(null)
   const [shareNote, setShareNote] = useState(null)
   const isPhone = typeof window !== 'undefined' ? window.innerWidth < 769 : false
   const isOwn = req.user_id === user?.id
@@ -1392,34 +1699,10 @@ function DetailModal({ req, user, myListings, saved, viewerLocation, onClose, on
     placeMatch = sameCity ? 'In your area' : sameRegion ? 'Same region' : 'Different city'
   }
 
-  const coordToReal = value => {
-    if (value == null) return null
-    if (typeof value === 'string' && value.trim() === '') return null
-    const n = Number(value)
-    if (!Number.isFinite(n) || n === 0) return null
-    return n
-  }
-  const realPoint = (latValue, lngValue, accuracyValue) => {
-    const lat = coordToReal(latValue)
-    const lng = coordToReal(lngValue)
-    if (lat == null || lng == null) return null
-    if (lat < -17.2 || lat > -9.3 || lng < 32.6 || lng > 36) return null
-    if (isKnownPlaceCenter(lat, lng)) return null
-    if (accuracyValue !== undefined) {
-      const accuracy = Number(accuracyValue)
-      if (!Number.isFinite(accuracy) || accuracy > GPS_VIEWER_ACCURACY_M) return null
-    }
-    return { lat, lng }
-  }
-
   let distanceText = null
   if (!isOwn && placeMatch && placeMatch !== 'Different city') {
-    const viewerPoint = realPoint(viewerLocation?.lat, viewerLocation?.lng, viewerLocation?.accuracy)
-    const reqPoint = realPoint(req.lat, req.lng)
-    if (viewerPoint && reqPoint) {
-      const km = haversineKm(viewerPoint.lat, viewerPoint.lng, reqPoint.lat, reqPoint.lng)
-      if (km != null && km <= 50) distanceText = `about ${Math.max(1, Math.round(km))} km away`
-    }
+    const km = realDistanceKm(req, viewerLocation)
+    if (km != null) distanceText = `about ${Math.max(1, Math.round(km))} km away`
   }
   const locationMatchText = distanceText || placeMatch
 
@@ -1430,6 +1713,7 @@ function DetailModal({ req, user, myListings, saved, viewerLocation, onClose, on
   }
 
   return (
+    <>
     <div
       style={{
         position: 'fixed', inset: 0, zIndex: 10000,
@@ -1507,17 +1791,32 @@ function DetailModal({ req, user, myListings, saved, viewerLocation, onClose, on
                 width: '100%', height: isPhone ? 220 : 280, borderRadius: 16, overflow: 'hidden',
                 background: C.bg, position: 'relative', marginBottom: 14,
               }}>
-                <img src={mainPhoto} alt={req.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <button type="button" aria-label="View image" onClick={() => setViewerIdx(mainIdx)}
+                  style={{
+                    width: '100%', height: '100%', border: 'none', padding: 0,
+                    background: 'transparent', cursor: 'zoom-in', display: 'block',
+                  }}>
+                  <img src={mainPhoto} alt={req.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </button>
                 {photos.length > 1 && (
                   <div style={{
-                    position: 'absolute', bottom: 10, right: 10,
+                    position: 'absolute', bottom: 10, left: 10,
                     background: 'rgba(0,0,0,0.55)', color: '#fff',
                     borderRadius: 999, padding: '4px 10px',
-                    fontSize: 11, fontWeight: 800,
+                    fontSize: 11, fontWeight: 800, pointerEvents: 'none',
                   }}>
                     {mainIdx + 1} / {photos.length}
                   </div>
                 )}
+                <div style={{
+                  position: 'absolute', bottom: 10, right: 10,
+                  width: 28, height: 28, borderRadius: '50%',
+                  background: 'rgba(0,0,0,0.55)', color: '#fff',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  pointerEvents: 'none',
+                }}>
+                  {Icon.search(15, '#fff')}
+                </div>
               </div>
               {photos.length > 1 && (
                 <ul style={{
@@ -1528,7 +1827,7 @@ function DetailModal({ req, user, myListings, saved, viewerLocation, onClose, on
                     <li key={url + i} style={{ flexShrink: 0, scrollSnapAlign: 'start' }}>
                       <button
                         type="button"
-                        onClick={() => setMainIdx(i)}
+                        onClick={() => { setMainIdx(i); setViewerIdx(i) }}
                         style={{
                           width: 48, height: 48, borderRadius: 10, overflow: 'hidden',
                           border: i === mainIdx ? `2px solid ${C.green}` : `1px solid ${C.border}`,
@@ -1730,6 +2029,16 @@ function DetailModal({ req, user, myListings, saved, viewerLocation, onClose, on
         </div>
       </div>
     </div>
+      {viewerIdx != null && (
+        <ImageViewer
+          key={viewerIdx}
+          photos={photos}
+          index={viewerIdx}
+          onChange={i => { setViewerIdx(i); setMainIdx(i) }}
+          onClose={() => setViewerIdx(null)}
+        />
+      )}
+    </>
   )
 }
 

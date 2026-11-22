@@ -219,6 +219,15 @@ export function sortRequestsByViewerLocation(list, viewerLoc, sortBy = 'recent')
   }
 
   scored.sort((x, y) => {
+    if (sortBy === 'nearest') {
+      const xKm = x.r._distanceKm
+      const yKm = y.r._distanceKm
+      const xReal = Number.isFinite(xKm)
+      const yReal = Number.isFinite(yKm)
+      if (xReal && yReal && xKm !== yKm) return xKm - yKm
+      if (xReal !== yReal) return xReal ? -1 : 1
+      return secondary(x.r, y.r)
+    }
     // Local looking-area matches always float to top
     if (y.loc !== x.loc) return y.loc - x.loc
     return secondary(x.r, y.r)
@@ -320,49 +329,81 @@ export function buyerCoords(req) {
   return coordsForPlace(looking)
 }
 
-/**
- * Estimated distance from seller (viewer GPS) to buyer.
- * @returns {{ km: number, label: string, approx: boolean, place: string } | null}
- */
+const GPS_VIEWER_MAX_ACCURACY_M = 1000
+const REAL_DISTANCE_MAX_KM = 50
+
+function isKnownPlaceCenter(lat, lng) {
+  return Object.values(MALAWI_PLACE_COORDS).some(c =>
+    (Math.abs(lat - c.lat) < 0.00005 && Math.abs(lng - c.lng) < 0.00005) ||
+    (Number(lat.toFixed(3)) === Number(c.lat.toFixed(3)) &&
+      Number(lng.toFixed(3)) === Number(c.lng.toFixed(3))),
+  )
+}
+
+/** True only for a real, accurate Malawi GPS point (never a town-centre lookup). */
+export function isRealMalawiPoint(value, { requireAccuracy = false } = {}) {
+  if (!value) return false
+  const lat = Number(value.lat)
+  const lng = Number(value.lng)
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) return false
+  if (lat >= -0.0001 && lat <= 0.0001 && lng >= -0.0001 && lng <= 0.0001) return false
+  if (lat < -17.2 || lat > -9.3 || lng < 32.6 || lng > 36.0) return false
+  if (isKnownPlaceCenter(lat, lng)) return false
+  if (requireAccuracy) {
+    const accuracy = Number(value.accuracy)
+    if (!Number.isFinite(accuracy) || accuracy > GPS_VIEWER_MAX_ACCURACY_M) return false
+  }
+  return true
+}
+
+/** Real GPS distance in km, or null when either point is missing/unusable. */
+export function realDistanceKm(req, viewerLoc) {
+  if (!isRealMalawiPoint(viewerLoc, { requireAccuracy: true })) return null
+  if (!isRealMalawiPoint({ lat: req?.lat, lng: req?.lng })) return null
+  const km = haversineKm(viewerLoc.lat, viewerLoc.lng, req.lat, req.lng)
+  return km != null && km <= REAL_DISTANCE_MAX_KM ? km : null
+}
+
+/** Fallback for posts with no saved GPS: keep only same live-GPS place matches. */
+export function requestMatchesViewerPlace(req, viewerLoc) {
+  const viewerTokens = [
+    viewerLoc?.area,
+    viewerLoc?.city,
+    viewerLoc?.district,
+  ].map(normLoc).filter(Boolean)
+  if (!viewerTokens.length) return false
+  const requestTokens = [
+    req?.city,
+    req?.detected_city,
+    ...(Array.isArray(req?.cities) ? req.cities : []),
+  ].map(normLoc).filter(Boolean)
+  return viewerTokens.some(v => requestTokens.some(r =>
+    r === v || r.includes(v) || v.includes(r),
+  ))
+}
+
+/** Backwards-compatible shape, now backed only by real GPS. */
 export function estimateDistanceToBuyer(req, sellerLoc) {
-  if (!sellerLoc) return null
-  const sLat = Number(sellerLoc.lat)
-  const sLng = Number(sellerLoc.lng)
-  let from = Number.isFinite(sLat) && Number.isFinite(sLng)
-    ? { lat: sLat, lng: sLng }
-    : coordsForPlace(sellerLoc.district || sellerLoc.city || sellerLoc.label || sellerLoc)
-  if (!from) return null
-
-  const to = buyerCoords(req)
-  if (!to) return null
-
-  const km = haversineKm(from.lat, from.lng, to.lat, to.lng)
+  const km = realDistanceKm(req, sellerLoc)
   if (km == null) return null
-
-  const approx = !!(to.approx || from.approx || sellerLoc.approx)
-  let label
-  if (km < 1) label = approx ? 'Est. under 1 km' : 'Under 1 km'
-  else if (km < 10) label = `${approx ? '≈ ' : ''}${km.toFixed(1)} km`
-  else label = `${approx ? '≈ ' : ''}${Math.round(km)} km`
-
   return {
     km,
-    label,
-    approx,
-    place: to.place || req.city || 'buyer',
+    label: km < 1 ? 'Under 1 km' : `about ${Math.max(1, Math.round(km))} km`,
+    approx: false,
+    place: null,
   }
 }
 
-/** Annotate requests with _distanceKm / _distanceLabel for UI. */
+/** Annotate requests with real _distanceKm / _distanceLabel for UI. */
 export function withDistanceToBuyer(list, sellerLoc) {
   return (list || []).map(r => {
-    const d = estimateDistanceToBuyer(r, sellerLoc)
+    const km = realDistanceKm(r, sellerLoc)
     return {
       ...r,
-      _distanceKm: d?.km ?? null,
-      _distanceLabel: d?.label ?? null,
-      _distanceApprox: d?.approx ?? false,
-      _distancePlace: d?.place ?? null,
+      _distanceKm: km,
+      _distanceLabel: km == null ? null : (km < 1 ? 'Under 1 km' : `about ${Math.max(1, Math.round(km))} km`),
+      _distanceApprox: false,
+      _distancePlace: null,
     }
   })
 }
