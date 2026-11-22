@@ -158,3 +158,4 @@ Looking For: detail view fixes, action bar above nav, sane distance
 Looking For: capture accurate GPS when posting, safer distance
 Looking For: GPS distance filter and nearest sort
 Looking For: batch loading per device, image viewer
+Notifications: compact rows, unread state, remove side rails

@@ -1,22 +1,15 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { isListingFeatured } from '../utils/homeUtils'
 import {
   ArrowLeftRight,
   Archive,
-  Apple,
-  Armchair,
   Bell,
-  Car,
   Check,
   CheckCircle2,
-  ChevronDown,
   CircleDollarSign,
   Eye,
   Handshake,
   Heart,
-  Home,
-  MapPin,
   MessageCircle,
   MessageSquare,
   Package,
@@ -25,31 +18,21 @@ import {
   PhoneMissed,
   Search,
   Settings,
-  Shirt,
   ShoppingBag,
-  Smartphone,
   Sparkles,
-  Sprout,
   Star,
-  Tag,
   Trash2,
   Truck,
-  Users,
   VideoOff,
   AlertTriangle,
-  Wrench,
   X,
   MailOpen,
-  ChevronRight,
-  Navigation,
-  Store,
   Undo2,
   Clock,
   Timer,
   PenLine,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
-import { useUserLocation } from '../hooks/useUserLocation'
 import DealEducationModal from '../components/DealEducationModal'
 import {
   MIN_DEAL_MESSAGES,
@@ -59,8 +42,6 @@ import {
   markNotificationHandled,
 } from '../utils/dealNotificationFlow'
 import '../styles/notifications.css'
-
-const ICON_PROPS = { size: 18, strokeWidth: 1.75, 'aria-hidden': true }
 
 /** Renders a Lucide icon component safely (modern stroke icons) */
 function Ic({
@@ -82,49 +63,6 @@ function Ic({
       aria-hidden="true"
     />
   )
-}
-
-/**
- * Category → Lucide icon (aligned with homeConstants ALL_CATEGORIES).
- * Falls back to Tag for unknown / custom labels.
- */
-const CATEGORY_ICONS = {
-  electronics: Smartphone,
-  phones: Smartphone,
-  mobile: Smartphone,
-  computers: Smartphone,
-  furniture: Armchair,
-  home: Armchair,
-  clothing: Shirt,
-  clothes: Shirt,
-  fashion: Shirt,
-  vehicles: Car,
-  cars: Car,
-  motor: Car,
-  automotive: Car,
-  property: Home,
-  realestate: Home,
-  housing: Home,
-  land: Home,
-  agriculture: Sprout,
-  farming: Sprout,
-  farm: Sprout,
-  food: Apple,
-  groceries: Apple,
-  services: Wrench,
-  service: Wrench,
-  other: Package,
-}
-
-function getCategoryIcon(category) {
-  if (!category) return Tag
-  const key = String(category).toLowerCase().replace(/[^a-z0-9]+/g, '')
-  if (CATEGORY_ICONS[key]) return CATEGORY_ICONS[key]
-  // Partial match (e.g. "Electronics & Gadgets" → electronics)
-  for (const [name, Icon] of Object.entries(CATEGORY_ICONS)) {
-    if (key.includes(name) || name.includes(key)) return Icon
-  }
-  return Tag
 }
 
 /**
@@ -153,37 +91,6 @@ function VerifiedBadge({ size = 14, className = '' }) {
         strokeLinejoin="round"
       />
     </svg>
-  )
-}
-
-/** Five modern star glyphs for Featured section heading */
-function FeaturedStars({ size = 12 }) {
-  return (
-    <span className="ad-stars" aria-hidden="true">
-      {[0, 1, 2, 3, 4].map((i) => (
-        <Ic
-          key={i}
-          icon={Star}
-          size={size}
-          strokeWidth={0}
-          fill="currentColor"
-          className="ad-star-glyph"
-        />
-      ))}
-    </span>
-  )
-}
-
-/** Flow divider between rail sections */
-function AdFlowDivider({ soft = false }) {
-  return (
-    <div className={`ad-flow-divider${soft ? ' ad-flow-divider--soft' : ''}`} aria-hidden="true">
-      <span className="ad-flow-line" />
-      <span className="ad-flow-arrow">
-        <Ic icon={ChevronDown} size={16} strokeWidth={2.25} />
-      </span>
-      <span className="ad-flow-line" />
-    </div>
   )
 }
 
@@ -390,7 +297,7 @@ function renderSmartBody(notif, sender) {
     case 'listing_liked':
       return `${name} liked "${data.listing_title || 'your listing'}"`
     case 'listing_sold':
-      return `🎉 "${data.listing_title || 'Your listing'}" has been marked as sold!`
+      return `"${data.listing_title || 'Your listing'}" has been marked as sold!`
     case 'deal_ready':
       return `You've chatted with ${data.buyer_name || 'a buyer'} about "${data.listing_title || 'a listing'}". Confirm the deal here if the sale happened.`
     case 'deal_request':
@@ -753,66 +660,6 @@ function AvatarIcon({ notif, cfg, sender, loading, showTypeBadge = true }) {
   )
 }
 
-/** Product strip: price (lead) → title → district. Photo optional when rail shows it. */
-function ProductContext({ product, loading, hideImage = false }) {
-  if (!product && !loading) return null
-  if (loading && !product) {
-    return (
-      <div className="product-context is-loading" aria-hidden="true">
-        {!hideImage && <div className="product-context-img skeleton-shimmer" />}
-        <div className="product-context-meta">
-          <div className="skeleton-line" style={{ width: '40%', height: 12 }} />
-          <div className="skeleton-line" style={{ width: '68%', height: 9, marginTop: 6 }} />
-        </div>
-      </div>
-    )
-  }
-  if (!product) return null
-
-  const { title, image, price, kind, district, city } = product
-  const priceLabel = price != null && price !== ''
-    ? (typeof price === 'number' || /^\d+(\.\d+)?$/.test(String(price))
-        ? `MWK ${Number(price).toLocaleString()}`
-        : String(price))
-    : null
-  const place = [district, city].filter(Boolean).join(', ') || null
-  const showImg = !hideImage
-
-  return (
-    <div className={`product-context${showImg ? '' : ' product-context--text'}`} title={title}>
-      {showImg && (
-        image ? (
-          <img className="product-context-img" src={image} alt={title || 'Product'} loading="lazy" />
-        ) : (
-          <span className="product-context-img product-context-fallback" aria-hidden="true">
-            <Ic icon={kind === 'service' ? Settings : Package} size={16} strokeWidth={1.75} />
-          </span>
-        )
-      )}
-      <div className="product-context-meta">
-        {priceLabel && <div className="product-context-price">{priceLabel}</div>}
-        <div className="product-context-title">{title}</div>
-        {place && (
-          <div className="product-context-place">
-            <Ic icon={MapPin} size={11} strokeWidth={2.25} />
-            {place}
-          </div>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function OfferChip({ data, cfg }) {
-  if (!data.offer_amount) return null
-  return (
-    <div className="offer-chip" style={{ color: cfg.color, borderColor: cfg.color, backgroundColor: cfg.bg }}>
-      <Ic icon={CircleDollarSign} size={13} strokeWidth={2} />
-      <span>MWK {Number(data.offer_amount).toLocaleString()}</span>
-    </div>
-  )
-}
-
 /**
  * Decision actions only. Open/view/profile are handled by tapping the row —
  * keeps the inbox scannable and action rows rare.
@@ -1036,7 +883,6 @@ const NotificationCard = memo(function NotificationCard({
   sender,
   sendersLoading,
   product,
-  productsLoading,
   index,
   onCardClick,
   onDelete,
@@ -1044,27 +890,17 @@ const NotificationCard = memo(function NotificationCard({
   onArchive,
   onAction,
 }) {
-  const data = notif.data || {}
   const onClickCard = useCallback(() => onCardClick(notif), [onCardClick, notif])
   const actorName = getActorName(notif, sender)
   const hasActor = !!(actorName && actorName !== 'Someone')
   const displayName = hasActor ? actorName : (notif.title || cfg.label || 'Someone')
   const isVerified = !!(sender?.is_verified)
   const purpose = getNotificationPurpose(notif, sender)
-  const TypeIcon = cfg.Icon || Bell
-  const isMessage = notif.type === 'new_message'
-  const showProduct = !!(product?.image || product?.title || productsLoading)
-
-  // Context under purpose (listing title etc.) — name is shown on the person row
-  const contextBits = []
-  if (product?.title) contextBits.push(product.title)
-  else if (data.listing_title) contextBits.push(data.listing_title)
-  else if (data.service_name) contextBits.push(data.service_name)
-  const contextLine = contextBits.join(' · ')
 
   const ariaLabel = [
     cfg.label,
     displayName,
+    product?.title,
     isVerified ? 'verified' : null,
     purpose,
     notif.read ? 'read' : 'unread',
@@ -1084,91 +920,41 @@ const NotificationCard = memo(function NotificationCard({
           className={[
             'notif-card',
             notif.read ? 'is-read' : 'is-unread',
-            product?.image ? 'has-product' : '',
-            isMessage ? 'is-message' : '',
           ].filter(Boolean).join(' ')}
           style={{ '--notif-accent': cfg.color }}
         >
           <div className="notif-card-inner">
-            <div className="notif-card-main">
-              {/* Avatar → full name → verified at end */}
-              <div className="notif-person">
-                <AvatarIcon
-                  notif={notif}
-                  cfg={cfg}
-                  sender={sender}
-                  loading={sendersLoading}
-                />
-                <div className="notif-person-text">
-                  <div className="notif-person-row">
-                    <span className={`notif-person-name${notif.read ? '' : ' is-unread-name'}`}>
-                      {displayName}
+            <div className="notif-person">
+              <AvatarIcon
+                notif={notif}
+                cfg={cfg}
+                sender={sender}
+                loading={sendersLoading}
+              />
+              <div className="notif-person-text">
+                <div className="notif-person-row">
+                  <span className={`notif-person-name${notif.read ? '' : ' is-unread-name'}`}>
+                    {displayName}
+                  </span>
+                  {isVerified && (
+                    <span className="notif-verified" title="Verified user">
+                      <VerifiedBadge size={13} />
                     </span>
-                    {isVerified ? (
-                      <span className="notif-person-verified" title="Verified user">
-                        <VerifiedBadge size={14} />
-                        <span className="notif-person-verified-label">Verified</span>
-                      </span>
-                    ) : (
-                      hasActor && (
-                        <span className="notif-person-unverified" title="Not verified">
-                          Unverified
-                        </span>
-                      )
+                  )}
+                  <div className="notif-person-end">
+                    <time className="notif-time" dateTime={notif.created_at}>
+                      {timeLabel(notif.created_at)}
+                    </time>
+                    {!notif.read && (
+                      <span className="unread-dot" style={{ backgroundColor: cfg.color }} aria-hidden="true" />
                     )}
-                    <div className="notif-person-end">
-                      <span
-                        className="notif-type notif-type--inline"
-                        style={{
-                          color: cfg.color,
-                          backgroundColor: cfg.bg,
-                          borderColor: `${cfg.color}22`,
-                        }}
-                      >
-                        <Ic icon={TypeIcon} size={10} strokeWidth={2.2} />
-                        {cfg.label}
-                      </span>
-                      <time className="notif-time" dateTime={notif.created_at}>
-                        {timeLabel(notif.created_at)}
-                      </time>
-                      {!notif.read && (
-                        <span className="unread-dot" style={{ backgroundColor: cfg.color }} aria-hidden="true" />
-                      )}
-                    </div>
                   </div>
                 </div>
-              </div>
-
-              <div className="notif-card-body">
                 <p className={`notif-purpose${notif.read ? '' : ' is-unread-purpose'}`}>
                   {purpose}
                 </p>
-
-                {contextLine && (
-                  <p className="notif-meta">{contextLine}</p>
-                )}
-
-                <OfferChip data={data} cfg={cfg} />
-
-                {showProduct && (
-                  <ProductContext
-                    product={product}
-                    loading={productsLoading && !product?.image}
-                    hideImage={!!product?.image}
-                  />
-                )}
-
-                <NotificationActions notif={notif} onAction={onAction} />
               </div>
             </div>
-
-            {(product?.image || product?.title) && (
-              <div className={`notif-product-rail${product?.image ? '' : ' notif-product-rail--empty'}`} aria-hidden="true">
-                {product.image
-                  ? <img src={product.image} alt="" loading="lazy" className="notif-product-rail-img" />
-                  : <Ic icon={product.kind === 'service' ? Settings : Package} size={16} strokeWidth={1.75} />}
-              </div>
-            )}
 
             <div className="notif-side" onClick={(e) => e.stopPropagation()}>
               <button
@@ -1181,6 +967,8 @@ const NotificationCard = memo(function NotificationCard({
               </button>
             </div>
           </div>
+
+          <NotificationActions notif={notif} onAction={onAction} />
         </article>
       </div>
     </SwipeActions>
@@ -1210,18 +998,19 @@ function Header({
           </button>
           <div className="header-text">
             <h1 className="header-title">Notifications</h1>
-            {unreadCount > 0
-              ? <p className="header-sub">{unreadCount} unread</p>
-              : <p className="header-sub" style={{ color: '#9aa0a6' }}>You&apos;re all caught up</p>
-            }
+            <p className="header-sub">{unreadCount} unread</p>
           </div>
         </div>
         <div className="header-actions">
-          {unreadCount > 0 && (
-            <button className="mark-all-btn" onClick={onMarkAllRead} aria-label="Mark all notifications as read">
-              Mark all read
-            </button>
-          )}
+          <button
+            className="mark-all-btn"
+            onClick={onMarkAllRead}
+            disabled={unreadCount === 0}
+            aria-label="Mark all notifications as read"
+          >
+            <Ic icon={Check} size={13} strokeWidth={2.25} />
+            <span>Mark all read</span>
+          </button>
           <button
             className={`filters-btn ${filtersOpen ? 'active' : ''}`}
             aria-label="Toggle filters"
@@ -1367,925 +1156,6 @@ function SkeletonCard() {
   )
 }
 
-/**
- * Haversine distance in km — identical to SearchPage.jsx `distanceKm`.
- * Only call when both user + listing lat/lng are real numbers. Never invents.
- */
-function distanceKm(lat1, lon1, lat2, lon2) {
-  const R = 6371
-  const dLat = (lat2 - lat1) * Math.PI / 180
-  const dLon = (lon2 - lon1) * Math.PI / 180
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1 * Math.PI / 180) *
-    Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLon / 2) ** 2
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-}
-
-/**
- * Real distance label from calculated km only.
- * Examples: "0.8 km away", "2.4 km away", "5 km away", "8 km away"
- * Never estimates — returns null if km is missing/invalid.
- */
-function formatDistanceLabel(km) {
-  if (km == null || !Number.isFinite(km) || km < 0) return null
-  if (km < 10) {
-    // One decimal; Number() drops trailing .0 → "5 km away"
-    return `${Number(km.toFixed(1))} km away`
-  }
-  return `${Math.round(km)} km away`
-}
-
-function parseCoord(v) {
-  if (v == null || v === '') return null
-  const n = Number(v)
-  return Number.isFinite(n) ? n : null
-}
-
-/** Resolve listing lat/lng from columns or precise_location payload. */
-function getListingCoords(item) {
-  let lat = parseCoord(item?.latitude)
-  let lng = parseCoord(item?.longitude)
-  if (lat != null && lng != null) return { lat, lng }
-
-  const p = item?.precise_location
-  if (!p) return null
-
-  let obj = p
-  if (typeof p === 'string') {
-    try { obj = JSON.parse(p) } catch { return null }
-  }
-  if (!obj || typeof obj !== 'object') return null
-
-  lat = parseCoord(obj.lat ?? obj.latitude ?? obj.y)
-  lng = parseCoord(obj.lng ?? obj.longitude ?? obj.x)
-  if (lat != null && lng != null) return { lat, lng }
-
-  // GeoJSON Point: [lng, lat]
-  if (Array.isArray(obj.coordinates) && obj.coordinates.length >= 2) {
-    lng = parseCoord(obj.coordinates[0])
-    lat = parseCoord(obj.coordinates[1])
-    if (lat != null && lng != null) return { lat, lng }
-  }
-  return null
-}
-
-function formatPrice(price) {
-  if (price == null || price === '') return null
-  const n = Number(price)
-  if (Number.isFinite(n)) return `MWK ${n.toLocaleString()}`
-  return String(price)
-}
-
-// ── Ad image cache + lazy load (browser decode cache + in-memory set) ─────
-const AD_IMAGE_CACHE = new Map() // url → 'loading' | 'ready' | 'error'
-const AD_ANIMATED_ONCE = new Set() // listing ids that already played enter anim
-const FEATURED_LAST_KEY = 'soko_featured_last_viewed_id'
-const FEATURED_ROTATE_MS = 8000
-/** Nearby list: initial batch + each scroll load-more page size */
-const NEARBY_PAGE_SIZE = 4
-
-function preloadAdImage(url) {
-  if (!url || typeof url !== 'string') return
-  const status = AD_IMAGE_CACHE.get(url)
-  if (status === 'ready' || status === 'loading') return
-  AD_IMAGE_CACHE.set(url, 'loading')
-  const img = new Image()
-  img.decoding = 'async'
-  img.loading = 'eager'
-  img.onload = () => { AD_IMAGE_CACHE.set(url, 'ready') }
-  img.onerror = () => { AD_IMAGE_CACHE.set(url, 'error') }
-  img.src = url
-}
-
-function isAdImageCached(url) {
-  return url && AD_IMAGE_CACHE.get(url) === 'ready'
-}
-
-/**
- * Lazy product image with in-memory cache + browser cache.
- * Skips IntersectionObserver delay when already cached.
- */
-function AdProductImage({ src, className = '', alt = '' }) {
-  const ref = useRef(null)
-  const cached = isAdImageCached(src)
-  const [inView, setInView] = useState(cached)
-  const [loaded, setLoaded] = useState(cached)
-
-  useEffect(() => {
-    if (!src || cached || inView) return
-    const el = ref.current
-    if (!el) return
-    const io = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setInView(true)
-          io.disconnect()
-        }
-      },
-      { rootMargin: '180px 0px', threshold: 0.01 }
-    )
-    io.observe(el)
-    return () => io.disconnect()
-  }, [src, cached, inView])
-
-  useEffect(() => {
-    if (inView && src) preloadAdImage(src)
-  }, [inView, src])
-
-  if (!src) {
-    return (
-      <span className={`${className} ad-listing-img--empty`} aria-hidden="true">
-        <Ic icon={Package} size={36} strokeWidth={1.25} />
-      </span>
-    )
-  }
-
-  return (
-    <span ref={ref} className="ad-listing-img-wrap">
-      {inView && (
-        <img
-          className={`${className}${loaded ? ' is-loaded' : ''}`}
-          src={src}
-          alt={alt}
-          loading="lazy"
-          decoding="async"
-          // Hint browser to keep decoded image for reuse
-          fetchPriority={cached ? 'high' : 'low'}
-          onLoad={() => {
-            AD_IMAGE_CACHE.set(src, 'ready')
-            setLoaded(true)
-          }}
-          onError={() => {
-            AD_IMAGE_CACHE.set(src, 'error')
-            setLoaded(true)
-          }}
-        />
-      )}
-    </span>
-  )
-}
-
-/**
- * Premium advertisement listing card — image-first.
- * Badges on photo: Featured · Distance · Verified
- * Compact body: price · title · district · Save · Message
- */
-function AdListingCard({
-  item,
-  saved,
-  onOpen,
-  onSave,
-  onMessage,
-  featured = false,
-  requireDistance = false,
-  compact = false,
-  animateEnter = true,
-}) {
-  const dist = formatDistanceLabel(item._distanceKm)
-  const price = formatPrice(item.price)
-  const district = item.district || item.city || null
-  const category = (item.category && String(item.category).trim()) || null
-  const verified = !!(item._sellerVerified || item._shopVerified)
-  const showFeatured = featured || item._isFeat
-  const hideForDistance = requireDistance && !dist
-  const canMessage = !!item.seller_id && typeof onMessage === 'function'
-
-  // Capture enter-anim decision once per mount so re-renders don't cancel it
-  const [playEnter] = useState(() => {
-    if (!animateEnter || item?.id == null) return false
-    const key = String(item.id)
-    if (AD_ANIMATED_ONCE.has(key)) return false
-    AD_ANIMATED_ONCE.add(key)
-    return true
-  })
-
-  // Nearby: never show without real calculated distance
-  if (hideForDistance) return null
-
-  const aria = [
-    item.title || 'Listing',
-    price,
-    category,
-    district,
-    dist,
-    verified ? 'Verified Seller' : null,
-    showFeatured ? 'Featured' : null,
-  ].filter(Boolean).join(', ')
-
-  return (
-    <article
-      className={[
-        'ad-listing-card',
-        showFeatured ? 'is-featured' : '',
-        compact ? 'is-compact' : 'is-hero',
-        playEnter ? 'ad-enter-once' : '',
-      ].filter(Boolean).join(' ')}
-    >
-      <div className="ad-listing-media">
-        <button
-          type="button"
-          className="ad-listing-media-hit"
-          onClick={() => onOpen(item.id)}
-          aria-label={aria}
-        >
-          <AdProductImage
-            src={item.image}
-            className="ad-listing-img"
-            alt={item.title || ''}
-          />
-          <span className="ad-listing-glass" aria-hidden="true" />
-          <span className="ad-listing-media-shade" aria-hidden="true" />
-        </button>
-
-        {/* Top-left: Featured — same orange pill as Search FBListingCard */}
-        {showFeatured && (
-          <div className="ad-featured-pill" aria-label="Featured listing">
-            <svg
-              className="ad-featured-pill-star"
-              width="11"
-              height="11"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-            >
-              <path
-                fill="#fff"
-                d="M12 2l2.9 6.9L22 10l-5 4.5L18.2 22 12 18.2 5.8 22 7 14.5 2 10l7.1-1.1L12 2z"
-              />
-            </svg>
-            <span className="ad-featured-pill-label">Featured</span>
-          </div>
-        )}
-
-        {/* Top-right: Category (icon matches category type) */}
-        {category && (
-          <div className="ad-listing-badges ad-listing-badges--top-right" aria-hidden="true">
-            <span className="ad-img-badge ad-img-badge--category" title={category}>
-              <Ic icon={getCategoryIcon(category)} size={11} strokeWidth={2.4} />
-              {category}
-            </span>
-          </div>
-        )}
-
-        {/* Bottom of image, above price: Distance */}
-        {dist && (
-          <div className="ad-listing-badges ad-listing-badges--bottom" aria-hidden="true">
-            <span className="ad-img-badge ad-img-badge--dist">
-              <Ic icon={MapPin} size={11} strokeWidth={2.4} />
-              {dist}
-            </span>
-          </div>
-        )}
-      </div>
-
-      <div className="ad-listing-body">
-        <button
-          type="button"
-          className="ad-listing-main"
-          onClick={() => onOpen(item.id)}
-        >
-          {price && <div className="ad-listing-price">{price}</div>}
-          <h4 className="ad-listing-title">{item.title}</h4>
-          {(district || verified) && (
-            <div className="ad-listing-meta-row">
-              {district ? (
-                <p className="ad-listing-place">
-                  <Ic icon={MapPin} size={11} strokeWidth={2.2} />
-                  <span>{district}</span>
-                </p>
-              ) : (
-                <span className="ad-listing-place-spacer" />
-              )}
-              {verified && (
-                <span className="ad-listing-verified-text" title="Verified Seller">
-                  <VerifiedBadge size={13} />
-                  <span>Verified Seller</span>
-                </span>
-              )}
-            </div>
-          )}
-        </button>
-
-        <div className="ad-listing-actions" role="group" aria-label="Listing actions">
-          <button
-            type="button"
-            className={`ad-listing-action ad-listing-action--save${saved ? ' is-saved' : ''}`}
-            aria-pressed={saved}
-            onClick={() => onSave(item.id)}
-          >
-            <Ic
-              icon={Heart}
-              size={14}
-              strokeWidth={2.1}
-              fill={saved ? 'currentColor' : 'none'}
-              className="ad-listing-action-ic"
-            />
-            {saved ? 'Saved' : 'Save'}
-          </button>
-          <button
-            type="button"
-            className="ad-listing-action ad-listing-action--message"
-            disabled={!canMessage}
-            onClick={() => canMessage && onMessage(item)}
-            aria-label={canMessage ? `Message seller about ${item.title || 'listing'}` : 'Messaging unavailable'}
-          >
-            <Ic icon={MessageCircle} size={14} strokeWidth={2.1} className="ad-listing-action-ic" />
-            Message
-          </button>
-        </div>
-      </div>
-    </article>
-  )
-}
-
-/**
- * Featured Products rotator:
- * - Advances every 8s
- * - Pauses while hovered (or tab hidden)
- * - Restores last viewed listing id from sessionStorage
- * - Preloads next image into AD_IMAGE_CACHE
- * - Enter anim only once per listing
- */
-function FeaturedRotator({ products, savedIds, onOpen, onSave, onMessage }) {
-  const [index, setIndex] = useState(0)
-  const [hovering, setHovering] = useState(false)
-  const [docHidden, setDocHidden] = useState(
-    () => typeof document !== 'undefined' && document.hidden
-  )
-  const indexRef = useRef(0)
-  const productsRef = useRef(products)
-
-  productsRef.current = products
-  indexRef.current = index
-
-  // Restore last viewed card when product list arrives
-  useEffect(() => {
-    if (!products.length) return
-    let lastId = null
-    try { lastId = sessionStorage.getItem(FEATURED_LAST_KEY) } catch { /* ignore */ }
-    if (lastId) {
-      const found = products.findIndex((p) => String(p.id) === String(lastId))
-      if (found >= 0) {
-        setIndex(found)
-        indexRef.current = found
-        return
-      }
-    }
-    setIndex(0)
-    indexRef.current = 0
-  }, [products])
-
-  // Persist last viewed
-  useEffect(() => {
-    const item = products[index]
-    if (!item?.id) return
-    try { sessionStorage.setItem(FEATURED_LAST_KEY, String(item.id)) } catch { /* ignore */ }
-  }, [index, products])
-
-  // Preload current + next (+ next-next) for smooth rotation
-  useEffect(() => {
-    if (!products.length) return
-    const n = products.length
-    ;[0, 1, 2].forEach((offset) => {
-      const p = products[(index + offset) % n]
-      if (p?.image) preloadAdImage(p.image)
-    })
-  }, [index, products])
-
-  // Pause when tab hidden
-  useEffect(() => {
-    const onVis = () => setDocHidden(document.hidden)
-    document.addEventListener('visibilitychange', onVis)
-    return () => document.removeEventListener('visibilitychange', onVis)
-  }, [])
-
-  // 8s rotation — paused while hovering or tab hidden
-  useEffect(() => {
-    if (products.length <= 1) return
-    if (hovering || docHidden) return
-
-    const id = window.setInterval(() => {
-      setIndex((prev) => {
-        const list = productsRef.current
-        if (!list.length) return prev
-        return (prev + 1) % list.length
-      })
-    }, FEATURED_ROTATE_MS)
-
-    return () => window.clearInterval(id)
-  }, [products.length, hovering, docHidden])
-
-  if (!products.length) {
-    return <p className="ad-section-empty">No featured products right now.</p>
-  }
-
-  const item = products[index] || products[0]
-  const paused = hovering || docHidden
-
-  return (
-    <div
-      className={`featured-rotator${paused ? ' is-paused' : ''}`}
-      onMouseEnter={() => setHovering(true)}
-      onMouseLeave={() => setHovering(false)}
-      onFocusCapture={() => setHovering(true)}
-      onBlurCapture={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget)) setHovering(false)
-      }}
-    >
-      <div className="featured-rotator-stage" key={item.id}>
-        <AdListingCard
-          item={item}
-          featured
-          saved={savedIds.has(item.id)}
-          onOpen={onOpen}
-          onSave={onSave}
-          onMessage={onMessage}
-          animateEnter
-        />
-      </div>
-
-      {products.length > 1 && (
-        <div className="featured-rotator-meta" aria-label="Featured rotation">
-          <div className="featured-rotator-dots" role="tablist" aria-label="Featured listings">
-            {products.map((p, i) => (
-              <button
-                key={p.id}
-                type="button"
-                role="tab"
-                aria-selected={i === index}
-                aria-label={`Show featured ${i + 1} of ${products.length}`}
-                className={`featured-rotator-dot${i === index ? ' is-active' : ''}`}
-                onClick={() => {
-                  setIndex(i)
-                  try { sessionStorage.setItem(FEATURED_LAST_KEY, String(p.id)) } catch { /* ignore */ }
-                }}
-              />
-            ))}
-          </div>
-          <div
-            className="featured-rotator-progress"
-            aria-hidden="true"
-          >
-            <span
-              key={`${item.id}-${paused ? 'p' : 'r'}`}
-              className={`featured-rotator-progress-bar${paused ? ' is-paused' : ''}`}
-            />
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function AdProductSkeleton({ featured = false }) {
-  return (
-    <div
-      className={`ad-listing-card is-skeleton${featured ? ' is-featured' : ''}`}
-      aria-hidden="true"
-    >
-      <div className="ad-listing-media skeleton-shimmer" />
-      <div className="ad-listing-body ad-listing-body--skel">
-        <div className="skeleton-line" style={{ width: '48%', height: 14 }} />
-        <div className="skeleton-line" style={{ width: '86%', height: 11, marginTop: 12 }} />
-        <div className="skeleton-line" style={{ width: '42%', height: 10, marginTop: 12 }} />
-      </div>
-    </div>
-  )
-}
-
-/**
- * Desktop-only left advertisement rail.
- * Hierarchy: Featured Products → Near You (real distance) → Sponsored Shops (later).
- * Distance uses haversine from browser GPS + listing coords — never invented.
- */
-function NearbyFeaturedRail() {
-  const navigate = useNavigate()
-  const { lat, lng, loading: locLoading, error: locError } = useUserLocation()
-  const [items, setItems] = useState([])
-  const [loading, setLoading] = useState(true)
-  const [locRetrying, setLocRetrying] = useState(false)
-  const [overrideCoords, setOverrideCoords] = useState(null)
-  const [savedIds, setSavedIds] = useState(() => new Set())
-  /** How many nearby cards are currently shown (grows as user scrolls) */
-  const [nearbyVisible, setNearbyVisible] = useState(NEARBY_PAGE_SIZE)
-  const nearbyScrollRef = useRef(null)
-  const nearbySentinelRef = useRef(null)
-
-  const userLat = parseCoord(overrideCoords?.lat ?? lat)
-  const userLng = parseCoord(overrideCoords?.lng ?? lng)
-
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      setLoading(true)
-      const cols = 'id, title, price, images, city, district, category, latitude, longitude, precise_location, featured, is_featured, featured_until, created_at, status, seller_id, shop_id'
-      const nowIso = new Date().toISOString()
-      let rows = []
-
-      // 1) Active featured (featured_until > now) with coordinates first
-      const { data: featuredGeo } = await supabase
-        .from('listings')
-        .select(cols)
-        .gt('featured_until', nowIso)
-        .not('latitude', 'is', null)
-        .not('longitude', 'is', null)
-        .order('featured_until', { ascending: false })
-        .limit(16)
-
-      if (featuredGeo?.length) rows = featuredGeo
-
-      // 2) Any active featured
-      if (rows.length < 8) {
-        const { data: featured } = await supabase
-          .from('listings')
-          .select(cols)
-          .gt('featured_until', nowIso)
-          .order('featured_until', { ascending: false })
-          .limit(20)
-        const seen = new Set(rows.map((r) => r.id))
-        for (const r of featured || []) {
-          if (!seen.has(r.id)) {
-            rows.push(r)
-            seen.add(r.id)
-          }
-        }
-      }
-
-      // 3) Nearby pool: as many geo listings as practical (distance sort client-side)
-      {
-        const { data: recentGeo } = await supabase
-          .from('listings')
-          .select(cols)
-          .not('latitude', 'is', null)
-          .not('longitude', 'is', null)
-          .order('created_at', { ascending: false })
-          .limit(100)
-        const seen = new Set(rows.map((r) => r.id))
-        for (const r of recentGeo || []) {
-          if (!seen.has(r.id)) {
-            rows.push(r)
-            seen.add(r.id)
-          }
-        }
-      }
-
-      // 4) Last resort: any recent (featured fallback only; Near You still needs coords)
-      if (!rows.length) {
-        const { data: recent } = await supabase
-          .from('listings')
-          .select(cols)
-          .order('created_at', { ascending: false })
-          .limit(12)
-        rows = recent || []
-      }
-
-      // Seller / shop verification for featured-style badges
-      const sellerIds = [...new Set(rows.map((r) => r.seller_id).filter(Boolean))]
-      const shopIds = [...new Set(rows.map((r) => r.shop_id).filter(Boolean))]
-      const profileMap = {}
-      const shopMap = {}
-
-      await Promise.all([
-        sellerIds.length
-          ? supabase
-            .from('profiles')
-            .select('id, is_verified, full_name')
-            .in('id', sellerIds)
-            .then(({ data }) => {
-              for (const p of data || []) profileMap[p.id] = p
-            })
-          : Promise.resolve(),
-        shopIds.length
-          ? supabase
-            .from('shops')
-            .select('id, is_verified')
-            .in('id', shopIds)
-            .then(({ data }) => {
-              for (const s of data || []) shopMap[s.id] = s
-            })
-          : Promise.resolve(),
-      ])
-
-      rows = rows.map((r) => ({
-        ...r,
-        _sellerVerified: r.seller_id ? !!(profileMap[r.seller_id]?.is_verified) : false,
-        _shopVerified: r.shop_id ? !!(shopMap[r.shop_id]?.is_verified) : false,
-        _sellerName: r.seller_id ? (profileMap[r.seller_id]?.full_name || null) : null,
-      }))
-
-      if (cancelled) return
-      setItems(rows)
-      setLoading(false)
-    }
-    load()
-    return () => { cancelled = true }
-  }, [])
-
-  const requestLocation = useCallback(() => {
-    if (!navigator.geolocation) return
-    setLocRetrying(true)
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const next = { lat: pos.coords.latitude, lng: pos.coords.longitude }
-        try { sessionStorage.setItem('userCoords', JSON.stringify(next)) } catch { /* ignore */ }
-        setOverrideCoords(next)
-        setLocRetrying(false)
-      },
-      () => setLocRetrying(false),
-      // Match SearchPage / useUserLocation near-me options
-      { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
-    )
-  }, [])
-
-  const enriched = useMemo(() => {
-    const hasUser = userLat != null && userLng != null
-    return items.map((item) => {
-      const img = firstImage(item.images)
-      const coords = getListingCoords(item)
-      // Same as SearchPage near-me: only set distance when both sides have real coords
-      let _distanceKm = null
-      if (hasUser && coords) {
-        _distanceKm = distanceKm(userLat, userLng, coords.lat, coords.lng)
-      }
-      const isFeat = isListingFeatured(item)
-      return {
-        ...item,
-        image: img,
-        _distanceKm,
-        _hasCoords: !!coords,
-        _isPrecise: !!item.precise_location,
-        _isFeat: isFeat,
-      }
-    })
-  }, [items, userLat, userLng])
-
-  /**
-   * 1. Featured Products — rotation pool (up to 8).
-   * One hero card is shown at a time; FeaturedRotator advances every 8s.
-   */
-  const featuredProducts = useMemo(() => {
-    const featured = enriched
-      .filter((i) => i._isFeat)
-      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-
-    if (featured.length >= 2) return featured.slice(0, 8)
-
-    if (featured.length === 1) {
-      const fillers = enriched
-        .filter((i) => i.id !== featured[0].id)
-        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-        .slice(0, 7)
-      return [...featured, ...fillers].slice(0, 8)
-    }
-
-    return enriched
-      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
-      .slice(0, 8)
-  }, [enriched])
-
-  /**
-   * 2. Nearby Products — prioritize REAL distance only (SearchPage haversine).
-   *    - Includes every listing with lat/lng + user GPS (featured or not)
-   *    - Sorted nearest → farthest (never by featured flag)
-   *    - Never invents distance
-   */
-  const nearYouAll = useMemo(() => {
-    if (userLat == null || userLng == null) return []
-    return enriched
-      .filter((i) => i._distanceKm != null && Number.isFinite(i._distanceKm))
-      .sort((a, b) => {
-        // Nearest first; stable tie-break by newer listing
-        if (a._distanceKm !== b._distanceKm) return a._distanceKm - b._distanceKm
-        return new Date(b.created_at) - new Date(a.created_at)
-      })
-  }, [enriched, userLat, userLng])
-
-  // Reset visible window when the nearby set / location changes
-  useEffect(() => {
-    setNearbyVisible(NEARBY_PAGE_SIZE)
-  }, [userLat, userLng, nearYouAll.length])
-
-  const nearYou = useMemo(
-    () => nearYouAll.slice(0, nearbyVisible),
-    [nearYouAll, nearbyVisible]
-  )
-  const hasMoreNearby = nearbyVisible < nearYouAll.length
-
-  const loadMoreNearby = useCallback(() => {
-    setNearbyVisible((n) => {
-      if (n >= nearYouAll.length) return n
-      return Math.min(n + NEARBY_PAGE_SIZE, nearYouAll.length)
-    })
-  }, [nearYouAll.length])
-
-  // Infinite scroll: when sentinel enters the nearby list viewport, load more
-  useEffect(() => {
-    const root = nearbyScrollRef.current
-    const sentinel = nearbySentinelRef.current
-    if (!root || !sentinel || !hasMoreNearby) return
-
-    const io = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((e) => e.isIntersecting)) loadMoreNearby()
-      },
-      { root, rootMargin: '120px 0px', threshold: 0 }
-    )
-    io.observe(sentinel)
-    return () => io.disconnect()
-  }, [hasMoreNearby, loadMoreNearby, nearYou.length])
-
-  const openListing = useCallback((id) => navigate(`/listing/${id}`), [navigate])
-
-  const toggleSave = useCallback((id) => {
-    setSavedIds((prev) => {
-      const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
-      return next
-    })
-  }, [])
-
-  const messageSeller = useCallback((item) => {
-    if (!item?.seller_id) return
-    navigate(`/chat/${item.seller_id}/${item.id}`)
-  }, [navigate])
-
-  const hasLocation = userLat != null && userLng != null
-
-  return (
-    <aside className="nearby-rail" aria-label="Marketplace: Featured, then nearby, then more">
-      <div className="nearby-rail-inner">
-        {/*
-          Attention hierarchy (always top → bottom):
-          ★★★★★ Featured Products  ~60%
-          ↓
-          Nearby Products          ~30%
-          ↓
-          Everything else          ~10%
-        */}
-        <div className="nearby-rail-scroll nearby-rail-scroll--hierarchy">
-          {loading ? (
-            <>
-              <section className="ad-section ad-section--featured ad-attention-60" aria-busy="true">
-                <div className="ad-section-head ad-section-head--featured">
-                  <h2 className="ad-section-title ad-section-title--featured">
-                    <FeaturedStars />
-                    Featured Products
-                  </h2>
-                </div>
-                <div className="ad-section-list ad-section-list--featured">
-                  {[1, 2].map((i) => <AdProductSkeleton key={i} featured />)}
-                </div>
-              </section>
-              <AdFlowDivider />
-              <section className="ad-section ad-section--near-you ad-attention-30" aria-busy="true">
-                <div className="ad-section-head">
-                  <h2 className="ad-section-title ad-section-title--near">
-                    <span className="ad-section-title-ic" aria-hidden="true">
-                      <Ic icon={MapPin} size={16} strokeWidth={2.1} />
-                    </span>
-                    Nearby Products
-                  </h2>
-                </div>
-                <div className="near-you-scroll">
-                  {[1, 2].map((i) => <AdProductSkeleton key={i} />)}
-                </div>
-              </section>
-            </>
-          ) : (
-            <>
-              {/* ═══ 60% attention — Featured Products ═══ */}
-              <section
-                className="ad-section ad-section--featured ad-attention-60"
-                aria-labelledby="ad-featured-heading"
-              >
-                <div className="ad-section-head ad-section-head--featured">
-                  <h2 id="ad-featured-heading" className="ad-section-title ad-section-title--featured">
-                    <FeaturedStars />
-                    Featured Products
-                  </h2>
-                  <p className="ad-section-sub ad-section-sub--featured">
-                    Handpicked for you
-                  </p>
-                </div>
-
-                {featuredProducts.length > 0 ? (
-                  <FeaturedRotator
-                    products={featuredProducts}
-                    savedIds={savedIds}
-                    onOpen={openListing}
-                    onSave={toggleSave}
-                    onMessage={messageSeller}
-                  />
-                ) : (
-                  <p className="ad-section-empty">No featured products right now.</p>
-                )}
-              </section>
-
-              <AdFlowDivider />
-
-              {/* ═══ 30% attention — Nearby Products ═══ */}
-              <section
-                className="ad-section ad-section--near-you ad-attention-30"
-                aria-labelledby="ad-near-heading"
-              >
-                <div className="ad-section-head">
-                  <h2 id="ad-near-heading" className="ad-section-title ad-section-title--near">
-                    <span className="ad-section-title-ic" aria-hidden="true">
-                      <Ic icon={MapPin} size={16} strokeWidth={2.1} />
-                    </span>
-                    Nearby Products
-                  </h2>
-                  <p className="ad-section-sub">
-                    {hasLocation && nearYouAll.length > 0
-                      ? `Nearest first · ${nearYouAll.length} with real distance`
-                      : 'Sorted by your real location'}
-                  </p>
-                </div>
-
-                {(locLoading || locRetrying) && (
-                  <p className="ad-section-empty">Finding your location…</p>
-                )}
-
-                {!hasLocation && !locLoading && !locRetrying && (
-                  <>
-                    <p className="ad-section-empty">
-                      Enable location for real distance.
-                    </p>
-                    <button
-                      type="button"
-                      className="nearby-rail-loc-btn"
-                      onClick={requestLocation}
-                      disabled={locRetrying}
-                    >
-                      <Ic icon={Navigation} size={14} strokeWidth={2.25} />
-                      {locError ? 'Enable location' : 'Use my location'}
-                    </button>
-                  </>
-                )}
-
-                {hasLocation && nearYou.length > 0 && (
-                  <div
-                    ref={nearbyScrollRef}
-                    className="near-you-scroll"
-                    role="list"
-                    aria-label="Nearby products, nearest first. Scroll for more."
-                  >
-                    {nearYou.map((item) => (
-                      <AdListingCard
-                        key={item.id}
-                        item={item}
-                        compact
-                        requireDistance
-                        saved={savedIds.has(item.id)}
-                        onOpen={openListing}
-                        onSave={toggleSave}
-                        onMessage={messageSeller}
-                      />
-                    ))}
-                    {/* Invisible sentinel — auto-loads next batch as user scrolls down */}
-                    {hasMoreNearby && (
-                      <div
-                        ref={nearbySentinelRef}
-                        className="near-you-sentinel"
-                        aria-hidden="true"
-                      />
-                    )}
-                  </div>
-                )}
-
-                {hasLocation && !locLoading && nearYouAll.length === 0 && (
-                  <p className="ad-section-empty">
-                    No GPS-located listings nearby yet.
-                  </p>
-                )}
-              </section>
-
-              <AdFlowDivider soft />
-
-              {/* ═══ 10% attention — Everything else ═══ */}
-              <footer className="ad-section ad-section--else ad-attention-10" aria-label="Everything else">
-                <div className="ad-else-actions">
-                  <button
-                    type="button"
-                    className="nearby-rail-cta nearby-rail-cta--else"
-                    onClick={() => navigate('/')}
-                  >
-                    <Ic icon={ShoppingBag} size={15} strokeWidth={2.1} />
-                    Explore marketplace
-                    <Ic icon={ChevronRight} size={15} strokeWidth={2.1} />
-                  </button>
-                </div>
-              </footer>
-            </>
-          )}
-        </div>
-      </div>
-    </aside>
-  )
-}
-
 function PushNotificationsBanner({ onEnable, onDismiss }) {
   return (
     <div className="push-banner" role="banner" aria-label="Push notifications prompt">
@@ -2311,199 +1181,6 @@ function PushNotificationsBanner({ onEnable, onDismiss }) {
   )
 }
 
-/**
- * Desktop right rail — Shops + Looking For advertisements.
- */
-function RightPromoRail() {
-  const navigate = useNavigate()
-  const [shops, setShops] = useState([])
-  const [requests, setRequests] = useState([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    let cancelled = false
-    async function load() {
-      setLoading(true)
-      const [shopsRes, reqRes] = await Promise.all([
-        supabase
-          .from('shops')
-          .select('id, name, slug, category, logo_url, city, district, rating, is_verified, follower_count')
-          .eq('is_active', true)
-          .order('follower_count', { ascending: false, nullsFirst: false })
-          .limit(5),
-        supabase
-          .from('buyer_requests')
-          .select('id, title, category, city, budget, created_at, image_url, urgency')
-          .not('status', 'eq', 'fulfilled')
-          .order('created_at', { ascending: false })
-          .limit(5),
-      ])
-      if (cancelled) return
-      setShops(shopsRes.data || [])
-      setRequests(reqRes.data || [])
-      setLoading(false)
-    }
-    load()
-    return () => { cancelled = true }
-  }, [])
-
-  return (
-    <aside className="right-promo-rail" aria-label="Shops and Looking For">
-      <div className="right-promo-rail-inner">
-        {/* ── Shops ── */}
-        <section className="promo-block promo-block--shops" aria-labelledby="promo-shops-heading">
-          <header className="promo-block-head">
-            <h2 id="promo-shops-heading" className="promo-block-title">
-              <span className="promo-block-title-ic" aria-hidden="true">
-                <Ic icon={Store} size={15} strokeWidth={2.1} />
-              </span>
-              Shops
-            </h2>
-            <button
-              type="button"
-              className="promo-block-link"
-              onClick={() => navigate('/shops')}
-            >
-              See all
-              <Ic icon={ChevronRight} size={14} strokeWidth={2.2} />
-            </button>
-          </header>
-          <p className="promo-block-sub">Trusted businesses near you</p>
-
-          {loading ? (
-            <div className="promo-list" aria-busy="true">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="promo-card is-skeleton" aria-hidden="true">
-                  <div className="promo-card-avatar skeleton-shimmer" />
-                  <div className="promo-card-body">
-                    <div className="skeleton-line" style={{ width: '70%', height: 11 }} />
-                    <div className="skeleton-line" style={{ width: '45%', height: 9, marginTop: 6 }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : shops.length === 0 ? (
-            <p className="promo-empty">No shops to show right now.</p>
-          ) : (
-            <div className="promo-list">
-              {shops.map((shop) => {
-                const place = shop.city || shop.district || null
-                const href = shop.slug ? `/shop/${shop.slug}` : `/shop/${shop.id}`
-                return (
-                  <button
-                    key={shop.id}
-                    type="button"
-                    className="promo-card promo-card--shop"
-                    onClick={() => navigate(href)}
-                  >
-                    <span className="promo-card-avatar">
-                      {shop.logo_url ? (
-                        <img src={shop.logo_url} alt="" loading="lazy" />
-                      ) : (
-                        <span className="promo-card-avatar-fallback" aria-hidden="true">
-                          {(shop.name || 'S')[0].toUpperCase()}
-                        </span>
-                      )}
-                    </span>
-                    <span className="promo-card-body">
-                      <span className="promo-card-title-row">
-                        <span className="promo-card-title">{shop.name}</span>
-                        {shop.is_verified && (
-                          <VerifiedBadge size={13} />
-                        )}
-                      </span>
-                      <span className="promo-card-meta">
-                        {shop.category && <span>{shop.category}</span>}
-                        {place && <span>{place}</span>}
-                      </span>
-                    </span>
-                    <Ic icon={ChevronRight} size={14} strokeWidth={2} className="promo-card-chevron" />
-                  </button>
-                )
-              })}
-            </div>
-          )}
-        </section>
-
-        {/* ── Looking For ── */}
-        <section className="promo-block promo-block--looking" aria-labelledby="promo-looking-heading">
-          <header className="promo-block-head">
-            <h2 id="promo-looking-heading" className="promo-block-title">
-              <span className="promo-block-title-ic promo-block-title-ic--looking" aria-hidden="true">
-                <Ic icon={Users} size={15} strokeWidth={2.1} />
-              </span>
-              Looking For
-            </h2>
-            <button
-              type="button"
-              className="promo-block-link"
-              onClick={() => navigate('/looking-for')}
-            >
-              See all
-              <Ic icon={ChevronRight} size={14} strokeWidth={2.2} />
-            </button>
-          </header>
-          <p className="promo-block-sub">People searching for products</p>
-
-          {loading ? (
-            <div className="promo-list" aria-busy="true">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="promo-card is-skeleton" aria-hidden="true">
-                  <div className="promo-card-thumb skeleton-shimmer" />
-                  <div className="promo-card-body">
-                    <div className="skeleton-line" style={{ width: '80%', height: 11 }} />
-                    <div className="skeleton-line" style={{ width: '40%', height: 9, marginTop: 6 }} />
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : requests.length === 0 ? (
-            <p className="promo-empty">No open requests right now.</p>
-          ) : (
-            <div className="promo-list">
-              {requests.map((req) => {
-                const budget =
-                  req.budget != null && req.budget !== ''
-                    ? (Number.isFinite(Number(req.budget))
-                        ? `MWK ${Number(req.budget).toLocaleString()}`
-                        : String(req.budget))
-                    : null
-                return (
-                  <button
-                    key={req.id}
-                    type="button"
-                    className="promo-card promo-card--looking"
-                    onClick={() => navigate('/looking-for')}
-                  >
-                    <span className="promo-card-thumb">
-                      {req.image_url ? (
-                        <img src={req.image_url} alt="" loading="lazy" />
-                      ) : (
-                        <span className="promo-card-thumb-fallback" aria-hidden="true">
-                          <Ic icon={Search} size={16} strokeWidth={1.75} />
-                        </span>
-                      )}
-                    </span>
-                    <span className="promo-card-body">
-                      <span className="promo-card-title">{req.title}</span>
-                      <span className="promo-card-meta">
-                        {budget && <span className="promo-card-budget">{budget}</span>}
-                        {req.city && <span>{req.city}</span>}
-                        {req.category && <span>{req.category}</span>}
-                      </span>
-                    </span>
-                    <Ic icon={ChevronRight} size={14} strokeWidth={2} className="promo-card-chevron" />
-                  </button>
-                )
-              })}
-            </div>
-          )}
-        </section>
-      </div>
-    </aside>
-  )
-}
-
 // ── Main component ─────────────────────────────────────────────────────────
 export default function Notifications() {
   const navigate = useNavigate()
@@ -2518,7 +1195,7 @@ export default function Notifications() {
   const [dealModal, setDealModal] = useState(null) // { notif, listing, buyerProfile, sending, error }
   const [actionBusy, setActionBusy] = useState(null) // `${notifId}:${action}`
   const { senders, loading: sendersLoading } = useSenderProfiles(notifications)
-  const { products, loading: productsLoading } = useProductContext(notifications)
+  const { products } = useProductContext(notifications)
 
   // ── Toast ────────────────────────────────────────────────────────────────
   const showToast = useCallback((message, type = 'info') => {
@@ -2624,6 +1301,7 @@ export default function Notifications() {
   }, [showToast])
 
   const archiveNotification = useCallback((id) => {
+    void id
     showToast('Archive feature coming soon', 'info')
   }, [showToast])
 
@@ -3062,12 +1740,10 @@ export default function Notifications() {
       />
 
       <div className="notif-body-shell">
-        <NearbyFeaturedRail />
-
         {loading ? (
           <main className="container" aria-busy="true">
             <div className="notifications-list">
-              {[1, 2, 3, 4, 5].map((i) => <SkeletonCard key={i} />)}
+              {[1, 2, 3, 4, 5, 6].map((i) => <SkeletonCard key={i} />)}
             </div>
           </main>
         ) : (
@@ -3099,7 +1775,6 @@ export default function Notifications() {
                           sender={sender}
                           sendersLoading={sendersLoading}
                           product={product}
-                          productsLoading={productsLoading}
                           index={i}
                           onCardClick={handleCardClick}
                           onDelete={deleteNotification}
@@ -3115,8 +1790,6 @@ export default function Notifications() {
             )}
           </main>
         )}
-
-        <RightPromoRail />
       </div>
 
       {pushBannerVisible && (
@@ -3139,7 +1812,11 @@ export default function Notifications() {
         {toast && (
           <>
             <span className="toast-icon" aria-hidden="true">
-              {toast.type === 'new' ? '🔔' : toast.type === 'success' ? '✓' : toast.type === 'error' ? '⚠' : 'ℹ'}
+              <Ic
+                icon={toast.type === 'new' ? Bell : toast.type === 'success' ? Check : toast.type === 'error' ? AlertTriangle : Settings}
+                size={15}
+                strokeWidth={2.25}
+              />
             </span>
             <span>{toast.message}</span>
           </>

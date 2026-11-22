@@ -1902,7 +1902,220 @@
     animation: ad-enter-once 0.38s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
-  @media (prefers-reduced-motion: reduce) {
+/* ── Compact inbox redesign ────────────────────────────────── */
+.notifications-page {
+  --notif-max: 720px;
+  --notif-pad-x: 16px;
+}
+
+.notifications-header .header-top,
+.notifications-header .header-search-row,
+.notifications-header .tabs {
+  max-width: var(--notif-max);
+  margin: 0 auto;
+}
+
+.mark-all-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+.mark-all-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.tabs {
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+}
+
+.notif-body-shell {
+  display: block !important;
+  width: 100%;
+  max-width: var(--notif-max);
+  margin: 0 auto;
+  padding: 0 var(--notif-pad-x) 48px;
+}
+.container {
+  max-width: 100%;
+  margin: 0;
+  padding: 12px 0 48px;
+}
+.nearby-rail,
+.right-promo-rail {
+  display: none !important;
+}
+
+.date-group {
+  margin-bottom: 12px;
+  background: #fff;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+  overflow: visible;
+}
+.date-header {
+  position: sticky;
+  top: 132px;
+  z-index: 6;
+  margin: 0;
+  padding: 10px 14px 8px;
+  border-bottom: 1px solid var(--soko-border);
+  border-radius: 14px 14px 0 0;
+  background: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #80868b;
+}
+.date-group .notifications-list {
+  gap: 6px;
+  padding: 8px;
+}
+
+.swipe-actions {
+  border-radius: 12px;
+}
+.notif-card {
+  min-height: 72px;
+  padding: 9px 10px;
+  border-radius: 12px;
+  border-color: transparent;
+  box-shadow: none;
+  background: #fff;
+}
+.notif-card::before {
+  top: 10px;
+  bottom: 10px;
+}
+.notif-card.is-unread {
+  background: linear-gradient(90deg, rgba(15, 157, 88, 0.07) 0%, #ffffff 65%);
+  border-color: rgba(15, 157, 88, 0.14);
+  box-shadow: none;
+}
+.notif-card:hover {
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+  transform: none;
+  background: #fff;
+}
+.notif-card.is-unread:hover {
+  background: linear-gradient(90deg, rgba(15, 157, 88, 0.09) 0%, #ffffff 68%);
+}
+.notif-card-inner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+}
+.notif-person {
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+.notif-person-row {
+  flex-wrap: nowrap;
+}
+.notif-person-name {
+  font-size: 0.875rem;
+  line-height: 1.25;
+}
+.notif-person-end {
+  gap: 5px;
+}
+.notif-time {
+  font-size: 0.6875rem;
+  color: var(--soko-muted-light);
+}
+.notif-verified {
+  display: inline-flex;
+  flex-shrink: 0;
+  line-height: 0;
+}
+.notif-purpose,
+.notif-card.is-message .notif-purpose {
+  margin-top: 2px;
+  font-family: var(--soko-font);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--soko-muted);
+  -webkit-line-clamp: 1;
+}
+.notif-purpose.is-unread-purpose,
+.notif-card.is-message.is-unread .notif-purpose {
+  font-weight: 600;
+  color: #3c4043;
+}
+.notif-actions {
+  margin-top: 7px;
+  padding-top: 7px;
+  border-top: 1px solid rgba(15, 23, 42, 0.06);
+}
+.notif-side {
+  align-self: center;
+  padding-top: 0;
+}
+.notif-dismiss {
+  width: 22px;
+  height: 22px;
+}
+.avatar-wrap,
+.avatar,
+.icon-fallback,
+.avatar-skeleton {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 50% !important;
+}
+
+.empty-state {
+  margin-top: 12px;
+  background: #fff;
+  border: 1px solid var(--soko-border);
+  border-radius: 14px;
+}
+.skeleton-card {
+  min-height: 72px;
+  margin-bottom: 0;
+  padding: 10px;
+  border-radius: 12px;
+  box-shadow: none;
+}
+.skeleton-card-inner {
+  align-items: center;
+}
+.skeleton-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+}
+.skeleton-lines {
+  gap: 7px;
+  padding-top: 0;
+  justify-content: center;
+}
+.skeleton-line {
+  height: 8px;
+}
+
+@media (max-width: 380px) {
+  .header-actions .mark-all-btn {
+    display: inline-flex;
+    padding: 6px 8px;
+  }
+  .mark-all-btn span {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+
     .ad-listing-card.ad-enter-once,
     .featured-rotator-progress-bar,
     .ad-featured-pill-shimmer,
