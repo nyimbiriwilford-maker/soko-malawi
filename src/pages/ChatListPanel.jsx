@@ -9,7 +9,8 @@ import {
   loadDeletedChatKeys,
   markChatDeleted,
 } from '../utils/chatSources'
-import SafeAvatar from '../components/SafeAvatar'
+import { Archive, Ban, Flag, MessageCircle, Star, Trash2 } from 'lucide-react'
+import ChatPopupMenu from '../components/ChatPopupMenu'
 import { watchUserOnline } from '../hooks/usePresence'
 import { parseOfferMessage, formatOfferAmount } from '../utils/offerMessage'
 import { stripForwardMark } from '../utils/forwardMessage'
@@ -202,14 +203,6 @@ function KebabIcon({ size = 18, color = '#3a443d' }) {
     </svg>
   )
 }
-function NewChatIcon({ size = 15, color = 'currentColor' }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M12 20h9" /><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
-    </svg>
-  )
-}
-
 function titleCaseName(value) {
   const name = String(value || 'User').trim().toLowerCase()
   if (!name) return 'User'
@@ -389,7 +382,7 @@ function renderChatPreview(msg, currentUserId) {
   return <span className="chat-preview-text">{prefix}{body}</span>
 }
 
-function ChatListRow({ chat, index, isOpen, online, currentUserId, onOpen, onMenu, onLongPressStart, onLongPressMove, onLongPressEnd }) {
+function ChatListRow({ chat, index, isOpen, isMenuOpen, online, currentUserId, onOpen, onMenu, onLongPressStart, onLongPressMove, onLongPressEnd }) {
   const src = getSourceType(chat)
   const hasContext = src !== 'direct' && !!(chat.contextId || chat.listing || chat.service || chat.request || chat.shop)
   const contextTitle = getContextTitle(chat, src)
@@ -404,7 +397,7 @@ function ChatListRow({ chat, index, isOpen, online, currentUserId, onOpen, onMen
       className={`chat-row${isOpen ? ' is-selected' : ''}${hasUnread ? ' is-unread' : ''}`}
       style={{ animationDelay: `${index * 0.03}s` }}
       onClick={onOpen}
-      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onMenu(chat) }}
+      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onMenu(chat, e.currentTarget) }}
       onTouchStart={(e) => onLongPressStart(e, chat)}
       onTouchMove={onLongPressMove}
       onTouchEnd={onLongPressEnd}
@@ -447,8 +440,10 @@ function ChatListRow({ chat, index, isOpen, online, currentUserId, onOpen, onMen
         <button
           type="button"
           className="chat-row-menu-btn"
-          onClick={(e) => { e.stopPropagation(); onMenu(chat) }}
+          onClick={(e) => { e.stopPropagation(); onMenu(chat, e.currentTarget) }}
           aria-label="Chat options"
+          aria-haspopup="menu"
+          aria-expanded={isMenuOpen}
         >
           <KebabIcon size={16} color="#5f6368" />
         </button>
@@ -472,10 +467,6 @@ export default function ChatListPanel() {
   const [search, setSearch] = useState('')
   const [searchOpen, setSearchOpen] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
-  const [newChatOpen, setNewChatOpen] = useState(false)
-  const [newChatQuery, setNewChatQuery] = useState('')
-  const [newChatResults, setNewChatResults] = useState([])
-  const [newChatLoading, setNewChatLoading] = useState(false)
   const [starred] = useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem(STARRED_KEY) || '[]')) } catch { return new Set() }
   })
@@ -484,7 +475,9 @@ export default function ChatListPanel() {
   })
   const [deletedKeys, setDeletedKeys] = useState(() => new Set())
   const [rowMenuChat, setRowMenuChat] = useState(null)
+  const [rowMenuAnchor, setRowMenuAnchor] = useState(null)
   const [rowBusy, setRowBusy] = useState(false)
+  const headerMenuAnchorRef = useRef(null)
   const longPressRef = useRef(null)
   const suppressClickRef = useRef(null)
   // Live presence: otherUserId -> { online, typing, recording, activityMeta }
@@ -581,8 +574,8 @@ export default function ChatListPanel() {
     }
   }, [currentUser?.id])
 
-  // Keep the list in sync with brand-new conversations (e.g. started via
-  // "New Message") and any other message activity — ChatListPanel usually
+  // Keep the list in sync with brand-new conversations (e.g. started from
+  // an item) and any other message activity — ChatListPanel usually
   // stays mounted in the split-view layout, so it won't otherwise notice
   // a chat that didn't exist yet when loadChats() first ran.
   useEffect(() => {
@@ -599,43 +592,21 @@ export default function ChatListPanel() {
     return () => { supabase.removeChannel(channel) }
   }, [currentUser?.id])
 
-  useEffect(() => {
-    if (!newChatOpen) return
-    const q = newChatQuery.trim()
-    let cancelled = false
-    const t = setTimeout(async () => {
-      if (cancelled) return
-      setNewChatLoading(true)
-      let query = supabase
-        .from('profiles')
-        .select('id,full_name,avatar_url,city')
-        .neq('id', currentUser?.id || '')
-        .limit(20)
-      if (q) query = query.ilike('full_name', `%${q}%`)
-      const { data } = await query
-      if (!cancelled) {
-        setNewChatResults(data || [])
-        setNewChatLoading(false)
-      }
-    }, 300)
-    return () => { cancelled = true; clearTimeout(t) }
-  }, [newChatOpen, newChatQuery, currentUser])
-
-  async function startNewChat(person) {
-    setNewChatOpen(false)
-    navigate(`/chat/${person.id}?src=direct`, {
-      state: { source: 'direct' },
-    })
+  function openRowMenu(chat, anchor) {
+    setRowMenuAnchor(anchor || null)
+    setRowMenuChat(chat)
   }
 
   function startLongPress(e, chat) {
     cancelLongPress()
     const point = (e.changedTouches && e.changedTouches[0]) || (e.touches && e.touches[0]) || e
     if (!point) return
-    const lp = { key: chat.key, chat, x: point.clientX, y: point.clientY }
+    const anchor = e.currentTarget
+    const lp = { key: chat.key, chat, anchor, x: point.clientX, y: point.clientY }
     lp.timer = setTimeout(() => {
       longPressRef.current = null
       suppressClickRef.current = chat.key
+      setRowMenuAnchor(anchor)
       setRowMenuChat(chat)
     }, 500)
     longPressRef.current = lp
@@ -856,7 +827,7 @@ export default function ChatListPanel() {
       case 'starred': return { Icon: StarFilledIcon, sub: 'Starred conversations will appear here.' }
       case 'offers': return { Icon: TagIcon, sub: 'Offer conversations will appear here.' }
       case 'archived': return { Icon: ArchiveBoxIcon, sub: 'Archived conversations will appear here.' }
-      default: return { Icon: ChatBubbleIcon, sub: 'Your conversations will appear here.' }
+      default: return { Icon: ChatBubbleIcon, sub: 'Start a chat from a product, service, shop or request' }
     }
   }
 
@@ -935,6 +906,28 @@ export default function ChatListPanel() {
   }
 
   const empty = emptyStateCopy()
+
+  const rowMenuGroups = rowMenuChat ? [
+    [
+      {
+        id: 'open',
+        label: 'Open chat',
+        icon: MessageCircle,
+        disabled: rowBusy,
+        onSelect: () => {
+          navigate(buildChatPath(rowMenuChat.otherId, {
+            source: rowMenuChat.source || 'direct',
+            contextId: rowMenuChat.contextId,
+          }), { state: { source: rowMenuChat.source || 'direct' } })
+        },
+      },
+    ],
+    [
+      { id: 'report', label: 'Report', icon: Flag, disabled: rowBusy, onSelect: () => rowReport(rowMenuChat) },
+      { id: 'block', label: 'Block', icon: Ban, disabled: rowBusy, onSelect: () => rowBlock(rowMenuChat) },
+      { id: 'delete', label: 'Delete chat', icon: Trash2, disabled: rowBusy, onSelect: () => rowDelete(rowMenuChat) },
+    ],
+  ] : []
 
   return (
     <div className="chat-list-panel" style={S.panel}>
@@ -1300,97 +1293,31 @@ export default function ChatListPanel() {
             <SearchGlassIcon size={20} color={searchOpen ? '#0F9D58' : '#5f6368'} />
           </button>
           <div style={S.menuWrap}>
-            <button type="button" className="chat-header-btn" onClick={() => setMenuOpen(v => !v)} aria-label="More options">
+            <button
+              ref={headerMenuAnchorRef}
+              type="button"
+              className="chat-header-btn"
+              onClick={() => setMenuOpen(v => !v)}
+              aria-label="More options"
+              aria-haspopup="menu"
+              aria-expanded={menuOpen}
+            >
               <KebabIcon size={20} color="#5f6368" />
             </button>
-            {menuOpen && (
-              <>
-                <div style={S.menuOverlay} onClick={() => setMenuOpen(false)} />
-                <div style={S.menuDropdown}>
-                  <button
-                    type="button"
-                    style={S.menuItem}
-                    onClick={() => { setMenuOpen(false); setNewChatQuery(''); setNewChatOpen(true) }}
-                  >
-                    <NewChatIcon size={15} color="#5f6368" />
-                    New Message
-                  </button>
-                  <div style={S.menuDivider} />
-                  <button
-                    type="button"
-                    style={{ ...S.menuItem, ...(activeFilter === 'starred' ? S.menuItemActive : {}) }}
-                    onClick={() => { setActiveFilter('starred'); setMenuOpen(false) }}
-                  >
-                    <StarFilledIcon size={15} color={activeFilter === 'starred' ? '#0F9D58' : '#f5a623'} />
-                    Starred
-                    {counts.starred > 0 && <span style={S.menuCount}>{counts.starred}</span>}
-                  </button>
-                  <button
-                    type="button"
-                    style={{ ...S.menuItem, ...(activeFilter === 'archived' ? S.menuItemActive : {}) }}
-                    onClick={() => { setActiveFilter('archived'); setMenuOpen(false) }}
-                  >
-                    <ArchiveBoxIcon size={15} color={activeFilter === 'archived' ? '#0F9D58' : '#80868b'} />
-                    Archived
-                    {counts.archived > 0 && <span style={S.menuCount}>{counts.archived}</span>}
-                  </button>
-                </div>
-              </>
-            )}
           </div>
         </div>
       </div>
 
-      {newChatOpen && (
-        <div style={S.newChatOverlay} onClick={() => setNewChatOpen(false)}>
-          <div style={S.newChatPanel} onClick={e => e.stopPropagation()}>
-            <div style={S.newChatHeader}>
-              <span style={S.newChatTitle}>New Message</span>
-              <button type="button" style={S.newChatClose} onClick={() => setNewChatOpen(false)} aria-label="Close">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#666" strokeWidth="2.5" strokeLinecap="round">
-                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-            </div>
-            <div style={S.newChatSearchWrap}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#aaa" strokeWidth="2.5" strokeLinecap="round" style={{ flexShrink: 0 }}>
-                <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-              </svg>
-              <input
-                autoFocus
-                style={S.newChatInput}
-                placeholder="Search people on SokoMw"
-                value={newChatQuery}
-                onChange={e => setNewChatQuery(e.target.value)}
-              />
-            </div>
-            <div style={S.newChatList}>
-              {newChatLoading && <div style={S.newChatEmpty}>Searching…</div>}
-              {!newChatLoading && newChatResults.length === 0 && (
-                <div style={S.newChatEmpty}>{newChatQuery.trim() ? 'No one found' : 'Start typing a name'}</div>
-              )}
-              {!newChatLoading && newChatResults.map(p => (
-                <div
-                  key={p.id}
-                  style={S.newChatRow}
-                  onClick={() => startNewChat(p)}
-                >
-                  <SafeAvatar
-                    url={p.avatar_url}
-                    name={p.full_name || 'U'}
-                    size={42}
-                    radius={12}
-                  />
-                  <div style={{ minWidth: 0 }}>
-                    <div style={S.newChatName}>{p.full_name || 'User'}</div>
-                    {p.city && <div style={S.newChatCity}>{p.city}</div>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      <ChatPopupMenu
+        open={menuOpen}
+        anchorEl={headerMenuAnchorRef.current}
+        label="Chat menu"
+        groups={[[
+          { id: 'starred', label: 'Starred', icon: Star, count: counts.starred, onSelect: () => setActiveFilter('starred') },
+          { id: 'archived', label: 'Archived', icon: Archive, count: counts.archived, onSelect: () => setActiveFilter('archived') },
+        ]]}
+        onClose={() => setMenuOpen(false)}
+      />
 
       {/* Search — appears only after tapping the search icon in the brand row */}
       {searchOpen && (
@@ -1469,10 +1396,11 @@ export default function ChatListPanel() {
                   chat={chat}
                   index={i}
                   isOpen={isOpen}
+                  isMenuOpen={rowMenuChat?.key === chat.key}
                   online={!!presenceMap[chat.otherId]?.online}
                   currentUserId={currentUser?.id}
                   onOpen={() => openChat(chat)}
-                  onMenu={setRowMenuChat}
+                  onMenu={openRowMenu}
                   onLongPressStart={startLongPress}
                   onLongPressMove={moveLongPress}
                   onLongPressEnd={cancelLongPress}
@@ -1483,70 +1411,19 @@ export default function ChatListPanel() {
         </div>
       </div>
 
-      {/* Per-row options: block / report / delete */}
-      {rowMenuChat && (
-        <div
-          style={S.rowMenuOverlay}
-          onClick={() => !rowBusy && setRowMenuChat(null)}
-          role="presentation"
-        >
-          <div style={S.rowMenuSheet} onClick={e => e.stopPropagation()}>
-            <div style={S.rowMenuHandle} />
-            <div style={{ fontSize: 15, fontWeight: 800, color: '#202124', marginBottom: 4 }}>
-              {titleCaseName(rowMenuChat.displayName)}
-            </div>
-            <div style={{ fontSize: 12, color: '#888', marginBottom: 12 }}>
-              Chat options
-            </div>
-            <button
-              type="button"
-              style={S.rowMenuItem}
-              disabled={rowBusy}
-              onClick={() => {
-                setRowMenuChat(null)
-                navigate(buildChatPath(rowMenuChat.otherId, {
-                  source: rowMenuChat.source || 'direct',
-                  contextId: rowMenuChat.contextId,
-                }), { state: { source: rowMenuChat.source || 'direct' } })
-              }}
-            >
-              Open chat
-            </button>
-            <button
-              type="button"
-              style={S.rowMenuItem}
-              disabled={rowBusy}
-              onClick={() => rowReport(rowMenuChat)}
-            >
-              Report
-            </button>
-            <button
-              type="button"
-              style={{ ...S.rowMenuItem, color: '#b91c1c' }}
-              disabled={rowBusy}
-              onClick={() => rowBlock(rowMenuChat)}
-            >
-              Block
-            </button>
-            <button
-              type="button"
-              style={{ ...S.rowMenuItem, color: '#b91c1c' }}
-              disabled={rowBusy}
-              onClick={() => rowDelete(rowMenuChat)}
-            >
-              Delete chat
-            </button>
-            <button
-              type="button"
-              style={S.rowMenuCancel}
-              disabled={rowBusy}
-              onClick={() => setRowMenuChat(null)}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
+      <ChatPopupMenu
+        open={!!rowMenuChat}
+        anchorEl={rowMenuAnchor}
+        label="Chat options"
+        title={rowMenuChat ? titleCaseName(rowMenuChat.displayName) : undefined}
+        subtitle="Chat options"
+        groups={rowMenuGroups}
+        onClose={() => {
+          if (rowBusy) return
+          setRowMenuChat(null)
+          setRowMenuAnchor(null)
+        }}
+      />
     </div>
   )
 }
@@ -1563,78 +1440,6 @@ S = {
 
   headerRow: { flexShrink: 0 },
   menuWrap: { position: 'relative' },
-  menuOverlay: { position: 'fixed', inset: 0, zIndex: 20 },
-  menuDropdown: {
-    position: 'absolute',
-    top: '48px',
-    right: 0,
-    background: '#fff',
-    borderRadius: '14px',
-    boxShadow: '0 8px 24px rgba(32,33,36,0.12)',
-    border: '1px solid #e8eaed',
-    padding: '6px',
-    minWidth: '170px',
-    zIndex: 21,
-  },
-  menuItem: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '10px',
-    width: '100%',
-    padding: '10px 12px',
-    borderRadius: '10px',
-    border: 'none',
-    background: 'none',
-    fontSize: '13px',
-    fontWeight: '600',
-    color: '#5f6368',
-    cursor: 'pointer',
-    textAlign: 'left',
-  },
-  menuItemActive: { background: '#e6f6ed', color: '#0F9D58' },
-  menuCount: { marginLeft: 'auto', fontSize: '11px', fontWeight: '800', color: '#80868b' },
-  menuDivider: { height: '1px', background: '#e8eaed', margin: '4px 6px' },
-
-  newChatOverlay: {
-    position: 'fixed',
-    inset: 0,
-    background: 'rgba(0,0,0,0.35)',
-    display: 'flex',
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-    zIndex: 50,
-    padding: '10vh 16px 0',
-  },
-  newChatPanel: {
-    background: '#fff',
-    borderRadius: '18px',
-    width: '100%',
-    maxWidth: '380px',
-    maxHeight: '70vh',
-    display: 'flex',
-    flexDirection: 'column',
-    overflow: 'hidden',
-    boxShadow: '0 12px 40px rgba(0,0,0,0.25)',
-  },
-  newChatHeader: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 18px 10px' },
-  newChatTitle: { fontSize: '15px', fontWeight: '800', color: '#0f1410' },
-  newChatClose: { background: 'rgba(0,0,0,0.04)', border: 'none', borderRadius: '8px', width: '28px', height: '28px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' },
-  newChatSearchWrap: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-    background: '#f4f8f5',
-    borderRadius: 999,
-    padding: '10px 16px',
-    border: '1.5px solid #e0ebe3',
-    margin: '0 16px 10px',
-  },
-  newChatInput: { flex: 1, border: 'none', background: 'transparent', fontSize: '14px', color: '#111', outline: 'none' },
-  newChatList: { flex: 1, overflowY: 'auto', padding: '4px 8px 12px' },
-  newChatEmpty: { padding: '24px 12px', textAlign: 'center', fontSize: '13px', color: '#9aa39d' },
-  newChatRow: { display: 'flex', alignItems: 'center', gap: '12px', padding: '9px 10px', borderRadius: '12px', cursor: 'pointer' },
-  newChatName: { fontSize: '14px', fontWeight: '700', color: '#0f1410', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
-  newChatCity: { fontSize: '12px', color: '#888' },
 
   searchWrap: {
     display: 'flex',
@@ -1897,57 +1702,5 @@ S = {
     display: 'flex',
     borderRadius: '6px',
     transition: 'background 0.2s',
-  },
-  rowMenuOverlay: {
-    position: 'fixed',
-    inset: 0,
-    background: 'rgba(8,12,10,0.45)',
-    zIndex: 80,
-    display: 'flex',
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
-  rowMenuSheet: {
-    width: '100%',
-    maxWidth: 420,
-    background: '#f7faf8',
-    borderRadius: '20px 20px 0 0',
-    padding: '12px 14px calc(16px + env(safe-area-inset-bottom, 0px))',
-    boxShadow: '0 -8px 40px rgba(0,0,0,0.18)',
-  },
-  rowMenuHandle: {
-    width: 36,
-    height: 4,
-    borderRadius: 4,
-    background: '#cfd9d2',
-    margin: '2px auto 14px',
-  },
-  rowMenuItem: {
-    width: '100%',
-    display: 'block',
-    textAlign: 'left',
-    border: 'none',
-    background: '#fff',
-    borderRadius: 12,
-    padding: '14px 16px',
-    fontSize: 14,
-    fontWeight: 700,
-    color: '#202124',
-    cursor: 'pointer',
-    marginBottom: 8,
-    fontFamily: 'inherit',
-  },
-  rowMenuCancel: {
-    width: '100%',
-    border: '1px solid #e0ebe3',
-    background: '#fff',
-    borderRadius: 12,
-    padding: '14px',
-    fontSize: 14,
-    fontWeight: 750,
-    color: '#1a7a4a',
-    cursor: 'pointer',
-    fontFamily: 'inherit',
-    marginTop: 4,
   },
 }

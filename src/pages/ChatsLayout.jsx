@@ -20,9 +20,14 @@ let S
  * Mobile behavior is controlled via data attributes + CSS in chats.css
  */
 export default function ChatsLayout() {
-  const { userId } = useParams()
+  const { userId, listingId: contextId } = useParams()
   const navigate = useNavigate()
   const hasThread = !!userId
+
+  useEffect(() => {
+    if (!hasThread || contextId) return
+    navigate('/chats', { replace: true })
+  }, [hasThread, contextId, navigate])
 
   // Pin the list shell to the *visible* viewport on mobile when the soft
   // keyboard / browser chrome resizes it — same visualViewport fix as the
@@ -131,7 +136,7 @@ export default function ChatsLayout() {
               </div>
               <p style={S.placeholderTitle}>Select a conversation</p>
               <p style={S.placeholderSub}>
-                Choose a chat from the list to start messaging.
+                Start a chat from a product, service, shop or request
               </p>
               <div style={S.placeholderActions}>
                 <button 

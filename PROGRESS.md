@@ -173,3 +173,4 @@ Chats: price on phone, image URL helper
 Chats: unread pill on preview line, no row gap
 Chats: space before dot
 Rail: plain green plus on desktop
+Chats: remove New Message, responsive popup menu

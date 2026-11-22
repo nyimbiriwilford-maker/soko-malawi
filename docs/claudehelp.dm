@@ -193,3 +193,30 @@ npm run build
 npx eslint <the real rail component path> | Select-String "no-undef|is not defined" ; "ESLINT DONE"
 git status -sb
 git diff HEAD~1 --stat -- src
+
+GOAL: Remove "New Message" and restyle the Chats popup menu so it looks professional on every device. Chats must only start from a product, service, shop or request. Branch wip/home-hero-premium (check with git branch --show-current). Rules: no git stash or reset, no SQL, no installs, do NOT launch Chrome or any browser, do not merge or push. Make the edits directly.
+
+PART 1 - REMOVE NEW MESSAGE (skip any item already done):
+1. Get-ChildItem src -Recurse -Include *.jsx,*.js | Select-String -Pattern "New Message|NewMessage|newMessage|new-message|start a new|compose" | Select-Object Path,LineNumber. Print raw, then continue.
+2. Remove the "New Message" item from the Chats three-dot menu. Remove other UI that lets a user pick any person and start a blank chat (floating buttons, picker modal). Do NOT remove any route or function that product, service, shop or Looking For request pages use to open a conversation linked to that item. Those Message/Chat buttons must keep working.
+3. A direct visit to a blank-chat URL redirects to /chats.
+4. Chats empty state text: "Start a chat from a product, service, shop or request", keep the Browse Marketplace and Post a Listing buttons.
+
+PART 2 - RESTYLE THE POPUP MENU (the three-dot menu in the Chats header, and the per-row menu; use ONE shared menu component for both). Colours: green #0F9D58, tint #e6f6ed, text #202124, grey #5f6368, border #e8eaed. Font DM Sans.
+1. Items: Starred and Archived only for the header menu (keep the row menu's existing actions). Do not add new actions. Show a count on the right in grey (12px) when the count is above 0 and the data already exists.
+2. Item style: 15px, weight 500, #202124, outline icon 20px grey #5f6368 (strokeWidth 1.75, existing icon set, same style for every item; no filled or coloured star). Row height 48px on laptop, 56px on touch. Padding 0 16px, 12px gap between icon and text. Hover (only with (hover: hover)): background #f6fbf8. Pressed: #e6f6ed. A 1px #e8eaed divider only between groups, with 4px vertical padding; no divider lines under every item.
+3. PHONE and touch below 769px: render as a bottom sheet: fixed, left 0, right 0, bottom 0, white, 16px top radius, max-height 70vh, a 36x4px grey drag handle centred at the top, padding-bottom env(safe-area-inset-bottom) plus 8px, backdrop rgba(0,0,0,0.4) with a 150ms fade, slide up 200ms (none under reduced motion). z-index above the bottom nav and the install bar. Tap on backdrop or swipe down closes it. A full-width "Cancel" row (grey text, 56px) at the bottom.
+4. LAPTOP and tablet 769px and up: a dropdown card anchored under the three-dot button, right-aligned to it, width 224px, white, 1px #e8eaed border, 14px radius, shadow 0 8px 24px rgba(16,24,40,0.12), 8px offset from the button, padding 6px, items with 10px radius. It must stay fully inside the viewport (flip up or shift left if needed) and never overlap or be clipped by the list pane, the tabs or the conversation pane (z-index above both panes; render in a portal at document.body if clipping occurs). Fade in 120ms.
+5. Behaviour on all devices: closes on outside click or tap, Esc, scroll of the page, and after choosing an item. Focus moves into the menu on open and returns to the button on close; arrow keys move between items; role="menu" and role="menuitem"; the button has aria-haspopup and aria-expanded. Opening a second menu closes the first. Body scroll is locked while the phone sheet is open.
+6. The row menu (long-press on touch, hover button on laptop) uses the same component and the same styling rules.
+7. Do not change what any menu action does. Do not change fetching, realtime, unread logic or the open conversation view. Do not touch other pages.
+
+Commit as "Chats: remove New Message, responsive popup menu", append one line to PROGRESS.md and commit it too.
+
+End with RAW output only, no summary: first the step 1 matches, then:
+git log --oneline -4
+npm run build
+npx eslint <the real changed file paths> | Select-String "no-undef|is not defined" ; "ESLINT DONE"
+npx eslint <the real Chats page and menu component paths> --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
+git status -sb
+git diff HEAD~1 --stat -- src
