@@ -238,7 +238,7 @@ export default function LookingForRequestCard({
             >
               Done
             </button>
-          ) : isOwn ? null : (
+          ) : isOwn ? null : (req.expires_at && new Date(req.expires_at) <= new Date()) ? null : (
             <button
               type="button"
               className={`lf-card-btn${req.user_has_offered ? ' is-done' : ''}`}
