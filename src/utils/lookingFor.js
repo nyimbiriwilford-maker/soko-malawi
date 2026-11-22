@@ -25,8 +25,21 @@ function matchMalawiDistrict(...candidates) {
  * GPS reverse-geocode for buyer stay location.
  * Returns area + district (Malawi-aware) and a display label.
  */
-export async function getGPSLocation() {
-  return new Promise((resolve) => {
+export async function getGPSLocation({ force = false } = {}) {
+  const CACHE_KEY = 'lf_gps_cache'
+  const CACHE_TTL = 10 * 60 * 1000
+  if (!force) {
+    try {
+      const raw = sessionStorage.getItem(CACHE_KEY)
+      if (raw) {
+        const parsed = JSON.parse(raw)
+        if (parsed && parsed.at && (Date.now() - parsed.at) < CACHE_TTL && parsed.data) {
+          return parsed.data
+        }
+      }
+    } catch { /* ignore */ }
+  }
+  const result = await new Promise((resolve) => {
     if (!navigator.geolocation) {
       resolve(null)
       return
@@ -89,6 +102,10 @@ export async function getGPSLocation() {
       { timeout: 12000, enableHighAccuracy: true, maximumAge: 60_000 },
     )
   })
+  if (result) {
+    try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ at: Date.now(), data: result })) } catch { /* ignore */ }
+  }
+  return result
 }
 
 /** @returns {Promise<string|null>} city / area label for simple callers */

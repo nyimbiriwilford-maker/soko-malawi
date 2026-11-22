@@ -135,23 +135,16 @@ const myAlertsRef = useRef([])
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (!user) { navigate('/login'); return }
       // Keep select minimal — missing columns (e.g. district) cause 400 and hide profile data
-      supabase.from('profiles').select('full_name,avatar_url,city').eq('id', user.id).maybeSingle()
+      supabase.from('profiles').select('full_name,avatar_url').eq('id', user.id).maybeSingle()
         .then(async ({ data }) => {
           setUser({ ...user, ...(data || {}) })
-          // GPS first so feed prioritises requests looking in this city/district
           const gps = await getGPSLocation()
           if (gps?.label || gps?.district || gps?.city) {
             setViewerLocation(gps)
             setViewerCity(gps.district || gps.city || gps.label)
-          } else if (data?.city) {
-            const fallback = {
-              label: data.city,
-              area: data.city,
-              district: data.city,
-              city: data.city,
-            }
-            setViewerLocation(fallback)
-            setViewerCity(fallback.city)
+          } else {
+            setViewerLocation(null)
+            setViewerCity(null)
           }
           setDetectingViewer(false)
           const { data: listings } = await supabase.from('listings')
@@ -342,10 +335,12 @@ const myAlertsRef = useRef([])
 
   async function redetectViewerGps() {
     setDetectingViewer(true)
-    const gps = await getGPSLocation()
+    const gps = await getGPSLocation({ force: true })
     setDetectingViewer(false)
     if (!gps?.label && !gps?.district) {
-      showToast('Could not detect GPS. Local sorting uses your profile city if set.', 'warning')
+      setViewerLocation(null)
+      setViewerCity(null)
+      showToast('Could not detect GPS.', 'warning')
       return
     }
     setViewerLocation(gps)
@@ -1011,10 +1006,10 @@ const myAlertsRef = useRef([])
               <span style={{ color: C.green, display: 'flex' }}>{Icon.nav(16, C.green)}</span>
               <div style={{ fontSize: 14, fontWeight: 600, color: C.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {detectingViewer
-                  ? 'Detecting your location…'
+                  ? 'Finding your location…'
                   : viewerPlaceLabel
                     ? `Near ${viewerPlaceLabel}`
-                    : 'Enable location'}
+                    : 'Location off'}
               </div>
             </div>
             <button
@@ -1028,7 +1023,7 @@ const myAlertsRef = useRef([])
                 fontFamily: 'inherit', opacity: detectingViewer ? 0.6 : 1,
               }}
             >
-              {detectingViewer ? '…' : 'Update GPS'}
+              {detectingViewer ? '…' : (viewerPlaceLabel ? 'Update GPS' : 'Enable GPS')}
             </button>
           </div>
 
