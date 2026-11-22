@@ -4762,13 +4762,13 @@ export default function Home() {
     let ch
     setStoriesLoading(true)
     setStoriesError(null)
-    fetchAllActiveStories(user.id, 'All')
+    fetchAllActiveStories(user.id, 'All', 13)
       .then(data => { setStories(data); setStoriesLoading(false) })
       .catch(err => { setStoriesError(err); setStoriesLoading(false) })
 
     ch = supabase.channel(`home-live-stories-${user.id}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'user_statuses' }, () => {
-        fetchAllActiveStories(user.id, 'All').then(setStories)
+        fetchAllActiveStories(user.id, 'All', 13).then(setStories)
       })
       .subscribe()
     return () => { if (ch) supabase.removeChannel(ch) }
@@ -5254,7 +5254,7 @@ export default function Home() {
             stories={forceEmptyStatus ? [] : stories}
             loading={forceEmptyStatus || forceErrorStatus ? false : storiesLoading}
             error={forceErrorStatus ? new Error('forced') : (forceEmptyStatus ? null : storiesError)}
-            onRetry={() => { setStoriesLoading(true); setStoriesError(null); fetchAllActiveStories(user.id, 'All').then(data => { setStories(data); setStoriesLoading(false) }).catch(err => { setStoriesError(err); setStoriesLoading(false) }) }}
+            onRetry={() => { setStoriesLoading(true); setStoriesError(null); fetchAllActiveStories(user.id, 'All', 13).then(data => { setStories(data); setStoriesLoading(false) }).catch(err => { setStoriesError(err); setStoriesLoading(false) }) }}
             onCreateStory={handleCreateStory}
             currentUserId={user?.id}
             currentUserProfile={user ? { avatar_url: user.avatar_url, full_name: user.full_name, is_verified: user.is_verified } : null}
@@ -5354,7 +5354,7 @@ export default function Home() {
           onClose={() => setShowUpload(false)}
           onSuccess={() => {
             setShowUpload(false)
-            fetchAllActiveStories(user?.id, 'All').then(setStories)
+            fetchAllActiveStories(user?.id, 'All', 13).then(setStories)
           }}
         />
       )}

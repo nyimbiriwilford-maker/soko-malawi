@@ -202,7 +202,7 @@ async function hydrateTaggedEntities(rows) {
   })
 }
 
-export async function fetchAllActiveStories(currentUserId = null, category = null) {
+export async function fetchAllActiveStories(currentUserId = null, category = null, limit = 200) {
   const isFiltered = category && category !== 'All'
 
   let { data, error } = await supabase
@@ -215,8 +215,8 @@ export async function fetchAllActiveStories(currentUserId = null, category = nul
     `)
     .gt('expires_at', new Date().toISOString())
     .order('created_at', { ascending: false })
-    .limit(200)
-
+    .limit(limit)
+ 
   // Older schema without tagged_kind / tagged_ref_id
   if (error && /tagged_kind|tagged_ref_id|column/i.test(error.message || '')) {
     ;({ data, error } = await supabase

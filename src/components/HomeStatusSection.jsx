@@ -420,18 +420,13 @@ function getInitCount(w) { return w >= 1024 ? 5 : 4 }
 export default function HomeStatusSection({ navigate, stories, loading, error, onRetry, onCreateStory, currentUserId }) {
   const [viewedIds, setViewedIds] = useState(loadViewedStoryIds)
   const [windowWidth, setWindowWidth] = useState(window.innerWidth)
-  const [loadCount, setLoadCount] = useState(() => getInitCount(window.innerWidth))
   const scrollRef = useRef(null)
-  const loadCountRef = useRef(loadCount)
   const [canScrollRight, setCanScrollRight] = useState(false)
   const [canScrollLeft, setCanScrollLeft] = useState(false)
-
-  useEffect(() => { loadCountRef.current = loadCount }, [loadCount])
 
   useEffect(() => {
     const handler = () => {
       setWindowWidth(window.innerWidth)
-      setLoadCount(getInitCount(window.innerWidth))
     }
     window.addEventListener('resize', handler)
     return () => window.removeEventListener('resize', handler)
@@ -494,9 +489,11 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
     }
     unviewed.sort(sortFn)
     viewed.sort(sortFn)
-    return [...owned, ...unviewed.map(x => x.c), ...viewed.map(x => x.c)].slice(0, 20)
+    return [...owned, ...unviewed.map(x => x.c), ...viewed.map(x => x.c)].slice(0, 13)
   }, [storyGroups, viewedIds, currentUserId])
 
+  const visibleStories = rankedStories.slice(0, 12)
+  const hasMoreStories = rankedStories.length > 12
 
   // Create Status card is the first rail item. With 2+ posted statuses it is
   // scrolled off-screen before first paint so landing/refresh shows only
@@ -565,26 +562,6 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
       if (raf) cancelAnimationFrame(raf)
     }
   }, [checkScroll, rankedStories.length])
-
-  const handleRailScroll = useCallback(() => {
-    const el = scrollRef.current
-    if (!el) return
-    const nearEnd = el.scrollLeft + el.clientWidth >= el.scrollWidth - 160
-    if (nearEnd) {
-      const current = loadCountRef.current
-      if (current >= rankedStories.length) return
-      const w = window.innerWidth
-      const inc = w >= 1024 ? 3 : (w < 768 ? 3 : 2)
-      setLoadCount(Math.min(current + inc, rankedStories.length))
-    }
-  }, [rankedStories.length])
-
-  useEffect(() => {
-    const el = scrollRef.current
-    if (!el) return
-    el.addEventListener('scroll', handleRailScroll, { passive: true })
-    return () => el.removeEventListener('scroll', handleRailScroll)
-  }, [handleRailScroll])
 
   // Mouse wheel horizontal scrolling (hover devices only)
   useEffect(() => {
@@ -706,24 +683,19 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
   function scrollByCards(dir) {
     const el = scrollRef.current
     if (!el) return
-    const first = el.querySelector('.hs-add-btn, .hs-story-btn')
-    const cardWidth = first?.offsetWidth || 148
-    const gap = parseFloat(window.getComputedStyle(el).gap) || 10
-    el.scrollBy({ left: dir * 3 * (cardWidth + gap), behavior: 'smooth' })
+    el.scrollBy({ left: dir * Math.round(el.clientWidth * 0.8), behavior: 'smooth' })
   }
   function scrollRight() { scrollByCards(1) }
   function scrollLeft() { scrollByCards(-1) }
-
-  const displayLimit = loadCount
 
   return (
     <>
       <style>{`
          .hs-rail::-webkit-scrollbar { display: none; }
          .hs-rail { -ms-overflow-style: none; scrollbar-width: none; display: flex; flex-wrap: nowrap; gap: 12px; padding: 0; margin: 0; scroll-padding-left: 0; overflow-x: auto; overflow-y: hidden; position: relative; z-index: 1; background: transparent; scroll-snap-type: x proximity; scroll-behavior: smooth; overscroll-behavior-x: contain; }
-        .hs-fade { position: absolute; top: 0; bottom: 0; width: 56px; pointer-events: none; z-index: 2; transition: opacity 0.2s ease; }
-        .hs-fade-left { left: 0; background: linear-gradient(to right, var(--home-bg), transparent); }
-        .hs-fade-right { right: 0; background: linear-gradient(to left, var(--home-bg), transparent); }
+         .hs-fade { position: absolute; top: 0; bottom: 0; width: 32px; pointer-events: none; z-index: 2; transition: opacity 0.2s ease; }
+         .hs-fade-left { left: 0; background: linear-gradient(to right, #f8f9fa, transparent); }
+         .hs-fade-right { right: 0; background: linear-gradient(to left, #f8f9fa, transparent); }
         @media (hover: none), (pointer: coarse) { .hs-fade { display: none !important; } .hs-rail-arrow { display: none !important; } }
          .hs-rail-wrap { width: 100%; margin: 0; padding: 0; background: transparent; overflow: visible; position: relative; z-index: 1; }
          .hs-section { margin: 28px 0; padding: 0; background: transparent; }
@@ -757,10 +729,17 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
           0%, 100% { opacity: 1; transform: scale(1); }
           50% { opacity: 0.5; transform: scale(0.75); }
         }
-        @keyframes shimmer {
-          0% { background-position: 200% 0; }
-          100% { background-position: -200% 0; }
-        }
+         @keyframes shimmer {
+           0% { background-position: 200% 0; }
+           100% { background-position: -200% 0; }
+         }
+         @keyframes hsSkelShimmer {
+           0% { background-position: 200% 0; }
+           100% { background-position: -200% 0; }
+         }
+         @media (prefers-reduced-motion: reduce) {
+           .hs-skel-shimmer { animation: none !important; }
+         }
         @media (hover: hover) {
            .hs-story-btn:hover img,
            .hs-story-btn:hover video { transform: scale(1.06); }
@@ -795,43 +774,86 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
                   View all <span style={{ fontSize: 14, lineHeight: 1 }}>→</span>
                 </button>
               </div>
-          {loading ? (
-            <div style={isMobile ? { padding: '0' } : { padding: '0' }}>
-              <div className="skeleton" style={{ width: 140, height: 16, borderRadius: 6, marginBottom: 12 }} />
-              <div style={{ display: 'flex', gap: 12, overflow: 'hidden' }}>
-                {[1, 2, 3, 4, 5, 6].map((_, k) => (
-                  <div key={k} className="skeleton hs-story-btn"
-                    style={{ borderRadius: 16 }} />
-                ))}
-              </div>
-            </div>
-            ) : (
+           {loading ? (
+             <div style={isMobile ? { padding: '0' } : { padding: '0' }}>
+               <div style={{ display: 'flex', gap: 12, overflow: 'hidden' }}>
+                 <button type="button" className="hs-add-btn"
+                   onClick={() => { if (!currentUserId) { navigate?.('/login'); return }; onCreateStory?.() }}
+                   style={{
+                     flexShrink: 0,
+                     cursor: 'pointer', padding: 8, fontFamily: 'inherit',
+                     textAlign: 'center', background: '#e6f6ed',
+                     scrollSnapAlign: 'start',
+                     border: '2px dashed #0F9D58',
+                     boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                     transition: 'all 0.25s ease',
+                     display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                     gap: 10,
+                     boxSizing: 'border-box',
+                   }}
+                 >
+                   <div className="hs-create-plus" style={{
+                     width: 44, height: 44,
+                     borderRadius: '50%',
+                     background: '#0F9D58',
+                     display: 'flex', alignItems: 'center', justifyContent: 'center',
+                     boxShadow: '0 6px 16px rgba(15,157,88,0.28)',
+                   }}>
+                     <Plus size={22} color="#fff" strokeWidth={2.5} />
+                   </div>
+                   <div style={{
+                     fontFamily: "'DM Sans', system-ui, sans-serif",
+                     fontSize: 13,
+                     fontWeight: 700,
+                     color: '#202124',
+                   }}>
+                     Add status
+                   </div>
+                 </button>
+                 {[1, 2, 3, 4].map((_, k) => (
+                   <div key={k} className="hs-story-btn hs-skel-card"
+                     style={{ background: '#f1f3f4', position: 'relative', overflow: 'hidden', boxShadow: 'none' }}>
+                     <div className="hs-skel-shimmer" style={{
+                       position: 'absolute', inset: 0,
+                       background: 'linear-gradient(90deg, #f1f3f4, #e8eaed, #f1f3f4)',
+                       backgroundSize: '200% 100%',
+                       animation: 'hsSkelShimmer 1.4s infinite',
+                     }} />
+                   </div>
+                 ))}
+               </div>
+             </div>
+             ) : (
             <div style={isMobile ? {} : {}}>
             {rankedStories.length > 0 ? (
                 <div className="hs-rail-wrap" style={{ position: 'relative', padding: 0 }}>
-                   <div className="hs-fade hs-fade-left" style={{ opacity: (!isMobile && canScrollLeft) ? 1 : 0 }} aria-hidden="true" />
-                   <div className="hs-fade hs-fade-right" style={{ opacity: (!isMobile && canScrollRight) ? 1 : 0 }} aria-hidden="true" />
-                   {canScrollLeft && !isMobile && (
-                     <button type="button" className="hs-rail-arrow"
-                       onClick={scrollLeft}
-                       style={{
-                         position: 'absolute', top: '50%', left: 12, zIndex: 3,
-                         transform: 'translateY(-50%)',
-                         width: 40, height: 40, borderRadius: '50%',
-                         background: '#ffffff',
-                         border: '1px solid #e8eaed',
-                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                         cursor: 'pointer',
-                         boxShadow: '0 4px 14px rgba(16,24,40,0.16)',
-                         color: '#202124', padding: 0, fontFamily: 'inherit',
-                         transition: 'opacity 0.2s ease, background 0.2s ease, border-color 0.2s ease, transform 0.1s ease',
-                       }}
-                       aria-label="Scroll statuses left"
-                     >
-                       <ChevronLeft size={20} />
-                     </button>
-                   )}
-                  <div ref={scrollRef}
+                    <div className="hs-fade hs-fade-left" style={{ opacity: canScrollLeft ? 1 : 0 }} aria-hidden="true" />
+                    <div className="hs-fade hs-fade-right" style={{ opacity: canScrollRight ? 1 : 0 }} aria-hidden="true" />
+                    {windowWidth >= 1100 && canScrollLeft && (
+                      <button type="button"
+                        onClick={scrollLeft}
+                        aria-label="Scroll statuses left"
+                        style={{
+                          position: 'absolute', top: '50%', left: 12, zIndex: 3,
+                          transform: 'translateY(-50%)',
+                          width: 44, height: 44, padding: 0, border: 'none',
+                          background: 'transparent', cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}
+                      >
+                        <span className="hs-rail-arrow" style={{
+                          width: 40, height: 40, borderRadius: '50%',
+                          background: '#ffffff',
+                          border: '1px solid #e8eaed',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          boxShadow: '0 4px 14px rgba(16,24,40,0.16)',
+                          transition: 'opacity 0.2s ease, background 0.2s ease, border-color 0.2s ease, transform 0.1s ease',
+                        }}>
+                          <ChevronLeft size={20} color="#0F9D58" />
+                        </span>
+                      </button>
+                    )}
+                   <div ref={scrollRef}
                     className="hs-rail"
                     style={{
                       display: 'flex', gap: 12, overflowX: 'auto', overflowY: 'hidden',
@@ -839,6 +861,7 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
                       WebkitOverflowScrolling: 'touch',
                       overscrollBehaviorX: 'contain',
                       scrollPaddingLeft: 0,
+                      paddingRight: windowWidth >= 769 ? 24 : 14,
                     }}
                   >
                     <button ref={createCardRef} type="button" className="hs-add-btn"
@@ -874,38 +897,77 @@ export default function HomeStatusSection({ navigate, stories, loading, error, o
                          Add status
                        </div>
                      </button>
-                     {rankedStories.slice(0, displayLimit).map(s => (
-                      <StoryCard
-                        key={s.user_id}
-                        s={s}
-                        isOwn={s.user_id === currentUserId}
-                        viewedIds={viewedIds}
-                        onClick={() => openStoryGroup(s)}
-                        windowWidth={windowWidth}
-                      />
-                    ))}
-                  </div>
+                      {visibleStories.map(s => (
+                       <StoryCard
+                         key={s.user_id}
+                         s={s}
+                         isOwn={s.user_id === currentUserId}
+                         viewedIds={viewedIds}
+                         onClick={() => openStoryGroup(s)}
+                         windowWidth={windowWidth}
+                       />
+                     ))}
+                     {hasMoreStories && (
+                       <button type="button" className="hs-story-btn"
+                         onClick={() => navigate?.('/status')}
+                         style={{
+                           flexShrink: 0,
+                           background: '#ffffff',
+                           border: '1px solid #e8eaed',
+                           borderRadius: 16,
+                           boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                           cursor: 'pointer',
+                           padding: 10,
+                           boxSizing: 'border-box',
+                           scrollSnapAlign: 'start',
+                           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                           gap: 12,
+                           fontFamily: 'inherit',
+                         }}
+                         aria-label="View all statuses"
+                       >
+                         <div style={{
+                           width: 44, height: 44, borderRadius: '50%',
+                           background: '#0F9D58',
+                           display: 'flex', alignItems: 'center', justifyContent: 'center',
+                         }}>
+                           <ChevronRight size={20} color="#fff" />
+                         </div>
+                         <div style={{
+                           fontFamily: "'DM Sans', system-ui, sans-serif",
+                           fontSize: 13, fontWeight: 700, color: '#202124',
+                           textAlign: 'center',
+                         }}>
+                           View all statuses
+                         </div>
+                       </button>
+                     )}
+                   </div>
 
-                   {canScrollRight && !isMobile && (
-                     <button type="button" className="hs-rail-arrow"
-                       onClick={scrollRight}
-                       style={{
-                         position: 'absolute', top: '50%', right: 12, zIndex: 3,
-                         transform: 'translateY(-50%)',
-                         width: 40, height: 40, borderRadius: '50%',
-                         background: '#ffffff',
-                         border: '1px solid #e8eaed',
-                         display: 'flex', alignItems: 'center', justifyContent: 'center',
-                         cursor: 'pointer',
-                         boxShadow: '0 4px 14px rgba(16,24,40,0.16)',
-                         color: '#202124', padding: 0, fontFamily: 'inherit',
-                         transition: 'opacity 0.2s ease, background 0.2s ease, border-color 0.2s ease, transform 0.1s ease',
-                       }}
-                       aria-label="Scroll statuses right"
-                     >
-                       <ChevronRight size={20} />
-                     </button>
-                   )}
+                    {windowWidth >= 1100 && canScrollRight && (
+                      <button type="button"
+                        onClick={scrollRight}
+                        aria-label="Scroll statuses right"
+                        style={{
+                          position: 'absolute', top: '50%', right: 12, zIndex: 3,
+                          transform: 'translateY(-50%)',
+                          width: 44, height: 44, padding: 0, border: 'none',
+                          background: 'transparent', cursor: 'pointer',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        }}
+                      >
+                        <span className="hs-rail-arrow" style={{
+                          width: 40, height: 40, borderRadius: '50%',
+                          background: '#ffffff',
+                          border: '1px solid #e8eaed',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          boxShadow: '0 4px 14px rgba(16,24,40,0.16)',
+                          transition: 'opacity 0.2s ease, background 0.2s ease, border-color 0.2s ease, transform 0.1s ease',
+                        }}>
+                          <ChevronRight size={20} color="#0F9D58" />
+                        </span>
+                      </button>
+                    )}
                 </div>
                ) : (
                   <div style={{ display: 'flex', gap: 12, padding: 0, margin: 0 }}>

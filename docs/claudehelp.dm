@@ -50,3 +50,4 @@ Reduce the distance from status to categories. make it match with the other spac
 
 JOBS ARE POSTED IN ADMIN ONLY, BUT WHEN POSTING JOB. IN JOB POST IN ADMIN, IT IS NOT WELL STAYLED. FIX IT. STYLE IT PROPELY
 Home statuses Phase 2c: fix only the TOP zone of Home status cards: two rows (avatar + in-flow count circle; full-width name and relative time only), 30px phone/32px 769px+ avatar, 13px phone middle text, no location, no overlap on 130x190 or 150x220 cards.
+Home statuses: scrolling behaviour, more-cards cue, loading state: 13 query/12 render, arrows 1100px+, fades, view-all card, skeleton.
