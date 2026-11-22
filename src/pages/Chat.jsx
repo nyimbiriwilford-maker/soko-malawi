@@ -42,6 +42,8 @@ import {
   SendHorizontal,
   PackageCheck,
   MessageCircleQuestion,
+  MapPin,
+  CalendarCheck,
   ChevronDown,
   Reply,
   TimerReset,
@@ -2550,6 +2552,37 @@ async function uploadAndSend(file, type, caption = '') {
     && !replyTo
     && !chatDisabledReason
     && !showDmGate
+  const isRequestOwner = chatSource === 'request' && !!request?.user_id && request.user_id === currentUser?.id
+  const quickReplies = useMemo(() => {
+    let items = []
+    if (chatSource === 'request') {
+      items = isRequestOwner
+        ? [
+            { label: 'Please send photos', text: 'Please send photos', Icon: ImageIcon },
+            { label: 'What is your price?', text: 'What is your price?', Icon: MessageCircleQuestion },
+            { label: 'Is it in good condition?', text: 'Is it in good condition?', Icon: PackageCheck },
+          ]
+        : [
+            { label: 'Do you still need it?', text: 'Do you still need it?', Icon: MessageCircleQuestion },
+            { label: 'I have it', text: 'I have it', Icon: PackageCheck },
+            { label: 'Send my offer', offer: true, Icon: HandCoins },
+            { label: 'Where can we meet?', text: 'Where can we meet?', Icon: MapPin },
+          ]
+    } else if (chatSource === 'service') {
+      items = [
+        { label: 'Are you available?', text: 'Are you available?', Icon: CalendarCheck },
+        { label: 'What is your price?', text: 'What is your price?', Icon: MessageCircleQuestion },
+        { label: 'Where are you located?', text: 'Where are you located?', Icon: MapPin },
+      ]
+    } else {
+      items = [
+        { label: 'Is this still available?', text: 'Is this still available?', Icon: PackageCheck },
+        { label: 'Make an offer', offer: true, Icon: HandCoins },
+        { label: "What's your last price?", text: "What's your last price?", Icon: MessageCircleQuestion },
+      ]
+    }
+    return items.filter(item => !item.offer || offersAllowedToday)
+  }, [chatSource, isRequestOwner, offersAllowedToday])
   const composerHasContent = !!newMsg.trim() || preview.length > 0
 
   function openComposerOffer() {
@@ -4139,7 +4172,7 @@ async function uploadAndSend(file, type, caption = '') {
       <div
         ref={messagesListRef}
         className="chat-messages"
-        style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}
+        style={{ flex: 1, overflowY: 'auto', minHeight: 0, paddingBottom: showQuickReplies ? 52 : undefined }}
         onClick={() => { setShowEmoji(false); setShowAttach(false) }}
         onScroll={e => {
           const el = e.currentTarget
@@ -5306,30 +5339,26 @@ async function uploadAndSend(file, type, caption = '') {
                 </div>
               )}
 
-              {showQuickReplies && (
+              {showQuickReplies && quickReplies.length > 0 && (
                 <div className="chat-quick-replies-bar">
-                  <button
-                    type="button"
-                    className="chat-quick-reply"
-                    onClick={() => { setShowAttach(false); sendMessage('Is this still available?') }}
-                  >
-                    <PackageCheck size={16} strokeWidth={1.75} aria-hidden="true" />
-                    <span>Is this still available?</span>
-                  </button>
-                  {offersAllowedToday && (
-                    <button type="button" className="chat-quick-reply" onClick={openComposerOffer}>
-                      <HandCoins size={16} strokeWidth={1.75} aria-hidden="true" />
-                      <span>Make an offer</span>
+                  {quickReplies.map(({ label, text, offer, Icon }) => (
+                    <button
+                      key={label}
+                      type="button"
+                      className="chat-quick-reply"
+                      onClick={() => {
+                        if (offer) {
+                          openComposerOffer()
+                          return
+                        }
+                        setShowAttach(false)
+                        sendMessage(text)
+                      }}
+                    >
+                      <Icon size={16} strokeWidth={1.75} aria-hidden="true" />
+                      <span>{label}</span>
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    className="chat-quick-reply"
-                    onClick={() => { setShowAttach(false); sendMessage("What's your last price?") }}
-                  >
-                    <MessageCircleQuestion size={16} strokeWidth={1.75} aria-hidden="true" />
-                    <span>What's your last price?</span>
-                  </button>
+                  ))}
                 </div>
               )}
 

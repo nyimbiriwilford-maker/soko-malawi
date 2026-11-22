@@ -467,3 +467,25 @@ npx eslint <the real changed file paths> | Select-String "no-undef|is not define
 npx eslint <the real Notifications page and deal component paths> --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
 git status -sb
 git diff HEAD~1 --stat -- src
+
+GOAL: Make the quick-reply chips context-aware and floating. Branch wip/home-hero-premium (check with git branch --show-current). Rules: no git stash or reset, no SQL, no installs, do NOT launch Chrome or any browser, do not merge or push. Edit only src/pages/Chat.jsx and src/styles/chat-thread.css. Run git status -sb first; if there are uncommitted changes, stop and tell me.
+
+1. Print raw with line numbers the quick-reply row, its chip list and the condition that shows it, then continue.
+2. CONTEXT: choose the chip set by chat type (src=request, listing or service) and by who the viewer is.
+   - Request chat, viewer is NOT the request owner (a seller replying): "Do you still need it?" (MessageCircleQuestion), "I have it" (PackageCheck), "Send my offer" (HandCoins or BadgeDollarSign; opens the existing offer flow), "Where can we meet?" (MapPin).
+   - Request chat, viewer IS the request owner (the buyer): "Please send photos" (Image), "What is your price?" (MessageCircleQuestion), "Is it in good condition?" (PackageCheck).
+   - Listing chat, buyer viewing: keep the current chips (Is this still available?, Make an offer, What's your last price?).
+   - Service chat: "Are you available?" (CalendarCheck), "What is your price?" (MessageCircleQuestion), "Where are you located?" (MapPin).
+   Never show "Is this still available?" in a request chat.
+3. Text chips fill and send through the normal send handler. Offer chips open the existing offer flow. Keep the existing show/hide rules (fewer than 3 messages, hidden once the user types).
+4. FLOATING STYLE: the row has a transparent background, no border, no shadow, no white bar, padding 0 12px 8px, display flex, gap 8px, overflow-x auto, hidden scrollbar. Each chip is its own pill floating on the chat background: white background, 1px #e8eaed border, box-shadow 0 1px 3px rgba(16,24,40,0.12), 36px tall, padding 0 14px, radius 999px, 14px DM Sans weight 500, flex 0 0 auto, nowrap, 16px Lucide icon on the left in green #0F9D58. Press state: background #e6f6ed. The row sits directly above the composer and never overlaps messages (add matching bottom padding to the message list while it is visible).
+5. Do not change sending, offers logic, other chat parts or other pages.
+
+Commit as "Chat view: context-aware floating quick replies", append one line to PROGRESS.md and commit it too.
+
+End with RAW output only, no summary:
+git log --oneline -4
+npm run build
+npx eslint src/pages/Chat.jsx | Select-String "no-undef|is not defined" ; "ESLINT DONE"
+git status -sb
+git diff HEAD~1 --stat -- src
