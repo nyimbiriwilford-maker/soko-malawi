@@ -38,10 +38,6 @@ import LookingForRequestCard, { LOOKING_FOR_CARD_CSS } from '../components/Looki
 import { makeOffer } from '../lib/makeOffer'
 import { rankServices, isServiceVerified } from '../lib/serviceRanking'
 import {
-  getGPSLocation,
-  sortRequestsByViewerLocation,
-  withDistanceToBuyer,
-  buyerCoords,
   fmtMWK,
 } from '../utils/lookingFor'
 import { SORT_OPTIONS } from '../constants/lookingFor'
@@ -62,6 +58,26 @@ import { SHOW_FEATURED_ADS } from '../config/featureFlags'
 import HomeStatusSection from '../components/HomeStatusSection'
 import StatusUploadModal from '../components/StatusUploadModal'
 import FeaturedListingsRow, { FEATURED_POOL_SIZE } from '../components/FeaturedListings'
+
+const HOME_LF_CONFIG = {
+  requestCacheKey: 'soko_lf_requests_v3',
+  requestCacheTtl: 5 * 60 * 1000,
+  gpsCacheKey: 'lf_gps_cache',
+  gpsCacheTtl: 10 * 60 * 1000,
+  fetchPoolSize: 40,
+  hiddenReshuffleMs: 10 * 60 * 1000,
+  freshnessHours: 12,
+  locationCity: 3,
+  locationRegion: 1.5,
+  urgencyUrgent: 1.5,
+  offersZero: 1.3,
+  offersLow: 1.1,
+  offersLowMax: 2,
+  qualityImage: 1.2,
+  qualityBudget: 1.1,
+}
+let homeLfPriorityCache = { at: 0, seed: 0 }
+let homeLfHiddenAt = 0
 
 /* ─────────────────────────────────────────────────────────────────────────────
    DESIGN TOKENS
@@ -1985,6 +2001,49 @@ function simpleHash(s) {
   return Math.abs(h)
 }
 
+function normLfPlace(value) {
+  return String(value || '').trim().toLowerCase()
+}
+
+function readCachedHomeGps() {
+  try {
+    const raw = sessionStorage.getItem(HOME_LF_CONFIG.gpsCacheKey)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (parsed && parsed.at && (Date.now() - parsed.at) < HOME_LF_CONFIG.gpsCacheTtl && parsed.data) return parsed.data
+  } catch {}
+  return null
+}
+
+function getHomeLfSeed() {
+  if (!homeLfPriorityCache.seed) {
+    homeLfPriorityCache = { at: Date.now(), seed: Math.floor(Math.random() * 1e9) + 1 }
+  }
+  return homeLfPriorityCache.seed
+}
+
+function lfPriorityScore(req, viewerLoc, now) {
+  const ageMs = req.created_at ? now - new Date(req.created_at).getTime() : HOME_LF_CONFIG.freshnessHours * 3600000
+  const freshness = 1 / (1 + Math.max(0, ageMs) / (HOME_LF_CONFIG.freshnessHours * 3600000))
+  let location = 1
+  if (viewerLoc) {
+    const places = [req.city, req.detected_city, ...(Array.isArray(req.cities) ? req.cities : [])]
+      .map(normLfPlace).filter(Boolean)
+    const viewerCity = normLfPlace(viewerLoc.city || viewerLoc.area || String(viewerLoc.label || '').split(',')[0])
+    const viewerRegion = normLfPlace(viewerLoc.district || String(viewerLoc.label || '').split(',').pop())
+    const matches = needle => places.some(p => p === needle || p.includes(needle) || needle.includes(p))
+    if (viewerCity && matches(viewerCity)) location = HOME_LF_CONFIG.locationCity
+    else if (viewerRegion && matches(viewerRegion)) location = HOME_LF_CONFIG.locationRegion
+  }
+  const offers = req.offer_count ?? req.offerCount ?? 0
+  const offersFactor = offers === 0 ? HOME_LF_CONFIG.offersZero
+    : offers <= HOME_LF_CONFIG.offersLowMax ? HOME_LF_CONFIG.offersLow : 1
+  const imageFactor = viewerLoc && (req.image_url || (Array.isArray(req.image_urls) && req.image_urls.length)) ? HOME_LF_CONFIG.qualityImage : 1
+  const budgetFactor = viewerLoc && req.budget ? HOME_LF_CONFIG.qualityBudget : 1
+  return freshness * location * (req.urgency === 'urgent' ? HOME_LF_CONFIG.urgencyUrgent : 1)
+    * offersFactor * imageFactor * budgetFactor
+}
+
 function haversineKm(lat1, lon1, lat2, lon2) {
   const R = 6371
   const dLat = (lat2 - lat1) * Math.PI / 180
@@ -1993,13 +2052,13 @@ function haversineKm(lat1, lon1, lat2, lon2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
 
-const LF_WEIGHTS = { verified: 15, location: 35, recency: 30, exposure: 20, urgencyNonFlexible: 10, urgencyMedium: 5 }
-const LF_NEAR_KM = 25
-function LookingForSection({ navigate, requests, loading, userLat, userLng, activeDistrict, viewerLocation: viewerLocationProp, user, onOffer, browseButtonVisible = false }) {
-  const [viewerLoc,    setViewerLoc]    = React.useState(viewerLocationProp || null)
-  const [detectingGps, setDetectingGps] = React.useState(!viewerLocationProp)
-  const [gpsError,     setGpsError]     = React.useState(null)
+function LookingForSection({ navigate, requests, loading, viewerLocation: viewerLocationProp, user, onOffer, browseButtonVisible = false }) {
+  const [viewerLoc, setViewerLoc] = React.useState(viewerLocationProp || readCachedHomeGps())
   const viewedIdsRef = React.useRef(new Set())
+
+  React.useEffect(() => {
+    if (viewerLocationProp) setViewerLoc(viewerLocationProp)
+  }, [viewerLocationProp])
 
   async function trackRequestView(req) {
     if (!req?.id || !user?.id) return
@@ -2033,85 +2092,8 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
     })
   }
 
-  async function detectGps(force = false) {
-    setDetectingGps(true)
-    setGpsError(null)
-    try {
-      const gps = await getGPSLocation()
-      if (gps?.lat != null || gps?.label || gps?.district) {
-        setViewerLoc(gps)
-        try {
-          sessionStorage.setItem('userCoords', JSON.stringify({ lat: gps.lat, lng: gps.lng }))
-          sessionStorage.setItem('soko_gps_location', JSON.stringify(gps))
-        } catch { /* ignore */ }
-        setDetectingGps(false)
-        return gps
-      }
-      if (Number.isFinite(userLat) && Number.isFinite(userLng)) {
-        const fallback = {
-          lat: userLat, lng: userLng,
-          label: activeDistrict && activeDistrict !== 'All Districts' ? activeDistrict : null,
-          district: activeDistrict && activeDistrict !== 'All Districts' ? activeDistrict : null,
-          city: activeDistrict && activeDistrict !== 'All Districts' ? activeDistrict : null,
-        }
-        setViewerLoc(fallback)
-        setDetectingGps(false)
-        return fallback
-      }
-      if (activeDistrict && activeDistrict !== 'All Districts') {
-        const d = { label: activeDistrict, district: activeDistrict, city: activeDistrict }
-        setViewerLoc(d)
-        setDetectingGps(false)
-        return d
-      }
-      if (force) setGpsError('Could not detect GPS. Allow location access.')
-      setDetectingGps(false)
-      return null
-    } catch {
-      setDetectingGps(false)
-      if (force) setGpsError('Could not detect GPS.')
-      return null
-    }
-  }
-
-  React.useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      if (viewerLocationProp?.lat != null || viewerLocationProp?.district) {
-        if (!cancelled) { setViewerLoc(viewerLocationProp); setDetectingGps(false) }
-        return
-      }
-      try {
-        const cached = sessionStorage.getItem('soko_gps_location')
-        if (cached) {
-          const parsed = JSON.parse(cached)
-          if (parsed?.lat != null || parsed?.district) {
-            if (!cancelled) { setViewerLoc(parsed); setDetectingGps(false) }
-            detectGps(false)
-            return
-          }
-        }
-      } catch { /* ignore */ }
-      if (!cancelled) await detectGps(false)
-    })()
-    return () => { cancelled = true }
-  }, [viewerLocationProp])
-
   const [lfNearby, setLfNearby] = React.useState('all')
   const lfNearbyPickedRef = React.useRef(false)
-
-  // Home Looking For: no location filter; keep newest-first ordering
-  React.useEffect(() => {
-    if (viewerLoc?.lat != null) return
-    if (activeDistrict && activeDistrict !== 'All Districts') {
-      setViewerLoc(prev => prev?.district === activeDistrict ? prev : {
-        label: activeDistrict, district: activeDistrict, city: activeDistrict, lat: prev?.lat, lng: prev?.lng,
-      })
-    }
-  }, [activeDistrict])
-
-  const [lfSort, setLfSort] = React.useState('recent')
-  const lfSessionSeed = React.useRef(Math.floor(Math.random() * 1000)).current
 
   function useLfWindowWidth() {
     const [w, setW] = React.useState(typeof window !== 'undefined' ? window.innerWidth : 1100)
@@ -2131,87 +2113,20 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
 
   const ranked = React.useMemo(() => {
     const now = Date.now()
-    const thirtyDays = 30 * 24 * 60 * 60 * 1000
-    let open = (requests || []).filter(r => {
+    const open = (requests || []).filter(r => {
       if (r.status === 'fulfilled') return false
-      if (r.approved != null && r.approved !== true) return false
-      if (r.deleted === true) return false
       if (r.expires_at && new Date(r.expires_at).getTime() <= now) return false
-      if (r.created_at && (now - new Date(r.created_at).getTime()) > thirtyDays) return false
-    if (lfNearby === 'near') {
-      const userCity = (viewerLoc?.city || viewerLoc?.district || (activeDistrict && activeDistrict !== 'All Districts' ? activeDistrict : '') || '').trim().toLowerCase()
-      const reqCities = [(r.city || ''), r.detected_city || '', ...(Array.isArray(r.cities) ? r.cities : [])].map(x => String(x).trim().toLowerCase()).filter(Boolean)
-      let keep = false
-      if (userCity && reqCities.some(c => c === userCity)) keep = true
-      if (!keep && viewerLoc?.lat != null && viewerLoc?.lng != null) {
-        const to = buyerCoords(r)
-        if (to && Number.isFinite(to.lat) && Number.isFinite(to.lng)) {
-          const km = haversineKm(viewerLoc.lat, viewerLoc.lng, to.lat, to.lng)
-          if (km != null && km <= LF_NEAR_KM) keep = true
-        }
-      }
-      if (!keep) return false
-    } else if (lfNearby !== 'all') {
-      const target = String(lfNearby).trim().toLowerCase()
-      const reqCities = [(r.city || ''), r.detected_city || '', ...(Array.isArray(r.cities) ? r.cities : [])].map(x => String(x).trim().toLowerCase()).filter(Boolean)
-      if (!reqCities.some(c => c === target)) return false
-    }
-    return true
+      return true
     })
-    const loc = viewerLoc
-      || (Number.isFinite(userLat) && Number.isFinite(userLng)
-        ? { lat: userLat, lng: userLng, district: activeDistrict !== 'All Districts' ? activeDistrict : null }
-        : null)
-      || (activeDistrict && activeDistrict !== 'All Districts'
-        ? { label: activeDistrict, district: activeDistrict, city: activeDistrict }
-        : null)
-    const byArea = sortRequestsByViewerLocation(open, loc, 'recent')
-    const withDist = withDistanceToBuyer(byArea, loc)
-    const ic = impressionCounts.current
-    const tiebreakSeed = lfSessionSeed + Math.floor(now / (30 * 60 * 1000))
-
-    if (lfSort !== 'recent') {
-      const sorted = [...withDist].sort((a, b) => {
-        if (lfSort === 'budget') return (b.budget || 0) - (a.budget || 0)
-        if (lfSort === 'demand') return (b.offer_count ?? b.offerCount ?? 0) - (a.offer_count ?? a.offerCount ?? 0)
-        if (lfSort === 'urgent') return (b.urgency === 'urgent' ? 1 : 0) - (a.urgency === 'urgent' ? 1 : 0)
-        return 0
-      })
-      return sorted
-    }
-
-    const withScore = withDist.map(r => {
-      const isVerified = r.profiles?.is_verified || r.profiles?.verified || false
-      const locScore = r._locScore || 0
-      const ageH = r.created_at ? (now - new Date(r.created_at).getTime()) / 3600000 : 168
-      const exposure = (r.offer_count ?? r.offerCount ?? 0) + (r.view_count ?? 0) + (ic[r.id] || 0)
-      const urgencyBonus = r.urgency === 'flexible' ? 0 : (r.urgency === 'medium' ? LF_WEIGHTS.urgencyMedium : LF_WEIGHTS.urgencyNonFlexible)
-      const score = (isVerified ? LF_WEIGHTS.verified : 0)
-        + (locScore / 100) * LF_WEIGHTS.location
-        + Math.max(0, LF_WEIGHTS.recency * (1 - Math.min(ageH, 168) / 168))
-        + Math.max(0, LF_WEIGHTS.exposure * (1 - Math.min(exposure, 50) / 50))
-        + urgencyBonus
-      const tiebreak = r.id ? simpleHash(r.id + tiebreakSeed) % 1e9 : 0
-      return { ...r, _fairScore: score, _tiebreak: tiebreak }
-    })
-
-    if (lfNearby === 'near' && viewerLoc?.lat != null && viewerLoc?.lng != null) {
-      withScore.sort((a, b) => {
-        const da = a._distanceKm != null ? a._distanceKm : Infinity
-        const db = b._distanceKm != null ? b._distanceKm : Infinity
-        if (da !== db) return da - db
-        if (a._fairScore !== b._fairScore) return b._fairScore - a._fairScore
-        return b._tiebreak - a._tiebreak
-      })
-      return withScore
-    }
-
-    withScore.sort((a, b) => {
-      if (a._fairScore !== b._fairScore) return b._fairScore - a._fairScore
-      return b._tiebreak - a._tiebreak
-    })
-    return withScore
-    }, [requests, viewerLoc, userLat, userLng, activeDistrict, lfSort, lfNearby])
+    const seed = getHomeLfSeed()
+    return open.map(r => {
+      const score = lfPriorityScore(r, viewerLoc, now)
+      const u = ((simpleHash(`${r.id}:${seed}`) % 999983) + 1) / 1000000
+      const race = -Math.log(1 - u) / Math.max(score, 1e-6)
+      return { ...r, _priorityScore: score, _priorityRace: race }
+    }).sort((a, b) => a._priorityRace - b._priorityRace
+      || new Date(b.created_at || 0) - new Date(a.created_at || 0))
+  }, [requests, viewerLoc])
 
   const displayCount = Math.min(LF_INITIAL_COUNT, ranked.length || LF_INITIAL_COUNT)
   const hasMoreLf = ranked.length > displayCount
@@ -2226,7 +2141,7 @@ function LookingForSection({ navigate, requests, loading, userLat, userLng, acti
   }, [displayCount])
 
   const filtered = ranked
-  const placeLabel = viewerLoc?.district || viewerLoc?.city || viewerLoc?.label || (activeDistrict && activeDistrict !== 'All Districts' ? activeDistrict : null)
+  const placeLabel = viewerLoc?.district || viewerLoc?.city || viewerLoc?.label || null
 
   const [lfNearbyOpen, setLfNearbyOpen] = React.useState(false)
   const [lfSortOpen, setLfSortOpen] = React.useState(false)
@@ -4699,39 +4614,25 @@ export default function Home() {
   const listingsRequestRef = useRef(0)
   const sectionsRequestRef = useRef(0)
 
-  // Boot GPS early (same reverse-geocode as Looking For page)
   useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      try {
-        const cached = sessionStorage.getItem('soko_gps_location')
-        if (cached) {
-          const parsed = JSON.parse(cached)
-          if (parsed?.lat != null || parsed?.district) {
-            if (!cancelled) setHomeGpsLocation(parsed)
-          }
-        }
-      } catch { /* ignore */ }
-      const gps = await getGPSLocation()
-      if (cancelled || !gps) return
-      setHomeGpsLocation(gps)
-      try {
-        sessionStorage.setItem('soko_gps_location', JSON.stringify(gps))
-        if (gps.lat != null && gps.lng != null) {
-          sessionStorage.setItem('userCoords', JSON.stringify({ lat: gps.lat, lng: gps.lng }))
-        }
-      } catch { /* ignore */ }
-      // Optionally align district filter with GPS when still on "All"
-      if (gps.district && activeDistrict === 'All Districts') {
-        // Don't auto-force filter — only store location for ranking
-      }
-    })()
-    return () => { cancelled = true }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setHomeGpsLocation(readCachedHomeGps())
   }, [])
 
 
   // ── Stories (compact LiveStoriesCard + viewer/upload) ─────
+  useEffect(() => {
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        homeLfHiddenAt = Date.now()
+      } else if (homeLfHiddenAt && (Date.now() - homeLfHiddenAt) >= HOME_LF_CONFIG.hiddenReshuffleMs) {
+        homeLfPriorityCache = { at: 0, seed: 0 }
+        homeLfHiddenAt = 0
+      }
+    }
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => document.removeEventListener('visibilitychange', onVisibility)
+  }, [])
+
   const [stories, setStories] = useState([])
   const [storiesLoading, setStoriesLoading] = useState(true)
   const [storiesError, setStoriesError] = useState(null)
@@ -5094,14 +4995,12 @@ export default function Home() {
       })(),
       (async () => {
         try {
-          const CACHE_KEY = 'soko_lf_requests_v2'
-          const CACHE_TTL = 5 * 60 * 1000
           const cached = (() => {
             try {
-              const raw = sessionStorage.getItem(CACHE_KEY)
+              const raw = sessionStorage.getItem(HOME_LF_CONFIG.requestCacheKey)
               if (!raw) return null
               const parsed = JSON.parse(raw)
-              if (Date.now() - parsed.ts < CACHE_TTL) return parsed.data
+              if (Date.now() - parsed.ts < HOME_LF_CONFIG.requestCacheTtl) return parsed.data
             } catch {}
             return null
           })()
@@ -5112,16 +5011,23 @@ export default function Home() {
           }
 
           const nowIso = new Date().toISOString()
-          const selectBase = 'id, title, description, category, city, cities, created_at, budget, offer_count, view_count, urgency, image_url, image_urls, expires_at, user_id, profiles:user_id(full_name,avatar_url,is_verified)'
-          const { data: resultData, error } = await supabase.from('buyer_requests')
+          const selectBase = 'id, title, description, category, city, cities, created_at, budget, offer_count, view_count, urgency, image_url, image_urls, expires_at, user_id, profiles:user_id!left(full_name,avatar_url,is_verified)'
+          let result = await supabase.from('buyer_requests')
             .select(selectBase)
             .neq('status', 'fulfilled')
             .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
             .order('created_at', { ascending: false })
-            .limit(16)
-          const result = { data: resultData, error }
+            .limit(HOME_LF_CONFIG.fetchPoolSize)
+          if (result.error) {
+            const selectLegacy = 'id, title, description, category, city, created_at, budget, image_url, user_id, profiles:user_id!left(full_name,avatar_url,is_verified)'
+            result = await supabase.from('buyer_requests')
+              .select(selectLegacy)
+              .neq('status', 'fulfilled')
+              .order('created_at', { ascending: false })
+              .limit(HOME_LF_CONFIG.fetchPoolSize)
+          }
           if (result.data) {
-            try { sessionStorage.setItem(CACHE_KEY, JSON.stringify({ data: result.data, ts: Date.now() })) } catch {}
+            try { sessionStorage.setItem(HOME_LF_CONFIG.requestCacheKey, JSON.stringify({ data: result.data, ts: Date.now() })) } catch {}
           }
           if (requestId !== sectionsRequestRef.current) return
           setRequests(result.data || [])
@@ -5329,9 +5235,6 @@ export default function Home() {
               navigate={navigate}
               requests={requests}
               loading={sectionsLoading}
-              userLat={userLat}
-              userLng={userLng}
-              activeDistrict={activeDistrict}
               viewerLocation={homeGpsLocation}
               user={user}
               onOffer={(req) => makeOffer(req, { user, navigate, onOfferStarted: (r, isNew) => {
