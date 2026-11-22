@@ -3075,8 +3075,9 @@
   border-color: #e8eaed !important;
   box-shadow: none !important;
   transform: none !important;
-  min-height: 0 !important;
-  padding: 14px 16px !important;
+  min-height: 64px !important;
+  margin: 0 !important;
+  padding: 12px 16px !important;
   border-radius: 12px !important;
 }
 
@@ -3088,10 +3089,17 @@
   background: var(--notif-accent) !important;
 }
 
+.notif-card-inner,
+.notif-person,
+.notif-person-text,
+.notif-person-row {
+  min-height: 0 !important;
+  margin: 0 !important;
+}
+
 .notif-card-inner {
   align-items: center !important;
   gap: 12px !important;
-  min-height: 0 !important;
 }
 
 .notif-person {
@@ -3099,14 +3107,32 @@
   gap: 12px !important;
 }
 
+.notif-person-row {
+  align-items: flex-start !important;
+}
+
 .notif-person-name {
+  display: -webkit-box !important;
   flex: 1 1 auto !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+  white-space: normal !important;
+  text-overflow: ellipsis !important;
+  -webkit-box-orient: vertical !important;
+  -webkit-line-clamp: 2 !important;
   font-family: 'DM Sans', 'Inter', system-ui, sans-serif !important;
   font-size: 15px !important;
   font-weight: 600 !important;
   letter-spacing: 0 !important;
-  line-height: 1.25 !important;
+  line-height: 1.1 !important;
   color: #202124 !important;
+}
+
+@media (min-width: 769px) {
+  .notif-person-name {
+    white-space: nowrap !important;
+    -webkit-line-clamp: 1 !important;
+  }
 }
 
 .notif-person-name.is-unread-name {
@@ -3123,17 +3149,23 @@
   font-family: 'DM Sans', 'Inter', system-ui, sans-serif !important;
   font-size: 14px !important;
   font-weight: 400 !important;
-  line-height: 1.4 !important;
+  line-height: 1.35 !important;
   color: #5f6368 !important;
   overflow: hidden !important;
   white-space: nowrap !important;
   text-overflow: ellipsis !important;
 }
 
+.notif-actions {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+
 .notif-person-end {
   flex: 0 0 auto !important;
   flex-direction: column !important;
   align-items: flex-end !important;
+  align-self: flex-start !important;
   gap: 2px !important;
   margin-left: 8px !important;
 }
@@ -3145,6 +3177,8 @@
 }
 
 .notif-time {
+  flex: none !important;
+  width: auto !important;
   font-family: 'DM Sans', 'Inter', system-ui, sans-serif !important;
   font-size: 12px !important;
   font-weight: 400 !important;
@@ -3181,7 +3215,8 @@
   bottom: -3px !important;
   width: 18px !important;
   height: 18px !important;
-  border: 2px solid #fff !important;
+  border: 0 !important;
+  box-shadow: 0 0 0 2px #fff !important;
 }
 
 @media (min-width: 1100px) {

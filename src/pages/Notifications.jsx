@@ -81,6 +81,31 @@ function toTitleCaseName(value) {
   })
 }
 
+function resolveViewName(notif, sender) {
+  const d = notif.data || {}
+  const candidates = [
+    d.viewer_name,
+    d.viewer_full_name,
+    d.actor_name,
+    d.sender_name,
+    d.viewer?.full_name,
+    d.viewer?.name,
+  ]
+
+  const viewerId = d.viewer_id || d.actor_id || d.sender_id
+  if (viewerId && getActorId(notif) === viewerId) {
+    candidates.push(sender?.full_name, sender?.name)
+  }
+
+  const sourceText = stripEmojis(notif.body || notif.message || d.message || d.preview || notif.title || '')
+  const match = sourceText.match(/^(.+?)\s+viewed(?:\s|$)/i)
+  if (match) candidates.push(match[1].replace(/^["'“”]+|["'“”]+$/g, ''))
+
+  return candidates
+    .map(toTitleCaseName)
+    .find((name) => name && name !== 'Someone') || 'Someone'
+}
+
 function formatMwkPrice(value) {
   if (value == null || value === '') return ''
   const digits = String(value).replace(/[^\d.-]/g, '')
@@ -980,7 +1005,7 @@ const NotificationCard = memo(function NotificationCard({
   const hasActor = !!(actorName && actorName !== 'Someone')
   const displayName = toTitleCaseName(hasActor ? actorName : (notif.title || cfg.label || 'Someone')) || 'Someone'
   const displayTitle = notif.type === 'listing_view'
-    ? `${hasActor ? displayName : 'Someone'} viewed your listing`
+    ? `${resolveViewName(notif, sender)} viewed your listing`
     : displayName
   const isVerified = !!(sender?.is_verified)
   const listingTitle = product?.title || notif.data?.listing_title || notif.data?.service_name || ''
