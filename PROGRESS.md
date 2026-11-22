@@ -137,3 +137,4 @@ Home statuses: rotating order with seen tracking (temp demo helper)
 Home statuses: priority multipliers (location, verified, completeness)
 Home statuses: remove temp demo helper
 Explore: redesign to match Home, shared categories config
+Explore: chevrons, grid overflow, row text

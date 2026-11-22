@@ -4,6 +4,7 @@
  */
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { ChevronRight } from 'lucide-react'
 import { CATEGORIES } from '../config/categories'
 
 const GREEN = '#0F9D58'
@@ -94,6 +95,7 @@ export default function ExplorePage() {
           background: transparent;
           padding: 8px 4px;
           min-height: 44px;
+          min-width: 0;
           -webkit-tap-highlight-color: transparent;
           transition: transform 0.12s ease;
         }
@@ -109,6 +111,10 @@ export default function ExplorePage() {
           -webkit-line-clamp: 2;
           -webkit-box-orient: vertical;
           overflow: hidden;
+          overflow-wrap: anywhere;
+        }
+        @media (max-width: 359px) {
+          .explore-cat-label { font-size: 11.5px; }
         }
         @media (min-width: 1100px) {
           .explore-cat {
@@ -182,7 +188,7 @@ export default function ExplorePage() {
           </div>
           <div style={{
             display: 'grid',
-            gridTemplateColumns: isWide ? 'repeat(8, 1fr)' : 'repeat(4, 1fr)',
+            gridTemplateColumns: isWide ? 'repeat(8, minmax(0, 1fr))' : 'repeat(4, minmax(0, 1fr))',
             gap: isWide ? 16 : '12px 8px',
           }}>
             {CATEGORIES.map(cat => {
@@ -250,7 +256,7 @@ export default function ExplorePage() {
                     alignItems: 'center',
                     gap: 12,
                     minHeight: 64,
-                    padding: '0 16px',
+                    padding: '10px 14px',
                     background: 'none',
                     border: 'none',
                     borderBottom: i < EXPLORE_ROWS.length - 1 ? `1px solid ${BORDER}` : 'none',
@@ -262,11 +268,11 @@ export default function ExplorePage() {
                   }}
                 >
                   <div style={{
+                    flex: 'none',
                     width: 48, height: 48, borderRadius: 14,
                     background: row.iconBg,
                     color: row.iconColor,
                     display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    flexShrink: 0,
                   }}>
                     {row.icon}
                   </div>
@@ -279,14 +285,20 @@ export default function ExplorePage() {
                       {row.title}
                     </div>
                     <div style={{
-                      fontSize: 14, color: SUB,
-                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                       fontFamily: "'DM Sans', system-ui, sans-serif",
+                      fontSize: 14, color: SUB,
+                      display: '-webkit-box',
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: 'vertical',
+                      overflow: 'hidden',
+                      lineHeight: 1.35,
                     }}>
                       {row.sub}
                     </div>
                   </div>
-                  {Icon.chevR}
+                  <div style={{ flex: 'none', marginLeft: 8, display: 'flex', alignItems: 'center' }}>
+                    <ChevronRight size={20} strokeWidth={1.75} color="#80868b" />
+                  </div>
                 </button>
               ))}
             </div>
