@@ -445,6 +445,7 @@ npx eslint src/pages/Chat.jsx | Select-String "no-undef|is not defined" ; "ESLIN
 git status -sb
 git diff HEAD~1 --stat -- src
 
+
 GOAL: Rebuild the desktop top navigation for 1100px and up only. Branch wip/home-hero-premium (check with git branch --show-current). Rules: no git stash or reset, no SQL, no installs, do NOT launch Chrome or any browser, do not merge or push. Make all edits directly. Do not change phone or tablet layouts below 1100px at all.
 
 STEP 1 - Before editing, print the current code raw with line numbers for: the desktop header markup, search bar, nav row and styles, unread counts source for chats and notifications, and account avatar/menu. Then inspect node_modules/lucide-react to confirm the needed icons exist. If any is missing, use the stated fallback.
@@ -549,5 +550,22 @@ End with RAW output only, no summary:
 git log --oneline -4
 npm run build
 npx eslint src/pages/Chat.jsx | Select-String "no-undef|is not defined" ; "ESLINT DONE"
+git status -sb
+git diff HEAD~1 --stat -- src
+
+GOAL: Small desktop header polish. Desktop only (min-width 1100px). Branch wip/home-hero-premium (check with git branch --show-current). Rules: no git stash or reset, no SQL, no installs, do NOT launch Chrome or any browser, do not merge or push. Edit only the header component, the early-access banner component and their styles.
+
+1. Early access strip: make it 32px tall (13px text, centred, icon 14px, X 28px target), amber #B06000 on #FFF8E1. On dismiss, store the dismissal in localStorage (try/catch) and stay hidden for 7 days.
+2. Avatar chevron: replace the faint circle with a 14px ChevronDown icon in #5f6368 next to the avatar, no circle, visible on hover and focus.
+3. Nav label: show "Statuses" instead of "Statuses (Stories)". Keep the route.
+4. Hero banner: find why the text and button look faded after load (opacity, transition or overlay). Print the cause raw. The title, subtitle and button must be at full opacity once the slide is active; only the slide change may fade.
+5. Do not change anything else.
+
+Commit as "Header: slim early-access strip, chevron, label", append one line to PROGRESS.md and commit it too.
+
+End with RAW output only, no summary:
+git log --oneline -4
+npm run build
+npx eslint <the real changed file paths> | Select-String "no-undef|is not defined" ; "ESLINT DONE"
 git status -sb
 git diff HEAD~1 --stat -- src

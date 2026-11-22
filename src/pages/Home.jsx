@@ -4164,6 +4164,7 @@ function HeroBanner({ navigate, onSearch, user, slides: externalSlides }) {
         .hb-split-img { width: 100%; height: 100%; object-fit: contain; object-position: right center; padding: 16px 24px 16px 0; }
         .hb-picture-path { display: block; }
         .hb-split .hb-overlay { display: none !important; }
+        .hb-slide.is-active .hb-split-title, .hb-slide.is-active .hb-split-desc, .hb-slide.is-active .hb-split-btn, .hb-slide.is-active .hb-overlay-title, .hb-slide.is-active .hb-overlay-sub, .hb-slide.is-active .hb-btn { opacity: 1 !important; transition: none !important; }
         @media (min-width: 769px) { .hb-split .hb-picture-path { display: none !important; } }
         @media (min-width: 769px) and (max-width: 1099px) {
           .hb-split .hb-split-left { padding-left: 24px; }
@@ -4212,7 +4213,7 @@ function HeroBanner({ navigate, onSearch, user, slides: externalSlides }) {
             }
           `}</style>
           {slides.map((s, i) => i === idx ? (
-            <div key={s.id} style={{ position: 'absolute', inset: 0, opacity: fade === 'in' ? 1 : 0, transition: 'opacity 0.4s ease' }}>
+            <div key={s.id} className={`hb-slide${fade === 'in' ? ' is-active' : ''}`} style={{ position: 'absolute', inset: 0, opacity: fade === 'in' ? 1 : 0, transition: 'opacity 0.4s ease' }}>
               <div className="hero-image-wrapper" style={{ position: 'absolute', inset: 0, background: '#f8f9fa' }}>
                 {!imgLoaded && !allFailed && <div className="hb-shimmer" style={{ position: 'absolute', inset: 0, background: '#f8f9fa' }} />}
                 {allFailed && (
@@ -4285,7 +4286,7 @@ function HeroBanner({ navigate, onSearch, user, slides: externalSlides }) {
                     </div>
                   )}
                   {overlayDesc && !(slide?.listing && slide.listing.price != null) && (
-                    <div style={{ fontSize: 13, color: '#fff', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}>{overlayDesc}</div>
+                    <div className="hb-overlay-sub" style={{ fontSize: 13, color: '#fff', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', textShadow: '0 1px 3px rgba(0,0,0,0.6)' }}>{overlayDesc}</div>
                   )}
                   {slide?.cta && (
                     <button
@@ -4450,15 +4451,42 @@ function SokoFooter({ navigate }) {
 /* ─────────────────────────────────────────────────────────────────────────────
    EARLY ACCESS STRIP
 ───────────────────────────────────────────────────────────────────────────── */
+const EARLY_ACCESS_DISMISS_KEY = 'soko_early_access_dismissed_at'
+const EARLY_ACCESS_DISMISS_MS = 7 * 24 * 60 * 60 * 1000
+
 function EarlyAccessStrip() {
-  const [vis, setVis] = useState(true)
+  const [vis, setVis] = useState(() => {
+    try {
+      const raw = localStorage.getItem(EARLY_ACCESS_DISMISS_KEY)
+      if (!raw) return true
+      const at = Number(raw)
+      return !Number.isFinite(at) || Date.now() - at >= EARLY_ACCESS_DISMISS_MS
+    } catch {
+      return true
+    }
+  })
   if (!vis) return null
+  const dismiss = () => {
+    setVis(false)
+    try { localStorage.setItem(EARLY_ACCESS_DISMISS_KEY, String(Date.now())) } catch {}
+  }
   return (
-    <div className="soko-early-access" style={{ background: 'linear-gradient(90deg, #f59e0b11, #f59e0b22, #f59e0b11)', borderBottom: `1px solid ${T.amber}44`, padding: '9px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.amberD} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 3h6l1 8H8L9 3z"/><path d="M6.5 11l-2 7a1 1 0 0 0 1 1.3h9a1 1 0 0 0 1-1.3l-2-7"/><line x1="10" y1="7" x2="10" y2="11"/><line x1="14" y1="7" x2="14" y2="11"/></svg>
-      <span style={{ fontSize: 12.5, fontWeight: 600, color: T.amberD }}>Early access — you're testing SokoMW. Official launch date coming soon.</span>
-      <button onClick={() => setVis(false)} style={{ marginLeft: 8, background: 'none', border: 'none', cursor: 'pointer', color: T.amberD, display: 'flex', alignItems: 'center' }}>{Icon.x(12)}</button>
-    </div>
+    <>
+      <style>{`
+        @media (min-width: 1100px) {
+          .soko-early-access { height: 32px !important; min-height: 32px !important; padding: 0 20px !important; background: #FFF8E1 !important; border-bottom: none !important; gap: 8px !important; }
+          .soko-early-access > svg { width: 14px !important; height: 14px !important; stroke: #B06000 !important; }
+          .soko-early-access > span { font-size: 13px !important; line-height: 1 !important; color: #B06000 !important; }
+          .soko-early-access > button { width: 28px !important; height: 28px !important; margin-left: 4px !important; padding: 0 !important; border-radius: 50% !important; color: #B06000 !important; justify-content: center !important; }
+          .soko-early-access > button svg { width: 14px !important; height: 14px !important; }
+        }
+      `}</style>
+      <div className="soko-early-access" style={{ background: 'linear-gradient(90deg, #f59e0b11, #f59e0b22, #f59e0b11)', borderBottom: `1px solid ${T.amber}44`, padding: '9px 20px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={T.amberD} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 3h6l1 8H8L9 3z"/><path d="M6.5 11l-2 7a1 1 0 0 0 1 1.3h9a1 1 0 0 0 1-1.3l-2-7"/><line x1="10" y1="7" x2="10" y2="11"/><line x1="14" y1="7" x2="14" y2="11"/></svg>
+        <span style={{ fontSize: 12.5, fontWeight: 600, color: T.amberD }}>Early access — you're testing SokoMW. Official launch date coming soon.</span>
+        <button type="button" aria-label="Dismiss early access notice" onClick={dismiss} style={{ marginLeft: 8, background: 'none', border: 'none', cursor: 'pointer', color: T.amberD, display: 'flex', alignItems: 'center', flexShrink: 0 }}>{Icon.x(14)}</button>
+      </div>
+    </>
   )
 }
 

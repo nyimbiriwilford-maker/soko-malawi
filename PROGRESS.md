@@ -190,3 +190,4 @@ Chat view: context-aware floating quick replies
 Notifications: clearer deal rows on all widths
 Notifications: full-width deal titles, single badge
 Header: clean desktop navigation and search
+Header: slim early-access strip, chevron, label

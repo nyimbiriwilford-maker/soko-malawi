@@ -112,7 +112,7 @@ const SOKO_PILLARS = [
     desktopIcon: Wrench,
   },
   {
-    key: 'stories', label: 'Statuses (Stories)', path: '/status',
+    key: 'stories', label: 'Statuses', path: '/status',
     icon: (s) => (
       <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
@@ -412,8 +412,9 @@ export default function SokoNav({
           .soko-cta-btn .soko-desktop-cta-label { display: inline !important; font-size: 14px !important; }
           .soko-avatar-wrap { position: relative !important; display: inline-flex !important; align-items: center !important; }
           .soko-nav-actions .soko-avatar-btn { width: 36px !important; height: 36px !important; border: 1px solid #e8eaed !important; box-shadow: none !important; }
-          .soko-avatar-caret { display: flex !important; position: absolute !important; right: -3px !important; bottom: -2px !important; width: 14px !important; height: 14px !important; align-items: center !important; justify-content: center !important; border-radius: 50% !important; background: #fff !important; color: #5f6368 !important; box-shadow: 0 0 0 1px #e8eaed !important; pointer-events: none !important; }
-          .soko-avatar-caret svg { width: 12px !important; height: 12px !important; stroke-width: 1.75 !important; }
+          .soko-avatar-caret { display: flex !important; position: absolute !important; right: -18px !important; top: 11px !important; width: 14px !important; height: 14px !important; align-items: center !important; justify-content: center !important; background: transparent !important; color: #5f6368 !important; border: none !important; border-radius: 0 !important; box-shadow: none !important; opacity: 0 !important; pointer-events: none !important; transition: opacity 0.15s ease !important; }
+          .soko-avatar-wrap:hover .soko-avatar-caret, .soko-avatar-wrap:focus-within .soko-avatar-caret { opacity: 1 !important; }
+          .soko-avatar-caret svg { width: 14px !important; height: 14px !important; stroke-width: 1.75 !important; }
           .soko-desktop-popover { border: 1px solid #e8eaed !important; border-radius: 14px !important; box-shadow: 0 12px 32px rgba(32,33,36,0.14) !important; background: #fff !important; }
           .soko-pillar-row.soko-nav-desktop { height: 44px !important; border-top: 1px solid #e8eaed !important; box-sizing: border-box !important; }
           .soko-pillar-row.soko-nav-desktop > div { height: 44px !important; max-width: 1400px !important; margin: 0 auto !important; padding: 0 24px !important; box-sizing: border-box !important; }
@@ -564,7 +565,7 @@ export default function SokoNav({
                 ? <img src={user.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 : (user?.email?.[0] || user?.full_name?.[0] || 'S').toUpperCase()}
             </button>
-            <span className="soko-avatar-caret" aria-hidden="true"><ChevronDown size={12} strokeWidth={1.75} /></span>
+            <span className="soko-avatar-caret" aria-hidden="true"><ChevronDown size={14} strokeWidth={1.75} /></span>
             {avatarOpen && (
               <div className="soko-desktop-popover" style={{ position: 'absolute', top: 'calc(100% + 10px)', right: 0, background: T.white, borderRadius: 16, padding: '8px 0', boxShadow: T.shadowLg, minWidth: 190, border: `1px solid ${T.gray200}`, zIndex: 200 }}>
                 {[
