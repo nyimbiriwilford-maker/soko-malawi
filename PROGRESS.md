@@ -155,3 +155,4 @@ Home: Manage button on own requests
 Looking For: redesign request detail view, remove km estimate
 Looking For: clean targeted eslint errors in detail-view file
 Looking For: detail view fixes, action bar above nav, sane distance
+Looking For: capture accurate GPS when posting, safer distance
