@@ -1114,7 +1114,7 @@ export default function ChatListPanel() {
         }
         .chat-row-person { display: flex; align-items: center; min-width: 0; }
         .chat-row-person-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .chat-list-price { flex: 0 0 auto; white-space: nowrap; }
+        .chat-list-price { flex: 0 0 auto; white-space: pre; }
         .chat-row-preview-line { display: flex; align-items: center; min-width: 0; min-height: 20px; line-height: 1.3; }
         .chat-row-preview { flex: 1; min-width: 0; font-size: 14px; }
         .chat-row.is-unread .chat-row-preview,

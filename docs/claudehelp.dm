@@ -164,3 +164,15 @@ npx eslint <the real page and row component paths> | Select-String "no-undef|is 
 npx eslint <the real page path> --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
 git status -sb
 git diff HEAD~1 --stat -- src
+
+GOAL: Fix the missing space before the dot on chat rows. Branch wip/home-hero-premium (check with git branch --show-current). Rules: no git stash or reset, no SQL, no installs, do NOT launch Chrome or any browser, do not merge or push. Edit only the Chats list row component.
+
+Line 2 must render "<Name> · <price>" with a normal space on both sides of the dot (for example "Wilford James · MWK 39,000"). Find where the name and price are joined, print it raw, and fix it. Do not change anything else.
+
+Commit as "Chats: space before dot", append one line to PROGRESS.md and commit it too.
+
+End with RAW output only:
+git log --oneline -3
+npm run build
+npx eslint <the real row component path> | Select-String "no-undef|is not defined" ; "ESLINT DONE"
+git status -sb
