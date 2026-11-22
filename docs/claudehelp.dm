@@ -445,6 +445,48 @@ npx eslint src/pages/Chat.jsx | Select-String "no-undef|is not defined" ; "ESLIN
 git status -sb
 git diff HEAD~1 --stat -- src
 
+GOAL: Rebuild the desktop top navigation for 1100px and up only. Branch wip/home-hero-premium (check with git branch --show-current). Rules: no git stash or reset, no SQL, no installs, do NOT launch Chrome or any browser, do not merge or push. Make all edits directly. Do not change phone or tablet layouts below 1100px at all.
+
+STEP 1 - Before editing, print the current code raw with line numbers for: the desktop header markup, search bar, nav row and styles, unread counts source for chats and notifications, and account avatar/menu. Then inspect node_modules/lucide-react to confirm the needed icons exist. If any is missing, use the stated fallback.
+
+1. HEADER: two clean rows, solid white, fixed shadow only after 8px scroll, above content. Row 1 height 64px, max-width 1400px, centered: logo left, centered search, right action group with 12px gaps. Row 2 height 44px with top border. Hide tagline. Keep same labels/routes. Shorten only Statuses (Stories) to Statuses if the row would wrap.
+2. ICONS: Lucide only in header, strokeWidth 1.75. Chats MessageCircle 22, Alerts Bell 22, Post Plus 18, Account ChevronDown. Action icon buttons 40px, grey #5f6368, hover #f1f3f4, no text labels. Avatar 36px circle, 1px border #e8eaed, small ChevronDown. Post white text 14px/700, green #0F9D58 pill, 40px high, 16px horizontal padding, Plus 18 + "Post", same handler. Pillar icons: Marketplace ShoppingBag, Shops Store, People Looking For UsersRound, Services Wrench, Stories/Statuses Clock fallback, Verification BadgeCheck fallback ShieldCheck. Active state green #0F9D58 text + underline only.
+3. SEARCH: 44px high, radius 999px, bg #f1f3f4, no border, 18px Search icon #5f6368, placeholder exactly "Search products, services, shops" in #80868b 15px, "/" hint chip right with 12px grey text radius 6 that hides on focus. Pressing "/" outside input focuses search. Remove green Search button; Enter submits. Clear X when text. Focus: white bg, 2px green border #0F9D58, soft shadow. Dropdown: white, 1px #e8eaed, radius 14px, shadow, 8px below, rows 44px with 16px Clock icons for recent searches; closes on Esc/outside.
+4. MENU: click avatar opens existing account menu, restyle shared popup menu: white, 1px #e8eaed, radius 14px, soft shadow. Keep all items and navigation behavior.
+5. Keep unread counts and all handlers/routes/state behavior unchanged. Do not change mobile/tablet CSS, markup behavior, or any other pages/components beyond what is needed for the desktop header and its search.
+
+Commit as "Header: clean desktop navigation and search", append one line to PROGRESS.md and commit it too.
+
+End with RAW output only, no summary: first the STEP 1 findings, then:
+git log --oneline -4
+npm run build
+npx eslint src/components/SokoNav.jsx src/components/SearchBox.jsx | Select-String "no-undef|is not defined" ; "ESLINT DONE"
+git status -sb
+git diff HEAD~1 --stat -- src
+
+GOAL: Refine the desktop header and search bar so they look professional. Desktop only (min-width 1100px); do not change phone or tablet layouts. Branch wip/home-hero-premium (check with git branch --show-current). Rules: no git stash or reset, no SQL, no installs, do NOT launch Chrome or any browser, do not merge or push. Do not change routes, search logic, auth, fetching or realtime.
+
+STEP 1 - Find the header component (Select-String "Buy. Sell. Find|Post Now|People Looking For" in src). Print raw with line numbers the header markup, search bar, nav row and styles, the unread counts source for chats and notifications, and the account avatar menu. Check that these lucide-react icons exist: ShoppingBag, Store, Target, Wrench, CircleDashed, BadgeCheck, Search, MessageCircle, Bell, Plus, ChevronDown, Clock, X. Fallbacks: CircleDashed -> Clock, BadgeCheck -> ShieldCheck. Then continue.
+
+STEP 2 - Colours/fonts: green #0F9D58, tint #e6f6ed, text #202124, grey #5f6368 / #80868b, border #e8eaed, page #f8f9fa, Sora for the logo, DM Sans elsewhere. Icons: Lucide only, outline, strokeWidth 1.75, no emojis.
+1. LAYOUT (1100px+): sticky top, white, z-index above content. Row 1 is 64px: logo at left (remove the tagline "Buy. Sell. Find. Anywhere in Malawi."), a centred search pill (max-width 560px, flex 1), and the actions group at right. Row 2 is the nav, 44px tall. Content max-width 1400px with 24px side padding, same as the page. Total header about 108px.
+2. SEARCH: height 44px, radius 999px, background #f1f3f4, no border, 16px Search icon in #5f6368 at the left, placeholder "Search products, services, shops" in #80868b, 15px text. Remove the green "Search" button; Enter submits through the existing handler. A small "/" keyboard hint chip at the right (12px grey, border 1px #e8eaed, radius 6px) that hides on focus; pressing "/" outside an input focuses the search. Focus state: white background, 2px #0F9D58 ring, soft shadow 0 2px 8px rgba(16,24,40,0.08). A clear X button appears when there is text. Keep any existing suggestion dropdown but restyle it: white, 1px #e8eaed border, 14px radius, shadow 0 8px 24px rgba(16,24,40,0.12), 8px below the field, rows 44px with a 16px Clock icon for recent searches, closes on Esc or outside click.
+3. ACTIONS (right, 12px gaps): Chats = MessageCircle and Alerts = Bell as 40px icon buttons (22px icon, grey #5f6368, hover background #f1f3f4, radius 10px), icon only with title and aria-label, no text label under them. Unread badges: a red #d93025 dot or count pill (min 18px, 11px white weight 700) at the top right of each icon, using the existing unread counts, hidden at 0. Then the green "Post" button: 40px tall, padding 0 16px, radius 999px, Plus icon 18px plus the text "Post", 14px weight 700, same handler as "Post Now". Then the avatar: 36px circle with a 1px #e8eaed border and a small ChevronDown; click opens the existing account menu restyled with the shared popup menu style (white, 1px border, 14px radius, soft shadow).
+4. NAV ROW: items 14px weight 500 grey #5f6368 with a 18px icon on the left and 8px gap, padding 0 14px, height 44px. Icons: Marketplace = ShoppingBag, Shops = Store, People Looking For = Target, Services = Wrench, Statuses (Stories) = CircleDashed, Verification = BadgeCheck. Active item: green #0F9D58 text and icon with a 2px green underline at the bottom; hover: #f6fbf8 background. Keep the same labels and routes. Shorten "Statuses (Stories)" to "Statuses" only if the row would wrap.
+5. SCROLL: when the page scrolls more than 8px, add box-shadow 0 1px 0 #e8eaed, 0 4px 12px rgba(16,24,40,0.06) to the header; no shadow at the top.
+6. Page content must not jump or hide under the sticky header: set the right top offset for pages that use sticky elements (sidebars, tab rows) so they sit below the new header height.
+7. Check at 1100px, 1366px and 1920px that nothing wraps or overlaps. Do not touch the phone and tablet headers.
+
+Commit as "Header: desktop redesign, search pill, consistent icons", append one line to PROGRESS.md and commit it too.
+
+End with RAW output only, no summary: first the step 1 findings, then:
+git log --oneline -4
+npm run build
+npx eslint <the real changed file paths> | Select-String "no-undef|is not defined" ; "ESLINT DONE"
+npx eslint <the real header component path> --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
+git status -sb
+git diff HEAD~1 --stat -- src
+
 GOAL: Fix the title truncation on deal notification rows. Branch wip/home-hero-premium (check with git branch --show-current). Rules: no git stash or reset, no SQL, no installs, do NOT launch Chrome or any browser, do not merge or push. Edit only the Notifications page, its row component and their styles. Do not change deal logic, handlers, fetching or other pages.
 
 1. Print raw with line numbers the row's top line, title, time, badge and chevron markup and styles, then fix.

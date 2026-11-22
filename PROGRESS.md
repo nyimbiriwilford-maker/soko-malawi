@@ -189,3 +189,4 @@ Notifications: expandable rows, plain deal copy; Deal flow: clear steps and conf
 Chat view: context-aware floating quick replies
 Notifications: clearer deal rows on all widths
 Notifications: full-width deal titles, single badge
+Header: clean desktop navigation and search

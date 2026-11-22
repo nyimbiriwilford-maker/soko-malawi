@@ -3,11 +3,29 @@
  * Desktop + mobile layout. Only the primary CTA differs per page.
  */
 import { useState, useRef, useEffect } from 'react'
-import { Image as ImageIcon, Wrench, Search, ChevronRight, Clock } from 'lucide-react'
+import {
+  Image as ImageIcon,
+  Wrench,
+  Search,
+  ChevronRight,
+  Clock,
+  ShoppingBag,
+  Store,
+  UsersRound,
+  BadgeCheck,
+  ShieldCheck,
+  MessageCircle,
+  Bell,
+  Plus,
+  ChevronDown,
+} from 'lucide-react'
+
 import { T } from '../constants/tokens'
 import { MALAWI_DISTRICTS } from '../constants/malawiDistricts'
 import { supabase } from '../lib/supabase'
 import SearchBox from './SearchBox'
+
+const VerificationDesktopIcon = BadgeCheck || ShieldCheck
 
 const Icon = {
   search: (s = 18) => (
@@ -63,8 +81,9 @@ const SOKO_PILLARS = [
         <path d="M3 12l9-9 9 9" /><path d="M5 10v10a1 1 0 0 0 1 1h3v-6h6v6h3a1 1 0 0 0 1-1V10" />
       </svg>
     ),
+    desktopIcon: ShoppingBag,
   },
-  { key: 'shops', label: 'Shops', path: '/shops', icon: Icon.shop },
+  { key: 'shops', label: 'Shops', path: '/shops', icon: Icon.shop, desktopIcon: Store },
   {
     key: 'lookingfor', label: 'People Looking For', path: '/looking-for',
     icon: (s) => (
@@ -77,6 +96,7 @@ const SOKO_PILLARS = [
         <circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1.2" fill="currentColor" />
       </svg>
     ),
+    desktopIcon: UsersRound,
   },
 
   {
@@ -89,6 +109,7 @@ const SOKO_PILLARS = [
         <line x1="1" y1="14" x2="7" y2="14" /><line x1="9" y1="8" x2="15" y2="8" /><line x1="17" y1="16" x2="23" y2="16" />
       </svg>
     ),
+    desktopIcon: Wrench,
   },
   {
     key: 'stories', label: 'Statuses (Stories)', path: '/status',
@@ -97,6 +118,7 @@ const SOKO_PILLARS = [
         <circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" />
       </svg>
     ),
+    desktopIcon: Clock,
   },
   {
     key: 'verify', label: 'Verification', path: '/profile',
@@ -105,19 +127,25 @@ const SOKO_PILLARS = [
         <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /><polyline points="9 12 11 14 15 10" />
       </svg>
     ),
+    desktopIcon: VerificationDesktopIcon,
   },
 ]
 
-function NavIconBtn({ icon, label, onClick }) {
+function NavIconBtn({ icon, label, onClick, desktopIcon }) {
   return (
     <button
       type="button"
+      className="soko-action-btn"
+      aria-label={label}
+      title={label}
       onClick={onClick}
       style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3, background: 'none', border: 'none', cursor: 'pointer', padding: '6px 10px', borderRadius: 12, color: T.gray800, fontSize: 10, fontWeight: 600, transition: 'background 0.15s', fontFamily: 'inherit' }}
       onMouseEnter={e => { e.currentTarget.style.background = T.gray100 }}
       onMouseLeave={e => { e.currentTarget.style.background = 'none' }}
     >
-      {icon}<span>{label}</span>
+      <span className="soko-legacy-nav-icon">{icon}</span>
+      {desktopIcon && <span className="soko-desktop-nav-icon">{desktopIcon}</span>}
+      <span className="soko-action-label">{label}</span>
     </button>
   )
 }
@@ -156,7 +184,28 @@ export default function SokoNav({
   const [chatCount, setChatCount] = useState(0)
   const [headerSearchOpen, setHeaderSearchOpen] = useState(false)
   const [laptopSearch, setLaptopSearch] = useState(search)
+  const [wideDesktop, setWideDesktop] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1100px)').matches)
+  const [scrolled, setScrolled] = useState(false)
   const postRef = useRef(null)
+
+  useEffect(() => {
+    const query = window.matchMedia('(min-width: 1100px)')
+    const update = () => setWideDesktop(query.matches)
+    update()
+    if (query.addEventListener) query.addEventListener('change', update)
+    else query.addListener(update)
+    return () => {
+      if (query.removeEventListener) query.removeEventListener('change', update)
+      else query.removeListener(update)
+    }
+  }, [])
+
+  useEffect(() => {
+    const update = () => setScrolled(window.scrollY > 8)
+    update()
+    window.addEventListener('scroll', update, { passive: true })
+    return () => window.removeEventListener('scroll', update)
+  }, [])
 
   useEffect(() => {
     let channel
@@ -243,7 +292,7 @@ export default function SokoNav({
 }
 
   return (
-    <nav className="soko-nav-glass" style={headerSearchOpen ? { zIndex: 1300 } : undefined}>
+    <nav className={`soko-nav-glass${scrolled ? ' is-scrolled' : ''}`} style={headerSearchOpen ? { zIndex: 1300 } : undefined}>
       <style>{`
         .soko-nav-glass {
           position: sticky; top: 0; z-index: 100;
@@ -264,6 +313,7 @@ export default function SokoNav({
         }
         .soko-post-item { position: relative; }
         .soko-post-item.is-status { border: 1px solid rgba(15,157,88,0.14); border-radius: 10px; }
+        .soko-desktop-nav-icon, .soko-avatar-caret, .soko-pillar-icon, .soko-desktop-plus, .soko-desktop-cta-label { display: none !important; }
         @media (max-width: 768px) {
           .soko-nav-mobile {
             display: flex !important;
@@ -322,20 +372,72 @@ export default function SokoNav({
           .hs-search-tablet { display: none !important; }
           .hs-search-laptop { display: block !important; }
         }
+        @media (min-width: 1100px) {
+          .soko-nav-glass {
+            position: sticky; top: 0; z-index: 1100;
+            background: #ffffff !important;
+            backdrop-filter: none;
+            -webkit-backdrop-filter: none;
+            border-bottom: 1px solid #e8eaed;
+            box-shadow: none;
+          }
+          .soko-nav-glass.is-scrolled { box-shadow: 0 2px 12px rgba(32,33,36,0.10); }
+          .soko-nav-main-row {
+            display: grid !important;
+            grid-template-columns: minmax(180px, 1fr) minmax(320px, 640px) minmax(220px, 1fr) !important;
+            align-items: center !important;
+            gap: 24px !important;
+            height: 64px !important;
+            min-height: 64px !important;
+            max-width: 1400px !important;
+            margin: 0 auto !important;
+            padding: 0 24px !important;
+            box-sizing: border-box !important;
+          }
+          .soko-nav-brand { justify-self: start !important; }
+          .soko-nav-tagline { display: none !important; }
+          .hs-search-laptop { display: block !important; flex: none !important; width: 100% !important; max-width: 640px !important; min-width: 0 !important; justify-self: center !important; }
+          .soko-nav-actions { display: flex !important; align-items: center !important; justify-content: flex-end !important; gap: 12px !important; flex: none !important; justify-self: end !important; }
+          .soko-nav-actions .soko-action-btn { width: 40px !important; height: 40px !important; padding: 0 !important; gap: 0 !important; border-radius: 10px !important; color: #5f6368 !important; background: transparent !important; }
+          .soko-nav-actions .soko-action-btn:hover { background: #f1f3f4 !important; }
+          .soko-nav-actions .soko-legacy-nav-icon, .soko-nav-actions .soko-action-label { display: none !important; }
+          .soko-nav-actions .soko-desktop-nav-icon { display: flex !important; align-items: center !important; justify-content: center !important; color: inherit !important; }
+          .soko-nav-actions .soko-desktop-nav-icon svg { width: 22px !important; height: 22px !important; stroke-width: 1.75 !important; }
+          .soko-icon-wrap { position: relative !important; display: inline-flex !important; }
+          .soko-icon-wrap .soko-nav-badge { top: 0 !important; right: 0 !important; min-width: 18px !important; width: auto !important; height: 18px !important; padding: 0 3px !important; font-size: 10px !important; }
+          .soko-cta-btn { height: 40px !important; padding: 0 16px !important; gap: 8px !important; border-radius: 999px !important; font-size: 14px !important; font-weight: 700 !important; }
+          .soko-cta-btn .soko-legacy-plus, .soko-cta-btn .soko-legacy-cta-label { display: none !important; }
+          .soko-cta-btn .soko-desktop-plus { display: flex !important; align-items: center !important; justify-content: center !important; }
+          .soko-cta-btn .soko-desktop-plus svg { width: 18px !important; height: 18px !important; stroke-width: 1.75 !important; }
+          .soko-cta-btn .soko-desktop-cta-label { display: inline !important; font-size: 14px !important; }
+          .soko-avatar-wrap { position: relative !important; display: inline-flex !important; align-items: center !important; }
+          .soko-nav-actions .soko-avatar-btn { width: 36px !important; height: 36px !important; border: 1px solid #e8eaed !important; box-shadow: none !important; }
+          .soko-avatar-caret { display: flex !important; position: absolute !important; right: -3px !important; bottom: -2px !important; width: 14px !important; height: 14px !important; align-items: center !important; justify-content: center !important; border-radius: 50% !important; background: #fff !important; color: #5f6368 !important; box-shadow: 0 0 0 1px #e8eaed !important; pointer-events: none !important; }
+          .soko-avatar-caret svg { width: 12px !important; height: 12px !important; stroke-width: 1.75 !important; }
+          .soko-desktop-popover { border: 1px solid #e8eaed !important; border-radius: 14px !important; box-shadow: 0 12px 32px rgba(32,33,36,0.14) !important; background: #fff !important; }
+          .soko-pillar-row.soko-nav-desktop { height: 44px !important; border-top: 1px solid #e8eaed !important; box-sizing: border-box !important; }
+          .soko-pillar-row.soko-nav-desktop > div { height: 44px !important; max-width: 1400px !important; margin: 0 auto !important; padding: 0 24px !important; box-sizing: border-box !important; }
+          .soko-pillar-btn { height: 44px !important; padding: 0 14px !important; gap: 8px !important; border-bottom: 2px solid transparent !important; font-family: 'DM Sans', 'Inter', system-ui, sans-serif !important; font-size: 14px !important; font-weight: 500 !important; color: #5f6368 !important; white-space: nowrap !important; }
+          .soko-pillar-btn:hover { background: #f6fbf8 !important; }
+          .soko-pillar-btn.is-active { color: #0F9D58 !important; border-bottom-color: #0F9D58 !important; font-weight: 700 !important; }
+          .soko-pillar-btn .soko-pillar-legacy-icon { display: none !important; }
+          .soko-pillar-btn .soko-pillar-icon { display: flex !important; align-items: center !important; justify-content: center !important; color: inherit !important; }
+          .soko-pillar-btn .soko-pillar-icon svg { width: 18px !important; height: 18px !important; stroke-width: 1.75 !important; }
+        }
       `}</style>
 
       {/* ════════════════════ DESKTOP LAYOUT ════════════════════ */}
-      <div className="soko-nav-desktop" style={{
+      <div className="soko-nav-desktop soko-nav-main-row" style={{
         maxWidth: 1400, margin: '0 auto', padding: '10px 20px',
         display: 'flex', alignItems: 'center', gap: 14, minHeight: 70,
       }}>
 
         {/* Brand */}
-        <div onClick={() => navigate('/')} style={{ cursor: 'pointer', flexShrink: 0, userSelect: 'none' }}>
+        <div className="soko-nav-brand" onClick={() => navigate('/')} style={{ cursor: 'pointer', flexShrink: 0, userSelect: 'none' }}>
           <div style={{ fontFamily: T.fontDisplay, fontSize: 22, fontWeight: 800, color: T.green, letterSpacing: '-0.5px', lineHeight: 1.1 }}>
             Soko<span style={{ color: T.amber }}>Mw</span>
           </div>
-          <div style={{ fontSize: 10.5, color: T.gray600, fontWeight: 500, whiteSpace: 'nowrap' }}>
+          <div className="soko-nav-tagline" style={{ fontSize: 10.5, color: T.gray600, fontWeight: 500, whiteSpace: 'nowrap' }}>
             Buy. Sell. Find. Anywhere in Malawi.
           </div>
         </div>
@@ -373,12 +475,13 @@ export default function SokoNav({
             onFocusChange={setHeaderSearchOpen}
             navigate={navigate}
             user={user}
-            placeholder="Search for anything (e.g. iPhone, Toyota, services...)"
+            desktopSearch={wideDesktop}
+            placeholder={wideDesktop ? 'Search products, services, shops' : 'Search for anything (e.g. iPhone, Toyota, services...)'}
           />
         </div>
 
         {/* Desktop Action Icons */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+        <div className="soko-nav-actions" style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
           {isGuest ? (
             <>
               <button type="button" onClick={() => navigate('/login')}
@@ -392,30 +495,33 @@ export default function SokoNav({
             </>
           ) : (
             <>
-          <div style={{ position: 'relative' }}>
-            <NavIconBtn icon={Icon.chat(18)} label="Chats" onClick={() => navigate('/chats')} />
+          <div className="soko-icon-wrap" style={{ position: 'relative' }}>
+            <NavIconBtn icon={Icon.chat(18)} label="Chats" onClick={() => navigate('/chats')} desktopIcon={<MessageCircle size={22} strokeWidth={1.75} />} />
             {chatCount > 0 && (
-              <span style={{ position: 'absolute', top: 4, right: 6, background: T.red, color: '#fff', borderRadius: '50%', width: 17, height: 17, fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #fff' }}>
+              <span className="soko-nav-badge" style={{ position: 'absolute', top: 4, right: 6, background: T.red, color: '#fff', borderRadius: '50%', width: 17, height: 17, fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #fff' }}>
                 {chatCount > 9 ? '9+' : chatCount}
               </span>
             )}
           </div>
-          <div style={{ position: 'relative' }}>
-            <NavIconBtn icon={Icon.bell(18)} label="Alerts" onClick={() => navigate('/notifications')} />
+          <div className="soko-icon-wrap" style={{ position: 'relative' }}>
+            <NavIconBtn icon={Icon.bell(18)} label="Alerts" onClick={() => navigate('/notifications')} desktopIcon={<Bell size={22} strokeWidth={1.75} />} />
             {notifCount > 0 && (
-              <span style={{ position: 'absolute', top: 4, right: 6, background: T.red, color: '#fff', borderRadius: '50%', width: 17, height: 17, fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #fff' }}>
+              <span className="soko-nav-badge" style={{ position: 'absolute', top: 4, right: 6, background: T.red, color: '#fff', borderRadius: '50%', width: 17, height: 17, fontSize: 9, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #fff' }}>
                 {notifCount > 9 ? '9+' : notifCount}
               </span>
             )}
           </div>
           {!hideCta && (
             <div ref={postRef} style={{ position: 'relative' }}>
-              <button type="button" onClick={handleCta}
+              <button type="button" className="soko-cta-btn" onClick={handleCta}
                 style={{ height: 38, padding: '0 18px', fontSize: 13.5, fontWeight: 700, background: T.green, color: '#fff', border: 'none', borderRadius: 50, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap', fontFamily: 'inherit', transition: 'opacity 0.15s', opacity: showPostMenu ? 0.85 : 1 }}>
-                {Icon.plus(14)} Post Now
+                <span className="soko-legacy-plus">{Icon.plus(14)}</span>
+                <span className="soko-desktop-plus"><Plus size={18} strokeWidth={1.75} /></span>
+                <span className="soko-legacy-cta-label">Post Now</span>
+                <span className="soko-desktop-cta-label">Post</span>
               </button>
               {showPostMenu && (
-                <div style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, background: T.white, borderRadius: 16, padding: '6px 0', boxShadow: T.shadowLg, minWidth: 240, border: `1px solid ${T.gray200}`, zIndex: 300, overflow: 'hidden' }}>
+                <div className="soko-desktop-popover" style={{ position: 'absolute', top: 'calc(100% + 8px)', right: 0, background: T.white, borderRadius: 16, padding: '6px 0', boxShadow: T.shadowLg, minWidth: 240, border: `1px solid ${T.gray200}`, zIndex: 300, overflow: 'hidden' }}>
                   <div style={{ padding: '10px 16px 6px' }}>
                     <span style={{ fontSize: 10, fontWeight: 700, color: T.gray400, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Create</span>
                     <div style={{ fontSize: 14, fontWeight: 700, color: T.gray900, marginTop: 2 }}>What do you want to post?</div>
@@ -451,15 +557,16 @@ export default function SokoNav({
               )}
             </div>
           )}
-          <div style={{ position: 'relative' }}>
-            <button type="button" onClick={() => setAvatarOpen(o => !o)}
+          <div className="soko-avatar-wrap" style={{ position: 'relative' }}>
+            <button type="button" className="soko-avatar-btn" aria-label="Account menu" onClick={() => setAvatarOpen(o => !o)}
               style={{ width: 38, height: 38, borderRadius: '50%', background: user?.avatar_url ? 'transparent' : `linear-gradient(135deg, ${T.green}, ${T.greenD})`, border: `2px solid ${T.green}`, cursor: 'pointer', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 14, fontWeight: 700, flexShrink: 0, padding: 0 }}>
               {user?.avatar_url
                 ? <img src={user.avatar_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 : (user?.email?.[0] || user?.full_name?.[0] || 'S').toUpperCase()}
             </button>
+            <span className="soko-avatar-caret" aria-hidden="true"><ChevronDown size={12} strokeWidth={1.75} /></span>
             {avatarOpen && (
-              <div style={{ position: 'absolute', top: 'calc(100% + 10px)', right: 0, background: T.white, borderRadius: 16, padding: '8px 0', boxShadow: T.shadowLg, minWidth: 190, border: `1px solid ${T.gray200}`, zIndex: 200 }}>
+              <div className="soko-desktop-popover" style={{ position: 'absolute', top: 'calc(100% + 10px)', right: 0, background: T.white, borderRadius: 16, padding: '8px 0', boxShadow: T.shadowLg, minWidth: 190, border: `1px solid ${T.gray200}`, zIndex: 200 }}>
                 {[
                   { label: 'My Profile', path: '/profile' },
                   ...(user?.shop_slug
@@ -623,9 +730,10 @@ export default function SokoNav({
           {SOKO_PILLARS.map(p => {
             const isActive = p.key === activePillar
             return (
-              <button key={p.key} type="button" onClick={() => navigate(p.path)}
+              <button key={p.key} type="button" className={`soko-pillar-btn${isActive ? ' is-active' : ''}`} onClick={() => navigate(p.path)}
                 style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: 6, padding: '10px 16px', background: 'none', border: 'none', borderBottom: isActive ? `2.5px solid ${T.green}` : '2.5px solid transparent', cursor: 'pointer', fontSize: 13.5, fontWeight: isActive ? 700 : 500, color: isActive ? T.green : T.gray800, whiteSpace: 'nowrap', fontFamily: 'inherit' }}>
-                <span style={{ color: isActive ? T.green : T.gray600, display: 'flex' }}>{p.icon(15)}</span>
+                <span className="soko-pillar-legacy-icon" style={{ color: isActive ? T.green : T.gray600, display: 'flex' }}>{p.icon(15)}</span>
+                {p.desktopIcon && <span className="soko-pillar-icon"><p.desktopIcon size={18} strokeWidth={1.75} /></span>}
                 {p.label}
               </button>
             )

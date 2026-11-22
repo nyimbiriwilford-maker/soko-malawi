@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { Search as SearchIconLucide, X as XIconLucide, Clock as ClockIconLucide } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { isJobListing } from '../utils/homeUtils'
 import NotifyMeModal from './NotifyMeModal'
@@ -41,6 +42,23 @@ const css = `
   .hsb-secondary, .hsb-tertiary { flex: 1; border-radius: 8px; padding: 8px 12px; font-size: 11px; font-weight: 700; cursor: pointer; font-family: inherit; min-height: 44px; }
   .hsb-secondary { border: 1px solid #D1D5DB; background: #fff; color: #374151; }
   .hsb-tertiary { border: none; background: #374151; color: #fff; }
+  .hsb-root.hsb-desktop .hsb-header-form { height: 44px; min-height: 44px !important; padding: 0 12px 0 14px; border: 2px solid transparent; background: #f1f3f4; }
+  .hsb-root.hsb-desktop .hsb-header-form.is-focused { background: #fff; border-color: #0F9D58; box-shadow: 0 4px 16px rgba(15,157,88,.12); }
+  .hsb-root.hsb-desktop .hsb-header-icon { display: none; }
+  .hsb-root.hsb-desktop .hsb-desktop-search-icon { display: flex; align-items: center; flex: 0 0 auto; margin-right: 10px; color: #5f6368; }
+  .hsb-root.hsb-desktop .hsb-header-input { font-family: 'DM Sans', 'Inter', system-ui, sans-serif; font-size: 15px; color: #202124; }
+  .hsb-root.hsb-desktop .hsb-header-input::placeholder { color: #80868b; opacity: 1; }
+  .hsb-root.hsb-desktop .hsb-submit { display: none !important; }
+  .hsb-root.hsb-desktop .hsb-clear { width: 28px; height: 28px; margin-right: 6px; border-radius: 50%; }
+  .hsb-root.hsb-desktop .hsb-clear-dot { display: none; }
+  .hsb-root.hsb-desktop .hsb-desktop-clear-icon { display: flex; color: #5f6368; }
+  .hsb-shortcut { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; width: 20px; height: 20px; margin-left: 4px; border: 1px solid #dadce0; border-radius: 6px; color: #80868b; font-family: 'DM Sans', 'Inter', system-ui, sans-serif; font-size: 12px; line-height: 1; }
+  .hsb-shortcut.is-hidden { display: none; }
+  .hsb-root.hsb-desktop .hsb-dropdown { top: calc(100% + 8px); border: 1px solid #e8eaed; border-radius: 14px; box-shadow: 0 12px 32px rgba(32,33,36,.14); padding: 8px 0; }
+  .hsb-root.hsb-desktop .hsb-row { min-height: 44px; padding: 0 16px; gap: 12px; }
+  .hsb-root.hsb-desktop .hsb-row:hover { background: #f1f3f4; }
+  .hsb-recent-icon { display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; flex: 0 0 auto; color: #80868b; }
+  .hsb-root.hsb-desktop .hsb-recent-title { display: block; font-family: 'DM Sans', 'Inter', system-ui, sans-serif; font-size: 14px; font-weight: 500; color: #202124; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 `
 
 function SearchIcon({ size = 15 }) {
@@ -59,6 +77,17 @@ function CloseIcon({ size = 9 }) {
   )
 }
 
+const RECENT_KEY = 'sokomw_recent_searches'
+
+function readRecentSearches() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]')
+    return Array.isArray(parsed) ? parsed.filter(item => typeof item === 'string').slice(0, 5) : []
+  } catch {
+    return []
+  }
+}
+
 export default function SearchBox({
   value = '',
   onChange,
@@ -72,6 +101,7 @@ export default function SearchBox({
   variant = 'header',
   height = 44,
   style,
+  desktopSearch = false,
 }) {
   const rootRef = useRef(null)
   const inputRef = useRef(null)
@@ -80,9 +110,11 @@ export default function SearchBox({
   const [loading, setLoading] = useState(false)
   const [notifyOpen, setNotifyOpen] = useState(false)
   const [notifyQuery, setNotifyQuery] = useState('')
+  const [recentSearches, setRecentSearches] = useState(() => readRecentSearches())
 
   const trimmed = value.trim()
-  const showDropdown = focused && trimmed.length >= 2
+  const showRecents = desktopSearch && trimmed.length < 2 && recentSearches.length > 0
+  const showDropdown = focused && (trimmed.length >= 2 || showRecents)
   const isHeader = variant === 'header'
 
   function setFocused(next) {
@@ -142,13 +174,43 @@ export default function SearchBox({
     }
   })
 
+  useEffect(() => {
+    if (!desktopSearch) return undefined
+    function onSlash(e) {
+      if (e.key !== '/' || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return
+      const active = document.activeElement
+      const typing = active && (['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName) || active.isContentEditable)
+      if (typing) return
+      e.preventDefault()
+      inputRef.current?.focus()
+    }
+    document.addEventListener('keydown', onSlash)
+    return () => document.removeEventListener('keydown', onSlash)
+  }, [desktopSearch])
+
+  function rememberSearch(term) {
+    const query = term.trim()
+    if (!query) return
+    setRecentSearches(prev => {
+      const next = [query, ...prev.filter(item => item.toLowerCase() !== query.toLowerCase())].slice(0, 5)
+      try {
+        localStorage.setItem(RECENT_KEY, JSON.stringify(next))
+      } catch {
+        return next
+      }
+      return next
+    })
+  }
+
   function submit() {
     if (!trimmed) return
+    rememberSearch(trimmed)
     onSubmit?.(trimmed)
     setFocused(false)
   }
 
   function select(term) {
+    rememberSearch(term)
     onChange?.(term)
     onSelect?.(term)
     setFocused(false)
@@ -167,10 +229,12 @@ export default function SearchBox({
   }
 
   return (
-    <div className="hsb-root" ref={rootRef} style={style}>
+    <div className={`hsb-root${desktopSearch ? ' hsb-desktop' : ''}`} ref={rootRef} style={style}>
       <style>{css}</style>
       <div className={`hsb-form ${isHeader ? 'hsb-header-form' : 'hsb-hero-form'}${focused && isHeader ? ' is-focused' : ''}`} style={{ minHeight: isHeader ? height + 8 : height }}>
-        {isHeader && <span className="hsb-header-icon"><SearchIcon /></span>}
+        {isHeader && (desktopSearch
+          ? <span className="hsb-desktop-search-icon"><SearchIconLucide size={18} strokeWidth={1.75} aria-hidden="true" /></span>
+          : <span className="hsb-header-icon"><SearchIcon /></span>)}
         <input
           ref={inputRef}
           className={`hsb-input ${isHeader ? 'hsb-header-input' : 'hsb-hero-input'}`}
@@ -191,14 +255,26 @@ export default function SearchBox({
             onClick={() => { onChange?.(''); inputRef.current?.focus() }}
           >
             <span className="hsb-clear-dot"><CloseIcon /></span>
+            {desktopSearch && <XIconLucide className="hsb-desktop-clear-icon" size={16} strokeWidth={1.75} aria-hidden="true" />}
           </button>
         )}
+        {isHeader && desktopSearch && <span className={`hsb-shortcut${focused ? ' is-hidden' : ''}`} aria-hidden="true">/</span>}
         <button type="button" className={`hsb-submit ${isHeader ? 'hsb-header-submit' : 'hsb-hero-submit'}`} onClick={submit} style={{ height }}>Search</button>
       </div>
 
       {showDropdown && (
         <div className="hsb-dropdown">
-          {loading ? (
+          {showRecents ? (
+            <>
+              <div className="hsb-label">Recent searches</div>
+              {recentSearches.map(term => (
+                <button key={term} type="button" className="hsb-row" onClick={() => select(term)}>
+                  <span className="hsb-recent-icon"><ClockIconLucide size={16} strokeWidth={1.75} aria-hidden="true" /></span>
+                  <span className="hsb-row-body"><span className="hsb-recent-title">{term}</span></span>
+                </button>
+              ))}
+            </>
+          ) : loading ? (
             <div className="hsb-skeleton-wrap">
               <div className="hsb-label">Searching products...</div>
               {[1, 2, 3].map(i => (
