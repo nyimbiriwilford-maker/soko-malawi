@@ -444,3 +444,26 @@ npm run build
 npx eslint src/pages/Chat.jsx | Select-String "no-undef|is not defined" ; "ESLINT DONE"
 git status -sb
 git diff HEAD~1 --stat -- src
+
+GOAL: Make deal notifications understandable and expandable, and make deal acceptance clear on every device. Branch wip/home-hero-premium (check with git branch --show-current). Rules: no git stash or reset, no SQL, no installs, do NOT launch Chrome or any browser, do not merge or push. Make edits directly. Edit only the Notifications page, the deal components, the deal card in chat and their styles. Do not change deal logic, handlers, statuses, fetching, realtime or other pages.
+
+STEP 1 - Print raw with line numbers first: the notification row component, NotificationActions, tab row, deal notification types/statuses and generated title/body strings, DealRequestCard, DealConfirmBar, dealNotificationFlow, and where the chat renders media_type === 'deal_request'. Then continue without waiting.
+
+Colours/fonts: green #0F9D58, tint #e6f6ed, amber #B06000 on #FFF8E1, red #D93025 on #FDECEA, grey #5f6368 / #80868b, border #e8eaed, DM Sans.
+
+1. NOTIFICATIONS: deal rows must read as plain deals, not raw database text. Generate clear titles and bodies at render time only. Add an accordion toggle on deal rows that expands to a short "How this works" panel with three numbered steps and a small status badge. Keep the existing row tap, navigation, mark-read, fetching and realtime logic unchanged.
+2. NOTIFICATIONS: fix the tab row so all tabs stay reachable by horizontal scrolling on phones and remain inside the centered 720px column on laptop.
+3. DEAL CARD / COMPONENTS: show the same simple three-step line ("request sent", "confirm the sale", "vouch for each other") in the chat deal card and in DealRequestCard/DealConfirmBar.
+4. DEAL CARD / COMPONENTS: make acceptance clear on every device. DealRequestCard buyer confirmation and DealConfirmBar initiation/confirmation must use a bottom sheet below 769px and a centered sheet above, with 44px touch targets. Keep every existing handler and status unchanged.
+5. DEAL CARD / COMPONENTS: replace emoji-led status blocks with clean icons, plain titles, one-line summaries, compact listing rows and inline success/error feedback. Use DM Sans and the colours above.
+6. Keep all deal logic, handlers, statuses, fetching, realtime and other pages unchanged.
+
+Commit as "Notifications: expandable rows, plain deal copy; Deal flow: clear steps and confirm sheet", append one line to PROGRESS.md and commit it too.
+
+End with RAW output only, no summary: first the STEP 1 findings, then:
+git log --oneline -4
+npm run build
+npx eslint <the real changed file paths> | Select-String "no-undef|is not defined" ; "ESLINT DONE"
+npx eslint <the real Notifications page and deal component paths> --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
+git status -sb
+git diff HEAD~1 --stat -- src

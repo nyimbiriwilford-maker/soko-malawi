@@ -6,6 +6,7 @@ import {
   Bell,
   Check,
   CheckCircle2,
+  ChevronDown,
   CircleDollarSign,
   Eye,
   Handshake,
@@ -138,6 +139,96 @@ function dedupeBody(title, body, name, listingTitle) {
   }
 
   return text
+}
+
+const DEAL_NOTIF_TYPES = new Set([
+  'deal_ready',
+  'deal_request',
+  'deal_confirmed',
+  'deal_declined',
+  'deal_vouching',
+  'new_vouch',
+])
+
+function isDealNotification(notif) {
+  return !!notif && DEAL_NOTIF_TYPES.has(notif.type)
+}
+
+function getDealPresentation(notif, sender, product) {
+  const data = notif.data || {}
+  const listingTitle = product?.title || data.listing_title || 'your listing'
+  const priceText = formatMwkPrice(product?.price ?? data.listing_price ?? data.price)
+  const item = priceText ? `${listingTitle} · ${priceText}` : listingTitle
+  const actorName = toTitleCaseName(getActorName(notif, sender))
+  const buyerName = toTitleCaseName(data.buyer_name) || actorName || 'the buyer'
+  const sellerName = toTitleCaseName(data.seller_name) || actorName || 'the seller'
+  const voucherName = toTitleCaseName(data.voucher_name) || actorName || 'someone'
+  const status = String(data.status || '').toLowerCase()
+
+  switch (notif.type) {
+    case 'deal_ready':
+      return {
+        title: 'Ready to confirm this deal',
+        body: `You and ${buyerName} talked about ${item}. Send a request when the sale is complete.`,
+        detail: `Deal confirmation is only for sales that really happened. You send the request, then ${buyerName} confirms it.`,
+        badge: 'Your turn',
+        steps: ['Agree the sale is complete', 'Send the confirmation request', `${buyerName} confirms`],
+        activeStep: 2,
+        tone: 'action',
+      }
+    case 'deal_request':
+      return {
+        title: 'Confirm this deal',
+        body: `${sellerName} says the sale for ${item} is complete.`,
+        detail: `Only confirm if you received the item as agreed. Your confirmation helps ${sellerName} build trust.`,
+        badge: status === 'declined' ? 'Closed' : 'Action needed',
+        steps: ['Seller sent a request', 'You confirm the sale', 'You can both vouch'],
+        activeStep: status ? 3 : 2,
+        tone: status === 'declined' || status === 'expired' || status === 'disputed' ? 'danger' : 'action',
+      }
+    case 'deal_confirmed':
+      return {
+        title: 'Deal confirmed',
+        body: `You and ${buyerName} confirmed ${item}.`,
+        detail: 'The deal is complete. You can vouch for each other on profile pages.',
+        badge: 'Done',
+        steps: ['Request sent', 'Both parties confirmed', 'Vouch for each other'],
+        activeStep: 3,
+        tone: 'done',
+      }
+    case 'deal_declined':
+      return {
+        title: 'Deal not confirmed',
+        body: `The confirmation for ${item} was declined.`,
+        detail: 'No action is needed. The seller can start a new request if needed.',
+        badge: 'Closed',
+        steps: ['Request sent', 'Confirmation declined', 'No action needed'],
+        activeStep: 2,
+        tone: 'danger',
+      }
+    case 'deal_vouching':
+      return {
+        title: 'Vouch for the seller',
+        body: `Your deal for ${item} is confirmed.`,
+        detail: `If ${sellerName} delivered as agreed, leave an honest vouch on their profile.`,
+        badge: 'Optional',
+        steps: ['Deal confirmed', 'Open the seller profile', 'Leave an honest vouch'],
+        activeStep: 2,
+        tone: 'amber',
+      }
+    case 'new_vouch':
+      return {
+        title: 'You received a vouch',
+        body: `${voucherName} vouched for you.`,
+        detail: 'A vouch helps people trust your shop. Keep trading well to grow your reputation.',
+        badge: 'Trust update',
+        steps: ['Someone bought from you', 'They left a vouch', 'Your reputation grows'],
+        activeStep: 3,
+        tone: 'done',
+      }
+    default:
+      return null
+  }
 }
 
 // ── Notification type config (premium Lucide icons) ───────────────────────
@@ -1135,6 +1226,7 @@ const NotificationCard = memo(function NotificationCard({
   onArchive,
   onAction,
 }) {
+  const [expanded, setExpanded] = useState(false)
   const onClickCard = useCallback(() => onCardClick(notif), [onCardClick, notif])
   const readIds = useMemo(
     () => (notif.mergedIds?.length ? notif.mergedIds : [notif.id]),
@@ -1147,14 +1239,15 @@ const NotificationCard = memo(function NotificationCard({
   const actorName = getActorName(notif, sender)
   const hasActor = !!(actorName && actorName !== 'Someone')
   const displayName = toTitleCaseName(hasActor ? actorName : (notif.title || cfg.label || 'Someone')) || 'Someone'
-  const displayTitle = notif.type === 'listing_view'
+  const dealPresentation = isDealNotification(notif) ? getDealPresentation(notif, sender, product) : null
+  const displayTitle = dealPresentation?.title || (notif.type === 'listing_view'
     ? `${resolveViewName(notif, sender)} viewed your listing`
-    : displayName
+    : displayName)
   const isVerified = !!(sender?.is_verified)
   const listingTitle = product?.title || notif.data?.listing_title || notif.data?.service_name || ''
   const priceText = formatMwkPrice(product?.price ?? notif.data?.listing_price ?? notif.data?.price)
 
-  let purposeText = dedupeBody(notif.title, getNotificationPurpose(notif, sender), displayName, listingTitle)
+  let purposeText = dealPresentation?.body || dedupeBody(notif.title, getNotificationPurpose(notif, sender), displayName, listingTitle)
   if (notif.type === 'listing_view') {
     purposeText = [listingTitle, priceText].filter(Boolean).join(' · ')
   }
@@ -1165,6 +1258,7 @@ const NotificationCard = memo(function NotificationCard({
   const ariaLabel = [
     displayTitle,
     purpose,
+    dealPresentation?.badge,
     isVerified ? 'verified' : null,
     notif.read ? 'read' : 'unread',
   ].filter(Boolean).join(', ')
@@ -1183,6 +1277,8 @@ const NotificationCard = memo(function NotificationCard({
           className={[
             'notif-card',
             notif.read ? 'is-read' : 'is-unread',
+            dealPresentation ? 'is-deal' : '',
+            expanded ? 'is-expanded' : '',
           ].filter(Boolean).join(' ')}
           style={{ '--notif-accent': cfg.color }}
         >
@@ -1216,6 +1312,22 @@ const NotificationCard = memo(function NotificationCard({
                         {mergedUnreadCount}
                       </span>
                     )}
+                    {dealPresentation && (
+                      <>
+                        <span className={`notif-deal-badge tone-${dealPresentation.tone}`}>
+                          {dealPresentation.badge}
+                        </span>
+                        <button
+                          type="button"
+                          className="notif-deal-toggle"
+                          aria-expanded={expanded}
+                          aria-label={expanded ? 'Hide deal steps' : 'Show deal steps'}
+                          onClick={(e) => { e.stopPropagation(); setExpanded((value) => !value) }}
+                        >
+                          <Ic icon={ChevronDown} size={16} strokeWidth={2} />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </div>
                 <p className={`notif-purpose${notif.read ? '' : ' is-unread-purpose'}`}>
@@ -1224,6 +1336,36 @@ const NotificationCard = memo(function NotificationCard({
                 </p>
               </div>
             </div>
+
+            {dealPresentation && expanded && (
+              <div className="notif-deal-details" onClick={(e) => e.stopPropagation()}>
+                <div className="notif-deal-detail-head">
+                  <span className="notif-deal-detail-label">How this works</span>
+                  <span className={`notif-deal-badge tone-${dealPresentation.tone}`}>
+                    {dealPresentation.badge}
+                  </span>
+                </div>
+                <p className="notif-deal-detail-copy">{dealPresentation.detail}</p>
+                <ol className="notif-deal-steps">
+                  {dealPresentation.steps.map((step, stepIndex) => {
+                    const stepNumber = stepIndex + 1
+                    return (
+                      <li
+                        key={step}
+                        className={[
+                          'notif-deal-step',
+                          stepNumber === dealPresentation.activeStep ? 'is-active' : '',
+                          stepNumber < dealPresentation.activeStep ? 'is-done' : '',
+                        ].filter(Boolean).join(' ')}
+                      >
+                        <span className="notif-deal-step-num">{stepNumber}</span>
+                        <span>{step}</span>
+                      </li>
+                    )
+                  })}
+                </ol>
+              </div>
+            )}
 
             <div className="notif-side" onClick={(e) => e.stopPropagation()}>
               <button

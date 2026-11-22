@@ -4321,9 +4321,14 @@ async function uploadAndSend(file, type, caption = '') {
 
                   {isDeal && (
                     <div className="deal-card">
-                      <div style={{ fontSize: 13, fontWeight: 700, color: '#15803d', marginBottom: 2 }}>🤝 Deal confirmation</div>
-                      <div style={{ fontSize: 12, color: '#3d6b4f', lineHeight: 1.4 }}>
-                        Confirm deals from Notifications for a cleaner chat.
+                      <div className="deal-card-title">Deal confirmation</div>
+                      <div className="deal-card-copy">
+                        Confirm the sale in Notifications after you receive the item.
+                      </div>
+                      <div className="deal-card-steps" aria-label="Deal confirmation steps">
+                        <span className="deal-card-step is-done"><span>1</span> Chat about item</span>
+                        <span className="deal-card-step"><span>2</span> Seller sends request</span>
+                        <span className="deal-card-step"><span>3</span> Buyer confirms</span>
                       </div>
                       <button type="button" onClick={() => navigate('/notifications')}>
                         Open Notifications
