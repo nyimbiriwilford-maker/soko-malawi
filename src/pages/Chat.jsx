@@ -14,7 +14,6 @@ import {
   Image as ImageIcon,
   Video,
   FileText,
-  Paperclip,
   SmilePlus,
   Camera,
   Music,
@@ -36,6 +35,17 @@ import {
   Pencil,
   RotateCcw,
   CornerUpLeft,
+  CirclePlus,
+  HandCoins,
+  Mic,
+  SendHorizontal,
+  PackageCheck,
+  MessageCircleQuestion,
+  ChevronDown,
+  Reply,
+  TimerReset,
+  Eraser,
+  X,
 } from 'lucide-react'
 import {
   buildOfferPayload,
@@ -98,14 +108,6 @@ import {
 } from '../constants/emojiCatalog'
 import '../styles/chat-thread.css'
 
-const ATTACH_OPTIONS = [
-  { id: 'image', label: 'Photo', sub: 'JPG, PNG, WEBP', accept: 'image/*', type: 'image', Icon: ImageIcon, tone: 'photo' },
-  { id: 'camera', label: 'Camera', sub: 'Take a picture', accept: 'image/*', type: 'image', Icon: Camera, tone: 'camera', capture: 'environment' },
-  { id: 'video', label: 'Video', sub: 'MP4, MOV', accept: 'video/*', type: 'video', Icon: Video, tone: 'video' },
-  { id: 'audio', label: 'Audio', sub: 'Music or voice file', accept: 'audio/*', type: 'audio', Icon: Music, tone: 'audio' },
-  { id: 'file', label: 'Document', sub: 'PDF, DOC, ZIP…', accept: '*/*', type: 'file', Icon: FileIcon2, tone: 'doc' },
-]
-
 const DISAPPEAR_OPTIONS = [
   { label: 'Off', ms: null },
   { label: '1h', ms: 3600000 },
@@ -130,9 +132,8 @@ const S = {
   topStatus: { fontSize: 12, marginTop: 2, display: 'flex', alignItems: 'center' },
   ctxTitle: { fontSize: 13, fontWeight: 650, color: '#0f1410', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
   ctxSub: { fontSize: 11, color: '#1a7a4a', fontWeight: 650 },
-  recordingBar: { display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 },
-  cancelRecBtn: { background: '#fef0f0', border: 'none', borderRadius: '50%', width: 38, height: 38, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  inputBar: { display: 'flex', alignItems: 'flex-end', gap: 6, flexShrink: 0, zIndex: 5, padding: '6px 10px 10px', background: '#fff', borderTop: '1px solid #e8ede9' },
+  recordingBar: { display: 'flex', alignItems: 'center', gap: 10, flexShrink: 0 },
+  inputBar: { display: 'flex', alignItems: 'flex-end', gap: 8, flexShrink: 0, zIndex: 5, padding: '8px 12px calc(8px + env(safe-area-inset-bottom, 0px))', background: '#fff', borderTop: '1px solid #e8eaed' },
   topActions: { display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 },
 }
 
@@ -313,7 +314,6 @@ export default function Chat() {
   const oldestLoadedIdRef = useRef(null) // oldest message id loaded so far
   const [recording, setRecording]         = useState(false)
   const [recordingTime, setRecordingTime] = useState(0)
-  const [waveHeights, setWaveHeights]     = useState(Array(40).fill(2))
   const [playingId, setPlayingId]         = useState(null)
   const [audioProgress, setAudioProgress] = useState({})
   const [audioDuration, setAudioDuration] = useState({})
@@ -322,6 +322,10 @@ export default function Chat() {
   const [lockedKbHeight, setLockedKbHeight] = useState(340) // fallback px if keyboard wasn't open yet
   const [isMobile, setIsMobile]           = useState(() =>
     typeof window !== 'undefined' && window.matchMedia('(max-width: 899px)').matches
+  )
+  const [isTouchDevice, setIsTouchDevice] = useState(() =>
+    typeof window !== 'undefined'
+      && (window.matchMedia('(hover: none)').matches || navigator.maxTouchPoints > 0)
   )
   const [showOffer, setShowOffer]         = useState(false)
   const [offerAmount, setOfferAmount]     = useState('')
@@ -359,6 +363,7 @@ const [toast, setToast]                 = useState(null)
 const [reactions, setReactions]         = useState({})
 const [unreadBelow, setUnreadBelow]     = useState(0)
 const [swipeHintId, setSwipeHintId]     = useState(null)
+const [chatStatus, setChatStatus]       = useState({ closed: false, blockedByMe: false, blockedMe: false })
 const [dmAccepted, setDmAccepted]       = useState(false)
 const [dmBusy, setDmBusy]               = useState(false)
 const [showReportSheet, setShowReportSheet] = useState(false)
@@ -510,6 +515,8 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
   const animFrameRef       = useRef(null)
   const audioRefs          = useRef({})
   const inputRef           = useRef(null)
+  const attachBtnRef       = useRef(null)
+  const recSlideStartRef   = useRef(null)
   /** Cursor position to restore after a programmatic emoji insert (commit-time). */
   const pendingEmojiCursorRef = useRef(null)
   /** Last known cursor position in the textarea — survives blur/unfocus (emoji inserts). */
@@ -594,6 +601,17 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
     const onChange = e => setIsMobile(e.matches)
     mq.addEventListener('change', onChange)
     return () => mq.removeEventListener('change', onChange)
+  }, [])
+
+  useEffect(() => {
+    const mq = window.matchMedia('(hover: none)')
+    const onChange = e => setIsTouchDevice(e.matches || navigator.maxTouchPoints > 0)
+    mq.addEventListener('change', onChange)
+    window.addEventListener('resize', onChange)
+    return () => {
+      mq.removeEventListener('change', onChange)
+      window.removeEventListener('resize', onChange)
+    }
   }, [])
 
   useEffect(() => {
@@ -760,6 +778,24 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
 
     const { data: other } = await supabase.from('users').select('*').eq('id', userId).maybeSingle()
     setOtherUser(other || { id: userId, name: otherProf?.full_name || 'User' })
+
+    let blockedByMe = false
+    let blockedMe = false
+    try {
+      const { data: blocks } = await supabase
+        .from('user_blocks')
+        .select('blocker_id,blocked_id')
+        .or(`and(blocker_id.eq.${user.id},blocked_id.eq.${userId}),and(blocker_id.eq.${userId},blocked_id.eq.${user.id})`)
+      ;(blocks || []).forEach(block => {
+        if (block.blocker_id === user.id) blockedByMe = true
+        if (block.blocked_id === user.id) blockedMe = true
+      })
+    } catch { /* ignore */ }
+    setChatStatus({
+      closed: !!(other?.chat_closed || other?.is_closed || otherProf?.chat_closed || otherProf?.is_closed),
+      blockedByMe,
+      blockedMe,
+    })
 
     // Load last_seen from profile on mount
     if (otherProf?.last_seen) setOtherLastSeen(new Date(otherProf.last_seen))
@@ -1872,7 +1908,7 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
     const path = `chat/${currentUser.id}/${safeName}_${Date.now()}_${index}.${ext}`
 
     const url = await uploadToR2(file, path, pct => {
-      // Also update the pending group bubble's per-image progress
+      setPreview(items => items.map((item, i) => i === index ? { ...item, _uploadProgress: pct } : item))
       setGroupedMessages(prev => prev.map(m => {
         if (m.id !== pendingId) return m
         const newGroup = m._imageGroup.map((img, i) =>
@@ -2329,7 +2365,7 @@ async function uploadAndSend(file, type, caption = '') {
     // Keep autosize in sync for programmatic inserts (onChange only handles typing);
     // must run regardless of focus since content changed and needs to resize visually.
     el.style.height = 'auto'
-    el.style.height = Math.min(el.scrollHeight, 120) + 'px'
+    el.style.height = Math.min(el.scrollHeight, 105) + 'px'
   }, [newMsg, showEmoji])
 
   // ── Voice recording ──────────────────────────────────────────────────────
@@ -2363,30 +2399,17 @@ async function uploadAndSend(file, type, caption = '') {
       setRecording(true); setRecordingTime(0)
       setRecordingIndicator(true, target)
       timerRef.current = setInterval(() => setRecordingTime(t => t + 1), 1000)
-      drawWave(analyser)
     } catch (e) {
       setRecordingIndicator(false, target)
       alert('Microphone access denied')
     }
   }
 
-  function drawWave(analyser) {
-    const dataArray = new Uint8Array(analyser.frequencyBinCount)
-    function frame() {
-      analyser.getByteFrequencyData(dataArray)
-      setWaveHeights(Array(40).fill(0).map((_, i) =>
-        Math.max(2, (dataArray[Math.floor(i * dataArray.length / 40)] / 255) * 36)
-      ))
-      animFrameRef.current = requestAnimationFrame(frame)
-    }
-    frame()
-  }
-
   function stopRecording() {
     mediaRecorderRef.current?.stop(); setRecording(false)
     setRecordingIndicator(false, activityTarget())
     clearInterval(timerRef.current); cancelAnimationFrame(animFrameRef.current)
-    setRecordingTime(0); setWaveHeights(Array(40).fill(2))
+    setRecordingTime(0)
   }
 
   function cancelRecording() {
@@ -2399,7 +2422,7 @@ async function uploadAndSend(file, type, caption = '') {
     setRecordingIndicator(false, activityTarget())
     clearInterval(timerRef.current)
     cancelAnimationFrame(animFrameRef.current)
-    setRecordingTime(0); setWaveHeights(Array(40).fill(2))
+    setRecordingTime(0)
   }
 
   // ── Audio playback ───────────────────────────────────────────────────────
@@ -2485,6 +2508,41 @@ async function uploadAndSend(file, type, caption = '') {
   const otherAvatar  = otherProfile?.avatar_url || null
   const otherInitial = displayName[0].toUpperCase()
   const disappearLabel = DISAPPEAR_OPTIONS.find(opt => opt.ms === defaultDisappear)?.label || 'Off'
+  const chatDisabledReason = chatStatus.closed
+    ? 'This chat is closed.'
+    : chatStatus.blockedMe
+      ? 'You cannot reply because this user blocked you.'
+      : chatStatus.blockedByMe
+        ? 'You cannot reply because you blocked this user.'
+        : null
+  const dmAcceptKey = currentUser?.id && userId
+    ? `soko_dm_accept_${currentUser.id}_${userId}`
+    : null
+  const showDmGate = chatSource === 'direct'
+    && !!currentUser?.id
+    && messages.length > 0
+    && !dmAccepted
+    && messages.some(m => m.from_user === userId)
+    && !messages.some(m => m.from_user === currentUser.id && !String(m.id).startsWith('temp_'))
+  const offersAllowedToday = (chatSource === 'listing' || chatSource === 'request')
+    && !chatDisabledReason
+  const linkedContextChat = (!!contextId && ['listing', 'request', 'service'].includes(chatSource)) || isRequestChat
+  const showQuickReplies = linkedContextChat
+    && messages.length < 3
+    && !newMsg.trim()
+    && preview.length === 0
+    && !replyTo
+    && !chatDisabledReason
+    && !showDmGate
+  const composerHasContent = !!newMsg.trim() || preview.length > 0
+
+  function openComposerOffer() {
+    setShowAttach(false)
+    setCounterParent(null)
+    setEditOfferMsg(null)
+    setShowOffer(true)
+    setShowEmoji(false)
+  }
 
   // ── Render helpers ───────────────────────────────────────────────────────
   function dateChipLabel(iso) {
@@ -2841,17 +2899,6 @@ async function uploadAndSend(file, type, caption = '') {
   })()
 
   // First-message safety gate for receivers of direct chats
-  const dmAcceptKey = currentUser?.id && userId
-    ? `soko_dm_accept_${currentUser.id}_${userId}`
-    : null
-
-  const showDmGate = chatSource === 'direct'
-    && !!currentUser?.id
-    && messages.length > 0
-    && !dmAccepted
-    && messages.some(m => m.from_user === userId)
-    && !messages.some(m => m.from_user === currentUser.id && !String(m.id).startsWith('temp_'))
-
   function acceptDirectChat() {
     setDmAccepted(true)
     try { if (dmAcceptKey) localStorage.setItem(dmAcceptKey, '1') } catch { /* ignore */ }
@@ -3003,33 +3050,6 @@ async function uploadAndSend(file, type, caption = '') {
       </ChatCallHost>
     )
   }
-
-  // Request chats: role-aware quick replies (buyer = request owner, seller = responder)
-  const requestSellerQuickReplies = [
-    'Hi, do you still need this?',
-    'I have what you need.',
-    'Can I send you photos?',
-    'When do you need it?',
-    'I can deliver to you.',
-    'Can we agree on a price?',
-  ]
-  const requestBuyerQuickReplies = [
-    'Yes, I still need it.',
-    'Please send photos.',
-    'What is your best price?',
-    'Where are you located?',
-    'Can you deliver?',
-    'Sorry, I already found one.',
-  ]
-  const activeQuickReplies = (() => {
-    const src = chatSourceRef.current || chatSource || 'direct'
-    if (src === 'request') {
-      const ownerId = request?.user_id || null
-      if (!ownerId || !currentUser?.id) return []
-      return ownerId === currentUser.id ? requestBuyerQuickReplies : requestSellerQuickReplies
-    }
-    return ['Hi! Is this still available?', 'What is your best price?', 'Where can we meet?']
-  })()
 
   // ── Main render ──────────────────────────────────────────────────────────
   return (
@@ -3254,28 +3274,60 @@ async function uploadAndSend(file, type, caption = '') {
           -webkit-backdrop-filter: none !important;
         }
         .chat-page.chat-thread .chat-attach-btn,
-        .chat-page.chat-thread .chat-emoji-btn,
         .chat-page.chat-thread .chat-mic-btn,
         .chat-page.chat-thread .chat-send-btn {
           width: 44px !important;
           height: 44px !important;
         }
+        .chat-page.chat-thread .chat-emoji-btn {
+          width: 32px !important;
+          height: 32px !important;
+        }
+        .chat-page.chat-thread .chat-attach-btn {
+          background: transparent !important;
+          color: #5f6368 !important;
+          border: none !important;
+          border-radius: 50% !important;
+        }
+        .chat-page.chat-thread .chat-mic-btn {
+          background: transparent !important;
+          border: none !important;
+          color: #5f6368 !important;
+        }
         .chat-page.chat-thread .chat-send-btn {
           background: #0F9D58 !important;
+          color: #fff !important;
           box-shadow: 0 2px 8px rgba(15,157,88,0.25) !important;
         }
         .chat-page.chat-thread .chat-composer {
-          background: #fff !important;
-          border: 1px solid #e8eaed !important;
+          background: #f1f3f4 !important;
+          border: none !important;
           border-radius: 22px !important;
-          padding: 4px 6px !important;
+          padding: 10px 14px !important;
           min-height: 44px !important;
+          box-shadow: none !important;
+        }
+        .chat-page.chat-thread .chat-composer:focus-within {
+          background: #fff !important;
+          box-shadow: 0 0 0 2px #0F9D58 !important;
         }
         .chat-page.chat-thread .chat-composer textarea {
           font-size: 15px !important;
           line-height: 1.4 !important;
-          padding: 9px 6px !important;
+          padding: 0 !important;
           max-height: 105px !important;
+        }
+        @media (hover: none) {
+          .chat-page.chat-thread .chat-emoji-btn,
+          .chat-page.chat-thread .chat-quick-reply,
+          .chat-page.chat-thread .chat-attachment-remove,
+          .chat-page.chat-thread .chat-reply-close {
+            width: 44px !important;
+            height: 44px !important;
+          }
+          .chat-page.chat-thread .chat-quick-reply {
+            height: 44px !important;
+          }
         }
         .chat-page.chat-thread .chat-scroll-fab {
           right: 16px !important;
@@ -3323,7 +3375,7 @@ async function uploadAndSend(file, type, caption = '') {
           .chat-page.chat-thread > .chat-disappear-banner,
           .chat-page.chat-thread > .chat-context-bar,
           .chat-page.chat-thread > .chat-messages-wrap,
-          .chat-page.chat-thread > .chat-input-bar {
+          .chat-page.chat-thread > .chat-composer-shell {
             width: 100%;
             max-width: 900px;
             margin-left: auto;
@@ -3997,20 +4049,6 @@ async function uploadAndSend(file, type, caption = '') {
             <p style={{ fontSize: 13, color: '#7a8a80', lineHeight: 1.65, maxWidth: 240 }}>
               Ask about the item, negotiate price, or arrange a meetup
             </p>
-            {activeQuickReplies.length > 0 && (
-              <div className="chat-quick-replies">
-                {activeQuickReplies.map(q => (
-                  <button
-                    key={q}
-                    type="button"
-                    className="chat-quick-chip"
-                    onClick={() => { setNewMsg(q); setTimeout(() => inputRef.current?.focus(), 30) }}
-                  >
-                    {q}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
         )}
 
@@ -4536,11 +4574,9 @@ async function uploadAndSend(file, type, caption = '') {
           type="button"
           className={`chat-scroll-fab${unreadBelow > 0 ? ' has-unread' : ''}`}
           onClick={() => scrollToBottom(true)}
-          aria-label={unreadBelow > 0 ? `${unreadBelow} new messages` : 'Scroll to bottom'}
+          aria-label="Scroll to latest"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-            <path d="M12 5v14M5 12l7 7 7-7" />
-          </svg>
+          <ChevronDown size={20} strokeWidth={1.75} aria-hidden="true" />
           {unreadBelow > 0 && (
             <span className="chat-scroll-unread">{unreadBelow > 99 ? '99+' : unreadBelow}</span>
           )}
@@ -4571,7 +4607,7 @@ async function uploadAndSend(file, type, caption = '') {
             {
               id: 'reply',
               label: 'Reply',
-              icon: CornerUpLeft,
+              icon: Reply,
               onSelect: () => {
                 setReplyTo(actionMsg)
                 closeMessageMenu()
@@ -4626,7 +4662,7 @@ async function uploadAndSend(file, type, caption = '') {
             actionMsg?.from_user === currentUser?.id ? {
               id: 'timer',
               label: 'Auto-delete timer',
-              icon: Timer,
+              icon: TimerReset,
               keepOpen: true,
               onSelect: () => setActionMode('timer'),
             } : null,
@@ -4679,7 +4715,7 @@ async function uploadAndSend(file, type, caption = '') {
             {
               id: 'delete-for-everyone',
               label: 'Delete for everyone',
-              icon: Trash2,
+              icon: Eraser,
               danger: true,
               badge: 'x',
               onSelect: () => { deleteMessageForEveryone(actionMsg); closeMessageMenu() },
@@ -4705,10 +4741,10 @@ async function uploadAndSend(file, type, caption = '') {
               keepOpen: true,
               onSelect: () => setActionMode('main'),
             },
-            { label: '1 hour', icon: Timer, onSelect: () => { setMessageDisappear(actionMsg, 3600000); closeMessageMenu() } },
-            { label: '24 hours', icon: Timer, onSelect: () => { setMessageDisappear(actionMsg, 86400000); closeMessageMenu() } },
-            { label: '7 days', icon: Timer, onSelect: () => { setMessageDisappear(actionMsg, 604800000); closeMessageMenu() } },
-            { label: 'Off', icon: Timer, onSelect: () => { setMessageDisappear(actionMsg, null); closeMessageMenu() } },
+            { label: '1 hour', icon: TimerReset, onSelect: () => { setMessageDisappear(actionMsg, 3600000); closeMessageMenu() } },
+            { label: '24 hours', icon: TimerReset, onSelect: () => { setMessageDisappear(actionMsg, 86400000); closeMessageMenu() } },
+            { label: '7 days', icon: TimerReset, onSelect: () => { setMessageDisappear(actionMsg, 604800000); closeMessageMenu() } },
+            { label: 'Off', icon: TimerReset, onSelect: () => { setMessageDisappear(actionMsg, null); closeMessageMenu() } },
           ],
         ]}
       />
@@ -4768,7 +4804,7 @@ async function uploadAndSend(file, type, caption = '') {
             ...(imageActionMsg?.from_user === currentUser?.id ? [{
               id: 'delete-for-everyone',
               label: 'Delete for everyone',
-              icon: Trash2,
+              icon: Eraser,
               danger: true,
               badge: 'x',
               onSelect: () => {
@@ -4982,60 +5018,6 @@ async function uploadAndSend(file, type, caption = '') {
         </div>
       )}
 
-      {/* ── Preview modal ── */}
-      {preview.length > 0 && (
-        <div className="chat-preview-overlay" onClick={() => !uploading && setPreview([])}>
-          <div className="chat-preview-card" onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-              <span style={{ fontSize: 16, fontWeight: 800, color: '#0f1410', letterSpacing: '-0.02em' }}>
-                {preview[0]?.type === 'image' ? 'Send photos' : preview[0]?.type === 'video' ? 'Send video' : preview[0]?.type === 'audio' ? 'Send audio' : 'Send files'}
-              </span>
-              <button
-                type="button"
-                className="chat-icon-btn"
-                style={{ width: 34, height: 34 }}
-                onClick={() => setPreview([])}
-                aria-label="Cancel"
-              >
-                ✕
-              </button>
-            </div>
-            <div className="chat-preview-media chat-preview-grid">
-              {preview.map((p, i) => (
-                <div key={i} className="chat-preview-item">
-                  {p.type === 'image' && <img src={p.url} alt="" />}
-                  {p.type === 'video' && <video src={p.url} controls />}
-                  {p.type === 'audio' && <audio src={p.url} controls style={{ width: '100%' }} />}
-                  {p.type === 'file' && <div style={{ padding: 12, textAlign: 'center' }}>📎 {p.file?.name || 'File'}</div>}
-                  <button className="chat-preview-remove" onClick={() => setPreview(ps => ps.filter((_, j) => j !== i))} aria-label="Remove">✕</button>
-                </div>
-              ))}
-            </div>
-            <input
-              placeholder="Add a caption (optional)…"
-              value={preview[0]?.caption || ''}
-              onChange={e => setPreview(ps => ps.map((p, i) => i === 0 ? { ...p, caption: e.target.value } : p))}
-              onKeyDown={e => { if (e.key === 'Enter') uploadQueue(preview) }}
-            />
-            <button
-              type="button"
-              className="chat-preview-send"
-              onClick={() => uploadQueue(preview)}
-              disabled={uploading}
-            >
-              {uploading ? (
-                <div style={{ width: 18, height: 18, border: '2px solid #fff', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-              ) : (
-                <>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>
-                  Send
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* ── Emoji Picker ── */}
       {showEmoji && (
         <>
@@ -5099,188 +5081,248 @@ async function uploadAndSend(file, type, caption = '') {
         </>
       )}
 
-      {/* ── Reply banner ── */}
-      {replyTo && (
-        <div className="chat-reply-banner" style={{ position: 'relative', bottom: isMobile && showEmoji && lockedKbHeight > 0 ? lockedKbHeight : 0 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: '#1a7a4a', marginBottom: 2 }}>
-              Replying to {replyTo.from_user === currentUser?.id ? 'yourself' : displayName}
-            </span>
-            <span style={{ fontSize: 12, color: '#637068', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {decodeReply(replyTo.body).body
-                || (replyTo.media_type === 'audio' ? '🎤 Voice note'
-                  : replyTo.media_type === 'image' ? '📷 Photo'
-                  : replyTo.media_type === 'video' ? '🎥 Video'
-                  : '📎 File')}
-            </span>
-          </div>
-          <button type="button" className="chat-icon-btn" style={{ width: 30, height: 30 }} onClick={() => setReplyTo(null)} aria-label="Cancel reply">✕</button>
-        </div>
+      {!recording && chatDisabledReason && (
+        <div className="chat-disabled-bar">{chatDisabledReason}</div>
       )}
 
-      {/* ── Recording bar ── */}
-      {recording && (
-        <div className="chat-recording-bar" style={{ ...S.recordingBar, position: 'relative', bottom: isMobile && showEmoji && lockedKbHeight > 0 ? lockedKbHeight : 0 }}>
-          <button type="button" style={S.cancelRecBtn} onClick={cancelRecording} aria-label="Cancel recording">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#c0392b" strokeWidth="2.5" strokeLinecap="round">
-              <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-            </svg>
-          </button>
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 2, height: 40, overflow: 'hidden' }}>
-            {waveHeights.map((h, i) => (
-              <div key={i} style={{ width: 3, height: `${h}px`, borderRadius: 2, background: `hsl(${140 + i * 2},60%,${40 + i % 4 * 5}%)`, transition: 'height 0.05s ease' }} />
-            ))}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-            <div style={{ width: 9, height: 9, borderRadius: '50%', background: '#e74c3c', animation: 'pulse 1s infinite' }} />
-            <span style={{ fontSize: 14, fontWeight: 700, color: '#1a7a4a', minWidth: 38 }}>{formatTime(recordingTime)}</span>
-          </div>
+      {recording && !chatDisabledReason && (
+        <div
+          className="chat-recording-bar"
+          style={{ ...S.recordingBar, position: 'relative', bottom: isMobile && showEmoji && lockedKbHeight > 0 ? lockedKbHeight : 0 }}
+          onTouchStart={e => { recSlideStartRef.current = e.touches[0]?.clientX ?? null }}
+          onTouchMove={e => {
+            const startX = recSlideStartRef.current
+            if (startX != null && (e.touches[0]?.clientX ?? startX) - startX < -80) cancelRecording()
+          }}
+          onTouchEnd={() => { recSlideStartRef.current = null }}
+        >
+          <span className="chat-recording-dot" aria-hidden="true" />
+          <span className="chat-recording-time">{formatTime(recordingTime)}</span>
+          {isTouchDevice ? (
+            <span className="chat-recording-slide">Slide to cancel</span>
+          ) : (
+            <button type="button" className="chat-recording-cancel" onClick={cancelRecording}>Cancel</button>
+          )}
           <button
             type="button"
             className="chat-send-btn"
-            style={{ width: 42, height: 42 }}
             onClick={stopRecording}
             aria-label="Send voice note"
           >
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2z" /></svg>
+            <SendHorizontal size={22} strokeWidth={1.75} aria-hidden="true" />
           </button>
         </div>
       )}
 
-      {/* ── Input bar (locked until DM receiver continues) ── */}
-      {!recording && showDmGate && (
+      {!recording && !chatDisabledReason && showDmGate && (
         <div className="dm-input-locked">
           Choose Continue, Block, or Report above to respond
         </div>
       )}
-      {!recording && !showDmGate && (
+
+      {!recording && !chatDisabledReason && !showDmGate && (
         <HideDuringCall>
-        <>
-        <div className="chat-input-bar" style={{ ...S.inputBar, position: 'relative', bottom: isMobile && showEmoji && lockedKbHeight > 0 ? lockedKbHeight : 0, willChange: isMobile && showEmoji ? 'transform' : 'auto' }}>
-          {showAttach && (
-            <div className="attach-menu" onClick={e => e.stopPropagation()}>
-              <div className="attach-menu-title">Share</div>
-              <button
-                type="button"
-                className="attach-option"
-                onClick={() => {
-                  setShowAttach(false)
-                  setCounterParent(null)
-                  setEditOfferMsg(null)
-                  setShowOffer(v => !v)
-                  setShowEmoji(false)
-                }}
-              >
-                <span className="am-icon tone-photo">
-                  <CircleDollarSign size={18} strokeWidth={2.1} />
-                </span>
-                <span className="attach-option-text">
-                  <span className="attach-option-label">Price offer</span>
-                  <span className="attach-option-sub">Negotiate a price</span>
-                </span>
-              </button>
-              {ATTACH_OPTIONS.map(opt => {
-                const Icon = opt.Icon
-                return (
-                  <button
-                    key={opt.id}
-                    type="button"
-                    className="attach-option"
-                    onClick={() => {
-                      setShowAttach(false)
-                      pickFile(opt.accept, opt.type, { capture: opt.capture })
-                    }}
-                  >
-                    <span className={`am-icon tone-${opt.tone}`}>
-                      <Icon size={18} strokeWidth={2.1} />
-                    </span>
-                    <span className="attach-option-text">
-                      <span className="attach-option-label">{opt.label}</span>
-                      <span className="attach-option-sub">{opt.sub}</span>
-                    </span>
-                  </button>
-                )
-              })}
-            </div>
-          )}
-
-          <button
-            type="button"
-            className={`chat-attach-btn${showAttach ? ' is-on' : ''}`}
-            onClick={e => { e.stopPropagation(); setShowAttach(v => !v); setShowEmoji(false) }}
-            title="Attach"
-            aria-label="Attach file"
-          >
-            <Paperclip size={20} strokeWidth={2} />
-          </button>
-
-          <div className="chat-composer">
-            <textarea
-              ref={inputRef}
-              readOnly={showEmoji}
-              placeholder={isServiceChat ? `Message about ${service?.name || 'service'}…` : 'Message…'}
-              value={newMsg}
-              onFocus={(e) => {
-                if (showEmoji) {
-                  e.target.blur()
-                  return
-                }
-              }}
-              onSelect={() => { cursorPosRef.current = inputRef.current?.selectionStart ?? null }}
-              onKeyUp={() => { cursorPosRef.current = inputRef.current?.selectionStart ?? null }}
-              onClick={() => { cursorPosRef.current = inputRef.current?.selectionStart ?? null }}
-              onTouchEnd={() => { cursorPosRef.current = inputRef.current?.selectionStart ?? null }}
-              onChange={e => {
-                handleTyping(e.target.value)
-                e.target.style.height = 'auto'
-                e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'
-              }}
-              onKeyDown={handleKey}
-              rows={1}
-            />
-            <button
-              type="button"
-              className={`chat-emoji-btn${showEmoji ? ' is-on' : ''}`}
-              onClick={e => {
-                e.stopPropagation(); setShowAttach(false)
-                if (!showEmoji) {
-                  // Read the live keyboard height already cached as a CSS var by the
-                  // visualViewport effect. Reuse it for a smooth keyboard-replacement.
-                  const cs = getComputedStyle(document.documentElement)
-                  const kb = parseFloat(cs.getPropertyValue('--chat-kb-offset')) || 0
-                  if (kb > 0) setLockedKbHeight(kb)
-                  inputRef.current?.blur()
-                  setShowEmoji(true)
-                } else {
-                  // Closing the picker also reopens the keyboard via the ep-header button.
-                  setShowEmoji(false)
-                }
-              }}
-              onMouseDown={e => e.preventDefault()}
-              title="Emoji"
-              aria-label="Emoji"
+          <>
+            <div
+              className="chat-composer-shell"
+              style={{ position: 'relative', bottom: isMobile && showEmoji && lockedKbHeight > 0 ? lockedKbHeight : 0, willChange: isMobile && showEmoji ? 'transform' : 'auto' }}
             >
-              <SmilePlus size={20} strokeWidth={2} />
-            </button>
-          </div>
+              {showQuickReplies && (
+                <div className="chat-quick-replies-bar">
+                  <button
+                    type="button"
+                    className="chat-quick-reply"
+                    onClick={() => { setShowAttach(false); sendMessage('Is this still available?') }}
+                  >
+                    <PackageCheck size={16} strokeWidth={1.75} aria-hidden="true" />
+                    <span>Is this still available?</span>
+                  </button>
+                  {offersAllowedToday && (
+                    <button type="button" className="chat-quick-reply" onClick={openComposerOffer}>
+                      <HandCoins size={16} strokeWidth={1.75} aria-hidden="true" />
+                      <span>Make an offer</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="chat-quick-reply"
+                    onClick={() => { setShowAttach(false); sendMessage("What's your last price?") }}
+                  >
+                    <MessageCircleQuestion size={16} strokeWidth={1.75} aria-hidden="true" />
+                    <span>What's your last price?</span>
+                  </button>
+                </div>
+              )}
 
-          {newMsg.trim()
-            ? (
-              <button type="button" className="chat-send-btn" onClick={() => sendMessage(newMsg)} aria-label="Send">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="white"><path d="M2 21l21-9L2 3v7l15 2-15 2z" /></svg>
-              </button>
-            ) : (
-              <button type="button" className="chat-mic-btn" onClick={startRecording} title="Voice note" aria-label="Record voice note">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-                  <rect x="9" y="2" width="6" height="12" rx="3" />
-                  <path d="M5 10a7 7 0 0014 0" />
-                  <line x1="12" y1="19" x2="12" y2="22" />
-                  <line x1="8" y1="22" x2="16" y2="22" />
-                </svg>
-              </button>
-            )}
-        </div>
-        </>
+              {replyTo && (
+                <div className="chat-reply-banner">
+                  <CornerUpLeft size={16} strokeWidth={1.75} aria-hidden="true" />
+                  <div className="chat-reply-copy">
+                    <span className="chat-reply-name">{replyTo.from_user === currentUser?.id ? 'You' : displayName}</span>
+                    <span className="chat-reply-text">
+                      {decodeReply(replyTo.body).body
+                        || (replyTo.media_type === 'audio' ? 'Voice note'
+                          : replyTo.media_type === 'image' ? 'Photo'
+                          : replyTo.media_type === 'video' ? 'Video'
+                          : 'File')}
+                    </span>
+                  </div>
+                  <button type="button" className="chat-reply-close" onClick={() => setReplyTo(null)} aria-label="Cancel reply">
+                    <X size={20} strokeWidth={1.75} aria-hidden="true" />
+                  </button>
+                </div>
+              )}
+
+              {preview.length > 0 && (
+                <div className="chat-attachment-strip">
+                  {preview.map((item, index) => (
+                    <div
+                      key={index}
+                      className={item.type === 'image' || item.type === 'video' ? 'chat-attachment-thumb' : 'chat-attachment-file'}
+                      style={{ '--chat-progress': `${item._uploadProgress || 0}%` }}
+                    >
+                      {item.type === 'image' && <img src={item.url} alt="Attachment preview" />}
+                      {item.type === 'video' && <video src={item.url} muted />}
+                      {item.type !== 'image' && item.type !== 'video' && (
+                        <>
+                          <FileText size={20} strokeWidth={1.75} aria-hidden="true" />
+                          <span className="chat-attachment-name">{item.file?.name || (item.type === 'audio' ? 'Audio' : 'File')}</span>
+                        </>
+                      )}
+                      <button
+                        type="button"
+                        className="chat-attachment-remove"
+                        disabled={uploading}
+                        onClick={() => setPreview(items => items.filter((_, i) => i !== index))}
+                        aria-label="Remove attachment"
+                      >
+                        <X size={14} strokeWidth={2} aria-hidden="true" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="chat-input-bar" style={S.inputBar}>
+                <button
+                  ref={attachBtnRef}
+                  type="button"
+                  className={`chat-attach-btn${showAttach ? ' is-on' : ''}`}
+                  onClick={e => { e.stopPropagation(); setShowAttach(value => !value); setShowEmoji(false) }}
+                  title="Attach"
+                  aria-label="Attach"
+                >
+                  <CirclePlus size={22} strokeWidth={1.75} aria-hidden="true" />
+                </button>
+
+                <div className="chat-composer">
+                  <textarea
+                    ref={inputRef}
+                    readOnly={showEmoji}
+                    placeholder="Message"
+                    value={newMsg}
+                    onFocus={e => {
+                      if (showEmoji) {
+                        e.target.blur()
+                        return
+                      }
+                    }}
+                    onSelect={() => { cursorPosRef.current = inputRef.current?.selectionStart ?? null }}
+                    onKeyUp={() => { cursorPosRef.current = inputRef.current?.selectionStart ?? null }}
+                    onClick={() => { cursorPosRef.current = inputRef.current?.selectionStart ?? null }}
+                    onTouchEnd={() => { cursorPosRef.current = inputRef.current?.selectionStart ?? null }}
+                    onChange={e => {
+                      handleTyping(e.target.value)
+                      e.target.style.height = 'auto'
+                      e.target.style.height = Math.min(e.target.scrollHeight, 105) + 'px'
+                    }}
+                    onKeyDown={handleKey}
+                    rows={1}
+                  />
+                  <button
+                    type="button"
+                    className={`chat-emoji-btn${showEmoji ? ' is-on' : ''}`}
+                    onClick={e => {
+                      e.stopPropagation(); setShowAttach(false)
+                      if (!showEmoji) {
+                        const cs = getComputedStyle(document.documentElement)
+                        const kb = parseFloat(cs.getPropertyValue('--chat-kb-offset')) || 0
+                        if (kb > 0) setLockedKbHeight(kb)
+                        inputRef.current?.blur()
+                        setShowEmoji(true)
+                      } else {
+                        setShowEmoji(false)
+                      }
+                    }}
+                    onMouseDown={e => e.preventDefault()}
+                    title="Emoji"
+                    aria-label="Emoji"
+                  >
+                    <SmilePlus size={20} strokeWidth={1.75} aria-hidden="true" />
+                  </button>
+                </div>
+
+                {composerHasContent ? (
+                  <button
+                    type="button"
+                    className="chat-send-btn"
+                    onClick={() => {
+                      if (newMsg.trim()) sendMessage(newMsg)
+                      else if (preview.length) uploadQueue(preview)
+                    }}
+                    aria-label="Send message"
+                  >
+                    <SendHorizontal size={22} strokeWidth={1.75} aria-hidden="true" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="chat-mic-btn"
+                    onClick={startRecording}
+                    title="Voice note"
+                    aria-label="Record voice message"
+                  >
+                    <Mic size={22} strokeWidth={1.75} aria-hidden="true" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <ChatPopupMenu
+              open={showAttach}
+              anchorEl={attachBtnRef.current}
+              groups={[[
+                {
+                  id: 'photo',
+                  label: 'Photo',
+                  icon: ImageIcon,
+                  onSelect: () => pickFile('image/*', 'image'),
+                },
+                ...(isTouchDevice ? [{
+                  id: 'camera',
+                  label: 'Camera',
+                  icon: Camera,
+                  onSelect: () => pickFile('image/*', 'image', { capture: 'environment' }),
+                }] : []),
+                {
+                  id: 'file',
+                  label: 'File',
+                  icon: FileText,
+                  onSelect: () => pickFile('*/*', 'file'),
+                },
+                ...(offersAllowedToday ? [{
+                  id: 'offer',
+                  label: 'Make an offer',
+                  icon: HandCoins,
+                  onSelect: openComposerOffer,
+                }] : []),
+              ]]}
+              onClose={() => setShowAttach(false)}
+              label="Attach"
+              title="Share"
+              iconSide="left"
+            />
+          </>
         </HideDuringCall>
       )}
     </div>

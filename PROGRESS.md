@@ -181,3 +181,4 @@ Chat view: image bubbles, viewer, scroll button
 Chat view: slim image bubbles, viewer, scroll button
 Chat view: bubble-style offer card, polished message menu, slim images
 Chat view: one polished message menu, slim image bubbles
+Chat view: compact composer, plus menu, quick replies, new icons

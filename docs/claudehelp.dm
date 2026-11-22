@@ -369,3 +369,33 @@ npx eslint <the real changed file paths> | Select-String "no-undef|is not define
 npx eslint <the real conversation view and menu paths> --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
 git status -sb
 git diff HEAD~1 --stat -- src
+
+GOAL: Redesign the chat composer (typing box) and its related parts so it is compact, clear and professional on every device, using the icon set below. Branch wip/home-hero-premium (check with git branch --show-current). Rules: no git stash or reset, no SQL, no installs, do NOT launch Chrome or any browser, do not merge or push. Edit only the conversation view and its components.
+
+STEP 1 - Print raw with line numbers, then continue without waiting: the input bar component (Select-String "Message…|Message\.\.\." in src), the attach button and menu, the offer (dollar) button, the mic/recording code, the emoji trigger, any reply-preview and attachment-preview code, the scroll-to-bottom button, and the message context menu icons. Also check which of these Lucide icons exist in the installed lucide-react version: CirclePlus, Image, Camera, FileText, HandCoins, BadgeDollarSign, SmilePlus, Mic, SendHorizontal, PackageCheck, MessageCircleQuestion, CornerUpLeft, ChevronDown, Reply, Copy, Forward, Download, Maximize2, TimerReset, Timer, Trash2, Eraser. Use the fallback where one is missing: HandCoins -> BadgeDollarSign, TimerReset -> Timer, Eraser -> Trash2.
+
+STEP 2 - Colours/fonts: green #0F9D58, tint #e6f6ed, text #202124, grey #5f6368 / #80868b, border #e8eaed, DM Sans. Icons: Lucide only, outline, strokeWidth 1.75, no emojis, no filled shapes (except the white send arrow inside the green circle). Size 22px in the bar, 20px in menus. Grey #5f6368 by default, green for send and active states, red #d93025 only for destructive actions.
+
+1. BAR: sticky bottom, white, 1px #e8eaed top border, padding 8px 12px plus env(safe-area-inset-bottom). On 769px+ the content is centred with max-width 900px, matching the message column.
+2. FIELD: pill, background #f1f3f4, no border, radius 22px, min-height 44px, grows to 5 lines then scrolls, 15px text, padding 10px 14px, placeholder "Message" in #80868b. Focus: 2px #0F9D58 ring with white background. SmilePlus emoji button inside the field at the right, 32px.
+3. LEFT BUTTON: one 44px CirclePlus button (hover tint #e6f6ed) that opens the shared popup menu (bottom sheet below 769px, dropdown above) with: Image "Photo", Camera "Camera" (touch devices only), FileText "File", HandCoins "Make an offer" (only when the chat is linked to a listing or request and offers are allowed today). Keep the same upload and offer handlers. Remove the loose paperclip and dollar buttons from the bar.
+4. RIGHT BUTTON: 44px circle. Field empty = Mic (grey, no fill). Text or attachment present = green #0F9D58 circle with a white SendHorizontal icon. Enter sends on laptop, Shift+Enter adds a line.
+5. QUICK REPLIES: only on chats linked to a listing/request/service with fewer than 3 messages in total, show a horizontally scrollable chip row above the bar (36px chips, white, 1px #e8eaed border, 14px text, 16px icon on the left): PackageCheck "Is this still available?", HandCoins "Make an offer", MessageCircleQuestion "What's your last price?". Text chips fill and send the message through the normal send handler; "Make an offer" opens the existing offer flow. Hide the row once the user types or after 3 messages.
+6. REPLY PREVIEW: a 48px strip above the field with a 3px green left bar, CornerUpLeft icon, sender name (12px, green, weight 600), one-line quoted text (13px grey) and an X (44px target).
+7. ATTACHMENT PREVIEW: selected photos as 56px rounded thumbnails in a strip above the field, each with a small X and an upload progress ring; files show a FileText icon and a name chip.
+8. RECORDING: replace the field with a bar showing a red pulsing dot (no icon), the timer (mm:ss), "Slide to cancel" in grey on touch (a Cancel text button on laptop), and the green send circle. Pulse off under reduced motion.
+9. DISABLED: if the chat is closed or the user is blocked, replace the bar with one grey line saying why, no input.
+10. SCROLL BUTTON: 40px white circle, soft shadow, ChevronDown icon, right 16px, 12px above the bar (and above the quick-reply row if shown), shown only when scrolled up more than 200px, hidden at the bottom.
+11. MESSAGE MENU ICONS (the shared message menu): Reply = Reply, Copy = Copy, Forward = Forward, Download = Download, View = Maximize2, Auto-delete timer = TimerReset, Delete for me = Trash2, Delete for everyone = Eraser. Delete items red text and icon.
+12. All tap targets at least 44px on touch. aria-labels: "Attach", "Send message", "Record voice message", "Scroll to latest".
+13. Do not change sending, uploading, receiving, realtime, read receipts, offers logic, routes or other pages.
+
+Commit as "Chat view: compact composer, plus menu, quick replies, new icons", append one line to PROGRESS.md and commit it too.
+
+End with RAW output only, no summary: first the step 1 findings (including which icons were missing), then:
+git log --oneline -4
+npm run build
+npx eslint <the real changed file paths> | Select-String "no-undef|is not defined" ; "ESLINT DONE"
+npx eslint <the real conversation view and composer paths> --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
+git status -sb
+git diff HEAD~1 --stat -- src
