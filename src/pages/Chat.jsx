@@ -3057,13 +3057,27 @@ async function uploadAndSend(file, type, caption = '') {
           color: #80868b;
           text-align: center;
         }
+        .chat-page.chat-thread .chat-messages-wrap {
+          position: relative;
+          display: flex;
+          flex: 1;
+          flex-direction: column;
+          min-height: 0;
+        }
         .chat-page.chat-thread .chat-date-chip,
         .chat-page.chat-thread .chat-sticky-date span {
+          display: block !important;
+          width: fit-content !important;
+          max-width: calc(100% - 24px) !important;
+          margin: 12px auto !important;
           background: #fff !important;
           color: #5f6368 !important;
           font-size: 12px !important;
           font-weight: 500 !important;
+          line-height: 1.4 !important;
           letter-spacing: 0 !important;
+          text-align: center !important;
+          white-space: nowrap !important;
           text-transform: none !important;
           border: 1px solid #e8eaed !important;
           border-radius: 999px !important;
@@ -3074,8 +3088,10 @@ async function uploadAndSend(file, type, caption = '') {
         }
         .chat-page.chat-thread .chat-sticky-date { top: 4px; }
         .chat-page.chat-thread .chat-load-more-end {
-          padding: 8px 12px 2px !important;
+          padding: 8px 12px 0 !important;
+          margin: 0 !important;
           font-size: 11px !important;
+          line-height: 1.4 !important;
           color: #80868b !important;
         }
         .chat-page.chat-thread .msg-stack { max-width: 75% !important; }
@@ -3145,6 +3161,7 @@ async function uploadAndSend(file, type, caption = '') {
         }
         .chat-page.chat-thread .chat-scroll-fab {
           right: 16px !important;
+          bottom: 12px !important;
           width: 40px !important;
           height: 40px !important;
           background: #fff !important;
@@ -3182,15 +3199,12 @@ async function uploadAndSend(file, type, caption = '') {
             max-height: var(--chat-vvh, 100%) !important;
           }
         }
-        @media (max-width: 399px) {
-          .chat-page.chat-thread .msg-stack { max-width: 80% !important; }
-        }
         @media (min-width: 769px) {
           .chat-back-btn { display: none !important; }
           .chat-page.chat-thread > .chat-topbar,
           .chat-page.chat-thread > .chat-disappear-banner,
           .chat-page.chat-thread > .chat-context-bar,
-          .chat-page.chat-thread > .chat-messages,
+          .chat-page.chat-thread > .chat-messages-wrap,
           .chat-page.chat-thread > .chat-input-bar {
             width: 100%;
             max-width: 900px;
@@ -3198,6 +3212,146 @@ async function uploadAndSend(file, type, caption = '') {
             margin-right: auto;
           }
           .chat-page.chat-thread .msg-stack { max-width: 65% !important; }
+        }
+        .chat-page.chat-thread .msg-bubble.offer-bubble {
+          max-width: none !important;
+          padding: 0 !important;
+          background: transparent !important;
+          border: 0 !important;
+          border-radius: 0 !important;
+          box-shadow: none !important;
+          overflow: visible !important;
+        }
+        .chat-page.chat-thread .msg-bubble.offer-bubble .offer-card {
+          box-sizing: border-box;
+          width: 320px;
+          max-width: 320px;
+          max-height: 190px;
+          padding: 12px !important;
+          background: #fff !important;
+          border: 1px solid #e8eaed !important;
+          border-radius: 14px !important;
+          box-shadow: 0 2px 10px rgba(16,24,40,0.08) !important;
+          overflow: hidden !important;
+          opacity: 1 !important;
+          filter: none !important;
+        }
+        .chat-page.chat-thread .msg-bubble.offer-bubble .offer-card::before { display: none !important; }
+        .chat-page.chat-thread .msg-bubble.offer-bubble .offer-card.is-mine,
+        .chat-page.chat-thread .msg-bubble.offer-bubble .offer-card.is-accepted,
+        .chat-page.chat-thread .msg-bubble.offer-bubble .offer-card.is-declined,
+        .chat-page.chat-thread .msg-bubble.offer-bubble .offer-card.is-expired,
+        .chat-page.chat-thread .msg-bubble.offer-bubble .offer-card.is-withdrawn {
+          background: #fff !important;
+          border-color: #e8eaed !important;
+          opacity: 1 !important;
+          filter: none !important;
+        }
+        .chat-page.chat-thread .offer-card-product {
+          width: 100% !important;
+          margin: 0 0 6px !important;
+          padding: 0 !important;
+          gap: 8px !important;
+          background: transparent !important;
+          border: 0 !important;
+          border-radius: 0 !important;
+          box-shadow: none !important;
+        }
+        .chat-page.chat-thread .offer-card-product-thumb {
+          width: 36px !important;
+          height: 36px !important;
+          border-radius: 8px !important;
+          border: 0 !important;
+          box-shadow: none !important;
+        }
+        .chat-page.chat-thread .offer-card-product-title {
+          font-size: 14px !important;
+          font-weight: 600 !important;
+          line-height: 1.3 !important;
+          color: #202124 !important;
+        }
+        .chat-page.chat-thread .offer-card-product-arrow {
+          color: #5f6368 !important;
+          font-size: 16px !important;
+        }
+        .chat-page.chat-thread .offer-card-product.is-unavailable {
+          justify-content: flex-start !important;
+          font-size: 12px !important;
+          color: #80868b !important;
+        }
+        .chat-page.chat-thread .offer-card-head {
+          margin: 0 0 4px !important;
+          gap: 8px !important;
+        }
+        .chat-page.chat-thread .offer-card-tag {
+          font-size: 11px !important;
+          font-weight: 500 !important;
+          line-height: 1.3 !important;
+          letter-spacing: 0.02em !important;
+          color: #80868b !important;
+        }
+        .chat-page.chat-thread .offer-card-tag::before { display: none !important; }
+        .chat-page.chat-thread .offer-card-status {
+          font-size: 10px !important;
+          line-height: 1.4 !important;
+          padding: 2px 8px !important;
+        }
+        .chat-page.chat-thread .offer-card-amount {
+          display: block !important;
+          margin: 0 !important;
+          font-family: 'Sora', 'DM Sans', sans-serif !important;
+          font-size: 22px !important;
+          font-weight: 800 !important;
+          line-height: 1.2 !important;
+          letter-spacing: -0.01em !important;
+          color: #0F9D58 !important;
+        }
+        .chat-page.chat-thread .offer-card-amount-currency {
+          display: inline !important;
+          margin: 0 !important;
+          padding: 0 !important;
+          background: transparent !important;
+          border: 0 !important;
+          font-size: 22px !important;
+          font-weight: 800 !important;
+          letter-spacing: 0 !important;
+          color: #0F9D58 !important;
+        }
+        .chat-page.chat-thread .offer-card-original-price {
+          margin-top: 2px !important;
+          font-size: 12px !important;
+          font-weight: 500 !important;
+          line-height: 1.3 !important;
+          color: #80868b !important;
+        }
+        .chat-page.chat-thread .offer-card-note,
+        .chat-page.chat-thread .offer-stepper,
+        .chat-page.chat-thread .offer-card-parent,
+        .chat-page.chat-thread .offer-card-footer { display: none !important; }
+        .chat-page.chat-thread .offer-card-actions,
+        .chat-page.chat-thread .offer-card-actions.is-manage {
+          display: flex !important;
+          flex-wrap: wrap !important;
+          gap: 6px !important;
+          margin: 8px 0 0 !important;
+          padding: 0 !important;
+          border: 0 !important;
+        }
+        .chat-page.chat-thread .offer-card-actions button {
+          flex: 1 1 0 !important;
+          min-width: 0 !important;
+          height: 40px !important;
+          min-height: 40px !important;
+          padding: 0 4px !important;
+          border-radius: 10px !important;
+          font-size: 12px !important;
+          line-height: 1.15 !important;
+        }
+        @media (max-width: 399px) {
+          .chat-page.chat-thread .msg-bubble.offer-bubble .offer-card {
+            width: 260px !important;
+            max-width: 260px !important;
+          }
         }
       `}</style>
 
@@ -3633,6 +3787,7 @@ async function uploadAndSend(file, type, caption = '') {
       {/* Call overlay is rendered by ChatCallHost (outside this page shell) */}
 
       {/* ── Messages ── */}
+      <div className="chat-messages-wrap" style={{ flex: 1, minHeight: 0, position: 'relative', display: 'flex', flexDirection: 'column' }}>
       <div
         ref={messagesListRef}
         className="chat-messages"
@@ -3643,7 +3798,7 @@ async function uploadAndSend(file, type, caption = '') {
           const distFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
           const near = distFromBottom < 100
           nearBottomRef.current = near
-          setShowScrollBtn(distFromBottom > 120)
+          setShowScrollBtn(distFromBottom > 200)
           if (near) setUnreadBelow(0)
           handleScroll()
         }}
@@ -3904,6 +4059,9 @@ async function uploadAndSend(file, type, caption = '') {
                           <span className="offer-card-amount-currency">{offer?.currency || 'MWK'}</span>
                           {Number(offer && offer.amount || 0).toLocaleString()}
                         </div>
+                        {offerProduct?.price != null && Number(offerProduct.price) > 0 && (
+                          <div className="offer-card-original-price">Asking {Number(offerProduct.price).toLocaleString()}</div>
+                        )}
                         {offer.note && <div className="offer-card-note">{offer.note}</div>}
                         {flow && flow.total > 1 && (
                           <div className="offer-stepper" aria-label={`Negotiation offer ${flow.index} of ${flow.total}`}>
@@ -4199,11 +4357,10 @@ async function uploadAndSend(file, type, caption = '') {
       </div>
 
       {/* ── Scroll / new messages ── */}
-      {(showScrollBtn || unreadBelow > 0) && (
+      {showScrollBtn && (
         <button
           type="button"
           className={`chat-scroll-fab${unreadBelow > 0 ? ' has-unread' : ''}`}
-          style={{ bottom: recording ? 84 : (replyTo ? 124 : 72) }}
           onClick={() => scrollToBottom(true)}
           aria-label={unreadBelow > 0 ? `${unreadBelow} new messages` : 'Scroll to bottom'}
         >
@@ -4215,6 +4372,7 @@ async function uploadAndSend(file, type, caption = '') {
           )}
         </button>
       )}
+      </div>
 
       {/* ── Toast ── */}
       {toast && (

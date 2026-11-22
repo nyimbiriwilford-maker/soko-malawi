@@ -246,3 +246,21 @@ npx eslint <the real changed file paths> | Select-String "no-undef|is not define
 npx eslint <the real conversation view path> --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
 git status -sb
 git diff HEAD~1 --stat -- src
+
+GOAL: Finish the chat view refinements. Branch wip/home-hero-premium (check with git branch --show-current). Rules: no git stash or reset, no SQL, no installs, do NOT launch Chrome or any browser, do not merge or push. Make the edits directly. Edit only the conversation view and its components.
+
+1. DATE SEPARATOR: print raw the element rendering "Today". Replace the full-width bar with a centred inline pill (width fit-content, margin 12px auto, 12px text, grey #5f6368, white background, 1px #e8eaed border, padding 6px 12px, 999px radius). "No more messages" stays small grey above it with 12px spacing, never overlapping.
+2. BUBBLE TEXT: message text 15px, line-height 1.4 on all widths (find any larger font-size or scaling and remove it), max-width 75% (65% at 769px+).
+3. PRICE OFFER CARD: print raw the offer card component. Make it compact: max-width 320px (260px if the screen is under 400px), padding 12px, ONE 1px border (remove the extra green outer wrapper or double border). Layout: row 1 listing photo 36px, title 14px weight 600, row 2 "PRICE OFFER" label 11px grey with the status chip at the right (ACCEPTED, PENDING, etc.), row 3 amount "MWK 30,000" at 22px weight 800 green, with the original price in 12px grey under it if it exists, row 4 action buttons (Accept, Decline, Counter) in one row, 40px tall, equal width, wrapping only if needed. The whole card must be at most about 190px tall. Keep every action and handler.
+4. SCROLL BUTTON: place it right 16px, bottom 12px above the input bar (position relative to the message area, not over bubbles when the list is at the bottom), 40px, shown only when scrolled up more than 200px.
+5. Do not change sending, receiving, realtime, read receipts, offers logic, routes or other pages.
+
+Commit as "Chat view: date pill, compact offer card, 15px text", append one line to PROGRESS.md and commit it too.
+
+End with RAW output only, no summary:
+git log --oneline -4
+npm run build
+npx eslint <the real changed file paths> | Select-String "no-undef|is not defined" ; "ESLINT DONE"
+npx eslint <the real conversation view path> --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
+git status -sb
+git diff HEAD~1 --stat -- src
