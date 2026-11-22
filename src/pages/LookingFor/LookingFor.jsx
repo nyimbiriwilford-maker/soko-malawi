@@ -98,7 +98,10 @@ export default function LookingFor() {
   const [dbCities,        setDbCities]        = useState([])
 
   /* ── UI state ── */
-  const [activeTab,     setActiveTab]     = useState('all')
+  const [activeTab,     setActiveTab]     = useState(() => {
+    const tab = new URLSearchParams(location.search).get('tab') || location.state?.tab
+    return tab === 'mine' || tab === 'saved' || tab === 'all' ? tab : 'all'
+  })
   const [savedIds, setSavedIds] = useState(() => {
     try {
       const stored = localStorage.getItem('soko_saved_requests')

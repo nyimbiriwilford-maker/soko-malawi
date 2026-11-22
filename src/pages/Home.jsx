@@ -2356,6 +2356,7 @@ function LookingForSection({ navigate, requests, loading, viewerLocation: viewer
                     user={user}
                     onViewDetails={(req) => navigate(`/looking-for?request=${req.id}`)}
                     onOffer={onOffer}
+                    onManage={() => navigate('/looking-for?tab=mine')}
                   />
                ))}
              </div>
