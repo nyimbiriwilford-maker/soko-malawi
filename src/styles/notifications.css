@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600;700&display=swap');
 
 /* =========================================================
    SokoMw Notifications — brand-aligned surface
@@ -3015,4 +3015,201 @@
 .avatar-initial {
   background: #e6f6ed !important;
   color: #0F9D58 !important;
+}
+
+/* ── Typography and copy polish ───────────────────────────── */
+.notifications-page {
+  --notif-max: 720px;
+  --notif-pad-x: 16px;
+  background: #f8f9fa !important;
+}
+
+.notifications-header .header-top,
+.notifications-header .header-search-row,
+.notifications-header .tabs,
+.notif-body-shell {
+  max-width: 720px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+.notif-body-shell {
+  display: block !important;
+  grid-template-columns: none !important;
+  padding: 0 16px 48px !important;
+}
+
+.notif-body-shell .container {
+  max-width: 100%;
+  margin: 0;
+  padding: 12px 0 48px;
+}
+
+.date-group {
+  margin-bottom: 16px !important;
+  background: #fff !important;
+  border: 1px solid #e8eaed !important;
+  border-radius: 16px !important;
+  box-shadow: none !important;
+}
+
+.date-header {
+  font-family: 'DM Sans', 'Inter', system-ui, sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.04em !important;
+  color: #80868b !important;
+}
+
+.notifications-list {
+  gap: 8px;
+}
+
+.notif-card,
+.notif-card.is-unread,
+.notif-card:hover,
+.notif-card:active,
+.notif-card.is-unread:hover,
+.notif-card.is-unread:active {
+  background: #fff !important;
+  border-color: #e8eaed !important;
+  box-shadow: none !important;
+  transform: none !important;
+  min-height: 0 !important;
+  padding: 14px 16px !important;
+  border-radius: 12px !important;
+}
+
+.notif-card::before {
+  background: transparent !important;
+}
+
+.notif-card.is-unread::before {
+  background: var(--notif-accent) !important;
+}
+
+.notif-card-inner {
+  align-items: center !important;
+  gap: 12px !important;
+  min-height: 0 !important;
+}
+
+.notif-person {
+  align-items: center !important;
+  gap: 12px !important;
+}
+
+.notif-person-name {
+  flex: 1 1 auto !important;
+  font-family: 'DM Sans', 'Inter', system-ui, sans-serif !important;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0 !important;
+  line-height: 1.25 !important;
+  color: #202124 !important;
+}
+
+.notif-person-name.is-unread-name {
+  font-weight: 700 !important;
+  color: #202124 !important;
+}
+
+.notif-purpose,
+.notif-purpose.is-unread-purpose,
+.notif-card.is-message .notif-purpose,
+.notif-card.is-message.is-unread .notif-purpose {
+  display: block !important;
+  margin: 0 !important;
+  font-family: 'DM Sans', 'Inter', system-ui, sans-serif !important;
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  line-height: 1.4 !important;
+  color: #5f6368 !important;
+  overflow: hidden !important;
+  white-space: nowrap !important;
+  text-overflow: ellipsis !important;
+}
+
+.notif-person-end {
+  flex: 0 0 auto !important;
+  flex-direction: column !important;
+  align-items: flex-end !important;
+  gap: 2px !important;
+  margin-left: 8px !important;
+}
+
+.notif-time-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.notif-time {
+  font-family: 'DM Sans', 'Inter', system-ui, sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 400 !important;
+  color: #80868b !important;
+}
+
+.message-count-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 16px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #0F9D58;
+  color: #fff;
+  font-family: 'DM Sans', 'Inter', system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.avatar-wrap,
+.avatar,
+.icon-fallback,
+.avatar-skeleton {
+  width: 40px !important;
+  height: 40px !important;
+  border-radius: 50% !important;
+}
+
+.icon-badge {
+  right: -3px !important;
+  bottom: -3px !important;
+  width: 18px !important;
+  height: 18px !important;
+  border: 2px solid #fff !important;
+}
+
+@media (min-width: 1100px) {
+  .notifications-page {
+    --notif-max: 720px;
+    --notif-pad-x: 16px;
+  }
+
+  .notifications-header .header-top,
+  .notifications-header .header-search-row,
+  .notifications-header .tabs,
+  .notif-body-shell,
+  .notif-body-shell .container,
+  .date-group,
+  .notifications-list {
+    max-width: 720px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    width: 100% !important;
+  }
+
+  .notif-body-shell {
+    display: block !important;
+    grid-template-columns: none !important;
+    padding: 0 16px 48px !important;
+  }
+
+  .notif-body-shell .container {
+    padding: 12px 0 48px !important;
+  }
 }

@@ -72,6 +72,23 @@ function stripEmojis(value) {
   return String(value).replace(EMOJI_RE, '').trim()
 }
 
+function toTitleCaseName(value) {
+  const text = stripEmojis(value)
+  if (!text) return ''
+  return text.replace(/\p{L}[\p{L}'’-]*/gu, (word) => {
+    const rest = word.slice(1)
+    return word.charAt(0).toUpperCase() + (rest === rest.toUpperCase() ? rest.toLowerCase() : rest)
+  })
+}
+
+function formatMwkPrice(value) {
+  if (value == null || value === '') return ''
+  const digits = String(value).replace(/[^\d.-]/g, '')
+  const amount = Number(digits)
+  if (!Number.isFinite(amount) || amount <= 0) return ''
+  return `MWK ${Math.round(amount).toLocaleString('en-US')}`
+}
+
 function dedupeBody(title, body, name, listingTitle) {
   let text = stripEmojis(body)
   const cleanTitle = stripEmojis(title)
@@ -282,6 +299,51 @@ function groupByDate(notifications) {
     groups[key].push(n)
   }
   return groups
+}
+
+function mergeMessageNotifications(notifs, senders) {
+  const merged = []
+
+  for (const notif of notifs) {
+    if (notif.type !== 'new_message') {
+      merged.push(notif)
+      continue
+    }
+
+    const actorId = getActorId(notif)
+    const senderKey = String(actorId || getActorName(notif, senders[actorId]) || 'unknown')
+    const previous = merged[merged.length - 1]
+
+    if (!previous || previous.type !== 'new_message' || previous.__senderKey !== senderKey) {
+      merged.push({ ...notif, __senderKey: senderKey, __members: [notif] })
+      continue
+    }
+
+    const members = [...previous.__members, notif]
+    const previousTime = new Date(previous.created_at).getTime()
+    const currentTime = new Date(notif.created_at).getTime()
+    const latest = currentTime >= previousTime ? notif : previous
+
+    merged[merged.length - 1] = {
+      ...latest,
+      __senderKey: senderKey,
+      __members: members,
+      read: members.every((member) => member.read),
+    }
+  }
+
+  return merged.map((entry) => {
+    const members = entry.__members
+    const notif = { ...entry }
+    delete notif.__senderKey
+    delete notif.__members
+    if (!members || members.length === 1) return notif
+    return {
+      ...notif,
+      mergedIds: members.map((member) => member.id),
+      mergedCount: members.length,
+    }
+  })
 }
 
 function renderSmartBody(notif, sender) {
@@ -643,7 +705,7 @@ function AvatarIcon({ notif, name: displayName, hasActor, cfg, sender, loading, 
         <img className="avatar" src={avatarUrl} alt="" loading="lazy" onError={() => setFailedAvatar(avatarUrl)} />
         {showTypeBadge && (
           <span className="icon-badge" style={{ backgroundColor: cfg.bg, color: cfg.color }}>
-            <Ic icon={TypeIcon} size={9} strokeWidth={2.25} />
+            <Ic icon={TypeIcon} size={14} strokeWidth={2.25} />
           </span>
         )}
       </div>
@@ -661,7 +723,7 @@ function AvatarIcon({ notif, name: displayName, hasActor, cfg, sender, loading, 
         </span>
         {showTypeBadge && (
           <span className="icon-badge" style={{ backgroundColor: cfg.bg, color: cfg.color }}>
-            <Ic icon={TypeIcon} size={9} strokeWidth={2.25} />
+            <Ic icon={TypeIcon} size={14} strokeWidth={2.25} />
           </span>
         )}
       </div>
@@ -906,19 +968,33 @@ const NotificationCard = memo(function NotificationCard({
   onAction,
 }) {
   const onClickCard = useCallback(() => onCardClick(notif), [onCardClick, notif])
+  const readIds = useMemo(
+    () => (notif.mergedIds?.length ? notif.mergedIds : [notif.id]),
+    [notif.id, notif.mergedIds],
+  )
+  const handleMarkRead = useCallback(() => {
+    readIds.forEach((id) => onMarkRead(id))
+  }, [onMarkRead, readIds])
+
   const actorName = getActorName(notif, sender)
   const hasActor = !!(actorName && actorName !== 'Someone')
-  const displayName = stripEmojis(hasActor ? actorName : (notif.title || cfg.label || 'Someone')) || stripEmojis(cfg.label) || 'Someone'
+  const displayName = toTitleCaseName(hasActor ? actorName : (notif.title || cfg.label || 'Someone')) || 'Someone'
+  const displayTitle = notif.type === 'listing_view'
+    ? `${hasActor ? displayName : 'Someone'} viewed your listing`
+    : displayName
   const isVerified = !!(sender?.is_verified)
   const listingTitle = product?.title || notif.data?.listing_title || notif.data?.service_name || ''
-  const purpose = dedupeBody(notif.title, getNotificationPurpose(notif, sender), displayName, listingTitle)
+  const priceText = formatMwkPrice(product?.price ?? notif.data?.listing_price ?? notif.data?.price)
+
+  let purpose = dedupeBody(notif.title, getNotificationPurpose(notif, sender), displayName, listingTitle)
+  if (notif.type === 'listing_view') {
+    purpose = [listingTitle, priceText].filter(Boolean).join(' · ')
+  }
 
   const ariaLabel = [
-    cfg.label,
-    displayName,
-    product?.title,
-    isVerified ? 'verified' : null,
+    displayTitle,
     purpose,
+    isVerified ? 'verified' : null,
     notif.read ? 'read' : 'unread',
   ].filter(Boolean).join(', ')
 
@@ -926,7 +1002,7 @@ const NotificationCard = memo(function NotificationCard({
     <SwipeActions
       onClick={onClickCard}
       onDelete={() => onDelete(notif.id)}
-      onMarkRead={() => onMarkRead(notif.id)}
+      onMarkRead={handleMarkRead}
       onArchive={() => onArchive(notif.id)}
       ariaLabel={ariaLabel}
       index={index}
@@ -952,14 +1028,21 @@ const NotificationCard = memo(function NotificationCard({
               <div className="notif-person-text">
                 <div className="notif-person-row">
                   <span className={`notif-person-name${notif.read ? '' : ' is-unread-name'}`}>
-                    {displayName}
+                    {displayTitle}
                   </span>
                   <div className="notif-person-end">
-                    <time className="notif-time" dateTime={notif.created_at}>
-                      {timeLabel(notif.created_at)}
-                    </time>
-                    {!notif.read && (
-                      <span className="unread-dot" style={{ backgroundColor: cfg.color }} aria-hidden="true" />
+                    <div className="notif-time-row">
+                      <time className="notif-time" dateTime={notif.created_at}>
+                        {timeLabel(notif.created_at)}
+                      </time>
+                      {!notif.read && (
+                        <span className="unread-dot" style={{ backgroundColor: cfg.color }} aria-hidden="true" />
+                      )}
+                    </div>
+                    {notif.mergedCount > 1 && (
+                      <span className="message-count-pill" aria-label={`${notif.mergedCount} messages`}>
+                        {notif.mergedCount}
+                      </span>
                     )}
                   </div>
                 </div>
@@ -1406,7 +1489,10 @@ export default function Notifications() {
   }, [navigate])
 
   const handleCardClick = useCallback((notif) => {
-    if (!notif.read) markOneRead(notif.id)
+    if (!notif.read) {
+      const ids = notif.mergedIds?.length ? notif.mergedIds : [notif.id]
+      ids.forEach((id) => markOneRead(id))
+    }
     navigateByType(notif)
   }, [markOneRead, navigateByType])
 
@@ -1734,7 +1820,15 @@ export default function Notifications() {
     return list
   }, [notifications, filter, senders])
 
-  const grouped = useMemo(() => groupByDate(filteredNotifications), [filteredNotifications])
+  const grouped = useMemo(() => {
+    const byDate = groupByDate(filteredNotifications)
+    return Object.fromEntries(
+      Object.entries(byDate).map(([dateLabel, notifs]) => [
+        dateLabel,
+        mergeMessageNotifications(notifs, senders),
+      ]),
+    )
+  }, [filteredNotifications, senders])
 
   return (
     <div className="notifications-page">
