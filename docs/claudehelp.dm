@@ -220,3 +220,29 @@ npx eslint <the real changed file paths> | Select-String "no-undef|is not define
 npx eslint <the real Chats page and menu component paths> --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
 git status -sb
 git diff HEAD~1 --stat -- src
+
+GOAL: Refine the open chat conversation view (route /chat/...) so it is clean, compact and professional on phone, tablet and laptop. Branch wip/home-hero-premium (check with git branch --show-current). Rules: no git stash or reset, no SQL, no installs, do NOT launch Chrome or any browser, do not merge or push. Make the edits directly. Edit only the conversation view and its components.
+
+STEP 1 - Find them: Get-ChildItem src -Recurse -Include *.jsx | Select-String -Pattern "last seen|New msgs auto-delete|No more messages" | Select-Object Path,LineNumber. Print raw with line numbers: header, listing card, date separators, message bubble, auto-delete row, input bar. Also find the failing request: Select-String -Pattern "deleted_at" in those files and in src/hooks and src/utils; print the .from('listings').select(...) calls raw. Say which selected column does not exist on listings (check against other working listings selects in the repo), then continue.
+
+STEP 2 - Colours/fonts: green #0F9D58, tint #e6f6ed, text #202124, grey #5f6368 / #80868b, border #e8eaed, chat background keep current, DM Sans body, Sora headings.
+1. BUG: fix the 400 on the listings request by removing or replacing the non-existent column (do not run SQL). Handle a deleted/missing listing without errors (show the card as "Listing unavailable").
+2. HEADER: back arrow (phone only), 40px avatar (initial fallback), name in Title Case at render time (never ALL CAPS) 16px weight 600, subtitle 12px: "Online" in green #0F9D58 when online, otherwise "last seen <time>" in grey. Green online dot with white ring on the avatar only when online; no grey dot. Right: search icon and three-dot menu, 44px targets. Height about 64px, white, 1px #e8eaed bottom border, sticky.
+3. LISTING CARD: one slim row under the header, 56px photo 44px square (10px radius), title 14px weight 600 one line, price 13px green weight 700, small grey 11px type label ("Listing", "Request" or "Service") above the title instead of a chip, chevron on the right, 1px border bottom, white. Whole row tappable as now.
+4. DATE SEPARATORS: one centred pill per day only (12px, grey #5f6368, white background, 1px #e8eaed border, 6px 12px padding). Remove the full-width "TODAY" bar. Show "No more messages" only at the very top when history is fully loaded, small grey, above the first date pill and never overlapping it.
+5. BUBBLES: text 15px, line-height 1.4, max-width 75% (80% on phones under 400px), padding 8px 12px, 16px radius with a 4px radius on the tail corner. Time inside the bubble, bottom right, 11px, grey (white 70% on green bubbles), with the existing read ticks. Group consecutive messages from the same sender: 2px gap inside a group, 10px between groups. Show the other person's 28px avatar only on the last bubble of a group. Sent bubbles green #0F9D58 with white text, received white with 1px #e8eaed border.
+6. AUTO-DELETE: remove the always-visible "New msgs auto-delete" row above the input. Put it in the three-dot menu as "Disappearing messages" showing the current value (Off, 1h, 24h, 7d) and opening the same choices in a small submenu or sheet. Keep the same logic and values. Use the shared menu component and styles built for the Chats popup (bottom sheet below 769px, dropdown above). If a small grey line "Disappearing messages: 24h" is active, show it as a thin banner under the header, otherwise show nothing.
+7. INPUT BAR: sticky bottom, white, 1px top border, padding 8px 12px plus env(safe-area-inset-bottom). Left: attach icon (44px). Centre: pill message field (min 44px, grows to 5 lines, 15px). Right: emoji (inside the field) and the mic; the mic turns into a green send button (44px circle) when there is text. Keep the existing dollar/offer icon but move it into the attach menu if the attach opens a menu, otherwise keep it next to attach. Keep the Enter-to-send behaviour on laptop (Shift+Enter for a new line).
+8. SCROLL-TO-BOTTOM button: 40px white circle with shadow, 12px above the input bar, right 16px, shown only when scrolled up, with an unread count pill if there are new messages. It must not overlap bubbles' text more than necessary.
+9. TABLET and LAPTOP: keep the two-pane layout. The conversation pane content is centred with max-width 900px, bubbles max-width 65%, no back arrow. Phone: full screen.
+10. Do not change sending, receiving, realtime, read receipts, attachments, offers, routes or other pages.
+
+Commit as "Chat view: compact header, grouped bubbles, disappearing menu, listings 400 fix", append one line to PROGRESS.md and commit it too.
+
+End with RAW output only, no summary: first the step 1 findings (including which column caused the 400), then:
+git log --oneline -4
+npm run build
+npx eslint <the real changed file paths> | Select-String "no-undef|is not defined" ; "ESLINT DONE"
+npx eslint <the real conversation view path> --rule "no-use-before-define: [error, { functions: false, classes: false, variables: true }]" ; "TDZ CHECK DONE"
+git status -sb
+git diff HEAD~1 --stat -- src

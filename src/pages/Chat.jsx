@@ -9,6 +9,7 @@ import {
   markChatDeleted,
 } from '../utils/chatSources'
 import SafeAvatar from '../components/SafeAvatar'
+import ChatPopupMenu from '../components/ChatPopupMenu'
 import {
   Image as ImageIcon,
   Video,
@@ -21,6 +22,13 @@ import {
   CircleDollarSign,
   Keyboard,
   Download,
+  Search,
+  UserRound,
+  Flag,
+  Ban,
+  Trash2,
+  Timer,
+  Check,
 } from 'lucide-react'
 import {
   buildOfferPayload,
@@ -86,9 +94,38 @@ const ATTACH_OPTIONS = [
   { id: 'camera', label: 'Camera', sub: 'Take a picture', accept: 'image/*', type: 'image', Icon: Camera, tone: 'camera', capture: 'environment' },
   { id: 'video', label: 'Video', sub: 'MP4, MOV', accept: 'video/*', type: 'video', Icon: Video, tone: 'video' },
   { id: 'audio', label: 'Audio', sub: 'Music or voice file', accept: 'audio/*', type: 'audio', Icon: Music, tone: 'audio' },
-  { id: 'file', label: 'Document', sub: 'PDF, DOC, ZIP…', accept: '*/*', type: 'file', Icon: FileText, tone: 'doc' },
+  { id: 'file', label: 'Document', sub: 'PDF, DOC, ZIP…', accept: '*/*', type: 'file', Icon: FileIcon2, tone: 'doc' },
 ]
 
+const DISAPPEAR_OPTIONS = [
+  { label: 'Off', ms: null },
+  { label: '1h', ms: 3600000 },
+  { label: '24h', ms: 86400000 },
+  { label: '7d', ms: 604800000 },
+]
+
+function toTitleCase(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/(^|[\s'-])([a-z])/g, (_, sep, letter) => sep + letter.toUpperCase())
+}
+
+// ── Styles ───────────────────────────────────────────────────────────────────
+const S = {
+  page: { display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, position: 'relative', overflow: 'hidden' },
+  loadCenter: { display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: 0 },
+  spinner: { width: 28, height: 28, border: '3px solid #e0ebe3', borderTopColor: '#1a7a4a', borderRadius: '50%', animation: 'spin 0.8s linear infinite' },
+  topbar: { display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between', flexShrink: 0, padding: '10px 12px', background: '#fff', borderBottom: '1px solid #e8ede9', zIndex: 10 },
+  topInfo: { display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 },
+  onlineDot: { position: 'absolute', bottom: 1, right: 1, width: 11, height: 11, borderRadius: '50%', transition: 'background 0.3s' },
+  topStatus: { fontSize: 12, marginTop: 2, display: 'flex', alignItems: 'center' },
+  ctxTitle: { fontSize: 13, fontWeight: 650, color: '#0f1410', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  ctxSub: { fontSize: 11, color: '#1a7a4a', fontWeight: 650 },
+  recordingBar: { display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 },
+  cancelRecBtn: { background: '#fef0f0', border: 'none', borderRadius: '50%', width: 38, height: 38, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
+  inputBar: { display: 'flex', alignItems: 'flex-end', gap: 6, flexShrink: 0, zIndex: 5, padding: '6px 10px 10px', background: '#fff', borderTop: '1px solid #e8ede9' },
+  topActions: { display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 },
+}
 
 // ── Reply storage: stored in message body as a prefix so no extra DB columns needed
 // Format: "↩[reply_preview|||reply_to_id]actual_body"
@@ -281,7 +318,6 @@ export default function Chat() {
   const [myProfile, setMyProfile]         = useState(null)
   const [replyTo, setReplyTo]             = useState(null)
   const [showScrollBtn, setShowScrollBtn] = useState(false)
-  const [stickyDate, setStickyDate] = useState(null)
 const [chatSearch, setChatSearch]       = useState(null)
 const [searchMatches, setSearchMatches] = useState([])
 const [searchIdx, setSearchIdx]         = useState(0)
@@ -301,6 +337,8 @@ const [reportReason, setReportReason]   = useState('spam')
 const [reportDetails, setReportDetails] = useState('')
 const [showChatMenu, setShowChatMenu]   = useState(false)
 const [menuMode, setMenuMode]           = useState('main') // main | report | delete
+const [showDisappearMenu, setShowDisappearMenu] = useState(false)
+const chatMenuAnchorRef                 = useRef(null)
 const [actionMode, setActionMode]       = useState('main') // main | delete | timer | edit
 const [editingMsg, setEditingMsg]       = useState(null)
 const [editDraft, setEditDraft]         = useState('')
@@ -385,7 +423,7 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
     ;(async () => {
       const { data, error } = await supabase
         .from('listings')
-        .select('id, title, images, price, status, deleted_at')
+        .select('id, title, images, price, status')
         .in('id', toFetch)
       if (cancelled) return
       setOfferListings(prev => {
@@ -446,8 +484,6 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
   const pendingEmojiCursorRef = useRef(null)
   /** Last known cursor position in the textarea — survives blur/unfocus (emoji inserts). */
   const cursorPosRef = useRef(null)
-  const stickyDateRef = useRef(null)
-  const currentStickyDateRef = useRef(null)
   const channelRef         = useRef(null)
   const presenceChannelRef = useRef(null)
   const typingTimeoutRef   = useRef(null)
@@ -548,12 +584,6 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
     if (loading) return
     requestAnimationFrame(() => scrollToBottom(false))
   }, [loading])
-
-  // Update the sticky date chip after grouping changes (initial load / prepend)
-  useEffect(() => {
-    if (!groupedMessages.length) return
-    requestAnimationFrame(() => updateStickyDate(scrollContainerRef.current))
-  }, [groupedMessages])
 
   // Load / sync reactions for this chat pair
   useEffect(() => {
@@ -1540,23 +1570,6 @@ const [defaultDisappear, setDefaultDisappear] = useState(null) // ms offset or n
     }
   }, [hasMore, loadingMore, loadMoreMessages])
 
-  // Update the floating date chip based on the message nearest a detection line
-  function updateStickyDate(el) {
-    if (!el) return
-    const items = el.querySelectorAll('[data-date]')
-    const line = el.scrollTop + 72 // ~72px below the top
-    let target = null
-    for (const item of items) {
-      if (item.offsetTop <= line) target = item
-      else break
-    }
-    const label = target?.getAttribute('data-date') || null
-    if (label !== currentStickyDateRef.current) {
-      currentStickyDateRef.current = label
-      setStickyDate(label)
-    }
-  }
-
   // ── sendMessage — optimistic UI + reply encoded in body ─────────────────
   async function sendMessage(body, type = 'text', mediaUrl = null, extraFields = {}, opts = {}) {
     console.log('SM_ENTRY', { body, type, mediaUrl, trimmed: body.trim() })
@@ -2386,11 +2399,13 @@ async function uploadAndSend(file, type, caption = '') {
 
   // ── Avatar helpers ───────────────────────────────────────────────────────
   const otherName    = otherProfile?.full_name || otherUser?.name || otherUser?.email || 'User'
+  const displayName  = toTitleCase(otherName)
   const otherAvatar  = otherProfile?.avatar_url || null
-  const otherInitial = otherName[0].toUpperCase()
+  const otherInitial = displayName[0].toUpperCase()
   const myName       = myProfile?.full_name || currentUser?.email || 'Me'
   const myAvatar     = myProfile?.avatar_url || null
   const myInitial    = myName[0].toUpperCase()
+  const disappearLabel = DISAPPEAR_OPTIONS.find(opt => opt.ms === defaultDisappear)?.label || 'Off'
 
   // ── Render helpers ───────────────────────────────────────────────────────
   function dateChipLabel(iso) {
@@ -2694,7 +2709,7 @@ async function uploadAndSend(file, type, caption = '') {
     currentUser,
     listingId: contextId,
     isServiceChatRef,
-    otherName,
+    otherName: displayName,
     otherAvatar,
     otherInitial,
     onCallMessage: (fields) => sendMessage('', 'text', null, fields),
@@ -2702,17 +2717,23 @@ async function uploadAndSend(file, type, caption = '') {
 
   // Unified source caption for the in-chat header strip
   const srcMeta = sourceMeta(chatSource)
+  const contextTypeLabel = srcMeta.label === 'Looking For' ? 'Request' : srcMeta.label
   const contextCaption = (() => {
     if (chatSource === 'service' && service) {
       return {
+        type: contextTypeLabel,
         title: service.name,
         sub: [service.rate, service.city].filter(Boolean).join(' · '),
         img: service.media_urls?.[0] || null,
         href: sourceHref('service', service),
       }
     }
-    if (chatSource === 'listing' && listing) {
+    if (chatSource === 'listing') {
+      if (!listing) {
+        return { type: 'Listing', title: 'Listing unavailable', sub: '', img: null, href: null }
+      }
       return {
+        type: contextTypeLabel,
         title: listing.title,
         sub: listing.price != null ? `MWK ${Number(listing.price).toLocaleString()}` : '',
         img: listing.images?.[0] || null,
@@ -2721,6 +2742,7 @@ async function uploadAndSend(file, type, caption = '') {
     }
     if (chatSource === 'shop' && shop) {
       return {
+        type: contextTypeLabel,
         title: shop.name,
         sub: [shop.category, shop.city || shop.district].filter(Boolean).join(' · '),
         img: shop.logo_url || null,
@@ -2729,6 +2751,7 @@ async function uploadAndSend(file, type, caption = '') {
     }
     if (chatSource === 'request' && request) {
       return {
+        type: contextTypeLabel,
         title: request.title,
         sub: [request.budget ? `Budget: ${request.budget}` : null, request.city].filter(Boolean).join(' · '),
         img: null,
@@ -2937,24 +2960,244 @@ async function uploadAndSend(file, type, caption = '') {
       <style>{`
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.3}}
         @keyframes spin{to{transform:rotate(360deg)}}
-        @keyframes onlinePulse{0%,100%{box-shadow:0 0 0 0 rgba(34,197,94,0.5)}50%{box-shadow:0 0 0 4px rgba(34,197,94,0)}}
-        @media (min-width: 900px) { .chat-back-btn { display: none !important; } }
+        @keyframes onlinePulse{0%,100%{box-shadow:0 0 0 0 rgba(15,157,88,0.45)}50%{box-shadow:0 0 0 4px rgba(15,157,88,0)}}
+        .chat-page.chat-thread {
+          --chat-line: #e8eaed;
+          --chat-green: #0F9D58;
+          --chat-mine: #0F9D58;
+          --chat-other: #ffffff;
+          --chat-ink: #202124;
+          --chat-muted: #5f6368;
+          --chat-radius: 16px;
+          font-family: 'DM Sans', system-ui, -apple-system, 'Segoe UI', sans-serif !important;
+        }
+        .chat-page.chat-thread .chat-topbar {
+          position: sticky;
+          top: 0;
+          z-index: 30;
+          height: 64px;
+          min-height: 64px;
+          box-sizing: border-box;
+          padding: 0 12px !important;
+          gap: 10px;
+          background: #fff !important;
+          border-bottom: 1px solid #e8eaed !important;
+          box-shadow: none !important;
+          backdrop-filter: none !important;
+          -webkit-backdrop-filter: none !important;
+        }
+        .chat-page.chat-thread .chat-topbar .chat-icon-btn {
+          width: 44px !important;
+          height: 44px !important;
+          border-radius: 12px;
+          background: transparent;
+          color: #5f6368;
+        }
+        .chat-page.chat-thread .chat-topbar .chat-icon-btn:hover { background: #e6f6ed; color: #0F9D58; }
+        .chat-page.chat-thread .chat-top-name {
+          font-family: 'Sora', 'DM Sans', sans-serif !important;
+          font-size: 16px !important;
+          font-weight: 600 !important;
+          letter-spacing: 0 !important;
+          color: #202124 !important;
+        }
+        .chat-page.chat-thread .chat-online-dot {
+          width: 10px;
+          height: 10px;
+          background: #0F9D58;
+          box-shadow: 0 0 0 2px #fff;
+        }
+        .chat-page.chat-thread .chat-context-bar {
+          height: 56px;
+          box-sizing: border-box;
+          padding: 0 12px !important;
+          gap: 10px;
+          background: #fff !important;
+          border-bottom: 1px solid #e8eaed !important;
+        }
+        .chat-page.chat-thread .chat-context-thumb {
+          width: 44px;
+          height: 44px;
+          border-radius: 10px;
+          background: #e6f6ed;
+          box-shadow: none;
+        }
+        .chat-page.chat-thread .chat-context-type {
+          font-size: 11px;
+          font-weight: 500;
+          line-height: 1.2;
+          color: #80868b;
+        }
+        .chat-page.chat-thread .chat-context-title {
+          font-family: 'Sora', 'DM Sans', sans-serif;
+          font-size: 14px;
+          font-weight: 600;
+          line-height: 1.25;
+          color: #202124;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .chat-page.chat-thread .chat-context-price {
+          font-size: 13px;
+          font-weight: 700;
+          line-height: 1.2;
+          color: #0F9D58;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .chat-page.chat-thread .chat-disappear-banner {
+          flex-shrink: 0;
+          padding: 4px 12px;
+          background: #fff;
+          border-bottom: 1px solid #e8eaed;
+          font-size: 11px;
+          line-height: 1.3;
+          color: #80868b;
+          text-align: center;
+        }
+        .chat-page.chat-thread .chat-date-chip,
+        .chat-page.chat-thread .chat-sticky-date span {
+          background: #fff !important;
+          color: #5f6368 !important;
+          font-size: 12px !important;
+          font-weight: 500 !important;
+          letter-spacing: 0 !important;
+          text-transform: none !important;
+          border: 1px solid #e8eaed !important;
+          border-radius: 999px !important;
+          padding: 6px 12px !important;
+          box-shadow: none !important;
+          backdrop-filter: none !important;
+          -webkit-backdrop-filter: none !important;
+        }
+        .chat-page.chat-thread .chat-sticky-date { top: 4px; }
+        .chat-page.chat-thread .chat-load-more-end {
+          padding: 8px 12px 2px !important;
+          font-size: 11px !important;
+          color: #80868b !important;
+        }
+        .chat-page.chat-thread .msg-stack { max-width: 75% !important; }
+        .chat-page.chat-thread .msg-bubble {
+          padding: 8px 12px !important;
+          border-radius: 16px !important;
+          box-shadow: none !important;
+        }
+        .chat-page.chat-thread .msg-bubble.r-mine-tail { border-bottom-right-radius: 4px !important; }
+        .chat-page.chat-thread .msg-bubble.r-mine-join { border-top-right-radius: 4px !important; }
+        .chat-page.chat-thread .msg-bubble.r-theirs-tail { border-bottom-left-radius: 4px !important; }
+        .chat-page.chat-thread .msg-bubble.r-theirs-join { border-top-left-radius: 4px !important; }
+        .chat-page.chat-thread .msg-bubble.is-mine {
+          background: #0F9D58 !important;
+          color: #fff !important;
+          border: 1px solid #0F9D58 !important;
+        }
+        .chat-page.chat-thread .msg-bubble.is-theirs {
+          background: #fff !important;
+          color: #202124 !important;
+          border: 1px solid #e8eaed !important;
+        }
+        .chat-page.chat-thread .msg-text,
+        .chat-page.chat-thread .msg-caption {
+          font-size: 15px !important;
+          line-height: 1.4 !important;
+          letter-spacing: 0 !important;
+        }
+        .chat-page.chat-thread .msg-meta {
+          margin-top: 4px !important;
+          font-size: 11px !important;
+        }
+        .chat-page.chat-thread .msg-bubble.is-mine .msg-meta { color: rgba(255,255,255,0.7) !important; }
+        .chat-page.chat-thread .msg-bubble.is-theirs .msg-meta { color: #80868b !important; }
+        .chat-page.chat-thread .msg-ticks.read { color: rgba(255,255,255,0.95) !important; }
+        .chat-page.chat-thread .chat-input-bar {
+          background: #fff !important;
+          border-top: 1px solid #e8eaed !important;
+          padding: 8px 12px calc(8px + env(safe-area-inset-bottom, 0px)) !important;
+          gap: 8px !important;
+          backdrop-filter: none !important;
+          -webkit-backdrop-filter: none !important;
+        }
+        .chat-page.chat-thread .chat-attach-btn,
+        .chat-page.chat-thread .chat-emoji-btn,
+        .chat-page.chat-thread .chat-mic-btn,
+        .chat-page.chat-thread .chat-send-btn {
+          width: 44px !important;
+          height: 44px !important;
+        }
+        .chat-page.chat-thread .chat-send-btn {
+          background: #0F9D58 !important;
+          box-shadow: 0 2px 8px rgba(15,157,88,0.25) !important;
+        }
+        .chat-page.chat-thread .chat-composer {
+          background: #fff !important;
+          border: 1px solid #e8eaed !important;
+          border-radius: 22px !important;
+          padding: 4px 6px !important;
+          min-height: 44px !important;
+        }
+        .chat-page.chat-thread .chat-composer textarea {
+          font-size: 15px !important;
+          line-height: 1.4 !important;
+          padding: 9px 6px !important;
+          max-height: 105px !important;
+        }
+        .chat-page.chat-thread .chat-scroll-fab {
+          right: 16px !important;
+          width: 40px !important;
+          height: 40px !important;
+          background: #fff !important;
+          color: #0F9D58 !important;
+          border: 1px solid #e8eaed !important;
+          box-shadow: 0 4px 16px rgba(16,24,40,0.12) !important;
+        }
+        .chat-page.chat-thread .chat-scroll-fab.has-unread {
+          width: 40px !important;
+          min-width: 40px !important;
+          padding: 0 !important;
+          border-radius: 50% !important;
+          background: #fff !important;
+          color: #0F9D58 !important;
+        }
+        .chat-page.chat-thread .chat-scroll-unread {
+          position: absolute;
+          top: -6px;
+          right: -6px;
+          min-width: 18px;
+          height: 18px;
+          padding: 0 4px;
+          box-sizing: border-box;
+          border-radius: 999px;
+          background: #0F9D58;
+          color: #fff;
+          font-size: 10px;
+          line-height: 18px;
+          text-align: center;
+          box-shadow: 0 0 0 2px #fff;
+        }
         @media (max-width: 899px) {
           .chat-page.chat-thread {
             height: var(--chat-vvh, 100%) !important;
             max-height: var(--chat-vvh, 100%) !important;
           }
-          .chat-top-actions { gap: 3px !important; }
-          .chat-top-actions .chat-icon-btn,
-          .chat-top-actions button { width: 34px !important; height: 34px !important; }
-          /* Free header space: search lives in ⋮ menu on phones */
-          .chat-search-toggle { display: none !important; }
         }
-        @media (min-width: 900px) {
-          .chat-menu-search { display: none !important; }
+        @media (max-width: 399px) {
+          .chat-page.chat-thread .msg-stack { max-width: 80% !important; }
         }
-        @media (max-width: 360px) {
-          .chat-top-actions .chat-icon-btn:not([aria-label="Chat options"]) { width: 32px !important; height: 32px !important; }
+        @media (min-width: 769px) {
+          .chat-back-btn { display: none !important; }
+          .chat-page.chat-thread > .chat-topbar,
+          .chat-page.chat-thread > .chat-disappear-banner,
+          .chat-page.chat-thread > .chat-context-bar,
+          .chat-page.chat-thread > .chat-messages,
+          .chat-page.chat-thread > .chat-input-bar {
+            width: 100%;
+            max-width: 900px;
+            margin-left: auto;
+            margin-right: auto;
+          }
+          .chat-page.chat-thread .msg-stack { max-width: 65% !important; }
         }
       `}</style>
 
@@ -2969,12 +3212,20 @@ async function uploadAndSend(file, type, caption = '') {
         <div style={S.topInfo}>
           <div style={{ position: 'relative', flexShrink: 0 }}>
             <ChatAvatar url={otherAvatar} initial={otherInitial} size={40} />
-            <div style={{
-              ...S.onlineDot,
-              background: otherOnline ? '#22c55e' : '#9ca3af',
-              boxShadow: '0 0 0 2px #fff',
-              animation: otherOnline ? 'onlinePulse 2s infinite' : 'none',
-            }} />
+            {otherOnline && (
+              <div
+                className="chat-online-dot"
+                style={{
+                  ...S.onlineDot,
+                  position: 'absolute',
+                  bottom: 1,
+                  right: 1,
+                  background: '#0F9D58',
+                  boxShadow: '0 0 0 2px #fff',
+                  animation: 'onlinePulse 2s infinite',
+                }}
+              />
+            )}
           </div>
           <button
             type="button"
@@ -2982,35 +3233,32 @@ async function uploadAndSend(file, type, caption = '') {
             onClick={() => navigate(`/profile/${userId}`)}
             title="View profile"
           >
-            <div className="chat-top-name">{otherName}</div>
+            <div className="chat-top-name">{displayName}</div>
             <div style={S.topStatus}>
               {otherRecording ? (
                 <span style={{ color: '#dc2626', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
                   <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#ef4444', display: 'inline-block', animation: 'pulse 1s infinite' }} />
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 'min(160px, 38vw)' }}>
-                    {otherName.split(' ')[0]} is recording audio…
+                    {displayName.split(' ')[0]} is recording audio…
                   </span>
                 </span>
               ) : otherTyping ? (
-                <span style={{ color: '#1a7a4a', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
+                <span style={{ color: '#0F9D58', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 5 }}>
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 'min(140px, 34vw)' }}>
-                    {otherName.split(' ')[0]} is typing
+                    {displayName.split(' ')[0]} is typing
                   </span>
                   <span style={{ display: 'flex', gap: 2, alignItems: 'center' }}>
                     {[0, 0.2, 0.4].map((d, i) => (
-                      <span key={i} style={{ width: 4, height: 4, borderRadius: '50%', background: '#1a7a4a', display: 'inline-block', animation: `typingDot 1.2s ${d}s infinite` }} />
+                      <span key={i} style={{ width: 4, height: 4, borderRadius: '50%', background: '#0F9D58', display: 'inline-block', animation: `typingDot 1.2s ${d}s infinite` }} />
                     ))}
                   </span>
                 </span>
               ) : otherOnline ? (
-                <span style={{ color: '#16a34a', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#22c55e', display: 'inline-block' }} />
+                <span style={{ color: '#0F9D58', fontWeight: 600, display: 'flex', alignItems: 'center', gap: 5 }}>
                   Online
                 </span>
-              ) : otherLastSeen ? (
-                <span style={{ color: '#9ca3af' }}>{lastSeenLabel(otherLastSeen)}</span>
               ) : (
-                <span style={{ color: '#9ca3af' }}>Offline</span>
+                <span style={{ color: '#80868b' }}>{lastSeenLabel(otherLastSeen)}</span>
               )}
             </div>
           </button>
@@ -3018,18 +3266,19 @@ async function uploadAndSend(file, type, caption = '') {
 
         <div className="chat-top-actions" style={S.topActions}>
           <button type="button" className="chat-icon-btn chat-search-toggle" onClick={() => setChatSearch(s => s === null ? '' : null)} title="Search" aria-label="Search messages">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
-              <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-            </svg>
+            <Search size={20} color="#5f6368" strokeWidth={1.75} aria-hidden="true" />
           </button>
           <button
+            ref={chatMenuAnchorRef}
             type="button"
             className="chat-icon-btn"
             title="More options"
             aria-label="Chat options"
+            aria-haspopup="menu"
+            aria-expanded={showChatMenu && menuMode === 'main'}
             onClick={() => { setMenuMode('main'); setShowChatMenu(true) }}
           >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
               <circle cx="12" cy="5" r="1.6" />
               <circle cx="12" cy="12" r="1.6" />
               <circle cx="12" cy="19" r="1.6" />
@@ -3038,8 +3287,94 @@ async function uploadAndSend(file, type, caption = '') {
         </div>
       </div>
 
-      {/* ── Chat options: block / report / delete ── */}
-      {showChatMenu && (
+      {defaultDisappear != null && (
+        <div className="chat-disappear-banner">
+          Disappearing messages: {disappearLabel}
+        </div>
+      )}
+
+      <ChatPopupMenu
+        open={showChatMenu && menuMode === 'main'}
+        anchorEl={chatMenuAnchorRef.current}
+        label="Chat options"
+        title="Chat options"
+        subtitle={`With ${displayName}`}
+        onClose={() => { setShowChatMenu(false); setMenuMode('main') }}
+        groups={[
+          [
+            {
+              id: 'profile',
+              label: 'View profile',
+              icon: UserRound,
+              onSelect: () => navigate(`/profile/${userId}`),
+            },
+            {
+              id: 'disappearing',
+              label: 'Disappearing messages',
+              icon: Timer,
+              value: disappearLabel,
+              onSelect: () => setShowDisappearMenu(true),
+            },
+            {
+              id: 'search',
+              label: 'Search in chat',
+              icon: Search,
+              onSelect: () => setChatSearch(''),
+            },
+          ],
+          [
+            {
+              id: 'report',
+              label: 'Report user',
+              icon: Flag,
+              onSelect: () => {
+                setMenuMode('report')
+                setReportReason('spam')
+                setReportDetails('')
+                setShowChatMenu(true)
+              },
+            },
+            {
+              id: 'block',
+              label: 'Block user',
+              icon: Ban,
+              disabled: dmBusy,
+              onSelect: () => blockUserFromChat('Blocked from chat menu'),
+            },
+          ],
+          [
+            {
+              id: 'delete',
+              label: 'Delete chat',
+              icon: Trash2,
+              onSelect: () => {
+                setMenuMode('delete')
+                setShowChatMenu(true)
+              },
+            },
+          ],
+        ]}
+      />
+
+      <ChatPopupMenu
+        open={showDisappearMenu}
+        anchorEl={chatMenuAnchorRef.current}
+        label="Disappearing messages"
+        title="Disappearing messages"
+        subtitle={`New messages in this chat: ${disappearLabel}`}
+        onClose={() => setShowDisappearMenu(false)}
+        groups={[
+          DISAPPEAR_OPTIONS.map(opt => ({
+            id: opt.label,
+            label: opt.label,
+            icon: defaultDisappear === opt.ms ? Check : null,
+            onSelect: () => setDefaultDisappear(opt.ms),
+          })),
+        ]}
+      />
+
+      {/* ── Chat options: report / delete ── */}
+      {showChatMenu && menuMode !== 'main' && (
         <div
           className="chat-action-scrim"
           onClick={() => { if (!dmBusy) { setShowChatMenu(false); setMenuMode('main') } }}
@@ -3053,65 +3388,10 @@ async function uploadAndSend(file, type, caption = '') {
           >
             <div className="chat-action-handle" />
 
-            {menuMode === 'main' && (
-              <>
-                <div style={{ fontSize: 15, fontWeight: 800, color: '#0f1410', marginBottom: 4, padding: '0 4px' }}>
-                  Chat options
-                </div>
-                <p style={{ fontSize: 12.5, color: '#6b7a70', margin: '0 4px 12px' }}>
-                  With <strong>{otherName}</strong>
-                </p>
-                <div className="chat-action-list">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setShowChatMenu(false)
-                      navigate(`/profile/${userId}`)
-                    }}
-                  >
-                    <span className="chat-action-ico">👤</span> View profile
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMenuMode('report')
-                      setReportReason('spam')
-                      setReportDetails('')
-                    }}
-                  >
-                    <span className="chat-action-ico">🚩</span> Report user
-                  </button>
-                  <button
-                    type="button"
-                    className="is-danger"
-                    onClick={() => blockUserFromChat('Blocked from chat menu')}
-                    disabled={dmBusy}
-                  >
-                    <span className="chat-action-ico">🚫</span> Block user
-                  </button>
-                  <button
-                    type="button"
-                    className="is-danger"
-                    onClick={() => setMenuMode('delete')}
-                  >
-                    <span className="chat-action-ico">🗑</span> Delete chat
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  className="chat-action-cancel"
-                  disabled={dmBusy}
-                  onClick={() => { setShowChatMenu(false); setMenuMode('main') }}
-                >
-                  Cancel
-                </button>
-              </>
-            )}
-
             {menuMode === 'report' && (
               <>
                 <div style={{ fontSize: 16, fontWeight: 800, color: '#0f1410', marginBottom: 6, padding: '0 4px' }}>
-                  Report {otherName}
+                  Report {displayName}
                 </div>
                 <p style={{ fontSize: 13, color: '#6b7a70', margin: '0 4px 12px', lineHeight: 1.45 }}>
                   Tell us why you’re reporting this person. Our team will review it.
@@ -3232,19 +3512,14 @@ async function uploadAndSend(file, type, caption = '') {
               : <span style={{ fontSize: 18 }}>{srcMeta.emoji}</span>}
           </div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div
-              className="chat-context-tag"
-              style={{ color: srcMeta.color, background: srcMeta.bg }}
-            >
-              {srcMeta.label}
-            </div>
-            <div style={S.ctxTitle}>{contextCaption.title}</div>
+            <div className="chat-context-type">{contextCaption.type}</div>
+            <div className="chat-context-title">{contextCaption.title}</div>
             {contextCaption.sub
-              ? <div style={S.ctxSub}>{contextCaption.sub}</div>
+              ? <div className="chat-context-price">{contextCaption.sub}</div>
               : null}
           </div>
           {contextCaption.href && (
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#1a7a4a" strokeWidth="2.5" strokeLinecap="round">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#0F9D58" strokeWidth="2.5" strokeLinecap="round">
               <path d="M9 18l6-6-6-6" />
             </svg>
           )}
@@ -3268,7 +3543,7 @@ async function uploadAndSend(file, type, caption = '') {
             <div className="dm-safety-icon">💬</div>
             <div className="dm-safety-title">Message request</div>
             <p className="dm-safety-text">
-              <strong>{otherName}</strong> sent you a direct message. You can continue the chat, block them, or report this person.
+              <strong>{displayName}</strong> sent you a direct message. You can continue the chat, block them, or report this person.
             </p>
             <div className="dm-safety-actions">
               <button
@@ -3305,7 +3580,7 @@ async function uploadAndSend(file, type, caption = '') {
           <div className="chat-action-sheet dm-report-sheet" onClick={e => e.stopPropagation()} role="dialog" aria-label="Report user">
             <div className="chat-action-handle" />
             <div style={{ fontSize: 16, fontWeight: 800, color: '#0f1410', marginBottom: 6, padding: '0 4px' }}>
-              Report {otherName}
+              Report {displayName}
             </div>
             <p style={{ fontSize: 13, color: '#6b7a70', margin: '0 4px 12px', lineHeight: 1.45 }}>
               Tell us why you’re reporting this person. Our team will review it.
@@ -3371,22 +3646,16 @@ async function uploadAndSend(file, type, caption = '') {
           setShowScrollBtn(distFromBottom > 120)
           if (near) setUnreadBelow(0)
           handleScroll()
-          updateStickyDate(el)
         }}
       >
-        {stickyDate && (
-          <div className="chat-sticky-date" aria-hidden="true">
-            <span>{stickyDate}</span>
+        {!hasMore && messages.length > 0 && (
+          <div className="chat-load-more-end">
+            <span>No more messages</span>
           </div>
         )}
         {loadingMore && (
           <div className="chat-load-more-spinner">
             <span>Loading...</span>
-          </div>
-        )}
-        {!hasMore && messages.length > 0 && (
-          <div className="chat-load-more-end">
-            <span>No more messages</span>
           </div>
         )}
 
@@ -3878,7 +4147,7 @@ async function uploadAndSend(file, type, caption = '') {
           <div
             className={`msg-row is-theirs is-group-end typing-row${otherRecording ? ' is-recording' : ''}`}
             aria-live="polite"
-            aria-label={otherRecording ? `${otherName} is recording audio` : `${otherName} is typing`}
+            aria-label={otherRecording ? `${displayName} is recording audio` : `${displayName} is typing`}
           >
             <ChatAvatar url={otherAvatar} initial={otherInitial} size={28} />
             <div className="msg-stack">
@@ -3890,7 +4159,7 @@ async function uploadAndSend(file, type, caption = '') {
                   </>
                 ) : (
                   <>
-                    <span className="typing-label">{otherName.split(' ')[0]} is typing</span>
+                    <span className="typing-label">{displayName.split(' ')[0]} is typing</span>
                     <span className="typing-dots" aria-hidden>
                       {[0, 0.2, 0.4].map((d, i) => (
                         <span key={i} className="typing-dot" style={{ animationDelay: `${d}s` }} />
@@ -3934,16 +4203,15 @@ async function uploadAndSend(file, type, caption = '') {
         <button
           type="button"
           className={`chat-scroll-fab${unreadBelow > 0 ? ' has-unread' : ''}`}
-          style={{ bottom: recording ? 84 : (replyTo ? 136 : 84) }}
+          style={{ bottom: recording ? 84 : (replyTo ? 124 : 72) }}
           onClick={() => scrollToBottom(true)}
           aria-label={unreadBelow > 0 ? `${unreadBelow} new messages` : 'Scroll to bottom'}
         >
-          {unreadBelow > 0 ? (
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <path d="M12 5v14M5 12l7 7 7-7" />
+          </svg>
+          {unreadBelow > 0 && (
             <span className="chat-scroll-unread">{unreadBelow > 99 ? '99+' : unreadBelow}</span>
-          ) : (
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-              <path d="M12 5v14M5 12l7 7 7-7" />
-            </svg>
           )}
         </button>
       )}
@@ -4452,7 +4720,7 @@ async function uploadAndSend(file, type, caption = '') {
         <div className="chat-reply-banner" style={{ position: 'relative', bottom: isMobile && showEmoji && lockedKbHeight > 0 ? lockedKbHeight : 0 }}>
           <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0 }}>
             <span style={{ fontSize: 11, fontWeight: 700, color: '#1a7a4a', marginBottom: 2 }}>
-              Replying to {replyTo.from_user === currentUser?.id ? 'yourself' : otherName}
+              Replying to {replyTo.from_user === currentUser?.id ? 'yourself' : displayName}
             </span>
             <span style={{ fontSize: 12, color: '#637068', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {decodeReply(replyTo.body).body
@@ -4504,29 +4772,29 @@ async function uploadAndSend(file, type, caption = '') {
       {!recording && !showDmGate && (
         <HideDuringCall>
         <>
-        {/* Default disappearing timer for new messages */}
-        <div className="chat-disappear-bar" style={{ flexShrink: 0, overflowX: 'auto', whiteSpace: 'nowrap', position: 'relative', bottom: isMobile && showEmoji && lockedKbHeight > 0 ? lockedKbHeight : 0 }}>
-          <span className="chat-disappear-label">New msgs auto-delete:</span>
-          {[
-            { label: 'Off', ms: null },
-            { label: '1h', ms: 3600000 },
-            { label: '24h', ms: 86400000 },
-            { label: '7d', ms: 604800000 },
-          ].map(opt => (
-            <button
-              key={opt.label}
-              type="button"
-              className={`chat-disappear-chip${defaultDisappear === opt.ms ? ' is-on' : ''}`}
-              onClick={() => setDefaultDisappear(opt.ms)}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
         <div className="chat-input-bar" style={{ ...S.inputBar, position: 'relative', bottom: isMobile && showEmoji && lockedKbHeight > 0 ? lockedKbHeight : 0, willChange: isMobile && showEmoji ? 'transform' : 'auto' }}>
           {showAttach && (
             <div className="attach-menu" onClick={e => e.stopPropagation()}>
               <div className="attach-menu-title">Share</div>
+              <button
+                type="button"
+                className="attach-option"
+                onClick={() => {
+                  setShowAttach(false)
+                  setCounterParent(null)
+                  setEditOfferMsg(null)
+                  setShowOffer(v => !v)
+                  setShowEmoji(false)
+                }}
+              >
+                <span className="am-icon tone-photo">
+                  <CircleDollarSign size={18} strokeWidth={2.1} />
+                </span>
+                <span className="attach-option-text">
+                  <span className="attach-option-label">Price offer</span>
+                  <span className="attach-option-sub">Negotiate a price</span>
+                </span>
+              </button>
               {ATTACH_OPTIONS.map(opt => {
                 const Icon = opt.Icon
                 return (
@@ -4560,16 +4828,6 @@ async function uploadAndSend(file, type, caption = '') {
             aria-label="Attach file"
           >
             <Paperclip size={20} strokeWidth={2} />
-          </button>
-
-          <button
-            type="button"
-            className={`chat-offer-btn${showOffer ? ' is-on' : ''}`}
-            onClick={e => { e.stopPropagation(); setCounterParent(null); setEditOfferMsg(null); setShowOffer(v => !v); setShowAttach(false); setShowEmoji(false) }}
-            title="Make a price offer"
-            aria-label="Make a price offer"
-          >
-            <CircleDollarSign size={20} strokeWidth={2} />
           </button>
 
           <div className="chat-composer">
@@ -4644,23 +4902,4 @@ async function uploadAndSend(file, type, caption = '') {
     </div>
     </ChatCallHost>
   )
-}
-
-// ── Styles ───────────────────────────────────────────────────────────────────
-const S = {
-  // height 100% fills the ChatsLayout thread column (which is already 100dvh).
-  // Using 100vh here double-counted the viewport and overflowed on desktop split.
-  page: { display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, position: 'relative', overflow: 'hidden' },
-  loadCenter: { display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', minHeight: 0 },
-  spinner: { width: 28, height: 28, border: '3px solid #e0ebe3', borderTopColor: '#1a7a4a', borderRadius: '50%', animation: 'spin 0.8s linear infinite' },
-  topbar: { display: 'flex', alignItems: 'center', gap: 10, justifyContent: 'space-between', flexShrink: 0, padding: '10px 12px', background: '#fff', borderBottom: '1px solid #e8ede9', zIndex: 10 },
-  topInfo: { display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 },
-  onlineDot: { position: 'absolute', bottom: 1, right: 1, width: 11, height: 11, borderRadius: '50%', transition: 'background 0.3s' },
-  topStatus: { fontSize: 12, marginTop: 2, display: 'flex', alignItems: 'center' },
-  ctxTitle: { fontSize: 13, fontWeight: 650, color: '#0f1410', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
-  ctxSub: { fontSize: 11, color: '#1a7a4a', fontWeight: 650 },
-  recordingBar: { display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 },
-  cancelRecBtn: { background: '#fef0f0', border: 'none', borderRadius: '50%', width: 38, height: 38, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
-  inputBar: { display: 'flex', alignItems: 'flex-end', gap: 6, flexShrink: 0, zIndex: 5, padding: '6px 10px 10px', background: '#fff', borderTop: '1px solid #e8ede9' },
-  topActions: { display: 'flex', gap: 4, alignItems: 'center', flexShrink: 0 },
 }

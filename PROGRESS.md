@@ -174,3 +174,4 @@ Chats: unread pill on preview line, no row gap
 Chats: space before dot
 Rail: plain green plus on desktop
 Chats: remove New Message, responsive popup menu
+Chat view: compact header, grouped bubbles, disappearing menu, listings 400 fix

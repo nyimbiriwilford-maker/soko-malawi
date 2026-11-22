@@ -177,7 +177,9 @@ export default function ChatPopupMenu({ open, anchorEl, groups = [], onClose, la
                 <span className="chat-popup-icon" />
               )}
               <span className="chat-popup-label">{item.label}</span>
-              {item.count > 0 ? <span className="chat-popup-count">{item.count}</span> : null}
+              {item.value != null || item.count > 0 ? (
+                <span className="chat-popup-count">{item.value ?? item.count}</span>
+              ) : null}
             </button>
           )
         })}
