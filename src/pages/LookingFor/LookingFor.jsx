@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { supabase } from '../../lib/supabase'
 import { makeOffer } from '../../lib/makeOffer'
@@ -57,6 +58,12 @@ export default function LookingFor() {
     window.addEventListener('resize', handler)
     return () => window.removeEventListener('resize', handler)
   }, [])
+  useEffect(() => {
+    if (!mobileFiltersOpen) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
+  }, [mobileFiltersOpen])
 
   /* ── auth / user ── */
   const [user,          setUser]          = useState(null)
@@ -693,6 +700,38 @@ const myAlertsRef = useRef([])
       </div>
 
       {/* ── SEARCH + FILTER BAR ── */}
+      {/* PHONE SEARCH + FILTERS */}
+      <div className="lf-phone-search-row" style={{ display: 'none', padding: '12px 14px 0', gap: 8, alignItems: 'center' }}>
+        <div style={{ flex: 1, height: 48, borderRadius: 999, background: C.bg, border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', gap: 8, padding: '0 14px', minWidth: 0 }}>
+          <span style={{ display: 'flex', color: C.gray2 }}>{Icon.search(16, C.gray2)}</span>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search requests…"
+            style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: C.text, fontSize: 14, minWidth: 0 }} />
+        </div>
+        <button type="button" onClick={() => setMobileFiltersOpen(true)}
+          style={{ height: 48, width: 48, borderRadius: 999, background: '#fff', border: `1px solid ${C.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', position: 'relative' }}>
+          {Icon.sliders(18, C.textSub)}
+          {(() => {
+            let count = 0
+            if (category !== 'All') count++
+            if (locationFilter !== 'All Locations') count++
+            if (budgetMin || budgetMax) count++
+            if (district !== 'All Districts') count++
+            return count > 0 ? (
+              <span style={{ position: 'absolute', top: 6, right: 6, minWidth: 16, height: 16, borderRadius: 999, background: C.green, color: '#fff', fontSize: 10, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>{count}</span>
+            ) : null
+          })()}
+        </button>
+      </div>
+      <div className="lf-phone-chips" style={{ display: 'none', padding: '8px 14px 0', gap: 8, overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
+        {['All', ...visibleCats.filter(c => c !== 'All')].map(c => (
+          <button key={c} type="button" onClick={() => { setCategory(c); setActiveTab('all') }}
+            style={{ height: 36, borderRadius: 999, padding: '0 14px', border: `1px solid ${C.border}`, background: category === c && activeTab === 'all' ? C.green : '#fff', color: category === c && activeTab === 'all' ? '#fff' : C.textSub, fontSize: 14, fontWeight: 600, cursor: 'pointer', flexShrink: 0, whiteSpace: 'nowrap' }}>
+            {c === 'All' ? 'All' : c}
+          </button>
+        ))}
+      </div>
+
+      {/* SEARCH + FILTER BAR */}
       <div className="lf-filter-section" style={{ padding:'16px 32px', background: C.bg, borderBottom:`1px solid ${C.border}` }}>
         <div className="lf-filter-bar" style={{ display:'flex', gap:10, alignItems:'center', background: C.surface, border:`1px solid ${C.border}`, borderRadius:10, padding:'4px 8px', flexWrap:'wrap' }}>
           <div className="lf-filter-search" style={{ flex:'1 1 160px', display:'flex', alignItems:'center', gap:8, padding:'6px 8px', minWidth:0 }}>
@@ -1157,6 +1196,23 @@ const myAlertsRef = useRef([])
           .lf-detail-main-photo { height: clamp(160px, 35vw, 220px) !important; border-radius: 12px !important; }
           .lf-detail-thumbs { gap: 6px !important; margin-top: 8px !important; }
           .lf-detail-thumb-btn { width: 56px !important; height: 56px !important; border-radius: 10px !important; }
+        }
+        @media (max-width: 1099px) {
+          .lf-phone-search-row { display: flex !important; }
+          .lf-phone-chips { display: flex !important; }
+          .lf-filter-section { display: none !important; }
+          .lf-sort-wrap { display: none !important; }
+          .lf-sidebar.is-open {
+            position: fixed !important;
+            left: 0 !important; right: 0 !important; bottom: 0 !important;
+            top: auto !important;
+            width: 100% !important;
+            max-height: 85dvh !important;
+            border-radius: 20px 20px 0 0 !important;
+            z-index: 10000 !important;
+            overflow-y: auto !important;
+          }
+          .lf-drawer-backdrop { z-index: 9999 !important; }
         }
       `}</style>
 
@@ -1705,4 +1761,5 @@ function DetailModal({ req, user, myListings, saved, onClose, onOffer, onSave, o
     </div>
   )
 }
+
 

@@ -143,3 +143,4 @@ Explore: section spacing
 Explore: tighten category spacing
 Looking for: remove hero, slim header row
 Looking for: filter sheet, chips, segmented tabs, near-you strip
+Looking for: phone filter sheet and chips
