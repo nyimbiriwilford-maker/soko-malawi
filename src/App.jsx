@@ -50,6 +50,158 @@ import { NetworkProvider } from './context/NetworkContext'
 import { useGlobalPresence } from './hooks/usePresence'
 import { registerPushNotifications, listenForServiceWorkerMessages } from './lib/pushNotifications'
 
+const INSTALL_DISMISS_KEY = 'soko-install-dismissed-at'
+const INSTALL_INSTALLED_KEY = 'soko-install-installed'
+const INSTALL_DISMISS_MS = 14 * 24 * 60 * 60 * 1000
+
+const INSTALL_BAR_CSS = `
+body.install-bar-visible {
+  padding-bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+}
+.soko-install-bar {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: 0;
+  z-index: 999;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 10px;
+  min-height: 64px;
+  max-height: 64px;
+  padding: 0 16px;
+  border-radius: 16px;
+  border: 1px solid #e0ebe3;
+  background: #fff;
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.18);
+  font-family: inherit;
+}
+.soko-install-logo {
+  width: 36px;
+  height: 36px;
+  flex: none;
+  border-radius: 8px;
+}
+.soko-install-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.soko-install-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #0a1a0f;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+.soko-install-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #7b8a80;
+  font-size: 12px;
+  line-height: 1.3;
+}
+.soko-install-actions {
+  display: flex;
+  flex: none;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+}
+.soko-install-dismiss,
+.soko-install-button {
+  flex: none;
+  height: 40px;
+  white-space: nowrap;
+  cursor: pointer;
+  font-family: inherit;
+}
+.soko-install-dismiss {
+  padding: 0 10px;
+  border: none;
+  background: transparent;
+  color: #637068;
+  font-size: 13px;
+  font-weight: 600;
+}
+.soko-install-button {
+  padding: 0 18px;
+  border: none;
+  border-radius: 999px;
+  background: #0F9D58;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+@media (max-width: 768px) {
+  body.install-bar-visible {
+    padding-bottom: calc(144px + env(safe-area-inset-bottom, 0px));
+  }
+  .soko-install-bar {
+    left: 0;
+    right: 0;
+    bottom: calc(var(--bottom-nav-h, 60px) + env(safe-area-inset-bottom, 0px));
+    z-index: 999;
+    min-height: 56px;
+    max-height: 56px;
+    padding: 0 12px;
+    border-radius: 0;
+    border-right: none;
+    border-bottom: none;
+    border-left: none;
+  }
+  .soko-install-actions {
+    gap: 4px;
+  }
+  .soko-install-dismiss {
+    padding: 0 6px;
+    font-size: 12px;
+  }
+  .soko-install-button {
+    padding: 0 14px;
+    font-size: 12px;
+  }
+}
+`
+
+function isInstallSuppressed() {
+  try {
+    if (localStorage.getItem(INSTALL_INSTALLED_KEY) === '1') return true
+    const dismissedAt = Number(localStorage.getItem(INSTALL_DISMISS_KEY))
+    if (dismissedAt && Date.now() - dismissedAt < INSTALL_DISMISS_MS) return true
+  } catch (err) {
+    console.warn('[SokoMw] install preference read failed', err)
+  }
+  try {
+    if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) return true
+  } catch (err) {
+    console.warn('[SokoMw] install mode check failed', err)
+  }
+  return false
+}
+
+function markInstallDismissed() {
+  try {
+    localStorage.setItem(INSTALL_DISMISS_KEY, String(Date.now()))
+  } catch (err) {
+    console.warn('[SokoMw] install dismissal save failed', err)
+  }
+}
+
+function markInstalled() {
+  try {
+    localStorage.setItem(INSTALL_INSTALLED_KEY, '1')
+  } catch (err) {
+    console.warn('[SokoMw] install state save failed', err)
+  }
+}
+
 // ── Branded page loader ────────────────────────────────────
 function PageLoader() {
   return <SokoLoader />
@@ -350,11 +502,17 @@ const [installPrompt, setInstallPrompt] = useState(null)
   useEffect(() => {
     const onBeforeInstallPrompt = (e) => {
       e.preventDefault()
+      if (isInstallSuppressed()) return
       setInstallPrompt(e)
     }
     window.addEventListener('beforeinstallprompt', onBeforeInstallPrompt)
     return () => window.removeEventListener('beforeinstallprompt', onBeforeInstallPrompt)
   }, [])
+
+  useEffect(() => {
+    document.body.classList.toggle('install-bar-visible', !!installPrompt)
+    return () => document.body.classList.remove('install-bar-visible')
+  }, [installPrompt])
 
   useEffect(() => {
     // Slide the fixed bottom nav off-screen while the on-screen keyboard
@@ -422,6 +580,7 @@ const [installPrompt, setInstallPrompt] = useState(null)
       await installPrompt.prompt()
       const { outcome } = await installPrompt.userChoice
       console.log('[app] install prompt outcome:', outcome)
+      if (outcome === 'accepted') markInstalled()
     } catch (err) {
       console.warn('[app] install prompt failed', err)
     } finally {
@@ -465,28 +624,23 @@ const [installPrompt, setInstallPrompt] = useState(null)
     <NetworkProvider>
       <OfflinePage />
       {installPrompt && (
-        <div style={{
-          position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 9999,
-          background: '#1a1f1b', borderTop: '1px solid #2e7d32',
-          padding: '12px 16px', display: 'flex',
-          alignItems: 'center', justifyContent: 'space-between', gap: 12,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <img src="/icons/icon-192.png" style={{ width: 36, height: 36, borderRadius: 8 }} />
-            <div>
-              <div style={{ color: '#fff', fontWeight: 600, fontSize: 14 }}>Install SokoMw</div>
-              <div style={{ color: '#8a9e8f', fontSize: 12 }}>Add to home screen for quick access</div>
-            </div>
+        <div className="soko-install-bar">
+          <style>{INSTALL_BAR_CSS}</style>
+          <img className="soko-install-logo" src="/icons/icon-192.png" alt="" />
+          <div className="soko-install-copy">
+            <div className="soko-install-title">Install SokoMw</div>
+            <div className="soko-install-sub">Add to home screen for quick access</div>
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={() => setInstallPrompt(null)} style={{
-              background: 'transparent', border: '1px solid #3a4a3d',
-              color: '#8a9e8f', borderRadius: 20, padding: '6px 14px', cursor: 'pointer', fontSize: 13,
-            }}>Not now</button>
-            <button onClick={handleInstall} style={{
-              background: '#2e7d32', border: 'none',
-              color: '#fff', borderRadius: 20, padding: '6px 14px', cursor: 'pointer', fontSize: 13, fontWeight: 600,
-            }}>Install</button>
+          <div className="soko-install-actions">
+            <button
+              type="button"
+              className="soko-install-dismiss"
+              onClick={() => {
+                markInstallDismissed()
+                setInstallPrompt(null)
+              }}
+            >Not now</button>
+            <button type="button" className="soko-install-button" onClick={handleInstall}>Install</button>
           </div>
         </div>
       )}

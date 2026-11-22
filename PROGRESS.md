@@ -161,3 +161,4 @@ Looking For: batch loading per device, image viewer
 Notifications: compact rows, unread state, remove side rails
 Notifications: grouped containers on phone, avatar fallback, tighter rows
 Notifications: wider titles on phone, type icons for system rows
+Install bar: compact, above bottom nav, 14 day dismiss
