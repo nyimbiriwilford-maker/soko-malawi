@@ -58,12 +58,6 @@ export default function LookingFor() {
     window.addEventListener('resize', handler)
     return () => window.removeEventListener('resize', handler)
   }, [])
-  useEffect(() => {
-    if (!mobileFiltersOpen) return
-    const prev = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
-    return () => { document.body.style.overflow = prev }
-  }, [mobileFiltersOpen])
 
   /* ── auth / user ── */
   const [user,          setUser]          = useState(null)
@@ -88,6 +82,12 @@ export default function LookingFor() {
   const [rangeValue,      setRangeValue]      = useState(50)
   const [moreFiltersOpen, setMoreFiltersOpen] = useState(false)
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false)
+  useEffect(() => {
+    if (!mobileFiltersOpen) return
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.body.style.overflow = prev }
+  }, [mobileFiltersOpen])
 
   /* ── location (GPS) — used to prioritise local Looking For posts ── */
   const [viewerCity,      setViewerCity]      = useState(null)
