@@ -14,6 +14,8 @@ import {
   fmtMWK,
   sortRequestsByViewerLocation,
   withDistanceToBuyer,
+  viewerLocationTokens,
+  haversineKm,
 } from '../../utils/lookingFor'
 import { CATEGORIES, URGENCY_OPTIONS, expiresAtFromDays } from '../../constants/lookingFor'
 import { getDemandLevel, timeAgo } from '../../utils/lookingFor'
@@ -1239,6 +1241,7 @@ const myAlertsRef = useRef([])
           user={user}
           myListings={myListings}
           saved={savedIds.has(detailReq.id)}
+          viewerLocation={viewerLocation}
           userHasOffered={requests.find(r => r.id === detailReq.id)?.user_has_offered ?? detailReq.user_has_offered}
           onClose={() => setDetailReq(null)}
           onOffer={r => { sendOffer(r); setDetailReq(null) }}
@@ -1296,18 +1299,19 @@ const myAlertsRef = useRef([])
 /* ══════════════════════════════════════════════════════
    VIEW DETAILS MODAL — modern icons + share
 ══════════════════════════════════════════════════════ */
-function DetailModal({ req, user, myListings, saved, onClose, onOffer, onSave, onFulfill, onDelete, userHasOffered }) {
+function DetailModal({ req, user, myListings, saved, viewerLocation, onClose, onOffer, onSave, onFulfill, onReactivate, onDelete, userHasOffered }) {
   const [mainIdx, setMainIdx] = useState(0)
   const [shareNote, setShareNote] = useState(null)
-  const isOwn  = req.user_id === user?.id
-  const name   = req.profiles?.full_name || 'Buyer'
+  const isPhone = typeof window !== 'undefined' ? window.innerWidth < 769 : false
+  const isOwn = req.user_id === user?.id
+  const name = req.profiles?.full_name || 'Buyer'
   const avatar = req.profiles?.avatar_url
   const initial = name[0]?.toUpperCase() || 'B'
   const budget = req.budget ? fmtMWK(req.budget) : 'Negotiable'
-  const stayHere = req.city || null
+  const stayHere = req.city || req.detected_city || null
   const lookingAreas = (req.cities?.length ? req.cities : []).filter(Boolean)
   const urgOpt = (URGENCY_OPTIONS || []).find(u => u.value === req.urgency)
-  const match  = !isOwn ? getMatchScore(req, myListings) : null
+  const match = !isOwn ? getMatchScore(req, myListings) : null
   const photos = req.image_urls?.length > 0
     ? req.image_urls
     : (req.image_url ? [req.image_url] : [])
@@ -1325,6 +1329,8 @@ function DetailModal({ req, user, myListings, saved, onClose, onOffer, onSave, o
   } else if (req.duration_days) {
     expiresLabel = `${req.duration_days} day post`
   }
+  const expired = expiresLabel === 'Expired'
+  const cityLabel = stayHere || lookingAreas[0] || 'Anywhere'
 
   const shareUrl = typeof window !== 'undefined'
     ? `${window.location.origin}/looking-for?request=${req.id}`
@@ -1332,7 +1338,6 @@ function DetailModal({ req, user, myListings, saved, onClose, onOffer, onSave, o
   const shareText = `Looking for on SokoMw: ${req.title || 'Request'}${budget ? ` · ${budget}` : ''}`
 
   async function handleShare() {
-    // Desktop: always copy link only. Mobile: native share sheet when available.
     const isMobile = typeof navigator !== 'undefined'
       && /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '')
     try {
@@ -1362,28 +1367,55 @@ function DetailModal({ req, user, myListings, saved, onClose, onOffer, onSave, o
     setTimeout(() => setShareNote(null), 2200)
   }
 
-  const infoCards = [
-    { label: 'Budget', value: budget, accent: C.green, ico: Icon.wallet },
-    { label: 'Category', value: req.category || '—', accent: C.text, ico: (s, c) => <CatIcon category={req.category} size={s} color={c} /> },
-    { label: 'Posted', value: timeAgo(req.created_at), accent: C.textSub, ico: Icon.clock },
-    { label: 'Duration', value: expiresLabel || 'Open', accent: C.green, ico: Icon.clock },
-    ...(req._distanceLabel
-      ? [{
-          label: 'To buyer',
-          value: req._distanceLabel,
-          accent: C.green,
-          ico: Icon.nav,
-          hint: req._distanceApprox
-            ? `Estimated${req._distancePlace ? ` · ${req._distancePlace}` : ''}`
-            : `GPS${req._distancePlace ? ` · ${req._distancePlace}` : ''}`,
-        }]
-      : []),
-  ]
+  const normPlace = s => String(s || '')
+    .toLowerCase()
+    .replace(/\s+district$/i, '')
+    .replace(/\s+region$/i, '')
+    .replace(/[^\w\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  const places = [...lookingAreas, stayHere, req.detected_city].filter(Boolean)
+  const normalizedStay = normPlace(stayHere)
+  const uniqueLooking = lookingAreas.filter(c => normPlace(c) !== normalizedStay)
+  const samePlace = !!stayHere && lookingAreas.length > 0 && uniqueLooking.length === 0
+  const cityChips = lookingAreas.length
+    ? (uniqueLooking.length ? uniqueLooking : [stayHere].filter(Boolean))
+    : ([stayHere].filter(Boolean))
+  const showRequester = !!stayHere && (lookingAreas.length === 0 || !samePlace)
+  const showWants = lookingAreas.length > 0
+  const wantsChips = showWants ? cityChips : []
+
+  let placeMatch = null
+  if (viewerLocation && !isOwn) {
+    const viewerTokens = viewerLocationTokens(viewerLocation)
+    const cityTokens = [viewerLocation.city, viewerLocation.area].filter(Boolean).map(normPlace)
+    const regionTokens = [viewerLocation.district, ...viewerTokens].filter(Boolean).map(normPlace)
+    const matches = token => places.some(p => {
+      const n = normPlace(p)
+      return !!token && (n === token || n.includes(token) || token.includes(n))
+    })
+    const sameCity = cityTokens.some(matches)
+    const sameRegion = !sameCity && regionTokens.some(matches)
+    placeMatch = sameCity ? 'In your area' : sameRegion ? 'Same region' : 'Different city'
+  }
+
+  let distanceText = null
+  if (viewerLocation && !isOwn) {
+    const viewerLat = Number(viewerLocation.lat)
+    const viewerLng = Number(viewerLocation.lng)
+    const reqLat = Number(req.lat)
+    const reqLng = Number(req.lng)
+    if ([viewerLat, viewerLng, reqLat, reqLng].every(Number.isFinite)) {
+      const km = haversineKm(viewerLat, viewerLng, reqLat, reqLng)
+      if (km != null) distanceText = `about ${Math.max(1, Math.round(km))} km`
+    }
+  }
+  const locationMatchText = placeMatch ? `${placeMatch}${distanceText ? ` · ${distanceText}` : ''}` : null
 
   const iconBtn = {
-    width: 36, height: 36, borderRadius: '50%', border: `1.5px solid ${C.border}`,
-    background: C.bg, cursor: 'pointer', display: 'flex', alignItems: 'center',
-    justifyContent: 'center', color: C.gray1, padding: 0, flexShrink: 0,
+    width: 40, height: 40, borderRadius: 12, border: `1px solid ${C.border}`,
+    background: C.surface, cursor: 'pointer', display: 'flex', alignItems: 'center',
+    justifyContent: 'center', color: C.text, padding: 0, flexShrink: 0,
   }
 
   return (
@@ -1391,33 +1423,33 @@ function DetailModal({ req, user, myListings, saved, onClose, onOffer, onSave, o
       style={{
         position: 'fixed', inset: 0, zIndex: 1000,
         background: 'rgba(15,23,42,0.55)', backdropFilter: 'blur(8px)',
-        display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+        display: 'flex', alignItems: isPhone ? 'flex-end' : 'center', justifyContent: 'center',
       }}
       onClick={e => e.target === e.currentTarget && onClose()}
     >
       <div style={{
         background: C.surface,
-        borderRadius: '22px 22px 0 0',
-        width: '100%', maxWidth: 520,
-        maxHeight: '92vh', overflowY: 'auto',
-        boxShadow: '0 -12px 48px rgba(0,0,0,0.2)',
+        borderRadius: isPhone ? '16px 16px 0 0' : 20,
+        width: '100%', maxWidth: isPhone ? '100%' : 560,
+        maxHeight: '92vh', display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        boxShadow: isPhone ? '0 -12px 48px rgba(0,0,0,0.2)' : C.shadow,
         fontFamily: "'Inter', system-ui, sans-serif",
       }}>
-        <div style={{ display: 'flex', justifyContent: 'center', padding: '12px 0 4px' }}>
-          <div style={{ width: 36, height: 4, borderRadius: 2, background: C.border }} />
-        </div>
-
-        {/* Top bar */}
+        {isPhone && (
+          <div style={{ display: 'flex', justifyContent: 'center', padding: '10px 0 0' }}>
+            <div style={{ width: 36, height: 4, borderRadius: 2, background: C.border }} />
+          </div>
+        )}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '8px 18px 14px', borderBottom: `1px solid ${C.border}`, gap: 10,
+          padding: '14px 18px 12px', borderBottom: `1px solid ${C.border}`, gap: 10, flexShrink: 0,
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 11, minWidth: 0, flex: 1 }}>
             <div style={{
-              width: 44, height: 44, borderRadius: '50%', overflow: 'hidden',
+              width: 42, height: 42, borderRadius: '50%', overflow: 'hidden',
               background: `linear-gradient(135deg,${C.green},${C.greenDk})`,
               display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 16, fontWeight: 800, color: '#fff', flexShrink: 0,
+              fontSize: 15, fontWeight: 800, color: '#fff', flexShrink: 0,
             }}>
               {avatar
                 ? <img src={avatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -1428,17 +1460,17 @@ function DetailModal({ req, user, myListings, saved, onClose, onOffer, onSave, o
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
                 {req.profiles?.is_verified === true && Icon.verified(15)}
               </div>
-              <div style={{ fontSize: 11, color: C.gray2, fontWeight: 600, marginTop: 2, display: 'flex', alignItems: 'center', gap: 5 }}>
-                {Icon.spark(11, C.green)} Looking For · SokoMw
+              <div style={{ fontSize: 12, color: C.gray1, fontWeight: 600, marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                Posted {timeAgo(req.created_at)} · {cityLabel}
               </div>
             </div>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
             <button type="button" onClick={handleShare} style={iconBtn} title="Share" aria-label="Share">
-              {Icon.share(16, C.gray1)}
+              {Icon.share(17, C.text)}
             </button>
             <button type="button" onClick={onClose} style={iconBtn} title="Close" aria-label="Close">
-              {Icon.x(16, C.gray1)}
+              {Icon.x(17, C.text)}
             </button>
           </div>
         </div>
@@ -1447,25 +1479,20 @@ function DetailModal({ req, user, myListings, saved, onClose, onOffer, onSave, o
           <div style={{
             margin: '10px 18px 0', padding: '8px 12px', borderRadius: 10,
             background: C.greenL, color: C.green, fontSize: 12, fontWeight: 700,
-            display: 'flex', alignItems: 'center', gap: 6,
+            display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
           }}>
             {Icon.check(14, C.green)} {shareNote}
           </div>
         )}
 
-        <div style={{ padding: '16px 18px 28px' }}>
-          {/* Photos */}
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 18px 20px' }}>
           {mainPhoto ? (
-            <div style={{ marginBottom: 16 }}>
-              <div className="lf-detail-main-photo" style={{
-                width: '100%', height: 'clamp(180px, 30vw, 280px)', borderRadius: 16, overflow: 'hidden',
-                background: C.bg, position: 'relative',
+            <>
+              <div style={{
+                width: '100%', height: isPhone ? 220 : 280, borderRadius: 16, overflow: 'hidden',
+                background: C.bg, position: 'relative', marginBottom: 14,
               }}>
-                <img
-                  src={mainPhoto}
-                  alt={req.title}
-                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                />
+                <img src={mainPhoto} alt={req.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 {photos.length > 1 && (
                   <div style={{
                     position: 'absolute', bottom: 10, right: 10,
@@ -1478,62 +1505,61 @@ function DetailModal({ req, user, myListings, saved, onClose, onOffer, onSave, o
                 )}
               </div>
               {photos.length > 1 && (
-                <ul className="lf-detail-thumbs" style={{
-                  display: 'flex', gap: 8, marginTop: 10, overflowX: 'auto',
-                  listStyle: 'none', padding: 0, margin: '10px 0 0', scrollSnapType: 'x mandatory',
-                  WebkitOverflowScrolling: 'touch',
+                <ul style={{
+                  display: 'flex', gap: 8, overflowX: 'auto', listStyle: 'none',
+                  padding: 0, margin: '0 0 14px', scrollSnapType: 'x mandatory', WebkitOverflowScrolling: 'touch',
                 }}>
                   {photos.map((url, i) => (
                     <li key={url + i} style={{ flexShrink: 0, scrollSnapAlign: 'start' }}>
                       <button
                         type="button"
                         onClick={() => setMainIdx(i)}
-                        className={`lf-detail-thumb-btn${i === mainIdx ? ' is-active' : ''}`}
                         style={{
-                          width: 64, height: 64, borderRadius: 10, overflow: 'hidden',
-                          border: i === mainIdx ? `2.5px solid ${C.green}` : `1.5px solid ${C.border}`,
+                          width: 48, height: 48, borderRadius: 10, overflow: 'hidden',
+                          border: i === mainIdx ? `2px solid ${C.green}` : `1px solid ${C.border}`,
                           padding: 0, cursor: 'pointer', display: 'block', background: C.bg,
-                          transition: 'border-color 0.15s, transform 0.15s',
                         }}
                       >
-                        <img src={url} alt="" loading="lazy"
-                          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                        <img src={url} alt="" loading="lazy" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
                       </button>
                     </li>
                   ))}
                 </ul>
               )}
-            </div>
-          ) : (
-            <div style={{
-              height: 120, borderRadius: 16, marginBottom: 16,
-              background: `linear-gradient(135deg,${C.greenL},#f0fdf4)`,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              color: C.green,
-            }}>
-              <CatIcon category={req.category} size={40} color={C.green} />
-            </div>
-          )}
+            </>
+          ) : null}
 
-          {/* Badges */}
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
+          <h2 style={{
+            fontFamily: "'Sora', system-ui, sans-serif", fontSize: 20, fontWeight: 800,
+            color: C.text, margin: '0 0 4px', lineHeight: 1.3,
+          }}>
+            {req.title}
+          </h2>
+          <div style={{ fontSize: 20, fontWeight: 800, color: C.green, marginBottom: 12 }}>{budget}</div>
+
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14 }}>
             <span style={{
               fontSize: 11, fontWeight: 800, color: C.green, background: C.greenL,
-              borderRadius: 999, padding: '5px 10px',
-              display: 'inline-flex', alignItems: 'center', gap: 5,
+              borderRadius: 999, padding: '5px 10px', display: 'inline-flex', alignItems: 'center', gap: 5,
             }}>
               <CatIcon category={req.category} size={12} color={C.green} />
-              {req.category}
+              {req.category || 'Request'}
             </span>
-            {urgOpt && (
+            {urgOpt && req.urgency !== 'flexible' && (
               <span style={{
-                fontSize: 11, fontWeight: 800,
-                color: urgOpt.color || C.red,
-                background: urgOpt.bg || '#fff0f0',
-                borderRadius: 999, padding: '5px 10px',
+                fontSize: 11, fontWeight: 800, color: urgOpt.color || C.red,
+                background: urgOpt.bg || '#fff0f0', borderRadius: 999, padding: '5px 10px',
                 display: 'inline-flex', alignItems: 'center', gap: 4,
               }}>
                 {Icon.lightning(11, urgOpt.color || C.red)} {urgOpt.label}
+              </span>
+            )}
+            {expiresLabel && (
+              <span style={{
+                fontSize: 11, fontWeight: 800, color: '#b45309', background: '#fffbeb',
+                borderRadius: 999, padding: '5px 10px', display: 'inline-flex', alignItems: 'center', gap: 4,
+              }}>
+                {Icon.clock(11, '#b45309')} {expiresLabel}
               </span>
             )}
             {match != null && match >= 40 && (
@@ -1545,243 +1571,160 @@ function DetailModal({ req, user, myListings, saved, onClose, onOffer, onSave, o
                 {Icon.spark(11, C.green)} {match}% match
               </span>
             )}
-            {expiresLabel && (
+            {expired && (
               <span style={{
-                fontSize: 11, fontWeight: 800, color: '#b45309',
-                background: '#fffbeb', borderRadius: 999, padding: '5px 10px',
-                display: 'inline-flex', alignItems: 'center', gap: 4,
-              }}>
-                {Icon.clock(11, '#b45309')} {expiresLabel}
-              </span>
-            )}
-            {expiresLabel === 'Expired' && (
-              <span style={{
-                fontSize: 11, fontWeight: 700, color: '#5f6368',
-                background: '#f1f3f4', borderRadius: 999, padding: '5px 10px',
-                display: 'inline-flex', alignItems: 'center', gap: 4,
+                fontSize: 11, fontWeight: 700, color: C.gray1, background: '#f1f3f4',
+                borderRadius: 999, padding: '5px 10px', display: 'inline-flex', alignItems: 'center', gap: 4,
               }}>
                 No longer active
               </span>
             )}
           </div>
 
-          <h2 style={{
-            fontSize: 22, fontWeight: 900, color: C.text, margin: '0 0 10px',
-            lineHeight: 1.25, letterSpacing: -0.3,
-          }}>
-            {req.title}
-          </h2>
-
           {req.description ? (
-            <p style={{ fontSize: 14, color: C.gray1, lineHeight: 1.65, margin: '0 0 18px' }}>
+            <p style={{ fontSize: 14, color: C.gray1, lineHeight: 1.6, margin: '0 0 16px' }}>
               {req.description}
             </p>
-          ) : (
-            <p style={{ fontSize: 13, color: C.gray3, fontStyle: 'italic', margin: '0 0 18px' }}>
-              No extra description provided.
-            </p>
-          )}
+          ) : null}
 
-          {/* Info grid */}
-          <div style={{
-            display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16,
-          }}>
-            {infoCards.map(card => (
-              <div
-                key={card.label}
-                style={{
-                  background: card.label === 'To buyer' ? C.greenL : C.bg,
-                  borderRadius: 14, padding: '12px 14px',
-                  border: `1px solid ${card.label === 'To buyer' ? C.green : C.border}`,
-                }}
-              >
-                <div style={{
-                  fontSize: 10, fontWeight: 800, color: C.gray2,
-                  textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6,
-                  display: 'flex', alignItems: 'center', gap: 5,
-                }}>
-                  <span style={{ display: 'flex', color: card.accent }}>
-                    {typeof card.ico === 'function' ? card.ico(12, card.accent) : null}
-                  </span>
-                  {card.label}
-                </div>
-                <div style={{ fontSize: 14, fontWeight: 800, color: card.accent, lineHeight: 1.3 }}>
-                  {card.value}
-                </div>
-                {card.hint && (
-                  <div style={{ fontSize: 10, color: C.gray2, fontWeight: 600, marginTop: 4 }}>
-                    {card.hint}
-                  </div>
-                )}
-              </div>
-            ))}
+          <div style={{ display: 'flex', gap: 22, marginBottom: 16 }}>
+            <div>
+              <div style={{ fontSize: 12, color: C.gray1, fontWeight: 600 }}>Posted</div>
+              <div style={{ fontSize: 14, color: C.text, fontWeight: 700 }}>{timeAgo(req.created_at)}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: 12, color: C.gray1, fontWeight: 600 }}>Expires</div>
+              <div style={{ fontSize: 14, color: C.text, fontWeight: 700 }}>{expiresLabel || 'Open'}</div>
+            </div>
           </div>
 
-          {/* Locations */}
           <div style={{
-            background: 'linear-gradient(145deg,#f0fdf4,#ffffff)',
-            border: `1.5px solid ${C.green}33`,
-            borderRadius: 16, padding: 14, marginBottom: 16,
+            background: C.bg, border: `1px solid ${C.border}`, borderRadius: 16,
+            padding: 14, marginBottom: 16,
           }}>
             <div style={{
-              fontSize: 11, fontWeight: 800, color: C.green,
-              textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 12,
-              display: 'flex', alignItems: 'center', gap: 6,
+              fontSize: 11, fontWeight: 800, color: C.green, textTransform: 'uppercase',
+              letterSpacing: 0.6, marginBottom: 10, display: 'flex', alignItems: 'center', gap: 6,
             }}>
-              {Icon.pin(13, C.green)} Locations
+              {Icon.pin(13, C.green)} Location
             </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-              <div>
-                <div style={{
-                  fontSize: 11, fontWeight: 700, color: C.gray2, marginBottom: 6,
-                  display: 'flex', alignItems: 'center', gap: 5,
-                }}>
-                  {Icon.home(12, C.gray2)} Where they stay
-                </div>
-                {stayHere ? (
-                  <span style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 5,
-                    background: C.surface, border: `1px solid ${C.border}`,
-                    borderRadius: 999, padding: '6px 12px',
-                    fontSize: 13, fontWeight: 700, color: C.text,
-                  }}>
-                    {Icon.pin(12, C.green)} {stayHere}
-                  </span>
-                ) : (
-                  <span style={{ fontSize: 13, color: C.gray3, fontWeight: 600 }}>Not specified</span>
+            {!stayHere && wantsChips.length === 0 ? (
+              <span style={{ fontSize: 13, color: C.gray1, fontWeight: 600 }}>Not specified</span>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                {showRequester && (
+                  <div>
+                    <div style={{ fontSize: 12, color: C.gray1, fontWeight: 600, marginBottom: 5 }}>Requester is in</div>
+                    <span style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 5, background: C.surface,
+                      border: `1px solid ${C.border}`, borderRadius: 999, padding: '6px 11px',
+                      fontSize: 13, fontWeight: 700, color: C.text,
+                    }}>
+                      {Icon.pin(12, C.green)} {stayHere}
+                    </span>
+                  </div>
                 )}
-                {req._distanceLabel && !isOwn && (
-                  <div style={{
-                    marginTop: 8, fontSize: 12, fontWeight: 700, color: C.green,
-                    display: 'flex', alignItems: 'center', gap: 6,
-                  }}>
-                    {Icon.nav(13, C.green)}
-                    {req._distanceApprox ? 'Est. ' : ''}{req._distanceLabel} from you to buyer
+                {showWants && wantsChips.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 12, color: C.gray1, fontWeight: 600, marginBottom: 5 }}>Wants it in</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                      {wantsChips.map(c => (
+                        <span key={c} style={{
+                          display: 'inline-flex', alignItems: 'center', gap: 5, background: C.greenL,
+                          border: `1px solid ${C.green}44`, borderRadius: 999, padding: '6px 11px',
+                          fontSize: 12, fontWeight: 700, color: C.green,
+                        }}>
+                          {Icon.pin(11, C.green)} {c}
+                        </span>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
-              <div>
-                <div style={{
-                  fontSize: 11, fontWeight: 700, color: C.gray2, marginBottom: 6,
-                  display: 'flex', alignItems: 'center', gap: 5,
-                }}>
-                  {Icon.search(12, C.gray2)} Looking for product in
-                </div>
-                {lookingAreas.length > 0 ? (
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                    {lookingAreas.map(c => (
-                      <span
-                        key={c}
-                        style={{
-                          background: `linear-gradient(135deg,${C.green},${C.greenDk})`,
-                          color: '#fff', borderRadius: 999, padding: '6px 12px',
-                          fontSize: 12, fontWeight: 700,
-                          display: 'inline-flex', alignItems: 'center', gap: 4,
-                        }}
-                      >
-                        {Icon.pin(11, '#fff')} {c}
-                      </span>
-                    ))}
-                  </div>
-                ) : (
-                  <span style={{ fontSize: 13, color: C.gray3, fontWeight: 600 }}>
-                    {stayHere || 'Anywhere'}
-                  </span>
-                )}
+            )}
+            {locationMatchText && (
+              <div style={{
+                marginTop: 10, fontSize: 12, fontWeight: 700, color: C.green,
+                display: 'flex', alignItems: 'center', gap: 6,
+              }}>
+                {Icon.nav(13, C.green)} {locationMatchText}
               </div>
-            </div>
+            )}
           </div>
 
-          {/* Engagement */}
           <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            marginBottom: 18, padding: '12px 0',
-            borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}`,
+            fontSize: 13, color: C.gray1, fontWeight: 600, paddingBottom: 4,
           }}>
-            <span style={{ fontSize: 13, color: C.gray1, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              {Icon.users(15, C.gray1)} {req.offer_count || 0} {(req.offer_count || 0) === 1 ? 'offer' : 'offers'}
-            </span>
-            <span style={{ fontSize: 13, color: C.gray1, fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-              {Icon.eye(15, C.gray1)} {req.view_count || 0} views
-            </span>
+            {req.offer_count || 0} {(req.offer_count || 0) === 1 ? 'offer' : 'offers'} · {req.view_count || 0} {(req.view_count || 0) === 1 ? 'view' : 'views'}
           </div>
+        </div>
 
-          {/* Actions */}
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              onClick={handleShare}
-              style={{
-                padding: '12px 14px', border: `1.5px solid ${C.border}`,
-                borderRadius: 12, background: C.surface,
-                color: C.text, fontWeight: 700, fontSize: 13,
-                cursor: 'pointer', fontFamily: 'inherit',
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-              }}
-            >
-              {Icon.share(15, C.text)} Share
-            </button>
+        <div style={{
+          position: 'sticky', bottom: 0, background: C.surface, borderTop: `1px solid ${C.border}`,
+          padding: '12px 18px calc(12px + env(safe-area-inset-bottom))',
+          display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
+        }}>
+          {!isOwn && (
             <button
               type="button"
               onClick={() => onSave(req.id)}
               style={{
-                padding: '12px 14px', border: `1.5px solid ${C.border}`,
-                borderRadius: 12, background: C.surface,
-                color: saved ? C.red : C.text, fontWeight: 700, fontSize: 13,
-                cursor: 'pointer', fontFamily: 'inherit',
-                display: 'inline-flex', alignItems: 'center', gap: 6,
+                height: 48, padding: '0 14px', border: `1.5px solid ${C.border}`, borderRadius: 12,
+                background: C.surface, color: saved ? C.red : C.text, fontWeight: 700, fontSize: 13,
+                cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex',
+                alignItems: 'center', justifyContent: 'center', gap: 6, flexShrink: 0,
               }}
             >
-              {Icon.bookmark(15, saved, saved ? C.red : C.text)}
+              {Icon.bookmark(17, saved, saved ? C.red : C.text)}
               {saved ? 'Saved' : 'Save'}
             </button>
-            {isOwn ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => { onFulfill(req.id); onClose() }}
-                  style={{
-                    flex: 1, minWidth: 100, padding: '12px 0', border: 'none', borderRadius: 12,
-                    background: C.green, color: '#fff', fontWeight: 800, fontSize: 13,
-                    cursor: 'pointer', fontFamily: 'inherit',
-                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  }}
-                >
-                  {Icon.check(15, '#fff')} Fulfilled
-                </button>
-                <button
-                  type="button"
-                  onClick={() => { onDelete(req.id); onClose() }}
-                  style={{
-                    flex: 1, minWidth: 90, padding: '12px 0', border: `1.5px solid ${C.red}`,
-                    borderRadius: 12, background: 'transparent', color: C.red,
-                    fontWeight: 800, fontSize: 13, cursor: 'pointer', fontFamily: 'inherit',
-                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
-                  }}
-                >
-                  {Icon.trash(15, C.red)} Delete
-                </button>
-              </>
-            ) : (
+          )}
+          <button type="button" onClick={handleShare} style={iconBtn} title="Share" aria-label="Share">
+            {Icon.share(18, C.text)}
+          </button>
+          {isOwn ? (
+            <>
               <button
                 type="button"
-                onClick={() => { onOffer(req); onClose() }}
+                onClick={() => { (expired ? onReactivate : onFulfill)?.(req.id); onClose() }}
                 style={{
-                  flex: 1, minWidth: 120, padding: '13px 0', border: 'none', borderRadius: 12,
-                  background: userHasOffered ? C.border : `linear-gradient(135deg,${C.green},${C.greenDk})`,
-                  color: userHasOffered ? C.gray2 : '#fff',
-                  fontWeight: 800, fontSize: 14, cursor: 'pointer',
-                  boxShadow: userHasOffered ? 'none' : '0 4px 16px rgba(15,157,88,0.35)',
-                  fontFamily: 'inherit',
+                  flex: 1, height: 48, border: 'none', borderRadius: 12,
+                  background: expired ? C.green : C.border, color: expired ? '#fff' : C.gray1,
+                  fontWeight: 800, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
                   display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
                 }}
               >
-                {userHasOffered
-                  ? <><span style={{ display: 'inline-flex' }}>{Icon.check(15, C.gray2)}</span> Offer sent</>
-                  : <><span style={{ display: 'inline-flex' }}>{Icon.send(15, '#fff')}</span> {'Submit offer'}</>}
+                {expired ? 'Reactivate' : 'Done'}
               </button>
-            )}
-          </div>
+              <button
+                type="button"
+                onClick={() => { onDelete(req.id); onClose() }}
+                style={{
+                  height: 48, padding: '0 14px', border: `1.5px solid ${C.red}`, borderRadius: 12,
+                  background: C.surface, color: C.red, fontWeight: 800, fontSize: 14,
+                  cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex',
+                  alignItems: 'center', justifyContent: 'center', gap: 6, flexShrink: 0,
+                }}
+              >
+                {Icon.trash(16, C.red)} Delete
+              </button>
+            </>
+          ) : !expired ? (
+            <button
+              type="button"
+              onClick={() => { onOffer(req); onClose() }}
+              style={{
+                flex: 1, height: 48, border: 'none', borderRadius: 12,
+                background: userHasOffered ? C.border : C.green,
+                color: userHasOffered ? C.gray1 : '#fff', fontWeight: 800, fontSize: 14,
+                cursor: 'pointer', fontFamily: 'inherit', display: 'inline-flex',
+                alignItems: 'center', justifyContent: 'center', gap: 6,
+              }}
+            >
+              {userHasOffered ? Icon.check(16, C.gray1) : Icon.send(16, '#fff')}
+              {userHasOffered ? 'Offer sent' : 'Submit offer'}
+            </button>
+          ) : null}
         </div>
       </div>
     </div>
