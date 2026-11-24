@@ -192,3 +192,4 @@ Notifications: full-width deal titles, single badge
 Header: clean desktop navigation and search
 Header: slim early-access strip, chevron, label
 Header: complete desktop search with scope, suggestions, location
+Shop: remove fake opening hours, WhatsApp row is a link

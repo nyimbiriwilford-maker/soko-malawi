@@ -3279,9 +3279,14 @@ if (!shop) {
             <div className="sp-side-title">About this shop</div>
             <div className="sp-about-text">{shop.description || 'This shop hasn\u2019t added a description yet.'}</div>
             <div className="sp-about-row"><Icon.Pin /> {shop.city ? `${shop.city}, ` : ''}{shop.district || 'Malawi'}</div>
-            <div className="sp-about-row"><Icon.Clock /> Open now · 08:00 AM – 06:00 PM</div>
             {shop.phone && <div className="sp-about-row"><Icon.Phone /> {shop.phone}</div>}
-            {shop.whatsapp && <div className="sp-about-row"><Icon.Phone /> WhatsApp</div>}
+            {shop.whatsapp && (
+              <a className="sp-about-row" style={{ textDecoration: 'none', color: 'inherit' }}
+                 href={`https://wa.me/${shop.whatsapp.replace(/[^0-9]/g, '')}`}
+                 target="_blank" rel="noopener noreferrer">
+                <Icon.Phone /> Chat on WhatsApp
+              </a>
+            )}
             {(shop.social_facebook || shop.whatsapp || shop.social_instagram || shop.social_tiktok || shop.social_x || shop.social_website) && (
               <div className="sp-social-row">
                 {shop.social_facebook && (
