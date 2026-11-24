@@ -194,3 +194,4 @@ Header: slim early-access strip, chevron, label
 Header: complete desktop search with scope, suggestions, location
 Shop: remove fake opening hours, WhatsApp row is a link
 Shop: tappable Verified badge with what-Verified-means sheet
+Shop: Verified sheet above header, scroll lock

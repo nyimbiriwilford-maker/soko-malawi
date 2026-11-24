@@ -1337,17 +1337,18 @@ const css = `
   @keyframes ss-drawer-spin { to { transform: rotate(360deg); } }
 
   .sp-vsheet-overlay {
-    position: fixed; inset: 0; z-index: 1000;
+    position: fixed; inset: 0; z-index: 5000;
     background: rgba(0,0,0,0.45);
     display: flex; justify-content: center; align-items: flex-end;
   }
   .sp-vsheet {
     background: #fff; border-radius: 16px 16px 0 0; padding: 20px;
     width: 100%; max-width: 440px; max-height: 85vh; overflow-y: auto;
+    padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
   }
   @media (min-width: 769px) {
-    .sp-vsheet-overlay { align-items: center; }
-    .sp-vsheet { border-radius: 16px; }
+    .sp-vsheet-overlay { align-items: center; padding: 16px; }
+    .sp-vsheet { border-radius: 16px; max-height: calc(100vh - 32px); }
   }
 `
 
@@ -1388,9 +1389,14 @@ export default function ShopPage() {
   const [verifyInfoOpen, setVerifyInfoOpen] = useState(false)
   useEffect(() => {
     if (!verifyInfoOpen) return undefined
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
     const onKey = (e) => { if (e.key === 'Escape') setVerifyInfoOpen(false) }
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prevOverflow
+    }
   }, [verifyInfoOpen])
   const [shop, setShop] = useState(null)
   const [owner, setOwner] = useState(null)
