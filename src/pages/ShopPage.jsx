@@ -1335,6 +1335,20 @@ const css = `
     animation: ss-drawer-spin 0.6s linear infinite;
   }
   @keyframes ss-drawer-spin { to { transform: rotate(360deg); } }
+
+  .sp-vsheet-overlay {
+    position: fixed; inset: 0; z-index: 1000;
+    background: rgba(0,0,0,0.45);
+    display: flex; justify-content: center; align-items: flex-end;
+  }
+  .sp-vsheet {
+    background: #fff; border-radius: 16px 16px 0 0; padding: 20px;
+    width: 100%; max-width: 440px; max-height: 85vh; overflow-y: auto;
+  }
+  @media (min-width: 769px) {
+    .sp-vsheet-overlay { align-items: center; }
+    .sp-vsheet { border-radius: 16px; }
+  }
 `
 
 const Icon = {
@@ -1371,6 +1385,13 @@ function initials(name) {
 export default function ShopPage() {
   const { slug } = useParams()
   const navigate = useNavigate()
+  const [verifyInfoOpen, setVerifyInfoOpen] = useState(false)
+  useEffect(() => {
+    if (!verifyInfoOpen) return undefined
+    const onKey = (e) => { if (e.key === 'Escape') setVerifyInfoOpen(false) }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [verifyInfoOpen])
   const [shop, setShop] = useState(null)
   const [owner, setOwner] = useState(null)
   const [currentUserId, setCurrentUserId] = useState(null)
@@ -2559,7 +2580,7 @@ if (!shop) {
       <div className="sp-shophead">
         <div className="sp-shophead-inner">
           <div className="sp-logo-frame">
-            {shop.is_verified && <div className="sp-verified-pill">Verified Shop</div>}
+            {shop.is_verified && <button type="button" className="sp-verified-pill" style={{ border: 'none', cursor: 'pointer' }} onClick={() => setVerifyInfoOpen(true)} aria-label="What does Verified Shop mean?">Verified Shop</button>}
             {shop.logo_url ? (
               <img className="sp-logo-img" src={shop.logo_url} alt={shop.name} />
             ) : (
@@ -2578,7 +2599,9 @@ if (!shop) {
           <div className="sp-shop-info">
             <div className="sp-shop-name-row">
               <div className="sp-shop-name">{shop.name}</div>
-              {shop.is_verified && <Icon.Check />}
+              {shop.is_verified && (
+                <button type="button" onClick={() => setVerifyInfoOpen(true)} aria-label="What does Verified mean?" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'inline-flex', minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}><Icon.Check /></button>
+              )}
             </div>
             {shop.description && <div className="sp-shop-tagline">{shop.description}</div>}
             <div className="sp-shop-tags">
@@ -3797,6 +3820,28 @@ if (!shop) {
             // Payment / submit does not instantly verify — wait for admin approval
           }}
         />
+      )}
+      {verifyInfoOpen && shop.is_verified && (
+        <div className="sp-vsheet-overlay" onClick={() => setVerifyInfoOpen(false)}>
+          <div className="sp-vsheet" role="dialog" aria-modal="true" onClick={e => e.stopPropagation()}>
+            <h2 style={{ fontFamily: 'Sora, sans-serif', fontSize: 18, fontWeight: 800, color: T.green, margin: '0 0 4px' }}>Verified Shop</h2>
+            <div style={{ fontFamily: 'DM Sans, sans-serif', fontSize: 13, color: T.textMuted, marginBottom: 18 }}>{shop.name}</div>
+            <div style={{ fontFamily: 'DM Sans, sans-serif', marginBottom: 14 }}>
+              <div style={{ fontFamily: 'Sora, sans-serif', fontSize: 13.5, fontWeight: 700, color: T.green, marginBottom: 3 }}>Identity reviewed</div>
+              <div style={{ fontSize: 13, lineHeight: 1.5, color: T.textMuted }}>The shop owner's national ID was reviewed by the SokoMw team.</div>
+            </div>
+            <div style={{ fontFamily: 'DM Sans, sans-serif', marginBottom: 14 }}>
+              <div style={{ fontFamily: 'Sora, sans-serif', fontSize: 13.5, fontWeight: 700, color: T.green, marginBottom: 3 }}>Checked by people</div>
+              <div style={{ fontSize: 13, lineHeight: 1.5, color: T.textMuted }}>Each verification request is reviewed manually, not automatically.</div>
+            </div>
+            <div style={{ fontFamily: 'DM Sans, sans-serif', marginBottom: 18 }}>
+              <div style={{ fontFamily: 'Sora, sans-serif', fontSize: 13.5, fontWeight: 700, color: T.green, marginBottom: 3 }}>Still be careful</div>
+              <div style={{ fontSize: 13, lineHeight: 1.5, color: T.textMuted }}>Verified does not guarantee a deal. Inspect the item first, meet in a public place, and never pay in advance to someone you have not met.</div>
+            </div>
+            <button type="button" onClick={() => { setVerifyInfoOpen(false); navigate('/safety') }} style={{ minHeight: 44, width: '100%', border: 'none', borderRadius: 12, background: T.green, color: '#fff', fontFamily: 'DM Sans, sans-serif', fontSize: 14, fontWeight: 700, cursor: 'pointer', marginTop: 4 }}>Read safety tips</button>
+            <button type="button" onClick={() => setVerifyInfoOpen(false)} style={{ minHeight: 44, width: '100%', border: 'none', background: 'transparent', color: T.textMuted, fontFamily: 'DM Sans, sans-serif', fontSize: 14, fontWeight: 600, cursor: 'pointer', marginTop: 6 }}>Close</button>
+          </div>
+        </div>
       )}
     </div>
   )
