@@ -479,12 +479,15 @@ const css = `
   @media (hover: none) {
     .sp-listing-card:hover .sp-listing-img-wrap img { transform: none; }
   }
-  .sp-img-ph {
-    width: 100%; height: 100%;
-    display: flex; align-items: center; justify-content: center;
-    background: linear-gradient(145deg, #f1f3f4 0%, #e8eaed 100%);
-    color: ${T.textLight}; font-size: 28px;
-  }
+   .sp-img-ph {
+     width: 100%; height: 100%;
+     display: flex; align-items: center; justify-content: center;
+     background: linear-gradient(145deg, #f1f3f4 0%, #e8eaed 100%);
+     color: ${T.textLight}; font-size: 28px;
+   }
+   .sp-listing-img-wrap > .sp-img-ph { position: absolute; inset: 0; }
+   .sp-listing-img-wrap > img { position: absolute; inset: 0; z-index: 1; }
+   .sp-img-ph-txt { font-size: 12px; font-weight: 600; color: #80868b; letter-spacing: .2px; }
   .sp-badge-stack {
     position: absolute; top: 8px; left: 8px;
     display: flex; flex-direction: column; gap: 5px; align-items: flex-start; z-index: 2;
@@ -2957,9 +2960,9 @@ if (!shop) {
                             <div className="sp-list-thumb">
                               {cover ? (
                                 <img src={cover} alt="" loading="lazy" />
-                              ) : (
-                                <div className="sp-img-ph">📦</div>
-                              )}
+                               ) : (
+                                 <div className="sp-img-ph"><span className="sp-img-ph-txt">No photo</span></div>
+                               )}
                               {promo && (
                                 <div className="sp-badge-stack">
                                   <span className={promo.includes('Sale') || promo === 'Sale' ? 'sp-sale-badge' : 'sp-featured-badge'}>{promo}</span>
@@ -3023,11 +3026,8 @@ if (!shop) {
                             onKeyDown={e => { if (e.key === 'Enter') navigate(`/listing/${item.id}`) }}
                           >
                             <div className="sp-listing-img-wrap">
-                              {cover ? (
-                                <img src={cover} alt={item.title} loading="lazy" />
-                              ) : (
-                                <div className="sp-img-ph">📦</div>
-                              )}
+                                <div className="sp-img-ph"><span className="sp-img-ph-txt">No photo yet</span></div>
+                                {cover && <img src={cover} alt={item.title} loading="lazy" onError={e => { e.currentTarget.style.display = 'none' }} />}
                               <div className="sp-badge-stack">
                                 {promo && (
                                   <span className={promo === 'Sale' || promo.includes('Sale') ? 'sp-sale-badge' : 'sp-featured-badge'}>
