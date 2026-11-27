@@ -1,6 +1,6 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo, useId } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { ShieldCheck, TrendingUp, Lock, CalendarDays, Info } from 'lucide-react'
+import { ShieldCheck, TrendingUp, Lock, CalendarDays, Info, Camera, Zap } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import VerificationModal from '../components/VerificationModal'
 import SokoNav from '../components/SokoNav'
@@ -8,6 +8,7 @@ import { featureExistingListing } from '../lib/featureListing'
 import { FEATURED_DURATION_DAYS, featuredPriceLabel } from '../constants/featuredPricing'
 import { SHOW_FEATURED_ADS } from '../config/featureFlags'
 import { isListingFeatured } from '../utils/homeUtils'
+import { SIMILAR_SHOP_RULES, pickSimilarShops } from '../utils/shopRanking'
 
 const CATEGORIES = [
   'Fashion & Clothing', 'Electronics', 'Phones & Accessories', 'Vehicles',
@@ -28,6 +29,8 @@ const T = {
   greenLight: '#e8f5ee',
   gold: '#F9AB00',
   goldDark: '#c88a00',
+  amber: '#F59E0B',
+  starEmpty: '#D1D5DB',
   white: '#ffffff',
   offwhite: '#f8f9fa',
   text: '#202124',
@@ -38,6 +41,18 @@ const T = {
   gray200: '#e8eaed',
   gray900: '#202124',
   shadow: '0 1px 3px rgba(0,0,0,.08), 0 4px 16px rgba(0,0,0,.04)',
+}
+
+const MOBILE_SOCIAL_BTN_STYLE = {
+  width: 40, height: 40, minWidth: 40, minHeight: 40,
+  padding: 0, borderRadius: '50%',
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+}
+
+const MOBILE_INLINE_SOCIAL_BTN_STYLE = {
+  width: 32, height: 32, minWidth: 32, minHeight: 32,
+  padding: 0, borderRadius: '50%',
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
 }
 
 /** Shop owner theme presets (stored as shops.theme) */
@@ -102,10 +117,6 @@ const css = `
     /* Fallback until measured from real nav height */
     --sp-nav-offset: 120px;
   }
-  @media (max-width: 900px) {
-    .sp-root { padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
-  }
-
   /* Dark shop theme: slightly cooler page backdrop */
   .sp-root.sp-theme-dark {
     background: #f1f3f5;
@@ -156,61 +167,34 @@ const css = `
   .sp-more-menu-item.danger svg { color: #dc2626; }
   .sp-more-menu-item.danger:hover { background: #fef2f2; }
 
-  /* ── COVER ── */
-  .sp-cover-wrap { max-width: 1180px; margin: 12px auto 0; padding: 0 20px; }
-  /* Standard shop banner: ~3:1 marketplace cover (desktop ~320px) */
+  /* ── SHOP HEADER CARD ── */
+  .sp-header-card {
+    max-width: 1180px; margin: 12px auto 0; padding: 0 20px;
+  }
+  .sp-header-card-inner {
+    background: ${T.white}; border: 1px solid ${T.border};
+    border-radius: 18px; box-shadow: ${T.shadow}; overflow: hidden;
+  }
+  .sp-cover-wrap { position: relative; height: 240px; }
   .sp-cover {
-    position: relative;
-    width: 100%;
-    height: clamp(200px, 26vw, 340px);
-    min-height: 200px;
-    max-height: 340px;
-    border-radius: 22px;
+    position: absolute; inset: 0; width: 100%; height: 100%;
     overflow: hidden;
-    background: var(--theme-cover);
-    box-shadow: ${T.shadow};
+    background: linear-gradient(135deg, #16a34a 0%, #34d399 100%);
   }
   .sp-cover img {
-    width: 100%; height: 100%; object-fit: cover; object-position: center;
-    display: block;
+    position: absolute; inset: 0;
+    width: 100%; height: 100%; object-fit: cover; object-position: center; display: block;
   }
-  /* Bottom-gradient scrim over the cover image — always visible so the
-     banner reads as designed, subtle enough not to muddy the photo. */
-  .sp-cover-theme-glow {
-    position: absolute; inset: 0; pointer-events: none;
-    background: linear-gradient(to top, rgba(0,0,0,.5) 0%, transparent 60%);
+  .sp-cover-gradient {
+    position: absolute; inset: 0; pointer-events: none; z-index: 1;
+    background: linear-gradient(to top, rgba(0,0,0,0.25) 0%, transparent 70%);
   }
-
-  /* ── SHOP HEADER CARD ── */
-  .sp-shophead {
-    max-width: 1180px; margin: 0 auto; padding: 0 20px;
-    position: relative;
-  }
-  .sp-shophead-inner {
-    background: ${T.white};
-    border: 1px solid ${T.border};
-    border-top: 3px solid var(--theme);
-    border-radius: 16px;
-    padding: 20px 22px 20px 168px;
-    margin-top: -56px;
-    position: relative;
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 20px;
-    flex-wrap: wrap;
-    box-shadow: ${T.shadow};
-  }
+  .sp-header-body { position: relative; padding: 0 24px 20px; }
   .sp-logo-frame {
-    position: absolute;
-    left: 22px;
-    top: -36px;
-    width: 116px; height: 116px;
-    border-radius: 16px;
-    background: ${T.white};
-    border: 1px solid ${T.border};
-    padding: 6px;
-    box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+    position: absolute; left: 24px; top: -44px; z-index: 3;
+    width: 112px; height: 112px; border-radius: 16px;
+    background: ${T.white}; border: 4px solid ${T.white};
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12); overflow: hidden;
   }
   .sp-verified-pill {
     position: absolute;
@@ -221,44 +205,83 @@ const css = `
     padding: 3px 10px; border-radius: 10px;
     white-space: nowrap;
   }
-  .sp-logo-img { width: 100%; height: 100%; border-radius: 11px; object-fit: cover; }
-  .sp-shop-info { flex: 1; min-width: 200px; }
+  .sp-logo-img { width: 100%; height: 100%; border-radius: 12px; object-fit: cover; display: block; }
+  .sp-header-main {
+    padding-top: 72px; display: flex; align-items: flex-start;
+    justify-content: space-between; gap: 24px; flex-wrap: wrap;
+  }
+  .sp-shop-info { flex: 1; min-width: 220px; }
   .sp-shop-name-row { display: flex; align-items: center; gap: 8px; }
   .sp-shop-name {
     font-family: 'Sora', Inter, sans-serif;
-    font-size: clamp(18px, 3vw, 24px); font-weight: 800; color: ${T.text}; letter-spacing: -0.4px;
+    font-size: 28px; font-weight: 800; color: ${T.text}; letter-spacing: -0.5px; line-height: 1.2;
   }
-  .sp-shop-tagline { font-size: 13.5px; color: ${T.textMuted}; margin-top: 4px; line-height: 1.45; }
-  .sp-shop-tags { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; align-items: center; }
-  .sp-tag-pill {
+  .sp-verified-tick {
+    display: inline-flex; align-items: center; justify-content: center;
+    background: none; border: none; padding: 0; cursor: pointer;
+    min-width: 24px; min-height: 24px; flex-shrink: 0;
+  }
+  .sp-shop-tagline {
+    font-size: 13.5px; color: ${T.textMuted}; margin-top: 5px; line-height: 1.45;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .sp-info-chips { display: flex; align-items: center; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
+  .sp-info-chip {
+    display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+    padding: 6px 10px; border-radius: 999px;
     background: ${T.gray100}; border: 1px solid ${T.border};
-    font-size: 12px; font-weight: 600; color: ${T.textMuted};
-    padding: 4px 10px; border-radius: 999px;
+    font-size: 12px; font-weight: 600; color: ${T.textMuted}; white-space: nowrap;
   }
-  .sp-shop-loc { font-size: 12.5px; color: ${T.textMuted}; display: flex; align-items: center; gap: 4px; }
-  .sp-shop-meta { font-size: 12.5px; color: ${T.textMuted}; margin-top: 8px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-  .sp-shop-meta .star { color: ${T.gold}; }
+  .sp-info-chip svg { color: #16a34a; flex-shrink: 0; }
+  .sp-info-chip .chip-star { color: ${T.amber}; display: inline-flex; align-items: center; }
+  .sp-star-row { display: inline-flex; align-items: center; gap: 2px; }
+  .sp-rating-stat-star { display: inline-flex; vertical-align: -2px; margin-right: 4px; }
+  .sp-header-divider { height: 1px; background: ${T.border}; margin: 16px 0 14px; }
+  .sp-header-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  .sp-header-stat { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .sp-header-stat + .sp-header-stat { border-left: 1px solid ${T.border}; padding-left: 14px; }
+  .sp-header-stat-value { font-size: 17px; font-weight: 800; color: ${T.text}; line-height: 1.2; }
+  .sp-header-stat-label { font-size: 11.5px; color: ${T.textMuted}; }
 
-  .sp-shophead-right { display: flex; flex-direction: column; align-items: flex-end; gap: 10px; flex-shrink: 0; }
+  .sp-shophead-right { display: flex; flex-direction: column; align-items: flex-end; align-self: flex-start; gap: 16px; flex-shrink: 0; }
   .sp-action-row { display: flex; gap: 8px; flex-wrap: wrap; }
   .sp-btn-msg, .sp-btn-follow {
     display: inline-flex; align-items: center; justify-content: center; gap: 7px;
     border-radius: 12px; padding: 10px 16px;
     font-size: 13.5px; font-weight: 700; font-family: inherit; cursor: pointer;
-    transition: all 0.15s; min-height: 44px; touch-action: manipulation;
+    transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.15s;
+    min-height: 44px; touch-action: manipulation;
   }
-  .sp-btn-msg { background: ${T.white}; border: 1.5px solid ${T.border}; color: ${T.text}; }
-  .sp-btn-msg:hover { background: ${T.gray100}; border-color: var(--theme); color: var(--theme-dark); }
-  .sp-btn-follow {
-    background: var(--theme); border: none; color: var(--theme-on);
-  }
-  .sp-btn-follow:hover { filter: brightness(0.92); }
+  .sp-btn-msg { background: #16a34a; border: 1px solid #16a34a; color: ${T.white}; }
+  .sp-btn-msg:hover { background: #15803d; border-color: #15803d; }
+  .sp-btn-msg:active, .sp-btn-follow:active { transform: translateY(1px); }
+  .sp-btn-follow { background: ${T.white}; border: 1.5px solid #16a34a; color: #15803d; }
+  .sp-btn-follow:hover { background: ${T.greenLight}; }
   .sp-btn-follow.following {
-    background: var(--theme-light); color: var(--theme-dark);
-    border: 1.5px solid var(--theme); filter: none;
+    background: ${T.gray100}; border-color: transparent; color: ${T.text};
   }
-  .sp-btn-follow.following:hover { background: var(--theme-soft); }
+  .sp-btn-follow.following:hover { background: ${T.gray200}; }
   .sp-followers-count { font-size: 12.5px; color: ${T.textMuted}; display: flex; align-items: center; gap: 5px; }
+
+  .sp-header-tabs {
+    display: flex; gap: 4px; padding: 0 24px;
+    border-top: 1px solid ${T.border};
+    overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  }
+  .sp-header-tabs::-webkit-scrollbar { display: none; }
+  .sp-header-tab {
+    position: relative; flex-shrink: 0;
+    padding: 13px 14px; background: none; border: none;
+    font-family: inherit; font-size: 13.5px; font-weight: 600;
+    color: ${T.textMuted}; cursor: pointer; white-space: nowrap;
+    transition: color 0.15s;
+  }
+  .sp-header-tab:hover { color: ${T.text}; }
+  .sp-header-tab.active { color: #16a34a; font-weight: 800; }
+  .sp-header-tab.active::after {
+    content: ''; position: absolute; bottom: 0; left: 12px; right: 12px;
+    height: 2.5px; background: #16a34a; border-radius: 2px 2px 0 0;
+  }
 
   /* ── STATS BAR ── */
   .sp-stats {
@@ -325,16 +348,6 @@ const css = `
     border: 1px solid ${T.border}; border-radius: 10px; padding: 7px 10px;
     background: ${T.white}; font-family: inherit; cursor: pointer; min-height: 36px;
   }
-  .sp-view-toggle { display: flex; gap: 4px; }
-  .sp-view-btn {
-    width: 36px; height: 36px; border-radius: 9px; border: 1px solid ${T.border};
-    background: ${T.white}; display: flex; align-items: center; justify-content: center;
-    cursor: pointer; color: ${T.textMuted}; touch-action: manipulation;
-  }
-  .sp-view-btn.active {
-    background: var(--theme); border-color: var(--theme); color: var(--theme-on);
-  }
-
   /* ── MAIN LAYOUT ──
      Products | Sidebar share one row. Sidebar is sticky under the nav and
      scrolls internally so every card can be reached (never cut mid-panel). */
@@ -342,7 +355,7 @@ const css = `
     max-width: 1180px;
     width: 100%;
     margin: 0 auto;
-    padding: 16px 20px 64px;
+    padding: 16px 20px 40px;
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
     column-gap: 24px;
@@ -373,38 +386,15 @@ const css = `
    * - overflow-y: auto so About / Policies / Owner are always reachable
    */
   .sp-sidebar-sticky {
-    position: sticky;
-    top: var(--sp-nav-offset);
     box-sizing: border-box;
     width: 100%;
     max-width: 100%;
-    max-height: calc(100vh - var(--sp-nav-offset) - 16px);
-    max-height: calc(100dvh - var(--sp-nav-offset) - 16px);
-    overflow-x: hidden;
-    overflow-y: auto;
-    overscroll-behavior: contain;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-gutter: stable;
-    scrollbar-width: thin;
-    scrollbar-color: #9aa0a6 transparent;
     display: flex;
     flex-direction: column;
     gap: 12px;
     padding: 0 4px 12px 0;
     margin: 0;
   }
-  .sp-sidebar-sticky::-webkit-scrollbar { width: 8px; }
-  .sp-sidebar-sticky::-webkit-scrollbar-track {
-    background: ${T.gray100};
-    border-radius: 99px;
-    margin: 6px 0;
-  }
-  .sp-sidebar-sticky::-webkit-scrollbar-thumb {
-    background: #c4c7cc;
-    border-radius: 99px;
-    border: 2px solid ${T.gray100};
-  }
-  .sp-sidebar-sticky::-webkit-scrollbar-thumb:hover { background: #9aa0a6; }
 
   .sp-sidebar-sticky > * {
     flex: 0 0 auto;
@@ -429,7 +419,7 @@ const css = `
   @media (max-width: 900px) {
     .sp-main {
       grid-template-columns: 1fr;
-      padding: 12px 10px 28px;
+      padding: 12px 10px 18px;
       column-gap: 0;
       row-gap: 14px;
     }
@@ -452,17 +442,24 @@ const css = `
   }
 
   .sp-grid {
-    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px;
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px;
   }
-  @media (max-width: 900px) {
-    .sp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  @media (max-width: 1023px) {
+    .sp-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  }
+  @media (max-width: 639px) {
+    .sp-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .sp-listing-price { min-height: 50px; gap: 4px; }
   }
   .sp-listing-card {
-    background: ${T.white}; border: 1px solid ${T.border}; border-radius: 14px; overflow: hidden;
+    background: ${T.white}; border: 1.5px solid ${T.border}; border-radius: 14px; overflow: hidden;
+    box-sizing: border-box;
     transition: transform 0.15s, box-shadow 0.15s; cursor: pointer;
     display: flex; flex-direction: column;
+    width: 100%; min-width: 0; max-width: none;
     box-shadow: ${T.shadow};
   }
+  .sp-flash-card { border-color: #E24B4A; }
   .sp-listing-card:hover { transform: translateY(-2px); box-shadow: 0 10px 28px rgba(0,0,0,0.1); }
   @media (hover: none) {
     .sp-listing-card:hover { transform: none; box-shadow: ${T.shadow}; }
@@ -489,18 +486,12 @@ const css = `
    .sp-listing-img-wrap > img { position: absolute; inset: 0; z-index: 1; }
    .sp-img-ph-txt { font-size: 12px; font-weight: 600; color: #80868b; letter-spacing: .2px; }
   .sp-badge-stack {
-    position: absolute; top: 8px; left: 8px;
+    position: absolute; top: 12px; left: 12px;
     display: flex; flex-direction: column; gap: 5px; align-items: flex-start; z-index: 2;
   }
-  .sp-featured-badge, .sp-cond-badge, .sp-sale-badge {
+  .sp-cond-badge {
     font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 6px;
     line-height: 1.2; letter-spacing: 0.01em;
-  }
-  .sp-featured-badge {
-    background: var(--theme); color: var(--theme-on);
-  }
-  .sp-sale-badge { background: #ea4335; color: #fff; }
-  .sp-cond-badge {
     background: rgba(255,255,255,.94); color: ${T.gray900};
     border: 1px solid rgba(0,0,0,.06); backdrop-filter: blur(6px);
   }
@@ -514,46 +505,62 @@ const css = `
   .sp-fav-btn:hover { color: #ea4335; }
   .sp-fav-btn.saved { color: #ea4335; }
   .sp-fav-btn:disabled { opacity: .8; cursor: default; }
+  .sp-flash-band {
+    position: absolute; left: 0; right: 0; bottom: 0; z-index: 3;
+    display: flex; align-items: center; justify-content: space-between; gap: 6px;
+    padding: 6px 10px; font-size: 12px; font-weight: 800; line-height: 1.2;
+    background: #E24B4A; color: #fff;
+  }
+  .sp-flash-band.urgent { background: #F5B301; color: #412402; }
+  .sp-flash-label, .sp-flash-time { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+  .sp-flash-label-short { display: none; }
+  .sp-flash-ends { display: inline; }
+  @media (max-width: 639px) {
+    .sp-flash-band { display: flex; justify-content: space-between; align-items: center; gap: 6px; padding: 5px 8px; font-size: 11px; white-space: nowrap; overflow: hidden; font-variant-numeric: tabular-nums; }
+    .sp-flash-label { display: none; }
+    .sp-flash-label-short { display: none; }
+    .sp-flash-ends { display: none; }
+    .sp-flash-time { min-width: 0; flex-shrink: 0; }
+  }
   .sp-listing-body { padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 4px; flex: 1; }
   .sp-listing-title {
     font-size: 13px; font-weight: 600; color: ${T.text}; line-height: 1.35;
     display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-    min-height: 2.6em;
   }
   .sp-listing-price {
-    font-size: 14.5px; font-weight: 800; color: ${T.green}; margin-top: auto;
-    display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap;
+    font-size: 14.5px; font-weight: 800; color: ${T.green};
+    display: flex; align-items: baseline; align-content: flex-start; gap: 6px; flex-wrap: wrap;
   }
   .sp-listing-price .old {
-    text-decoration: line-through; color: ${T.textLight}; font-size: 11.5px; font-weight: 500;
+    text-decoration: line-through; color: ${T.textLight}; font-size: 12px; font-weight: 500;
   }
-  .sp-listing-price .sale { color: #ea4335; }
+  .sp-listing-price .sale { color: ${T.green}; font-weight: 800; }
+  .sp-listing-price .sp-discount-chip {
+    font-size: 10.5px; font-weight: 800; line-height: 1;
+    padding: 3px 6px; border-radius: 6px;
+    background: #FDECEA; color: #A32D2D; border: 1px solid #F6C9C4;
+    white-space: nowrap; flex-shrink: 0;
+  }
+  .sp-flash-stock {
+    display: flex; align-items: center;
+    font-size: 12px; font-weight: 700; color: #A32D2D;
+    white-space: nowrap;
+  }
   .sp-listing-meta {
     font-size: 11.5px; color: ${T.textLight};
     display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    margin-top: auto;
   }
   .sp-listing-meta .dot { width: 3px; height: 3px; border-radius: 50%; background: ${T.border}; }
-
-  /* List view */
-  .sp-list-view { display: flex; flex-direction: column; gap: 10px; }
-  .sp-list-item {
-    background: ${T.white}; border: 1px solid ${T.border}; border-radius: 14px;
-    display: flex; gap: 14px; padding: 10px; cursor: pointer;
-    box-shadow: ${T.shadow}; transition: box-shadow .15s; align-items: stretch;
+  .sp-grid .sp-listing-title {
+    font-size: 14px; line-height: 1.35;
+    display: block; white-space: nowrap; text-overflow: ellipsis; overflow: hidden;
   }
-  .sp-list-item:hover { box-shadow: 0 8px 22px rgba(0,0,0,.08); }
-  .sp-list-thumb {
-    width: 108px; height: 108px; border-radius: 12px; overflow: hidden;
-    background: ${T.gray100}; flex-shrink: 0; position: relative;
-  }
-  .sp-list-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .sp-list-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; padding: 2px 4px 2px 0; }
-  .sp-list-body .sp-listing-title { min-height: 0; -webkit-line-clamp: 2; }
-  .sp-list-price-row { margin-top: auto; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-  @media (max-width: 600px) {
-    .sp-list-thumb { width: 88px; height: 88px; border-radius: 10px; }
-    .sp-list-item { gap: 10px; padding: 8px; }
-  }
+  .sp-grid .sp-listing-price { font-size: 16px; font-weight: 800; color: ${T.green}; }
+  .sp-grid .sp-listing-price .sale { color: ${T.green}; }
+  .sp-grid .sp-listing-price .old { font-size: 12px; }
+  .sp-grid .sp-listing-price .sp-discount-chip { font-size: 11px; }
+  .sp-grid .sp-listing-meta { font-size: 12px; }
 
   .sp-products-head {
     display: flex; align-items: center; justify-content: space-between; gap: 10px;
@@ -593,10 +600,13 @@ const css = `
   }
 
   .sp-skel-grid {
-    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px;
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px;
   }
-  @media (max-width: 900px) {
-    .sp-skel-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  @media (max-width: 1023px) {
+    .sp-skel-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  }
+  @media (max-width: 639px) {
+    .sp-skel-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
   }
   .sp-skel-card {
     background: ${T.white}; border: 1px solid ${T.border}; border-radius: 14px; overflow: hidden;
@@ -790,6 +800,13 @@ const css = `
     text-decoration: none; transition: transform 0.15s, box-shadow 0.15s;
   }
   .sp-social-icon:hover { transform: translateY(-2px); box-shadow: 0 4px 10px rgba(0,0,0,0.15); }
+  .sp-wa-btn {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    width: 100%; padding: 11px 14px; margin-top: 4px; border-radius: 10px;
+    background: #25d366; color: #fff; font-size: 13.5px; font-weight: 700;
+    text-decoration: none; transition: filter 0.15s;
+  }
+  .sp-wa-btn:hover { filter: brightness(0.94); }
 
   .sp-policy-row {
     display: flex; align-items: flex-start; gap: 9px;
@@ -821,94 +838,107 @@ const css = `
   }
   .sp-msg-owner-btn:hover { background: var(--theme-light); border-color: var(--theme); color: var(--theme-dark); }
 
-  /* ── SIMILAR SHOPS (sticky under nav) ── */
+  /* ── SIMILAR SHOPS ── */
   .sp-similar-wrap {
-    position: sticky;
-    top: var(--sp-nav-offset);
-    z-index: 35;
-    margin-top: 8px;
-    background: rgba(248, 249, 250, 0.96);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border-top: 1px solid ${T.border};
-    border-bottom: 1px solid ${T.border};
-    box-shadow: 0 8px 24px rgba(0,0,0,.06);
+    max-width: 1180px; margin: 0 auto; padding: 4px 20px 40px; box-sizing: border-box;
+    position: relative; background: transparent; border: none; box-shadow: none;
   }
   .sp-similar {
-    max-width: 1180px;
-    margin: 0 auto;
-    padding: 14px 20px 16px;
+    padding: 22px 22px 24px; border-radius: 22px;
+    background:
+      radial-gradient(120% 140% at 0% 0%, rgba(15,157,88,.10) 0%, rgba(15,157,88,0) 55%),
+      linear-gradient(180deg, #ffffff 0%, #f3faf6 100%);
+    border: 1px solid rgba(15,157,88,.16);
+    box-shadow: 0 1px 2px rgba(13,31,15,.04), 0 12px 32px rgba(13,31,15,.05);
   }
-  .sp-similar-head {
-    display: flex; align-items: center; justify-content: space-between; gap: 10px;
-    margin-bottom: 12px;
+  .sp-similar-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+  .sp-similar-title { min-width: 0; }
+  .sp-similar-eyebrow {
+    font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--theme-dark, ${T.greenDark}); margin-bottom: 4px;
   }
   .sp-similar-head h3 {
-    font-family: 'Sora', Inter, sans-serif;
-    font-size: 15px; font-weight: 800; color: ${T.text}; margin: 0;
+    font-family: 'Sora', Inter, sans-serif; font-size: 18px; font-weight: 800;
+    color: ${T.text}; margin: 0; letter-spacing: -.01em;
   }
-  .sp-similar-head .sp-similar-all {
-    font-size: 13px; font-weight: 700; color: var(--theme-dark, ${T.green});
-    cursor: pointer; white-space: nowrap; background: none; border: none;
-    font-family: inherit; padding: 0;
+  .sp-similar-all {
+    display: inline-flex; align-items: center; gap: 6px; flex-shrink: 0;
+    padding: 9px 14px; border-radius: 999px; cursor: pointer; font-family: inherit;
+    border: 1px solid rgba(15,157,88,.28); background: #fff;
+    color: var(--theme-dark, ${T.greenDark}); font-size: 13px; font-weight: 700; line-height: 1;
+    transition: background .15s, color .15s, border-color .15s;
   }
-  .sp-similar-head .sp-similar-all:hover { text-decoration: underline; }
-  .sp-similar-grid {
-    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px;
-  }
-  @media (max-width: 900px) {
-    .sp-similar-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
-  }
+  .sp-similar-all:hover { background: var(--theme, ${T.green}); border-color: var(--theme, ${T.green}); color: #fff; }
+  .sp-similar-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 14px; }
   .sp-similar-card {
-    background: ${T.white}; border: 1px solid ${T.border}; border-radius: 14px;
-    padding: 12px; display: flex; align-items: center; gap: 12px; cursor: pointer;
-    transition: box-shadow 0.15s, transform 0.15s; box-shadow: ${T.shadow};
+    position: relative; display: flex; flex-direction: column; gap: 14px;
+    padding: 16px; border-radius: 18px; background: #fff; cursor: pointer;
+    border: 1px solid ${T.border}; box-shadow: 0 1px 2px rgba(13,31,15,.04);
+    transition: transform .18s, box-shadow .18s, border-color .18s;
   }
-  .sp-similar-card:hover { box-shadow: 0 8px 22px rgba(0,0,0,0.08); transform: translateY(-1px); }
+  .sp-similar-card:hover { transform: translateY(-3px); border-color: rgba(15,157,88,.35); box-shadow: 0 14px 30px rgba(13,31,15,.10); }
+  .sp-similar-card:focus-visible { outline: 2px solid var(--theme, ${T.green}); outline-offset: 2px; }
   @media (hover: none) {
-    .sp-similar-card:hover { transform: none; box-shadow: ${T.shadow}; }
+    .sp-similar-card:hover { transform: none; border-color: ${T.border}; box-shadow: 0 1px 2px rgba(13,31,15,.04); }
   }
+  .sp-similar-top { display: flex; align-items: center; gap: 12px; }
   .sp-similar-avatar {
-    width: 48px; height: 48px; border-radius: 12px; flex-shrink: 0;
+    width: 56px; height: 56px; border-radius: 16px; flex-shrink: 0; overflow: hidden;
     display: flex; align-items: center; justify-content: center;
-    font-size: 14px; font-weight: 800; color: ${T.white}; overflow: hidden;
-    background: #111;
+    font-size: 15px; font-weight: 800; color: ${T.white}; background: #111;
+    box-shadow: 0 0 0 3px #fff, 0 0 0 4px rgba(15,157,88,.18);
   }
   .sp-similar-avatar img { width: 100%; height: 100%; object-fit: cover; }
   .sp-similar-info { flex: 1; min-width: 0; }
   .sp-similar-name {
-    font-size: 13.5px; font-weight: 700; color: ${T.text};
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    display: flex; align-items: center; gap: 5px;
+    font-family: 'Sora', Inter, sans-serif; font-size: 14.5px; font-weight: 700; color: ${T.text};
   }
-  .sp-similar-cat { font-size: 11.5px; color: ${T.textMuted}; margin-top: 2px; }
-  .sp-similar-bottom { display: flex; align-items: center; justify-content: space-between; margin-top: 5px; gap: 6px; }
-  .sp-similar-followers { font-size: 11px; color: ${T.textLight}; }
-  .sp-similar-rating { font-size: 11.5px; font-weight: 700; color: ${T.text}; display: flex; align-items: center; gap: 3px; }
-  .sp-similar-rating .star { color: ${T.gold}; }
+  .sp-similar-name svg { flex-shrink: 0; }
+  .sp-similar-name-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .sp-similar-cat {
+    display: inline-flex; margin-top: 6px; padding: 3px 9px; border-radius: 999px;
+    background: rgba(15,157,88,.09); color: var(--theme-dark, ${T.greenDark});
+    font-size: 11px; font-weight: 700; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .sp-similar-stats {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding-top: 12px; border-top: 1px dashed ${T.border};
+  }
+  .sp-similar-followers { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: ${T.textMuted}; }
+  .sp-similar-rating {
+    display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 999px;
+    background: #fff7e0; font-size: 12px; font-weight: 800; color: ${T.text};
+  }
+  .sp-similar-rating .star { color: ${T.amber}; display: inline-flex; }
+  .sp-similar-new { font-size: 11.5px; font-weight: 600; color: ${T.textLight}; }
+  .sp-similar-visit {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 10px; border-radius: 12px; font-size: 13px; font-weight: 700;
+    background: rgba(15,157,88,.08); color: var(--theme-dark, ${T.greenDark});
+    transition: background .15s, color .15s;
+  }
+  .sp-similar-card:hover .sp-similar-visit { background: var(--theme, ${T.green}); color: #fff; }
 
-  /* Horizontal scroll on very small screens so cards stay full */
+  @media (max-width: 900px) {
+    .sp-similar-wrap { padding: 4px 10px 0; }
+    .sp-similar { padding: 16px 12px 18px; border-radius: 18px; }
+    .sp-similar-head h3 { font-size: 16px; }
+    .sp-similar-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+  }
   @media (max-width: 600px) {
     .sp-similar-grid {
-      display: flex;
-      gap: 10px;
-      overflow-x: auto;
-      padding-bottom: 4px;
-      scrollbar-width: none;
-      -webkit-overflow-scrolling: touch;
+      display: flex; overflow-x: auto; scroll-snap-type: x mandatory; gap: 10px;
+      margin: 0 -12px; padding: 2px 12px 6px; scrollbar-width: none; -webkit-overflow-scrolling: touch;
     }
     .sp-similar-grid::-webkit-scrollbar { display: none; }
-    .sp-similar-card {
-      flex: 0 0 min(78vw, 280px);
-      max-width: min(78vw, 280px);
-    }
+    .sp-similar-card { flex: 0 0 min(76vw, 280px); scroll-snap-align: start; }
   }
 
   /* mobile shop layout */
   @media (max-width: 900px) {
     .sp-root {
-      /* Bottom gap = real mobile bottom-nav height (measured, incl. safe-area)
-         + a little air. Falls back to 72px until the hook measures it. */
-      padding-bottom: calc(var(--sp-bottom-nav-offset, 72px) + 16px);
+      padding-bottom: 24px;
     }
 
     .sp-breadcrumb {
@@ -928,13 +958,8 @@ const css = `
       background: ${T.white}; border: 1px solid ${T.border};
     }
 
-    .sp-cover-wrap { padding: 0 10px; margin-top: 6px; }
-    .sp-cover {
-      height: clamp(160px, 42vw, 220px);
-      min-height: 160px;
-      max-height: 220px;
-      border-radius: 16px;
-    }
+    .sp-header-card { padding: 0 10px; margin-top: 6px; }
+    .sp-header-card-inner { border-radius: 16px; }
     /* Cover edit pill always visible on touch (no hover) */
     .sp-cover-overlay {
       opacity: 1 !important;
@@ -950,42 +975,40 @@ const css = `
     }
     .sp-logo-overlay-btn { padding: 5px 8px; font-size: 10px; }
 
-    .sp-shophead { padding: 0 10px; }
-    .sp-shophead-inner {
-      padding: 48px 12px 12px;
-      margin-top: -36px;
-      border-radius: 14px;
-      flex-direction: column;
-      align-items: stretch;
-      gap: 12px;
-    }
+    .sp-header-body { padding: 0 12px 20px; }
     .sp-logo-frame {
-      left: 12px; top: -26px;
-      width: 68px; height: 68px;
-      border-radius: 14px; padding: 3px;
+      left: 12px; top: -38px;
+      width: 96px; height: 96px;
+      border-radius: 16px; border-width: 4px;
     }
-    .sp-logo-img { border-radius: 11px; }
     .sp-verified-pill {
       top: -20px; font-size: 9px; padding: 2px 7px;
     }
-    .sp-shop-info { min-width: 0; width: 100%; }
-    .sp-shop-name { font-size: 17px; line-height: 1.25; }
-    .sp-shop-tagline {
-      font-size: 12.5px;
-      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    .sp-header-main {
+      padding-top: 58px; flex-direction: column; align-items: flex-start; gap: 14px;
     }
-    .sp-shop-tags { margin-top: 8px; gap: 6px; }
-    .sp-tag-pill { font-size: 11px; padding: 3px 9px; }
-    .sp-shop-meta { font-size: 12px; margin-top: 6px; gap: 5px; }
-    .sp-shop-meta .meta-joined { display: none; }
-    /* Follower count is shown once, under the Message/Follow buttons in the
-       header action column — keep the meta-line copy hidden to avoid dupes. */
-    .sp-shop-meta .meta-followers-inline { display: none !important; }
+    .sp-shop-info { min-width: 0; width: 100%; }
+    .sp-shop-name { font-size: 23px; line-height: 1.25; }
+    .sp-shop-tagline { font-size: 12.5px; }
+    .sp-info-chips {
+      flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
+      margin: 0 -12px; padding: 2px 12px 4px;
+    }
+    .sp-info-chips::-webkit-scrollbar { display: none; }
+    .sp-info-chip { font-size: 11px; padding: 5px 9px; }
+    .sp-header-divider { margin: 14px 0 12px; }
+    .sp-header-stats {
+      width: 100%; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+      justify-items: center; gap: 8px;
+    }
+    .sp-header-stat + .sp-header-stat { border-left: none; padding-left: 0; }
+    .sp-header-stat-value { font-size: 15px; }
+    .sp-header-stat-label { font-size: 10.5px; }
 
     /* Visitor actions live inline in the header (like the owner bar) so no
        floating bar ever covers the product grid on mobile. */
     .sp-shophead-right.visitor-actions {
-      width: 100%; align-items: stretch; display: flex;
+      width: 100%; align-items: flex-end; display: flex;
     }
     .sp-shophead-right.visitor-actions .sp-action-row {
       display: grid;
@@ -1005,7 +1028,7 @@ const css = `
       padding-top: 2px;
     }
     .sp-shophead-right.owner-actions {
-      width: 100%; align-items: stretch; display: flex;
+      width: 100%; align-items: flex-end; display: flex;
     }
     .sp-owner-bar {
       width: 100%;
@@ -1020,6 +1043,9 @@ const css = `
     .sp-owner-btn .owner-btn-label { display: none; }
     .sp-owner-btn.primary .owner-btn-label { display: inline; }
     .sp-owner-btn.primary { grid-column: span 1; }
+
+    .sp-header-tabs { padding: 0 6px; }
+    .sp-header-tab { padding: 12px 12px; font-size: 13px; min-height: 44px; }
 
     .sp-stats { padding: 0 10px; margin-top: 10px; }
     .sp-stats-inner {
@@ -1082,27 +1108,17 @@ const css = `
       flex: 1 1 auto; min-width: 0; max-width: none;
       height: 40px; font-size: 12px; padding: 0 8px;
     }
-    .sp-view-toggle { margin-left: auto; }
-    .sp-view-btn { width: 40px; height: 40px; }
 
     .sp-products-head { margin-bottom: 10px; }
     .sp-products-head h3 { font-size: 14px; }
     .sp-products-count { font-size: 11.5px; }
 
-    .sp-grid { gap: 8px; }
     .sp-listing-card { border-radius: 12px; }
     .sp-listing-body { padding: 8px 8px 10px; gap: 3px; }
-    .sp-listing-title {
-      font-size: 12px; min-height: 2.5em; line-height: 1.3;
-    }
-    .sp-listing-price { font-size: 13px; }
-    .sp-listing-meta { font-size: 10.5px; }
     .sp-fav-btn { width: 30px; height: 30px; top: 6px; right: 6px; }
-    .sp-badge-stack { top: 6px; left: 6px; gap: 4px; }
-    .sp-featured-badge, .sp-cond-badge, .sp-sale-badge {
-      font-size: 9px; padding: 2px 6px;
-    }
-    .sp-cond-badge { display: none; }
+    .sp-badge-stack { gap: 4px; }
+    .sp-cond-badge { font-size: 9px; padding: 2px 6px; }
+    .sp-listing-price .sp-discount-chip { font-size: 10px; padding: 2px 5px; }
 
     .sp-side-card { padding: 14px; border-radius: 12px; }
     .sp-desktop-sidebar-title { font-size: 13.5px; }
@@ -1121,20 +1137,6 @@ const css = `
       padding-left: 12px;
       padding-right: 12px;
     }
-    /* Similar-shops rail scrolls normally on mobile (not sticky) so it
-       never floats over the product grid or the pinned tab bar. */
-    .sp-similar-wrap {
-      position: static;
-      top: auto;
-      margin-top: 8px;
-    }
-    .sp-similar { padding: 12px 12px 14px; }
-    .sp-similar-head h3 { font-size: 14px; }
-    .sp-similar-card { padding: 10px; border-radius: 12px; gap: 10px; }
-    .sp-similar-avatar { width: 42px; height: 42px; border-radius: 10px; }
-    .sp-similar-name { font-size: 12.5px; }
-    .sp-similar-cat { font-size: 11px; }
-
     .sp-empty-products { padding: 36px 16px; border-radius: 14px; }
     .sp-viewall { min-height: 46px; font-size: 13px; border-radius: 11px; }
 
@@ -1146,6 +1148,16 @@ const css = `
       gap: 12px !important;
     }
     .sp-verify-benefits { display: none !important; }
+  }
+
+  @media (max-width: 768px) {
+    .sp-root {
+      /* index.css reserves 88px under the page for the fixed bottom nav, but the real nav is only
+         60px on short screens (BottomNav max-height:660px rule). Pull the page down by the
+         unused part so the gap above the nav is always exactly the 24px padding. */
+      margin-bottom: calc(var(--sp-bottom-nav-offset, 88px) - 88px);
+    }
+    .sp-root.sp-root { background: #f6f8f7 !important; }
   }
 
   @media (max-width: 600px) {
@@ -1240,6 +1252,7 @@ const css = `
     background: rgba(255,255,255,0.92); border: none; border-radius: 8px;
     padding: 6px 12px; font-size: 11px; font-weight: 700; cursor: pointer; color: #0d1b0e;
   }
+  .sp-cover-edit-pill, .sp-logo-camera-btn { display: none; }
 
   /* ── OWNER ACTION BAR (replaces Follow/Message when owner views own shop) ── */
   .sp-owner-bar { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -1353,13 +1366,430 @@ const css = `
     .sp-vsheet-overlay { align-items: center; padding: 16px; }
     .sp-vsheet { border-radius: 16px; max-height: calc(100vh - 32px); }
   }
+
+  /* LAYOUT RESTRUCTURE */
+  .sp-main { display: block; max-width: 1180px; margin: 0 auto; padding: 0 20px 40px; }
+  .sp-main-col { width: 100%; max-width: none; }
+  .sp-prod-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  @media (max-width: 1100px) { .sp-prod-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+  @media (max-width: 700px) {
+    .sp-main { padding: 0 10px 40px; }
+    .sp-prod-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+
+  .sp-quick-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .sp-quick-btn, .sp-icon-btn, .sp-info-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    font-family: inherit; font-size: 13.5px; font-weight: 800; cursor: pointer;
+    min-height: 44px; border-radius: 12px; padding: 0 14px;
+    transition: background .15s, border-color .15s, color .15s, transform .15s;
+  }
+  .sp-quick-btn.primary { background: #16a34a; border: 1px solid #16a34a; color: #fff; }
+  .sp-quick-btn.primary:hover { background: #15803d; border-color: #15803d; }
+  .sp-quick-btn:not(.primary) { background: #fff; border: 1.5px solid #16a34a; color: #15803d; }
+  .sp-quick-btn:not(.primary):hover { background: #e8f5ee; }
+  .sp-quick-btn:active, .sp-icon-btn:active, .sp-info-btn:active { transform: translateY(1px); }
+  .sp-icon-btn, .sp-info-btn {
+    width: 44px; padding: 0; border-radius: 50%; background: #fff;
+    border: 1.5px solid ${T.border}; color: ${T.textMuted};
+  }
+  .sp-icon-btn:hover, .sp-info-btn:hover { border-color: #16a34a; color: #15803d; background: #f0fdf4; }
+  .sp-icon-btn.whatsapp { color: #128c3b; border-color: rgba(18,140,59,.28); background: #e8f5ee; }
+  .sp-icon-btn.social { width: 36px; min-height: 36px; font-size: 12px; font-weight: 900; }
+  .sp-info-btn { width: auto; padding: 0 12px; border-radius: 999px; }
+  .sp-quick-actions button:focus-visible, .sp-quick-actions a:focus-visible,
+  .sp-header-tab:focus-visible, .sp-tab:focus-visible, .sp-info-panel button:focus-visible {
+    outline: 2px solid #16a34a; outline-offset: 2px;
+  }
+
+  .sp-tabs.sp-header-tabs-sticky {
+    position: sticky; top: var(--sp-nav-offset, 120px); z-index: 30;
+    max-width: 1180px; margin: 10px auto 0; padding: 0 20px;
+    background: transparent; border: none; box-shadow: none;
+  }
+  .sp-tabs.sp-header-tabs-sticky .sp-tabs-left {
+    max-width: none; background: #fff; border: 1px solid ${T.border};
+    border-radius: 14px; box-shadow: ${T.shadow}; padding: 4px;
+  }
+  .sp-tabs.sp-header-tabs-sticky .sp-tab { min-height: 46px; border-radius: 10px; }
+
+  .sp-info-overlay {
+    position: fixed; inset: 0; z-index: 2000;
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+    background: rgba(0,0,0,.45); animation: spInfoFade .15s ease-out;
+  }
+  .sp-info-panel {
+    width: 100%; max-width: 520px; max-height: min(86vh, 760px); overflow-y: auto;
+    background: #fff; border-radius: 18px; box-shadow: 0 24px 70px rgba(0,0,0,.24);
+    animation: spInfoUp .18s ease-out;
+  }
+  .sp-info-head {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 18px 20px 14px; border-bottom: 1px solid ${T.border};
+  }
+  .sp-info-title-main { font-family: 'Sora', Inter, sans-serif; font-size: 18px; font-weight: 800; color: ${T.text}; }
+  .sp-info-sub { font-size: 12.5px; color: ${T.textMuted}; margin-top: 2px; }
+  .sp-info-close {
+    width: 36px; height: 36px; border-radius: 50%; border: 1px solid ${T.border};
+    background: ${T.gray100}; color: ${T.text}; cursor: pointer; font-size: 20px; line-height: 1;
+  }
+  .sp-info-body { padding: 4px 20px 20px; }
+  .sp-info-section { padding: 16px 0 4px; scroll-margin-top: 12px; }
+  .sp-info-section + .sp-info-section { border-top: 1px solid ${T.border}; }
+  .sp-info-section-title {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: .06em;
+    color: #15803d; margin-bottom: 6px; min-height: 32px; padding: 0;
+  }
+  .sp-info-section-title svg { width: 16px; height: 16px; flex-shrink: 0; }
+  .sp-info-row {
+    display: flex; align-items: center; gap: 9px;
+    font-size: 13.5px; line-height: 1.55; color: ${T.text};
+    padding: 10px 0; border-top: 1px dashed ${T.border}; min-height: 44px; box-sizing: border-box;
+  }
+  .sp-info-row:first-of-type { border-top: none; }
+  .sp-info-row svg { flex-shrink: 0; color: #16a34a; }
+  .sp-info-icon { width: 20px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; }
+  .sp-info-icon svg { width: 18px; height: 18px; }
+  .sp-info-label { font-size: 12px; color: ${T.textMuted}; font-weight: 600; }
+  .sp-info-labeled { flex-direction: column; gap: 2px; align-items: flex-start; }
+  .sp-info-external { margin-left: auto; color: ${T.textLight}; display: inline-flex; align-items: center; }
+  .sp-info-row a { color: #15803d; text-decoration: none; font-weight: 600; }
+  .sp-info-row a:hover { text-decoration: underline; }
+  .sp-info-owner { display: flex; align-items: center; gap: 12px; padding: 8px 0 12px; }
+  .sp-info-avatar {
+    width: 56px; height: 56px; border-radius: 16px; overflow: hidden; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 20px;
+  }
+  .sp-info-avatar img { width: 100%; height: 100%; object-fit: cover; }
+  .sp-info-owner-name { display: flex; align-items: center; gap: 6px; font-weight: 800; font-size: 15px; color: ${T.text}; }
+  .sp-info-badge { font-size: 10.5px; font-weight: 800; padding: 3px 8px; border-radius: 999px; background: #e8f5ee; color: #15803d; }
+  .sp-info-joined { font-size: 12px; color: ${T.textMuted}; margin-top: 3px; }
+  .sp-info-edit-link { background: none; border: none; color: #15803d; font-weight: 700; cursor: pointer; font-family: inherit; }
+  .sp-info-panel .sp-info-section-title { display: flex; flex-direction: row; align-items: center; gap: 8px; min-height: 32px; padding: 12px 0 4px; }
+  .sp-info-panel .sp-info-section-title svg { display: inline-block; width: 16px; height: 16px; flex-shrink: 0; }
+  .sp-info-panel .sp-info-row { line-height: 1.4; padding: 10px 0; min-height: 44px; }
+  .sp-info-handle { display: none; }
+  @keyframes spInfoFade { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes spInfoUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: translateY(0); } }
+  @keyframes spInfoSheet { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  @media (max-width: 700px) {
+    .sp-info-overlay { align-items: flex-end; padding: 0; }
+    .sp-info-panel { max-width: none; max-height: 88dvh; border-radius: 20px 20px 0 0; animation: spInfoSheet .2s ease-out; }
+    .sp-info-handle { display: block; width: 44px; height: 4px; border-radius: 999px; background: ${T.border}; margin: 10px auto 0; }
+    .sp-info-body { padding-bottom: calc(24px + var(--sp-bottom-nav-offset, 72px)); }
+    .sp-quick-actions { justify-content: flex-start; }
+    .sp-tabs.sp-header-tabs-sticky {
+      top: calc(var(--sp-nav-offset, 120px) - 6px);
+      padding: 0 10px;
+    }
+  }
+
+  /* ── HEADER POLISH ── */
+  .sp-header-body { padding: 0 24px 20px; }
+  .sp-header-main {
+    display: grid;
+    grid-template-columns: 112px minmax(0, 1fr) auto;
+    grid-template-areas: "logo info actions";
+    column-gap: 16px;
+    row-gap: 16px;
+    align-items: start;
+    padding-top: 0;
+  }
+  .sp-logo-frame {
+    grid-area: logo;
+    position: relative; left: auto; top: auto;
+    margin-top: -45px;
+    width: 112px; height: 112px;
+  }
+  .sp-shop-info { grid-area: info; padding-top: 10px; min-width: 0; }
+  .sp-shop-name { font-size: 26px; line-height: 1.2; }
+  .sp-shop-tagline { margin-top: 6px; line-height: 1.4; }
+  .sp-info-chips { margin-top: 8px; gap: 6px; }
+  .sp-header-divider { display: none; }
+  .sp-header-stats {
+    display: flex; flex-wrap: wrap; align-items: baseline;
+    justify-content: flex-end;
+    gap: 8px 24px; margin: 0; padding: 0; border: none;
+  }
+  .sp-header-stat { flex-direction: row; align-items: baseline; gap: 5px; }
+  .sp-header-stat + .sp-header-stat { border-left: none; padding-left: 0; }
+  .sp-header-stat-value { font-size: 18px; font-weight: 600; line-height: 1.1; }
+  .sp-header-stat-label { font-size: 11.5px; color: ${T.textMuted}; }
+
+  .sp-social-row {
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 8px; flex-wrap: nowrap;
+  }
+  .sp-social-row .sp-social-btn {
+    box-sizing: border-box;
+    width: 36px; height: 36px; min-width: 36px; max-width: 36px;
+    min-height: 36px; max-height: 36px; flex: 0 0 36px;
+    border-radius: 50%; border: 1px solid #E5E7EB;
+    background: ${T.white}; display: inline-flex; align-items: center;
+    justify-content: center; padding: 0; margin: 0; cursor: pointer;
+    transition: background 0.15s;
+  }
+  .sp-social-row .sp-social-btn:hover {
+    background: #F0FDF4;
+  }
+  .sp-social-row .sp-social-btn svg {
+    width: 18px; height: 18px; display: block; flex-shrink: 0;
+  }
+  .sp-social-row .sp-social-btn:focus-visible {
+    outline: 2px solid #16a34a; outline-offset: 2px;
+  }
+
+  .sp-shophead-right { grid-area: actions; align-self: flex-start; align-items: flex-end; gap: 16px; padding-top: 10px; }
+  .sp-quick-actions { flex-wrap: nowrap; justify-content: flex-end; }
+  .sp-quick-btn { min-height: 40px; font-size: 13px; padding: 0 14px; }
+  .sp-quick-btn.following { background: ${T.gray100}; border-color: transparent; color: ${T.text}; }
+  .sp-icon-btn { width: 40px; min-height: 40px; }
+  .sp-info-btn { min-height: 40px; }
+  .sp-header-card button:focus-visible,
+  .sp-header-card a:focus-visible,
+  .sp-header-card [role="button"]:focus-visible,
+  .sp-tabs button:focus-visible,
+  .sp-listings-toolbar input:focus-visible,
+  .sp-listings-toolbar select:focus-visible,
+  .sp-listings-toolbar button:focus-visible {
+    outline: 2px solid #16a34a; outline-offset: 2px;
+  }
+
+  .sp-tabs.sp-header-tabs-sticky {
+    margin: 16px auto 0;
+    padding: 4px 20px;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    z-index: 40;
+  }
+  .sp-tabs.sp-header-tabs-sticky .sp-tabs-left {
+    max-width: none;
+    background: ${T.white};
+    border: 1px solid ${T.border};
+    border-bottom: 1px solid ${T.border};
+    border-radius: 14px;
+    box-shadow: ${T.shadow};
+    padding: 4px;
+  }
+  .sp-tabs.sp-header-tabs-sticky .sp-tab { min-height: 42px; }
+
+  .sp-listings-toolbar {
+    flex-wrap: nowrap; margin: 16px 0 14px; gap: 8px;
+  }
+  .sp-listings-toolbar .sp-shop-search { flex: 1 1 auto; min-width: 0; }
+  .sp-shop-search input { width: 100%; min-width: 0; height: 40px; }
+  .sp-sort-select { height: 40px; min-height: 40px; padding: 0 10px; }
+
+  @media (max-width: 900px) {
+    .sp-header-body { padding: 0 12px 20px; }
+    .sp-header-main {
+      grid-template-columns: 96px minmax(0, 1fr);
+      grid-template-areas: "logo info" "actions actions";
+      column-gap: 12px;
+      row-gap: 12px;
+    }
+    .sp-logo-frame { margin-top: -38px; width: 96px; height: 96px; }
+    .sp-shop-info { padding-top: 8px; }
+    .sp-header-stats {
+      width: 100%; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+      justify-items: center; align-items: center; gap: 8px; margin: 0;
+    }
+    .sp-shophead-right {
+      grid-area: actions; align-self: flex-start; padding-top: 0; width: 100%; align-items: flex-end; gap: 16px;
+    }
+    .sp-quick-actions {
+      display: grid; grid-template-columns: 1fr auto auto;
+      gap: 8px; width: 100%; justify-content: start;
+    }
+    .sp-quick-btn.primary { grid-column: 1 / -1; width: 100%; }
+    .sp-icon-btn, .sp-info-btn { justify-self: end; }
+    .sp-social-row {
+      margin-left: -12px; margin-right: -12px; padding: 0 12px 2px;
+      flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+    }
+    .sp-social-row::-webkit-scrollbar { display: none; }
+    .sp-tabs.sp-header-tabs-sticky { padding: 0 10px; }
+    .sp-main { padding: 0 10px 40px; }
+    .sp-listings-toolbar { flex-wrap: wrap; }
+    .sp-listings-toolbar .sp-shop-search { flex: 1 1 100%; }
+    .sp-sort-select { flex: 1 1 calc(50% - 4px); min-width: 0; }
+  }
+  @media (max-width: 1023px) {
+    .sp-cover-wrap { height: 180px; }
+  }
+  @media (max-width: 600px) {
+    .sp-cover-wrap { height: 140px; }
+  }
+  @media (max-width: 380px) {
+    .sp-header-body { padding-left: 10px; padding-right: 10px; }
+    .sp-header-main { column-gap: 10px; }
+    .sp-shop-name { font-size: 23px; }
+    .sp-header-stat-value { font-size: 17px; }
+  }
+  @media (max-width: 639px) {
+    .sp-root { padding-bottom: 80px; }
+    .sp-header-card { padding: 0 10px; margin-top: 6px; }
+    .sp-header-card-inner { border-radius: 16px; }
+    .sp-cover-wrap { height: 150px; }
+    .sp-cover img { object-fit: cover; object-position: center; }
+    .sp-cover-overlay { display: none !important; }
+    .sp-cover-edit-pill {
+      display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+      position: absolute; top: 10px; right: 12px; z-index: 3;
+      min-height: 28px; padding: 5px 10px; border: none; border-radius: 999px;
+      background: rgba(255,255,255,0.94); color: #0d1b0e;
+      font-family: inherit; font-size: 12px; font-weight: 700;
+      box-shadow: 0 2px 8px rgba(0,0,0,.18); cursor: pointer;
+    }
+    .sp-header-body { padding: 0 16px 12px; }
+    .sp-header-main {
+      display: grid; width: 100%; padding-top: 0;
+      grid-template-columns: 72px minmax(0, 1fr);
+      grid-template-areas:
+        'logo name'
+        'logo tagline'
+        'chips chips'
+        'social social'
+        'actions actions';
+      align-items: start; column-gap: 12px; row-gap: 8px;
+    }
+    .sp-header-main.sp-social-inline {
+      grid-template-areas:
+        'logo name'
+        'logo tagline'
+        'chips chips'
+        'actions actions';
+    }
+    .sp-logo-frame {
+      grid-area: logo; align-self: start;
+      position: relative; left: auto; top: auto; z-index: 3;
+      width: 72px; height: 72px; border-radius: 14px;
+      border: 4px solid #fff; margin: -28px 0 0; overflow: visible;
+    }
+    .sp-logo-img { border-radius: 10px; }
+    .sp-logo-overlay { display: none !important; }
+    .sp-logo-camera-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+                      position: absolute; right: -6px; bottom: -6px; z-index: 4;
+      width: 28px; height: 28px; border-radius: 50%;
+      background: #fff; border: 1px solid ${T.border}; color: ${T.text};
+      box-shadow: 0 2px 8px rgba(0,0,0,.16); cursor: pointer;
+    }
+    .sp-shop-info { display: contents; }
+    .sp-shop-name-row {
+      grid-area: name; display: block; width: 100%; min-width: 0; padding-top: 6px;
+    }
+    .sp-shop-name.inline {
+      display: block; margin: 0; width: 100%; min-width: 0;
+      font-size: 20px; font-weight: 700; line-height: 1.2;
+      max-height: 48px; overflow: hidden;
+    }
+    .sp-name-tail { white-space: nowrap; }
+    .sp-shop-name.inline .sp-verified-tick {
+      display: inline-block; width: 20px; height: 20px;
+      min-width: 20px; min-height: 20px; margin: 0 0 0 6px;
+      padding: 0; vertical-align: middle; flex-shrink: 0;
+    }
+    .sp-shop-name.inline .sp-verified-tick svg { width: 20px; height: 20px; display: block; }
+    .sp-shop-tagline {
+      grid-area: tagline; min-width: 0; margin: 0;
+      font-size: 13px; line-height: 1.4; color: ${T.textMuted}; white-space: normal;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .sp-info-chips {
+      grid-area: chips; display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+      margin: 0; padding: 0; overflow: visible;
+    }
+    .sp-chip-category, .sp-chip-joined { display: none !important; }
+    .sp-info-chip {
+      width: auto !important; flex: 0 0 auto !important; min-width: 0 !important;
+      white-space: nowrap !important; height: 32px !important;
+      font-size: 12px !important; padding: 0 10px !important;
+    }
+    .sp-info-chip svg { width: 14px !important; height: 14px !important; }
+    .sp-info-chips .sp-chip-location {
+      flex: 0 1 auto !important; max-width: none; overflow: visible;
+    }
+    .sp-chip-location-text {
+      display: inline; min-width: 0; overflow: visible;
+      text-overflow: clip; white-space: nowrap;
+    }
+    .sp-social-row {
+      grid-area: social; display: flex; flex-wrap: nowrap; align-items: center;
+      gap: 8px; margin: 0; padding: 0; overflow: visible;
+    }
+    .sp-social-row .sp-social-btn {
+      width: 40px !important; height: 40px !important;
+      min-width: 40px !important; max-width: 40px !important;
+      min-height: 40px !important; max-height: 40px !important;
+      flex: 0 0 40px !important;
+    }
+    .sp-info-chips .sp-social-btn {
+      width: 32px !important; height: 32px !important;
+      min-width: 32px !important; max-width: 32px !important;
+      min-height: 32px !important; max-height: 32px !important;
+      flex: 0 0 32px !important;
+      box-sizing: border-box;
+      border: 1px solid #E5E7EB; border-radius: 50%;
+      background: ${T.white}; display: inline-flex; align-items: center;
+      justify-content: center; padding: 0; margin: 0;
+    }
+    .sp-social-row .sp-social-btn svg { width: 20px !important; height: 20px !important; }
+    .sp-info-chips .sp-social-btn svg { width: 16px !important; height: 16px !important; }
+    .sp-info-chips .sp-social-btn:hover { background: #F0FDF4; }
+    .sp-shophead-right { grid-area: actions; width: 100%; align-items: stretch; gap: 8px; padding-top: 0; }
+    .sp-quick-actions {
+      display: grid; grid-template-columns: minmax(0, 1fr) 44px auto;
+      gap: 8px; width: 100%; justify-content: stretch; flex-wrap: nowrap;
+    }
+    .sp-quick-btn.primary {
+      grid-column: 1 / -1; width: 100%; min-height: 44px; height: 44px;
+      padding: 0 12px; font-size: 13.5px; justify-self: stretch;
+    }
+    .sp-quick-btn:not(.primary) {
+      width: 100%; min-height: 44px; height: 44px;
+      padding: 0 10px; font-size: 13px; justify-self: stretch;
+    }
+    .sp-icon-btn { width: 44px; height: 44px; min-height: 44px; justify-self: stretch; }
+    .sp-info-btn { height: 44px; min-height: 44px; justify-self: stretch; padding: 0 12px; }
+    .sp-header-stats {
+      display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+      width: 100%; margin: 4px 0 0; padding: 8px 0 0;
+      border-top: 1px solid ${T.border}; justify-items: center;
+      text-align: center; align-items: baseline; gap: 8px;
+    }
+    .sp-header-stat {
+      flex-direction: row; align-items: baseline; justify-content: center;
+      flex-wrap: nowrap; gap: 5px; min-width: 0; white-space: nowrap;
+    }
+    .sp-header-stat-value,
+    .sp-header-stat-label { white-space: nowrap; }
+    .sp-header-stat + .sp-header-stat { border-left: none; padding-left: 0; }
+    .sp-tabs.sp-header-tabs-sticky {
+      margin: 10px 0 0; padding: 0 12px;
+      top: calc(var(--sp-nav-offset, 120px) - 6px);
+    }
+    .sp-tabs.sp-header-tabs-sticky .sp-tabs-left {
+      width: 100%; min-width: 0; padding: 0; gap: 4px;
+      background: transparent; border: none; border-radius: 0;
+      box-shadow: none; overflow-x: auto; scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+    }
+    .sp-tabs.sp-header-tabs-sticky .sp-tabs-left::-webkit-scrollbar { display: none; }
+    .sp-tabs.sp-header-tabs-sticky .sp-tab { min-height: 44px; padding: 12px 12px; }
+  }
 `
 
 const Icon = {
   Search: () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>,
   Grid: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>,
   List: () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3" y2="6"/><line x1="3" y1="12" x2="3" y2="12"/><line x1="3" y1="18" x2="3" y2="18"/></svg>,
-  Heart: (filled = false) => <svg width="15" height="15" viewBox="0 0 24 24" fill={filled ? '#ea4335' : 'none'} stroke={filled ? '#ea4335' : 'currentColor'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z"/></svg>,
+  Heart: ({ filled = false } = {}) => <svg width="15" height="15" viewBox="0 0 24 24" fill={filled ? '#ea4335' : 'none'} stroke={filled ? '#ea4335' : 'currentColor'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 0 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8Z"/></svg>,
   Pin: () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 6-9 13-9 13s-9-7-9-13a9 9 0 1 1 18 0Z"/><circle cx="12" cy="10" r="3"/></svg>,
   Star: () => <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26"/></svg>,
   Users: () => <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>,
@@ -1379,6 +1809,43 @@ Check: () => <svg width="20" height="20" viewBox="0 0 24 24"><path fill="#16a34a
   Phone: () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg>,
   Mail: () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>,
   Clock: () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>,
+  Facebook: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="#1877f2" aria-hidden="true"><path d="M22 12.06C22 6.5 17.52 2 12 2S2 6.5 2 12.06c0 5.02 3.66 9.18 8.44 9.94v-7.03H7.9v-2.91h2.54V9.85c0-2.52 1.49-3.91 3.77-3.91 1.09 0 2.24.2 2.24.2v2.46h-1.26c-1.24 0-1.63.77-1.63 1.56v1.88h2.78l-.44 2.91h-2.34V22c4.78-.76 8.44-4.92 8.44-9.94Z"/></svg>,
+  Instagram: () => <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><defs><linearGradient id="spIGrad" x1="0" y1="1" x2="1" y2="0"><stop stopColor="#feda75"/><stop offset=".45" stopColor="#d62976"/><stop offset="1" stopColor="#4f5bd5"/></linearGradient></defs><rect x="2" y="2" width="20" height="20" rx="6" fill="url(#spIGrad)"/><rect x="6" y="6" width="12" height="12" rx="4" fill="none" stroke="#fff" strokeWidth="2"/><circle cx="12" cy="12" r="3.1" fill="none" stroke="#fff" strokeWidth="2"/><circle cx="17.4" cy="6.7" r="1.2" fill="#fff"/></svg>,
+  TikTok: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="#111827" aria-hidden="true"><path d="M16.6 2h-3.1v12.1a2.7 2.7 0 1 1-2.7-2.7c.28 0 .55.04.8.12V8.4a5.8 5.8 0 1 0 5 5.7V8.1a6.4 6.4 0 0 0 3.7 1.2V6.2a3.6 3.6 0 0 1-3.7-4.2Z"/></svg>,
+  XBrand: () => <svg width="18" height="18" viewBox="0 0 24 24" fill="#111827" aria-hidden="true"><path d="M18.9 2H22l-6.8 7.8L23 22h-6.3l-5-6.6L6 22H2.7l7.3-8.4L2 2h6.5l4.5 6 5.9-6Zm-1.1 18h1.7L7.4 3.8H5.6L17.8 20Z"/></svg>,
+  WhatsApp: () => <svg width="18" height="18" viewBox="0 0 16 16" fill="#25D366" aria-hidden="true"><path d="M13.601 2.326A7.854 7.854 0 0 0 7.994 0C3.627 0 .068 3.558.064 7.926c0 1.399.366 2.76 1.057 3.965L0 16l4.204-1.102a7.933 7.933 0 0 0 3.79.965h.004c4.368 0 7.926-3.558 7.93-7.93a7.898 7.898 0 0 0-2.327-5.607zM7.998 14.521a6.573 6.573 0 0 1-3.356-.92l-.24-.144-2.494.654.666-2.433-.156-.251a6.559 6.559 0 0 1-1.007-3.505c0-3.626 2.957-6.584 6.591-6.584a6.56 6.56 0 0 1 4.66 1.931 6.557 6.557 0 0 1 1.928 4.66c-.004 3.639-2.961 6.592-6.592 6.592zm3.615-4.934c-.197-.099-1.17-.578-1.353-.646-.182-.065-.315-.099-.445.099-.133.197-.513.646-.627.775-.114.133-.232.148-.43.05-.197-.1-.836-.308-1.592-.985-.59-.525-.985-1.175-1.103-1.372-.114-.198-.011-.304.088-.403.087-.088.197-.232.296-.346.1-.114.133-.198.198-.33.065-.134.034-.248-.015-.347-.05-.099-.445-1.076-.612-1.47-.16-.389-.323-.335-.445-.34-.114-.007-.247-.007-.38-.007a.729.729 0 0 0-.529.247c-.182.198-.691.677-.691 1.654 0 .977.71 1.916.81 2.049.098.133 1.394 2.132 3.383 2.992.47.205.84.326 1.129.418.475.152.904.129 1.246.078.38-.07 1.17-.478 1.335-.94.164-.462.164-.858.115-.94-.05-.082-.182-.133-.38-.232z"/></svg>,
+}
+
+const STAR_POINTS = '12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26'
+
+function RatingStar({ ratio = 0, size = 13, outlined = false }) {
+  const clipId = `sp-star-clip-${useId().replace(/[^a-zA-Z0-9]/g, '')}`
+  const filled = Math.max(0, Math.min(1, Number(ratio) || 0))
+  if (outlined) {
+    return (
+      <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={T.starEmpty} strokeWidth="2" strokeLinejoin="round" aria-hidden="true">
+        <polygon points={STAR_POINTS} />
+      </svg>
+    )
+  }
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true">
+      <defs><clipPath id={clipId}><rect x="0" y="0" width={filled * 24} height="24" /></clipPath></defs>
+      <polygon points={STAR_POINTS} fill={T.starEmpty} />
+      {filled > 0 && <polygon points={STAR_POINTS} fill={T.amber} clipPath={`url(#${clipId})`} />}
+    </svg>
+  )
+}
+
+function StarRow({ value = 0, size = 13 }) {
+  const average = Math.max(0, Math.min(5, Number(value) || 0))
+  return (
+    <span className="sp-star-row" role="img" aria-label={`${average.toFixed(1)} out of 5 stars`}>
+      {[1, 2, 3, 4, 5].map(n => (
+        <RatingStar key={n} ratio={Math.max(0, Math.min(1, average - (n - 1)))} size={size} />
+      ))}
+    </span>
+  )
 }
 
 function initials(name) {
@@ -1386,10 +1853,49 @@ function initials(name) {
   return name.trim().split(/\s+/).slice(0, 2).map(p => p[0]?.toUpperCase()).join('')
 }
 
+function titleCasePlace(value) {
+  return String(value || '')
+    .replace(/[A-Za-z]+/g, word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .replace(/^Are(?=\s*\d)/, 'Area')
+}
+
+function formatMwPhone(raw) {
+  let d = String(raw || '').replace(/\D/g, '')
+  if (d.length === 9) d = '0' + d
+  if (d.length === 10) return `${d.slice(0, 4)} ${d.slice(4, 7)} ${d.slice(7)}`
+  return raw
+}
+
+function flashCountdown(endMs, now) {
+  const remaining = Math.max(0, endMs - now.getTime())
+  const totalSeconds = Math.ceil(remaining / 1000)
+  const hours = Math.floor((totalSeconds % 86400) / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+  const clock = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+  if (remaining > 86400000) {
+    let displayDays = Math.floor(remaining / 86400000)
+    let displayHours = Math.ceil((remaining - displayDays * 86400000) / 3600000)
+    if (displayHours >= 24) { displayDays += 1; displayHours = 0 }
+    return { label: 'Flash sale', time: `${displayDays}d ${String(displayHours).padStart(2, '0')}h`, urgent: false, mobileLabel: 'Flash' }
+  }
+  if (totalSeconds < 3600) return { label: 'Ending soon', time: clock, urgent: true, mobileLabel: 'Soon' }
+  return { label: 'Flash sale', time: clock, urgent: false, mobileLabel: 'Flash' }
+}
+
 export default function ShopPage() {
   const { slug } = useParams()
   const navigate = useNavigate()
   const [verifyInfoOpen, setVerifyInfoOpen] = useState(false)
+  const [infoOpen, setInfoOpen] = useState(false)
+  const [infoSection, setInfoSection] = useState('about')
+  const [mobileHeader, setMobileHeader] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 639px)').matches)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 639px)')
+    const onChange = (e) => setMobileHeader(e.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
   useEffect(() => {
     if (!verifyInfoOpen) return undefined
     const prevOverflow = document.body.style.overflow
@@ -1401,6 +1907,21 @@ export default function ShopPage() {
       document.body.style.overflow = prevOverflow
     }
   }, [verifyInfoOpen])
+  useEffect(() => {
+    if (!infoOpen) return undefined
+    const prevOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const onKey = (e) => { if (e.key === 'Escape') setInfoOpen(false) }
+    window.addEventListener('keydown', onKey)
+    const scrollTimer = window.setTimeout(() => {
+      document.getElementById(`sp-info-${infoSection}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 60)
+    return () => {
+      window.clearTimeout(scrollTimer)
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = prevOverflow
+    }
+  }, [infoOpen, infoSection])
   const [shop, setShop] = useState(null)
   const [owner, setOwner] = useState(null)
   const [currentUserId, setCurrentUserId] = useState(null)
@@ -1410,17 +1931,19 @@ export default function ShopPage() {
   const [followLoading, setFollowLoading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState('listings')
-  const [viewMode, setViewMode] = useState('grid')
   const [listings, setListings] = useState([])
   const [allListings, setAllListings] = useState([])
   const [listingsLoading, setListingsLoading] = useState(false)
-  const [sortBy, setSortBy] = useState('latest')
+  const [sortBy, setSortBy] = useState('mix')
+  // New random seed on every page load / shop change => products rotate instead of one fixed item on top.
+  const mixSeed = useMemo(() => Math.floor(Math.random() * 2147483647), [slug])
   const [filterCategory, setFilterCategory] = useState('all')
   const [navSearch, setNavSearch] = useState('')
   const [notifCount, setNotifCount] = useState(0)
   const [shopLocalSearch, setShopLocalSearch] = useState('')
   const [productsVisible, setProductsVisible] = useState(12)
   const PRODUCTS_PAGE = 12
+  const [now, setNow] = useState(() => new Date())
 
   const [reviews, setReviews] = useState([])
   const [reviewsLoading, setReviewsLoading] = useState(false)
@@ -1438,6 +1961,11 @@ export default function ShopPage() {
   // Saved listings (listing_saves) — mirrors the Home/Listings save flow.
   const [savedIds, setSavedIds] = useState(() => new Set())
   const [saveBusyId, setSaveBusyId] = useState(null)
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 1000)
+    return () => clearInterval(timer)
+  }, [])
 
   // Keep sidebar sticky offset = real SokoNav height so nothing sits under the nav
   useEffect(() => {
@@ -1830,25 +2358,13 @@ export default function ShopPage() {
   useEffect(() => {
     if (!shop?.id) return
     async function fetchSimilarShops() {
+      const cols = 'id, name, slug, logo_url, category, district, city, follower_count, rating, review_count, is_verified, is_active'
       const { data } = await supabase
-        .from('shops')
-        .select('id, name, slug, logo_url, category, district, city, follower_count, rating, review_count, is_verified')
-        .eq('is_active', true)
-        .neq('id', shop.id)
-        .eq('category', shop.category || '')
-        .limit(4)
-      if (data && data.length > 0) {
-        setSimilarShops(data)
-      } else {
-        const { data: fallback } = await supabase
-          .from('shops')
-          .select('id, name, slug, logo_url, category, district, city, follower_count, rating, review_count, is_verified')
-          .eq('is_active', true)
-          .neq('id', shop.id)
-          .order('follower_count', { ascending: false })
-          .limit(4)
-        setSimilarShops(fallback || [])
-      }
+        .from('shops').select(cols)
+        .eq('is_active', true).neq('id', shop.id)
+        .order('follower_count', { ascending: false })
+        .limit(SIMILAR_SHOP_RULES.poolSize)
+      setSimilarShops(pickSimilarShops(data, shop))
     }
     fetchSimilarShops()
   }, [shop?.id])
@@ -2150,17 +2666,55 @@ export default function ShopPage() {
       <div className="sp-root">
         <style>{css}</style>
         <style>{`
-          @keyframes sp-shimmer {
-            0%   { background-position: -800px 0; }
-            100% { background-position: 800px 0; }
-          }
-          .sp-sk {
-            background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
-            background-size: 800px 100%;
-            animation: sp-shimmer 1.4s infinite;
-            border-radius: 10px;
-          }
-        `}</style>
+  @keyframes sp-shimmer {
+    0%   { background-position: -800px 0; }
+    100% { background-position: 800px 0; }
+  }
+  .sp-sk {
+    background: linear-gradient(90deg, #f0f0f0 25%, #e8e8e8 50%, #f0f0f0 75%);
+    background-size: 800px 100%;
+    animation: sp-shimmer 1.4s infinite;
+    border-radius: 10px;
+  }
+  .sp-sk-wrap { max-width: 1180px; margin: 0 auto; padding: 0 20px; box-sizing: border-box; width: 100%; }
+  .sp-sk-wrap * { min-width: 0; box-sizing: border-box; }
+  .sp-sk-bc { display: flex; gap: 8px; align-items: center; margin-top: 14px; }
+  .sp-sk-cover { height: clamp(200px, 26vw, 340px); min-height: 200px; border-radius: 16px; margin-top: 12px; }
+  .sp-sk-head {
+    background: ${T.white}; border: 1px solid ${T.border}; border-radius: 16px;
+    padding: 20px 22px 20px 168px; margin-top: -56px; position: relative;
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 20px;
+    box-shadow: ${T.shadow};
+  }
+  .sp-sk-logo { position: absolute; left: 22px; top: -36px; width: 116px; height: 116px; border-radius: 16px; }
+  .sp-sk-info { flex: 1; display: flex; flex-direction: column; gap: 10px; }
+  .sp-sk-btns { display: flex; gap: 10px; flex-shrink: 0; }
+  .sp-sk-stats {
+    background: ${T.white}; border: 1px solid ${T.border}; border-radius: 14px;
+    display: grid; grid-template-columns: repeat(4, 1fr); padding: 18px 0; margin-top: 16px;
+  }
+  .sp-sk-stat { display: flex; align-items: center; justify-content: center; gap: 12px; }
+  .sp-sk-tabs { display: flex; gap: 28px; border-bottom: 1px solid ${T.border}; margin-top: 18px; }
+  .sp-sk-main { display: grid; grid-template-columns: 1fr 320px; gap: 24px; margin-top: 20px; padding-bottom: 60px; }
+  .sp-sk-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  .sp-sk-card { background: ${T.white}; border: 1px solid ${T.border}; border-radius: 14px; overflow: hidden; }
+  .sp-sk-side { display: flex; flex-direction: column; gap: 16px; }
+  .sp-sk-sidecard { background: ${T.white}; border: 1px solid ${T.border}; border-radius: 14px; padding: 18px; }
+
+  @media (max-width: 900px) {
+    .sp-sk-wrap { padding: 0 10px; }
+    .sp-sk-cover { height: clamp(160px, 42vw, 220px); min-height: 160px; }
+    .sp-sk-head { padding: 52px 14px 16px; margin-top: -28px; }
+    .sp-sk-logo { left: 14px; top: -40px; width: 84px; height: 84px; border-radius: 14px; }
+    .sp-sk-btns { display: none; }
+    .sp-sk-stats { grid-template-columns: repeat(2, 1fr); gap: 14px 0; padding: 14px 0; }
+    .sp-sk-stat { gap: 8px; }
+    .sp-sk-tabs { gap: 18px; overflow: hidden; }
+    .sp-sk-main { grid-template-columns: 1fr; padding-bottom: 24px; }
+    .sp-sk-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+    .sp-sk-side { display: none; }
+  }
+`}</style>
 
         <SokoNav
           user={currentUser}
@@ -2173,59 +2727,31 @@ export default function ShopPage() {
           onCta={() => navigate('/post')}
         />
 
-        {/* Skeleton breadcrumb */}
-        <div style={{ maxWidth: 1180, margin: '14px auto 0', padding: '0 20px', display: 'flex', gap: 8, alignItems: 'center' }}>
-          {[60, 50, 100].map((w, i) => (
-            <div key={i} className="sp-sk" style={{ width: w, height: 14 }} />
-          ))}
+        <div className="sp-sk-wrap sp-sk-bc">
+          {[60, 50, 100].map((w, i) => <div key={i} className="sp-sk" style={{ width: w, height: 14 }} />)}
         </div>
-
-        {/* Skeleton cover */}
-        <div style={{ maxWidth: 1180, margin: '12px auto 0', padding: '0 20px' }}>
-          <div className="sp-sk" style={{ height: 'clamp(200px, 26vw, 340px)', minHeight: 200, borderRadius: 16 }} />
-        </div>
-
-        {/* Skeleton shop header card */}
-        <div style={{ maxWidth: 1180, margin: '0 auto', padding: '0 20px' }}>
-          <div style={{
-            background: T.white, border: `1px solid ${T.border}`,
-            borderRadius: 16, padding: '20px 22px 20px 168px',
-            marginTop: -56, position: 'relative', display: 'flex',
-            alignItems: 'flex-start', justifyContent: 'space-between', gap: 20,
-            boxShadow: T.shadow,
-          }}>
-            {/* Logo skeleton */}
-            <div className="sp-sk" style={{
-              position: 'absolute', left: 22, top: -36,
-              width: 116, height: 116, borderRadius: 16,
-            }} />
-            {/* Info skeleton */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <div className="sp-sk" style={{ width: 200, height: 28 }} />
-              <div className="sp-sk" style={{ width: 300, height: 14 }} />
+        <div className="sp-sk-wrap"><div className="sp-sk sp-sk-cover" /></div>
+        <div className="sp-sk-wrap">
+          <div className="sp-sk-head">
+            <div className="sp-sk sp-sk-logo" />
+            <div className="sp-sk-info">
+              <div className="sp-sk" style={{ width: '60%', maxWidth: 200, height: 28 }} />
+              <div className="sp-sk" style={{ width: '85%', maxWidth: 300, height: 14 }} />
               <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
                 <div className="sp-sk" style={{ width: 90, height: 26, borderRadius: 8 }} />
                 <div className="sp-sk" style={{ width: 120, height: 26, borderRadius: 8 }} />
               </div>
-              <div className="sp-sk" style={{ width: 180, height: 13 }} />
             </div>
-            {/* Buttons skeleton */}
-            <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
+            <div className="sp-sk-btns">
               <div className="sp-sk" style={{ width: 100, height: 40, borderRadius: 10 }} />
               <div className="sp-sk" style={{ width: 100, height: 40, borderRadius: 10 }} />
             </div>
           </div>
         </div>
-
-        {/* Skeleton stats bar */}
-        <div style={{ maxWidth: 1180, margin: '16px auto 0', padding: '0 24px' }}>
-          <div style={{
-            background: T.white, border: `1px solid ${T.border}`,
-            borderRadius: 14, display: 'grid',
-            gridTemplateColumns: 'repeat(4, 1fr)', padding: '18px 0',
-          }}>
-            {[0,1,2,3].map(i => (
-              <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+        <div className="sp-sk-wrap">
+          <div className="sp-sk-stats">
+            {[0, 1, 2, 3].map(i => (
+              <div key={i} className="sp-sk-stat">
                 <div className="sp-sk" style={{ width: 38, height: 38, borderRadius: 10, flexShrink: 0 }} />
                 <div>
                   <div className="sp-sk" style={{ width: 48, height: 18, marginBottom: 6 }} />
@@ -2235,20 +2761,15 @@ export default function ShopPage() {
             ))}
           </div>
         </div>
-
-        {/* Skeleton tabs */}
-        <div style={{ maxWidth: 1180, margin: '18px auto 0', padding: '0 24px', borderBottom: `1px solid ${T.border}`, display: 'flex', gap: 28, paddingBottom: 0 }}>
-          {[80, 60, 100, 110].map((w, i) => (
-            <div key={i} className="sp-sk" style={{ width: w, height: 14, marginBottom: 14 }} />
-          ))}
+        <div className="sp-sk-wrap">
+          <div className="sp-sk-tabs">
+            {[80, 60, 100, 110].map((w, i) => <div key={i} className="sp-sk" style={{ width: w, height: 14, marginBottom: 14 }} />)}
+          </div>
         </div>
-
-        {/* Skeleton product grid + sidebar */}
-        <div style={{ maxWidth: 1180, margin: '20px auto 0', padding: '0 24px 60px', display: 'grid', gridTemplateColumns: '1fr 320px', gap: 24 }}>
-          {/* Grid */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
-            {[0,1,2,3,4,5].map(i => (
-              <div key={i} style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 14, overflow: 'hidden' }}>
+        <div className="sp-sk-wrap sp-sk-main">
+          <div className="sp-sk-grid">
+            {[0, 1, 2, 3, 4, 5].map(i => (
+              <div key={i} className="sp-sk-card">
                 <div className="sp-sk" style={{ width: '100%', aspectRatio: '1', borderRadius: 0 }} />
                 <div style={{ padding: '10px 12px 14px', display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <div className="sp-sk" style={{ width: '85%', height: 13 }} />
@@ -2258,11 +2779,9 @@ export default function ShopPage() {
               </div>
             ))}
           </div>
-
-          {/* Sidebar */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {[140, 120, 130].map((h, i) => (
-              <div key={i} style={{ background: T.white, border: `1px solid ${T.border}`, borderRadius: 14, padding: 18 }}>
+          <div className="sp-sk-side">
+            {[0, 1, 2].map(i => (
+              <div key={i} className="sp-sk-sidecard">
                 <div className="sp-sk" style={{ width: '60%', height: 16, marginBottom: 14 }} />
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <div className="sp-sk" style={{ width: '100%', height: 13 }} />
@@ -2299,6 +2818,13 @@ if (!shop) {
     )
   }
 
+  function mixKey(id, seed) {
+    let h = 2166136261 ^ seed
+    const s = String(id)
+    for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619) }
+    return ((h >>> 0) % 100000) / 100000
+  }
+
   function getSortedFiltered() {
     let result = [...allListings]
     const q = shopLocalSearch.trim().toLowerCase()
@@ -2315,6 +2841,13 @@ if (!shop) {
     if (sortBy === 'price-low') result.sort((a, b) => (a.price || 0) - (b.price || 0))
     else if (sortBy === 'price-high') result.sort((a, b) => (b.price || 0) - (a.price || 0))
     else if (sortBy === 'latest') result.sort((a, b) => new Date(b.created_at || 0) - new Date(a.created_at || 0))
+    else if (sortBy === 'mix') {
+      // random but stable per page load; currently featured products get a small boost
+      result.sort((a, b) =>
+        (mixKey(a.id, mixSeed) - (isListingFeatured(a) ? 0.25 : 0)) -
+        (mixKey(b.id, mixSeed) - (isListingFeatured(b) ? 0.25 : 0))
+      )
+    }
     return result
   }
   const filteredListings = getSortedFiltered()
@@ -2322,37 +2855,31 @@ if (!shop) {
   const hasMoreProducts = filteredListings.length > productsVisible
   const featureableListings = allListings.filter(l => !isListingFeatured(l))
 
-  function formatPrice(item) {
-    if (item.price_type === 'free' || item.price === 0) return { main: 'FREE', sale: null, old: null }
-    const hasFlash = item.flash_sale_price != null && Number(item.flash_sale_price) > 0 &&
-      (!item.flash_sale_expires_at || new Date(item.flash_sale_expires_at) > new Date())
-    if (hasFlash) {
+  function formatPrice(item, now) {
+    const noDiscount = { sale: false, old: null, discount: null, flash: false, endMs: null }
+    if (item.price_type === 'free' || item.price === 0) return { main: 'FREE', ...noDiscount }
+    const original = Number(item.price)
+    if (!Number.isFinite(original) || original <= 0) return { main: 'Price on request', ...noDiscount }
+
+    const current = Number(item.flash_sale_price)
+    const endDates = [item.flash_sale_expires_at, item.flash_sale_ends_at]
+      .filter(Boolean)
+      .map(value => new Date(value))
+    const allDatesValid = endDates.length > 0 && endDates.every(date => Number.isFinite(date.getTime()))
+    const endMs = allDatesValid ? Math.min(...endDates.map(date => date.getTime())) : null
+    const hasValidEnd = allDatesValid && endMs > now.getTime()
+    const hasDiscount = Number.isFinite(current) && current > 0 && current < original && hasValidEnd
+    if (hasDiscount) {
       return {
-        main: `MK ${Number(item.flash_sale_price).toLocaleString()}`,
+        main: `MK ${current.toLocaleString()}`,
         sale: true,
-        old: item.price != null ? `MK ${Number(item.price).toLocaleString()}` : null,
+        old: `MK ${original.toLocaleString()}`,
+        discount: Math.round(((original - current) / original) * 100),
+        flash: true,
+        endMs,
       }
     }
-    return {
-      main: item.price != null ? `MK ${Number(item.price).toLocaleString()}` : 'Price on request',
-      sale: false,
-      old: null,
-    }
-  }
-
-  function promoLabel(item) {
-    const now = new Date()
-    const isFeatured = item.is_featured || item.featured ||
-      (item.featured_until && new Date(item.featured_until) > now)
-    if (isFeatured) return '⭐ Featured'
-    const b = item.promo_badge
-    if (!b || b === 'none') return null
-    if (b === 'hot') return '🔥 Hot'
-    if (b === 'sale') return 'Sale'
-    if (b === 'new_in') return '🆕 New'
-    if (b === 'limited') return 'Limited'
-    if (b === 'featured') return '⭐ Featured'
-    return null
+    return { main: `MK ${original.toLocaleString()}`, ...noDiscount }
   }
 
   function conditionLabel(c) {
@@ -2361,10 +2888,84 @@ if (!shop) {
     return map[c] || (c.charAt(0).toUpperCase() + c.slice(1).replace(/_/g, ' '))
   }
 
-  const shopInitials = initials(shop.name)
+  const shopInitial = (shop.name || '?').trim().charAt(0).toUpperCase() || '?'
+  const nameWords = String(shop.name || '').trim().split(/\s+/).filter(Boolean)
+  const nameHead = nameWords.slice(0, -1).join(' ')
+  const nameTail = nameWords[nameWords.length - 1] || ''
   const listingCount = allListings.length || shop.listing_count || 0
   const followerCount = shop.follower_count ?? 0
   const activeTheme = resolveShopTheme(shop.theme)
+  const locationLabel = titleCasePlace([shop.city, shop.district].filter(Boolean).join(', ') || shop.address || '')
+  const locationParts = locationLabel.split(',').map(part => part.trim()).filter(Boolean)
+  const addressParts = String(shop.address || '').split(',').map(part => part.trim()).filter(Boolean)
+  const mobileLocationParts = addressParts.length > 1
+    ? [addressParts[0], shop.city || addressParts[addressParts.length - 1]]
+    : locationParts.length > 1
+      ? [locationParts[0], locationParts[locationParts.length - 1]]
+      : []
+  const mobileLocationLabel = mobileLocationParts.length === 2 && mobileLocationParts[0] !== mobileLocationParts[1]
+    ? titleCasePlace(mobileLocationParts.join(', '))
+    : locationLabel
+  const joinedLabel = shop.created_at
+    ? `Joined ${new Date(shop.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`
+    : 'Joined recently'
+  const followerValue = followerCount >= 1000 ? `${(followerCount / 1000).toFixed(1)}K` : followerCount
+  const followersLabel = `${followerValue} ${followerCount === 1 ? 'Follower' : 'Followers'}`
+  const reviewCountValue = shop.review_count || 0
+  const ratingLabel = reviewCountValue > 0
+    ? `${Number(shop.rating || 0).toFixed(1)} · ${reviewCountValue} ${reviewCountValue === 1 ? 'review' : 'reviews'}`
+    : 'New shop'
+  const hasContact = !!(shop.whatsapp || shop.phone || shop.email || shop.address || locationLabel)
+  const hasPolicies = !!(shop.policy_delivery || shop.policy_returns || shop.policy_payment || (Array.isArray(shop.policy_custom) && shop.policy_custom.length))
+  const waDigits = String(shop.whatsapp || shop.phone || '').replace(/[^0-9]/g, '')
+  const whatsappHref = waDigits ? `https://wa.me/${waDigits}` : ''
+  const socialHref = (v) => (v ? (/^https?:\/\//i.test(v) ? v : `https://${v}`) : '')
+  const socialLinks = [
+    { key: 'facebook', label: 'Facebook', icon: 'Facebook', href: socialHref(shop.social_facebook) },
+    { key: 'instagram', label: 'Instagram', icon: 'Instagram', href: socialHref(shop.social_instagram) },
+    { key: 'tiktok', label: 'TikTok', icon: 'TikTok', href: socialHref(shop.social_tiktok) },
+    { key: 'x', label: 'X', icon: 'XBrand', href: socialHref(shop.social_x) },
+  ].filter(s => !!s.href)
+  const socialCount = (whatsappHref ? 1 : 0) + socialLinks.length
+  const inlineSocial = mobileHeader && socialCount > 0 && socialCount < 3
+  const socialBtnStyle = !mobileHeader ? undefined : (inlineSocial ? MOBILE_INLINE_SOCIAL_BTN_STYLE : MOBILE_SOCIAL_BTN_STYLE)
+  const socialItems = [
+    ...(whatsappHref
+      ? [<a key="whatsapp" className="sp-social-btn whatsapp" href={whatsappHref} target="_blank" rel="noopener noreferrer" aria-label="Chat on WhatsApp" title="Chat on WhatsApp" style={socialBtnStyle}>
+          <Icon.WhatsApp />
+        </a>]
+      : []),
+    ...socialLinks.map(s => {
+      const SocialIcon = Icon[s.icon]
+      return (
+        <a key={s.key} className="sp-social-btn" href={s.href} target="_blank" rel="noopener noreferrer" aria-label={s.label} title={s.label} style={socialBtnStyle}>
+          <SocialIcon />
+        </a>
+      )
+    }),
+  ]
+  const verifiedTick = shop.is_verified ? (
+    <button type="button" className="sp-verified-tick" onClick={() => setVerifyInfoOpen(true)} aria-label="What does Verified mean?"><Icon.Check /></button>
+  ) : null
+  const statRatingValue = reviewCountValue > 0 ? Number(shop.rating || 0).toFixed(1) : 'New'
+  const ownerName = owner?.full_name || owner?.name || owner?.username || 'Shop owner'
+  const ownerInitial = owner?.full_name ? initials(ownerName) : (shop.name || '?').charAt(0).toUpperCase()
+  const ownerJoinedLabel = shop.created_at
+    ? `Joined ${new Date(shop.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}`
+    : ''
+  const capLine = (v) => (v ? v.charAt(0).toUpperCase() + v.slice(1) : '')
+  const activeHeaderTab = infoOpen && ['about', 'contact', 'policies'].includes(infoSection) ? infoSection : tab
+  function openInfoPanel(section) {
+    setInfoSection(section || 'about')
+    setInfoOpen(true)
+  }
+  const headerTabs = [
+    { key: 'listings', label: 'Products' },
+    { key: 'about', label: 'About' },
+    { key: 'reviews', label: 'Reviews' },
+    ...(hasContact ? [{ key: 'contact', label: 'Contact' }] : []),
+    ...(hasPolicies ? [{ key: 'policies', label: 'Policies' }] : []),
+  ]
 
   async function applyShopTheme(nextTheme) {
     if (!shop?.id || !SHOP_THEMES[nextTheme]) return
@@ -2565,109 +3166,194 @@ if (!shop) {
         </div>
       </div>
 
-      {/* ── COVER ── */}
-      <div className="sp-cover-wrap">
-        <div className="sp-cover">
-          {shop.cover_url ? (
-            <>
-              <img src={shop.cover_url} alt="" />
-              <div className="sp-cover-theme-glow" />
-            </>
-          ) : null}
-          {isOwner && (
-            <div className="sp-cover-overlay" onClick={() => coverInputRef.current?.click()}>
-              <button type="button" className="sp-cover-overlay-btn">
-                📷 {shop.cover_url ? 'Change Cover' : 'Add Cover'}
-              </button>
-              <input ref={coverInputRef} type="file" accept="image/*" hidden onChange={handleCoverChange} />
+      {/* ── SHOP HEADER CARD ── */}
+      <div className="sp-header-card">
+        <div className="sp-header-card-inner">
+          <div className="sp-cover-wrap">
+            <div className="sp-cover">
+              {shop.cover_url ? <img src={shop.cover_url} alt="" /> : null}
+              <div className="sp-cover-gradient" />
+              {isOwner && (
+                <>
+                  <div className="sp-cover-overlay" onClick={() => coverInputRef.current?.click()}>
+                    <button type="button" className="sp-cover-overlay-btn">
+                      📷 {shop.cover_url ? 'Change Cover' : 'Add Cover'}
+                    </button>
+                  </div>
+                  <button type="button" className="sp-cover-edit-pill" onClick={() => coverInputRef.current?.click()} aria-label="Change cover">
+                    <Camera size={13} strokeWidth={2.2} /> Cover
+                  </button>
+                  <input ref={coverInputRef} type="file" accept="image/*" hidden onChange={handleCoverChange} />
+                </>
+              )}
             </div>
-          )}
+          </div>
+
+          <div className="sp-header-body">
+            <div className={`sp-header-main${inlineSocial ? ' sp-social-inline' : ''}`}>
+              <div className="sp-logo-frame">
+                {shop.logo_url ? (
+                  <img className="sp-logo-img" src={shop.logo_url} alt={shop.name} />
+                ) : (
+                  <div className="sp-logo-img" style={{ background: activeTheme.light, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 34, fontWeight: 800, color: activeTheme.dark }}>
+                    {shopInitial}
+                  </div>
+                )}
+                {isOwner && (
+                  <>
+                    <div className="sp-logo-overlay" onClick={() => logoInputRef.current?.click()}>
+                      <button className="sp-logo-overlay-btn">📷 Change</button>
+                    </div>
+                    <button type="button" className="sp-logo-camera-btn" onClick={() => logoInputRef.current?.click()} aria-label="Change logo">
+                      <Camera size={14} strokeWidth={2.2} />
+                    </button>
+                    <input ref={logoInputRef} type="file" accept="image/*" hidden onChange={handleLogoChange} />
+                  </>
+                )}
+              </div>
+
+              <div className="sp-shop-info">
+                <div className="sp-shop-name-row">
+                  {mobileHeader ? (
+                    <h1 className="sp-shop-name inline">
+                      {nameHead && <>{nameHead}{' '}</>}
+                      <span className="sp-name-tail">{nameTail}{verifiedTick}</span>
+                    </h1>
+                  ) : (
+                    <>
+                      <div className="sp-shop-name">{shop.name}</div>
+                      {verifiedTick}
+                    </>
+                  )}
+                </div>
+                {shop.description && <div className="sp-shop-tagline">{shop.description}</div>}
+                <div className="sp-info-chips">
+                  {shop.category && <span className="sp-info-chip sp-chip-category"><Icon.Grid /> {shop.category}</span>}
+                  {locationLabel && <span className="sp-info-chip sp-chip-location"><Icon.Pin /> <span className="sp-chip-location-text">{mobileHeader ? mobileLocationLabel : locationLabel}</span></span>}
+                  <span
+                    className="sp-info-chip"
+                    role="button"
+                    tabIndex={0}
+                    aria-label="View shop reviews"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => setTab('reviews')}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setTab('reviews') }}
+                  >
+                    <span className="chip-star">
+                      {reviewCountValue > 0
+                        ? <RatingStar ratio={Number(shop.rating || 0) / 5} size={16} />
+                        : <RatingStar outlined size={16} />}
+                    </span> {ratingLabel}
+                  </span>
+                  <span className="sp-info-chip sp-chip-joined"><CalendarDays size={13} strokeWidth={2.2} /> {joinedLabel}</span>
+                  {inlineSocial && socialItems}
+                </div>
+
+                {!inlineSocial && <div className="sp-social-row">{socialItems}</div>}
+
+              </div>
+
+              <div className={`sp-shophead-right ${isOwner ? 'owner-actions' : 'visitor-actions'}`}>
+                <div className="sp-quick-actions">
+                  {isOwner ? (
+                    <>
+                      <button type="button" className="sp-quick-btn primary" onClick={() => navigate('/post', { state: { shopId: shop.id } })}>
+                        <Icon.Plus /> Add Product
+                      </button>
+                      <button type="button" className="sp-quick-btn" onClick={openEditDrawer}>Edit Shop</button>
+                    </>
+                  ) : (
+                    <>
+                      <button type="button" className="sp-quick-btn primary" onClick={handleMessageOwner}><Icon.Msg /> Message</button>
+                      {currentUserId !== shop?.owner_id && (
+                        <button
+                          type="button"
+                          className={`sp-quick-btn${isFollowing ? ' following' : ''}`}
+                          onClick={handleFollowToggle}
+                          disabled={followLoading}
+                        >
+                          {isFollowing ? <><Icon.Check2 /> Following</> : <><Icon.Plus /> Follow</>}
+                        </button>
+                      )}
+                    </>
+                  )}
+                  <button type="button" className="sp-icon-btn" onClick={handleShareShop} aria-label="Share shop" title="Share shop">
+                    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                      <line x1="8.6" y1="10.5" x2="15.4" y2="6.5"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/>
+                    </svg>
+                  </button>
+                  <button type="button" className="sp-info-btn" onClick={() => openInfoPanel('about')} aria-label="Shop info" title="Shop info">
+                    <Info size={16} strokeWidth={2.2} /> Info
+                  </button>
+                </div>
+
+                <div className="sp-header-stats">
+                  <div
+                    className="sp-header-stat"
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`View ${listingCount} products`}
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => setTab('listings')}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setTab('listings') }}
+                  >
+                    <span className="sp-header-stat-value">{listingCount}</span>
+                    <span className="sp-header-stat-label">Products</span>
+                  </div>
+                  <div className="sp-header-stat">
+                    <span className="sp-header-stat-value">{followerValue}</span>
+                    <span className="sp-header-stat-label">{followerCount === 1 ? 'Follower' : 'Followers'}</span>
+                  </div>
+                  <div
+                    className="sp-header-stat"
+                    role="button"
+                    tabIndex={0}
+                    aria-label="View shop reviews"
+                    style={{ cursor: 'pointer' }}
+                    onClick={() => setTab('reviews')}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') setTab('reviews') }}
+                  >
+                    <span className="sp-header-stat-value">
+                      <span className="sp-rating-stat-star">
+                        {reviewCountValue > 0
+                          ? <RatingStar ratio={Number(shop.rating || 0) / 5} size={16} />
+                          : <RatingStar outlined size={16} />}
+                      </span>
+                      {mobileHeader
+                        ? statRatingValue
+                        : (reviewCountValue > 0 ? Number(shop.rating || 0).toFixed(1) : 'New shop')}
+                    </span>
+                    <span className="sp-header-stat-label">Rating</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
 
-      {/* ── SHOP HEADER CARD ── */}
-      <div className="sp-shophead">
-        <div className="sp-shophead-inner">
-          <div className="sp-logo-frame">
-            {shop.is_verified && <button type="button" className="sp-verified-pill" style={{ border: 'none', cursor: 'pointer' }} onClick={() => setVerifyInfoOpen(true)} aria-label="What does Verified Shop mean?">Verified Shop</button>}
-            {shop.logo_url ? (
-              <img className="sp-logo-img" src={shop.logo_url} alt={shop.name} />
-            ) : (
-              <div className="sp-logo-img" style={{ background: activeTheme.light, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 30, fontWeight: 800, color: activeTheme.dark }}>
-                {shopInitials}
-              </div>
-            )}
-            {isOwner && (
-              <div className="sp-logo-overlay" onClick={() => logoInputRef.current?.click()}>
-                <button className="sp-logo-overlay-btn">📷 Change</button>
-                <input ref={logoInputRef} type="file" accept="image/*" hidden onChange={handleLogoChange} />
-              </div>
-            )}
-          </div>
-
-          <div className="sp-shop-info">
-            <div className="sp-shop-name-row">
-              <div className="sp-shop-name">{shop.name}</div>
-              {shop.is_verified && (
-                <button type="button" onClick={() => setVerifyInfoOpen(true)} aria-label="What does Verified mean?" style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'inline-flex', minWidth: 44, minHeight: 44, alignItems: 'center', justifyContent: 'center' }}><Icon.Check /></button>
-              )}
-            </div>
-            {shop.description && <div className="sp-shop-tagline">{shop.description}</div>}
-            <div className="sp-shop-tags">
-              {shop.category && <span className="sp-tag-pill">{shop.category}</span>}
-              {(shop.city || shop.district) && (
-                <span className="sp-shop-loc"><Icon.Pin /> {shop.city ? `${shop.city}, ` : ''}{shop.district || 'Malawi'}</span>
-              )}
-            </div>
-            <div className="sp-shop-meta">
-              {shop.rating ? (
-                <>
-                  <span className="star"><Icon.Star /></span>
-                  <span>{shop.rating} ({shop.review_count || 0})</span>
-                  <span>·</span>
-                </>
-              ) : (
-                <span>No reviews yet</span>
-              )}
-              <span className="meta-joined">Joined {shop.created_at ? new Date(shop.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'recently'}</span>
-              <span className="meta-followers-inline" style={{ display: 'none' }}>
-                {followerCount >= 1000 ? `${(followerCount / 1000).toFixed(1)}K` : followerCount} followers
-              </span>
-            </div>
-          </div>
-
-          <div className={`sp-shophead-right ${isOwner ? 'owner-actions' : 'visitor-actions'}`}>
-            {isOwner ? (
-              <div className="sp-owner-bar">
-                <button type="button" className="sp-owner-btn primary" onClick={() => navigate('/post', { state: { shopId: shop.id } })}>
-                  <Icon.Plus /> <span className="owner-btn-label">Add Product</span>
-                </button>
-                <button type="button" className="sp-owner-btn" onClick={openEditDrawer}>
-                  Edit<span className="owner-btn-label"> Shop</span>
-                </button>
-                <button type="button" className="sp-owner-btn" onClick={handleShareShop}>
-                  Share<span className="owner-btn-label"> Shop</span>
-                </button>
-              </div>
-            ) : (
-              <>
-                <div className="sp-action-row">
-                  <button type="button" className="sp-btn-msg" onClick={handleMessageOwner}><Icon.Msg /> Message</button>
-                  {currentUserId !== shop?.owner_id && (
-                    <button
-                      type="button"
-                      className={`sp-btn-follow${isFollowing ? ' following' : ''}`}
-                      onClick={handleFollowToggle}
-                      disabled={followLoading}
-                    >
-                      {isFollowing ? 'Following' : 'Follow'}
-                    </button>
-                  )}
-                </div>
-                <div className="sp-followers-count"><Icon.Users /> {followerCount >= 1000 ? `${(followerCount/1000).toFixed(1)}K` : followerCount} followers</div>
-              </>
-            )}
-          </div>
+      {/* ── STICKY TABS ── */}
+      <div className="sp-tabs sp-header-tabs-sticky">
+        <div className="sp-tabs-left">
+          {headerTabs.map(t => (
+            <button
+              key={t.key}
+              type="button"
+              className={`sp-tab ${activeHeaderTab === t.key ? 'active' : ''}`}
+              onClick={() => {
+                if (t.key === 'listings' || t.key === 'reviews') {
+                  setInfoOpen(false)
+                  setTab(t.key)
+                } else {
+                  openInfoPanel(t.key)
+                }
+              }}
+            >
+              {t.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -2769,74 +3455,6 @@ if (!shop) {
         </div>
       )}
 
-      {/* ── STATS BAR ── */}
-      <div className="sp-stats">
-        <div className="sp-stats-inner">
-          <div className="sp-stat" style={{ cursor: shop.rating ? 'pointer' : 'default' }} onClick={() => shop.rating && setTab('reviews')}>
-            <div className="sp-stat-icon" style={{ background: '#fef3e2' }}><Icon.RatingIcon /></div>
-            <div>
-              <div className="sp-stat-num">
-                {shop.rating || '—'}
-                {shop.rating > 0 && (
-                  <span style={{ fontSize: 12.5, fontWeight: 600, color: T.textMuted, marginLeft: 4 }}>
-                    ({shop.review_count || 0})
-                  </span>
-                )}
-              </div>
-              <div className="sp-stat-label">Shop Rating</div>
-            </div>
-          </div>
-          <div className="sp-stat">
-            <div className="sp-stat-icon" style={{ background: '#f1edff' }}><Icon.ListingsIcon /></div>
-            <div>
-              <div className="sp-stat-num">{listingCount}</div>
-              <div className="sp-stat-label">Listings</div>
-            </div>
-          </div>
-          <div className="sp-stat">
-            <div className="sp-stat-icon" style={{ background: activeTheme.light }}><Icon.FollowersIcon /></div>
-            <div>
-              <div className="sp-stat-num">{followerCount >= 1000 ? `${(followerCount/1000).toFixed(1)}K` : followerCount}</div>
-              <div className="sp-stat-label">Followers</div>
-            </div>
-          </div>
-          {shop.created_at ? (
-            <div className="sp-stat">
-              <div className="sp-stat-icon" style={{ background: '#e8f0fe' }}><CalendarDays size={17} strokeWidth={2} color="#1a73e8" /></div>
-              <div>
-                <div className="sp-stat-num" style={{ fontSize: 14 }}>
-                  Open since{' '}
-                  {new Date(shop.created_at).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
-                </div>
-                <div className="sp-stat-label">Selling on Soko</div>
-              </div>
-            </div>
-          ) : (
-            <div className="sp-stat">
-              <div className="sp-stat-icon" style={{ background: T.gray100 }}><Icon.Clock /></div>
-              <div>
-                <div className="sp-stat-num" style={{ color: T.textMuted, fontSize: 14 }}>New shop</div>
-                <div className="sp-stat-label">Selling on Soko</div>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── TABS ── */}
-      <div className="sp-tabs">
-        <div className="sp-tabs-left">
-          {['listings', 'about', 'reviews', 'policies'].map(t => (
-            <button key={t} className={`sp-tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
-              {t === 'listings' && 'Listings'}
-              {t === 'about' && 'About'}
-              {t === 'reviews' && `Reviews (${shop.review_count || 0})`}
-              {t === 'policies' && 'Shop Policies'}
-            </button>
-          ))}
-        </div>
-      </div>
-
       {/* ── MAIN ── */}
       <div className="sp-main">
         <div className="sp-main-col" ref={listingsRef}>
@@ -2874,14 +3492,11 @@ if (!shop) {
                   value={sortBy}
                   onChange={e => setSortBy(e.target.value)}
                 >
+                  <option value="mix">Recommended</option>
                   <option value="latest">Latest</option>
                   <option value="price-low">Price: Low to High</option>
                   <option value="price-high">Price: High to Low</option>
                 </select>
-                <div className="sp-view-toggle">
-                  <button type="button" className={`sp-view-btn ${viewMode === 'grid' ? 'active' : ''}`} onClick={() => setViewMode('grid')} aria-label="Grid view"><Icon.Grid /></button>
-                  <button type="button" className={`sp-view-btn ${viewMode === 'list' ? 'active' : ''}`} onClick={() => setViewMode('list')} aria-label="List view"><Icon.List /></button>
-                </div>
               </div>
               {listingsLoading ? (
                 <div className="sp-skel-grid" aria-busy="true" aria-label="Loading products">
@@ -2941,85 +3556,18 @@ if (!shop) {
                     </span>
                   </div>
 
-                  {viewMode === 'list' ? (
-                    <div className="sp-list-view">
+                  <div className="sp-grid">
                       {displayListings.map(item => {
-                        const price = formatPrice(item)
-                        const promo = promoLabel(item)
-                        const cond = conditionLabel(item.condition)
-                        const cover = Array.isArray(item.images) ? item.images[0] : null
-                        return (
-                          <div
-                            key={item.id}
-                            className="sp-list-item"
-                            onClick={() => navigate(`/listing/${item.id}`)}
-                            role="link"
-                            tabIndex={0}
-                            onKeyDown={e => { if (e.key === 'Enter') navigate(`/listing/${item.id}`) }}
-                          >
-                            <div className="sp-list-thumb">
-                              {cover ? (
-                                <img src={cover} alt="" loading="lazy" />
-                               ) : (
-                                 <div className="sp-img-ph"><span className="sp-img-ph-txt">No photo</span></div>
-                               )}
-                              {promo && (
-                                <div className="sp-badge-stack">
-                                  <span className={promo.includes('Sale') || promo === 'Sale' ? 'sp-sale-badge' : 'sp-featured-badge'}>{promo}</span>
-                                </div>
-                              )}
-                              <button
-                                type="button"
-                                className={`sp-fav-btn${savedIds.has(item.id) ? ' saved' : ''}`}
-                                aria-pressed={savedIds.has(item.id)}
-                                aria-label={savedIds.has(item.id) ? 'Remove from saved' : 'Save listing'}
-                                disabled={saveBusyId === item.id}
-                                onClick={e => { e.stopPropagation(); toggleListingSave(item.id) }}
-                              >
-                                <Icon.Heart filled={savedIds.has(item.id)} />
-                              </button>
-                            </div>
-                            <div className="sp-list-body">
-                              <div className="sp-listing-title">{item.title}</div>
-                              <div className="sp-listing-meta">
-                                {item.city && <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}><Icon.Pin /> {item.city}</span>}
-                                {item.city && cond && <span className="dot" />}
-                                {cond && <span>{cond}</span>}
-                                {item.category && (
-                                  <>
-                                    {(item.city || cond) && <span className="dot" />}
-                                    <span>{item.category}</span>
-                                  </>
-                                )}
-                              </div>
-                              <div className="sp-list-price-row">
-                                <div className="sp-listing-price">
-                                  {price.old && <span className="old">{price.old}</span>}
-                                  <span className={price.sale ? 'sale' : ''}>{price.main}</span>
-                                </div>
-                                {shop.rating > 0 && (
-                                  <span style={{ fontSize: 12, color: T.textMuted, display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                                    <span style={{ color: T.gold }}><Icon.Star /></span>
-                                    <strong style={{ color: T.text }}>{shop.rating}</strong>
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  ) : (
-                    <div className="sp-grid">
-                      {displayListings.map(item => {
-                        const price = formatPrice(item)
-                        const promo = promoLabel(item)
+                        const price = formatPrice(item, now)
+                        const countdown = price.flash ? flashCountdown(price.endMs, now) : null
+                        const stockQty = Number(item.stock_qty)
+                        const lowStock = price.flash && Number.isFinite(stockQty) && stockQty > 0 && stockQty <= 10
                         const cond = conditionLabel(item.condition)
                         const cover = Array.isArray(item.images) ? item.images[0] : (typeof item.images === 'string' ? item.images : null)
                         return (
                           <div
                             key={item.id}
-                            className="sp-listing-card"
+                            className={`sp-listing-card${price.flash ? ' sp-flash-card' : ''}`}
                             onClick={() => navigate(`/listing/${item.id}`)}
                             role="link"
                             tabIndex={0}
@@ -3029,11 +3577,6 @@ if (!shop) {
                                 <div className="sp-img-ph"><span className="sp-img-ph-txt">No photo yet</span></div>
                                 {cover && <img src={cover} alt={item.title} loading="lazy" onError={e => { e.currentTarget.style.display = 'none' }} />}
                               <div className="sp-badge-stack">
-                                {promo && (
-                                  <span className={promo === 'Sale' || promo.includes('Sale') ? 'sp-sale-badge' : 'sp-featured-badge'}>
-                                    {promo}
-                                  </span>
-                                )}
                                 {cond && <span className="sp-cond-badge">{cond}</span>}
                               </div>
                               <button
@@ -3046,13 +3589,26 @@ if (!shop) {
                               >
                                 <Icon.Heart filled={savedIds.has(item.id)} />
                               </button>
+                              {countdown && (
+                                <div
+                                  className={`sp-flash-band${countdown.urgent ? ' urgent' : ''}`}
+                                  aria-label={`Flash sale, ends in ${countdown.time}`}
+                                >
+                                  <Zap size={13} strokeWidth={2.5} fill="currentColor" />
+                                  <span className="sp-flash-label">{countdown.label}</span>
+                                  <span className="sp-flash-label-short">{countdown.urgent ? 'Soon' : 'Flash'}</span>
+                                  <span className="sp-flash-time"><span className="sp-flash-ends">Ends in </span>{countdown.time}</span>
+                                </div>
+                              )}
                             </div>
                             <div className="sp-listing-body">
                               <div className="sp-listing-title">{item.title}</div>
                               <div className="sp-listing-price">
-                                {price.old && <span className="old">{price.old}</span>}
                                 <span className={price.sale ? 'sale' : ''}>{price.main}</span>
+                                {price.old && <span className="old">{price.old}</span>}
+                                {price.discount != null && <span className="sp-discount-chip">-{price.discount}%</span>}
                               </div>
+                              <div className="sp-flash-stock">{lowStock && <span>Only {stockQty} left</span>}</div>
                               <div className="sp-listing-meta">
                                 {(item.city || item.district) && (
                                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
@@ -3063,7 +3619,7 @@ if (!shop) {
                                   <>
                                     <span className="dot" />
                                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
-                                      <span style={{ color: T.gold }}><Icon.Star /></span>
+                                      <span style={{ color: T.amber }}><Icon.Star /></span>
                                       {shop.rating}
                                     </span>
                                   </>
@@ -3074,7 +3630,6 @@ if (!shop) {
                         )
                       })}
                     </div>
-                  )}
 
                   {hasMoreProducts && (
                     <button
@@ -3098,21 +3653,16 @@ if (!shop) {
             </>
           )}
 
-          {tab === 'about' && (
-            <div className="sp-side-card" style={{ marginBottom: 0 }}>
-              <div className="sp-side-title">About {shop.name}</div>
-              <div className="sp-about-text">{shop.description || 'This shop hasn\u2019t added a description yet.'}</div>
-              <div className="sp-about-row"><Icon.Pin /> {shop.city ? `${shop.city}, ` : ''}{shop.district || 'Malawi'}</div>
-              {shop.whatsapp && <div className="sp-about-row"><Icon.Phone /> WhatsApp: {shop.whatsapp}</div>}
-              {shop.phone && <div className="sp-about-row"><Icon.Phone /> {shop.phone}</div>}
-              {shop.address && <div className="sp-about-row"><Icon.Pin /> {shop.address}</div>}
-            </div>
-          )}
 
           {tab === 'reviews' && (
             <div className="sp-side-card" style={{ marginBottom: 0 }}>
               <div className="sp-side-title">
-                {shop.rating ? `${shop.rating} · ${shop.review_count || reviews.length} review${(shop.review_count || reviews.length) === 1 ? '' : 's'}` : 'No reviews yet'}
+                {Number(shop.rating || 0) > 0 ? (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <StarRow value={Number(shop.rating)} size={14} />
+                    <span>{Number(shop.rating).toFixed(1)} · {shop.review_count || reviews.length} review{(shop.review_count || reviews.length) === 1 ? '' : 's'}</span>
+                  </span>
+                ) : 'Reviews'}
               </div>
 
               {!isOwner && (
@@ -3123,12 +3673,13 @@ if (!shop) {
                   <div style={{ fontSize: 13, fontWeight: 700, color: T.text, marginBottom: 10 }}>
                     {myReview ? 'Update your rating' : 'Rate this shop'}
                   </div>
-                  <div style={{ display: 'flex', gap: 4, marginBottom: 12 }}>
+                  <div style={{ display: 'flex', gap: 6, marginBottom: 12 }}>
                     {[1, 2, 3, 4, 5].map(n => (
                       <svg
                         key={n}
-                        width="26" height="26" viewBox="0 0 24 24"
-                        fill={(reviewHoverRating || reviewRating) >= n ? T.gold : '#e3ece5'}
+                        width="32" height="32" viewBox="0 0 24 24"
+                        fill={(reviewHoverRating || reviewRating) >= n ? T.amber : T.starEmpty}
+                        role="button" aria-label={`Rate ${n} star${n > 1 ? 's' : ''}`}
                         style={{ cursor: 'pointer', transition: 'fill 0.1s' }}
                         onMouseEnter={() => setReviewHoverRating(n)}
                         onMouseLeave={() => setReviewHoverRating(0)}
@@ -3151,7 +3702,7 @@ if (!shop) {
                   )}
                   <button
                     className="sp-d-save-btn"
-                    style={{ width: 'auto', padding: '10px 20px' }}
+                    style={{ width: 'auto', padding: '10px 22px', background: T.green, borderColor: T.green }}
                     onClick={handleSubmitReview}
                     disabled={reviewSubmitting}
                   >
@@ -3182,7 +3733,7 @@ if (!shop) {
                           <div style={{ fontSize: 13, fontWeight: 700, color: T.text }}>{r.profiles?.full_name || 'Buyer'}</div>
                           <div style={{ display: 'flex', gap: 2 }}>
                             {[1,2,3,4,5].map(n => (
-                              <svg key={n} width="11" height="11" viewBox="0 0 24 24" fill={r.rating >= n ? T.gold : '#e3ece5'}>
+                              <svg key={n} width="11" height="11" viewBox="0 0 24 24" fill={r.rating >= n ? T.amber : T.starEmpty}>
                                 <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26" />
                               </svg>
                             ))}
@@ -3194,222 +3745,28 @@ if (!shop) {
                       </div>
                       {r.comment && <div style={{ fontSize: 13, color: T.textMuted, lineHeight: 1.6 }}>{r.comment}</div>}
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+                   ))}
+                 </div>
+               )}
+             </div>
+           )}
 
-          {tab === 'policies' && (
-            <div className="sp-side-card" style={{ marginBottom: 0 }}>
-              <div className="sp-side-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                Shop Policies
-                {isOwner && (
-                  <button className="sp-policy-edit-btn" onClick={openPolicyEditor}>Edit Policies</button>
-                )}
-              </div>
-              {shop.policy_delivery && <div className="sp-policy-row"><Icon.Truck /> {shop.policy_delivery}</div>}
-              {shop.policy_returns && <div className="sp-policy-row"><Icon.Refresh /> {shop.policy_returns}</div>}
-              {shop.policy_payment && <div className="sp-policy-row"><Icon.Lock /> {shop.policy_payment}</div>}
-              {Array.isArray(shop.policy_custom) && shop.policy_custom.map((p, i) => (
-                <div key={i} className="sp-policy-row"><Icon.ChevronRight /> {p.label}</div>
-              ))}
-              {!shop.policy_delivery && !shop.policy_returns && !shop.policy_payment && (!shop.policy_custom || shop.policy_custom.length === 0) && (
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13, color: T.textMuted, lineHeight: 1.5 }}>
-                  <span style={{ flexShrink: 0, marginTop: 1, color: T.textLight }}><Info size={14} strokeWidth={2} /></span>
-                  <span>
-                    Delivery and returns aren't listed — ask the shop in chat before ordering.
-                    {isOwner && ' Click Edit Policies to add yours.'}
-                  </span>
-                </div>
-              )}
-            </div>
-          )}
+
         </div>
 
-        {/* ── SIDEBAR (sticky under nav; scrolls fully inside its rail) ── */}
-        <aside className="sp-sidebar" aria-label="Shop details">
-          <div className="sp-sidebar-sticky" tabIndex={0}>
-          {/* Product featuring advert */}
-          {SHOW_FEATURED_ADS && (
-          <div className="sp-feature-ad">
-            <div className="sp-feature-ad-badge">
-              <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26" />
-              </svg>
-              Featured
-            </div>
-            <h4>{isOwner ? 'Boost a product' : 'Sell faster on Soko'}</h4>
-            <p>
-              {isOwner
-                ? 'Feature a listing on the homepage with a gold badge — more views, more chats, more sales.'
-                : 'Shop owners feature top products on the Soko homepage. Reach buyers across Malawi.'}
-            </p>
-            <div className="sp-feature-ad-price">
-              <strong>{featuredPriceLabel().split('·')[0].trim()}</strong>
-              <span>· {FEATURED_DURATION_DAYS} days on homepage</span>
-            </div>
-            <ul className="sp-feature-ad-perks">
-              <li>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-                Gold Featured badge
-              </li>
-              <li>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-                Homepage placement
-              </li>
-              <li>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><polyline points="20 6 9 17 4 12"/></svg>
-                Priority visibility in feed
-              </li>
-            </ul>
-            {isOwner ? (
-              <>
-                <button
-                  type="button"
-                  className="sp-feature-ad-btn"
-                  onClick={() => {
-                    if (allListings.length === 0) {
-                      navigate('/post', { state: { shopId: shop.id } })
-                      return
-                    }
-                    setFeatureSheetOpen(true)
-                  }}
-                  disabled={!!featuringId}
-                >
-                  {allListings.length === 0
-                    ? 'Add a product first'
-                    : featureableListings.length === 0
-                      ? 'All products featured'
-                      : 'Feature a product'}
-                </button>
-                <div className="sp-feature-ad-note">
-                  Free entitlement may apply · otherwise {featuredPriceLabel()}
-                </div>
-              </>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  className="sp-feature-ad-btn"
-                  onClick={() => navigate(currentUserId ? '/post' : '/login')}
-                >
-                  {currentUserId ? 'Sell & feature products' : 'Sign in to sell'}
-                </button>
-                <div className="sp-feature-ad-note">
-                  Promote your listings to the homepage
-                </div>
-              </>
-            )}
-          </div>
-          )}
-
-          <div className="sp-side-card">
-            <div className="sp-side-title">About this shop</div>
-            <div className="sp-about-text">{shop.description || 'This shop hasn\u2019t added a description yet.'}</div>
-            <div className="sp-about-row"><Icon.Pin /> {shop.city ? `${shop.city}, ` : ''}{shop.district || 'Malawi'}</div>
-            {shop.phone && <div className="sp-about-row"><Icon.Phone /> {shop.phone}</div>}
-            {shop.whatsapp && (
-              <a className="sp-about-row" style={{ textDecoration: 'none', color: 'inherit' }}
-                 href={`https://wa.me/${shop.whatsapp.replace(/[^0-9]/g, '')}`}
-                 target="_blank" rel="noopener noreferrer">
-                <Icon.Phone /> Chat on WhatsApp
-              </a>
-            )}
-            {(shop.social_facebook || shop.whatsapp || shop.social_instagram || shop.social_tiktok || shop.social_x || shop.social_website) && (
-              <div className="sp-social-row">
-                {shop.social_facebook && (
-                  <a className="sp-social-icon" style={{ background: '#1877f2' }} href={shop.social_facebook} target="_blank" rel="noopener noreferrer" title="Facebook">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M22 12.06C22 6.5 17.52 2 12 2S2 6.5 2 12.06c0 5 3.66 9.16 8.44 9.94v-7.03H7.9v-2.91h2.54V9.84c0-2.5 1.49-3.89 3.78-3.89 1.1 0 2.24.2 2.24.2v2.46h-1.26c-1.24 0-1.63.77-1.63 1.56v1.89h2.78l-.44 2.91h-2.34V22c4.78-.78 8.44-4.94 8.44-9.94Z"/></svg>
-                  </a>
-                )}
-                {shop.whatsapp && (
-                  <a className="sp-social-icon" style={{ background: '#25d366' }} href={`https://wa.me/${shop.whatsapp.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" title="WhatsApp">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91c0 1.94.56 3.76 1.53 5.3L2 22l4.94-1.61a9.84 9.84 0 0 0 5.1 1.4h.01c5.46 0 9.91-4.45 9.91-9.91C21.96 6.45 17.51 2 12.04 2Zm5.78 14.04c-.24.69-1.42 1.32-1.95 1.4-.5.08-1.13.11-1.82-.11-.42-.13-.96-.31-1.65-.6-2.9-1.25-4.79-4.16-4.93-4.36-.14-.2-1.18-1.57-1.18-3 0-1.42.74-2.12 1-2.41.26-.29.57-.36.76-.36.19 0 .38 0 .55.01.18.01.41-.07.64.49.24.58.81 2.01.88 2.16.07.15.12.32.02.5-.1.18-.15.3-.3.46-.15.16-.31.36-.44.48-.15.14-.3.29-.13.57.17.28.76 1.25 1.63 2.02 1.12.99 2.07 1.3 2.37 1.45.3.15.47.13.65-.06.18-.2.76-.88.96-1.19.2-.3.4-.25.67-.15.27.1 1.71.81 2 .96.29.15.49.22.56.34.07.13.07.71-.17 1.4Z"/></svg>
-                  </a>
-                )}
-                {shop.social_instagram && (
-                  <a className="sp-social-icon" style={{ background: 'linear-gradient(45deg,#f09433,#e6683c,#dc2743,#cc2366,#bc1888)' }} href={shop.social_instagram} target="_blank" rel="noopener noreferrer" title="Instagram">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><rect x="2" y="2" width="20" height="20" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="#fff" stroke="none"/></svg>
-                  </a>
-                )}
-                {shop.social_tiktok && (
-                  <a className="sp-social-icon" style={{ background: '#000' }} href={shop.social_tiktok} target="_blank" rel="noopener noreferrer" title="TikTok">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="#fff"><path d="M16.6 5.82c-.83-.7-1.36-1.7-1.42-2.82h-3.05v13.13c0 1.6-1.3 2.9-2.9 2.9a2.9 2.9 0 0 1 0-5.8c.27 0 .54.04.79.11V10.3a6 6 0 0 0-.79-.05A5.95 5.95 0 0 0 3.3 16.2a5.95 5.95 0 0 0 5.95 5.95 5.95 5.95 0 0 0 5.95-5.95V9.27a8.16 8.16 0 0 0 4.76 1.52V7.74c-1.13 0-2.18-.36-3.36-1.92Z"/></svg>
-                  </a>
-                )}
-                {shop.social_x && (
-                  <a className="sp-social-icon" style={{ background: '#000' }} href={shop.social_x} target="_blank" rel="noopener noreferrer" title="X">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="#fff"><path d="M18.9 2H22l-7.6 8.7L22.6 22H16l-5.2-6.8L4.9 22H1.8l8.1-9.3L1.4 2h6.7l4.7 6.2L18.9 2Zm-2.2 18h1.7L7.4 4H5.6l11.1 16Z"/></svg>
-                  </a>
-                )}
-                {shop.social_website && (
-                  <a className="sp-social-icon" style={{ background: T.green }} href={shop.social_website} target="_blank" rel="noopener noreferrer" title="Website">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
-                  </a>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="sp-side-card">
-            <div className="sp-side-title" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              Shop Policies
-              {isOwner && (
-                <button className="sp-policy-edit-btn" onClick={openPolicyEditor}>Edit</button>
-              )}
-            </div>
-            {shop.policy_delivery && <div className="sp-policy-row"><Icon.Truck /> {shop.policy_delivery}</div>}
-            {shop.policy_returns && <div className="sp-policy-row"><Icon.Refresh /> {shop.policy_returns}</div>}
-            {shop.policy_payment && <div className="sp-policy-row"><Icon.Lock /> {shop.policy_payment}</div>}
-            {Array.isArray(shop.policy_custom) && shop.policy_custom.slice(0, 2).map((p, i) => (
-              <div key={i} className="sp-policy-row"><Icon.ChevronRight /> {p.label}</div>
-            ))}
-            {!shop.policy_delivery && !shop.policy_returns && !shop.policy_payment && (!shop.policy_custom || shop.policy_custom.length === 0) && (
-              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 7, fontSize: 12.5, color: T.textMuted, lineHeight: 1.5 }}>
-                <span style={{ flexShrink: 0, marginTop: 1, color: T.textLight }}><Info size={13} strokeWidth={2} /></span>
-                <span>Delivery and returns aren't listed — ask the shop in chat before ordering.</span>
-              </div>
-            )}
-            <div className="sp-policy-link" onClick={() => setTab('policies')}>View all policies <Icon.ChevronRight /></div>
-          </div>
-
-          <div className="sp-side-card">
-            <div className="sp-side-title">Shop Owner</div>
-            <div className="sp-owner-row">
-              {owner?.avatar_url ? (
-                <img className="sp-owner-avatar" src={owner.avatar_url} alt={owner.full_name || 'Owner'} />
-              ) : (
-                <div className="sp-owner-avatar" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 15, fontWeight: 700, color: T.green }}>
-                  {initials(owner?.full_name || shop.name)}
-                </div>
-              )}
-              <div>
-                <div className="sp-owner-name-row">
-                  <span className="sp-owner-name">{owner?.full_name || 'Shop Owner'}</span>
-                  {shop.is_verified && (
-                    <svg width="14" height="14" viewBox="0 0 24 24"><path fill="#16a34a" d="M12 0a4 4 0 0 1 3.2 1.6 4 4 0 0 1 3.6 1 4 4 0 0 1 1 3.6A4 4 0 0 1 21.4 9.4a4 4 0 0 1 0 5.2A4 4 0 0 1 19.8 17.8a4 4 0 0 1-1 3.6 4 4 0 0 1-3.6 1A4 4 0 0 1 12 24a4 4 0 0 1-3.2-1.6 4 4 0 0 1-3.6-1 4 4 0 0 1-1-3.6A4 4 0 0 1 2.6 14.6a4 4 0 0 1 0-5.2A4 4 0 0 1 4.2 6.2a4 4 0 0 1 1-3.6 4 4 0 0 1 3.6-1A4 4 0 0 1 12 0Z"/><path d="m7.5 12.5 3 3 6-7" stroke="#fff" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                  )}
-                  <span className="sp-owner-tag">Owner</span>
-                </div>
-                <div className="sp-owner-sub">
-                  Joined {shop.created_at ? new Date(shop.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' }) : 'recently'}
-                </div>
-              </div>
-            </div>
-            <button className="sp-msg-owner-btn" onClick={handleMessageOwner}><Icon.Msg /> Message Owner</button>
-          </div>
-          </div>
-        </aside>
       </div>
 
-      {/* ── SIMILAR SHOPS (sticky) ── */}
+      {/* ── SIMILAR SHOPS ── */}
       <div className="sp-similar-wrap">
         <div className="sp-similar">
           <div className="sp-similar-head">
-            <h3>More shops you might like</h3>
+            <div className="sp-similar-title">
+              <div className="sp-similar-eyebrow">Discover</div>
+              <h3>More shops you might like</h3>
+            </div>
             <button type="button" className="sp-similar-all" onClick={() => navigate('/shops')}>
-              View all shops
+              View all
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 12h14M13 6l6 6-6 6" /></svg>
             </button>
           </div>
           <div className="sp-similar-grid">
@@ -3426,45 +3783,44 @@ if (!shop) {
                 tabIndex={0}
                 onKeyDown={e => { if (e.key === 'Enter') navigate(`/shop/${s.slug}`) }}
               >
-                <div className="sp-similar-avatar" style={{
-                  background: s.logo_url ? '#111' : 'linear-gradient(135deg,#1e293b,#334155)',
-                }}>
-                  {s.logo_url
-                    ? <img src={s.logo_url} alt={s.name} loading="lazy" />
-                    : initials(s.name)
-                  }
+                <div className="sp-similar-top">
+                  <div className="sp-similar-avatar" style={{ background: s.logo_url ? '#111' : 'linear-gradient(135deg,#1e293b,#334155)' }}>
+                    {s.logo_url ? <img src={s.logo_url} alt={s.name} loading="lazy" /> : initials(s.name)}
+                  </div>
+                  <div className="sp-similar-info">
+                    <div className="sp-similar-name">
+                      <span className="sp-similar-name-text">{s.name}</span>
+                      {s.is_verified && (
+                        <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden><path fill="#16a34a" d="M12 0a4 4 0 0 1 3.2 1.6 4 4 0 0 1 3.6 1 4 4 0 0 1 1 3.6A4 4 0 0 1 21.4 9.4a4 4 0 0 1 0 5.2A4 4 0 0 1 19.8 17.8a4 4 0 0 1-1 3.6 4 4 0 0 1-3.6 1A4 4 0 0 1 12 24a4 4 0 0 1-3.2-1.6 4 4 0 0 1-3.6-1 4 4 0 0 1-1-3.6A4 4 0 0 1 2.6 14.6a4 4 0 0 1 0-5.2A4 4 0 0 1 4.2 6.2a4 4 0 0 1 1-3.6 4 4 0 0 1 3.6-1A4 4 0 0 1 12 0Z"/><path d="m7.5 12.5 3 3 6-7" stroke="#fff" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
+                      )}
+                    </div>
+                    <span className="sp-similar-cat">{s.category || 'General'}</span>
+                  </div>
                 </div>
-                <div className="sp-similar-info">
-                  <div className="sp-similar-name" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                    {s.name}
-                    {s.is_verified && (
-                      <svg width="13" height="13" viewBox="0 0 24 24" aria-hidden><path fill="#16a34a" d="M12 0a4 4 0 0 1 3.2 1.6 4 4 0 0 1 3.6 1 4 4 0 0 1 1 3.6A4 4 0 0 1 21.4 9.4a4 4 0 0 1 0 5.2A4 4 0 0 1 19.8 17.8a4 4 0 0 1-1 3.6 4 4 0 0 1-3.6 1A4 4 0 0 1 12 24a4 4 0 0 1-3.2-1.6 4 4 0 0 1-3.6-1 4 4 0 0 1-1-3.6A4 4 0 0 1 2.6 14.6a4 4 0 0 1 0-5.2A4 4 0 0 1 4.2 6.2a4 4 0 0 1 1-3.6 4 4 0 0 1 3.6-1A4 4 0 0 1 12 0Z"/><path d="m7.5 12.5 3 3 6-7" stroke="#fff" strokeWidth="2.4" fill="none" strokeLinecap="round" strokeLinejoin="round"/></svg>
-                    )}
-                  </div>
-                  <div className="sp-similar-cat">{s.category || 'General'}</div>
-                  <div className="sp-similar-bottom">
-                    <span className="sp-similar-followers">
-                      {s.follower_count >= 1000 ? `${(s.follower_count / 1000).toFixed(1)}K` : s.follower_count || 0} followers
+                <div className="sp-similar-stats">
+                  <span className="sp-similar-followers">
+                    <Icon.Users />
+                    {s.follower_count >= 1000 ? `${(s.follower_count / 1000).toFixed(1)}K` : s.follower_count || 0} followers
+                  </span>
+                  {s.rating ? (
+                    <span className="sp-similar-rating">
+                      <span className="star"><Icon.Star /></span>
+                      {s.rating}
+                      <span style={{ fontSize: 10.5, fontWeight: 500, color: T.textLight }}>({s.review_count || 0})</span>
                     </span>
-                    {s.rating ? (
-                      <span className="sp-similar-rating">
-                        <span className="star"><Icon.Star /></span>
-                        {s.rating}
-                        <span style={{ fontSize: 10, fontWeight: 500, color: T.textLight }}>({s.review_count || 0})</span>
-                      </span>
-                    ) : (
-                      <span style={{ fontSize: 10.5, fontWeight: 500, color: T.textLight, fontStyle: 'italic' }}>No reviews yet</span>
-                    )}
-                  </div>
+                  ) : (
+                    <span className="sp-similar-new">No reviews yet</span>
+                  )}
+                </div>
+                <div className="sp-similar-visit">
+                  Visit shop
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M5 12h14M13 6l6 6-6 6" /></svg>
                 </div>
               </div>
             ))}
           </div>
         </div>
       </div>
-
-      {/* Spacer so page end isn’t flush under sticky similar block */}
-      <div style={{ height: 48 }} aria-hidden />
 
       {/* ── FEATURE PRODUCT PICKER ── */}
       {SHOW_FEATURED_ADS && featureSheetOpen && isOwner && (
@@ -3826,6 +4182,89 @@ if (!shop) {
             // Payment / submit does not instantly verify — wait for admin approval
           }}
         />
+      )}
+      {infoOpen && (
+        <div className="sp-info-overlay" onClick={e => { if (e.target === e.currentTarget) setInfoOpen(false) }}>
+          <div className="sp-info-panel" role="dialog" aria-modal="true" aria-label="Shop information">
+            <div className="sp-info-handle" aria-hidden="true" />
+            <div className="sp-info-head">
+              <div>
+                <div className="sp-info-title-main">Shop info</div>
+                <div className="sp-info-sub">{shop.name}</div>
+              </div>
+              <button type="button" className="sp-info-close" onClick={() => setInfoOpen(false)} aria-label="Close shop info">×</button>
+            </div>
+            <div className="sp-info-body">
+              {(shop.description || shop.category || shop.created_at) && (
+                <section id="sp-info-about" className="sp-info-section">
+                  <div className="sp-info-section-title"><span><Info size={16} /> About</span></div>
+                  {shop.description && <div className="sp-info-row">{shop.description}</div>}
+                  {shop.category && <div className="sp-info-row"><span className="sp-info-icon"><Icon.Grid /></span>{shop.category}</div>}
+                  {shop.created_at && <div className="sp-info-row"><span className="sp-info-icon"><CalendarDays size={16} /></span>{joinedLabel}</div>}
+                </section>
+              )}
+
+              {hasContact && (
+                <section id="sp-info-contact" className="sp-info-section">
+                  <div className="sp-info-section-title"><span><Icon.Phone /> Contact</span></div>
+                  {locationLabel && <div className="sp-info-row sp-info-labeled"><span className="sp-info-label">Area</span><span>{locationLabel}</span></div>}
+                  {shop.address && <div className="sp-info-row sp-info-labeled"><span className="sp-info-label">Address</span><span>{titleCasePlace(shop.address)}</span></div>}
+                  {shop.phone && <div className="sp-info-row"><span className="sp-info-icon"><Icon.Phone /></span><a href={`tel:${shop.phone}`}>{formatMwPhone(shop.phone)}</a></div>}
+                  {shop.email && <div className="sp-info-row"><span className="sp-info-icon"><Icon.Mail /></span><a href={`mailto:${shop.email}`}>{shop.email}</a></div>}
+                  {shop.whatsapp && <div className="sp-info-row"><span className="sp-info-icon"><Icon.WhatsApp /></span><a href={whatsappHref} target="_blank" rel="noopener noreferrer">Chat on WhatsApp: {formatMwPhone(shop.whatsapp)}</a></div>}
+                  {socialLinks.map(s => {
+                    const SocialIcon = Icon[s.icon]
+                    return (
+                      <div key={s.key} className="sp-info-row">
+                        <span className="sp-info-icon"><SocialIcon /></span>
+                        <a href={s.href} target="_blank" rel="noopener noreferrer">{s.label}</a>
+                        <span className="sp-info-external">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                        </span>
+                      </div>
+                    )
+                  })}
+                </section>
+              )}
+
+              {hasPolicies && (
+                <section id="sp-info-policies" className="sp-info-section">
+                  <div className="sp-info-section-title">
+                    <span><Icon.Lock /> Policies</span>
+                    {isOwner && <button type="button" className="sp-info-edit-link" onClick={openPolicyEditor}>Edit</button>}
+                  </div>
+                  {shop.policy_delivery && <div className="sp-info-row"><span className="sp-info-icon"><Icon.Truck /></span>{capLine(shop.policy_delivery)}</div>}
+                  {shop.policy_returns && <div className="sp-info-row"><span className="sp-info-icon"><Icon.Refresh /></span>{capLine(shop.policy_returns)}</div>}
+                  {shop.policy_payment && <div className="sp-info-row"><span className="sp-info-icon"><Icon.Lock /></span>{capLine(shop.policy_payment)}</div>}
+                  {Array.isArray(shop.policy_custom) && shop.policy_custom.map((p, i) => (
+                    <div key={i} className="sp-info-row"><span className="sp-info-icon"><Info size={16} color={T.textMuted} /></span>{capLine(typeof p === 'string' ? p : (p.label || p.text || ''))}</div>
+                  ))}
+                </section>
+              )}
+
+              <section className="sp-info-section">
+                <div className="sp-info-section-title"><span><Icon.Users /> Shop Owner</span></div>
+                <div className="sp-info-owner">
+                  <div className="sp-info-avatar" style={{ background: activeTheme.light, color: activeTheme.dark }}>
+                    {owner?.avatar_url && !avatarError
+                      ? <img src={owner.avatar_url} alt={ownerName} onError={() => setAvatarError(true)} />
+                      : ownerInitial}
+                  </div>
+                  <div>
+                    <div className="sp-info-owner-name">
+                      {ownerName}
+                      {shop.is_verified && <Icon.Check />}
+                      <span className="sp-info-badge">Owner</span>
+                    </div>
+                    {ownerJoinedLabel && <div className="sp-info-joined">{ownerJoinedLabel}</div>}
+                    <div className="sp-info-joined">{followersLabel}</div>
+                  </div>
+                </div>
+                {!isOwner && <button type="button" className="sp-quick-btn primary" onClick={() => { setInfoOpen(false); handleMessageOwner() }}><Icon.Msg /> Message Owner</button>}
+              </section>
+            </div>
+          </div>
+        </div>
       )}
       {verifyInfoOpen && shop.is_verified && (
         <div className="sp-vsheet-overlay" onClick={() => setVerifyInfoOpen(false)}>

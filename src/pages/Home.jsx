@@ -1165,7 +1165,6 @@ const QUICK_CATEGORIES = [
 
 function CategoryGrid({ navigate, onCategoryChange }) {
   function handleClick(item) {
-    if (item.isServices)  return navigate('/services')
     if (item.isAll) return navigate('/listings')
     navigate(`/listings?cat=${encodeURIComponent(item.key)}`)
   }

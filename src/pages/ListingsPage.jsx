@@ -173,9 +173,13 @@ function dedupeLocation(city, area) {
 
 function formatPrice(n) {
   if (!n && n !== 0) return ''
-  if (n >= 1_000_000) return `MK ${(n / 1_000_000).toFixed(1)}M`
-  if (n >= 1_000)     return `MK ${(n / 1_000).toFixed(0)}K`
-  return `MK ${n.toLocaleString()}`
+  return `MK ${Number(n).toLocaleString()}`
+}
+
+function formatCondition(v) {
+  if (!v) return ''
+  const s = String(v).replace(/_/g, ' ').toLowerCase()
+  return s.charAt(0).toUpperCase() + s.slice(1)
 }
 
 function isFlashSaleActive(listing) {
@@ -186,12 +190,14 @@ function isFlashSaleActive(listing) {
 function timeAgo(ts) {
   if (!ts) return ''
   const d = Date.now() - new Date(ts)
-  const h = Math.floor(d / 3600000)
   const m = Math.floor(d / 60000)
-  if (h >= 24) return `${Math.floor(h / 24)}d ago`
-  if (h >= 1)  return `${h}h ago`
-  if (m < 1)   return 'just now'
-  return `${m}m ago`
+  const h = Math.floor(d / 3600000)
+  const days = Math.floor(d / 86400000)
+  if (m < 60) return `${Math.max(1, m)} min ago`
+  if (h < 24) return `${h} h ago`
+  if (days < 30) return `${days} days ago`
+  const dt = new Date(ts)
+  return dt.toLocaleString('en-US', { month: 'short', year: 'numeric' })
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -285,6 +291,33 @@ const SUBCAT_PARENT = CATEGORY_TREE.reduce((map, node) => {
   (node.children || []).forEach(child => { map[child.key] = node.key })
   return map
 }, {})
+
+const CATEGORY_ALIASES = {
+  fashion: 'Clothing',
+  vehicles: 'Vehicles',
+  electronics: 'Electronics',
+  property: 'Property',
+  agriculture: 'Agriculture',
+  services: 'Services',
+  food: 'Food',
+  furniture: 'Furniture',
+}
+
+function normalizeCategoryKey(raw) {
+  const v = String(raw || '').trim()
+  if (!v) return ''
+  const lower = v.toLowerCase()
+  if (CATEGORY_ALIASES[lower]) return CATEGORY_ALIASES[lower]
+  for (const node of CATEGORY_TREE) {
+    if (node.key.toLowerCase() === lower || String(node.label || '').toLowerCase() === lower) return node.key
+  }
+  for (const node of CATEGORY_TREE) {
+    for (const c of (node.children || [])) {
+      if (c.key.toLowerCase() === lower || String(c.label || '').toLowerCase() === lower) return c.key
+    }
+  }
+  return v
+}
 
 /* Mirrors PostListing.jsx's CONDITIONS exactly, so filter values line up
    with what's actually stored in listings.condition. */
@@ -433,15 +466,16 @@ function GlobalStyles() {
         border:1px solid ${T.gray100};
         box-shadow:${T.shadow};
         cursor:pointer; display:flex; flex-direction:column;
-        transition: transform .22s cubic-bezier(.34,1.2,.64,1), box-shadow .22s ease, border-color .22s ease;
+        transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
         animation: fadeUp .4s ease both;
       }
       .sp-card:hover {
-        transform:translateY(-5px);
-        box-shadow:${T.shadowMd};
+        transform:translateY(-2px);
+        box-shadow:0 8px 24px rgba(16,24,40,.12);
         border-color:${T.gray200};
       }
       .sp-card:hover .sp-card-img { transform:scale(1.06); }
+      .sp-card:focus-visible { outline: 2px solid ${T.green}; outline-offset: 2px; }
       .sp-card-img { transition:transform .5s cubic-bezier(.22,1,.36,1); }
 
       /* Quick actions — Chat + Call (Home product cards) */
@@ -629,8 +663,8 @@ function GlobalStyles() {
         100% { opacity:1; transform:translateY(0) scaleY(1); max-height:600px; }
       }
 
-      @media (max-width: 1100px) {
-        .sp-results-grid.grid-4 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 12px !important; }
+      @media (max-width: 1279px) {
+        .sp-results-grid.grid-4 { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 16px !important; }
       }
       @media (max-width: 900px) {
         .sp-root { padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px)); }
@@ -652,8 +686,8 @@ function GlobalStyles() {
           font-size: 12.5px !important;
         }
         .sp-results-grid.grid-4 {
-          grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-          gap: 10px !important;
+          grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+          gap: 12px !important;
         }
         .sp-card {
           border-radius: 14px !important;
@@ -716,6 +750,23 @@ function GlobalStyles() {
       }
       @media (max-width: 380px) {
         .sp-results-grid.grid-4 { gap: 7px !important; }
+      }
+      @media (max-width: 479px) {
+        .sp-results-grid.grid-4 {
+          grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+          gap: 10px !important;
+        }
+        .sp-page { padding: 0 12px !important; }
+      }
+      @media (max-width: 639px) {
+        .sp-card-meta { flex-direction: column; align-items: flex-start; gap: 2px; }
+        .sp-card-time { font-size: 12px; color: ${T.gray600}; }
+      }
+      .sp-list-thumb { width: 112px; }
+      @media (min-width: 640px) { .sp-list-thumb { width: 200px; } }
+      @media (prefers-reduced-motion: reduce) {
+        .sp-card { transition: none !important; animation: none !important; }
+        .sp-card:hover { transform: none !important; }
       }
     `}</style>
   )
@@ -1021,9 +1072,9 @@ function ResultCardGrid({ listing, delay, onClick, user, navigate, saved, onTogg
   }
 
   return (
-    <div className="sp-card" style={{ animationDelay:`${delay}s`, ...(onSale ? { border:`1.5px solid ${T.red}`, boxShadow:`0 0 0 1px rgba(234,67,53,0.15), ${T.shadow}` } : {}) }} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} onClick={onClick}>
+    <a href={`/listing/${listing.id}`} className="sp-card" aria-label={`${listing.title}, ${formatPrice(listing.price)}, ${dedupeLocation(listing.city, listing.area) || 'Malawi'}`} style={{ animationDelay:`${delay}s`, textDecoration:'none', color:'inherit', display:'block', ...(onSale ? { border:`1.5px solid ${T.red}`, boxShadow:`0 0 0 1px rgba(234,67,53,0.15), ${T.shadow}` } : {}) }} onMouseEnter={() => setHov(true)} onMouseLeave={() => setHov(false)} onClick={e => { if (e.target.closest('button')) e.preventDefault() }}>
       {/* Image */}
-      <div style={{ position:'relative', width:'100%', height:185, overflow:'hidden', background:T.gray100, flexShrink:0, borderRadius:'12px 12px 0 0' }}>
+      <div style={{ position:'relative', width:'100%', aspectRatio:'1 / 1', overflow:'hidden', background:T.gray100, flexShrink:0, borderRadius:'12px 12px 0 0' }}>
         {listing.images?.[0] && !imgErr
           ? <img src={listing.images[0]} alt={listing.title} onError={() => setImgErr(true)} className="sp-card-img" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
           : <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:42, color:T.gray400 }}>📦</div>
@@ -1032,10 +1083,15 @@ function ResultCardGrid({ listing, delay, onClick, user, navigate, saved, onTogg
           <div className="sp-hotdeal-badge" style={{ position:'absolute', top:10, left:10, background:`linear-gradient(135deg,${T.red},#c62828)`, color:'#fff', borderRadius:50, padding:'4px 11px', fontSize:10, fontWeight:900, letterSpacing:'0.3px', display:'flex', alignItems:'center', gap:3, zIndex:2 }}>🔥 HOT DEAL</div>
         )}
         {!onSale && isFeat && (
-          <div style={{ position:'absolute', top:10, left:10, background:`linear-gradient(135deg,${T.amber},#e09800)`, color:'#1a0a00', borderRadius:50, padding:'3px 10px', fontSize:9.5, fontWeight:900, boxShadow:'0 2px 8px rgba(249,171,0,0.4)', display:'flex', alignItems:'center', gap:4 }}>⭐ FEATURED</div>
+          <div style={{ position:'absolute', top:10, left:10, background:'#FBBF24', color:'#412402', borderRadius:6, padding:'3px 8px', fontSize:11, fontWeight:600, display:'flex', alignItems:'center', gap:3 }}>
+            <span>★</span> FEATURED
+          </div>
         )}
         {!onSale && !isFeat && isNew && (
-          <div style={{ position:'absolute', top:10, left:10, background:T.green, color:'#fff', borderRadius:50, padding:'3px 10px', fontSize:9.5, fontWeight:800 }}>NEW</div>
+          <div style={{ position:'absolute', top:10, left:10, background:T.green, color:'#fff', borderRadius:6, padding:'3px 8px', fontSize:11, fontWeight:600 }}>NEW</div>
+        )}
+        {!onSale && !isFeat && !isNew && listing.condition && (
+          <div style={{ position:'absolute', top:10, left:10, background:'#fff', color:T.gray900, borderRadius:6, padding:'3px 8px', fontSize:11, fontWeight:600, border:`1px solid ${T.gray200}` }}>{formatCondition(listing.condition)}</div>
         )}
         {hasVideo && (
           <div style={{ position:'absolute', bottom:9, left:9, background:'rgba(0,0,0,0.6)', color:'#fff', borderRadius:50, padding:'3px 8px', fontSize:10, fontWeight:700, display:'flex', alignItems:'center', gap:4 }}>
@@ -1053,12 +1109,31 @@ function ResultCardGrid({ listing, delay, onClick, user, navigate, saved, onTogg
         >
           {Icon.heart(14, saved ? 'currentColor' : 'none')}
         </button>
+        {user?.id && listing.seller_id !== user.id && (
+          <button
+            type="button"
+            aria-label="Chat with seller"
+            onClick={e => {
+              e.preventDefault(); e.stopPropagation()
+              if (!listing?.seller_id) { navigate('/listing/' + listing.id); return }
+              if (user?.id && listing.seller_id === user.id) { navigate('/listing/' + listing.id); return }
+              if (!user?.id) {
+                try { sessionStorage.setItem('soko_post_login', JSON.stringify({ type:'chat', sellerId: listing.seller_id, listingId: listing.id })) } catch {}
+                navigate('/login'); return
+              }
+              navigate(buildChatPath(listing.seller_id, { source: 'listing', contextId: listing.id }), { state: { source: 'listing' } })
+            }}
+            style={{ position:'absolute', bottom:10, right:10, width:36, height:36, borderRadius:'50%', border:`1px solid ${T.gray200}`, background:'#fff', color:T.green, display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', boxShadow:'0 2px 8px rgba(0,0,0,.12)', zIndex:3 }}
+          >
+            {Icon.chat(16)}
+          </button>
+        )}
       </div>
 
       {/* Body */}
-      <div className="sp-card-body-pad" style={{ padding:'10px 12px 8px', display:'flex', flexDirection:'column', gap:5, flex:1, minHeight:0, justifyContent:'flex-start' }}>
+      <div className="sp-card-body-pad" style={{ padding:'10px 12px 8px', display:'flex', flexDirection:'column', gap:5, flex:1, minHeight:0, justifyContent:'flex-start', position:'relative' }}>
         <div style={{ display:'flex', alignItems:'center', gap:4 }}>
-          <span style={{ fontSize:13, fontWeight:700, color:T.gray900, overflow:'hidden', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', minWidth:0, lineHeight:1.25 }}>{listing.title}</span>
+          <span style={{ fontSize:13, fontWeight:700, color:T.gray900, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', minWidth:0, lineHeight:1.25 }}>{listing.title}</span>
           {isVerif && <span style={{ flexShrink:0 }}>{Icon.verify(13)}</span>}
         </div>
         {onSale ? (
@@ -1074,22 +1149,20 @@ function ResultCardGrid({ listing, delay, onClick, user, navigate, saved, onTogg
             Bulk pricing available
           </div>
         )}
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', fontSize:11.5, color:T.gray600, gap:6 }}>
-          <span style={{ display:'flex', alignItems:'center', gap:5, minWidth:0, overflow:'hidden' }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', fontSize:11.5, color:T.gray600, gap:6, width:'100%' }}>
+          <span style={{ display:'flex', alignItems:'center', gap:5, minWidth:0, overflow:'hidden', flex:1 }}>
             <span style={{ color:T.green, flexShrink:0 }}>{Icon.pin(11)}</span>
             <span style={{ overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
               {dedupeLocation(listing.city, listing.area) || 'Malawi'}
             </span>
           </span>
-          <span style={{ display:'flex', alignItems:'center', gap:3, flexShrink:0 }}>
+          <span style={{ display:'flex', alignItems:'center', gap:3, flexShrink:0, whiteSpace:'nowrap' }}>
             {Icon.clock(11)} {timeAgo(listing.created_at)}
           </span>
         </div>
       </div>
 
-      {/* Quick actions */}
-      <ListingCardActions listing={listing} user={user} navigate={navigate} />
-    </div>
+    </a>
   )
 }
 
@@ -1112,8 +1185,8 @@ function ResultCardList({ listing, delay, onClick, user, navigate, saved, onTogg
   }
 
   return (
-    <div className="sp-card-list" style={{ animationDelay:`${delay}s`, position:'relative' }} onClick={onClick}>
-      <div className="sp-list-thumb" style={{ position:'relative', width:140, height:110, flexShrink:0, overflow:'hidden', background:T.gray100 }}>
+    <a href={`/listing/${listing.id}`} className="sp-card-list" style={{ animationDelay:`${delay}s`, position:'relative', textDecoration:'none', color:'inherit', display:'flex' }} onClick={e => { if (e.target.closest('button')) e.preventDefault() }}>
+      <div className="sp-list-thumb" style={{ position:'relative', flexShrink:0, overflow:'hidden', background:T.gray100, aspectRatio:'4 / 3' }}>
         {listing.images?.[0] && !imgErr
           ? <img src={listing.images[0]} alt={listing.title} onError={() => setImgErr(true)} className="sp-card-img" style={{ width:'100%', height:'100%', objectFit:'cover' }} />
           : <div style={{ width:'100%', height:'100%', display:'flex', alignItems:'center', justifyContent:'center', fontSize:34, color:T.gray400 }}>📦</div>
@@ -1123,16 +1196,6 @@ function ResultCardList({ listing, delay, onClick, user, navigate, saved, onTogg
         {hasVideo && (
           <div style={{ position:'absolute', bottom:6, left:6, background:'rgba(0,0,0,0.6)', color:'#fff', borderRadius:50, padding:'2px 6px', fontSize:9, fontWeight:700 }}>🎬 {listing.videos.length}</div>
         )}
-        <button
-          type="button"
-          className="sp-list-heart"
-          onClick={handleSave}
-          disabled={saveBusy}
-          aria-label={saved ? 'Remove from saved' : 'Save listing'}
-          style={{ position:'absolute', top:8, right:8, width:30, height:30, borderRadius:'50%', border:'none', background:'rgba(255,255,255,0.92)', display:'flex', alignItems:'center', justifyContent:'center', color:saved ? T.red : T.gray600, cursor: saveBusy ? 'default' : 'pointer', boxShadow:'0 2px 8px rgba(0,0,0,.1)', zIndex:2 }}
-        >
-          {Icon.heart(14, saved ? 'currentColor' : 'none')}
-        </button>
       </div>
       <div style={{ flex:1, padding:'12px 14px', display:'flex', flexDirection:'column', justifyContent:'space-between', minWidth:0 }}>
         <div>
@@ -1140,6 +1203,11 @@ function ResultCardList({ listing, delay, onClick, user, navigate, saved, onTogg
             <span style={{ fontSize:14, fontWeight:700, color:T.gray900, overflow:'hidden', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical', lineHeight:1.25 }}>{listing.title}</span>
             {isVerif && <span style={{ flexShrink:0 }}>{Icon.verify(13)}</span>}
           </div>
+          {listing.condition && (
+            <span style={{ display:'inline-block', fontSize:11, fontWeight:600, padding:'3px 8px', borderRadius:6, background:'#fff', color:T.gray900, border:`1px solid ${T.gray200}`, width:'fit-content', marginBottom:4 }}>
+              {formatCondition(listing.condition)}
+            </span>
+          )}
           {listing.description && (
             <div style={{ fontSize:12, color:T.gray600, lineHeight:1.4, overflow:'hidden', display:'-webkit-box', WebkitLineClamp:2, WebkitBoxOrient:'vertical' }}>{listing.description}</div>
           )}
@@ -1161,15 +1229,13 @@ function ResultCardList({ listing, delay, onClick, user, navigate, saved, onTogg
           </div>
         </div>
       </div>
-      <div className="sp-card-list-actions">
-        <ListingCardActions listing={listing} user={user} navigate={navigate} />
-      </div>
-    </div>
+    </a>
   )
 }
 
-/* ─────────────────────────────────────────────────────────────────────────────
+/* ————————————————————————————————————————————————————————————————————————————
    SHOP RESULT CARD — Shops tab
+
 ───────────────────────────────────────────────────────────────────────────── */
 function ShopResultCard({ shop, delay, onClick }) {
   return (
@@ -1270,7 +1336,19 @@ function SkeletonRowCard() {
 /* ─────────────────────────────────────────────────────────────────────────────
    EMPTY STATE
 ───────────────────────────────────────────────────────────────────────────── */
-function EmptyState({ query, onClearFilters, label = 'results' }) {
+function EmptyState({ query, onClearFilters, label = 'results', category }) {
+  if (category) {
+    return (
+      <div style={{ display:'flex', flexDirection:'column', alignItems:'center', padding:'64px 24px', textAlign:'center' }}>
+        <div style={{ width:72, height:72, borderRadius:'50%', background:T.gray100, display:'flex', alignItems:'center', justifyContent:'center', marginBottom:20, color:T.gray400 }}>
+          {Icon.search(34)}
+        </div>
+        <div style={{ fontSize:18, fontWeight:700, color:T.gray900, marginBottom:8 }}>No {category} listings yet</div>
+        <div style={{ fontSize:14, color:T.gray600, marginBottom:24 }}>Try browsing all listings instead</div>
+        <button onClick={onClearFilters} style={{ background:T.green, color:'#fff', border:'none', borderRadius:12, padding:'11px 28px', fontSize:14, fontWeight:700, cursor:'pointer' }}>Browse all listings</button>
+      </div>
+    )
+  }
   return (
     <div style={{ display:'flex', flexDirection:'column', alignItems:'center', padding:'64px 24px', textAlign:'center' }}>
       <div style={{ width:72, height:72, borderRadius:'50%', background:T.gray100, display:'flex', alignItems:'center', justifyContent:'center', marginBottom:20, color:T.gray400 }}>
@@ -1363,6 +1441,13 @@ export default function SearchPage() {
   const [sidebarStuck, setSidebarStuck] = useState(false)
   const [savedIds, setSavedIds] = useState(() => new Set())
 
+  const clearCategoryFilter = () => {
+    const next = new URLSearchParams(searchParams)
+    next.delete('cat')
+    setSearchParams(next)
+    setCheckedCats(new Set())
+  }
+
   // Sidebar gets a subtle elevation lift once the page has scrolled past
   // its sticky offset — a quiet cue that it's now "floating" over content,
   // distinct from the cards' hover-driven lift.
@@ -1385,7 +1470,8 @@ export default function SearchPage() {
 
   /* Sync URL → category filter (e.g. /listings?cat=Agriculture from Home page category tiles) */
   useEffect(() => {
-    if (catParam) setCheckedCats(new Set([catParam]))
+    if (catParam) setCheckedCats(new Set([normalizeCategoryKey(catParam)]))
+    else setCheckedCats(new Set())
   }, [catParam])
 
   /* Auth + saved listings */
@@ -1524,14 +1610,17 @@ export default function SearchPage() {
 
     if (queryParam) query = query.ilike('title', `%${queryParam}%`)
 
-    if (filters.cats.size > 0) {
+    const activeCats = new Set(filters.cats)
+    if (catParam) activeCats.add(normalizeCategoryKey(catParam))
+
+    if (activeCats.size > 0) {
       // Split checked keys into top-level categories vs subcategories, and
       // match a listing if either its category OR its subcategory is checked
       // — this keeps behavior correct whether the user checked a parent,
       // a leaf, or a mix of both.
       const topLevelKeys = new Set(CATEGORY_TREE.map(n => n.key))
-      const checkedTop  = [...filters.cats].filter(k => topLevelKeys.has(k))
-      const checkedSub  = [...filters.cats].filter(k => !topLevelKeys.has(k))
+      const checkedTop  = [...activeCats].filter(k => topLevelKeys.has(k))
+      const checkedSub  = [...activeCats].filter(k => !topLevelKeys.has(k))
 
       const orParts = []
       if (checkedTop.length > 0) orParts.push(`category.in.(${checkedTop.join(',')})`)
@@ -1553,21 +1642,13 @@ export default function SearchPage() {
 
     let rows = (allData || []).filter(l => !isJobListing(l))
 
-    // Split into featured vs regular; fair multi-seller rotation (Phase 3.2)
-    const featured = rows.filter(l => isListingFeatured(l))
-    const regular  = rows.filter(l => !isListingFeatured(l))
-    const sortedFeatured = rotateFeaturedFairly(featured, { intervalMs: 30_000, maxPerSeller: 2 })
-
-    // Sort regular by user's chosen sort
-    let sortedRegular = [...regular]
+    // No featured-first reordering when filtering: keep all matching listings visible.
+    let merged = [...rows]
     switch (currentSort) {
-      case 'price_asc':  sortedRegular.sort((a, b) => (a.price || 0) - (b.price || 0)); break
-      case 'price_desc': sortedRegular.sort((a, b) => (b.price || 0) - (a.price || 0)); break
-      default:           sortedRegular.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+      case 'price_asc':  merged.sort((a, b) => (a.price || 0) - (b.price || 0)); break
+      case 'price_desc': merged.sort((a, b) => (b.price || 0) - (a.price || 0)); break
+      default:           merged.sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
     }
-
-    // Merge: fair-rotated featured first, then regular
-    let merged = [...sortedFeatured, ...sortedRegular]
 
     // Enrich with verified flags (all candidates so filters + totals stay correct)
     const shopIds   = [...new Set(merged.map(l => l.shop_id).filter(Boolean))]
@@ -1797,20 +1878,24 @@ export default function SearchPage() {
 
         {/* ── Search summary bar ── */}
         <div className="sp-summary">
-          <div className="sp-summary-title">
-            {queryParam
-              ? <>Results for <span style={{ color:T.green }}>&ldquo;{queryParam}&rdquo;</span></>
-              : catParam
-                ? <>Browsing <span style={{ color:T.green }}>{catParam}</span></>
-                : 'Browse listings'}
-          </div>
-          <div className="sp-summary-count">
-            {loading ? 'Searching…' : `${totalCount.toLocaleString()} ${resultsLabel} found`}
+          <div className="sp-summary-title" style={{ display:'flex', alignItems:'baseline', gap:8, flexWrap:'wrap' }}>
+            <span>
+              {queryParam
+                ? <>Results for <span style={{ color:T.green }}>&ldquo;{queryParam}&rdquo;</span></>
+                : catParam
+                  ? normalizeCategoryKey(catParam)
+                  : 'All listings'}
+            </span>
+            {!loading && (
+              <span style={{ fontSize:13, color:T.gray600, fontWeight:500 }}>
+                {totalCount.toLocaleString()} listing{totalCount === 1 ? '' : 's'}
+              </span>
+            )}
           </div>
         </div>
 
         {/* ── Search tabs — one per pillar ── */}
-        <div className="sp-scroll sp-tabs-scroll" style={{ display:'flex', gap:4, overflowX:'auto', marginTop:12, borderBottom:`1px solid ${T.gray200}` }}>
+        <div className="sp-scroll sp-tabs-scroll" style={{ display:'flex', gap:4, overflowX:'auto', marginTop:12 }}>
           {SEARCH_TABS.map(t => {
             const count = tabCounts[t.key]
             return (
@@ -1863,6 +1948,12 @@ export default function SearchPage() {
                     )}
                   </button>
                 )}
+                {catParam && (
+                  <span style={{ display:'inline-flex', alignItems:'center', gap:6, background:'#e8f5ee', color:T.green, border:`1px solid ${T.green}`, borderRadius:999, padding:'6px 10px', fontSize:12, fontWeight:700 }}>
+                    {normalizeCategoryKey(catParam)}
+                    <button type="button" onClick={clearCategoryFilter} style={{ background:'none', border:'none', color:T.green, cursor:'pointer', fontSize:14, lineHeight:1, padding:0 }} aria-label="Remove category filter">×</button>
+                  </span>
+                )}
 
                 <div style={{ display:'flex', alignItems:'center', gap:6, minWidth:0 }}>
                   <span style={{ fontSize:12.5, color:T.gray600, whiteSpace:'nowrap' }}>Sort</span>
@@ -1893,7 +1984,7 @@ export default function SearchPage() {
             {loading ? (
               activeTab === 'listings' ? (
                 <div className="sp-results-grid grid-4">
-                  {Array.from({ length: PAGE_SIZE }).map((_, i) => <SkeletonCard key={i} />)}
+                  {Array.from({ length: 8 }).map((_, i) => <SkeletonCard key={i} />)}
                 </div>
               ) : (
                 <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
@@ -1901,7 +1992,7 @@ export default function SearchPage() {
                 </div>
               )
             ) : allResults.length === 0 ? (
-              <EmptyState query={queryParam} onClearFilters={clearFiltersAndSearch} label={resultsLabel} />
+              <EmptyState query={queryParam} onClearFilters={catParam ? clearCategoryFilter : clearFiltersAndSearch} label={resultsLabel} category={catParam ? normalizeCategoryKey(catParam) : ''} />
             ) : activeTab === 'listings' ? (
               viewMode === 'grid' ? (
                 <div className="sp-results-grid grid-4">

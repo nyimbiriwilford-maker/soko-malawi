@@ -978,6 +978,9 @@ export default function ShopSetup() {
                 )}
               </div>
               <input ref={coverInputRef} type="file" accept="image/*" hidden onChange={handleCoverChange} />
+              <div className="ss-hint">
+                Recommended size 1600x400. Keep important text and logos in the center.
+              </div>
             </div>
 
             <div className="ss-field">
